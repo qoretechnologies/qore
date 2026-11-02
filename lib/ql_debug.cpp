@@ -13401,6 +13401,17 @@ static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, Runtime
     return q_get_live_bigint_count();
 }
 
+//! returns the number of heap floats that exist in the process
+/** A double whose NaN-boxed encoding would collide with a value tag (a negative NaN, or a finite negative double from
+    about -2.18e307 to about -8.71e307) is a heap object; code that does not release one leaks it, so tests compare
+    the count before and after the code under test, in every execution mode and on every platform.  Unlike the
+    resident set size of the process, the count does not depend on the page size, the allocator or the kernel's
+    huge page policy.
+*/
+static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_live_bigfloat_count();
+}
+
 //! returns the number of hashes and lists copied in the current thread
 /** Copy-on-write in an lvalue operation copies a container that is not unique, so tests compare the count before
     and after an update to verify that a container that only one variable holds is changed in place in every
@@ -15191,6 +15202,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_region_walk_count", f_dbg_get_region_walk_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

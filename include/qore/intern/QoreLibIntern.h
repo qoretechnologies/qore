@@ -404,6 +404,13 @@ DLLLOCAL bool needs_scan(const QoreValue& v);
 */
 DLLLOCAL int64 q_get_live_bigint_count();
 
+//! Returns the number of heap floats (QoreBigFloatNode) that exist in the process
+/** A double whose NaN-boxed encoding would collide with a value tag is allocated on the heap, and code that fails to
+    release one leaks it; tests compare the count before and after the code under test; see
+    dbg_get_live_bigfloat_count().
+*/
+DLLLOCAL int64 q_get_live_bigfloat_count();
+
 //! Returns the number of hashes and lists that QoreHashNode::copy() and QoreListNode::copy() made in the current thread
 /** Copy-on-write in an lvalue operation copies a container that is not unique with these functions, so tests use
     the count to verify that a container that only one variable holds is changed in place and that a shared one is
