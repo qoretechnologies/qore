@@ -2130,6 +2130,31 @@ all — and could not be code-generated in half an hour. Above
 call and no extra block. Smaller functions keep the inline form so LLVM can fold
 it away.
 
+The helper form still emitted one call per tracked local at every boundary, so
+the code stayed `tracked locals x temp boundaries` (a function of N try
+statements, each declaring a local, had 1482 calls at N=40 and 6402 at N=80).
+A tracker can hold a value at a boundary only if a store or a runtime helper
+passed the slot put one there after the previous boundary that flushed it; every
+other test always skips. `flushLocalReloadStateAtTempBoundary()` now emits a
+placeholder and records the counts of the maps and the form at the boundary;
+`finalizeReloadChainFlushes()`, once the function is complete, searches forward
+from each instruction that can put a value into a slot (or publish a scalar
+local to `scalar_boundary_token`) to the first boundaries that flush it, or to a
+store of NOTHING to the slot (a scope's tracker clear), which ends the path, jumping
+between boundaries with a precomputed set of the boundaries first reached from
+each block, and emits at each boundary only the operations of those slots, in
+the order of the full flush: the trackers, then the deferred slots without a
+tracker, each in reverse declaration order (`getReverseDeclarationOrder()`), as a
+rotation or a clear can release a local's last reference (78 and 198 calls in
+the example). The operations omitted are those the runtime skipped, so ownership
+and release order are unchanged. The
+per-local `valid = epoch` stores of the boundary are dropped too: after the epoch
+increment every cache whose valid epoch is not the new epoch is stale either way,
+and only the local that the scalar token can name is tested.
+`QORE_DISABLE_LLVM_RELOAD_CHAIN_PRUNING` restores the test of every tracked local
+at every boundary for comparison; `AOTReloadChainFlushGrowth.qtest` asserts the
+linear growth and that the control shows the quadratic one.
+
 Together these took that method from an unbounded hang to 29s.
 
 Two details matter for correctness. The runtime helper releases slots in LIFO

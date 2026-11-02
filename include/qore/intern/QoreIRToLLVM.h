@@ -51,6 +51,7 @@ class FunctionEntry;
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/ValueHandle.h>
 
 class QoreIRFunction;
 class QoreIRBasicBlock;
@@ -759,7 +760,8 @@ private:
     // One last-published cache is sufficient; older publications stay conservative.
     llvm::AllocaInst* scalar_boundary_token = nullptr;
     llvm::AllocaInst* scalar_boundary_value = nullptr;
-    std::unordered_set<const void*> scalar_boundary_locals;
+    //! the locals with a scalar publication, mapped to the order in which their first publication was emitted
+    std::unordered_map<const void*, unsigned> scalar_boundary_locals;
     // Propagate cancellation from native handler cache emission to lowerFunction().
     bool native_handler_cache_cancelled = false;
     // Cleanup emission is shared by normal and exceptional exits; cancelled
@@ -1112,6 +1114,48 @@ private:
     // the statement; at DiscardTemps those temps are dead and the refs can be
     // dropped before the next source statement observes destructor timing.
     void flushLocalReloadStateAtTempBoundary(llvm::Module& module);
+
+    //! A temp boundary whose reload-chain flush is emitted when the function is complete
+    /** flushLocalReloadStateAtTempBoundary() emits a placeholder call and records the state that the flush
+        depended on when it was emitted inline; finalizeReloadChainFlushes() replaces the placeholder.
+    */
+    struct ReloadChainFlush {
+        //! the placeholder call; null if its block was removed
+        llvm::WeakVH marker;
+        //! the number of entries of local_reload_trackers when the boundary was reached
+        unsigned tracker_count;
+        //! the number of entries of local_reload_deferred when the boundary was reached
+        unsigned deferred_count;
+        //! the number of entries of local_valid_epochs when the boundary was reached
+        unsigned valid_epoch_count;
+        //! the number of entries of scalar_boundary_locals when the boundary was reached
+        unsigned scalar_local_count;
+        //! the operations are runtime helper calls, not inline code
+        bool use_flush_helpers;
+        //! local_reload_epoch existed when the boundary was reached
+        bool has_epoch;
+        //! scalar_boundary_token existed when the boundary was reached
+        bool has_token;
+    };
+    //! the temp boundaries of the function being lowered, in the order they were reached
+    std::vector<ReloadChainFlush> reload_chain_flushes;
+
+    //! Emits the reload-chain flushes of the function, once its code is complete
+    /** At a temp boundary, a slot of a local's reload chain needs an operation only if it can hold a value there:
+        a value is put into it only by a store or by a runtime helper that is passed the slot, and the flush of the
+        boundary or a store of NOTHING empties it.  A forward search from each such instruction to the first boundary that flushes the
+        slot finds the boundaries that need an operation for it; every other operation of the boundary is one that
+        the runtime would skip, as the slot holds no value.  The same search finds the locals whose scalar
+        publication can reach a boundary's read of scalar_boundary_token.  The work and the code emitted are
+        proportional to the instructions of the function plus the boundaries that each value reaches, not to the
+        number of boundaries times the number of tracked locals.
+
+        @return false if the compilation was cancelled (local_cleanup_cancelled is set)
+    */
+    bool finalizeReloadChainFlushes(llvm::Module& module, llvm::Function* llvm_func);
+
+    //! Removes the placeholders of the reload-chain flushes that were not emitted, as of a failed lowering
+    void discardReloadChainFlushes(llvm::Module& module);
 
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution

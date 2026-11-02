@@ -5687,6 +5687,9 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     }
 }
 
+//! the placeholder of a reload-chain flush (see QoreIRToLLVM::finalizeReloadChainFlushes())
+static constexpr const char* QoreReloadChainFlushMarker = "qore_ir_reload_chain_flush_marker";
+
 void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     if (!local_reload_boundary_cleanup_pending) {
         return;
@@ -5697,194 +5700,645 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
         return;
     }
 
+    // The flush is emitted by finalizeReloadChainFlushes() once the function is complete, at this placeholder,
+    // with the state it had here: only the locals and the scalar publications known here take part, as when the
+    // flush was emitted inline, and the same form is used.
+    //
+    // Emitting the NOTHING test inline costs two basic blocks per tracked local at every temp boundary, so a
+    // function with many locals and many call sites pays (locals x boundaries) blocks -- the reflection test's
+    // 1621-line method reached 88062 rotations, 95% of its 184933 basic blocks, and could not be code-generated in
+    // minutes.  Above the threshold the identical test and rotation run in the runtime helper instead, which emits
+    // one call and no extra block.  Small functions keep the inline form so LLVM can fold it.
+    const bool use_flush_helpers = (local_reload_trackers.size()
+        + local_reload_deferred.size()) >= getReloadChainCallThreshold();
+    auto marker_fn = module.getOrInsertFunction(QoreReloadChainFlushMarker,
+        llvm::FunctionType::get(void_type, {}, false));
+    llvm::CallInst* marker = builder->CreateCall(marker_fn, {});
+    reload_chain_flushes.push_back({marker, static_cast<unsigned>(local_reload_trackers.size()),
+        static_cast<unsigned>(local_reload_deferred.size()), static_cast<unsigned>(local_valid_epochs.size()),
+        static_cast<unsigned>(scalar_boundary_locals.size()), use_flush_helpers, local_reload_epoch != nullptr,
+        scalar_boundary_token != nullptr});
+}
+
+void QoreIRToLLVM::discardReloadChainFlushes(llvm::Module& module) {
+    for (ReloadChainFlush& flush : reload_chain_flushes) {
+        if (auto* marker = llvm::cast_or_null<llvm::Instruction>(static_cast<llvm::Value*>(flush.marker))) {
+            marker->eraseFromParent();
+        }
+    }
+    reload_chain_flushes.clear();
+    llvm::Function* marker_fn = module.getFunction(QoreReloadChainFlushMarker);
+    if (marker_fn && marker_fn->use_empty()) {
+        marker_fn->eraseFromParent();
+    }
+}
+
+bool QoreIRToLLVM::finalizeReloadChainFlushes(llvm::Module& module, llvm::Function* llvm_func) {
+    if (reload_chain_flushes.empty()) {
+        return true;
+    }
+    size_t checked = 0;
+    auto cancelled = [&]() {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM reload-chain flushes")) {
+            local_cleanup_cancelled = true;
+            return true;
+        }
+        return false;
+    };
+
+    // The items whose value a boundary may need to flush: the tracker slots [0, T), the deferred slots [T, T + D)
+    // and the scalar publications of the locals in scalar_boundary_locals [T + D, T + D + S), in the order of
+    // local_reload_trackers, local_reload_deferred and scalar_boundary_locals.
+    const unsigned tracker_total = local_reload_trackers.size();
+    const unsigned deferred_total = local_reload_deferred.size();
+    const unsigned scalar_base = tracker_total + deferred_total;
+    const unsigned item_total = scalar_base + scalar_boundary_locals.size();
+    constexpr unsigned NoIndex = std::numeric_limits<unsigned>::max();
+
+    llvm::DenseMap<const llvm::Value*, unsigned> slot_items;
+    std::unordered_map<const void*, unsigned> tracker_index;
+    unsigned index = 0;
+    for (auto& [key, tracker] : local_reload_trackers) {
+        slot_items[tracker] = index;
+        tracker_index[key] = index++;
+    }
+    // the tracker of the local of each deferred slot, or NoIndex
+    std::vector<unsigned> deferred_tracker(deferred_total, NoIndex);
+    // the deferred slot of the local of each tracker, or NoIndex
+    std::vector<unsigned> tracker_deferred(tracker_total, NoIndex);
+    std::vector<const void*> deferred_keys(deferred_total);
+    index = 0;
+    for (auto& [key, deferred] : local_reload_deferred) {
+        slot_items[deferred] = tracker_total + index;
+        deferred_keys[index] = key;
+        auto i = tracker_index.find(key);
+        if (i != tracker_index.end()) {
+            deferred_tracker[index] = i->second;
+            tracker_deferred[i->second] = index;
+        }
+        ++index;
+    }
+    std::vector<const void*> scalar_keys(scalar_boundary_locals.size());
+    llvm::DenseMap<const llvm::Value*, unsigned> scalar_caches;
+    for (auto& [key, order] : scalar_boundary_locals) {
+        assert(order < scalar_keys.size());
+        scalar_keys[order] = key;
+        auto cache = local_allocas.find(key);
+        if (cache != local_allocas.end()) {
+            scalar_caches[cache->second.storage()] = scalar_base + order;
+        }
+    }
+    llvm::DenseMap<const llvm::Value*, unsigned> marker_flushes;
+    for (unsigned i = 0, e = reload_chain_flushes.size(); i < e; ++i) {
+        if (llvm::Value* marker = reload_chain_flushes[i].marker) {
+            marker_flushes[marker] = i;
+        }
+    }
+    const llvm::Value* cleanup_arrays[] = {invoke_cleanup_array, exit_cleanup_array, preinst_exit_cleanup_array,
+        boxed_exit_cleanup_array};
+    auto is_cleanup_array_slot = [&](const llvm::Value* ptr) {
+        auto* gep = llvm::dyn_cast<llvm::GetElementPtrInst>(ptr);
+        if (!gep) {
+            return false;
+        }
+        for (const llvm::Value* array : cleanup_arrays) {
+            if (array && gep->getPointerOperand() == array) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Where a value can be put into each item: (block, position) pairs; an item used in any other way can hold a
+    // value at every boundary, as the inline flush assumed for all of them.
+    std::vector<std::vector<std::pair<unsigned, unsigned>>> sources(item_total);
+    // Where each slot item is set to NOTHING: (block, position) pairs in layout order.  A path from a source that
+    // passes one carries no value further, as the boundaries after it would test an empty slot.
+    std::vector<std::vector<std::pair<unsigned, unsigned>>> kills(scalar_base);
+    std::vector<char> unknown(item_total, 0);
+    bool unknown_publication = false;
+    std::vector<llvm::BasicBlock*> blocks;
+    llvm::DenseMap<const llvm::BasicBlock*, unsigned> block_index;
+    // the boundaries of each block: (position, flush)
+    std::vector<std::vector<std::pair<unsigned, unsigned>>> block_flushes;
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        const unsigned b = blocks.size();
+        blocks.push_back(&bb);
+        block_index[&bb] = b;
+        block_flushes.emplace_back();
+        unsigned pos = 0;
+        for (llvm::Instruction& inst : bb) {
+            if (cancelled()) {
+                return false;
+            }
+            ++pos;
+            if (auto* call = llvm::dyn_cast<llvm::CallBase>(&inst)) {
+                auto f = marker_flushes.find(call);
+                if (f != marker_flushes.end()) {
+                    block_flushes[b].emplace_back(pos, f->second);
+                    continue;
+                }
+                // a runtime helper passed a slot can put a value into it
+                for (const llvm::Use& op : call->operands()) {
+                    auto i = slot_items.find(op.get());
+                    if (i != slot_items.end()) {
+                        sources[i->second].emplace_back(b, pos);
+                    }
+                }
+                continue;
+            }
+            if (auto* store = llvm::dyn_cast<llvm::StoreInst>(&inst)) {
+                const llvm::Value* value = store->getValueOperand();
+                const llvm::Value* ptr = store->getPointerOperand();
+                if (scalar_boundary_token && ptr == scalar_boundary_token) {
+                    if (store->getMetadata("qore.scalar.boundary.publish")) {
+                        auto* select = llvm::dyn_cast<llvm::SelectInst>(value);
+                        auto i = select ? scalar_caches.find(select->getTrueValue()) : scalar_caches.end();
+                        if (i != scalar_caches.end()) {
+                            sources[i->second].emplace_back(b, pos);
+                        } else {
+                            unknown_publication = true;
+                        }
+                    } else if (!llvm::isa<llvm::ConstantPointerNull>(value)) {
+                        unknown_publication = true;
+                    }
+                }
+                auto i = slot_items.find(ptr);
+                if (i != slot_items.end()) {
+                    auto* constant = llvm::dyn_cast<llvm::ConstantInt>(value);
+                    if (!constant || constant->getZExtValue() != VAL_NOTHING) {
+                        sources[i->second].emplace_back(b, pos);
+                    } else {
+                        kills[i->second].emplace_back(b, pos);
+                    }
+                }
+                i = slot_items.find(value);
+                if (i != slot_items.end() && !is_cleanup_array_slot(ptr)) {
+                    // the cleanup helpers given a cleanup array only release and clear the slots in it
+                    unknown[i->second] = 1;
+                }
+                continue;
+            }
+            if (llvm::isa<llvm::LoadInst>(inst)) {
+                continue;
+            }
+            for (const llvm::Use& op : inst.operands()) {
+                auto i = slot_items.find(op.get());
+                if (i != slot_items.end()) {
+                    unknown[i->second] = 1;
+                }
+            }
+        }
+    }
+    if (unknown_publication) {
+        for (unsigned i = scalar_base; i < item_total; ++i) {
+            unknown[i] = 1;
+        }
+    }
+    // QORE_DISABLE_LLVM_RELOAD_CHAIN_PRUNING tests every item at every boundary that flushes it, as the inline
+    // flush did, to compare the code
+    static constinit QoreEnvFlag disable_pruning("QORE_DISABLE_LLVM_RELOAD_CHAIN_PRUNING");
+    if (disable_pruning.get()) {
+        std::fill(unknown.begin(), unknown.end(), 1);
+    }
+
+    // A boundary flushes an item if the inline flush would have tested it there: a tracker known at the
+    // boundary, the deferred slot of a local without a tracker there, and the scalar token, which the boundary
+    // reads and resets.  Any other boundary leaves the item as it is.
+    auto flushes = [&](unsigned item, const ReloadChainFlush& flush) -> bool {
+        if (item < tracker_total) {
+            return item < flush.tracker_count;
+        }
+        if (item < scalar_base) {
+            const unsigned d = item - tracker_total;
+            return d < flush.deferred_count
+                && (deferred_tracker[d] == NoIndex || deferred_tracker[d] >= flush.tracker_count);
+        }
+        return flush.has_epoch && flush.has_token;
+    };
+    // whether a scalar publication is one of the boundary's reuse candidates
+    auto scalar_candidate = [&](unsigned item, const ReloadChainFlush& flush) -> bool {
+        const void* key = scalar_keys[item - scalar_base];
+        if (item - scalar_base >= flush.scalar_local_count) {
+            return false;
+        }
+        auto valid = local_valid_epochs.find(key);
+        return valid != local_valid_epochs.end()
+            && static_cast<unsigned>(valid - local_valid_epochs.begin()) < flush.valid_epoch_count;
+    };
+
+    // The counts of the boundaries only grow, as the maps only grow while the function is lowered: a boundary
+    // that flushes an item exists if the last one flushes a tracker or the scalar token, and if the first boundary
+    // that knows a deferred slot has no tracker for its local yet.
+    const unsigned flush_total = reload_chain_flushes.size();
+    auto can_be_flushed = [&](unsigned item) -> bool {
+        const ReloadChainFlush& last = reload_chain_flushes.back();
+        if (item < tracker_total) {
+            return item < last.tracker_count;
+        }
+        if (item >= scalar_base) {
+            return last.has_epoch && last.has_token;
+        }
+        const unsigned d = item - tracker_total;
+        auto first = std::upper_bound(reload_chain_flushes.begin(), reload_chain_flushes.end(), d,
+            [](unsigned value, const ReloadChainFlush& flush) { return value < flush.deferred_count; });
+        return first != reload_chain_flushes.end() && flushes(item, *first);
+    };
+
+    // The boundaries first reached from the end of each block, every boundary ending a path: the search for an
+    // item jumps from boundary to boundary instead of walking each block of a long region without one.  A block
+    // whose set would exceed the limit, as before a branch to many boundaries, is walked instead.
+    constexpr size_t MaxNextFlushes = 64;
+    const unsigned block_total = blocks.size();
+    std::vector<std::vector<unsigned>> next_flushes(block_total);
+    std::vector<char> walk_block(block_total, 0);
+    std::vector<char> queued(block_total, 1);
+    std::vector<unsigned> work;
+    work.reserve(block_total);
+    for (unsigned b = 0; b < block_total; ++b) {
+        work.push_back(b);
+    }
+    std::vector<unsigned> next;
+    while (!work.empty()) {
+        if (cancelled()) {
+            return false;
+        }
+        const unsigned b = work.back();
+        work.pop_back();
+        queued[b] = 0;
+        next.clear();
+        bool walk = false;
+        for (llvm::BasicBlock* successor : llvm::successors(blocks[b])) {
+            const unsigned s = block_index.at(successor);
+            if (!block_flushes[s].empty()) {
+                next.push_back(block_flushes[s].front().second);
+            } else if (walk_block[s]) {
+                walk = true;
+                break;
+            } else {
+                next.insert(next.end(), next_flushes[s].begin(), next_flushes[s].end());
+            }
+        }
+        if (!walk) {
+            std::sort(next.begin(), next.end());
+            next.erase(std::unique(next.begin(), next.end()), next.end());
+            walk = next.size() > MaxNextFlushes;
+        }
+        bool changed;
+        if (walk) {
+            changed = !walk_block[b];
+            walk_block[b] = 1;
+            next_flushes[b].clear();
+        } else {
+            changed = next != next_flushes[b];
+            if (changed) {
+                next_flushes[b] = next;
+            }
+        }
+        // the set of a block with a boundary is not that of its entry
+        if (changed && block_flushes[b].empty()) {
+            for (llvm::BasicBlock* predecessor : llvm::predecessors(blocks[b])) {
+                const unsigned p = block_index.at(predecessor);
+                if (!queued[p]) {
+                    queued[p] = 1;
+                    work.push_back(p);
+                }
+            }
+        }
+    }
+    // the block and the position of each boundary
+    std::vector<std::pair<unsigned, unsigned>> flush_location(flush_total, {NoIndex, 0});
+    for (unsigned b = 0; b < block_total; ++b) {
+        for (auto& [pos, f] : block_flushes[b]) {
+            flush_location[f] = {b, pos};
+        }
+    }
+
+    std::vector<std::vector<unsigned>> flush_items(flush_total);
+    std::vector<unsigned> flush_stamp(flush_total, 0);
+    std::vector<unsigned> visit_stamp(flush_total, 0);
+    std::vector<unsigned> entry_stamp(block_total, 0);
+    std::vector<unsigned> exit_stamp(block_total, 0);
+    // a boundary reached (its index) or a block entered (flush_total + its index)
+    std::vector<unsigned> pending;
+    for (unsigned item = 0; item < item_total; ++item) {
+        if (cancelled()) {
+            return false;
+        }
+        if ((!unknown[item] && sources[item].empty()) || !can_be_flushed(item)) {
+            continue;
+        }
+        const unsigned stamp = item + 1;
+        auto record = [&](unsigned f) {
+            if (flush_stamp[f] != stamp && (item < scalar_base || scalar_candidate(item, reload_chain_flushes[f]))) {
+                flush_stamp[f] = stamp;
+                flush_items[f].push_back(item);
+            }
+        };
+        if (unknown[item]) {
+            for (unsigned f = 0; f < flush_total; ++f) {
+                if (flushes(item, reload_chain_flushes[f])) {
+                    record(f);
+                }
+            }
+            continue;
+        }
+        // the position of the first store of NOTHING to a slot item in block b after pos, or NoIndex
+        auto next_kill = [&](unsigned b, unsigned pos) -> unsigned {
+            if (item >= scalar_base || kills[item].empty()) {
+                return NoIndex;
+            }
+            const std::vector<std::pair<unsigned, unsigned>>& item_kills = kills[item];
+            auto k = std::lower_bound(item_kills.begin(), item_kills.end(), std::make_pair(b, pos + 1));
+            return (k != item_kills.end() && k->first == b) ? k->second : NoIndex;
+        };
+        // continues the search after pos in block b: at its next boundary, or from its end; a store of NOTHING
+        // before either ends the path
+        auto continue_after = [&](unsigned b, unsigned pos) {
+            const unsigned kill_pos = next_kill(b, pos);
+            for (auto& [flush_pos, f] : block_flushes[b]) {
+                if (flush_pos > pos) {
+                    if (kill_pos < flush_pos) {
+                        return;
+                    }
+                    if (visit_stamp[f] != stamp) {
+                        visit_stamp[f] = stamp;
+                        pending.push_back(f);
+                    }
+                    return;
+                }
+            }
+            if (kill_pos != NoIndex || exit_stamp[b] == stamp) {
+                return;
+            }
+            exit_stamp[b] = stamp;
+            if (walk_block[b]) {
+                for (llvm::BasicBlock* successor : llvm::successors(blocks[b])) {
+                    const unsigned s = block_index.at(successor);
+                    if (entry_stamp[s] != stamp) {
+                        entry_stamp[s] = stamp;
+                        pending.push_back(flush_total + s);
+                    }
+                }
+                return;
+            }
+            for (unsigned f : next_flushes[b]) {
+                if (visit_stamp[f] != stamp) {
+                    visit_stamp[f] = stamp;
+                    pending.push_back(f);
+                }
+            }
+        };
+        for (auto& [b, pos] : sources[item]) {
+            continue_after(b, pos);
+        }
+        while (!pending.empty()) {
+            if (cancelled()) {
+                pending.clear();
+                return false;
+            }
+            const unsigned next_item = pending.back();
+            pending.pop_back();
+            if (next_item >= flush_total) {
+                continue_after(next_item - flush_total, 0);
+                continue;
+            }
+            // a boundary that flushes the item ends the path; any other leaves the item as it is
+            if (flushes(item, reload_chain_flushes[next_item])) {
+                record(next_item);
+            } else if (flush_location[next_item].first != NoIndex) {
+                continue_after(flush_location[next_item].first, flush_location[next_item].second);
+            }
+        }
+    }
+
+    // A rotation or a clear can release a local's older value, so a boundary visits its trackers, then its
+    // deferred slots without a tracker, each in reverse declaration order (see getReverseDeclarationOrder()), as
+    // the inline flush did; the order of the operations kept is that of the full flush.  The rank of a slot item
+    // is that of its local, with its position in its map as the index of a local without a slot, as
+    // getReverseDeclarationOrder() ranks the keys of a map; the scalar publications follow in their order.
+    std::vector<uint64_t> item_rank(scalar_base);
+    {
+        unsigned t = 0;
+        for (auto& [key, tracker] : local_reload_trackers) {
+            (void)tracker;
+            if (cancelled()) {
+                return false;
+            }
+            item_rank[t] = getLocalDeclarationRank(key, t);
+            ++t;
+        }
+        for (unsigned d = 0; d < deferred_total; ++d) {
+            if (cancelled()) {
+                return false;
+            }
+            item_rank[tracker_total + d] = getLocalDeclarationRank(deferred_keys[d], d);
+        }
+    }
+    auto item_group = [&](unsigned item) -> unsigned {
+        return item < tracker_total ? 0 : (item < scalar_base ? 1 : 2);
+    };
+    auto release_order = [&](unsigned a, unsigned b) -> bool {
+        const unsigned group_a = item_group(a);
+        const unsigned group_b = item_group(b);
+        if (group_a != group_b) {
+            return group_a < group_b;
+        }
+        if (group_a < 2 && item_rank[a] != item_rank[b]) {
+            return item_rank[a] > item_rank[b];
+        }
+        // equal ranks keep the order of the map, as the stable sort of getReverseDeclarationOrder() does
+        return a < b;
+    };
+
+    llvm::IRBuilderBase::InsertPointGuard insert_guard(*builder);
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     auto i64_nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-    auto clear_alloca = [&](llvm::Value* alloca) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(i64_nothing, alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
-    };
-
-    // The tracker for each local holds an explicit +1 ref to the value currently
-    // cached in the alloca, paired one-to-one with the alloca's cached copy so
-    // any consumer that reads the alloca (or that LLVM's mem2reg forwards from
-    // the prior store) keeps the referent alive.  Immediately decreffing the
-    // tracker at a temp boundary breaks that pairing for SSA values that LLVM
-    // has already forwarded past the boundary — e.g.,
-    //   StoreLocal @parse_opts %v  // refSelf'd into ctx->locals[slot] AND tracker
-    //   discard.temps              // flushes tracker => decref %v
-    //   ... %v used directly as a call arg (LLVM elided the LoadLocal) ...
-    // After the flush, the only remaining ref is on ctx->locals[slot]; in the
-    // case where parse_opts is a block-scoped pre-instantiated local the call
-    // arg still names the same payload pointer, but the explicit decref drove
-    // the QoreBigIntNode (or any other heap value) to refcount 0 and freed it
-    // prematurely, leaving the call arg dangling.  The fix mirrors
-    // reloadLocalFromRuntime()'s deferred-decref pattern: rotate tracker → deferred
-    // and decref the old deferred, so a still-live SSA value is guaranteed at
-    // least one additional cycle of life before its referent goes away.  This
-    // is the same one-cycle window already used by single-local reloads (see
-    // ConstantList.h comments on "AOT module v3" lifetime).  Net refcount delta
-    // across this routine is unchanged (one decref per tracker) — only the
-    // ordering moves the decref past the next reload site.
-    // Only rotate the chain when the tracker actually holds a value: a flush
-    // with an empty tracker would otherwise pump the deferred slot's +1 ref
-    // off the chain even though no new value came in.  In the
-    // QoreRepl getVisibleSymbols → collectAllSymbolDetails scenario the po
-    // local holds a boxed QoreBigIntNode (parse options > INT48_MAX with
-    // PO_ALLOW_STATEMENT_NO_EFFECT bit 52); two consecutive temp boundaries
-    // between StoreLocal @po and the call would push %po through tracker →
-    // deferred → (decref) and free the QoreBigIntNode while args[4] still
-    // names the same payload pointer.  Guarding on tracker_val != NOTHING
-    // turns each unmatched flush into a no-op for the chain, preserving the
-    // value until either a real reload site rotates a new value through or
-    // the function-exit cleanup runs.
-    // Emitting the NOTHING test inline costs two basic blocks per tracked local at
-    // every temp boundary, so a function with many locals and many call sites pays
-    // (locals x boundaries) blocks -- the reflection test's 1621-line method reached
-    // 88062 rotations, 95% of its 184933 basic blocks, and could not be
-    // code-generated in minutes.  Above the threshold the identical test and
-    // rotation run in the runtime helper instead, which emits one call and no extra
-    // block.  Small functions keep the inline form so LLVM can fold it.
-    const bool use_flush_helpers = (local_reload_trackers.size()
-        + local_reload_deferred.size()) >= getReloadChainCallThreshold();
-    llvm::FunctionCallee rotate_helper;
-    llvm::FunctionCallee clear_helper;
-    if (use_flush_helpers) {
-        rotate_helper = module.getOrInsertFunction("qore_rt_reload_chain_rotate",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
-        clear_helper = module.getOrInsertFunction("qore_rt_reload_chain_clear",
-                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-    }
-
-    auto rotate_or_skip = [&](llvm::Value* tracker_alloca,
-            llvm::Value* deferred_alloca) {
-        if (use_flush_helpers) {
-            builder->CreateCall(rotate_helper,
-                    {tracker_alloca, deferred_alloca, xsink_arg});
-            return;
+    for (unsigned f = 0, e = reload_chain_flushes.size(); f < e; ++f) {
+        if (cancelled()) {
+            return false;
         }
-        llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
-        llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
-                "tracker_has_value");
-        llvm::Function* parent = builder->GetInsertBlock()->getParent();
-        llvm::BasicBlock* rotate_bb = llvm::BasicBlock::Create(
-                builder->getContext(), "reload_chain_rotate", parent);
-        llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
-                builder->getContext(), "reload_chain_cont", parent);
-        builder->CreateCondBr(is_set, rotate_bb, cont_bb);
-        builder->SetInsertPoint(rotate_bb);
-        llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_alloca);
-        builder->CreateStore(i64_nothing, tracker_alloca);
-        builder->CreateStore(tracker_val, deferred_alloca);
-        builder->CreateCall(helper, {old_deferred, xsink_arg});
-        builder->CreateBr(cont_bb);
-        builder->SetInsertPoint(cont_bb);
-    };
-
-    // a rotation can release a local's older value: in reverse declaration order
-    const std::vector<const void*> tracker_keys = getReverseDeclarationOrder(local_reload_trackers,
-        local_reload_trackers_release_order);
-    size_t count = 0;
-    for (const void* key : tracker_keys) {
-        if (!(++count % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM local reload chain flush");
-        }
-        llvm::Value* tracker_alloca = local_reload_trackers.find(key)->second;
-        auto deferred_it = local_reload_deferred.find(key);
-        if (deferred_it == local_reload_deferred.end()) {
-            // No deferred slot — gate the decref on tracker_val != NOTHING so
-            // an empty tracker is a no-op (matches the rotation-path
-            // behavior above).
-            if (use_flush_helpers) {
-                builder->CreateCall(clear_helper, {tracker_alloca, xsink_arg});
-                continue;
-            }
-            llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
-            llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
-                    "tracker_has_value_noslot");
-            llvm::Function* parent = builder->GetInsertBlock()->getParent();
-            llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(
-                    builder->getContext(), "reload_chain_clear", parent);
-            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
-                    builder->getContext(), "reload_chain_clear_cont", parent);
-            builder->CreateCondBr(is_set, clear_bb, cont_bb);
-            builder->SetInsertPoint(clear_bb);
-            builder->CreateStore(i64_nothing, tracker_alloca);
-            builder->CreateCall(helper, {tracker_val, xsink_arg});
-            builder->CreateBr(cont_bb);
-            builder->SetInsertPoint(cont_bb);
+        const ReloadChainFlush& flush = reload_chain_flushes[f];
+        auto* marker = llvm::cast_or_null<llvm::Instruction>(static_cast<llvm::Value*>(flush.marker));
+        if (!marker) {
             continue;
         }
-        rotate_or_skip(tracker_alloca, deferred_it->second);
-    }
-    // Deferred-only slots: drain only when the slot actually has content, so
-    // an empty chain stays empty across flushes.
-    const std::vector<const void*> deferred_keys = getReverseDeclarationOrder(local_reload_deferred,
-        local_reload_deferred_release_order);
-    for (const void* key : deferred_keys) {
-        if (!(++count % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM local reload chain flush");
+        std::vector<unsigned>& items = flush_items[f];
+        std::sort(items.begin(), items.end(), release_order);
+        const bool has_slot_items = !items.empty() && items.front() < scalar_base;
+        builder->SetCurrentDebugLocation(marker->getDebugLoc());
+        llvm::BasicBlock* tail = nullptr;
+        if (has_slot_items && !flush.use_flush_helpers) {
+            // the inline form branches: the code after the boundary continues in its own block
+            llvm::BasicBlock* head = marker->getParent();
+            tail = head->splitBasicBlock(marker, "reload_chain_flush_cont");
+            head->getTerminator()->eraseFromParent();
+            builder->SetInsertPoint(head);
+        } else {
+            builder->SetInsertPoint(marker);
         }
-        llvm::Value* deferred_alloca = local_reload_deferred.find(key)->second;
-        if (local_reload_trackers.find(key) != local_reload_trackers.end()) {
-            // Already rotated above; skip to avoid double-decref.
-            continue;
-        }
-        if (use_flush_helpers) {
-            builder->CreateCall(clear_helper, {deferred_alloca, xsink_arg});
-            continue;
-        }
-        llvm::Value* deferred_val = builder->CreateLoad(i64_type, deferred_alloca);
-        llvm::Value* is_set = builder->CreateICmpNE(deferred_val, i64_nothing,
-                "deferred_has_value");
-        llvm::Function* parent = builder->GetInsertBlock()->getParent();
-        llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(
-                builder->getContext(), "reload_deferred_clear", parent);
-        llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
-                builder->getContext(), "reload_deferred_clear_cont", parent);
-        builder->CreateCondBr(is_set, clear_bb, cont_bb);
-        builder->SetInsertPoint(clear_bb);
-        builder->CreateStore(i64_nothing, deferred_alloca);
-        builder->CreateCall(helper, {deferred_val, xsink_arg});
-        builder->CreateBr(cont_bb);
-        builder->SetInsertPoint(cont_bb);
-    }
 
-    if (local_reload_epoch) {
-        llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
-        llvm::Value* next_epoch = builder->CreateAdd(epoch,
-                llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
-        builder->CreateStore(next_epoch, local_reload_epoch);
-        llvm::Value* token = scalar_boundary_token
-            ? builder->CreateLoad(ptr_type, scalar_boundary_token) : nullptr;
-        llvm::Value* published = token ? builder->CreateLoad(i64_type, scalar_boundary_value) : nullptr;
-        size_t boundary_locals = 0;
-        for (auto& [key, valid_epoch] : local_valid_epochs) {
-            if (++boundary_locals % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT scalar boundary epochs")) {
-                local_cleanup_cancelled = true;
+        llvm::FunctionCallee rotate_helper;
+        llvm::FunctionCallee clear_helper;
+        if (flush.use_flush_helpers) {
+            rotate_helper = module.getOrInsertFunction("qore_rt_reload_chain_rotate",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+            clear_helper = module.getOrInsertFunction("qore_rt_reload_chain_clear",
+                    llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+        }
+        // releases the value of a slot that has one (the tracker of a local without a deferred slot, or a deferred
+        // slot without a tracker)
+        auto clear_slot = [&](llvm::Value* slot, const char* clear_name, const char* cont_name) {
+            if (flush.use_flush_helpers) {
+                builder->CreateCall(clear_helper, {slot, xsink_arg});
                 return;
             }
-            llvm::Value* valid = epoch;
-            if (token && scalar_boundary_locals.count(key)) {
-                // raw local cache: compare stored bits and slot identity with the published scalar.
-                llvm::Value* cache = local_allocas.at(key).storage();
-                llvm::Value* fresh = builder->CreateICmpEQ(
-                    builder->CreateLoad(i64_type, valid_epoch), epoch);
-                llvm::Value* unchanged = builder->CreateICmpEQ(
-                    builder->CreateLoad(i64_type, cache), published);
-                llvm::Value* same = builder->CreateICmpEQ(token, cache);
-                llvm::Value* reuse = builder->CreateAnd(same, builder->CreateAnd(fresh, unchanged));
-                valid = builder->CreateSelect(reuse, next_epoch, epoch, "scalar_boundary_valid_epoch");
+            llvm::Value* val = builder->CreateLoad(i64_type, slot);
+            llvm::Value* is_set = builder->CreateICmpNE(val, i64_nothing, "slot_has_value");
+            llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(builder->getContext(), clear_name, llvm_func);
+            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(builder->getContext(), cont_name, llvm_func);
+            builder->CreateCondBr(is_set, clear_bb, cont_bb);
+            builder->SetInsertPoint(clear_bb);
+            builder->CreateStore(i64_nothing, slot);
+            builder->CreateCall(helper, {val, xsink_arg});
+            builder->CreateBr(cont_bb);
+            builder->SetInsertPoint(cont_bb);
+        };
+
+        // The tracker for each local holds an explicit +1 ref to the value currently
+        // cached in the alloca, paired one-to-one with the alloca's cached copy so
+        // any consumer that reads the alloca (or that LLVM's mem2reg forwards from
+        // the prior store) keeps the referent alive.  Immediately decreffing the
+        // tracker at a temp boundary breaks that pairing for SSA values that LLVM
+        // has already forwarded past the boundary — e.g.,
+        //   StoreLocal @parse_opts %v  // refSelf'd into ctx->locals[slot] AND tracker
+        //   discard.temps              // flushes tracker => decref %v
+        //   ... %v used directly as a call arg (LLVM elided the LoadLocal) ...
+        // After the flush, the only remaining ref is on ctx->locals[slot]; in the
+        // case where parse_opts is a block-scoped pre-instantiated local the call
+        // arg still names the same payload pointer, but the explicit decref drove
+        // the QoreBigIntNode (or any other heap value) to refcount 0 and freed it
+        // prematurely, leaving the call arg dangling.  The fix mirrors
+        // reloadLocalFromRuntime()'s deferred-decref pattern: rotate tracker → deferred
+        // and decref the old deferred, so a still-live SSA value is guaranteed at
+        // least one additional cycle of life before its referent goes away.  This
+        // is the same one-cycle window already used by single-local reloads (see
+        // ConstantList.h comments on "AOT module v3" lifetime).  Net refcount delta
+        // across this routine is unchanged (one decref per tracker) — only the
+        // ordering moves the decref past the next reload site.
+        // Only rotate the chain when the tracker actually holds a value: a flush
+        // with an empty tracker would otherwise pump the deferred slot's +1 ref
+        // off the chain even though no new value came in.  In the
+        // QoreRepl getVisibleSymbols → collectAllSymbolDetails scenario the po
+        // local holds a boxed QoreBigIntNode (parse options > INT48_MAX with
+        // PO_ALLOW_STATEMENT_NO_EFFECT bit 52); two consecutive temp boundaries
+        // between StoreLocal @po and the call would push %po through tracker →
+        // deferred → (decref) and free the QoreBigIntNode while args[4] still
+        // names the same payload pointer.  Guarding on tracker_val != NOTHING
+        // turns each unmatched flush into a no-op for the chain, preserving the
+        // value until either a real reload site rotates a new value through or
+        // the function-exit cleanup runs.
+        // A slot that cannot hold a value here is not tested at all: its test would always skip, so the
+        // operations emitted, and their order, are those of the slots that can.
+        auto rotate_or_skip = [&](llvm::Value* tracker_alloca, llvm::Value* deferred_alloca) {
+            if (flush.use_flush_helpers) {
+                builder->CreateCall(rotate_helper, {tracker_alloca, deferred_alloca, xsink_arg});
+                return;
             }
-            builder->CreateStore(valid, valid_epoch);
+            llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
+            llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing, "tracker_has_value");
+            llvm::BasicBlock* rotate_bb = llvm::BasicBlock::Create(
+                    builder->getContext(), "reload_chain_rotate", llvm_func);
+            llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(
+                    builder->getContext(), "reload_chain_cont", llvm_func);
+            builder->CreateCondBr(is_set, rotate_bb, cont_bb);
+            builder->SetInsertPoint(rotate_bb);
+            llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_alloca);
+            builder->CreateStore(i64_nothing, tracker_alloca);
+            builder->CreateStore(tracker_val, deferred_alloca);
+            builder->CreateCall(helper, {old_deferred, xsink_arg});
+            builder->CreateBr(cont_bb);
+            builder->SetInsertPoint(cont_bb);
+        };
+
+        // the trackers, then the deferred slots without a tracker, each in reverse declaration order, as the items
+        // are sorted (release_order)
+        std::vector<unsigned> candidates;
+        for (unsigned item : items) {
+            if (item < tracker_total) {
+                llvm::Value* tracker = (local_reload_trackers.begin() + item)->second;
+                const unsigned d = tracker_deferred[item];
+                if (d == NoIndex || d >= flush.deferred_count) {
+                    // No deferred slot — gate the decref on tracker_val != NOTHING so an empty tracker is a no-op
+                    // (matches the rotation-path behavior above).
+                    clear_slot(tracker, "reload_chain_clear", "reload_chain_clear_cont");
+                } else {
+                    rotate_or_skip(tracker, (local_reload_deferred.begin() + d)->second);
+                }
+            } else if (item < scalar_base) {
+                // Deferred-only slots: drain only when the slot actually has content, so an empty chain stays
+                // empty across flushes.
+                clear_slot((local_reload_deferred.begin() + (item - tracker_total))->second,
+                    "reload_deferred_clear", "reload_deferred_clear_cont");
+            } else {
+                candidates.push_back(item);
+            }
         }
-        if (token) {
-            builder->CreateStore(llvm::ConstantPointerNull::get(
-                llvm::cast<llvm::PointerType>(ptr_type)), scalar_boundary_token);
+
+        if (flush.has_epoch) {
+            assert(local_reload_epoch);
+            llvm::Value* epoch = builder->CreateLoad(i64_type, local_reload_epoch);
+            llvm::Value* next_epoch = builder->CreateAdd(epoch,
+                    llvm::ConstantInt::get(i64_type, 1), "local_reload_epoch_next");
+            builder->CreateStore(next_epoch, local_reload_epoch);
+            // Every local cache is stale after the increment, as its valid epoch is at most the epoch before it:
+            // only the local whose scalar publication is still the token's can stay valid.  At most one local
+            // matches the token, and only a local whose publication can reach this boundary can.
+            if (flush.has_token && !candidates.empty()) {
+                // the candidates in the order of local_valid_epochs
+                std::sort(candidates.begin(), candidates.end(), [&](unsigned a, unsigned b) {
+                    return local_valid_epochs.find(scalar_keys[a - scalar_base])
+                        < local_valid_epochs.find(scalar_keys[b - scalar_base]);
+                });
+                llvm::Value* token = builder->CreateLoad(ptr_type, scalar_boundary_token);
+                llvm::Value* published = builder->CreateLoad(i64_type, scalar_boundary_value);
+                for (unsigned item : candidates) {
+                    const void* key = scalar_keys[item - scalar_base];
+                    auto cache_it = local_allocas.find(key);
+                    if (cache_it == local_allocas.end()) {
+                        // no cache can match the token
+                        continue;
+                    }
+                    llvm::Value* valid_epoch = local_valid_epochs.find(key)->second;
+                    // raw local cache: compare stored bits and slot identity with the published scalar.
+                    llvm::Value* cache = cache_it->second.storage();
+                    llvm::Value* fresh = builder->CreateICmpEQ(
+                        builder->CreateLoad(i64_type, valid_epoch), epoch);
+                    llvm::Value* unchanged = builder->CreateICmpEQ(
+                        builder->CreateLoad(i64_type, cache), published);
+                    llvm::Value* same = builder->CreateICmpEQ(token, cache);
+                    llvm::Value* reuse = builder->CreateAnd(same, builder->CreateAnd(fresh, unchanged));
+                    builder->CreateStore(builder->CreateSelect(reuse, next_epoch, epoch,
+                        "scalar_boundary_valid_epoch"), valid_epoch);
+                }
+            }
+            if (flush.has_token) {
+                builder->CreateStore(llvm::ConstantPointerNull::get(
+                    llvm::cast<llvm::PointerType>(ptr_type)), scalar_boundary_token);
+            }
         }
+        if (tail) {
+            builder->CreateBr(tail);
+        }
+        marker->eraseFromParent();
     }
+    reload_chain_flushes.clear();
+    llvm::Function* marker_fn = module.getFunction(QoreReloadChainFlushMarker);
+    if (marker_fn && marker_fn->use_empty()) {
+        marker_fn->eraseFromParent();
+    }
+    return true;
 }
 
 unsigned QoreIRToLLVM::estimateInvokeCleanupArrayCapacity(const QoreIRFunction& func) const {
@@ -15782,6 +16236,15 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
     scalar_boundary_token = nullptr;
     scalar_boundary_value = nullptr;
     scalar_boundary_locals.clear();
+    // a lowering that fails leaves no placeholder of a reload-chain flush in the module
+    reload_chain_flushes.clear();
+    struct ReloadChainFlushGuard {
+        QoreIRToLLVM& lowerer;
+        llvm::Module& module;
+        DLLLOCAL ~ReloadChainFlushGuard() {
+            lowerer.discardReloadChainFlushes(module);
+        }
+    } reload_chain_flush_guard{*this, module};
     jit_deopt_block = nullptr;
     current_lowering_block_ = nullptr;
     landingpad_blocks.clear();
@@ -18582,6 +19045,12 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
             error = "missing terminator in LLVM block '" + bb.getName().str() + "'";
             return false;
         }
+    }
+
+    // Every temp boundary and every instruction that can put a value into a reload chain are emitted.
+    if (!finalizeReloadChainFlushes(module, llvm_func)) {
+        error = "cancelled during LLVM reload-chain flush emission";
+        return false;
     }
 
     // All exits (and therefore every emitInvokeCleanup() call) are emitted.
@@ -21570,7 +22039,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             builder->CreateICmpNE(assigned, llvm::ConstantInt::get(i32_type, 0)),
                             it->second.storage(), empty), scalar_boundary_token);
                         publication->setMetadata("qore.scalar.boundary.publish", llvm::MDNode::get(ctx, {}));
-                        scalar_boundary_locals.insert(key);
+                        scalar_boundary_locals.emplace(key, static_cast<unsigned>(scalar_boundary_locals.size()));
                     }
                     if (return_class_store_result) {
                         stored_result = assigned;

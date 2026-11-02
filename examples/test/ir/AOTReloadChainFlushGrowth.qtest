@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTReloadChainFlushGrowthTest
+
+class AOTReloadChainFlushGrowthTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+
+        const DisablePruning = "QORE_DISABLE_LLVM_RELOAD_CHAIN_PRUNING=1 ";
+        #! the statement counts compared: the growth from the first to the second and from the second to the third
+        const Sizes = (20, 40, 80);
+    }
+    constructor() : Test("reload-chain flushes grow with the function, not with locals x boundaries", "1.0", \ARGV) {
+        addTestCase("N try statements each declaring a local", \checkTry());
+        addTestCase("N statements with object locals and destructors", \checkObjects());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    #! a function of n try statements, each declaring a local that a call can change
+    private static string tryFixture(int n) {
+        list<string> lines = ("%modern", "sub ext(auto v) {}", "int sub big(int seed) {", "    int total = 0;");
+        for (int i = 0; i < n; ++i) {
+            push lines, sprintf("    try { string s%d = sprintf(\"%%d\", seed + %d); ext(s%d); total += s%d.size(); }"
+                " catch (hash<ExceptionInfo> ex) { total -= 1; }", i, i, i, i);
+        }
+        lines += ("    return total;", "}", "printf(\"%d\\n\", big(7));");
+        return lines.join("\n") + "\n";
+    }
+
+    #! a function of n statements, each with an object local whose destructor logs, released by later statements
+    private static string objectFixture(int n) {
+        list<string> lines = ("%modern", "our list<string> events = ();",
+            "class Tracked { private { string name; } constructor(string name) { self.name = name; }"
+                " destructor() { push events, name; } string get() { return name; } }",
+            "sub ext(auto v) { push events, \"ext\"; }", "int sub big(int seed) {", "    int total = 0;");
+        for (int i = 0; i < n; ++i) {
+            push lines, sprintf("    Tracked t%d(sprintf(\"t%d-%%d\", seed)); ext(t%d); total += t%d.get().size();",
+                i, i, i, i);
+            if (i >= 2) {
+                push lines, sprintf("    remove t%d;", i - 2);
+            }
+            # a block whose locals, used out of declaration order, are released at its end in reverse declaration
+            # order
+            if (!(i % 4)) {
+                push lines, sprintf("    { Tracked a%d(\"a%d\"); Tracked b%d(\"b%d\"); ext(b%d); ext(a%d);"
+                    " total += b%d.get().size() + a%d.get().size(); }", i, i, i, i, i, i, i, i);
+            }
+        }
+        lines += ("    return total;", "}", "printf(\"%d:%s\\n\", big(7), events.join(\",\"));");
+        return lines.join("\n") + "\n";
+    }
+
+    #! returns the LLVM code of the body of big() in the IR dump
+    /** found by position, not by a regular expression: the body of a large function exceeds the match limit of a
+        lazy match over it
+    */
+    private string bigBody(string ir) {
+        int start = ir.find("(ptr %ctx, ptr %xsink)");
+        while (start >= 0) {
+            int line = ir.rfind("\n", start) + 1;
+            int end_of_line = ir.find("\n", start);
+            string head = ir.substr(line, end_of_line - line);
+            if (head =~ /^define .*@big_/) {
+                int end = ir.find("\n}\n", end_of_line);
+                assertGt(end_of_line, end, "end of the LLVM definition of big()");
+                return ir.substr(end_of_line + 1, end - end_of_line);
+            }
+            start = ir.find("(ptr %ctx, ptr %xsink)", end_of_line);
+        }
+        assertTrue(False, "LLVM definition of big()");
+        return "";
+    }
+
+    #! returns the number of reload-chain flush operations in the code of big(), as runtime helper calls or inline
+    private int countFlushOperations(string code) {
+        int helpers = (regex_extract(code, "(call void @qore_rt_reload_chain_(?:rotate|clear)\\()", RE_Global) ?? ()).size();
+        int inline_ops = (regex_extract(code, "^(reload_(?:chain_rotate|chain_clear|deferred_clear)[0-9]*):",
+            RE_Global | RE_MultiLine) ?? ()).size();
+        return helpers + inline_ops;
+    }
+
+    #! compiles the fixture at each size and returns the flush operations of each; checks the output of each
+    private list<int> measure(code fixture, string prefix, TmpDir dir) {
+        list<int> counts = ();
+        foreach int n in (Sizes) {
+            string source = dir.path + "/fixture" + n + ".q";
+            write(source, fixture(n));
+            string expected = run((qore, "--exec-mode=ast", source));
+            string executable = dir.path + "/fixture" + n;
+            string ir = run((qcc, "-O0", "--strip-source", "-o", executable, source), prefix + "QORE_DUMP_LLVM_IR=1 ");
+            assertEq(expected, run((executable,)), "AOT result " + prefix + n);
+            push counts, countFlushOperations(bigBody(ir));
+        }
+        return counts;
+    }
+
+    #! checks that the growth from 2N to 4N statements is near twice that from N to 2N
+    private checkGrowth(code fixture, string name) {
+        TmpDir dir("qore-reload-chain-growth-");
+        list<int> counts = measure(fixture, "", dir);
+        assertGt(0, counts[0], name + ": the fixture has reload-chain flushes");
+        int first = counts[1] - counts[0];
+        int second = counts[2] - counts[1];
+        assertGt(0, first, name + ": flushes grow with the statements");
+        # linear growth doubles the difference; growth with (locals x boundaries) quadruples it
+        assertLe(first * 5 / 2, second, sprintf("%s: near-linear growth %y", name, counts));
+
+        # the control flushes every tracked local at every boundary, as before: the measure sees quadratic growth
+        list<int> unpruned = measure(fixture, DisablePruning, dir);
+        assertGt((unpruned[1] - unpruned[0]) * 3, unpruned[2] - unpruned[1],
+            sprintf("%s: the control grows with locals x boundaries %y", name, unpruned));
+        assertGt(counts[2] * 4, unpruned[2], sprintf("%s: flushes pruned %y vs %y", name, counts, unpruned));
+    }
+
+    #! checks the result in every mode, with and without pruning, at the largest size
+    private checkModes(code fixture) {
+        TmpDir dir("qore-reload-chain-modes-");
+        string source = dir.path + "/fixture.q";
+        write(source, fixture(Sizes[2]));
+        string expected = run((qore, "--exec-mode=ast", source));
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source), DisablePruning), mode + " unpruned");
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", DisablePruning)) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+
+    checkTry() {
+        checkGrowth(\tryFixture(), "try statements");
+        checkModes(\tryFixture());
+    }
+
+    checkObjects() {
+        checkGrowth(\objectFixture(), "object locals");
+        checkModes(\objectFixture());
+    }
+}
