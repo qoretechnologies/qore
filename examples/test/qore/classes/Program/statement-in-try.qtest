@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StatementInTryTest
+
+#! ProgramControl::getStatementIdInfo() tells if a statement is in the body of a try statement of its function
+class StatementInTryTest inherits QUnit::Test {
+    private {
+        #! the comments are the line numbers
+        const Source = "%modern\n"                                          # 1
+            "sub f() {\n"                                                    # 2
+            "    int a = 1;\n"                                               # 3
+            "    try {\n"                                                    # 4
+            "        a = 2;\n"                                               # 5
+            "        if (a) {\n"                                             # 6
+            "            a = 3;\n"                                           # 7
+            "        }\n"                                                    # 8
+            "        code c = sub () {\n"                                    # 9
+            "            a = 4;\n"                                           # 10
+            "        };\n"                                                   # 11
+            "    } catch (hash<ExceptionInfo> ex) {\n"                       # 12
+            "        a = 5;\n"                                               # 13
+            "        try {\n"                                                # 14
+            "            a = 6;\n"                                           # 15
+            "        } catch () {\n"                                         # 16
+            "            a = 7;\n"                                           # 17
+            "        }\n"                                                    # 18
+            "    }\n"                                                        # 19
+            "    a = 8;\n"                                                   # 20
+            "}\n"                                                            # 21
+            "try {\n"                                                        # 22
+            "    try {\n"                                                    # 23
+            "        f();\n"                                                 # 24
+            "    } catch () {\n"                                             # 25
+            "        f();\n"                                                 # 26
+            "    }\n"                                                        # 27
+            "} catch () {\n"                                                 # 28
+            "}\n"                                                            # 29
+            "f();\n";                                                        # 30
+    }
+
+    constructor() : QUnit::Test("StatementInTryTest", "1.0") {
+        addTestCase("statements in try statements", \inTryTest());
+        set_return_value(main());
+    }
+
+    inTryTest() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        pgm.parse(Source, "src");
+        ProgramControl pc = pgm.getProgram();
+        hash<string, bool> expected = {
+            # a statement before a try statement
+            "3": False,
+            # the body of a try statement, also nested blocks
+            "5": True,
+            "7": True,
+            # a closure is a function of its own
+            "10": False,
+            # a catch block
+            "13": False,
+            # a try statement in a catch block
+            "15": True,
+            "17": False,
+            "20": False,
+            # the top-level code: nested try statements, and a catch block in a try statement
+            "24": True,
+            "26": True,
+            "30": False,
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            int id = pc.findStatementId("src", i.key.toInt());
+            assertEq(i.value, pc.getStatementIdInfo(id).in_try, "line " + i.key);
+        }
+    }
+}

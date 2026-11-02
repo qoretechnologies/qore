@@ -669,6 +669,13 @@
       mistakes receive targeted errors, while intent-dependent constructs are available through the new strict
       \c language-traps warning; all targeted diagnostics expose stable semantic IDs, hints, facts, suggestions,
       related locations, and applicability-ranked fixes for editors and coding agents
+    - runtime errors that match a common pitfall (\c RUNTIME-TYPE-ERROR for a missing value or a container value
+      type, and \c OBJECT-ALREADY-DELETED) carry a @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" hash
+      with a stable ID, a hint, facts, and suggestions as the exception \c arg; the default exception handler and
+      @ref Util::get_exception_string() "get_exception_string()" show it as a hint (see @ref common_pitfalls)
+    - @ref Qore::get_local_vars() "get_local_vars()" gives the declared type of each typed variable and marks a
+      variable that was declared but not assigned; the debuggers show such variables and the hints of runtime
+      diagnostics
     - added @ref <number>::toStringRoundTrip() "<number>::toStringRoundTrip()" and
       @ref <float>::toStringRoundTrip() "<float>::toStringRoundTrip()" for the shortest decimal
       significand that reconstructs the source binary value, with plain/scientific output and preserved signed zero
@@ -1863,7 +1870,10 @@ val = "string";      # OK
       the automatic @ref new-style "%new-style" bits selectively
 
     <b>Note:</b> This change only affects scripts loaded via the command-line binary and
-    the C++ \c QoreProgram::parseFile() API. Module loading via @ref Qore::load_module
+    the C++ \c QoreProgram::parseFile() API, and code parsed with @ref Qore::Program::parse() "Program::parse()" after
+    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()", which the debuggers (\c qdbg,
+    \c qdbg-server and the Visual Studio Code debug adapter) call, so that a debugged script is parsed as the
+    interpreter parses it. Module loading via @ref Qore::load_module
     "load_module()" or @ref requires "%requires" is unaffected — modules continue to control their own parse options
     through directives inside the <tt>.qm</tt> file.
     @endparblock
@@ -2609,6 +2619,32 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       @ref Qore::channel_select() "channel_select()" to wait on several channels at once; and
       @ref Qore::parallel_map() "parallel_map()" / @ref Qore::parallel_foreach() "parallel_foreach()" for
       parallel collection processing.  All of them honor cooperative cancellation
+    - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" tells with \c in_try if a
+      statement is in the body of a try statement of its function, for debuggers
+    - new @ref Qore::DebugProgram::setProgramTerminating() "DebugProgram::setProgramTerminating()" method: a debugger
+      that ends a program by cancelling its threads marks it, so that the threads that end with \c THREAD-CANCELLED
+      end without the message of an unhandled exception; \c qdbg, \c qdbg-mcp and the Visual Studio Code debug adapter
+      end programs quietly with \c kill and their terminate requests
+    - @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()" gives the local variables
+      that a statement can refer to in \c locals, with the top-level local variables of the program, which have global
+      scope, and the new @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"
+      method gives the values of the top-level local variables in the current thread, so that debuggers check the
+      conditions and log messages of breakpoints when they are set and evaluate expressions with the variables that
+      the code sees
+    - new @ref Qore::ProgramControl::findStatementIds() "ProgramControl::findStatementIds()" method: finds all
+      statements of a line, and @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
+      gives the columns of a statement with \c start_column and \c end_column, so that a debugger can set a breakpoint
+      on any statement of a line with more than one statement
+    - new @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()" method: gives the calls
+      of a statement that a debugger can step into, also calls whose called code is only known at runtime, such as
+      methods that a subclass can override and call references; stepping over with the start of the called code as the
+      statement to run to now stops only when the stepped code calls it, not when code that it calls does
+    - new @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" method: creates a
+      Program that inherits all code of a debugged Program, also the code that is not public, for evaluating
+      expressions in a debugger
+    - new @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()" method: applies the parse
+      options that the interpreter gives a source file by its name, so that code parsed with
+      @ref Qore::Program::parse() "Program::parse()" is parsed as the interpreter parses the file
     - new @ref Qore::ParseOptions "ParseOptions" class: an opaque parse-option container supporting more
       than the 64 bits available to the legacy @ref parse_options "PO_*" integer constants, accepting
       options by name, by constant, or by combining other @ref Qore::ParseOptions "ParseOptions" objects, with corresponding
@@ -2795,6 +2831,7 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         the global async I/O controller and c-ares
       - @ref Qore::getnameinfo_async() "getnameinfo_async()": Future-returning async reverse DNS lookup for
         peer-style address information backed by the global async I/O controller and c-ares
+      - @ref Qore::get_thread_name(softint) "get_thread_name(tid)": returns the current name of another thread
       - @ref Qore::get_value_byte_size() "get_value_byte_size()": returns the approximate memory size in bytes of any Qore value;
         recursively calculates sizes for hashes and lists, returns exact sizes for strings and binary data
       - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
@@ -3559,6 +3596,102 @@ while (*binary chunk = input.read(65536)) {
       - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
         (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
 
+    - @ref debugcmdlineintro "DebugCmdLine" module
+      - the results of commands and the values of variables are printed in YAML style, as in \c qdbg and the debug
+        console of Visual Studio Code, with @ref NOTHING (no value) and @ref NULL written as in %Qore
+      - added the \c eval command (\c qdbg and \c qdbg-remote), which evaluates an expression with the variables of the
+        current frame; \c thread \c list shows the names of threads; the output of programs of a debug server is
+        printed as the programs wrote it
+      - added the \c break \c condition, \c break \c hitcondition and \c break \c log commands, which set the
+        condition, the hit condition and the log message of a breakpoint (conditional breakpoints and logpoints)
+      - added the \c exception \c filter command (exceptions that stop threads, also by their codes),
+        <tt>line:column</tt> statements and
+        the \c statement \c line command (breakpoints on a statement of a line with more than one statement), the
+        \c thread \c targets command and <tt>go stepinto</tt> (stepping into a chosen call), the \c thread \c var
+        command (elements, keys and members of variables, also private ones, which can be set), and the
+        \c options \c stopall option (all threads stop together), and the \c display and \c undisplay commands
+        (expressions that are shown at each stop)
+      - fixed \c qdbg not ending when it quits while a thread of the program is stopped before the end of the program
+      - fixed \c qdbg-remote failing at its start, and not starting with the debugged program and its stopped thread
+        as the current ones; with input that is not a terminal, it processes each command of a file of commands at the
+        stop that it is written for, as \c qdbg does
+      - fixed the \c thread \c set and \c help \c thread commands, and \c bt \c all and \c thread \c list, failing with
+        an error; \c qdbg-remote \c -h shows the help without a URL
+      - \c go without arguments runs the current thread until its next breakpoint or exception; it resumed the thread
+        in the mode of its last command; \c frame \c set checks the number of the frame
+      - \c help lists the commands with what they do and a quick start, and the descriptions of the commands and the
+        usage of \c qdbg, \c qdbg-remote, \c qdbg-server and \c qdbg-vsc-adapter are written in plain language;
+        errors are shown as <tt>Error: description (CODE)</tt>, and an error at the start of \c qdbg or
+        \c qdbg-server is shown on one line, with its call stack with \c -v; \c history \c load and
+        \c history \c save without a file name show an error; the unused \c -r option of \c qdbg-server is removed
+      - fixed \c help \c thread \c set showing no description, and the usage of \c qdbg-remote and
+        \c qdbg-vsc-adapter showing 1 as the default of \c -w; it is 1500 milliseconds
+      - fixed \c qdbg \c -z, \c qdbg-vsc-adapter \c -z and the \c timeZone of a Visual Studio Code launch
+        configuration failing with a UTC offset, such as \c +01:00
+      - added the \c continue (\c c), \c step (\c s), \c next (\c n), \c finish, \c print and \c locals commands, as in
+        other debuggers
+      - the events of the debugger are shown in plain words, such as
+        <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, the frames of call stacks are named after their
+        functions, without the frames and threads of the debugger, and \c thread \c list shows whether each thread
+        is paused
+      - a thread that the program starts runs until it reaches a breakpoint, as without the debugger, and its end
+        does not pause it; a thread that pauses while the current thread runs becomes the current thread, and with
+        input that is not a terminal, a command that resumes a thread returns when any thread pauses
+      - added the \c up, \c down, \c b and \c kill commands, as in other debuggers: \c up and \c down select the
+        frame that called the current frame or that it called, and show its line, and \c kill ends the program;
+        \c frame \c set shows the frame that it selects; a thread that starts while all threads of its program are
+        stopped together stays stopped with them; a display expression that cannot be evaluated is shown with the
+        reason
+      - files of commands: \c qdbg and \c qdbg-remote run the commands of \c .qdbginit in the home folder (or of the
+        file of \c -i, unless \c -n is given) and of the files of \c -x at their start, and the \c script command runs
+        a file of commands; a command of a file that resumes a thread waits until a thread pauses, and the first
+        command that fails ends the file
+      - \c quit tells when the program continues without the debugger, and <tt>quit kill</tt> ends it first; the
+        condition and the expressions of the log message of a breakpoint are checked when they are set, also for a
+        breakpoint on a function, whose parameters they can use
+      - JSON output for programs such as coding agents: with \c --json, \c qdbg and \c qdbg-remote write one JSON
+        object for each command, event and output of the program; with \c --wait-timeout or the
+        \c options \c waittimeout command, a command that resumes a thread waits for a thread to pause only as long,
+        and then the program is paused (see @ref debugging_qdbg_json)
+      - an exception that matches a common pitfall of %Qore is shown with a hint when a thread stops at it, and a
+        variable that was declared but not assigned is shown as such with its declared type
+      - session files keep the display expressions, the exception filters and the \c stopall option with the
+        breakpoints; fixed \c session \c save and \c session \c load without a file name doing nothing, \c session
+        \c save writing no file without breakpoints, \c session \c load failing with a type error for a file that is
+        not a session file, and the \c session command showing the number of stopped threads twice
+      - \c qdbg-server listens on \c 127.0.0.1 unless a listener is given with \c -l, as its clients can evaluate
+        expressions and change the program; it listened on all interfaces; with \c -k (or the \c QDBG_SERVER_TOKEN
+        environment variable), it requires a token from its clients, which they send as a bearer token
+        (\c qdbg-remote and \c qdbg-vsc-adapter: <tt>-H Authorization=Bearer &lt;token&gt;</tt>)
+    - @ref debughandlerintro "DebugHandler" module
+      - fixed @ref DebugHandler::WebSocketDebugConnection "WebSocketDebugConnection" to accept a connection context
+        whose values all have the same type, such as a literal <tt>{"id": 1}</tt>; adding the handler raised
+        \c RUNTIME-TYPE-ERROR
+    - @ref debugprogramcontrolintro "DebugProgramControl" module
+      - stopped threads read and set the values of variables and of their elements, keys and members, also private
+        ones, by their paths, and evaluate expressions with the variables of a frame
+      - \c thread/evaluate returns the whole value with \c serialize
+      - added \c captureOutput(), which sends the output of the process to the clients as \c "output" events, as
+        \c qdbg-server does for its programs
+      - interrupt events give the name of the thread
+      - breakpoints have conditions, hit conditions and log messages, which all clients share; the thread that hits a
+        breakpoint checks them before it stops, so it does not stop and wait for a client at each hit
+      - each client selects the exceptions that stop threads with \c exception/filter/set; an exception that no client
+        stops at does not stop the thread
+      - fixed the threads of a debug server staying stopped when its last client disconnects; they continue, and
+        without a client a thread stops only at the start of a program
+      - the interrupt event of a thread that attaches tells whether it starts the program (\c programstart); a thread
+        that a program starts without a client does not stop
+      - added the <tt>program/&lt;id&gt;/terminate</tt> command and \c terminateProgram(), which end a debugged program: its
+        threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+      - fixed a program created with the \c program//create command staying debugged when it ends with an exception
+      - fixed a step stopping twice at the first statement of a block or a function; it stops once at each statement
+      - fixed stepping out of a function stopping at its first line; it stops at the closing brace of the function
+      - fixed a pause not stopping a thread in a loop whose body is empty
+    - @ref debugutilintro "DebugUtil" module
+      - added functions that describe values, list their elements, keys and members, also private ones, and read and
+        set values by their paths
+      - added the \c DebugOutputCapture class, which captures the output of the process for debugger clients
     - @ref discorddataproviderintro "DiscordDataProvider" module
       - API calls are made with an asynchronous
         @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"; a synchronous
@@ -4017,6 +4150,21 @@ while (*binary chunk = input.read(65536)) {
         it: \c "/../etc" was returned as the relative path \c "etc"
 
     - @ref vscdebugadapterintro "VscDebugAdapter" module
+      - the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands in the debug console of
+        Visual Studio Code, as they can be the names of variables
+      - a launched program ends when the session ends, unless Visual Studio Code keeps it running, and an attached
+        program ends when Visual Studio Code ends it (\c terminateDebuggee); the \c restart request ends a launched
+        program and launches it again, or attaches an attached program again; integers are shown in hexadecimal when
+        the IDE requests it
+      - the exception filters of Visual Studio Code are described, and a breakpoint that cannot be set is explained
+        in plain words, such as <tt>there is no statement on line 1 of "target.q" where the program can pause</tt>
+      - lists, hashes and objects are shown as trees in Visual Studio Code, and their elements, keys and members can
+        be set; they were shown as text that could not be expanded
+      - expressions are evaluated for watches, hovers and the debug console, and variables are set to the values of
+        expressions; they can refer to all code of the program, its functions, classes and constants; only the names
+        of variables were evaluated
+      - conditional breakpoints, hit conditions and logpoints are supported; the debugger checks them in the thread
+        that hits a breakpoint, and they are shared with \c qdbg
       - the output of programs that are debugged in the adapter process is sent to the IDE as \c output events;
         it was written to the channel of the protocol and lost
       - fixed the adapter using all the time of a CPU while waiting for requests, and not ending when the IDE
@@ -4024,8 +4172,9 @@ while (*binary chunk = input.read(65536)) {
       - fixed watches and hovers returning no value when the variables of the frame had not been listed, and
         requests without arguments, such as \c configurationDone, failing with empty arguments
         (<a href="https://github.com/qoretechnologies/qore/issues/5560">issue 5560</a>)
-      - the \c stopOnEntry argument of a \c launch request is supported: with \c false, a launched program stops
-        only at a breakpoint or an exception, not at its first statement; it was always stopped there
+      - a launched program runs until a breakpoint or an exception, as in other debuggers of Visual Studio Code; it
+        stops at its first statement only with the \c stopOnEntry argument of the \c launch request set to
+        \c true; it was always stopped there
       - fixed the reasons of stops: a breakpoint stop was reported as a step, without the breakpoints that are hit,
         and the whole debugger event was shown as the text of the stop
       - fixed the names of stack frames: the top frame was named after the debugger event, and each other frame
@@ -4039,6 +4188,26 @@ while (*binary chunk = input.read(65536)) {
       - fixed the output of a program that is debugged in the adapter process being sent after the \c terminated
         event at the end of the program
       - fixed \c qdbg-vsc-adapter writing nothing to its log file
+      - threads are shown with their current names
+      - added the "Uncaught exceptions" exception filter: the program stops at an exception that no try statement of
+        the debugged code catches
+      - breakpoints can be set on any statement of a line with more than one statement (column breakpoints, with
+        the \c breakpointLocations request); stack frames give the columns of their statements; fixed the end line
+        of stack frames not being shown
+      - step into a chosen call of the current statement (step-in targets)
+      - when a thread stops, the other threads of the program stop, and \c continue continues them all, as in other
+        debuggers of Visual Studio Code; only the thread that stops was stopped; the \c stopAllThreads argument of
+        \c launch and \c attach requests set to \c false keeps that
+      - the output of a program of a remote debug server (\c qdbg-server) is shown in the IDE; the server also writes
+        it to its terminal, and its own log is not sent as output; the output that a thread writes before it stops
+        is shown before the stop, also for programs launched by the adapter
+      - fixed \c qdbg-vsc-adapter writing every event of a remote debug server to the debug console of the IDE
+      - fixed \c qdbg-vsc-adapter ending without an answer when the remote debug server cannot be reached, so the
+        IDE did not show why; the IDE's requests are answered with the error; when the connection to the debug
+        server is closed during a session, the session ends with a message in the debug console
+      - fixed attaching to a program of a remote debug server: breakpoints could be set only after an event of the
+        program, and threads that were stopped when the program was attached, or that the runtime stopped when it
+        was attached, were neither resumed nor reported as stopped
     - @ref websocketclientintro "WebSocketClient" module
       - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
         CONNECT handshake for HTTP/2 and HTTP/3
@@ -4463,6 +4632,11 @@ while (*binary chunk = input.read(65536)) {
     - @ref datastreamutilintro "DataStreamUtil" module
       - migrated from module-yaml; framing, serialization, and protocol negotiation for data streams
 
+    - @ref debugmcpserverintro "DebugMcpServer" module
+      - an <a href="https://modelcontextprotocol.io">MCP</a> server that lets coding agents debug %Qore programs:
+        launch a script or attach to a debug server, such as \c qdbg-server or Qorus, set breakpoints with
+        conditions, run until a thread pauses or a time passes, and read the call stack, the variables and the values
+        of expressions; the new \c qdbg-mcp tool runs it (see @ref debugging_mcp)
     - @ref deeldataproviderintro "DeelDataProvider" module
       - new module providing a data provider API for <a href="https://www.deel.com/">Deel</a> global workforce management
 
@@ -5388,6 +5562,34 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::set_local_var_value() "set_local_var_value()", which debuggers use to set a local variable, assigned
+      a value to a local variable that is not bound to a closure without its type: a value of another type was
+      converted to the type of the value holder of the variable, such as a string to \c 0 for an \c int variable, and
+      a read-only variable was changed.  The value is now assigned as an assignment in the code assigns it: converted
+      to the type of the variable if it accepts it, or refused with \c RUNTIME-TYPE-ERROR or
+      \c RUNTIME-READONLY-VIOLATION
+    - a request of a debugger to pause a program (@ref Qore::DebugProgram::breakProgram() "breakProgram()" and
+      @ref Qore::DebugProgram::breakProgramThread() "breakProgramThread()") skipped a thread of the program that ran
+      other code at that moment, such as the code of a module, or a debugger callback, as for a logpoint, so that a
+      thread that logged in a loop could not be paused; such a thread is now paused at the next statement of the
+      program.  \c qdbg also reported the ends of the threads of a program that it ended with \c kill only in part,
+      and possibly after the end of the program, as it released the program while its threads ran, and the debugger
+      is not called for a program without references
+    - \c qdbg did not end on \c SIGINT or \c SIGTERM: the program was no longer debugged, but it continued, and
+      \c qdbg with it; \c qdbg now ends the program and exits with 128 plus the number of the signal, as does
+      \c qdbg-remote, whose debug server's programs continue.  \c qdbg-remote also looked up a connection for a URL
+      without a scheme, such as \c localhost:8001, which loaded the modules of all connections
+    - with the \c ir, \c jit and \c tiered execution modes and in code compiled with \c qcc, when an
+      @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler raised an exception
+      as a block was left normally (at its end, or with \c return, \c break or \c continue), the handlers registered
+      before it in the block did not run, so cleanup code such as releasing a resource was skipped; when the block
+      was left with \c return from a \c try block in it, the \c catch block caught the exception, and the handler ran
+      twice.  As with the \c ast execution mode, every remaining handler of the block now runs, the following
+      \c on_error handlers see the exception and the \c on_success handlers do not run, the exceptions of several
+      handlers are chained in the order they were raised, and the exception leaves the block; a \c return in a
+      handler no longer skips the handlers registered before it either.  With the \c jit and \c tiered execution
+      modes, a value that a handler assigned to a local variable of the function when an exception left a block in
+      a \c try block could also be lost
     - a call passing no value for a parameter of an overloaded function or method (a literal \c NOTHING, an omitted
       argument, or a variable holding no value) could select a different variant at parse time than at run time
       when three or more variants accepted no value equally well: the parse-time resolution selected the last of

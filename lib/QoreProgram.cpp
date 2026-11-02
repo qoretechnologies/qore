@@ -44,6 +44,24 @@
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/DoWhileStatement.h"
+#include "qore/intern/ExpressionStatement.h"
+#include "qore/intern/ForEachStatement.h"
+#include "qore/intern/ForStatement.h"
+#include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/IfStatement.h"
+#include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/QoreParseListNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/ReturnStatement.h"
+#include "qore/intern/ScopedObjectCallNode.h"
+#include "qore/intern/SwitchStatement.h"
+#include "qore/intern/ThrowStatement.h"
+#include "qore/intern/WhileStatement.h"
+#include "qore/intern/VarRefNode.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
@@ -1304,6 +1322,20 @@ void qore_program_private_base::setCreatorChain(const QoreProgram& creator) {
     creator_ids.insert(creator_ids.end(), creator.priv->creator_ids.begin(), creator.priv->creator_ids.end());
 }
 
+void qore_program_private_base::addCreatorChain(const QoreProgram& creator) {
+    // the chain of the parent is set when the child is created
+    assert(!creator_ids.empty());
+    qore_program_id_t creator_id = creator.priv->getProgramId();
+    if (!isCreatedBy(creator_id)) {
+        creator_ids.push_back(creator_id);
+    }
+    for (qore_program_id_t id : creator.priv->creator_ids) {
+        if (!isCreatedBy(id)) {
+            creator_ids.push_back(id);
+        }
+    }
+}
+
 void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,
@@ -1389,6 +1421,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     // under the parent's lock
     ext_parent = !(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) ? p_pgm : nullptr;
 }
+
+// see InheritAllUserCodeHelper
+thread_local bool q_inherit_all_user_code = false;
 
 #ifdef DEBUG
 namespace {
@@ -1498,6 +1533,12 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 
     // roll back pending domain
     pend_dom = 0;
+
+    // with PO_ALLOW_REPARSE, the Program is back in its committed state, so it can be used at runtime again; without
+    // it, it cannot be parsed again
+    if (atomic_rollback) {
+        parsing_in_progress = false;
+    }
 }
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
@@ -2640,13 +2681,60 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
    return lvh.assign(holder.release(), "<API assignment>");
 }
 
+QoreHashNode* qore_program_private::getTopLevelLocalVars(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ThreadLocalProgramData* tlpd = nullptr;
+    {
+        AutoLocker al(tlock);
+        pgm_data_map_t::iterator i = pgm_data_map.find(get_thread_program_data());
+        if (i != pgm_data_map.end()) {
+            tlpd = i->second;
+        }
+    }
+    const LVList* lvl = sb.getLVList();
+    if (!tlpd || !lvl) {
+        return rv.release();
+    }
+    // only the variables that are instantiated in the thread have values; the inherited ones are not variables of the
+    // code of this Program
+    unsigned n = std::min(static_cast<unsigned>(lvl->size()), tlpd->inst_count);
+    for (unsigned i = sb.getInheritedLocalVarCount(); i < n; ++i) {
+        const LocalVar* lv = lvl->lv[i];
+        ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
+        // a variable that a closure uses is found by its name, as the code finds it
+        if (lv->closureUse()) {
+            ClosureVarValue* cvv = tlpd->cvstack.try_find(lv->getName());
+            if (!cvv) {
+                continue;
+            }
+            v->setKeyValue("type", new QoreStringNode("closure"), xsink);
+            v->setKeyValue("value", cvv->eval(xsink), xsink);
+        } else {
+            LocalVarValue* lvv = tlpd->lvstack.findMaybe(lv);
+            if (!lvv) {
+                continue;
+            }
+            v->setKeyValue("type", new QoreStringNode("local"), xsink);
+            v->setKeyValue("value", lvv->eval(xsink), xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+        qore_set_local_var_debug_type(**v, lv->getTypeInfo(), xsink);
+        rv->setKeyValue(lv->getName(), v.release(), xsink);
+    }
+    return rv.release();
+}
+
 LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeInfo* typeInfo) {
     std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     // emplace into the deque-backed arena; returns a stable pointer
     // that stays valid for the Program's lifetime.  Avoids the per-
     // LocalVar `new`+list-node allocation of the prior safe_dslist
     // implementation — hot path in AOT deserialization.
-    return local_var_list.emplace(name, typeInfo);
+    LocalVar* lv = local_var_list.emplace(name, typeInfo);
+    lv->setOwner(this);
+    return lv;
 }
 
 void qore_program_private::addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement *statement, int offs, const char* section, int sectionOffs) {
@@ -2718,6 +2806,8 @@ void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement
         // plock must already be held
         ReverseStatementIdMap_t::iterator i = pgm->priv->reverseStatementIds.find(statement);
         if (i == pgm->priv->reverseStatementIds.end()) {
+            // a new block can start at a line of the cache of blocks
+            pgm->priv->blockIndexCache.clear();
             pgm->priv->statementIds.push_back(statement);
             pgm->priv->reverseStatementIds.insert(std::pair<AbstractStatement*, unsigned long>(statement, pgm->priv->statementIds.size()));
         }
@@ -2888,6 +2978,21 @@ void ThreadLocalProgramData::dbgDetach(ExceptionSink* xsink) {
     }
 }
 
+void ThreadLocalProgramData::dbgClearTermination(ExceptionSink& xsink) {
+    if (!xsink.isException()) {
+        return;
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm || !pgm->priv->debugger_terminating) {
+        return;
+    }
+    QoreValue err = xsink.getExceptionErr();
+    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
+        printd(5, "ThreadLocalProgramData::dbgClearTermination() this: %p, tid: %d\n", this, q_gettid());
+        xsink.clear();
+    }
+}
+
 int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const AbstractStatement* statement, ExceptionSink* xsink) {
     checkAttach(xsink);
     checkBreakFlag();
@@ -2899,7 +3004,7 @@ int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const 
     bool cond = runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0);
     if (!cond) {
         const AbstractStatement* st = statement ? statement : blockStatement;
-        cond = st == runToStatement;
+        cond = isRunToStatement(st);
         if (!cond && st->getBreakpointFlag()) {   // fast breakpoint check
             printd(5, "ThreadLocalProgramData::dbgStep() this: %p, rs: %d, tid: %d, breakpoint phase-1\n", this, runState, q_gettid());
             bkptId = getProgram()->priv->onCheckBreakpoint(st, xsink);  // more precise check requiring lock
@@ -2949,7 +3054,7 @@ void ThreadLocalProgramData::dbgFunctionEnter(const StatementBlock* statement, E
     checkBreakFlag();
     if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
         // no code
-    } else if (runState == DBG_RS_STEP || statement == runToStatement) {
+    } else if (runState == DBG_RS_STEP || isRunToStatement(statement)) {
         printd(5, "ThreadLocalProgramData::dbgFunctionEnter() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         functionCallLevel = 0;
         DebugRunStateEnum rs = runState;
@@ -2970,7 +3075,7 @@ void ThreadLocalProgramData::dbgFunctionEnter(const StatementBlock* statement, E
 void ThreadLocalProgramData::dbgFunctionExit(const StatementBlock* statement, QoreValue& returnValue, ExceptionSink* xsink) {
     if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
         // no code
-    } else if ((runState == DBG_RS_UNTIL_RETURN && functionCallLevel == 1) || runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0) || statement == runToStatement) {
+    } else if ((runState == DBG_RS_UNTIL_RETURN && functionCallLevel == 1) || runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0) || isRunToStatement(statement)) {
         printd(5, "ThreadLocalProgramData::dbgFunctionExit() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         DebugRunStateEnum rs = runState;
         const AbstractStatement* rts = runToStatement;
@@ -3448,6 +3553,12 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+
+    // the top-level code runs in this Program with no object or class context: the code that runs it, such as the
+    // builtin Program::run() method, has the Program object and class and the calling Program as its context, which
+    // the closures created and the frames of the calls made in the top-level code would otherwise get
+    ProgramCallContextHelper pcch(this);
+    ObjectSubstitutionHelper osh(nullptr, nullptr);
 
     // Save and set runtime_po for this program's top-level code.
     // Without this, runtime_po retains the outer program's value,
@@ -3970,6 +4081,11 @@ int QoreDebugProgram::breakProgramThread(QoreProgram *pgm, int tid) const {
    return priv->breakProgramThread(pgm, tid);
 }
 
+int QoreDebugProgram::setProgramTerminating(QoreProgram* pgm) const {
+   printd(5, "QoreDebugProgram::setProgramTerminating(), this: %p, pgm: %p\n", this, pgm);
+   return priv->setProgramTerminating(pgm);
+}
+
 int QoreDebugProgram::breakProgram(QoreProgram *pgm) const {
    printd(5, "QoreDebugProgram::breakProgram(), this: %p, pgm: %p\n", this, pgm);
    return priv->breakProgram(pgm);
@@ -3998,6 +4114,318 @@ void QoreProgram::getBreakpoints(QoreBreakpointList_t &bkptList) {
 
 void QoreProgram::getStatementBreakpoints(const AbstractStatement* statement, QoreBreakpointList_t &bkptList) {
    priv->getStatementBreakpoints(statement, bkptList);
+}
+
+QoreListNode* qore_program_private::findStatementIds(const char* name, int line, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
+    const AbstractStatement* st = getStatementFromIndex(name, line);
+    if (!st) {
+        return rv.release();
+    }
+    auto same_str = [](const char* a, const char* b) -> bool {
+        return a == b || (a && b && !strcmp(a, b));
+    };
+    // the start column and the ID of each statement found
+    std::vector<std::pair<int, int64>> found;
+    {
+        const QoreProgramLocation* sloc = st->loc;
+        AutoLocker al(&plock);
+        for (size_t i = 0; i < statementIds.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "statement search")) {
+                return nullptr;
+            }
+            const AbstractStatement* s = statementIds[i];
+            if (!s || !s->loc) {
+                continue;
+            }
+            const QoreProgramLocation* loc = s->loc;
+            // another statement of the line is one with a column, as a block or a statement of AOT code has none
+            if (s != st && (loc->start_column < 0 || loc->start_line != sloc->start_line
+                    || loc->offset != sloc->offset || !same_str(loc->getFile(), sloc->getFile())
+                    || !same_str(loc->getSource(), sloc->getSource()))) {
+                continue;
+            }
+            found.emplace_back(loc->start_column, static_cast<int64>(i + 1));
+        }
+    }
+    std::stable_sort(found.begin(), found.end(),
+        [](const std::pair<int, int64>& a, const std::pair<int, int64>& b) { return a.first < b.first; });
+    for (const auto& i : found) {
+        rv->push(i.second, xsink);
+        assert(!*xsink);
+    }
+    return rv.release();
+}
+
+namespace {
+//! Collects the calls of the expressions of a statement that a debugger can step into, in the order in which they are
+//! evaluated
+class StepInTargetCollector {
+public:
+    StepInTargetCollector(qore_program_private& pgm, ExceptionSink* xsink) : pgm(pgm), xsink(xsink),
+            rv(new QoreListNode(hashdeclStepInTargetInfo->getTypeInfo()), xsink) {
+    }
+
+    //! Adds the calls of a statement; its blocks are not searched
+    void addStatement(const AbstractStatement* st) {
+        if (auto* s = dynamic_cast<const ExpressionStatement*>(st)) {
+            add(s->getExpression());
+        } else if (auto* s = dynamic_cast<const ReturnStatement*>(st)) {
+            add(s->getExpression());
+        } else if (auto* s = dynamic_cast<const IfStatement*>(st)) {
+            add(s->getCond());
+        } else if (auto* s = dynamic_cast<const WhileStatement*>(st)) {
+            // also a do-while statement
+            add(s->getCond());
+        } else if (auto* s = dynamic_cast<const ForStatement*>(st)) {
+            add(s->getAssignment());
+            add(s->getCond());
+            add(s->getIterator());
+        } else if (auto* s = dynamic_cast<const ForEachStatement*>(st)) {
+            add(s->getList());
+        } else if (auto* s = dynamic_cast<const SwitchStatement*>(st)) {
+            add(s->getSwitchExp());
+        } else if (auto* s = dynamic_cast<const ThrowStatement*>(st)) {
+            add(s->getArgs());
+        }
+    }
+
+    QoreListNode* release() {
+        return *xsink ? nullptr : rv.release();
+    }
+
+private:
+    //! the maximum depth of the expressions that are searched; deeper parts of an expression are not
+    static constexpr int MaxDepth = 256;
+
+    qore_program_private& pgm;
+    ExceptionSink* xsink;
+    ReferenceHolder<QoreListNode> rv;
+    int depth = 0;
+
+    void addArgs(const QoreParseListNode* parse_args, const QoreListNode* args) {
+        if (parse_args) {
+            for (size_t i = 0; i < parse_args->size(); ++i) {
+                add(parse_args->get(i));
+            }
+        }
+        if (args) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                add(li.getValue());
+            }
+        }
+    }
+
+    //! Adds a call
+    /** @param variant the variant of the called code, if known at parse time; builtin code and the code of other
+        Programs are not stepped into, so their calls are not added
+        @param loc the location of the call
+        @param cls the class of a method, if not given by its variant
+        @param name the name of the called function or method, nullptr for the call of a call reference
+        @param label the label of a call of a call reference
+    */
+    void addCall(const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc,
+            const QoreClass* cls, const char* name, const char* label = nullptr) {
+        unsigned long sid = 0;
+        if (variant) {
+            const UserVariantBase* uvb = variant->getUserVariantBase();
+            const StatementBlock* entry = uvb ? uvb->getEntryStatementBlock() : nullptr;
+            if (!entry) {
+                return;
+            }
+            // the called code of another Program has no statement ID here
+            sid = pgm.getStatementId(entry);
+            if (!sid) {
+                return;
+            }
+            // the class of a method, also of a constructor
+            if (!cls) {
+                if (auto* mvb = dynamic_cast<const MethodVariantBase*>(variant)) {
+                    cls = mvb->getClass();
+                }
+            }
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclStepInTargetInfo, xsink), xsink);
+        qore_hash_private* ph = qore_hash_private::get(**h);
+        QoreStringNode* str = new QoreStringNode;
+        if (name) {
+            if (cls) {
+                str->sprintf("%s::", cls->getName());
+            }
+            str->concat(name);
+        } else {
+            str->concat(label ? label : "<call>");
+        }
+        ph->setKeyValueIntern("name", str);
+        ph->setKeyValueIntern("function", new QoreStringNode(name ? name : ""));
+        ph->setKeyValueIntern("statement_id", static_cast<int64>(sid));
+        if (loc) {
+            ph->setKeyValueIntern("start_line", loc->start_line);
+            ph->setKeyValueIntern("end_line", loc->end_line);
+            ph->setKeyValueIntern("start_column", loc->start_column);
+            ph->setKeyValueIntern("end_column", loc->end_column);
+        }
+        rv->push(h.release(), xsink);
+    }
+
+    void add(const QoreValue& val) {
+        const AbstractQoreNode* node = val.getInternalNode();
+        if (!node || val.isValue() || depth >= MaxDepth || *xsink) {
+            return;
+        }
+        ++depth;
+        addNode(node);
+        --depth;
+    }
+
+    void addNode(const AbstractQoreNode* node) {
+        // a closure is called later, if at all
+        if (dynamic_cast<const QoreClosureParseNode*>(node)) {
+            return;
+        }
+        // obj.method(args): the object is evaluated first, then the arguments
+        if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+            add(dot->getExpression());
+            const MethodCallNode* call = dot->getMethodCall();
+            if (call) {
+                addArgs(call->getParseArgs(), call->getArgs());
+                addCall(call->getVariant(), dot->loc, call->getClass(), call->getName());
+            }
+            return;
+        }
+        if (auto* call = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+            addArgs(call->getParseArgs(), call->getArgs());
+            addCall(call->getVariant(), call->loc, nullptr, "constructor");
+            return;
+        }
+        if (auto* call = dynamic_cast<const AbstractMethodCallNode*>(node)) {
+            addArgs(call->getParseArgs(), call->getArgs());
+            addCall(call->getVariant(), call->loc, call->getClass(), call->getName());
+            return;
+        }
+        if (auto* call = dynamic_cast<const AbstractFunctionCallNode*>(node)) {
+            addArgs(call->getParseArgs(), call->getArgs());
+            // a function whose variant is chosen at runtime is stepped into only if it has user code
+            if (!call->getVariant()) {
+                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                const QoreFunction* f = fc ? fc->getFunction() : nullptr;
+                if (f && !f->hasUser()) {
+                    return;
+                }
+            }
+            addCall(call->getVariant(), call->loc, nullptr, call->getName());
+            return;
+        }
+        // the called code is only known at runtime
+        if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+            add(call->getExp());
+            addArgs(call->getParseArgs(), call->getArgs());
+            const AbstractQoreNode* exp = call->getExp().getInternalNode();
+            auto* var = dynamic_cast<const VarRefNode*>(exp);
+            addCall(nullptr, call->loc, nullptr, nullptr, var ? var->getName() : nullptr);
+            return;
+        }
+        if (auto* op = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+            for (unsigned i = 0; i < 3; ++i) {
+                add(op->get(i));
+            }
+            return;
+        }
+        // also the [] and the {} operators
+        if (auto* op = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+            add(op->getLeft());
+            add(op->getRight());
+            return;
+        }
+        if (auto* op = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
+            add(op->getLeft());
+            add(op->getRight());
+            return;
+        }
+        if (auto* op = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+            add(op->getExp());
+            return;
+        }
+        if (auto* op = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+            add(op->getExp());
+            return;
+        }
+        if (auto* l = dynamic_cast<const QoreParseListNode*>(node)) {
+            for (const QoreValue& v : l->getValues()) {
+                add(v);
+            }
+            return;
+        }
+        if (auto* l = dynamic_cast<const QoreListNode*>(node)) {
+            ConstListIterator li(l);
+            while (li.next()) {
+                add(li.getValue());
+            }
+            return;
+        }
+        if (auto* h = dynamic_cast<const QoreParseHashNode*>(node)) {
+            const auto& keys = h->getKeys();
+            const auto& values = h->getValues();
+            for (size_t i = 0; i < keys.size(); ++i) {
+                add(keys[i]);
+                if (i < values.size()) {
+                    add(values[i]);
+                }
+            }
+            return;
+        }
+        // other expressions make no calls that are known at parse time, or their calls are not searched
+    }
+};
+}
+
+const StatementBlock* qore_program_private::getBlockFromIndex(const char* file, int line, int end_line) {
+    if (!file) {
+        return nullptr;
+    }
+    AutoLocker al(&plock);
+    std::tuple<std::string, int, int> key(file, line, end_line);
+    auto ci = blockIndexCache.find(key);
+    if (ci != blockIndexCache.end()) {
+        return ci->second;
+    }
+    const StatementBlock* rv = nullptr;
+    int rv_lines = -1;
+    for (const AbstractStatement* s : statementIds) {
+        const StatementBlock* b = dynamic_cast<const StatementBlock*>(s);
+        if (!b || !b->loc || b->loc->start_line + b->loc->offset != line || !b->loc->getFile()
+            || strcmp(b->loc->getFile(), file)) {
+            continue;
+        }
+        // the block with the given lines
+        if (end_line >= 0 && b->loc->end_line + b->loc->offset == end_line) {
+            rv = b;
+            break;
+        }
+        // otherwise the innermost block, which has the fewest lines, as for the code of an AOT program, whose
+        // statement index has one entry for each line that a statement starts at, as a block, so a block that starts
+        // at the line of its first statement is the entry of that statement
+        int lines = b->loc->end_line - b->loc->start_line;
+        if (rv_lines < 0 || lines < rv_lines) {
+            rv = b;
+            rv_lines = lines;
+        }
+    }
+    blockIndexCache[key] = rv;
+    return rv;
+}
+
+QoreListNode* qore_program_private::getStepInTargets(int64 statement_id, ExceptionSink* xsink) {
+    const AbstractStatement* st = resolveStatementId(statement_id);
+    if (!st) {
+        xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot resolve statement id from (" QLLD ")",
+            statement_id);
+        return nullptr;
+    }
+    StepInTargetCollector collector(*this, xsink);
+    collector.addStatement(st);
+    return collector.release();
 }
 
 AbstractStatement* QoreProgram::findStatement(const char* fileName, int line) const {

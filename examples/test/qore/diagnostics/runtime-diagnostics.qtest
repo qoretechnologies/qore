@@ -1,0 +1,267 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class RuntimeDiagnosticsTest
+
+hashdecl RuntimeDiagnosticsHash {
+    int count = 0;
+}
+
+class RuntimeDiagnosticsTarget {
+    public {
+        int count = 1;
+    }
+
+    int get() {
+        return count;
+    }
+}
+
+#! Tests the structured runtime diagnostics given as the arg of runtime errors that match a language trap
+public class RuntimeDiagnosticsTest inherits QUnit::Test {
+    constructor() : Test("RuntimeDiagnosticsTest", "1.0") {
+        addTestCase("a declared but unassigned value", \testNoValueForType());
+        addTestCase("a missing hash key", \testMissingHashKey());
+        addTestCase("map over NOTHING", \testMapOverNothing());
+        addTestCase("a gap in a typed list in foreach", \testForeachGap());
+        addTestCase("a hashdecl member", \testHashDeclMember());
+        addTestCase("an object member", \testObjectMember());
+        addTestCase("a narrowed hash value type", \testHashValueType());
+        addTestCase("a narrowed list value type on append", \testListAppendValueType());
+        addTestCase("a narrowed list value type on element assignment", \testListElementValueType());
+        addTestCase("an incompatible value", \testIncompatibleType());
+        addTestCase("a call reference to a deleted object", \testDeletedObjectCallRef());
+        addTestCase("a method call on a deleted object", \testDeletedObjectCall());
+        addTestCase("errors that are not traps have no diagnostic", \testNoDiagnostic());
+        addTestCase("get_exception_string() shows the hint", \testExceptionString());
+        addTestCase("get_exception_string() keeps other args", \testExceptionStringOtherArg());
+        addTestCase("the default exception handler shows the hint", \testDefaultHandler());
+        addTestCase("the default exception handler keeps other args", \testDefaultHandlerOtherArg());
+        set_return_value(main());
+    }
+
+    #! returns the exception raised by the code, which must raise one
+    private hash<ExceptionInfo> getException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "no exception was raised";
+    }
+
+    #! returns the diagnostic of the exception raised by the code and checks the common fields
+    private hash<RuntimeDiagnosticInfo> getDiagnostic(code c, string err, string id) {
+        hash<ExceptionInfo> ex = getException(c);
+        assertEq(err, ex.err);
+        assertTrue(ex.arg instanceof hash<RuntimeDiagnosticInfo>, sprintf("arg: %y", ex.arg));
+        hash<RuntimeDiagnosticInfo> diag = ex.arg;
+        assertEq(id, diag.id);
+        assertNeq("", diag.hint);
+        assertGt(0, diag.suggestions.size());
+        return diag;
+    }
+
+    testNoValueForType() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            *int i;
+            int j = i;
+            remove j;
+        }, "RUNTIME-TYPE-ERROR", "NO-VALUE-FOR-TYPE");
+        assertEq({"expectedType": "int"}, diag.facts);
+        assertEq("pitfalls_declaration", diag.doc);
+        assertRegex("declared but not assigned", diag.hint);
+    }
+
+    testMissingHashKey() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            hash<auto!> h = {"a": 1};
+            string s = h.b;
+            remove s;
+        }, "RUNTIME-TYPE-ERROR", "NO-VALUE-FOR-TYPE");
+        assertEq({"expectedType": "string"}, diag.facts);
+    }
+
+    testMapOverNothing() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            *list<int> src;
+            auto mapped = (map $1 + 1, src);
+            list<auto> l = mapped;
+            remove l;
+        }, "RUNTIME-TYPE-ERROR", "NO-VALUE-FOR-TYPE");
+        assertEq("list<auto>", diag.facts.expectedType);
+    }
+
+    testForeachGap() {
+        # elements between the end of a list and an index assigned beyond it have no value
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            list<int> l = (1,);
+            l[3] = 2;
+            int sum = 0;
+            foreach int i in (l) {
+                sum += i;
+            }
+        }, "RUNTIME-TYPE-ERROR", "NO-VALUE-FOR-TYPE");
+        assertEq({"expectedType": "int"}, diag.facts);
+        hash<ExceptionInfo> ex = getException(sub () {
+            list<string> l = ("a",);
+            l[2] = "b";
+            string str = "";
+            foreach string s in (l) {
+                str += s;
+            }
+        });
+        assertEq("<foreach lvalue assignment> expects type 'string', but got no value instead", ex.desc);
+        assertEq("NO-VALUE-FOR-TYPE", ex.arg.id);
+    }
+
+    testHashDeclMember() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            hash<RuntimeDiagnosticsHash> h();
+            auto v = "x";
+            h.count = v;
+        }, "RUNTIME-TYPE-ERROR", "INCOMPATIBLE-RUNTIME-TYPE");
+        assertEq({"expectedType": "int", "actualType": "string"}, diag.facts);
+    }
+
+    testObjectMember() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            RuntimeDiagnosticsTarget t();
+            auto v;
+            t.count = v;
+        }, "RUNTIME-TYPE-ERROR", "NO-VALUE-FOR-TYPE");
+        assertEq({"expectedType": "int"}, diag.facts);
+    }
+
+    testHashValueType() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            auto h = {"a": 1};
+            h.b = "x";
+        }, "RUNTIME-TYPE-ERROR", "CONTAINER-VALUE-TYPE");
+        assertEq({"expectedType": "int", "actualType": "string", "container": "hash"}, diag.facts);
+        assertEq("pitfalls_narrowing", diag.doc);
+        assertRegex("hash<auto!>", diag.suggestions[0]);
+    }
+
+    testListAppendValueType() {
+        hash<ExceptionInfo> ex = getException(sub () {
+            auto l = (1, 2);
+            l += "x";
+        });
+        assertEq("RUNTIME-TYPE-ERROR", ex.err);
+        assertRegex("declared value type of the list holding the target", ex.desc);
+        assertEq("CONTAINER-VALUE-TYPE", ex.arg.id);
+        assertEq({"expectedType": "int", "actualType": "string", "container": "list"}, ex.arg.facts);
+    }
+
+    testListElementValueType() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            auto l = (1, 2);
+            l[0] = "x";
+        }, "RUNTIME-TYPE-ERROR", "CONTAINER-VALUE-TYPE");
+        assertEq("list", diag.facts.container);
+    }
+
+    testIncompatibleType() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            auto v = "x";
+            int i = v;
+            remove i;
+        }, "RUNTIME-TYPE-ERROR", "INCOMPATIBLE-RUNTIME-TYPE");
+        assertEq({"expectedType": "int", "actualType": "string"}, diag.facts);
+        assertNothing(diag.doc);
+    }
+
+    testDeletedObjectCallRef() {
+        hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
+            RuntimeDiagnosticsTarget t();
+            code c = \t.get();
+            delete t;
+            c();
+        }, "OBJECT-ALREADY-DELETED", "DELETED-OBJECT");
+        assertEq("pitfalls_background_callref", diag.doc);
+        assertEq({}, diag.facts);
+        assertRegex("call reference", diag.hint);
+    }
+
+    testDeletedObjectCall() {
+        RuntimeDiagnosticsTarget t();
+        RuntimeDiagnosticsTarget alias = t;
+        delete t;
+        getDiagnostic(sub () {
+            alias.get();
+        }, "OBJECT-ALREADY-DELETED", "DELETED-OBJECT");
+    }
+
+    testNoDiagnostic() {
+        hash<ExceptionInfo> ex = getException(sub () {
+            auto v = 1;
+            auto z = v - 1;
+            auto r = v / z;
+            remove r;
+        });
+        assertEq("DIVISION-BY-ZERO", ex.err);
+        assertFalse(ex.arg instanceof hash<RuntimeDiagnosticInfo>);
+        # a user exception with a hash arg of the same keys is not a runtime diagnostic
+        ex = getException(sub () {
+            throw "USER-ERROR", "desc", {"id": "NO-VALUE-FOR-TYPE", "hint": "h"};
+        });
+        assertFalse(ex.arg instanceof hash<RuntimeDiagnosticInfo>);
+    }
+
+    testExceptionString() {
+        hash<ExceptionInfo> ex = getException(sub () {
+            *int i;
+            int j = i;
+            remove j;
+        });
+        string str = get_exception_string(ex);
+        assertRegex("\n  hint \\(NO-VALUE-FOR-TYPE\\): a value of this type is required", str);
+        assertRegex("\n    - assign the variable before it is read", str);
+        assertFalse(str =~ /\(arg: /);
+    }
+
+    testExceptionStringOtherArg() {
+        hash<ExceptionInfo> ex = getException(sub () {
+            throw "USER-ERROR", "desc", {"id": "x"};
+        });
+        string str = get_exception_string(ex);
+        assertRegex("\\(arg: \\{id: \"x\"\\}\\)", str);
+        assertFalse(str =~ /hint \(/);
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! returns the error output of the program, which ends with an unhandled exception
+    private string runUnhandled(string src) {
+        return backquote(sprintf("%s -e %s 2>&1", qoreBin(), shellQuote(src)));
+    }
+
+    testDefaultHandler() {
+        string out = runUnhandled("%new-style\nauto h = {\"a\": 1}; h.b = \"x\";");
+        assertRegex("RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead", out);
+        assertRegex("\nhint \\(CONTAINER-VALUE-TYPE\\): the value type of the container", out);
+        assertRegex("\n  - create a container that holds values of different types", out);
+        assertFalse(out =~ /arg: /);
+    }
+
+    testDefaultHandlerOtherArg() {
+        string out = runUnhandled("throw \"USER-ERROR\", \"desc\", \"extra\";");
+        assertRegex("\nUSER-ERROR: desc: extra\n", out);
+        assertFalse(out =~ /hint \(/);
+    }
+}

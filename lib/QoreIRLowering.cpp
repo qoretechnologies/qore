@@ -3816,6 +3816,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // Check if this block has on_exit/on_success/on_error handlers
     bool has_on_block_exit = block->hasOnBlockExit();
     uint32_t scope_id = 0;
+    // the index of the Scope entry of this block in cleanup_stack
+    size_t scope_entry_index = SIZE_MAX;
 
     if (has_on_block_exit) {
         // Allocate a unique scope ID (for compatibility with Phase 2/3)
@@ -3826,6 +3828,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             scope_entry.type = BlockCleanupEntry::Scope;
             scope_entry.scope_id = scope_id;
             scope_entry.handler_start = block_handler_start;  // Record handler start for inline lowering
+            scope_entry.block_scope = true;
+            scope_entry_index = cleanup_stack.size();
             pushBlockCleanup(scope_entry);
         }
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
@@ -3847,7 +3851,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // it can prove it, so an unrecognized statement keeps the anchor.
     const bool needs_handler_anchor = has_on_block_exit
             && qoreIrBlockEnclosesScopeLocals(block);
-    if (needs_handler_anchor || (lvars && getCurrentExceptionTarget())) {
+    // A block with handlers inside an exception region of the frame has its own exception target as well: it leaves
+    // the scope at runtime, running the handlers that have not run yet, before the exception reaches the enclosing
+    // target, whose own ScopeExit would otherwise leave this scope in place of its own (the interpreter pops the
+    // innermost runtime scope).  The handlers that are lowered inline at the exits of the block raise their
+    // exceptions here too, while the handlers registered before them are still registered (see
+    // lowerHandlersAtExit()).  The frame has exception edges already, so the AOT outliner loses nothing.
+    if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.
@@ -3892,9 +3902,15 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         exception_stack.push_back(lvar_exception_cleanup_block);
         pushed_lvar_exception_target = true;
     }
+    if (has_on_block_exit) {
+        // where an exception raised by a handler of this block lowered inline goes; see
+        // BlockCleanupEntry::handler_exception_target
+        cleanup_stack[scope_entry_index].handler_exception_target = getCurrentExceptionTarget();
+    }
 
     if (!root_statement_block) {
-        builder.createDebugBlock(block->loc);
+        // the event is for this block, which a step of a debugger can stop at, also when it is empty
+        builder.createDebugBlock(block->loc, block);
     }
 
     bool terminated = false;
@@ -3987,13 +4003,6 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             bool skip_inline = has_unconditional && has_error;
 
             if (!skip_inline) {
-                // Clear the runtime OBE registration before executing inline
-                // handler code.  Handler bodies may contain return/break/etc.;
-                // if such a non-local exit happens before ScopeExit runs, the
-                // interpreter's return cleanup would see the handler still
-                // registered and fire it a second time.
-                builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
-
                 // Phase 1: Inline handlers at fall-through exit.  The
                 // Scope entry that owns these handlers is at
                 // cleanup_stack.size()-1 (it gets popped below); pass
@@ -4002,9 +4011,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 // the firing Scope entry — without the barrier,
                 // `return`/`break`/`continue` inside an on_exit body
                 // triggers infinite re-inlining.
+                //
+                // Each handler is dropped from the runtime registration before
+                // its inline code (a trim), so a non-local exit in its body
+                // cannot fire it a second time, while the handlers registered
+                // before it stay registered until they have run themselves; the
+                // scope is left after the last handler.
+                assert(scope_entry_index == cleanup_stack.size() - 1);
+                const BlockCleanupEntry scope_entry = cleanup_stack[scope_entry_index];
                 if (!lowerHandlersAtExit(false, error, block_handler_start,
                         /*end_index=*/SIZE_MAX,
-                        /*barrier_depth=*/cleanup_stack.size())) {
+                        /*barrier_depth=*/cleanup_stack.size(), &scope_entry)) {
                     return false;
                 }
             } else {
@@ -4080,7 +4097,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             // Exception unwinds through this synthetic block instead of the
             // try LandingPad, so fire this lexical scope's on_exit/on_error
             // handlers here while its locals are still alive.
-            auto* se_inst = builder.createScopeExit(scope_id, true, block->loc, /*inline_lowered=*/false);
+            // whether the handlers run as for an error is decided at runtime from the sink, as in the AST
+            // interpreter (StatementBlock::execIntern()): a thread_exit reaches this block too, and it is not an
+            // exception, so the block's on_success handlers run and its on_error handlers do not
+            auto* se_inst = builder.createScopeExit(scope_id, false, block->loc, /*inline_lowered=*/false);
             se_inst->exception_target = lvar_exception_cleanup_continue_block;
             builder.createBranch(lvar_exception_cleanup_continue_block, block->loc);
             builder.setBlock(lvar_exception_cleanup_continue_block);
@@ -4174,14 +4194,17 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
                 if ((i - 1) == protected_scope_index) {
+                    // A non-local exit (a return) in the body of a handler of this scope that is being lowered
+                    // inline: the handler itself has been dropped from the scope at runtime, and the handlers
+                    // registered before it are still registered (see lowerHandlersAtExit()).  They still run, as in
+                    // the AST interpreter, where every handler of a block runs whatever the others do
+                    // (StatementBlock::execIntern()), so the scope is left here running them; re-inlining them
+                    // would re-enter the handler range that is being lowered.
+                    auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
+                        /*inline_lowered=*/false);
+                    se_inst->exception_target = getCurrentExceptionTarget();
                     break;
                 }
-                // Clear the runtime OBE registration before executing inline
-                // handler code.  A handler can contain a non-local exit; if the
-                // ScopeExit ran after the inline body, that exit path would
-                // leave the handler registered and fire it again during return
-                // cleanup.
-                builder.createScopeExit(entry.scope_id, is_error, entry.loc, /*inline_lowered=*/true);
 
                 // Phase 1: Inline handlers on break/continue/return cleanup.
                 // Each Scope's handlers occupy the range [entry.handler_start,
@@ -4214,8 +4237,10 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // fired by the current outer emitBlockCleanups when
                 // this iteration returns.  This is what prevents the
                 // infinite re-inlining cycle.
+                // The handlers are dropped from the runtime scope one at a time before their inline code, and
+                // the scope is left after the last one; see lowerHandlersAtExit()
                 if (!lowerHandlersAtExit(is_error, error, entry.handler_start, handler_end,
-                        /*barrier_depth=*/i)) {
+                        /*barrier_depth=*/i, &entry)) {
                     return false;
                 }
                 break;
@@ -4927,7 +4952,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 }
 
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index,
-        size_t end_index, size_t barrier_depth) {
+        size_t end_index, size_t barrier_depth, const BlockCleanupEntry* scope) {
     // Debug-only sanity assert: a correct fix puts natural depth well
     // under this.  Real-world deeply-nested handlers in the qwf corpus
     // stay under 8 once the HandlerBarrier mechanism prevents the
@@ -4949,61 +4974,116 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
     if (end_index > block_handlers.size()) {
         end_index = block_handlers.size();
     }
-    if (block_handlers.empty() || start_index >= end_index) {
-        return true;
-    }
 
-    // Process handlers in reverse order (LIFO), starting from the end
-    for (int i = static_cast<int>(end_index) - 1; i >= static_cast<int>(start_index); --i) {
-        const InlineHandler& handler = block_handlers[i];
-        if (!shouldRunHandler(handler, is_error)) {
-            continue;
-        }
+    // Copy what is needed from the Scope entry: lowering a handler body can push entries on cleanup_stack, which
+    // can reallocate it
+    const bool have_scope = scope != nullptr;
+    const uint32_t scope_id = have_scope ? scope->scope_id : 0;
+    const QoreProgramLocation* scope_loc = have_scope ? scope->loc : nullptr;
+    // a handler of a statement block raises its exceptions to the block's handler exception target; see
+    // BlockCleanupEntry::handler_exception_target
+    const bool set_exception_target = have_scope && scope->block_scope;
+    QoreIRBasicBlock* handler_exception_target = set_exception_target ? scope->handler_exception_target : nullptr;
 
-        // Push a HandlerBarrier sentinel on cleanup_stack at `barrier_depth`
-        // so any `emitBlockCleanups` invoked from a non-local exit
-        // (return/break/continue) *inside* the handler body's lowering
-        // clamps its walk at the barrier — preventing the firing Scope
-        // entry (which still lives on cleanup_stack at/above this depth
-        // and still lists this handler in its handler_start range) from
-        // being re-entered, which would re-fire this same handler and
-        // recurse unboundedly.  Symmetric to the TryStatement /
-        // RefForeach anchors added in 8fb555ac1 (that fix kept outer
-        // Scope entries from claiming inner-scope handlers; this one
-        // keeps an in-flight handler from claiming its own Scope).
-        //
-        // SIZE_MAX means "caller didn't compute a barrier" — e.g.
-        // compileAllHandlerIRs's isolated instance with an empty
-        // cleanup_stack where there's nothing to protect against.  In
-        // that case we skip the barrier entirely.
-        const bool have_barrier = (barrier_depth != SIZE_MAX);
-        if (have_barrier) {
-            BlockCleanupEntry barrier;
-            barrier.type = BlockCleanupEntry::HandlerBarrier;
-            barrier.handler_start = barrier_depth;
-            barrier.loc = handler.code ? handler.code->loc : nullptr;
-            pushBlockCleanup(barrier);
-        }
-
-        // Lower the handler code block inline using the current parse context
-        // This gives the handler natural access to parent block's scope
-        bool ok = lowerStatementBlock(handler.code, error);
-
-        if (have_barrier) {
-            // The barrier must still be on top — handler bodies push
-            // their own entries above it and are responsible for popping
-            // them before returning.  Assert loudly if someone violated
-            // that.
-            assert(!cleanup_stack.empty()
-                && cleanup_stack.back().type == BlockCleanupEntry::HandlerBarrier
-                && "HandlerBarrier disturbed by handler body");
-            cleanup_stack.pop_back();
-        }
-        if (!ok) {
-            return false;
+    if (!block_handlers.empty() && start_index < end_index) {
+        // Process handlers in reverse order (LIFO), starting from the end
+        for (int i = static_cast<int>(end_index) - 1; i >= static_cast<int>(start_index); --i) {
+            // a copy: lowering the handler can register more handlers, which can reallocate block_handlers
+            const InlineHandler handler = block_handlers[i];
+            if (!shouldRunHandler(handler, is_error)) {
+                continue;
+            }
+            if (!lowerHandlerAtExit(handler, i - start_index, error, barrier_depth, scope_id, scope_loc,
+                    set_exception_target, handler_exception_target)) {
+                return false;
+            }
         }
     }
 
+    if (have_scope) {
+        // leave the scope at runtime; its handlers have all been lowered, and those that did not apply are dropped
+        builder.createScopeExit(scope_id, is_error, scope_loc, /*inline_lowered=*/true);
+    }
+    return true;
+}
+
+bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t keep_handlers, std::string& error,
+        size_t barrier_depth, uint32_t scope_id, const QoreProgramLocation* scope_loc, bool set_exception_target,
+        QoreIRBasicBlock* handler_exception_target) {
+    if (scope_id) {
+        // The handler and the handlers registered after it are dropped from the scope at runtime: the
+        // handler's code follows inline, so a non-local exit in it cannot fire it again, and the later ones
+        // have already been lowered.  The handlers registered before it (keep_handlers) stay registered: if
+        // the handler raises an exception, the scope's exception path runs them with the exception, as the
+        // AST interpreter runs every remaining handler of a block after one raises an exception
+        // (StatementBlock::execIntern()).
+        builder.createScopeTrim(scope_id, static_cast<uint32_t>(keep_handlers), scope_loc);
+    }
+
+    // Push a HandlerBarrier sentinel on cleanup_stack at `barrier_depth`
+    // so any `emitBlockCleanups` invoked from a non-local exit
+    // (return/break/continue) *inside* the handler body's lowering
+    // clamps its walk at the barrier — preventing the firing Scope
+    // entry (which still lives on cleanup_stack at/above this depth
+    // and still lists this handler in its handler_start range) from
+    // being re-entered, which would re-fire this same handler and
+    // recurse unboundedly.  Symmetric to the TryStatement /
+    // RefForeach anchors added in 8fb555ac1 (that fix kept outer
+    // Scope entries from claiming inner-scope handlers; this one
+    // keeps an in-flight handler from claiming its own Scope).
+    //
+    // SIZE_MAX means "caller didn't compute a barrier" — e.g.
+    // compileAllHandlerIRs's isolated instance with an empty
+    // cleanup_stack where there's nothing to protect against.  In
+    // that case we skip the barrier entirely.
+    const bool have_barrier = (barrier_depth != SIZE_MAX);
+    if (have_barrier) {
+        BlockCleanupEntry barrier;
+        barrier.type = BlockCleanupEntry::HandlerBarrier;
+        barrier.handler_start = barrier_depth;
+        barrier.loc = handler.code ? handler.code->loc : nullptr;
+        pushBlockCleanup(barrier);
+    }
+
+    // Lower the handler code block inline using the current parse context
+    // This gives the handler natural access to parent block's scope
+    bool ok;
+    if (set_exception_target) {
+        // An exception raised by the handler goes to the exception target of the body of the handler's block
+        // (or leaves the frame when there is none), not to the target of the statement that left the block,
+        // which can be a try block nested in it (`try { return; }`) or a block inside it whose scope has already
+        // been left: the handler runs after the statement has left them, as in the AST interpreter.
+        std::vector<QoreIRBasicBlock*> saved_exception_stack;
+        saved_exception_stack.swap(exception_stack);
+        // restores the exception stack on every way out
+        struct ExceptionStackRestore {
+            std::vector<QoreIRBasicBlock*>& stack;
+            std::vector<QoreIRBasicBlock*>& saved;
+            ~ExceptionStackRestore() {
+                stack.swap(saved);
+            }
+        } exception_stack_restore{exception_stack, saved_exception_stack};
+        if (handler_exception_target) {
+            exception_stack.push_back(handler_exception_target);
+        }
+        ok = lowerStatementBlock(handler.code, error);
+    } else {
+        ok = lowerStatementBlock(handler.code, error);
+    }
+
+    if (have_barrier) {
+        // The barrier must still be on top — handler bodies push
+        // their own entries above it and are responsible for popping
+        // them before returning.  Assert loudly if someone violated
+        // that.
+        assert(!cleanup_stack.empty()
+            && cleanup_stack.back().type == BlockCleanupEntry::HandlerBarrier
+            && "HandlerBarrier disturbed by handler body");
+        cleanup_stack.pop_back();
+    }
+    if (!ok) {
+        return false;
+    }
     return true;
 }
 

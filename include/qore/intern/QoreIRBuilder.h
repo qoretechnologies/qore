@@ -357,7 +357,12 @@ public:
     void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
     //! the IR interpreter's DebugProgram hook path.
-    QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr);
+    //! Creates the instruction of the step event of the start of a block
+    /** @param loc the location of the block
+        @param block the block, if known; the event is for this block, otherwise for the block found from the location
+    */
+    QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr,
+            const AbstractStatement* block = nullptr);
     //! Emit the debugger's step event for a statement (QoreIROpcode::DebugStatement)
     QoreIRInstruction* createDebugStatement(const AbstractStatement* statement);
     //! Emit a pending-exception check after cleanup code that can run destructors.
@@ -415,6 +420,11 @@ public:
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);
     QoreIRScopeExitInstruction* createScopeExit(uint32_t scope_id, bool is_error = false,
         const QoreProgramLocation* loc = nullptr, bool inline_lowered = false);
+    //! Create a ScopeExit instruction that keeps the scope open and drops all but its first @p keep_handlers handlers
+    /** See QoreIRScopeExitInstruction::trim
+    */
+    QoreIRScopeExitInstruction* createScopeTrim(uint32_t scope_id, uint32_t keep_handlers,
+        const QoreProgramLocation* loc = nullptr);
     //! Create a ContextInit instruction — initializes a Context frame on the
     //! thread-local context stack and returns an opaque handle (0 on failure).
     QoreIRContextInstruction* createContext(const std::string& name, const QoreValue& exp,

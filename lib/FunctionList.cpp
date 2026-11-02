@@ -48,6 +48,16 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
     bool no_builtin = static_cast<bool>(po & PO_NO_SYSTEM_FUNC_VARIANTS);
     for (fl_map_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i) {
         QoreFunction* f = i->second->getFunction();
+        // all user functions with all of their variants are shared for a debugger
+        if (q_inherit_all_user_code && !f->hasBuiltin()) {
+            if (no_user) {
+                continue;
+            }
+            f->ref();
+            FunctionEntry* fe = new FunctionEntry(i->first, f, ns);
+            insert(std::make_pair(fe->getName(), fe));
+            continue;
+        }
         if (f->allPrivate()) {
             continue;
         }

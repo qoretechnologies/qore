@@ -136,6 +136,22 @@ public int sub value() { return 5; }
             list<auto> nodes = parse("%requires " + name + "\n", name);
             assertEq(0, findNodes(nodes, "module_path").size(), name);
         }
+
+        # the module path directives with a quoted path and with an unquoted path, which can contain dots
+        mkdir(dir.path + "/.dot.dir");
+        mkdir(dir.path + "/.dot.dir/lib");
+        f.open2(dir.path + "/.dot.dir/lib/RelativeDirectiveModule.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(mod);
+        f.close();
+        foreach string directive in ("%prepend-module-path " + dir.path + "/.dot.dir/lib",
+                "%prepend-module-path \"" + dir.path + "/.dot.dir/lib\"",
+                "%append-module-path \"" + dir.path + "/.dot.dir/lib\"") {
+            string source = directive + "\n%requires RelativeDirectiveModule >= 1.0\n"
+                "int sub run() { return RelativeDirectiveModule::value(); }\n";
+            assertEq(5, run(source, directive), directive);
+            list<auto> nodes = parse(source, directive);
+            assertEq(1, findNodes(nodes, "function_declaration").size(), directive);
+        }
     }
 
     arguments() {

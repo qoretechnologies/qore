@@ -30,6 +30,9 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreException.h"
+#include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 
 #include <cstdlib>
 
@@ -579,7 +582,23 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
 
         // issue #3768: show "arg" unconditionally if present
         if (!e->arg.isNothing()) {
-            if (e->arg.getType() == NT_STRING) {
+            const QoreHashNode* diag = e->arg.getType() == NT_HASH ? e->arg.get<const QoreHashNode>() : nullptr;
+            if (diag && diag->getHashDecl() == hashdeclRuntimeDiagnosticInfo) {
+                // a runtime diagnostic is shown as a hint with its suggestions
+                QoreStringValueHelper id(diag->getKeyValue("id"));
+                QoreStringValueHelper hint(diag->getKeyValue("hint"));
+                printe("\nhint (%s): %s", id->c_str(), hint->c_str());
+                const QoreListNode* sl = diag->getKeyValue("suggestions").getType() == NT_LIST
+                    ? diag->getKeyValue("suggestions").get<const QoreListNode>()
+                    : nullptr;
+                if (sl) {
+                    ConstListIterator li(sl);
+                    while (li.next()) {
+                        QoreStringValueHelper suggestion(li.getValue());
+                        printe("\n  - %s", suggestion->c_str());
+                    }
+                }
+            } else if (e->arg.getType() == NT_STRING) {
                 QoreStringValueHelper arg(e->arg);
                 printe("%s%s", hdr ? ", arg: " : ": ", arg->c_str());
             } else {
@@ -855,4 +874,50 @@ QoreExternalRuntimeStackLocationHelper::QoreExternalRuntimeStackLocationHelper(
 
 QoreExternalRuntimeStackLocationHelper::~QoreExternalRuntimeStackLocationHelper() {
     delete priv;
+}
+
+QoreHashNode* qore_make_runtime_diagnostic(const char* id, const char* hint, const char* doc,
+        const std::vector<std::pair<std::string, std::string>>& facts, const std::vector<std::string>& suggestions) {
+    assert(hashdeclRuntimeDiagnosticInfo);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclRuntimeDiagnosticInfo, nullptr), nullptr);
+    qore_hash_private* ph = qore_hash_private::get(**h);
+    ph->setKeyValueIntern("id", new QoreStringNode(id));
+    ph->setKeyValueIntern("hint", new QoreStringNode(hint));
+    ReferenceHolder<QoreListNode> sl(new QoreListNode(stringTypeInfo), nullptr);
+    for (const auto& suggestion : suggestions) {
+        sl->push(new QoreStringNode(suggestion), nullptr);
+    }
+    ph->setKeyValueIntern("suggestions", sl.release());
+    ReferenceHolder<QoreHashNode> fh(new QoreHashNode(stringTypeInfo), nullptr);
+    qore_hash_private* fph = qore_hash_private::get(**fh);
+    for (const auto& fact : facts) {
+        fph->setKeyValueIntern(fact.first.c_str(), new QoreStringNode(fact.second));
+    }
+    ph->setKeyValueIntern("facts", fh.release());
+    ph->setKeyValueIntern("doc", doc ? QoreValue(new QoreStringNode(doc)) : QoreValue());
+    return h.release();
+}
+
+void qore_raise_deleted_object(ExceptionSink* xsink, const char* fmt, ...) {
+    if (!xsink) {
+        return;
+    }
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
+    while (true) {
+        va_list args;
+        va_start(args, fmt);
+        int rc = desc->vsprintf(fmt, args);
+        va_end(args);
+        if (!rc) {
+            break;
+        }
+    }
+    ReferenceHolder<QoreHashNode> diag(qore_make_runtime_diagnostic(QORE_RTD_DELETED_OBJECT,
+        "the object was deleted before this call or member access: its last reference went away, or it was "
+        "deleted explicitly; a method call reference (\\method() or \\obj.method()) does not keep its object "
+        "alive, so keep a reference to the object for as long as the call reference can be called",
+        "pitfalls_background_callref", {},
+        {"keep a reference to the object, as in a member or a local variable, while the call can happen",
+         "call the method directly, as in \"background obj.method()\", which keeps the object alive"}), nullptr);
+    xsink->raiseExceptionArg("OBJECT-ALREADY-DELETED", diag.release(), desc.release());
 }

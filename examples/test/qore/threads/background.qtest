@@ -164,6 +164,7 @@ class T {
         addTestCase("issue 2653", \issue2653());
         addTestCase("issue 2701", \issue2701());
         addTestCase("issue 2444", \issue2444());
+        addTestCase("names of other threads", \otherThreadNameTest());
         addTestCase("stale self capture", \staleSelfCapture());
         addTestCase("background object lifetime", \backgroundObjectLifetime());
         set_return_value(main());
@@ -301,6 +302,41 @@ class T {
 
         set_thread_name(ThreadName);
         assertEq(ThreadName, get_thread_name());
+    }
+
+    # the name of a thread can be read by another thread as soon as it is set
+    otherThreadNameTest() {
+        if (!HAVE_THREAD_NAME) {
+            assertEq(NOTHING, get_thread_name(gettid()));
+            testSkip("no thread names available");
+        }
+        assertEq(get_thread_name(), get_thread_name(gettid()));
+
+        Queue named();
+        Queue proceed();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            set_thread_name("other-1");
+            named.push(gettid());
+            proceed.get();
+            set_thread_name("other-2");
+            named.push(gettid());
+            proceed.get();
+        }();
+        int tid = named.get();
+        # the thread waits while its name is read
+        assertEq("other-1", get_thread_name(tid));
+        proceed.push(True);
+        assertEq(tid, named.get());
+        assertEq("other-2", get_thread_name(tid));
+        proceed.push(True);
+        done.waitForZero();
+
+        # negative: IDs of no thread
+        assertEq(NOTHING, get_thread_name(0));
+        assertEq(NOTHING, get_thread_name(-1));
+        assertEq(NOTHING, get_thread_name(1000000));
     }
 
     staleSelfCapture() {

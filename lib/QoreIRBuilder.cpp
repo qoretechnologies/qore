@@ -1633,8 +1633,10 @@ void QoreIRBuilder::abandonTempScope() {
     }
 }
 
-QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc) {
-    auto inst = append<QoreIRInstruction>(QoreIROpcode::DebugBlock);
+QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc, const AbstractStatement* block) {
+    QoreIRInstruction* inst = block
+        ? static_cast<QoreIRInstruction*>(append<QoreIRDebugStatementInstruction>(QoreIROpcode::DebugBlock, block))
+        : append<QoreIRInstruction>(QoreIROpcode::DebugBlock);
     inst->loc = loc;
     return inst;
 }
@@ -1847,6 +1849,15 @@ QoreIRScopeEnterInstruction* QoreIRBuilder::createScopeEnter(uint32_t scope_id, 
 QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bool is_error,
         const QoreProgramLocation* loc, bool inline_lowered) {
     auto inst = append<QoreIRScopeExitInstruction>(scope_id, is_error, inline_lowered);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRScopeExitInstruction* QoreIRBuilder::createScopeTrim(uint32_t scope_id, uint32_t keep_handlers,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRScopeExitInstruction>(scope_id, false, true);
+    inst->trim = true;
+    inst->keep_handlers = keep_handlers;
     inst->loc = loc;
     return inst;
 }

@@ -7,6 +7,7 @@
     Copyright (C) 2026 Qore Technologies, s.r.o.
 */
 
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
@@ -4239,7 +4240,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     } else if (base.getType() == NT_WEAKREF) {
         self = base.get<const WeakReferenceNode>()->get();
         if (!self || !self->isValid()) {
-            xsink->raiseException("OBJECT-ALREADY-DELETED",
+            qore_raise_deleted_object(xsink, 
                 "cannot call '%s()' on a deleted weak reference", method_name);
             result = QoreValue();
             return true;
@@ -4249,7 +4250,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (!self->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED",
+        qore_raise_deleted_object(xsink, 
             "cannot call '%s()' on an object that has already been deleted", method_name);
         result = QoreValue();
         return true;
@@ -6784,6 +6785,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return qore_program_private::get(*pgm)->getStatementFromIndex(
             dbg_inst->loc->getFile(), dbg_inst->cached_start_line + dbg_inst->loc->offset);
     };
+    // the statement of an exception event for the debugger: the current statement of the frame, which the
+    // DebugStatement instructions set while a debugger is attached, if its location contains the instruction; the
+    // statement found by the instruction's location otherwise, which on a line with several statements is the first
+    // of them
+    auto get_exception_statement = [&](const QoreIRInstruction* inst) -> const AbstractStatement* {
+        const AbstractStatement* stmt = *rl_cache.stmt_ptr;
+        if (stmt && inst->loc && stmt->loc && stmt->loc->getFile() == inst->loc->getFile()
+            && stmt->loc->start_line <= inst->loc->start_line && stmt->loc->end_line >= inst->loc->start_line) {
+            return stmt;
+        }
+        return getDebugStatement(inst);
+    };
 
     auto findDismissTarget = [](QoreIRBasicBlock* start, QoreIRBasicBlock*& target_block,
             size_t& target_ip) -> bool {
@@ -6847,6 +6860,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             tlpd->dbgFunctionExit(statements, return_value, xsink);
             return false;  // local_cleanup RAII handles cleanup
         }
+        // the debugger can set the local variables of the frame while the thread is stopped, through the runtime
+        // stack, as a callee can
+        invalidateExternalCaches();
     }
 
     if (func.blocks.empty()) {
@@ -7287,8 +7303,12 @@ next_instruction:
             goto next_instruction;
         }
         if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
-            // Update runtime_loc for exception/callstack reporting via cached pointers
-            *rl_cache.stmt_ptr = nullptr;
+            // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
+            // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
+            // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
+            if (!debug_active) {
+                *rl_cache.stmt_ptr = nullptr;
+            }
             *rl_cache.loc_ptr = inst->loc;
             last_ephemeral_line = inst->cached_start_line;
         }
@@ -8238,7 +8258,9 @@ next_instruction:
                         fflush(stderr);
                     }
                     if (debug_active) {
-                        tlpd->dbgException(getDebugStatement(inst), xsink);
+                        tlpd->dbgException(get_exception_statement(inst), xsink);
+                        // the debugger can set the local variables of the frame at the stop of the exception
+                        invalidateExternalCaches();
                         if (ir_trace_exceptions_env.get()) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
@@ -12224,9 +12246,15 @@ load_local_done:
             }
             case QoreIROpcode::DebugBlock: {
                 if (debug_active && !(xsink && *xsink)) {
+                    // the block of the instruction, or the block that starts at its location, as for the debug IR of
+                    // AOT code; the block of the function otherwise
                     const StatementBlock* dbg_block = nullptr;
-                    if (AbstractStatement* dbg_stmt = getDebugStatement(inst)) {
-                        dbg_block = dynamic_cast<const StatementBlock*>(dbg_stmt);
+                    if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+                        dbg_block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
+                    }
+                    if (!dbg_block && pgm && inst->loc && inst->cached_start_line >= 0) {
+                        dbg_block = qore_program_private::get(*pgm)->getBlockFromIndex(inst->loc->getFile(),
+                            inst->cached_start_line + inst->loc->offset, inst->loc->end_line + inst->loc->offset);
                     }
                     if (!dbg_block) {
                         dbg_block = statements;
@@ -12271,7 +12299,12 @@ load_local_done:
                         dbg_stmt = getDebugStatement(inst);
                     }
                     if (dbg_stmt) {
+                        // the current statement of the frame, which the frames of its calls record
+                        *rl_cache.stmt_ptr = dbg_stmt;
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
+                        // the debugger can set the local variables of the frame while the thread is stopped,
+                        // through the runtime stack, as a callee can: they are read from it again
+                        invalidateExternalCaches();
                         if (ir_trace_debug_env.get()) {
                             fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
                                 func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
@@ -12510,6 +12543,19 @@ load_local_done:
             }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
+                if (scope_inst->trim) {
+                    // The scope stays open: only the handlers registered after its first keep_handlers ones are
+                    // dropped, without running them, because they are lowered inline; the handlers kept run on the
+                    // exception path of the scope if an inlined handler raises an exception
+                    if (!scope_stack.empty()) {
+                        size_t keep = scope_stack.back() + scope_inst->keep_handlers;
+                        if (on_block_exit_handlers.size() > keep) {
+                            on_block_exit_handlers.resize(keep);
+                        }
+                    }
+                    ++ip;
+                    break;
+                }
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
                 if (!scope_stack.empty()) {
                     size_t scope_start = scope_stack.back();
@@ -15372,7 +15418,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (!o || !o->isValid()) {
-                        xsink->raiseException("OBJECT-ALREADY-DELETED",
+                        qore_raise_deleted_object(xsink, 
                             "cannot call method on a deleted weak reference");
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -16126,7 +16172,9 @@ load_local_done:
                     }
                 }
                 if (debug_active && xsink && *xsink) {
-                    tlpd->dbgException(getDebugStatement(inst), xsink);
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
+                    // the debugger can set the local variables of the frame at the stop of the exception
+                    invalidateExternalCaches();
                 }
                 if (throw_inst->exception_target) {
                     // The landing pad is in this frame, so only the throwing statement's own
@@ -16186,7 +16234,9 @@ load_local_done:
                     }
                 }
                 if (debug_active && *xsink) {
-                    tlpd->dbgException(getDebugStatement(inst), xsink);
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
+                    // the debugger can set the local variables of the frame at the stop of the exception
+                    invalidateExternalCaches();
                 }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {

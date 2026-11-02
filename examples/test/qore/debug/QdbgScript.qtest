@@ -14,6 +14,11 @@
 %requires QUnit
 %requires FsUtil
 %requires Util
+%requires json
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
 
 %exec-class QdbgScriptTest
 
@@ -29,8 +34,58 @@ public class QdbgScriptTest inherits QUnit::Test {
             "int total = add(2, 3);\n"                                       # 7
             "printf(\"total: %d %y\\n\", total, h);\n";                      # 8
 
+        #! a program whose line 4 runs five times, with i from 0 to 4; the comments are the line numbers
+        const LoopProgram = "%modern\n"                                     # 1
+            "int total = 0;\n"                                              # 2
+            "for (int i = 0; i < 5; ++i) {\n"                               # 3
+            "    total += i;\n"                                             # 4
+            "}\n"                                                           # 5
+            "printf(\"total: %d\\n\", total);\n";                          # 6
+
+        #! a program with a line of three statements, calls to step into, a caught and an uncaught exception
+        const FeatureProgram = "%modern\n"                                   # 1
+            "int sub g(int x) { return x * 10; }\n"                           # 2
+            "hash<auto> h = {\"name\": \"é\", \"lines\": (1, 2, 3)};\n"      # 3
+            "string s = \"é😀\"; int x = g(1); int y = g(g(2));\n"           # 4
+            "try { throw \"CAUGHT\"; } catch (hash<ExceptionInfo> ex) {}\n"   # 5
+            "printf(\"%d %d %y\\n\", x, y, h.lines);\n"                      # 6
+            "throw \"UNCAUGHT\";\n";                                         # 7
+
+        #! a program with a thread that runs while the initial thread is stopped
+        const ThreadProgram = "%modern\n"                                    # 1
+            "our bool done;\n"                                                # 2
+            "Counter c(1);\n"                                                 # 3
+            "Counter running(1);\n"                                           # 4
+            "background sub () { on_exit c.dec(); running.dec(); int n; while (!done) { ++n; } "
+                "printf(\"thread done\\n\"); }();\n"                           # 5
+            "running.waitForZero();\n"                                        # 6
+            "done = True;\n"                                                  # 7
+            "c.waitForZero();\n";                                             # 8
+
+        #! a program whose initial thread waits for a thread that calls add(); the comments are the line numbers
+        const TwoThreadProgram = "%modern\n"                                # 1
+            "int sub add(int a, int b) {\n"                                  # 2
+            "    int sum = a + b;\n"                                         # 3
+            "    return sum;\n"                                              # 4
+            "}\n"                                                            # 5
+            "Counter c(1);\n"                                                # 6
+            "background sub () { on_exit c.dec(); int x = add(1, 1); }();\n" # 7
+            "c.waitForZero();\n"                                             # 8
+            "printf(\"total: %d\\n\", add(2, 3));\n";                      # 9
+
+        #! a program with a long list and a function that is called in a loop
+        const DisplayProgram = "%modern\n"                                   # 1
+            "list<int> big = range(0, 249);\n"                                # 2
+            "int sub f(int a) { int b = a * 2; return b; }\n"                 # 3
+            "int total = 0;\n"                                                # 4
+            "for (int i = 0; i < 3; ++i) { total += f(i); }\n"                # 5
+            "printf(\"%d\\n\", total);\n";                                   # 6
+
         string qore_exe = QdbgScriptTest::getQoreExecutable();
         string qdbg = normalize_dir(get_script_dir() + "/../../../../bin/qdbg");
+        string qdbg_remote = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-remote");
+        string qdbg_server = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");
+        string qdbg_vsc_adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
     }
 
@@ -47,11 +102,43 @@ public class QdbgScriptTest inherits QUnit::Test {
     constructor() : Test("QdbgScript", "1.0", \ARGV) {
         addTestCase("a script of commands", \scriptTest());
         addTestCase("a program without statements", \emptyProgramTest());
+        addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
+        addTestCase("exception filters, columns, step-in targets and variables", \featureTest());
+        addTestCase("all threads stop together", \stopAllTest());
+        addTestCase("exceptions by code", \exceptionCodeTest());
+        addTestCase("display expressions, pages of values and columns of the call stack", \displayTest());
+        addTestCase("qdbg-remote with a debug server that requires a token", \remoteTest());
+        addTestCase("JSON output of qdbg-remote", \remoteJsonTest());
+        addTestCase("SIGTERM ends qdbg and qdbg-remote", \signalTest());
+        addTestCase("commands of threads, frames and steps", \threadCommandTest());
+        addTestCase("quitting while a thread is stopped", \quitTest());
+        addTestCase("help and errors", \helpTest());
+        addTestCase("shortcuts as in other debuggers", \shortcutTest());
+        addTestCase("threads that start, pause and end", \threadStartTest());
+        addTestCase("frames, breakpoints and ending the program as in other debuggers", \frameKillTest());
+        addTestCase("files of commands: the init file, -x and script", \commandFileTest());
+        addTestCase("session files with breakpoints and settings", \sessionFileTest());
+        addTestCase("expressions and texts with quotes and spaces; NOTHING and NULL", \expressionTextTest());
+        addTestCase("time zones", \timeZoneTest());
+        addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
+        addTestCase("JSON output", \jsonOutputTest());
+        addTestCase("JSON output: hints and the end of the program", \jsonExceptionTest());
+        addTestCase("the time that a command waits for a thread to pause", \waitTimeoutTest());
+        addTestCase("quitting while the program runs", \quitRunningTest());
+        addTestCase("pausing threads that log, and the ends of the threads of a program", \threadEndTest());
+        addTestCase("a pause in blocks, and the threads of logpoints in JSON output", \pauseBlockTest());
+        addTestCase("conditions are checked when they are set", \conditionCheckTest());
+        addTestCase("top-level local variables in functions", \topLevelVarTest());
+        addTestCase("the usage of the debugger tools", \usageTest());
+        addTestCase("errors at the start of qdbg and qdbg-server", \startupErrorTest());
         set_return_value(main());
     }
 
     #! runs qdbg for the program with the commands on its input and returns its output and exit code
-    private hash<auto> runQdbg(string program, list<string> commands) {
+    /** @param home the home folder of qdbg, for its init file; without it, qdbg runs no init file (-n), so that the
+        init file of the user does not change the test
+    */
+    private hash<auto> runQdbg(string program, list<string> commands, *list<string> args, *string home) {
         TmpDir tmp("qore-qdbg-test-");
         File f();
         f.open2(tmp.path + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
@@ -62,8 +149,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         f.close();
         *string module_dir = ENV.QORE_MODULE_DIR;
         # -y . disables the command history file
-        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color target.q < commands 2>&1",
-            tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg);
+        string cmd = sprintf("cd '%s' && %sQORE_MODULE_DIR='%s' '%s' '%s' -y . --no-color %s %s target.q < commands "
+            "2>&1", tmp.path, home ? sprintf("HOME='%s' ", home) : "", qlib_dir + (module_dir ? ":" + module_dir : ""),
+            qore_exe, qdbg, home ? "" : "-n", (map sprintf("'%s'", $1), args ?? ()).join(" "));
         int rc;
         string out = backquote(cmd, \rc);
         # loader warnings of AOT modules that are out of date are about the environment, not output of qdbg
@@ -89,6 +177,9 @@ public class QdbgScriptTest inherits QUnit::Test {
 
     scriptTest() {
         hash<auto> res = runQdbg(Program, (
+            # at the start of the program, expressions are evaluated with its code and there are no local variables
+            "eval add(20, 22)",
+            "thread local",
             "break create add",
             "break create target.q 8",
             "go run",
@@ -98,36 +189,1161 @@ public class QdbgScriptTest inherits QUnit::Test {
             "thread local nosuch",
             "go run",
             "thread local total",
+            "eval h.lines[1] + total",
+            "eval nosuch",
+            # the thread ends with the program, and is resumed then
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at the start of the program (thread 2)",
+            "integer add(20, 22) = 42",
+            "no local vars in frame",
+            "Breakpoint 1 created at ",
+            "Breakpoint 2 created at ", "target.q:8",
+            # the commands after "go run" are processed at the stop in add()
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 2)",
+            # each frame is named after its function, and the frames of the debugger are not shown
+            "Call stack of thread 2:", "* 0  add() at ", "target.q:3", "  1  <top level> at ", "target.q:7:1",
+            "local vars in frame: sum, argv, b, a",
+            "integer a = 2",
+            "there is no local var \"nosuch\"",
+            # and at the stop at line 8
+            "Paused at breakpoint 2 at ", "target.q:8",
+            "integer total = 5",
+            # an expression with the local variables of the frame
+            "integer h.lines[1] + total = 7",
+            "DEBUG-EVALUATE-ERROR",
+            "total: 5",
+            "Thread 2 ended",
+        ));
+        assertFalse(res.out =~ /Program::run|qdbg/, "the frames of the debugger are not shown");
+        # no command was processed when the thread was not stopped
+        assertFalse(res.out =~ /is not stopped/, "no command is processed when the thread is not stopped");
+        assertFalse(res.out =~ /there is no current program/, "no command is processed before the program attaches");
+    }
+
+    breakpointConditionTest() {
+        hash<auto> res = runQdbg(LoopProgram, (
+            "break create target.q 4",
+            "break condition 1 i == 3",
+            "break create target.q 4",
+            "break log 2 i={i} total={total}",
+            # negative: an invalid hit condition
+            "break hitcondition 2 often",
+            "break list",
+            "go run",
+            "thread local i",
+            # without its condition the breakpoint has no options and its hits are no longer counted; with a hit
+            # condition, they are counted again from its next hit
+            "break condition 1",
+            "break hitcondition 1 1",
+            "break list",
+            "go run",
+            "thread local i",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at the start of the program",
+            "Breakpoint 1 created",
+            "Breakpoint 2 created",
+            "BREAKPOINT-HIT-CONDITION-ERROR",
+            # the options of the breakpoints
+            "condition: i == 3", "log: i={i} total={total}",
+            # the logpoint writes its message at each hit, and the thread stops when the condition is true
+            "i=0 total=0", "i=1 total=0", "i=2 total=1", "i=3 total=3",
+            "Paused at breakpoint 1 at ", "integer i = 3",
+            # the logpoint was hit four times
+            "hitcondition: 1", "log: i={i} total={total} hits: 4",
+            "i=4 total=6",
+            "Paused at breakpoint 1 at ", "integer i = 4",
+            "total: 10",
+            "Thread 2 ended",
+        ));
+    }
+
+    featureTest() {
+        hash<auto> res = runQdbg(FeatureProgram, (
+            # all exceptions stop threads by default
+            "exception filter",
+            "exception filter uncaught",
+            "exception filter",
+            # the statements of line 4 with their columns, counted in characters
+            "stmt line 4",
+            # breakpoints on the second and the third statement of line 4
+            "break create target.q 4:20",
+            "break create target.q 4:33",
+            "go run",
+            # a hash with its keys, an element, a key, and a variable that does not exist
+            "thread var h",
+            "thread var h.lines[1]",
+            "thread var h{name}",
+            "thread var nosuch",
+            # an element set to the value of an expression
+            "thread var h.lines[1] = 40 + 2",
+            "go run",
+            # the calls of "int y = g(g(2));", and a step into the outer one
+            "thread targets",
+            "go stepinto 2",
+            "thread local x",
+            # negative: a call that the statement does not have
+            "go stepinto 9",
+            # the caught exception does not stop the thread
             "go run",
             "go run",
             "quit",
         ));
         assertEq(0, res.rc);
         assertInOrder(res.out, (
-            "interrupt/attach",
-            "bkptid : 1",
-            "bkptid : 2",
-            # the commands after "go run" are processed at the stop in add()
-            "interrupt/step", "bkptid: 1", "(target.q:3",
-            "TID 2 call stack:", " - 0*: interrupt: step()", " - 1 : add()",
-            "local vars in frame: sum, argv, b, a",
-            "integer a = 2",
-            "there is no local var \"nosuch\"",
-            # and at the stop at line 8
-            "interrupt/step", "bkptid: 2", "(target.q:8",
-            "integer total = 5",
-            "total: 5",
-            "interrupt/detach",
+            "exceptions that stop threads: user, system, uncaught",
+            "exceptions that stop threads: uncaught",
         ));
-        # no command was processed when the thread was not stopped
-        assertFalse(res.out =~ /is not stopped/, "no command is processed when the thread is not stopped");
-        assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+        assertInOrder(res.out, (
+            "column 1", "column 18", "column 32",
+            "Breakpoint 1 created", "Breakpoint 2 created",
+            "Paused at breakpoint 1 at ",
+            "h: hash<auto>", "name: string \"é\"", "lines: list<int>",
+            "h.lines[1]: integer 2",
+            "h{name}: string \"é\"",
+            "no global variable \"nosuch\"",
+            "h.lines[1] = integer 42",
+            "Paused at breakpoint 2 at ",
+            "1: g (target.q:4:42)", "2: g (target.q:4:40)",
+            "Paused at ", "target.q:2", "integer x = 20",
+            "the statement has no call",
+            "10 200 [1, 42, 3]",
+            "Paused at uncaught exception UNCAUGHT", "target.q:7",
+            "Thread 2 ended",
+        ));
+        # the caught exception did not stop the thread
+        assertFalse(res.out =~ /target\.q:5/, "the caught exception does not stop the thread");
+    }
+
+    # when the initial thread stops, the thread that it started stops, and they continue together
+    stopAllTest() {
+        hash<auto> res = runQdbg(ThreadProgram, (
+            "options stopall set 1",
+            # the other thread runs in its loop when the initial thread stops
+            "break create target.q 7",
+            "go run",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at the start of the program",
+            # the thread that the program starts runs until the initial thread stops at the breakpoint
+            "Thread 3 started",
+            "Paused at breakpoint 1",
+            "thread done",
+            "Thread 2 ended",
+        ));
+        # the thread that the initial thread started stopped and continued with it
+        list<string> tids = (res.out =~ x/Paused[^\n]*\(thread ([0-9]+)/g) ?? ();
+        assertTrue((map {$1: True}, tids).size() >= 2, sprintf("%y", tids));
+    }
+
+    # the exception filter with the code of the caught exception stops only at that exception
+    exceptionCodeTest() {
+        hash<auto> res = runQdbg(FeatureProgram, (
+            "exception filter CAUGHT",
+            "exception filter",
+            "go run",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "exceptions that stop threads: CAUGHT",
+            "Paused at exception CAUGHT", "target.q:5",
+            "Thread 2 ended",
+        ));
+        # the program ends with the uncaught exception, which it writes
+        assertFalse(res.out =~ /Paused at uncaught exception/, "the uncaught exception does not stop the thread");
+    }
+
+    displayTest() {
+        hash<auto> res = runQdbg(DisplayProgram, (
+            "break create target.q 3:20",
+            "break create target.q 6",
+            "display a",
+            "display a * 10",
+            "display",
+            "go run",
+            # the call stack with the columns of the statements
+            "bt",
+            "go run",
+            "undisplay 1",
+            "go run",
+            # negative: an expression that does not exist
+            "undisplay 5",
+            "undisplay",
+            "go run",
+            # the elements of a long list from an index, and the rest of them
+            "thread var big from 240",
+            "thread var big",
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        # the list of the expressions; the output of the command line has CR LF line ends
+        assertRegex("(?m)^1: a\r?\n2: a \\* 10\r?$", res.out, "the list of the display expressions");
+        assertInOrder(res.out, (
+            # the expressions are shown at each stop
+            "Paused at breakpoint 1 at ", "1: a = 0", "2: a * 10 = 0",
+            "* 0  f() at ", "target.q:3:20", "  1  <top level> at ", "target.q:5:31",
+            "Paused at breakpoint 1 at ", "1: a = 1", "2: a * 10 = 10",
+            "Paused at breakpoint 1 at ", "1: a * 10 = 20",
+            "there is no display expression 5",
+            "Paused at breakpoint 2 at ", "target.q:6 (thread",
+            "big: list<int> list (249)", "  240: integer 240", "  248: integer 248",
+            "big: list<int> list (249)", "  0: integer 0", "  99: integer 99",
+            "... 149 more (thread var big from 100)",
+            "6\n",
+        ));
+        # no expression is shown after they were removed
+        int last = res.out.find("target.q:6 (thread");
+        assertFalse(res.out.substr(last) =~ /^1: a/m, "no display expression is shown");
+    }
+
+%ifdef NoProcess
+    remoteTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    remoteJsonTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    signalTest() {
+        testSkip("no process module 2.2 or later");
+    }
+%else
+    #! runs qdbg-remote with the commands on its input for a debug server and returns its output and exit code
+    private hash<auto> runRemote(int port, list<string> commands, *string token, *list<string> args) {
+        TmpDir tmp("qore-qdbg-test-");
+        File f();
+        f.open2(tmp.path + "/commands", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(commands.join("\n") + "\n");
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        # no init file of the user
+        string cmd = sprintf("cd '%s' && QORE_MODULE_DIR='%s' '%s' '%s' -y . -n --no-color %s %s localhost:%d < commands "
+            "2>&1", tmp.path, qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, qdbg_remote,
+            token ? sprintf("-H 'Authorization=Bearer %s'", token) : "", (map sprintf("'%s'", $1), args ?? ()).join(" "),
+            port);
+        int rc;
+        string out = backquote(cmd, \rc);
+        out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
+        if (m_options.verbose > 1) {
+            printf("%s\n", out);
+        }
+        return {"out": out, "rc": rc};
+    }
+
+    #! starts qdbg-server with a program in a folder and returns the process and its port
+    private hash<auto> startServer(string dir, string program) {
+        File f();
+        f.open2(dir + "/target.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(program);
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        Process server(qore_exe, (qdbg_server, "target.q"), {
+            "cwd": dir,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
+                "QDBG_SERVER_TOKEN": "s3cret",
+            },
+        });
+        on_error if (server.running()) {
+            server.terminate();
+        }
+        string line = "";
+        while (line !~ /\n/) {
+            *string s = server.readStdout(1024, 30s);
+            if (!exists s) {
+                throw "TEST-ERROR", "the debug server did not start";
+            }
+            line += s;
+        }
+        return {"server": server, "port": (line =~ x/listening on port ([0-9]+)/)[0].toInt()};
+    }
+
+    # JSON output of qdbg-remote: the connection, the result of each command, the output of the program of the
+    # server, and the time that a command waits for a thread to pause
+    remoteJsonTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        hash<auto> sh = startServer(tmp.path, "%modern\nprintf(\"start\\n\");\nint n = 0;\nwhile (True) {\n"
+            "    ++n;\n}\n");
+        Process server = sh.server;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        hash<auto> res = runRemote(sh.port, ("options waittimeout", "go", "kill", "quit"), "s3cret",
+            ("--json", "--wait-timeout=300"));
+        assertEq(0, res.rc, res.out);
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        assertEq("connected", objs[0].type);
+        assertEq(sprintf("ws://localhost:%d", sh.port), objs[0].url);
+        list<hash<auto>> results = select objs, $1.type == "result";
+        assertEq(("options waittimeout", "go", "kill", "quit"), map $1.command, results);
+        assertEq("wait timeout: 300 ms\n", results[0].output);
+        assertTrue(results[1].timedOut);
+        # the output of the program of the server
+        assertEq("start\n", (map $1.text, objs, $1.type == "output" && $1.category == "stdout").join(""));
+        assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        assertTrue(server.wait(30s), "the debug server ends with its program");
+    }
+
+    #! sends SIGTERM to a process
+    private sendTerm(Process p) {
+        string out = backquote(sprintf("kill -TERM %d 2>&1", p.id()));
+        assertEq("", out);
+    }
+
+    # SIGTERM ends qdbg and the program that it debugs, also while a command waits for a thread to pause; it ends
+    # qdbg-remote, and the program of the debug server continues
+    signalTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        string path = tmp.path + "/target.q";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n");
+        f.close();
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        hash<auto> env = Process::getEnvironment() + {"QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : "")};
+        Process p(qore_exe, (qdbg, "-n", "-y", ".", "--no-color", "target.q"), {"cwd": tmp.path, "env": env});
+        on_exit if (p.running()) {
+            p.terminate();
+        }
+        # the command waits for a thread to pause, which it does not
+        p.write("go\n");
+        string out = "";
+        while (out !~ /Thread 2 continues/) {
+            *string s = p.readStdout(1024, 30s);
+            if (!exists s) {
+                break;
+            }
+            out += s;
+        }
+        assertRegex("Thread 2 continues", out);
+        sendTerm(p);
+        assertTrue(p.wait(30s), "qdbg ends with SIGTERM");
+        assertEq(128 + SIGTERM, p.exitCode(), p.readStderr(65536, 0) ?? "");
+
+        # qdbg-remote ends, and the program of the debug server continues
+        hash<auto> sh = startServer(tmp.path, LoopProgram);
+        Process server = sh.server;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        Process r(qore_exe, (qdbg_remote, "-n", "-y", ".", "--no-color", "-H", "Authorization=Bearer s3cret",
+            sprintf("localhost:%d", sh.port)), {"cwd": tmp.path, "env": env});
+        on_exit if (r.running()) {
+            r.terminate();
+        }
+        out = "";
+        while (out !~ /connected to debug server/) {
+            *string s = r.readStdout(1024, 30s);
+            if (!exists s) {
+                break;
+            }
+            out += s;
+        }
+        assertRegex("connected to debug server", out);
+        sendTerm(r);
+        assertTrue(r.wait(30s), "qdbg-remote ends with SIGTERM");
+        assertEq(128 + SIGTERM, r.exitCode(), r.readStderr(65536, 0) ?? "");
+        assertTrue(server.running(), "the debug server continues");
+    }
+
+    # qdbg-remote processes each command of a script at the stop that it is written for, as qdbg does, with a debug
+    # server that requires a token
+    remoteTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        hash<auto> sh = startServer(tmp.path, LoopProgram);
+        Process server = sh.server;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        int port = sh.port;
+        File f();
+
+        # negative: no token and a wrong token
+        hash<auto> res = runRemote(port, ("quit",));
+        assertNeq(0, res.rc);
+        assertRegex("401", res.out);
+        res = runRemote(port, ("quit",), "wrong");
+        assertNeq(0, res.rc);
+
+        # the thread of the program that the server holds at its start is the current thread; the breakpoint is set by
+        # a file of commands of the start
+        string cmd_file = tmp.path + "/start.cmds";
+        f.open2(cmd_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("# the breakpoint of the loop\nbreak create target.q 4\nbreak condition 1 i == 2\n");
+        f.close();
+        res = runRemote(port, (
+            "display total",
+            "go run",
+            "thread local i",
+            "thread var total",
+            "go run",
+            "quit",
+        ), "s3cret", ("-x", cmd_file));
+        assertEq(0, res.rc, res.out);
+        assertInOrder(res.out, (
+            "connected to debug server",
+            "Breakpoint 1 created",
+            # the command that resumes the thread returns when it stops at the breakpoint
+            "Paused at breakpoint 1 at ",
+            "1: total = 1",
+            "integer i = 2",
+            "total: integer 1",
+            "total: 10",
+            # the TIDs of the server are not those of a qdbg process
+            "Thread ", " ended",
+        ));
+        # the acknowledgements of commands are not shown
+        assertFalse(res.out =~ /"ok"/, "no acknowledgement is shown");
+
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+    }
+%endif
+
+    threadCommandTest() {
+        hash<auto> res = runQdbg(Program, (
+            "help thread",
+            "thread set 2",
+            "break create target.q 7",
+            "break create target.q 8",
+            # without a mode, the thread continues to the next breakpoint
+            "go",
+            "bt all",
+            "thread list",
+            # negative: a frame that the stack does not have
+            "frame set 9",
+            # the only call of the line, and its first statement
+            "go stepinto",
+            # out of the function, to the next statement of the caller
+            "go untilreturn",
+            "go",
+            # negative: a frame of a thread that has ended
+            "go",
+            "frame set 0",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Subcommands; \"help thread <subcommand>\" shows the details of one:",
+            "  set      Select the current thread.",
+            "Thread 2 is now the current thread",
+            "Paused at breakpoint 1 at ", "target.q:7",
+            # the call stacks of all threads have no current frame
+            "Call stack of thread 2:", "  0  <top level> at ", "target.q:7",
+            "* thread 2 (", "), paused: <top level> at ", "target.q:7",
+            "there is no frame 9; the frames are numbered from 0 to 0",
+            "Paused at ", "target.q:3",
+            # the thread pauses at the next statement of the caller, which shows the value that add() returned
+            "Paused at ", "target.q:8", "add() returned 5", "8>: printf(",
+            "total: 5",
+            "Thread 2 ended",
+            "there is no current thread",
+        ));
+        assertFalse(res.out =~ /RUNTIME-TYPE-ERROR|INVALID-MEMBER/, "no error of the debugger");
+    }
+
+    shortcutTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "c",
+            "locals",
+            "print a + b",
+            "n",
+            "finish",
+            "s",
+            "continue",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1 at ", "target.q:3",
+            # the local variables with their values
+            "integer b = 3", "integer a = 2",
+            "integer a + b = 5",
+            "Paused at ", "target.q:4",
+            "Paused at ", "target.q:8", "add() returned 5",
+            "total: 5",
+            "Thread 2 ended",
+        ));
+        # the shortcuts are listed with the commands
+        res = runQdbg(Program, ("help", "quit"));
+        assertInOrder(res.out, ("continue (c) ", "finish ", "locals ", "next (n) ", "print ", "step (s) "));
+    }
+
+    #! writes a file of commands and returns its path
+    private string writeCommands(TmpDir tmp, string name, list<string> lines) {
+        string path = tmp.path + "/" + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(lines.join("\n") + "\n");
+        return path;
+    }
+
+    commandFileTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        # the init file in the home folder
+        writeCommands(tmp, ".qdbginit", ("# comment", "", "break create target.q 3", "display a"));
+        hash<auto> res = runQdbg(Program, ("c", "quit"), NOTHING, tmp.path);
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("Breakpoint 1 created at ", "Paused at breakpoint 1 at ", "target.q:3", "1: a = 2"));
+        # -n: no init file
+        res = runQdbg(Program, ("c", "quit"), ("-n",), tmp.path);
+        assertFalse(res.out =~ /Breakpoint 1/, "no init file with -n");
+        assertRegex("total: 5", res.out);
+
+        # -i instead of the init file of the home folder, then -x files in their order; a command that fails ends its
+        # file, and the next file is run
+        string init = writeCommands(tmp, "init.cmds", ("break create target.q 8",));
+        string x1 = writeCommands(tmp, "x1.cmds", ("c", "nosuch", "print 1"));
+        string x2 = writeCommands(tmp, "x2.cmds", ("print total + 1",));
+        res = runQdbg(Program, ("print 2", "quit"), ("-i", init, "-x", x1, "-x", x2), tmp.path);
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Breakpoint 1 created at ", "target.q:8",
+            "Paused at breakpoint 1 at ",
+            "\"nosuch\": Unknown command",
+            "Error: " + x1 + ":2: the command failed, so the rest of the file is not run",
+            "integer total + 1 = 6",
+            "integer 2 = 2",
+        ));
+        assertFalse(res.out =~ /integer 1 = 1/, "the rest of a file after a command that fails is not run");
+
+        # the script command: a file that fails in a file that runs it is shown once, and quit in a file ends the
+        # debugger
+        string bad = writeCommands(tmp, "bad.cmds", ("nosuch",));
+        string outer = writeCommands(tmp, "outer.cmds", ("script " + bad, "print 9"));
+        string quit = writeCommands(tmp, "quit.cmds", ("print 3", "quit", "print 4"));
+        string itself = writeCommands(tmp, "self.cmds", ("script " + tmp.path + "/self.cmds",));
+        res = runQdbg(Program, ("script " + outer, "print 7", "script " + itself, "script", "script " + tmp.path +
+            "/nosuch.cmds", "script " + quit, "print 8"));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Error: " + bad + ":1: the command failed",
+            "integer 7 = 7",
+            "more than 16 files of commands run one another",
+            "Error: " + itself + ":1: the command failed",
+            "Error: the name of the file is missing: script <file>",
+            "Error: cannot read the commands of ",
+            "integer 3 = 3",
+        ));
+        assertEq(1, (res.out =~ x/(the command failed)/g).size() - 1, "each failure of a file is shown once");
+        assertFalse(res.out =~ /integer (4|8|9) = /, "the commands after a failure or quit are not run");
+    }
+
+    # an expression or a text is used as it is written, with its quotes and spaces, and NOTHING and NULL are written
+    # as in Qore
+    expressionTextTest() {
+        hash<auto> res = runQdbg(Program, (
+            "eval sprintf(\"%s-%s\", \"x\", \"y  z\")",
+            "print 'a  b' + \"!\"",
+            "print {\"n\": NOTHING, \"u\": NULL}",
+            # a logpoint, which does not stop the thread, and a breakpoint at the top level
+            "break create target.q 3",
+            "break log 1 a=\"{a}\"  b={b}",
+            "break list",
+            "break create target.q 8",
+            "c",
+            "display \"<\" + total + \">\"",
+            "thread var h.name = \"s  t\"",
+            # a variable with a type accepts a value of the type, as an assignment in the code does
+            "thread var total = \"x\"",
+            "thread var total = 9",
+            "thread local total",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "= \"x-y  z\"",
+            "= \"a  b!\"",
+            "  n: NOTHING", "  u: NULL",
+            "log: a=\"{a}\"  b={b}",
+            "a=\"2\"  b=3",
+            "1: \"<\" + total + \">\" = \"<5>\"",
+            "h.name = string \"s  t\"",
+            "Error: <API assignment> expects type 'int', but got type 'string' instead (RUNTIME-TYPE-ERROR)",
+            "total = integer 9",
+            "integer total = 9",
+        ));
+        # the local variable that has no value yet is shown with its declared type
+        res = runQdbg(Program, ("break create target.q 3", "c", "thread local sum", "quit"));
+        assertRegex("int sum = NOTHING \\(declared but not assigned\\)", res.out);
+    }
+
+    sessionFileTest() {
+        TmpDir tmp("qore-qdbg-test-");
+        string session = tmp.path + "/session.yaml";
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "display a",
+            "exception filter uncaught",
+            "options stopall set 1",
+            "session save " + session,
+            # negative: no file name
+            "session save",
+            "session load",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "The session is saved to ",
+            "Error: the name of the file is missing: session save <file>",
+            "Error: the name of the file is missing: session load <file>",
+        ));
+        # the breakpoint and the settings are loaded with -s
+        res = runQdbg(Program, ("break list", "display", "exception filter", "options stopall", "c", "quit"),
+            ("-s", session));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "target.q:3",
+            "1: a",
+            "exceptions that stop threads: uncaught",
+            "stop all threads: 1",
+            "Paused at breakpoint", "target.q:3", "1: a = 2",
+        ));
+        # negative: a file that is not a session file
+        string not_session = writeCommands(tmp, "x.cmds", ("print 1",));
+        res = runQdbg(Program, ("session load " + not_session, "quit"));
+        assertRegex("is not a session file of the debugger", res.out);
+    }
+
+    frameKillTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "display nosuch",
+            "c",
+            # the frame of the call of add(), and back
+            "up",
+            "down",
+            # negative: no frame further down or up, and an invalid number of frames
+            "down",
+            "up 5",
+            "up x",
+            "frame set 1",
+            "b target.q 8",
+            "c",
+            # the program ends before line 8 prints its output
+            "kill",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Breakpoint 1 created at ",
+            "Paused at breakpoint 1 at ", "target.q:3",
+            # a display expression that cannot be evaluated in the frame
+            "1: nosuch: cannot be shown: ",
+            "Frame 1: <top level> at ", "target.q:7:1", "7>: int total = add(2, 3);",
+            "Frame 0: add() at ", "target.q:3", "3>:     int sum = a + b;",
+            "Error: the current frame is the innermost frame",
+            "Error: the call stack has no frame further up",
+            "Error: expecting a number of frames; got \"x\"",
+            "Frame 1: <top level> at ",
+            "Breakpoint 2 created at ", "target.q:8",
+            "Paused at breakpoint 2 at ", "target.q:8",
+            "The program ended",
+        ));
+        assertFalse(res.out =~ /total: 5/, "the program ended before its output");
+    }
+
+    threadStartTest() {
+        hash<auto> res = runQdbg(TwoThreadProgram, (
+            "break create target.q 3",
+            # the thread that the program starts runs, and pauses at the breakpoint; it becomes the current thread,
+            # as the initial thread does not pause
+            "c",
+            "thread list",
+            "bt all",
+            "bt",
+            # the thread ends, and the initial thread pauses at the breakpoint
+            "c",
+            "c",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at the start of the program (thread 2)",
+            "Thread 3 started",
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 3, now the current thread)",
+            "  thread 2 (", "), running: ",
+            "* thread 3 (", "), paused: add() at ", "target.q:3",
+            "Call stack of thread 2:",
+            "Call stack of thread 3:", "  0  add() at ", "  1  <anonymous closure>() at ", "target.q:7",
+            "Call stack of thread 3:", "* 0  add() at ",
+            # the end of thread 3 and the stop of thread 2 happen at the same time
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 2, now the current thread)",
+            "total: 5",
+            "Thread 2 ended",
+        ));
+        # thread 3 ends after it continues; the initial thread, which waits for it, can print its output before the end
+        # of thread 3 is shown, as its code ends before the thread does
+        assertInOrder(res.out, ("Call stack of thread 3:", "* 0  add() at ", "Thread 3 ended"));
+        # the thread of the command line of the debugger is not shown, nor does a thread pause when it starts or
+        # when its code ends
+        assertFalse(res.out =~ /thread 1 |DebugProgramControl|Paused at the start of the program \(thread 3/);
+    }
+
+    helpTest() {
+        hash<auto> res = runQdbg(Program, (
+            "help",
+            "help thread set",
+            "help go",
+            # negative: an unknown command, a missing file name and lines without statements
+            "help nosuch",
+            "history load",
+            "break create target.q 1",
+            "break create 1",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Commands; \"help <command>\" shows the details of one:",
+            "  break ", "Commands for breakpoints, which pause the program when it reaches them.",
+            "  go ", "Resume the current thread.",
+            "Quick start:", "break create <line>",
+            "thread set: Select the current thread.", "Usage: thread set <thread>",
+            "go: Resume the current thread.", "  go step ", "run to the next line",
+            "nosuch: unknown command; try \"help\"",
+            "Error: the name of the file is missing: history load <file>",
+            "Error: there is no statement on line 1 of \"target.q\" where the program can pause "
+                "(PROGRAM-STATEMENT-ERROR)",
+            "Error: there is no statement on line 1 where the program can pause (PROGRAM-STATEMENT-ERROR)",
+        ));
+        # each command of the list has a description
+        *list<*string> m = (res.out =~ x/shows the details of one:\r?\n(.*?)\r?\n\r?\nQuick start:/s);
+        assertEq(1, m.size());
+        list<string> lines = m[0].split("\n");
+        assertGt(15, lines.size());
+        foreach string line in (lines) {
+            assertRegex("^  [a-z]+( \\([a-z, ]+\\))? +[A-Z][^\\r]+\\.\\r?$", line);
+        }
+        # without the full information of exceptions, the codes of commands are not shown
+        assertFalse(res.out =~ /DEBUG-COMMAND/);
+    }
+
+    timeZoneTest() {
+        string program = "%modern\nprintf(\"offset: %d\\n\", TimeZone::get().UTCOffset());\n";
+        hash<auto> res = runQdbg(program, ("go", "quit"), ("-z", "+01:30"));
+        assertEq(0, res.rc);
+        assertRegex("offset: 5400\\b", res.out);
+        res = runQdbg(program, ("go", "quit"), ("-z", "-05:00"));
+        assertRegex("offset: -18000\\b", res.out);
+        res = runQdbg(program, ("go", "quit"), ("-z", "Etc/GMT-2"));
+        assertRegex("offset: 7200\\b", res.out);
+        # negative: an offset that is not valid
+        res = runQdbg(program, ("go", "quit"), ("-z", "+1"));
+        assertRegex("\"\\+1\" is not a valid UTC offset", res.out);
+        assertFalse(res.out =~ /offset: /);
+    }
+
+    #! runs a debugger tool with arguments and returns its output and exit code
+    private hash<auto> runTool(string tool, list<string> args) {
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        string cmd = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' %s < /dev/null 2>&1",
+            qlib_dir + (module_dir ? ":" + module_dir : ""), qore_exe, tool,
+            (map sprintf("'%s'", $1), args).join(" "));
+        int rc;
+        string out = backquote(cmd, \rc);
+        out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
+        return {"out": out, "rc": rc};
+    }
+
+    usageTest() {
+        hash<auto> res = runTool(qdbg, ("-h",));
+        assertRegex("usage: qdbg \\[options\\]", res.out);
+        assertRegex("-z, --time-zone=zone +the time zone of the script", res.out);
+        assertRegex("Type \"help\" at the prompt", res.out);
+        res = runTool(qdbg_remote, ("-h",));
+        assertRegex("usage: qdbg-remote \\[options\\] <url>", res.out);
+        # the default response timeout in milliseconds
+        assertRegex("milliseconds; the default is 1500", res.out);
+        res = runTool(qdbg_server, ("-h",));
+        assertRegex("-k, --token-file=<file>", res.out);
+        assertRegex("should require a token", res.out);
+        res = runTool(qdbg_vsc_adapter, ("-h",));
+        assertRegex("-X, --execute=pgmlist", res.out);
+        assertRegex("milliseconds; the default is 1500", res.out);
+        assertRegex("UTC offset, such as \\+01:00", res.out);
+        # negative: qdbg-remote without a URL
+        res = runTool(qdbg_remote, ());
+        assertNeq(0, res.rc);
+        assertRegex("the URL of the debug server is missing", res.out);
+    }
+
+    startupErrorTest() {
+        string file = tmp_location() + "/no-such-dir-qdbg/target.q";
+        hash<auto> res = runTool(qdbg, (file,));
+        assertNeq(0, res.rc);
+        assertRegex("^qdbg: error: cannot open .*no-such-dir-qdbg/target.q.* \\(FILE-OPEN2-ERROR\\)", res.out);
+        # the error is shown although the output of the server is captured for its clients
+        res = runTool(qdbg_server, (file,));
+        assertNeq(0, res.rc);
+        assertRegex("qdbg-server: error: cannot open .*no-such-dir-qdbg/target.q.* \\(FILE-OPEN2-ERROR\\)", res.out);
+        # with -v, the call stack of the error is shown
+        res = runTool(qdbg, ("-v", file));
+        assertNeq(0, res.rc);
+        assertRegex("called at", res.out);
+    }
+
+    # an exception that matches a common pitfall is shown with a hint, and a variable that was declared but not
+    # assigned is shown as such
+    trapHintTest() {
+        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n    printf(\"%d\\n\", count);\n}\nf();\n", (
+            "exception filter uncaught",
+            "go run",
+            "thread local count",
+            "thread local src",
+            "locals",
+            "go run",
+            "quit",
+        ));
+        assertInOrder(res.out, (
+            "Paused at uncaught exception RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got no value instead",
+            "target.q:4",
+            "hint (NO-VALUE-FOR-TYPE): a value of this type is required",
+            "  - assign the variable before it is read",
+            "int count = NOTHING (declared but not assigned)",
+            "nothing src = NOTHING",
+        ));
+        # the locals command shows the variable as declared but not assigned too
+        assertEq(2, (res.out =~ x/(int count = NOTHING \(declared but not assigned\))/g).size(), res.out);
+    }
+
+    #! returns the objects of JSON output; each line of the output is one
+    private list<hash<auto>> parseJsonLines(string out) {
+        list<hash<auto>> rv = ();
+        foreach string line in (out.split("\n")) {
+            if (line.val()) {
+                auto v = parse_json(line);
+                assertEq(NT_HASH, v.typeCode(), sprintf("a line of JSON output: %y", line));
+                push rv, v;
+            }
+        }
+        return rv;
+    }
+
+    # each command gives a result object, and events and the output of the program are objects of their own
+    jsonOutputTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "go",
+            "thread local sum",
+            "nosuchcommand",
+            "",
+            "go",
+            "quit",
+        ), ("--json",));
+        assertEq(0, res.rc);
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        # the results of the commands in the order of the commands; an empty line is not a command
+        list<hash<auto>> results = select objs, $1.type == "result";
+        assertEq(("break create target.q 3", "go", "thread local sum", "nosuchcommand", "go", "quit"),
+            map $1.command, results);
+        assertEq((True, True, True, False, True, True), map $1.ok, results);
+        assertEq("int sum = NOTHING (declared but not assigned)\n", results[2].output);
+        assertEq("\"nosuchcommand\": unknown command", results[3].error);
+        assertTrue(results[5].quit);
+        assertFalse(results[1].hasKey("timedOut"));
+
+        # the stops, with their text and data, and the output of the program, which is not written as it is
+        list<hash<auto>> stops = select objs, $1.type == "event" && $1.event == "interrupt";
+        assertEq("Paused at the start of the program", stops[0].text.substr(0, 34));
+        assertEq("attach", stops[0].data.func);
+        assertRegex("^Paused at breakpoint 1 at target.q:3", stops[1].text);
+        assertEq(3, stops[1].data.line);
+        assertEq(1, stops[1].data.bkptid);
+        assertFalse(stops[1].data.hasKey("localvars"));
+        list<hash<auto>> output = select objs, $1.type == "output";
+        assertEq("total: 5 {name: \"invoice\", lines: [1, 2, 3]}\n", (map $1.text, output).join(""));
+        assertEq(("stdout",), keys (map {$1.category: True}, output));
+        # the end of the program
+        assertEq(1, (select objs, $1.type == "end" && !$1.hasKey("exception")).size());
+        # the stop at the breakpoint comes before the result of the command that resumed the thread
+        int stop_pos = (map $#, objs, $1.type == "event" && $1.text =~ /^Paused at breakpoint/)[0];
+        int go_pos = (map $#, objs, $1.type == "result" && $1.command == "go")[0];
+        assertLt(go_pos, stop_pos);
+    }
+
+    # the stop at an exception gives the hint of a common pitfall
+    jsonExceptionTest() {
+        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n}\nf();\n", (
+            "exception filter uncaught",
+            "go",
+            "go",
+            "quit",
+        ), ("--json",));
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        *hash<auto> stop = (select objs, $1.type == "event" && $1.data.func == "exception")[0];
+        assertEq("RUNTIME-TYPE-ERROR", stop.data.exception.err);
+        assertEq("NO-VALUE-FOR-TYPE", stop.data.exception.arg.id);
+        assertRegex("^hint \\(NO-VALUE-FOR-TYPE\\): ", stop.hint);
+        # the exception that ends the program is given with its end, which is the last object of the program
+        hash<auto> end = (select objs, $1.type == "end")[0];
+        assertEq("RUNTIME-TYPE-ERROR", end.exception.err);
+        assertEq("NO-VALUE-FOR-TYPE", end.exception.arg.id);
+        assertRegex("hint \\(NO-VALUE-FOR-TYPE\\)", end.exception.text);
+        assertFalse(end.exception.hasKey("callstack"));
+    }
+
+    # a thread that runs the code of the debugger, as for a logpoint, is paused at its next statement; the debugger
+    # reports the ends of all threads of the program that it ends
+    threadEndTest() {
+        string program = "%modern\n"                     # 1
+            "sub work(int w) {\n"                         # 2
+            "    int n = 0;\n"                            # 3
+            "    while (True) {\n"                        # 4
+            "        ++n;\n"                              # 5
+            "        usleep(1ms);\n"                      # 6
+            "    }\n"                                     # 7
+            "}\n"                                         # 8
+            "background work(1);\n"                       # 9
+            "background work(2);\n"                       # 10
+            "work(0);\n";                                 # 11
+        hash<auto> res = runQdbg(program, (
+            "break create target.q 6",
+            "break log 1 w{w} n{n}",
+            "go",
+            "thread list",
+            "kill",
+            "quit",
+        ), ("--wait-timeout=300",));
+        assertEq(0, res.rc);
+        # the output of qdbg ends lines with \r\n
+        assertRegex("\nw[0-2] n[0-9]+\r?\n", res.out);
+        assertInOrder(res.out, (
+            "No thread paused within 300 ms; pausing the program",
+            "Paused at target.q:",
+        ));
+        # the threads paused in the loop of the function
+        assertRegex("thread [0-9]+ \\(qore/[0-9]+\\), paused: work\\(\\) at target.q:[4-6]", res.out);
+
+        # all threads stop at the breakpoint; kill reports the end of each of them before the end of the program
+        for (int i = 0; i < 3; ++i) {
+            res = runQdbg(program, ("break create target.q 6", "go", "go", "go", "kill", "quit"),
+                ("--wait-timeout=2000",));
+            assertEq(0, res.rc);
+            *list<string> ends = (res.out =~ x/(Thread [0-9]+ ended|The program ended)/g);
+            assertEq(4, ends.size(), res.out);
+            assertEq("The program ended", ends.last(), res.out);
+            # the threads that the debugger cancelled end without an error
+            assertFalse(res.out =~ /THREAD-CANCELLED|unhandled QORE/, res.out);
+        }
+
+        # without a debugger, a thread that is cancelled reports the exception that ends it
+        TmpDir tmp("qore-qdbg-test-");
+        File f();
+        string script = tmp.path + "/cancel.q";
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nCounter c(1);\nint tid = background c.waitForZero();\ncancel_thread(tid, \"stop\");\n");
+        f.close();
+        hash<auto> r = runTool(script, ());
+        assertRegex("unhandled QORE .*\nTHREAD-CANCELLED: .*stop", r.out);
+    }
+
+    # a pause stops at a statement, not at a block, so that the next step goes on to another line
+    pauseBlockTest() {
+        string program = "%modern\n"             # 1
+            "int n = 0;\n"                        # 2
+            "while (True) {\n"                    # 3
+            "    if (n > 2) {\n"                  # 4
+            "        n = 0;\n"                    # 5
+            "        continue;\n"                 # 6
+            "    }\n"                             # 7
+            "    ++n;\n"                          # 8
+            "}\n";                                # 9
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> res = runQdbg(program, ("c", "s", "kill", "quit"), ("--json", "--wait-timeout=100"));
+            list<hash<auto>> stops = select parseJsonLines(res.out), $1.type == "event" && $1.event == "interrupt"
+                && $1.data.func == "step";
+            assertEq(2, stops.size(), res.out);
+            # the pause, at a statement, which has a column
+            assertTrue(stops[0].data.pause, res.out);
+            assertTrue(exists stops[0].data.column, res.out);
+            assertNeq(stops[0].data.line, stops[1].data.line, res.out);
+        }
+        # a thread in an empty block of a loop is paused at the block
+        hash<auto> res = runQdbg("%modern\nwhile (True);\n", ("c", "kill", "quit"), ("--wait-timeout=100",));
+        assertInOrder(res.out, ("No thread paused within 100 ms; pausing the program", "Paused at target.q:2"));
+
+        # the messages of logpoints give their thread and breakpoint
+        res = runQdbg(LoopProgram, ("break create target.q 4", "break log 1 i={i}", "c", "quit"), ("--json",));
+        list<hash<auto>> logs = select parseJsonLines(res.out), $1.type == "output" && $1.category == "console";
+        assertEq(("i=0\n", "i=1\n", "i=2\n", "i=3\n", "i=4\n"), map $1.text, logs);
+        assertEq(("1",), keys (map {$1.breakpoint: True}, logs));
+        assertEq(1, (map {$1.tid: True}, logs).size());
+        # the output of the program does not
+        hash<auto> out = (select parseJsonLines(res.out), $1.type == "output" && $1.category == "stdout")[0];
+        assertFalse(out.hasKey("tid"));
+    }
+
+    # a command that resumes a thread waits for it to pause only as long as the wait timeout; then the program is
+    # paused, also when no thread can pause
+    waitTimeoutTest() {
+        string loop = "%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n";
+        hash<auto> res = runQdbg(loop, (
+            "options waittimeout",
+            "go",
+            "thread local n",
+            "options waittimeout set 0",
+            "options waittimeout",
+            "kill",
+            "quit",
+        ), ("--wait-timeout=300",));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "wait timeout: 300 ms",
+            "No thread paused within 300 ms; pausing the program",
+            "Paused at target.q:",
+            "integer n = ",
+            "wait timeout: 0 ms",
+        ));
+
+        # with JSON output, the result of the command tells that its time passed
+        res = runQdbg(loop, ("go", "kill", "quit"), ("--json", "--wait-timeout=300"));
+        list<hash<auto>> objs = parseJsonLines(res.out);
+        hash<auto> go = (select objs, $1.type == "result" && $1.command == "go")[0];
+        assertTrue(go.timedOut);
+        assertTrue(go.ok);
+        assertEq("No thread paused within 300 ms; pausing the program\n", go.output);
+        # the program paused before the result
+        assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        # the debugger ended the program
+        assertEq({"type": "end", "terminated": True}, (select objs, $1.type == "end")[0]);
+
+        # a thread that waits cannot pause until it continues
+        res = runQdbg("%modern\nQueue q();\nq.get();\n", ("go", "kill", "quit"), ("--wait-timeout=300",));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "No thread paused within 300 ms; pausing the program",
+            "No thread paused within 300 ms after the request; a thread that waits, as for a lock or I/O, pauses "
+                "when it continues",
+        ));
+
+        # negative: a negative wait timeout
+        res = runQdbg(loop, ("quit",), ("--wait-timeout=-1",));
+        assertNeq(0, res.rc);
+        assertRegex("the wait timeout cannot be negative: -1", res.out);
+    }
+
+    # quit tells that a program continues without the debugger, and "quit kill" ends it first
+    quitRunningTest() {
+        # the program continues to its end, and qdbg ends with it
+        hash<auto> res = runQdbg(Program, ("break create target.q 3", "go", "quit"));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1",
+            "The program continues without the debugger, and qdbg ends when the program ends; \"quit kill\" ends the "
+                "program first",
+            "total: 5",
+        ));
+        # a program that does not end is ended first
+        string loop = "%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n";
+        res = runQdbg(loop, ("go", "quit kill"), ("--wait-timeout=200",));
+        assertEq(0, res.rc);
+        assertFalse(res.out =~ /continues without the debugger/, res.out);
+        # without a program, quit says nothing
+        res = runQdbg(Program, ("go", "quit"));
+        assertEq(0, res.rc);
+        assertFalse(res.out =~ /continues without the debugger/, res.out);
+        # JSON output tells that the program continues
+        res = runQdbg(Program, ("break create target.q 3", "go", "quit"), ("--json",));
+        hash<auto> q = (select parseJsonLines(res.out), $1.type == "result" && $1.command == "quit")[0];
+        assertTrue(q.quit);
+        assertTrue(q.programRunning);
+        # negative: an unknown argument does not end the debugger
+        res = runQdbg(Program, ("quit now", "kill", "quit"));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("unknown argument \"now\"; usage: quit [kill]",));
+    }
+
+    # a condition that cannot be parsed with the variables of its statement is refused when it is set
+    conditionCheckTest() {
+        hash<auto> res = runQdbg(Program, (
+            "break create target.q 3",
+            "break condition 1 a ===",
+            "break condition 1 nosuchvar > 1",
+            "break log 1 a={a} n={nosuchvar}",
+            "break condition 1 a == 2 && b == 3",
+            "break list",
+            "go",
+            "eval a",
+            "go",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "invalid condition \"a ===\": ",
+            "invalid condition \"nosuchvar > 1\": ",
+            "invalid expression of the log message \"nosuchvar\": ",
+            "condition: a == 2 && b == 3",
+            "Paused at breakpoint 1",
+            "= 2",
+        ));
+        assertFalse(res.out =~ /could not be checked/, res.out);
+    }
+
+    # top-level local variables have global scope: expressions and conditions in functions can refer to them, with the
+    # values of the thread
+    topLevelVarTest() {
+        string program = "%modern\n"                                      # 1
+            "int top = 5;\n"                                                # 2
+            "sub f() {\n"                                                   # 3
+            "    int a = (top ?? 0) + 1;\n"                                 # 4
+            "    printf(\"a: %d\\n\", a);\n"                               # 5
+            "}\n"                                                           # 6
+            "f();\n"                                                        # 7
+            "Counter c(1);\n"                                               # 8
+            "background sub () { on_exit c.dec(); f(); }();\n"              # 9
+            "c.waitForZero();\n";                                           # 10
+        hash<auto> res = runQdbg(program, (
+            "break create target.q 5",
+            "break condition 1 top > 1 || !exists top",
+            "go",
+            "eval top * 2",
+            "go",
+            "eval top",
+            "go",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1",
+            "= 10",
+            "a: 6",
+            "Paused at breakpoint 1",
+            # the thread that the program started has its own value
+            "top = NOTHING",
+            "a: 1",
+        ));
+        assertFalse(res.out =~ /invalid condition|could not be checked/, res.out);
+    }
+
+    # a thread that continues when qdbg quits does not stop again, as at the end of the program
+    quitTest() {
+        hash<auto> res = runQdbg(FeatureProgram, (
+            "go run",
+            "quit",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("Paused at exception CAUGHT",));
     }
 
     # a program that never attaches to the debugger, as it has no statements, does not keep qdbg waiting
     emptyProgramTest() {
         hash<auto> res = runQdbg("%modern\n", ("quit",));
         assertEq(0, res.rc);
-        assertFalse(res.out =~ /Program is not set/, "no command is processed before the program attaches");
+        assertFalse(res.out =~ /there is no current program/, "no command is processed before the program attaches");
     }
 }

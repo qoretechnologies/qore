@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StatementColumnsTest
+
+#! the columns of statements and ProgramControl::findStatementIds()
+class StatementColumnsTest inherits QUnit::Test {
+    private {
+        #! the comments are the line numbers
+        const Source = "%modern\n"                                                       # 1
+            "int sub f(int a) { if (a) { a = 2; } return a; }\n"                          # 2
+            "int x = 1; x += 2; f(x);\n"                                                  # 3
+            "while (x > 10) { x--; }\n"                                                   # 4
+            "for (int i = 0; i < 2; ++i) { x++; }\n"                                      # 5
+            "switch (x) { case 1: break; }\n"                                             # 6
+            "\n"                                                                          # 7
+            "foreach int i in (1, 2) { continue; }\n"                                     # 8
+            "try { throw \"E\"; } catch (hash<ExceptionInfo> ex) { do { x--; } while (x > 100); }\n" # 9
+            "f(1);\n"                                                                     # 10
+            "  x = 2;\n"                                                                  # 11
+            "auto v = find %a in ({\"a\": (1, 2)}) where (%a == 2); x = 1;\n";          # 12
+    }
+
+    constructor() : QUnit::Test("StatementColumnsTest", "1.0") {
+        addTestCase("the columns of statements", \columnsTest());
+        addTestCase("the statements of a line", \lineStatementsTest());
+        addTestCase("errors", \errorTest());
+        set_return_value(main());
+    }
+
+    private {
+        #! the Program of the test source, which a ProgramControl does not keep
+        Program pgm;
+    }
+
+    private ProgramControl getProgram() {
+        pgm = new Program(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        pgm.parse(Source, "src");
+        return pgm.getProgram();
+    }
+
+    #! returns the start and end columns of the statements of a line
+    private list<list<int>> getColumns(ProgramControl pc, int line) {
+        return map (pc.getStatementIdInfo($1).start_column, pc.getStatementIdInfo($1).end_column),
+            pc.findStatementIds("src", line);
+    }
+
+    columnsTest() {
+        ProgramControl pc = getProgram();
+        # if, an expression statement in a block, and return; an expression statement ends before its ';'
+        assertEq(((19, 36), (28, 33), (37, 45)), getColumns(pc, 2));
+        # expression statements
+        assertEq(((0, 9), (11, 17), (19, 23)), getColumns(pc, 3));
+        # loops with the statements of their blocks
+        assertEq(((0, 23), (17, 20)), getColumns(pc, 4));
+        assertEq(((0, 36), (30, 33)), getColumns(pc, 5));
+        assertEq(((0, 37), (26, 34)), getColumns(pc, 8));
+        # switch and break
+        assertEq(((0, 29), (21, 26)), getColumns(pc, 6));
+        # try, throw, and do-while in a catch block
+        assertEq(((0, 82), (6, 15), (52, 78), (57, 60)), getColumns(pc, 9));
+        # the tokens that the scanner reads after "case" and "find" are given back to it and scanned again, which
+        # must not move the columns of the rest of the line
+        assertEq(((0, 51), (53, 58)), getColumns(pc, 12));
+        # indentation
+        assertEq(((2, 7),), getColumns(pc, 11));
+    }
+
+    lineStatementsTest() {
+        ProgramControl pc = getProgram();
+        # the first statement of a line is the one that findStatementId() finds
+        foreach int line in ((2, 3, 4, 5, 6, 8, 9, 10, 11, 12)) {
+            assertEq(pc.findStatementId("src", line), pc.findStatementIds("src", line)[0], "line " + line);
+        }
+        # the statements of a line in the order of their columns
+        list<int> ids = pc.findStatementIds("src", 3);
+        assertEq(3, ids.size());
+        assertEq((3, 3, 3), (map pc.getStatementIdInfo($1).start_line, ids));
+        # a line without a statement
+        assertEq((), pc.findStatementIds("src", 7));
+        # a line after the last statement is in no statement
+        assertEq((), pc.findStatementIds("src", 100));
+        # a source that does not exist
+        assertEq((), pc.findStatementIds("no-such-source", 3));
+    }
+
+    errorTest() {
+        ProgramControl pc = getProgram();
+        # negative: a label with a NUL character
+        assertThrows("PROGRAM-STATEMENT-ERROR", \pc.findStatementIds(), ("src\0x", 3));
+        # a Program that cannot be debugged
+        Program nodbg(PO_NEW_STYLE | PO_NO_DEBUGGING, True);
+        nodbg.parse("int x = 1;", "src");
+        assertThrows("DEBUGGING", \nodbg.getProgram().findStatementIds(), ("src", 1));
+    }
+}

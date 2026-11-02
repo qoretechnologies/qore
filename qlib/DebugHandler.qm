@@ -40,7 +40,7 @@
 %allow-debugger
 
 module DebugHandler {
-    version = "0.2";
+    version = "0.2.1";
     desc = "user module for providing debug server via WebSocket server services";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.com>";
     url = "http://qore.org";
@@ -59,6 +59,11 @@ module DebugHandler {
 
     @see
     - @ref DebugProgramControl::DebugProgramControl "DebugProgramControl"
+
+    @subsection debughandler_v0_2_1 DebugHandler Version 0.2.1
+    - fixed @ref DebugHandler::WebSocketDebugConnection "WebSocketDebugConnection" to accept a connection context
+      whose values all have the same type, such as a literal <tt>{"id": 1}</tt>; adding the handler raised
+      \c RUNTIME-TYPE-ERROR
 
     @subsection debughandler_v0_2 DebugHandler Version 0.2
     - updated to new WebSocket APIs
@@ -93,8 +98,11 @@ public namespace DebugHandler {
         */
         constructor(AbstractWebSocketDebugHandler n_handler, hash<auto> n_cx): WebSocketConnection(n_handler) {
             dhandler = n_handler;
-            cx = n_cx;
-            cx.handler = dhandler;
+            # the context is completed in an "auto!" local: a caller's context may be narrowed (e.g.
+            # hash<string, int> for {"id": 1}), and adding the handler would throw
+            hash<auto!> c = n_cx;
+            c.handler = dhandler;
+            cx = c;
             dhandler.debugProgram.registerConnection(cx);
         }
 

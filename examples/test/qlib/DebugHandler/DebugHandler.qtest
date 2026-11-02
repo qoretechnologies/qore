@@ -111,6 +111,7 @@ public class DebugHandlerTest inherits QUnit::Test {
         addTestCase("error handling", \errorHandlingTests());
         addTestCase("content type", \contentTypeTests());
         addTestCase("handler management", \handlerMgmtTests());
+        addTestCase("connection with a narrowed context", \narrowedContextTests());
         set_return_value(main());
     }
 
@@ -317,6 +318,16 @@ public class DebugHandlerTest inherits QUnit::Test {
         # verify the handler returns the correct MIME type
         WebSocketDebugHandler handler(dpc);
         assertEq(MimeTypeYamlRpc, handler.getContentType());
+    }
+
+    # a connection context whose values all have the same type, as a literal with an ID only, gets the handler
+    narrowedContextTests() {
+        WebSocketDebugHandler handler(dpc);
+        hash<auto> cx = {"id": 990001};
+        WebSocketDebugConnection c(handler, cx);
+        assertEq(990001, c.cx.id);
+        assertEq(handler, c.cx.handler);
+        c.connectionClosed();
     }
 
     handlerMgmtTests() {

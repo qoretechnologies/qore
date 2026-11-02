@@ -1,0 +1,742 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires json
+%requires DebugMcpServer
+%requires McpClient
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class DebugMcpServerTest
+
+public class DebugMcpServerTest inherits QUnit::Test {
+    private {
+        #! the program that is debugged; the comments are the line numbers
+        const Program = "%modern\n"                                         # 1
+            "int sub add(int a, int b) {\n"                                  # 2
+            "    int sum = a + b;\n"                                         # 3
+            "    return sum;\n"                                              # 4
+            "}\n"                                                            # 5
+            "hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3)};\n" # 6
+            "int total = 0;\n"                                               # 7
+            "for (int i = 0; i < 5; ++i) {\n"                                # 8
+            "    total += add(i, 1);\n"                                      # 9
+            "}\n"                                                            # 10
+            "printf(\"total: %d\\n\", total);\n";                           # 11
+
+        #! a program that ends with an exception that matches a common pitfall
+        const TrapProgram = "%modern\n"                                     # 1
+            "sub f() {\n"                                                    # 2
+            "    *int src;\n"                                                # 3
+            "    int count = src;\n"                                         # 4
+            "}\n"                                                            # 5
+            "f();\n";                                                        # 6
+
+        #! a program that does not end
+        const LoopProgram = "%modern\nint n = 0;\nwhile (True) {\n    ++n;\n}\n";
+
+        #! a program whose threads do not end
+        const ThreadProgram = "%modern\n"                                   # 1
+            "sub work(int w) {\n"                                            # 2
+            "    int n = 0;\n"                                               # 3
+            "    while (True) {\n"                                           # 4
+            "        ++n;\n"                                                 # 5
+            "        usleep(1ms);\n"                                         # 6
+            "    }\n"                                                        # 7
+            "}\n"                                                            # 8
+            "background work(1);\n"                                          # 9
+            "background work(2);\n"                                          # 10
+            "work(0);\n";                                                    # 11
+
+        string qore_exe = DebugMcpServerTest::getQoreExecutable();
+        string qdbg_mcp = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-mcp");
+        string qdbg_server = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");
+        string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    constructor() : Test("DebugMcpServer", "1.0", \ARGV) {
+        addTestCase("reports of a session", \reportTest());
+        addTestCase("tools of the server", \toolListTest());
+        addTestCase("a launched script: breakpoints, stack, variables and expressions", \launchTest());
+        addTestCase("an exception that matches a common pitfall", \trapTest());
+        addTestCase("the time that a tool waits for a thread to pause", \timeoutTest());
+        addTestCase("logpoints, a pause and the end of the threads of a program", \threadTest());
+        addTestCase("commands of qdbg", \commandTest());
+        addTestCase("errors of the tools", \errorTest());
+        addTestCase("a token of the server", \tokenTest());
+        addTestCase("attaching to a debug server", \attachTest());
+        addTestCase("the usage of qdbg-mcp", \usageTest());
+        set_return_value(main());
+    }
+
+    #! returns the qore executable to run the tools with; a relative path is made absolute
+    static string getQoreExecutable() {
+        string exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (exe =~ /\// && !absolute_path(exe)) {
+            exe = normalize_dir(getcwd() + DirSep + exe);
+        }
+        return exe;
+    }
+
+    # the report of a session: events, output and the end of the program, as JSON objects
+    reportTest() {
+        hash<auto> o = DebugMcpSession::summarizeEvent({"type": "event", "event": "interrupt",
+            "text": "Paused at exception E at a.q:4 (thread 2)", "hint": "hint (X): h",
+            "data": {"func": "exception", "tid": 2, "file": "a.q", "line": 4, "uncaught": True,
+                "exception": {"err": "E", "desc": "d", "callstack": ()}}});
+        assertEq({"text": "Paused at exception E at a.q:4 (thread 2)", "reason": "exception", "tid": 2, "file": "a.q",
+            "line": 4, "exception": {"err": "E", "desc": "d", "uncaught": True}, "hint": "hint (X): h"}, o);
+        o = DebugMcpSession::summarizeEvent({"type": "event", "event": "breakpoint", "text": "Breakpoint 3 created",
+            "data": {"event": "create", "info": {"id": 3, "statements": ({"file": "a.q", "start_line": 9,
+                "offset": 0},)}}});
+        assertEq({"text": "Breakpoint 3 created", "breakpoint": 3, "change": "create", "file": "a.q", "line": 9}, o);
+        assertEq({"type": "int", "value": "NOTHING", "declaredType": "int", "unassigned": True},
+            DebugMcpSession::describeValue({"type": "int", "value": "NOTHING", "declaredType": "int",
+                "unassigned": True}));
+        assertEq({"type": "list", "value": "list (3)", "size": 3},
+            DebugMcpSession::describeValue({"type": "list", "value": "list (3)", "indexed": 3}));
+
+        # the whole value of a container, and the raw value of a string
+        assertEq({"type": "list", "value": "list (3)", "size": 3, "text": "[1, 2, 3]"},
+            DebugMcpSession::describeValue({"type": "list", "value": "list (3)", "indexed": 3},
+                AbstractDebugControl::serialize((1, 2, 3))));
+        assertEq({"type": "string", "value": "\"a\\nb\"", "text": "a\nb"},
+            DebugMcpSession::describeValue({"type": "string", "value": "\"a\\nb\""},
+                AbstractDebugControl::serialize("a\nb")));
+        # no text when it says nothing more than the value
+        assertEq({"type": "integer", "value": "2"},
+            DebugMcpSession::describeValue({"type": "integer", "value": "2"}, AbstractDebugControl::serialize(2)));
+        # a long value is truncated
+        hash<auto> d = DebugMcpSession::describeValue({"type": "string", "value": "\"...\""},
+            AbstractDebugControl::serialize(strmul("x", DebugMcpSession::MaxValueText + 10)));
+        assertEq(DebugMcpSession::MaxValueText, d.text.length());
+        assertTrue(d.truncated);
+
+        # the reasons of stops
+        assertEq("start", DebugMcpSession::getStopReason({"func": "attach"}));
+        assertEq("thread start", DebugMcpSession::getStopReason({"func": "attach", "programstart": False}));
+        assertEq("breakpoint", DebugMcpSession::getStopReason({"func": "step", "bkptids": (1,)}));
+        assertEq("breakpoint", DebugMcpSession::getStopReason({"func": "step", "bkptid": 1}));
+        assertEq("step", DebugMcpSession::getStopReason({"func": "step"}));
+        assertEq("function entry", DebugMcpSession::getStopReason({"func": "funcEnter"}));
+        assertEq("breakpoint", DebugMcpSession::getStopReason({"func": "funcEnter", "bkptid": 2}));
+        assertEq("function exit", DebugMcpSession::getStopReason({"func": "funcExit"}));
+        assertEq("exception", DebugMcpSession::getStopReason({"func": "exception"}));
+        assertEq("end of code", DebugMcpSession::getStopReason({"func": "exit"}));
+        assertEq("thread end", DebugMcpSession::getStopReason({"func": "detach"}));
+
+        # the output in a report: its last lines
+        assertEq({"programOutput": "a\nb\n"}, DebugMcpSession::limitOutput("programOutput", "a\nb\n"));
+        assertEq({"logOutput": "a\n"}, DebugMcpSession::limitOutput("logOutput", "a"));
+        string many = (map sprintf("line %d", $1), xrange(DebugMcpSession::MaxOutputLines + 5)).join("\n")
+            + "\n";
+        hash<auto> l = DebugMcpSession::limitOutput("logOutput", many);
+        assertEq(5, l.logOutputOmitted);
+        assertEq(DebugMcpSession::MaxOutputLines + 1, l.logOutput.split("\n").size());
+        assertRegex("^\\[5 earlier lines are omitted\\]\nline 5\n", l.logOutput);
+        many = (map sprintf("line %d", $1), xrange(DebugMcpSession::MaxOutputLines + 1)).join("\n");
+        assertRegex("^\\[1 earlier line is omitted\\]\nline 1\n", DebugMcpSession::limitOutput("o", many).o);
+
+        # consecutive identical lines are given once with their count, in their order
+        assertEq({"logOutput": "a (x3)\nb\na (x2)\n"}, DebugMcpSession::limitOutput("logOutput", "a\na\na\nb\na\na\n",
+            True));
+        # without collapse, as the output of the program
+        assertEq({"programOutput": "a\na\n"}, DebugMcpSession::limitOutput("programOutput", "a\na\n"));
+        # lines of other threads are not identical
+        assertEq({"logOutput": "[thread 2] x\n[thread 3] x\n[thread 2] x\n"},
+            DebugMcpSession::limitOutput("logOutput", "[thread 2] x\n[thread 3] x\n[thread 2] x\n", True));
+        # the limit applies to the collapsed lines, and the omitted lines are those of the output
+        many = (map sprintf("line %d\nline %d", $1, $1), xrange(DebugMcpSession::MaxOutputLines + 2)).join("\n");
+        l = DebugMcpSession::limitOutput("logOutput", many, True);
+        assertEq(4, l.logOutputOmitted);
+        list<string> ll = l.logOutput.split("\n");
+        assertEq(DebugMcpSession::MaxOutputLines + 1, ll.size());
+        assertEq("[4 earlier lines are omitted]", ll[0]);
+        assertEq("line 2 (x2)", ll[1]);
+        assertEq(sprintf("line %d (x2)", DebugMcpSession::MaxOutputLines + 1), ll.last());
+
+        # the arguments of a tool
+        DebugMcpServer::checkArguments("t", ("a", "b"), {"a": 1});
+        DebugMcpServer::checkArguments("t", NOTHING, NOTHING);
+        assertThrows("DEBUG-MCP-ERROR", "t: unknown arguments \"c\", \"d\"; the arguments of the tool are: a, b",
+            \DebugMcpServer::checkArguments(), ("t", ("a", "b"), {"a": 1, "c": 2, "d": 3}));
+
+        # the end of the program with an exception
+        hash<auto> ex = DebugMcpLocalSession::summarizeException(<ExceptionInfo>{"err": "E", "desc": "d",
+            "file": "a.q", "line": 3, "arg": 1, "callstack": ()});
+        assertEq({"err": "E", "desc": "d", "file": "a.q", "line": 3, "arg": 1}, ex);
+    }
+
+%ifdef NoProcess
+    toolListTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    launchTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    trapTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    timeoutTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    threadTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    commandTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    errorTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    tokenTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    attachTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    usageTest() {
+        testSkip("no process module 2.2 or later");
+    }
+%else
+    #! runs qdbg-mcp with arguments until it ends, and returns its exit code and output
+    private hash<auto> runTool(list<string> args) {
+        Process p(qore_exe, (qdbg_mcp,) + args, {
+            "env": Process::getEnvironment() + {"QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR
+                ? ":" + ENV.QORE_MODULE_DIR : "")},
+        });
+        p.wait();
+        string out = (p.readStdout(65536, 0) ?? "") + (p.readStderr(65536, 0) ?? "");
+        out = (select out.split("\n"), $1 !~ /^warning: (AOT|binary) module/).join("\n");
+        return {"rc": p.exitCode(), "out": out};
+    }
+
+    usageTest() {
+        hash<auto> r = runTool(("-h",));
+        assertEq(0, r.rc);
+        assertRegex("^usage: qdbg-mcp \\[options\\]", r.out);
+        assertRegex("--no-launch", r.out);
+        assertRegex("claude mcp add --transport http", r.out);
+        # negative: an argument, an unknown option and an empty token
+        r = runTool(("extra",));
+        assertNeq(0, r.rc);
+        assertRegex("unexpected argument \"extra\"", r.out);
+        r = runTool(("--nosuchoption",));
+        assertNeq(0, r.rc);
+        TmpDir tmp("qore-dmcp-test-");
+        string fn = writeProgram(tmp.path, "\n", "token");
+        r = runTool(("-k", fn));
+        assertNeq(0, r.rc);
+        assertRegex("the token of the server is empty", r.out);
+    }
+
+    #! starts a tool and returns the process and its URL from the first line of its output
+    private hash<auto> startTool(string tool, list<string> args, string dir, *hash<string, string> env) {
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        Process p(qore_exe, (tool,) + args, {
+            "cwd": dir,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
+            } + env,
+        });
+        on_error if (p.running()) {
+            p.terminate();
+        }
+        string line = "";
+        while (line !~ /\n/) {
+            *string s = p.readStdout(1024, 60s);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("%s did not start: %s", tool, p.readStderr(4096, 0) ?? "");
+            }
+            line += s;
+        }
+        return {"process": p, "line": line};
+    }
+
+    #! starts qdbg-mcp and returns the process and a client of its server
+    private hash<auto> startServer(string dir, *list<string> args, *string token) {
+        hash<auto> h = startTool(qdbg_mcp, args ?? (), dir, token ? {"QDBG_MCP_TOKEN": token} : NOTHING);
+        *string url = (h.line =~ x/listening on (http:\/\/[^\s]+)/)[0];
+        assertTrue(exists url, h.line);
+        McpClient::McpClient c(url, token ? {"headers": {"Authorization": "Bearer " + token}} : NOTHING);
+        c.initialize(<McpClientInfo>{"name": "DebugMcpServerTest", "version": "1.0"});
+        return {"process": h.process, "client": c, "url": url};
+    }
+
+    #! calls a tool and returns its report; an error of the tool fails the test
+    private hash<auto> call(McpClient::McpClient c, string tool, *hash<auto> args) {
+        hash<auto> r = c.callTool(tool, args);
+        return parse_json(r.content[0].text);
+    }
+
+    #! calls a tool that fails and returns its error, with its \c err and \c desc
+    private hash<auto> callError(McpClient::McpClient c, string tool, *hash<auto> args) {
+        try {
+            c.callTool(tool, args);
+        } catch (hash<ExceptionInfo> ex) {
+            # the client raises the error result of the tool
+            assertEq("MCP-ERROR", ex.err);
+            assertTrue(ex.arg.isError);
+            return parse_json(ex.arg.content[0].text);
+        }
+        fail(sprintf("the tool %s did not fail", tool));
+        return {};
+    }
+
+    #! writes a program to a file of a folder and returns the path of the file
+    private string writeProgram(string dir, string program, string name = "target.q") {
+        string path = dir + DirSep + name;
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(program);
+        f.close();
+        return path;
+    }
+
+    toolListTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        list<string> names = sort(map $1.name, s.client.listTools());
+        assertEq(("qore_debug_attach", "qore_debug_command", "qore_debug_continue", "qore_debug_delete_breakpoint",
+            "qore_debug_evaluate", "qore_debug_exception_filter", "qore_debug_launch", "qore_debug_pause",
+            "qore_debug_set_breakpoint", "qore_debug_stack", "qore_debug_status", "qore_debug_terminate",
+            "qore_debug_variables"), names);
+        # the modes of resuming a thread are listed
+        hash<auto> cont = (select s.client.listTools(), $1.name == "qore_debug_continue")[0];
+        assertEq(("run", "step", "next", "finish"), cont.inputSchema.properties.mode{"enum"});
+        # the parameters are described in full, with the syntax of their values
+        hash<auto> bp = (select s.client.listTools(), $1.name == "qore_debug_set_breakpoint")[0];
+        assertEq(DebugMcpFields.location.desc, bp.inputSchema.properties.location.description);
+        assertEq(DebugMcpFields.hit_condition.desc, bp.inputSchema.properties.hit_condition.description);
+
+        # without launching scripts
+        hash<auto> s2 = startServer(tmp.path, ("--no-launch",));
+        on_exit s2.process.terminate();
+        assertFalse(inlist("qore_debug_launch", map $1.name, s2.client.listTools()));
+    }
+
+    launchTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        string path = writeProgram(tmp.path, Program);
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+
+        # the script pauses at its start
+        hash<auto> r = call(c, "qore_debug_launch", {"script": path});
+        assertTrue(r.ok);
+        assertRegex("^Paused at the start of the program", r.events[0].text);
+        assertEq("start", r.events[0].reason);
+        assertTrue(r.state.paused);
+        assertFalse(r.state.programEnded);
+        # the exceptions that pause threads
+        assertEq(("user", "system", "uncaught"), r.exceptionFilters);
+
+        # a breakpoint with a condition: the thread pauses when it is true
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "condition": "a == 2"});
+        assertTrue(r.ok, r.error);
+        # one event for the breakpoint with its options
+        assertEq(1, r.events.size(), sprintf("%y", r.events));
+        int id = r.breakpoint;
+        assertGt(0, id);
+        r = call(c, "qore_debug_continue");
+        assertTrue(r.ok, r.error);
+        hash<auto> stop = (select r.events, $1.reason == "breakpoint")[0];
+        assertEq(3, stop.line);
+        assertEq((id,), stop.breakpoints);
+        assertEq("add", stop.function);
+
+        # the variables of the frame: sum was declared but not assigned yet
+        r = call(c, "qore_debug_variables");
+        hash<auto> vars = map {$1.name: $1}, r.variables;
+        assertEq({"name": "a", "type": "integer", "value": "2", "declaredType": "int"}, vars.a);
+        assertTrue(vars.sum.unassigned);
+        assertEq("int", vars.sum.declaredType);
+
+        # the call stack, and the variables of the frame of the top-level code
+        r = call(c, "qore_debug_stack");
+        assertEq(("add", "<top level>"), map $1.function, r.frames);
+        assertEq(3, r.frames[0].line);
+        assertEq(9, r.frames[1].line);
+        # the variables of the top-level code: their whole values, without the empty argv
+        r = call(c, "qore_debug_variables", {"frame": 1});
+        vars = map {$1.name: $1}, r.variables;
+        assertFalse(vars.hasKey("argv"));
+        assertEq("{name: \"invoice\", lines: [1, 2, 3]}", vars.h.text);
+        assertEq(2, vars.h.size);
+        r = call(c, "qore_debug_variables", {"frame": 1, "path": "h"});
+        assertEq(2, r.size);
+        assertEq("{name: \"invoice\", lines: [1, 2, 3]}", r.text);
+        assertEq(("name", "lines"), map $1.name, r.children);
+        r = call(c, "qore_debug_variables", {"frame": 1, "path": "h.lines"});
+        assertEq(("1", "2", "3"), map $1.value, r.children);
+
+        # an expression with the variables of a frame
+        r = call(c, "qore_debug_evaluate", {"expression": "a * 10 + b"});
+        assertEq("21", r.value);
+        assertEq("integer", r.type);
+        r = call(c, "qore_debug_evaluate", {"expression": "h.lines.size()", "frame": 1});
+        assertEq("3", r.value);
+        r = call(c, "qore_debug_evaluate", {"expression": "h.name", "frame": 1});
+        assertEq("invoice", r.text);
+        r = call(c, "qore_debug_evaluate", {"expression": "h.lines", "frame": 1});
+        assertEq("[1, 2, 3]", r.text);
+
+        # a step over runs to the next statement of the function
+        r = call(c, "qore_debug_continue", {"mode": "next"});
+        assertEq(4, (select r.events, $1.reason == "step")[0].line);
+
+        # the thread runs until add() returns: it pauses at the next statement of the caller, the call of the next
+        # iteration of the loop, and the stop gives the value that add() returned
+        r = call(c, "qore_debug_continue", {"mode": "finish"});
+        stop = (select r.events, $1.returned)[0];
+        assertEq(9, stop.line);
+        assertEq("<top level>", stop.function);
+        assertEq({"function": "add", "type": "integer", "value": "3"}, stop.returned);
+
+        # the program runs to its end without the breakpoint; its output is reported
+        call(c, "qore_debug_delete_breakpoint", {"id": id});
+        r = call(c, "qore_debug_continue");
+        assertEq("total: 15\n", r.programOutput);
+        assertEq({}, r.programEnd);
+        assertTrue(r.state.programEnded);
+
+        # the session ends
+        r = call(c, "qore_debug_terminate");
+        assertTrue(r.sessionEnded);
+        r = call(c, "qore_debug_status");
+        assertEq({"session": False}, r.state);
+    }
+
+    trapTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        string path = writeProgram(tmp.path, TrapProgram);
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+        call(c, "qore_debug_launch", {"script": path});
+        hash<auto> r = call(c, "qore_debug_exception_filter", {"filters": ("uncaught",)});
+        assertTrue(r.ok);
+        assertEq(("uncaught",), r.exceptionFilters);
+        # no exception pauses threads, and then all
+        assertEq(("none",), call(c, "qore_debug_exception_filter", {"filters": ()}).exceptionFilters);
+        assertEq(("user", "system", "uncaught"), call(c, "qore_debug_exception_filter",
+            {"filters": ("all",)}).exceptionFilters);
+        r = call(c, "qore_debug_exception_filter", {"filters": ("uncaught",)});
+        r = call(c, "qore_debug_continue");
+        hash<auto> stop = (select r.events, $1.reason == "exception")[0];
+        assertEq(4, stop.line);
+        assertEq("RUNTIME-TYPE-ERROR", stop.exception.err);
+        assertTrue(stop.exception.uncaught);
+        assertRegex("^hint \\(NO-VALUE-FOR-TYPE\\): ", stop.hint);
+        # the variable that was declared but not assigned
+        r = call(c, "qore_debug_variables");
+        assertTrue((select r.variables, $1.name == "count")[0].unassigned);
+        # the program ends with the exception
+        r = call(c, "qore_debug_continue");
+        assertEq("RUNTIME-TYPE-ERROR", r.programEnd.exception.err);
+        assertEq("NO-VALUE-FOR-TYPE", r.programEnd.exception.hint.id);
+        assertEq(4, r.programEnd.exception.line);
+        assertFalse(r.programEnd.exception.hasKey("callstack"));
+        call(c, "qore_debug_terminate");
+    }
+
+    timeoutTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        string path = writeProgram(tmp.path, LoopProgram);
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+        call(c, "qore_debug_launch", {"script": path});
+        # no thread pauses: the program is paused after the time
+        hash<auto> r = call(c, "qore_debug_continue", {"timeout_ms": 300});
+        assertTrue(r.timedOut);
+        assertRegex("No thread paused within 300 ms; pausing the program", r.text);
+        assertTrue(r.state.paused);
+        # the stop is the pause, not a step
+        assertEq(("pause",), map $1.reason, r.events, $1.tid == r.state.threadId);
+        # where the thread is paused, and its variables
+        assertEq(("<top level>",), map $1.function, r.frames);
+        assertRegex("/target.q$", r.frames[0].file);
+        assertEq("integer", (select r.variables, $1.name == "n")[0].type);
+        assertFalse(r.hasKey("framesOmitted"));
+        # without the details
+        r = call(c, "qore_debug_continue", {"timeout_ms": 100, "details": False});
+        assertTrue(r.timedOut);
+        assertFalse(r.hasKey("frames") || r.hasKey("variables"));
+        r = call(c, "qore_debug_variables");
+        assertEq("integer", (select r.variables, $1.name == "n")[0].type);
+
+        # a paused thread is not paused again; the pause tells where it is
+        r = call(c, "qore_debug_pause");
+        assertEq("thread " + r.state.threadId + " is paused\n", r.text);
+        assertTrue(r.state.paused);
+        assertEq(("<top level>",), map $1.function, r.frames);
+        assertEq("integer", (select r.variables, $1.name == "n")[0].type);
+        r = call(c, "qore_debug_pause", {"details": False});
+        assertFalse(r.hasKey("frames"));
+
+        # the program is ended
+        r = call(c, "qore_debug_terminate");
+        assertEq({"terminated": True}, r.programEnd);
+        assertTrue(r.sessionEnded);
+
+        # a thread that waits cannot pause until it continues; the debugger ends it
+        path = writeProgram(tmp.path, "%modern\nQueue q();\nq.get();\n", "wait.q");
+        call(c, "qore_debug_launch", {"script": path});
+        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
+        assertTrue(r.timedOut);
+        assertRegex("No thread paused within 200 ms after the request", r.text);
+        assertFalse(r.state.paused);
+        r = call(c, "qore_debug_pause", {"timeout_ms": 200});
+        assertRegex("No thread paused within 200 ms", r.text);
+        assertFalse(r.state.paused);
+        # a thread that is not paused has no details
+        assertFalse(r.hasKey("frames") || r.hasKey("detailsError"));
+        r = call(c, "qore_debug_terminate");
+        assertEq({"terminated": True}, r.programEnd);
+
+        # a thread deep in a recursion: the frames from the top are given
+        path = writeProgram(tmp.path, "%modern\nsub f(int d) {\n    if (d > 0) {\n        f(d - 1);\n    }\n"
+            "    while (True) {\n        ++d;\n    }\n}\nf(30);\n", "deep.q");
+        call(c, "qore_debug_launch", {"script": path});
+        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
+        assertTrue(r.timedOut);
+        assertEq(DebugMcpSession::MaxDetailFrames, r.frames.size());
+        # 31 calls of f() and the top-level code
+        assertEq(32 - DebugMcpSession::MaxDetailFrames, r.framesOmitted);
+        assertEq("f", r.frames[0].function);
+        assertEq(("d",), map $1.name, r.variables);
+        call(c, "qore_debug_terminate");
+    }
+
+    threadTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        string path = writeProgram(tmp.path, ThreadProgram);
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+        call(c, "qore_debug_launch", {"script": path});
+
+        # a logpoint in the loop of the threads: its messages are not the output of the program
+        hash<auto> r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 6", "log_message": "w{w} n{n}"});
+        assertTrue(r.ok, r.error);
+        assertEq(1, r.events.size(), sprintf("%y", r.events));
+        r = call(c, "qore_debug_continue", {"timeout_ms": 500});
+        assertTrue(r.timedOut);
+        # the stops of the requested pause, in the function of the threads
+        list<hash<auto>> pauses = select r.events, $1.reason == "pause";
+        assertGt(0, pauses.size(), sprintf("%y", r.events));
+        assertEq("work", pauses[0].function);
+        # the threads were paused although they are logging
+        assertTrue(r.state.paused, sprintf("%y", r - "logOutput"));
+        # each message tells its thread
+        assertRegex("\n\\[thread [0-9]+\\] w[0-2] n[0-9]+\n", r.logOutput);
+        assertFalse(r.programOutput =~ /w[0-2] n/);
+        # the last lines of the messages are reported
+        assertEq(DebugMcpSession::MaxOutputLines + 1, r.logOutput.split("\n").size());
+        assertRegex("^\\[[0-9]+ earlier lines are omitted\\]\n", r.logOutput);
+        assertGt(0, r.logOutputOmitted);
+
+        # the paused thread is in the loop of a function
+        r = call(c, "qore_debug_stack");
+        assertEq("work", r.frames[0].function);
+
+        # the program is ended with all its threads
+        r = call(c, "qore_debug_terminate");
+        assertEq({"terminated": True}, r.programEnd);
+        assertEq({"session": False}, r.state);
+        assertEq(3, (select r.events, $1.reason == "thread end").size(), sprintf("%y", r.events));
+
+        # a logpoint that logs the same message in a loop gives one line with the number of its messages
+        path = writeProgram(tmp.path, LoopProgram, "loop.q");
+        call(c, "qore_debug_launch", {"script": path});
+        r = call(c, "qore_debug_set_breakpoint", {"location": "loop.q 4", "log_message": "loop"});
+        assertTrue(r.ok, r.error);
+        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
+        assertRegex("^\\[thread [0-9]+\\] loop \\(x[0-9]+\\)\n$", r.logOutput);
+        assertFalse(r.hasKey("logOutputOmitted"));
+        call(c, "qore_debug_terminate");
+
+        # a program ends with the last of its threads: a thread that the initial thread waited for ends after its code
+        # let the initial thread continue, and its end is reported before the end of the program
+        path = writeProgram(tmp.path, "%modern\nCounter n(1);\nbackground sub () { on_exit n.dec(); usleep(1ms); "
+            "}();\nn.waitForZero();\n", "end.q");
+        for (int i = 0; i < 5; ++i) {
+            call(c, "qore_debug_launch", {"script": path});
+            r = call(c, "qore_debug_continue");
+            assertEq({}, r.programEnd);
+            assertEq(2, (select r.events, $1.reason == "thread end").size(), sprintf("%y", r.events));
+        }
+        call(c, "qore_debug_terminate");
+    }
+
+    commandTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        string path = writeProgram(tmp.path, Program);
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+        call(c, "qore_debug_launch", {"script": path});
+        call(c, "qore_debug_set_breakpoint", {"location": "target.q 9", "hit_condition": "== 3"});
+        hash<auto> r = call(c, "qore_debug_command", {"command": "break list"});
+        assertRegex("hitcondition: == 3", r.text);
+        r = call(c, "qore_debug_continue");
+        assertEq(9, (select r.events, $1.reason == "breakpoint")[0].line);
+        # the third time: i is 2
+        r = call(c, "qore_debug_command", {"command": "eval i"});
+        assertRegex("= 2", r.text);
+        # a command that fails
+        r = call(c, "qore_debug_command", {"command": "nosuchcommand"});
+        assertFalse(r.ok);
+        assertEq("\"nosuchcommand\": unknown command", r.error);
+        # commands that end qdbg or use files are not available
+        hash<auto> e = callError(c, "qore_debug_command", {"command": "quit"});
+        assertEq("DEBUG-MCP-ERROR", e.err);
+        e = callError(c, "qore_debug_command", {"command": "script /tmp/x"});
+        assertEq("DEBUG-MCP-ERROR", e.err);
+        call(c, "qore_debug_terminate");
+    }
+
+    errorTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        string path = writeProgram(tmp.path, Program);
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+        # no session
+        foreach string tool in (("qore_debug_continue", "qore_debug_stack", "qore_debug_variables",
+                "qore_debug_terminate", "qore_debug_pause")) {
+            hash<auto> e = callError(c, tool);
+            assertEq("DEBUG-MCP-ERROR", e.err, tool);
+        }
+        # a script that does not exist
+        hash<auto> e = callError(c, "qore_debug_launch", {"script": tmp.path + "/nosuchfile.q"});
+        assertRegex("FILE-OPEN", e.err);
+        # a breakpoint on a line without statements, and invalid arguments
+        call(c, "qore_debug_launch", {"script": path});
+        hash<auto> r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 1"});
+        assertFalse(r.ok);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "condition": "a ==="});
+        assertFalse(r.ok);
+        assertRegex("^invalid condition \"a ===\"", r.error);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "condition": "nosuchvar > 1"});
+        assertFalse(r.ok);
+        assertRegex("nosuchvar", r.error);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "hit_condition": "sometimes"});
+        assertFalse(r.ok);
+        assertRegex("invalid hit condition", r.error);
+        # the breakpoint is not kept without its hit condition
+        r = call(c, "qore_debug_command", {"command": "break list"});
+        assertFalse(r.text =~ /target.q:3/, r.text);
+        # negative: a misspelled argument is not ignored
+        e = callError(c, "qore_debug_set_breakpoint", {"location": "target.q 3", "log": "a={a}"});
+        assertEq("DEBUG-MCP-ERROR", e.err);
+        assertEq("qore_debug_set_breakpoint: unknown argument \"log\"; the arguments of the tool are: location, "
+            "condition, hit_condition, log_message", e.desc);
+        e = callError(c, "qore_debug_status", {"verbose": True});
+        assertEq("qore_debug_status: unknown argument \"verbose\"; the arguments of the tool are: none", e.desc);
+        r = call(c, "qore_debug_command", {"command": "break list"});
+        assertFalse(r.text =~ /target.q:3/, r.text);
+        e = callError(c, "qore_debug_continue", {"mode": "sideways"});
+        assertEq("DEBUG-MCP-ERROR", e.err);
+        e = callError(c, "qore_debug_exception_filter", {"filters": ("a b",)});
+        assertEq("DEBUG-MCP-ERROR", e.err);
+        e = callError(c, "qore_debug_variables", {"path": "nosuchvar"});
+        assertEq("DEBUG-ERROR", e.err);
+        # a launch while a program is debugged ends the earlier session
+        r = call(c, "qore_debug_launch", {"script": path});
+        assertTrue(r.state.paused);
+        call(c, "qore_debug_terminate");
+    }
+
+    tokenTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        hash<auto> s = startServer(tmp.path, NOTHING, "s3cret");
+        on_exit s.process.terminate();
+        assertEq(13, s.client.listTools().size());
+        # negative: no token and a wrong token
+        McpClient::McpClient c(s.url);
+        assertThrows("MCP-HTTP-ERROR", "401", \c.initialize(), <McpClientInfo>{"name": "x", "version": "1"});
+        McpClient::McpClient c2(s.url, {"headers": {"Authorization": "Bearer wrong"}});
+        assertThrows("MCP-HTTP-ERROR", "401", \c2.initialize(), <McpClientInfo>{"name": "x", "version": "1"});
+        # negative: a listener that other hosts can reach without a token
+        hash<auto> r = runTool(("-l", "0.0.0.0:0"));
+        assertNeq(0, r.rc);
+        assertRegex("without a token", r.out);
+    }
+
+    attachTest() {
+        TmpDir tmp("qore-dmcp-test-");
+        writeProgram(tmp.path, Program);
+        hash<auto> srv = startTool(qdbg_server, ("target.q",), tmp.path, {"QDBG_SERVER_TOKEN": "t0ken"});
+        Process server = srv.process;
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        int port = (srv.line =~ x/listening on port ([0-9]+)/)[0].toInt();
+        hash<auto> s = startServer(tmp.path);
+        on_exit s.process.terminate();
+        McpClient::McpClient c = s.client;
+
+        # negative: no token
+        hash<auto> e = callError(c, "qore_debug_attach", {"url": sprintf("localhost:%d", port)});
+        assertRegex("401", e.desc);
+        # negative: no debug server listens on the port: the error tells what to check
+        {
+            Socket sock();
+            sock.bind("127.0.0.1:0");
+            int free_port = sock.getSocketInfo().port;
+            sock.close();
+            e = callError(c, "qore_debug_attach", {"url": sprintf("127.0.0.1:%d", free_port)});
+            assertEq("HTTPCLIENT-CONNECT-ERROR", e.err);
+            assertRegex("no debug server listens at .*check that the debug server runs", e.desc);
+        }
+
+        # the thread of the program that the server holds at its start is the current thread
+        hash<auto> r = call(c, "qore_debug_attach", {"url": sprintf("localhost:%d", port), "token": "t0ken"});
+        assertTrue(r.ok);
+        assertTrue(r.state.paused);
+        assertEq(("user", "system", "uncaught"), r.exceptionFilters);
+        # the thread that paused before the session is reported with where it is
+        assertEq({"text": sprintf("Thread %d is paused at the start of the program, before its first statement",
+            r.state.threadId), "reason": "start", "tid": r.state.threadId}, r.events[0]);
+        # its frame has no file and line yet
+        hash<auto> st = call(c, "qore_debug_stack");
+        assertEq(({"frame": 0, "function": "<top level>", "current": True},), st.frames);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 4"});
+        assertTrue(r.ok, r.error);
+        int id = r.breakpoint;
+        r = call(c, "qore_debug_continue");
+        assertEq(4, (select r.events, $1.reason == "breakpoint")[0].line);
+        r = call(c, "qore_debug_evaluate", {"expression": "sum"});
+        assertEq("1", r.value);
+        # the session ends; the program of the server continues without the breakpoint
+        call(c, "qore_debug_delete_breakpoint", {"id": id});
+        r = call(c, "qore_debug_terminate");
+        assertTrue(r.sessionEnded);
+        assertEq({"session": False}, r.state);
+        assertRegex("Detached from the debug server; the paused threads of its programs continue", r.text);
+        assertTrue(server.wait(30s), "the debug server ends with its program");
+    }
+%endif
+}

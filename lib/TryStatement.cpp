@@ -168,6 +168,10 @@ int TryStatement::parseInitImpl(QoreParseContext& parse_context) {
     ash.saveState();
 
     if (try_block) {
+        // the statements of the try block are in a try statement; those of the catch block are not, unless this
+        // statement is
+        QoreParseContextFlagHelper fht(parse_context);
+        fht.setFlags(PF_IN_TRY);
         err = try_block->parseInitImpl(parse_context);
         ash.recordBranchAndRestore();
     } else {

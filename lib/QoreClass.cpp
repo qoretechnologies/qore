@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
@@ -4608,7 +4609,7 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
     // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
     // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
     if (!self->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
             "already been deleted", self->getClassName(), nme);
         return QoreValue();
     }
@@ -4788,7 +4789,7 @@ QoreObject* qore_class_private::execCopy(QoreObject* old, ExceptionSink* xsink) 
     // Compiled calls can enter here directly, bypassing normal method dispatch.  Reject a deleted source
     // before allocating the copy; otherwise a failed copy can run a destructor on an uninitialized object.
     if (!old->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::copy() on an object that has "
+        qore_raise_deleted_object(xsink, "cannot call %s::copy() on an object that has "
             "already been deleted", old->getClassName());
         return nullptr;
     }

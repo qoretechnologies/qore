@@ -139,6 +139,18 @@ public:
     */
    DLLEXPORT int breakProgramThread(QoreProgram *pgm, int tid) const;
 
+   //! Notes that the debugger ends a program by cancelling its threads
+   /** The threads of the program that end with a \c THREAD-CANCELLED exception end without reporting it as an
+       unhandled exception, as their end is not an error; the main thread of the program still raises it to the code
+       that runs the program
+
+       @return 0 if the operation was successful, -1 if the target program does not allow debugging, or -2 if the
+       target program is not attached
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT int setProgramTerminating(QoreProgram* pgm) const;
+
    /**
     * Break program, i.e. all threads
     * @return 0 if the operation was successful, -1 if the target program does not allow debugging, -2 if the

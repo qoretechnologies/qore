@@ -1180,8 +1180,17 @@ public:
             : QoreIRInstruction(QoreIROpcode::DebugStatement), statement(n_statement) {
     }
 
-    //! the statement that the step event is for; it lives as long as the parse tree that the function was lowered
-    //! from
+    //! Creates a DebugStatement instruction, or a DebugBlock instruction for the given block
+    DLLLOCAL QoreIRDebugStatementInstruction(QoreIROpcode op, const AbstractStatement* n_statement)
+            : QoreIRInstruction(op), statement(n_statement) {
+        assert(op == QoreIROpcode::DebugStatement || op == QoreIROpcode::DebugBlock);
+    }
+
+    //! the statement that the step event is for, or the block of a DebugBlock instruction; it lives as long as the
+    //! parse tree that the function was lowered from
+    /** A DebugBlock instruction is also a plain QoreIRInstruction, as when it is read from the debug IR of AOT code,
+        whose block is found from its location (qore_program_private::getBlockFromIndex())
+    */
     const AbstractStatement* statement;
 };
 
@@ -2950,6 +2959,16 @@ public:
     uint32_t scope_id = 0;  //!< scope ID from matching ScopeEnter
     bool is_error = false;  //!< true if exiting due to an exception
     bool inline_lowered = false;  //!< true if handlers were already inlined; just flush runtime vector
+    //! true if the instruction only drops handlers of the scope without running them; the scope stays open
+    /** Emitted before each handler that is lowered inline: the handler and those registered after it are dropped,
+        and the handlers registered before it (the first @ref keep_handlers handlers of the scope) stay registered.
+        If the inlined handler raises an exception, the exception path of the scope (a non-inline ScopeExit, a
+        landing pad or the function exit) then runs the remaining handlers, with the exception, as the AST
+        interpreter does (StatementBlock::execIntern()).  A trim never runs handler code and never shrinks the
+        scope below its handler count at ScopeEnter.
+    */
+    bool trim = false;
+    uint32_t keep_handlers = 0;  //!< the number of handlers of the scope that a trim keeps registered
 };
 
 //! ContextInit — create a Context frame for a `context` statement.

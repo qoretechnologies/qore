@@ -26,6 +26,7 @@ class ParseOptionsTest inherits QUnit::Test {
         addTestCase("no-namespace-defs enforcement", \noNamespaceDefsTests());
         addTestCase("no-new enforcement", \noNewTests());
         addTestCase("parse directive tests", \parseDirectiveTests());
+        addTestCase("Program applySourceDefaults tests", \applySourceDefaultsTests());
         set_return_value(main());
     }
 
@@ -412,5 +413,63 @@ class ParseOptionsTest inherits QUnit::Test {
         assertThrows("PARSE-OPTION-ERROR", sub() { opts.hasAll("bad-option"); });
         assertThrows("PARSE-OPTION-ERROR", sub() { opts.hasAny("bad-option"); });
         assertThrows("PARSE-OPTION-ERROR", sub() { opts.merge("bad-option"); });
+    }
+
+    # the parse options that the interpreter gives a source file by its name
+    applySourceDefaultsTests() {
+        # independent Programs, which do not inherit the %modern mode of this program
+        # only a name that ends in exactly ".q" keeps the parse options
+        foreach string path in (("/tmp/x.qr", "x.qtest", "x.qm", "/tmp/x", "/tmp/dir.q/x", "x.q.bak", "x.Q")) {
+            Program pgm(PO_DEFAULT, True);
+            assertTrue(pgm.applySourceDefaults(path), path);
+            assertEq(PO_MODERN, pgm.getParseOptions() & PO_MODERN, path);
+            # code that needs %modern is parsed
+            pgm.parse("int sub f() { int x = 2; return x; }", path);
+            assertEq(2, pgm.callFunction("f"), path);
+        }
+        foreach string path in (("/tmp/x.q", "x.q")) {
+            Program pgm(PO_DEFAULT, True);
+            assertFalse(pgm.applySourceDefaults(path), path);
+            assertEq(0, pgm.getParseOptions() & PO_MODERN, path);
+            # old-style code is parsed
+            pgm.parse("sub f() { my $x = 3; return $x; }", path);
+            assertEq(3, pgm.callFunction("f"), path);
+        }
+
+        # the environment variable disables the default
+        *string old = ENV.QORE_OLD_STYLE_DEFAULT;
+        on_exit {
+            if (exists old) {
+                setenv("QORE_OLD_STYLE_DEFAULT", old);
+            } else {
+                unsetenv("QORE_OLD_STYLE_DEFAULT");
+            }
+        }
+        setenv("QORE_OLD_STYLE_DEFAULT", "1");
+        {
+            Program pgm(PO_DEFAULT, True);
+            assertFalse(pgm.applySourceDefaults("/tmp/x.qr"));
+            assertEq(0, pgm.getParseOptions() & PO_MODERN);
+        }
+        setenv("QORE_OLD_STYLE_DEFAULT", "0");
+        {
+            Program pgm(PO_DEFAULT, True);
+            assertTrue(pgm.applySourceDefaults("/tmp/x.qr"));
+        }
+        unsetenv("QORE_OLD_STYLE_DEFAULT");
+
+        # %modern only restricts code, so it is applied also when parse options are locked
+        {
+            Program pgm(PO_DEFAULT, True);
+            pgm.lockOptions();
+            assertTrue(pgm.applySourceDefaults("/tmp/x.qr"));
+            assertEq(PO_MODERN, pgm.getParseOptions() & PO_MODERN);
+        }
+        {
+            Program pgm(PO_DEFAULT, True);
+            pgm.lockOptions();
+            assertFalse(pgm.applySourceDefaults("/tmp/x.q"));
+            assertEq(0, pgm.getParseOptions() & PO_MODERN);
+        }
     }
 }

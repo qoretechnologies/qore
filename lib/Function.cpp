@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 // for the QCF_NO_DOMAIN_THROW violation reporting mode, checked in ~CodeEvaluationHelper()
 #include "qore/intern/ql_debug.h"
@@ -965,7 +966,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
         assert(n_qc);
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
             "deleted", qc->name.c_str(), func->getName());
         return;
     }
@@ -992,7 +993,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
         assert(n_qc);
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
             "deleted", qc->name.c_str(), func->getName());
         return;
     }
@@ -1163,7 +1164,10 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
                 old_rc_po = rc.getParseOptions();
                 rc.setParseOptions(pgm_po);
-                swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+                // only the parse options change: the thread's current statement and location are kept; the
+                // RuntimeConfig has them only for the AST interpreter, which keeps both current, while the IR
+                // interpreter and native code update only the thread's
+                swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
                     old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
                 restore_runtime_ctx = true;
                 if (*xsink) {
@@ -1260,7 +1264,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
             old_rc_po = rc.getParseOptions();
             rc.setParseOptions(pgm_po);
-            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+            // only the parse options change: the thread's current statement and location are kept (see above)
+            swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
                 old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
             restore_runtime_ctx = true;
             if (*xsink) {

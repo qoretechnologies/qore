@@ -1001,6 +1001,37 @@ nothing set_thread_name(string name) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
 #endif
 }
 
+//! Returns the descriptive name of the thread with the given ID
+/** The name is the current name of the thread, as set with set_thread_name() or by the system; another thread can
+    change it at any time
+
+    @par Platform Availability:
+    @ref Qore::Option::HAVE_THREAD_NAME
+
+    @par Example:
+    @code{.py}
+hash<string, *string> names = map {$1: get_thread_name($1)}, thread_list();
+    @endcode
+
+    @param tid the ID of the thread
+
+    @return the name of the thread, or @ref nothing if no thread with the given ID is active, if the thread has no
+    name, or if the current platform does not support thread names
+
+    @since %Qore 3.0
+*/
+*string get_thread_name(softint tid) [dom=THREAD_INFO;flags=RET_VALUE_ONLY] {
+#ifdef QORE_HAVE_THREAD_NAME
+    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
+    if (q_get_thread_name((int)tid, **rv)) {
+        return QoreValue();
+    }
+    return rv->empty() ? QoreValue() : rv.release();
+#else
+    return QoreValue();
+#endif
+}
+
 //! Returns @ref True if there is an active exception for the current thread
 /** @return @ref True if there is an active exception for the current thread
 

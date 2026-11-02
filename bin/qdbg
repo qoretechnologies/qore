@@ -19,51 +19,101 @@
 class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
     public {
         DebugProgramControlLocal dpc;
+        #! counts the thread that runs the program
+        Counter running();
+        #! the threads that left the program, by TID; see getQuitNote()
+        hash<string, bool> leftThreads = {};
+        #! serializes the access to leftThreads
+        Mutex leftLock();
         ResponseSync sync();
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uidSeq();
-        #! True if a command that resumes a thread returns when the thread stops again; for input that is not a
-        #! terminal, so that each command of a script is processed when the program is stopped
-        bool waitForStops;
     }
 
     private {
-        #! guards the wait for a thread to stop
-        Mutex stopLock();
-        #! signaled when the thread that is waited for stops
-        Condition stopCond();
-        #! True while a thread is waited for to stop
-        bool stopPending;
-        #! the thread that is waited for to stop; any thread if not set
-        *int stopTid;
+        #! serializes the commands sent to stopped threads, as their responses are delivered one at a time; the
+        #! commands of stopping all threads together are sent in background threads
+        Mutex cmdLock();
     }
     constructor(DebugProgramControlLocal n_dpc): DebugLinenoiseCommandLine() {
         dpc = n_dpc;
         dpc.dcl = self;
     }
+    #! Waits for the end of the program after the kill command, as long as the wait timeout if one is set
+    public bool waitForProgramEnd() {
+        # the thread that runs the program, and the threads that it started, whose ends are reported
+        if (waitTimeout) {
+            int deadline = clock_getmicros() + waitTimeout * 1000;
+            if (running.waitForZero(waitTimeout)
+                || !waitForLiveThreads(max(1, (deadline - clock_getmicros()) / 1000))) {
+                printfImpl("%s\n", tc.warning(sprintf("The program did not end within %d ms", waitTimeout)));
+                return False;
+            }
+            return True;
+        }
+        running.waitForZero();
+        waitForLiveThreads();
+        return True;
+    }
+
+    #! Notes the threads that leave the program before the event is processed; see getQuitNote()
+    public processEvent(hash<auto> data) {
+        if (DebugCommandLine::isThreadEnd(data) && data.func == "detach") {
+            AutoLock al(leftLock);
+            leftThreads{data.tid} = True;
+        }
+        DebugLinenoiseCommandLine::processEvent(data);
+    }
+
+    #! Tells that the program continues without the debugger, and that qdbg ends when the program ends
+    public *string getQuitNote() {
+        if (!running.getCount()) {
+            return;
+        }
+        # the program continues while a thread is in it that did not leave it; without one, the thread that ran it is
+        # returning
+        hash<string, bool> left;
+        {
+            AutoLock al(leftLock);
+            left = leftThreads;
+        }
+        foreach ProgramControl pgm in (dpc.getAllPrograms()) {
+            if (select pgm.getThreadList(), !left{$1}) {
+                return "The program continues without the debugger, and qdbg ends when the program ends; \"quit "
+                    "kill\" ends the program first";
+            }
+        }
+        running.waitForZero();
+    }
+
     public *hash<auto> doCommandImpl(hash<auto> data) {
         if (!exists data.tid) {
             return dpc.processCommand(DebugProgramControlLocal::CX, data);
         }
         # a command that resumes the thread returns when it stops again; the wait starts before the command is sent,
         # as the thread can stop again before the answer to the command is received
-        bool resumes = waitForStops && data.cmd =~ /^thread\/go(\/|$)/;
+        # a command with "wait" False, as of the threads that continue with another one, does not wait
+        bool resumes = resumesWithWait(data);
         if (resumes) {
             expectStop(data.tid);
         }
         on_error if (resumes) {
             cancelStop();
         }
-        # the stopped thread answers every command, with the unique ID of the command
-        data.uid = string(uidSeq.next());
-        sync.prepare(data.uid);
-        on_error sync.cancel();
-        *hash<auto> ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
-        if (ret.type == DebugResponseType::Thread) {
-            ret = sync.waitForResponse();
-        } else {
-            # answered without the thread, such as a thread that is not stopped
-            sync.cancel();
+        *hash<auto> ret;
+        {
+            AutoLock al(cmdLock);
+            # the stopped thread answers every command, with the unique ID of the command
+            data.uid = string(uidSeq.next());
+            sync.prepare(data.uid);
+            on_error sync.cancel();
+            ret = dpc.processCommand(DebugProgramControlLocal::CX, data);
+            if (ret.type == DebugResponseType::Thread) {
+                ret = sync.waitForResponse();
+            } else {
+                # answered without the thread, such as a thread that is not stopped
+                sync.cancel();
+            }
         }
         if (resumes) {
             if (ret.type == DebugResponseType::Error) {
@@ -73,42 +123,6 @@ class DebugCommandLineLocal inherits DebugLinenoiseCommandLine {
             }
         }
         return ret;
-    }
-
-    #! Starts waiting for a thread to stop; for any thread if \a tid is not given
-    expectStop(*int tid) {
-        AutoLock al(stopLock);
-        stopTid = tid;
-        stopPending = True;
-    }
-
-    #! Stops waiting for a thread to stop
-    cancelStop() {
-        AutoLock al(stopLock);
-        stopPending = False;
-        stopCond.broadcast();
-    }
-
-    #! Waits until the thread that is waited for stops, stops being debugged, or the program ends
-    waitForStop() {
-        AutoLock al(stopLock);
-        while (stopPending) {
-            stopCond.wait(stopLock);
-        }
-    }
-
-    #! Processes an event of the debug server: a thread that is waited for stops or stops being debugged
-    eventReceived(hash<auto> data) {
-        if (data.type != DebugResponseType::Event
-            || (data.cmd != DebugEventCmd::Interrupt
-                && (data.cmd != DebugEventCmd::Run || data.runstate != "detach"))) {
-            return;
-        }
-        AutoLock al(stopLock);
-        if (stopPending && (!exists stopTid || data.tid == stopTid)) {
-            stopPending = False;
-            stopCond.broadcast();
-        }
     }
 }
 
@@ -133,16 +147,37 @@ class DebugProgramControlLocal inherits DebugProgramControl {
             dcl.printData(data);
         }
     }
+    #! Ends debugging: the programs are no longer debugged, and their stopped threads continue
+    /** The programs are removed first, so that a thread that continues does not stop again, as at the end of a
+        program, with nobody to resume it
+    */
+    endDebugging() {
+        map removeProgram($1), getAllPrograms();
+        shutdown();
+    }
+
     public nothing broadcastDataImpl(any data) {
         debug("broadcastDataImpl: %y", data);
         dcl.printData(data);
         if (data.typeCode() == NT_HASH) {
+            # the state of the threads is updated before a command that waits for the event continues
+            dcl.processEvent(data);
             dcl.eventReceived(data);
         }
     }
 }
 
 class DebugWrapper {
+    public {
+        #! the time that qdbg waits for the end of the program on SIGINT or SIGTERM; see endOnSignal()
+        const SignalEndTimeout = 5s;
+
+        #! serializes the end of qdbg: the end of the commands, or SIGINT or SIGTERM; see ending
+        Mutex shutdown();
+        #! True when qdbg ends, so that only one of them ends it
+        bool ending;
+    }
+
     private {
         hash<auto> opts = (
             'help': 'h,help',
@@ -154,9 +189,14 @@ class DebugWrapper {
             "time_zone": "z,time-zone=s",
             #"exec_class": "x,exec-class:s",
             "history": "y,history=s",
+            "init_file": "i,init-file=s",
+            "no_init": "n,no-init",
+            "execute": "x,execute=s@",
             "session": "s,session=s",
             "color": "color",
             "no_color": "no-color",
+            "json": "json",
+            "wait_timeout": "wait-timeout=i",
         );
         DebugCommandLineLocal dcl;
         Logger logger;
@@ -200,9 +240,9 @@ class DebugWrapper {
         dcl = new DebugCommandLineLocal(dpcl);
         dcl.setLogger(logger);
         dcl.dpc.setLogger(logger);
-        # signal handler for graceful shutdown
+        # SIGINT and SIGTERM end the program and qdbg
         code sig_handler = sub (int sig) {
-            dpcl.shutdown();
+            endOnSignal(sig);
         };
         set_signal_handler(SIGINT, sig_handler);
         set_signal_handler(SIGTERM, sig_handler);
@@ -211,31 +251,93 @@ class DebugWrapper {
                 fileName = "/dev/stdin";
             }
             # with input that is not a terminal (a script), the commands are processed when the program is stopped
-            dcl.waitForStops = !stdin.isTty();
+            # each command of a script is processed when the program is stopped
+            dcl.waitsForStops = !stdin.isTty();
+            # the files of commands of the start, which are run at the start of the program
+            list<string> cmd_files = DebugLinenoiseCommandLine::getStartupCommandFiles(opt);
+            bool wait_start = dcl.waitsForStops || cmd_files;
+            # the thread that runs the program; the output of the program is captured until it ends
+            Counter running = dcl.running;
+            # the program is referenced until the debugger ends: the threads that it started can outlive the thread
+            # that runs it, and the debugger is not called for the threads of a program without references, so
+            # that their ends would not be reported
+            *Program pgm;
             if (exists fileName) {
-                Program pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
+                pgm = dcl.dpc.createProgram(fileName, opt, ARGV);
+            }
+            # the options apply before the program runs, so that its events, as its start, and its output are given as
+            # they set; a session file is loaded for the program that was created
+            dcl.init(opt);
+            # with JSON output, the output of the program is given as JSON objects, and the debugger writes to the
+            # original stdout
+            if (opt.json && dcl.dpc.captureOutput(False)) {
+                dcl.outputFile = dcl.dpc.getOutputCapture().getStdout();
+            }
+            on_exit if (opt.json) {
+                # the output of the program until its end is given
+                running.waitForZero();
+                dcl.dpc.stopOutputCapture();
+            }
+            if (pgm) {
                 logger.info("run program");
-                if (dcl.waitForStops) {
+                if (wait_start) {
                     # the first command is processed when the program has attached to the debugger
                     dcl.expectStop();
                 }
+                running.inc();
                 background sub () {
+                    on_exit running.dec();
                     # a wait for the program ends with it
                     on_exit dcl.cancelStop();
-                    pgm.run();
+                    try {
+                        pgm.run();
+                        if (opt.json) {
+                            dcl.writeJson({"type": "end"});
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a program that the debugger ended ("kill"); the thread is no longer cancelled
+                        if (DebugProgramControl::isTerminateException(ex)) {
+                            clear_thread_cancel();
+                            if (opt.json) {
+                                dcl.writeJson({"type": "end", "terminated": True});
+                            }
+                            return;
+                        }
+                        # with JSON output, the exception that ends the program is given in the object of its end
+                        if (opt.json) {
+                            hash<auto> e = map {$1.key: $1.value}, ex.pairIterator(),
+                                $1.key != "callstack" && $1.key != "next";
+                            e.text = get_exception_string(ex);
+                            dcl.writeJson({"type": "end", "exception": e});
+                            return;
+                        }
+                        rethrow;
+                    }
                 }();
             }
-            dcl.init(opt);
-            if (dcl.waitForStops) {
+            if (wait_start) {
                 dcl.waitForStop();
             }
-            dcl.runCmdLine();
+            # a command of a file can end the debugger
+            if (dcl.runStartupCommandFiles(cmd_files)) {
+                dcl.runCmdLine();
+            }
 
+            # qdbg ends; a signal no longer ends it
+            {
+                AutoLock al(shutdown);
+                ending = True;
+            }
             # explicit cleanup before program exit to avoid PROGRAM-ERROR
             # in destructors when module programs are destroyed first
-            dpcl.shutdown();
+            dpcl.endDebugging();
         } catch (hash<ExceptionInfo> ex) {
-            stderr.print(get_exception_string(ex) + "\n");
+            # the call stack of the error with -v
+            if (opt.verbose) {
+                stderr.printf("%s\n", get_exception_string(ex));
+            } else {
+                stderr.printf("%s: error: %s (%s)\n", get_script_name(), ex.desc, ex.err);
+            }
             exit(-1);
         }
         # remove signal handlers before exit so their closures release
@@ -245,37 +347,84 @@ class DebugWrapper {
         remove_signal_handler(SIGTERM);
     }
 
+    #! Ends the debugged program and qdbg, on SIGINT or SIGTERM
+    /** The program ends first, as a program that is no longer debugged would continue, and qdbg with it until it
+        ended; a thread that does not end within SignalEndTimeout, as in a call that cannot be interrupted, ends with
+        the process
+    */
+    private endOnSignal(int sig) {
+        # qdbg is not already ending
+        {
+            AutoLock al(shutdown);
+            if (ending) {
+                return;
+            }
+            ending = True;
+        }
+        foreach ProgramControl pgm in (dcl.dpc.getAllPrograms()) {
+            try {
+                dcl.dpc.terminateProgram(pgm);
+            } catch (hash<ExceptionInfo> ex) {
+                # a program that ends meanwhile
+            }
+        }
+        dcl.running.waitForZero(SignalEndTimeout);
+        dcl.dpc.endDebugging();
+        # the output of the program until its end is given, with JSON output
+        dcl.dpc.stopOutputCapture();
+        exit(128 + sig);
+    }
+
     private help(int exCode=1) {
-        printf("usage: %s [options] <program> [<program params> ...]\n"
-            "  where <program> is the program to debug, use \"--\" to get code from stdin\n"
-            "  -v                           verbose (use -v -v for debug output)\n"
-            "  -h                           help\n"
-            "  -D, --define=arg             sets the value of a parse define\n"
-            "  -p, --set-parse-option=arg   set parse option (ex: -pno-database)\n"
-            "  -z, --time-zone=arg          sets the time zone from the argument; can be\n"
-            "                               a region name (ex: 'Europe/Prague') or a\n"
-            "                               UTC offset (ex: '+01:00')\n"
-            "  -y, --history=file           load command line history from file, default: %s in home directory\n"
-            "                               When \".\" name is provided then history is not loaded/saved\n"
-            "  -s, --session=file           load session from file\n"
-            "  --color                      force color output\n"
-            "  --no-color                   disable color output\n"
+        printf("usage: %s [options] [<script> [<script arguments> ...]]\n"
+            "Debugs a Qore script in the terminal.  The script pauses when it starts; then commands such as\n"
+            "\"break create <line>\" (pause at a line) and \"go\" (continue) control it.  Type \"help\" at the prompt for\n"
+            "all commands.\n"
             "\n"
-            "When the input is not a terminal, the commands are a script: the first command is processed when the\n"
-            "program has attached to the debugger, and a command that resumes a thread returns when the thread stops\n"
-            "again or stops being debugged.\n"
+            "  <script>                     the script to debug; \"--\" reads it from the standard input\n"
             "\n"
-            "Keyboard shortcuts:\n"
-            "  Ctrl+D                       quit debugger\n"
-            "  Ctrl+G                       show current program/thread context\n"
-            "  TAB                          command completion (cycles through matches)\n"
+            "  -h                           show this help\n"
+            "  -v                           show more details of what the debugger does; -v -v shows all of them\n"
+            "  -D, --define=name[=value]    set a parse define of the script\n"
+            "  -p, --set-parse-option=opt   set a parse option of the script, such as -pno-database\n"
+            "  -z, --time-zone=zone         the time zone of the script: a region name, such as Europe/Prague, or a\n"
+            "                               UTC offset, such as +01:00\n"
+            "  -y, --history=file           the file of the commands that the up and down arrow keys recall; the\n"
+            "                               default is %s in the home folder; \".\" keeps no history\n"
+            "  -s, --session=file           load the breakpoints and settings that \"session save\" saved to a file\n"
+            "  -i, --init-file=file         run the commands of the file at the start instead of those of %s in\n"
+            "                               the home folder\n"
+            "  -n, --no-init                do not run the commands of %s in the home folder at the start\n"
+            "  -x, --execute=file           run the commands of the file at the start, after those of the init file;\n"
+            "                               can be given more than once\n"
+            "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
+            "  --json                       write JSON Lines for programs such as coding agents: one object for each\n"
+            "                               command, event and output of the script; commands are read without a\n"
+            "                               prompt\n"
+            "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
+            "                               when the input is not a terminal; then the script is paused (default: no\n"
+            "                               limit)\n"
+            "\n"
+            "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
+            "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"
+            "\"script <file>\" command runs a file of commands at the prompt.\n"
+            "\n"
+            "When the input is not a terminal, it is a script of commands: the first command runs when the script\n"
+            "pauses at its start, and a command that resumes a thread waits until a thread pauses or the thread ends.\n"
+            "\n"
+            "Keys:\n"
+            "  Ctrl+D                       end the debugger\n"
+            "  Ctrl+G                       show the current program and thread\n"
+            "  Tab                          complete a command (press again for the next match)\n"
             "\n"
             "Example:\n"
-            "  %s -v myfile.q -my -program params\n"
+            "  %s myscript.q arg1 arg2\n"
             "\n"
             ,
             get_script_name(),
             DebugLinenoiseCommandLine::defaultHistoryFileName,
+            DebugLinenoiseCommandLine::defaultInitFileName,
+            DebugLinenoiseCommandLine::defaultInitFileName,
             get_script_name(),
         );
         exit(exCode);

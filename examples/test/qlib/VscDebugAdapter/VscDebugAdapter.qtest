@@ -30,6 +30,7 @@
 %requires json
 %requires FsUtil
 %requires Util
+%requires VscDebugAdapter
 
 %try-module process >= 2.2
 %define NoProcess
@@ -42,6 +43,9 @@ class DapClient {
     public {
         #! bytes on stdout that are not part of a protocol message
         list<string> stray = ();
+
+        #! the maximum time to wait for a message before the test fails
+        const MessageTimeout = 30s;
     }
 
     private {
@@ -49,9 +53,6 @@ class DapClient {
         binary buf = binary();
         list<hash<auto>> backlog = ();
         int seq = 0;
-
-        #! the maximum time to wait for a message before the test fails
-        const MessageTimeout = 30s;
     }
 
     constructor(Process proc) {
@@ -185,9 +186,65 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "    int t = add(10, 20);\n"                                     # 7
             "}\n"                                                            # 8
             "Counter c(1);\n"                                                # 9
-            "background sub () { on_exit c.dec(); work(); }();\n"            # 10
+            "background sub () { on_exit c.dec(); set_thread_name(\"worker\"); work(); }();\n" # 10
             "c.waitForZero();\n"                                             # 11
             "printf(\"done\\n\");\n";                                         # 12
+
+        #! a program of a debug server that starts a thread for each line of input; the comments are the line numbers
+        const AttachProgram = "%modern\n"                                  # 1
+            "sub work() { printf(\"work\\n\");\n"                           # 2
+            "    int t = 1;\n"                                               # 3
+            "}\n"                                                            # 4
+            "while (stdin.readLine(False) == \"thread\") {\n"                # 5
+            "    Counter c(1);\n"                                            # 6
+            "    background sub () { on_exit c.dec(); work(); }();\n"        # 7
+            "    c.waitForZero();\n"                                         # 8
+            "    printf(\"done\\n\");\n"                                     # 9
+            "}\n";                                                           # 10
+
+        #! a program with a thread that runs and one that waits when the main thread stops at line 33; the comments
+        #! are the line numbers
+        const StopAllProgram = "%modern\n"                                 # 1
+            "our Counter stop(1);\n"                                         # 2
+            "our Counter busy_running(1);\n"                                 # 3
+            "our Mutex m();\n"                                               # 4
+            "our Condition cond();\n"                                        # 5
+            "our bool waiting = False;\n"                                    # 6
+            "our bool release = False;\n"                                    # 7
+            "sub busy() {\n"                                                 # 8
+            "    set_thread_name(\"busy\"); busy_running.dec();\n"           # 9
+            "    int i = 0;\n"                                               # 10
+            "    while (stop.getCount()) {\n"                                # 11
+            "        ++i;\n"                                                 # 12
+            "    }\n"                                                        # 13
+            "}\n"                                                            # 14
+            "sub blocked() {\n"                                              # 15
+            "    set_thread_name(\"waiter\"); m.lock();\n"                   # 16
+            "    on_exit m.unlock();\n"                                      # 17
+            "    waiting = True;\n"                                          # 18
+            "    cond.broadcast();\n"                                        # 19
+            "    while (!release) {\n"                                       # 20
+            "        cond.wait(m);\n"                                        # 21
+            "    }\n"                                                        # 22
+            "}\n"                                                            # 23
+            "Counter ended(2);\n"                                            # 24
+            "background sub () { on_exit ended.dec(); busy(); }();\n"        # 25
+            "background sub () { on_exit ended.dec(); blocked(); }();\n"     # 26
+            "busy_running.waitForZero();\n"                                  # 27
+            # the waiting thread releases the mutex only in Condition::wait()
+            "m.lock();\n"                                                    # 28
+            "while (!waiting) {\n"                                           # 29
+            "    cond.wait(m);\n"                                            # 30
+            "}\n"                                                            # 31
+            "m.unlock();\n"                                                  # 32
+            "int k = 1;\n"                                                   # 33
+            "stop.dec();\n"                                                  # 34
+            "m.lock();\n"                                                    # 35
+            "release = True;\n"                                              # 36
+            "cond.broadcast();\n"                                            # 37
+            "m.unlock();\n"                                                  # 38
+            "ended.waitForZero();\n"                                         # 39
+            "printf(\"done\\n\");\n";                                         # 40
 
         #! a program that raises an exception and catches it; the comments are the line numbers
         const ExceptionProgram = "%modern\n"                                # 1
@@ -196,6 +253,25 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "} catch (hash<ExceptionInfo> ex) {\n"                           # 4
             "    printf(\"caught %s\\n\", ex.err);\n"                         # 5
             "}\n";                                                           # 6
+
+        #! a program with exceptions that are caught in different ways, and one that is not caught; the comments are
+        #! the line numbers
+        const UncaughtProgram = "%modern\n"                                # 1
+            "sub fail(string err) {\n"                                       # 2
+            "    throw err, \"test\";\n"                                    # 3
+            "}\n"                                                            # 4
+            "try {\n"                                                        # 5
+            "    fail(\"CAUGHT-1\");\n"                                     # 6
+            "} catch (hash<ExceptionInfo> ex) {\n"                           # 7
+            "    try {\n"                                                    # 8
+            "        fail(\"CAUGHT-2\");\n"                                 # 9
+            "    } catch () {\n"                                             # 10
+            "    }\n"                                                        # 11
+            "}\n"                                                            # 12
+            "code c = sub () { fail(\"CAUGHT-3\"); };\n"                    # 13
+            "try { c(); } catch () {}\n"                                     # 14
+            "printf(\"before\\n\");\n"                                      # 15
+            "fail(\"UNCAUGHT\");\n";                                        # 16
 
         #! a program that runs until its variable \c done is set; the comments are the line numbers
         const LoopProgram = "%modern\n"                                     # 1
@@ -206,23 +282,98 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "}\n"                                                            # 6
             "printf(\"done\\n\");\n";                                         # 7
 
+        #! a program with structured values and a loop; the comments are the line numbers
+        const DataProgram = "%modern\n"                                     # 1
+            "class Base {\n"                                                 # 2
+            "    private { int id = 7; }\n"                                  # 3
+            "}\n"                                                            # 4
+            "class Account inherits Base {\n"                                # 5
+            "    private { int balance = 100; hash<auto> meta = {\"owner\": \"ann\", \"tags\": (\"a\", \"b\")}; }\n" # 6
+            "    public { string name = \"acct\"; }\n"                       # 7
+            "    int getBalance() { return balance; }\n"                     # 8
+            "}\n"                                                            # 9
+            "int sub work(int n) {\n"                                        # 10
+            "    int total = 0;\n"                                           # 11
+            "    for (int i = 0; i < n; ++i) {\n"                            # 12
+            "        total += i;\n"                                          # 13
+            "    }\n"                                                        # 14
+            "    return total;\n"                                            # 15
+            "}\n"                                                            # 16
+            "our Account acct = new Account();\n"                            # 17
+            "our hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3), \"nested\": {\"k\": \"v\"}};\n" # 18
+            "list<int> big = range(0, 250);\n"                               # 19
+            "int r = work(5);\n"                                             # 20
+            "printf(\"r: %d\\n\", r);\n";                                     # 21
+
+        #! a program whose line 4 calls g() twice; the comments are the line numbers
+        const StepInProgram = "%modern\n"                                   # 1
+            "int sub g(int x) { return x + 1; }\n"                           # 2
+            "int sub h(int x) { return g(x) * 2; }\n"                        # 3
+            "int r = g(h(1));\n"                                             # 4
+            "r = h(r);\n"                                                    # 5
+            "printf(\"%d\\n\", r);\n";                                      # 6
+
+        #! a program with lines of more than one statement; the comments are the line numbers
+        /** in line 3, the second and third statements start at the UTF-16 code units 18 and 37, which are the bytes
+            21 and 40, as the string before them has a character of two bytes and one of four bytes and two UTF-16
+            code units
+        */
+        const ColumnProgram = "%modern\n"                                   # 1
+            "int sub add(int a, int b) { return a + b; }\n"                  # 2
+            "string s = \"é😀\"; int x = add(1, 2); printf(\"%d\\n\", x);\n"   # 3
+            "x = add(x, 4); x = add(x, 5);\n";                               # 4
+
+        #! the capabilities that the adapter gave in its response to the last initialize request
+        hash<auto> capabilities;
+
         string qore_exe = executablePath(ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
         string adapter = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-vsc-adapter");
         string qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+        string server_script = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-server");
     }
 
     constructor() : Test("VscDebugAdapter", "1.0", \ARGV) {
         addTestCase("debug session over the Debug Adapter Protocol", \sessionTest());
         addTestCase("stopOnEntry false: the first stop is a breakpoint", \noStopOnEntryTest());
         addTestCase("stopOnEntry false: a breakpoint on the first statement stops", \firstStatementBreakpointTest());
-        addTestCase("stopOnEntry not given: the program stops at entry", \defaultStopOnEntryTest());
+        addTestCase("stopOnEntry not given: the program runs to its end", \defaultStopOnEntryTest());
         addTestCase("function breakpoints", \functionBreakpointTest());
         addTestCase("breakpoints that cannot be set", \unverifiedBreakpointTest());
         addTestCase("exception breakpoints", \exceptionTest());
         addTestCase("exceptions without an exception breakpoint", \exceptionNoFilterTest());
+        addTestCase("uncaught exceptions", \uncaughtExceptionTest());
+        addTestCase("the exception filters that stop a thread", \exceptionFilterTest());
         addTestCase("threads started by the program", \threadTest());
         addTestCase("pausing a running program", \pauseTest());
+        addTestCase("structured variables are shown as trees", \variablesTest());
+        addTestCase("values of variables, elements and members are set", \setVariableTest());
+        addTestCase("expressions are evaluated for watches, hovers and the debug console", \evaluateTest());
+        addTestCase("conditional breakpoints", \conditionalBreakpointTest());
+        addTestCase("hit conditions of breakpoints", \hitConditionTest());
+        addTestCase("logpoints", \logpointTest());
+        addTestCase("a breakpoint whose condition is false does not hide a step", \conditionalStepTest());
+        addTestCase("the columns of the protocol and of the source", \columnConversionTest());
+        addTestCase("breakpoints on a statement of a line with more than one", \columnBreakpointTest());
+        addTestCase("stepping into a chosen call", \stepInTargetTest());
+        addTestCase("columns of a source that only the debug server can read", \remoteColumnTest());
+        addTestCase("a debug server that requires a token", \tokenTest());
+        addTestCase("exceptions by code", \exceptionCodeTest());
+        addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
+        addTestCase("the adapter logs to its file and to the debug console", \logTest());
+        addTestCase("the end of a program that started a process is reported", \childProcessTest());
+        addTestCase("names of threads", \threadNameTest());
+        addTestCase("all threads stop and continue together", \stopAllThreadsTest());
+        addTestCase("output written before a stop is sent before it", \outputOrderTest());
+        addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
+        addTestCase("stopAllThreads false: only the thread that stops is stopped", \stopOneThreadTest());
+        addTestCase("attaching to a program of a debug server", \attachTest());
+        addTestCase("a debug server that cannot be reached", \noServerTest());
+        addTestCase("a debug server that ends during the session", \serverClosedTest());
         addTestCase("the adapter ends when the IDE closes its input", \endOfInputTest());
+        addTestCase("a launched program ends when the session ends", \terminateTest());
+        addTestCase("the restart request launches the program again", \restartTest());
+        addTestCase("integers in hexadecimal", \hexFormatTest());
+        addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
         set_return_value(main());
     }
 
@@ -281,6 +432,14 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         testSkip("no process module 2.2 or later");
     }
 
+    uncaughtExceptionTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    trapHintTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
     threadTest() {
         testSkip("no process module 2.2 or later");
     }
@@ -288,14 +447,122 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     pauseTest() {
         testSkip("no process module 2.2 or later");
     }
-%else
+
+    variablesTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    setVariableTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    evaluateTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    conditionalBreakpointTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    hitConditionTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    logpointTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    conditionalStepTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    socketTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    logTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    childProcessTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    attachTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    noServerTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    serverClosedTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    stopAllThreadsTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    stopOneThreadTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    outputOrderTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    sourceModeTest() {
+        testSkip("no process module 2.2 or later");
+    }
+%endif
+
+    # an exception stops the thread if its type is selected, or if it is not caught and uncaught exceptions are
+    exceptionFilterTest() {
+        hash<auto> user = {"exception": {"type": "User"}, "uncaught": False};
+        hash<auto> uncaught_system = {"exception": {"type": "System"}, "uncaught": True};
+        assertTrue(VscDebugAdapter::stopsAtException(user, ("User",)));
+        assertFalse(VscDebugAdapter::stopsAtException(user, ("System",)));
+        assertFalse(VscDebugAdapter::stopsAtException(user, ("uncaught",)));
+        assertTrue(VscDebugAdapter::stopsAtException(uncaught_system, ("uncaught",)));
+        assertTrue(VscDebugAdapter::stopsAtException(uncaught_system, ("System", "uncaught")));
+        assertFalse(VscDebugAdapter::stopsAtException(uncaught_system, ("User",)));
+        # a debug server that does not give "uncaught"
+        assertFalse(VscDebugAdapter::stopsAtException({"exception": {"type": "User"}}, ("uncaught",)));
+        assertFalse(VscDebugAdapter::stopsAtException(user, NOTHING));
+        # exception codes
+        hash<auto> file_error = {"exception": {"type": "User", "err": "FILE-OPEN-ERROR"}, "uncaught": False};
+        assertTrue(VscDebugAdapter::stopsAtException(file_error, (), ("SOCKET-ERROR", "FILE-OPEN-ERROR")));
+        assertFalse(VscDebugAdapter::stopsAtException(file_error, (), ("SOCKET-ERROR",)));
+        assertEq(("FILE-OPEN-ERROR", "SOCKET-ERROR"), VscDebugAdapter::getExceptionCodes({"filterOptions": (
+            {"filterId": "code", "condition": " FILE-OPEN-ERROR,, SOCKET-ERROR "},
+            {"filterId": "uncaught"},
+        )}));
+        assertEq((), VscDebugAdapter::getExceptionCodes({"filters": ("User",)}));
+        assertEq((), VscDebugAdapter::getExceptionCodes({"filterOptions": ({"filterId": "code"},)}));
+    }
+
+    # the default names that Qore gives threads are not shown
+    threadNameTest() {
+        assertEq("worker (3)", VscDebugAdapter::getThreadDisplayName(3, "worker", False));
+        assertEq("worker (3)", VscDebugAdapter::getThreadDisplayName(3, "worker", True));
+        assertEq("Thread 3", VscDebugAdapter::getThreadDisplayName(3, "qore/3", False));
+        assertEq("Thread 3", VscDebugAdapter::getThreadDisplayName(3, NOTHING, False));
+        assertEq("Main Thread (1)", VscDebugAdapter::getThreadDisplayName(1, "qore", True));
+        assertEq("Main Thread (5)", VscDebugAdapter::getThreadDisplayName(5, "qore/5", True));
+        # names that only look like the default names
+        assertEq("qore-x (4)", VscDebugAdapter::getThreadDisplayName(4, "qore-x", False));
+        assertEq("qore/a (4)", VscDebugAdapter::getThreadDisplayName(4, "qore/a", False));
+    }
+
+%ifndef NoProcess
     #! Starts the adapter with the modules of this source tree
-    private Process startAdapter() {
+    private Process startAdapter(*list<string> args, *hash<auto> env) {
         *string module_dir = ENV.QORE_MODULE_DIR;
-        return new Process(qore_exe, (adapter,), {
+        return new Process(qore_exe, (adapter,) + (args ?? ()), {
             "env": Process::getEnvironment() + {
                 "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
-            },
+            } + env,
         });
     }
 
@@ -339,7 +606,8 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertTrue(r.success, r.message);
         list<hash<auto>> frames = r.body.stackFrames;
         assertTrue(frames.size() > 0);
-        assertEq(path, frames[0].source.path);
+        # the source of the frame is the file itself, where the IDE shows values in hovers
+        assertEq({"name": "target.q", "path": path, "sourceReference": 0}, frames[0].source);
         assertEq(6, frames[0].line);
 
         # the variables of the frame
@@ -361,7 +629,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq("step", stopped.body.reason);
         r = dap.request("stackTrace", {"threadId": tid});
         frames = r.body.stackFrames;
-        r = dap.request("evaluate", {"expression": "h", "context": "watch", "frameId": frames[0].id});
+        r = dap.request("evaluate", {"expression": "h.name", "context": "watch", "frameId": frames[0].id});
         assertTrue(r.success, r.message);
         assertRegex("invoice", r.body.result);
 
@@ -383,8 +651,8 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     #! Writes the given test program to the given directory and returns its path
-    private string writeProgram(TmpDir tmp, string program = Program) {
-        string path = tmp.path + "/target.q";
+    private string writeProgram(TmpDir tmp, string program = Program, string name = "target.q") {
+        string path = tmp.path + "/" + name;
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(program);
@@ -396,6 +664,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
             "columnsStartAt1": True, "pathFormat": "path"});
         assertTrue(r.success, r.message);
+        capabilities = r.body;
         r = dap.request("launch", launch_args);
         assertTrue(r.success, r.message);
         dap.waitForEvent("initialized");
@@ -514,20 +783,19 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             proc.terminate();
         }
         DapClient dap(proc);
-        # "stopOnEntry" is true by default, as the qore-vscode extension documents it
+        # "stopOnEntry" is false by default, as in other debuggers of Visual Studio Code
         launch(dap, {"program": path});
         hash<auto> r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
 
-        hash<auto> stopped = dap.waitForEvent("stopped");
-        assertEq("entry", stopped.body.reason);
-        assertFalse(stopped.body.hasKey("hitBreakpointIds"));
-        int tid = stopped.body.threadId;
-        hash<auto> frame = topFrame(dap, tid);
-        assertEq(path, frame.source.path);
-        assertEq(6, frame.line);
-
-        finish(dap, proc, tid);
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
     }
 
     functionBreakpointTest() {
@@ -581,6 +849,12 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertTrue(r.success, r.message);
         assertFalse(r.body.breakpoints[0].verified);
         assertTrue(exists r.body.breakpoints[0].message, sprintf("%y", r.body.breakpoints));
+        # a line without a statement, in plain words
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 1},)});
+        assertTrue(r.success, r.message);
+        assertFalse(r.body.breakpoints[0].verified);
+        assertRegex("^there is no statement on line 1 of \".*target\\.q\" where the program can pause$",
+            r.body.breakpoints[0].message);
         r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
 
@@ -634,6 +908,51 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq(0, proc.exitCode());
     }
 
+    # with the "uncaught" filter, only an exception that no try statement catches stops the thread
+    uncaughtExceptionTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, UncaughtProgram);
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        assertEq(("User", "System", "uncaught", "code"), map $1.filter, r.body.exceptionBreakpointFilters);
+        assertEq(("User exceptions", "System exceptions", "Uncaught exceptions", "Exceptions by code"),
+            map $1.label, r.body.exceptionBreakpointFilters);
+        # each filter is described for the IDE
+        assertEq(4, (select r.body.exceptionBreakpointFilters, $1.description =~ /^[A-Z].+[a-z]$/).size());
+        r = dap.request("launch", {"program": path});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+        r = dap.request("setExceptionBreakpoints", {"filters": ("uncaught",)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        # the exceptions caught in a calling function, in a catch block and in a closure do not stop the thread
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("exception", stopped.body.reason);
+        assertEq("UNCAUGHT", stopped.body.text);
+        assertEq(("before\n",), dap.getOutput("stdout"));
+        int tid = stopped.body.threadId;
+        assertEq(3, topFrame(dap, tid).line);
+
+        # the program ends with the exception
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
     exceptionNoFilterTest() {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, ExceptionProgram);
@@ -681,6 +1000,16 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         assertEq("breakpoint", stopped.body.reason);
         assertEq((bkpt_id,), stopped.body.hitBreakpointIds);
         int tid = stopped.body.threadId;
+
+        # the threads are shown with their names
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        hash<string, string> names = map {$1.id: $1.name}, r.body.threads;
+        assertEq(2, names.size(), sprintf("%y", r.body.threads));
+        assertEq(HAVE_THREAD_NAME ? sprintf("worker (%d)", tid) : sprintf("Thread %d", tid), names{tid});
+        # the thread that started the program has a default name
+        int main_tid = (select keys names, $1.toInt() != tid)[0].toInt();
+        assertEq(sprintf("Main Thread (%d)", main_tid), names{main_tid});
 
         # the call stack of the thread ends with the call of its code by the background operator at line 10; the
         # top-level code that started the thread is not in it
@@ -755,6 +1084,1384 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         finish(dap, proc, tid);
         # the output before the pause was taken above
         assertEq(("done\n",), dap.getOutput("stdout"));
+    }
+
+    columnConversionTest() {
+        # a character of two bytes and one of four bytes and two UTF-16 code units
+        string line = "a\u00e9\U0001f600b";
+        assertEq(0, VscDebugAdapter::getByteColumn(line, 1));
+        assertEq(1, VscDebugAdapter::getByteColumn(line, 2));
+        assertEq(3, VscDebugAdapter::getByteColumn(line, 3));
+        assertEq(7, VscDebugAdapter::getByteColumn(line, 5));
+        assertEq(7, VscDebugAdapter::getByteColumn(line, 4, False));
+        assertEq(1, VscDebugAdapter::getProtocolColumn(line, 0));
+        assertEq(3, VscDebugAdapter::getProtocolColumn(line, 3));
+        assertEq(5, VscDebugAdapter::getProtocolColumn(line, 7));
+        assertEq(4, VscDebugAdapter::getProtocolColumn(line, 7, False));
+        # columns after the end of the line
+        assertEq(10, VscDebugAdapter::getByteColumn(line, 8));
+        assertEq(8, VscDebugAdapter::getProtocolColumn(line, 10));
+        # without the text of the line, a character is a byte
+        assertEq(4, VscDebugAdapter::getByteColumn(NOTHING, 5));
+        assertEq(5, VscDebugAdapter::getProtocolColumn(NOTHING, 4));
+        # columns before the start of the line
+        assertEq(0, VscDebugAdapter::getByteColumn(line, 0));
+    }
+
+    columnBreakpointTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, ColumnProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+
+        # each statement that starts on a line is a location
+        hash<auto> r = dap.request("breakpointLocations", {"source": {"path": path}, "line": 3});
+        assertTrue(r.success, r.message);
+        assertEq(({"line": 3, "column": 1}, {"line": 3, "column": 19}, {"line": 3, "column": 38}),
+            r.body.breakpoints);
+        # a range of lines and columns
+        r = dap.request("breakpointLocations", {"source": {"path": path}, "line": 3, "column": 2, "endLine": 4,
+            "endColumn": 10});
+        assertTrue(r.success, r.message);
+        assertEq(({"line": 3, "column": 19}, {"line": 3, "column": 38}, {"line": 4, "column": 1}),
+            r.body.breakpoints);
+        # negative: a line without a statement and a file that is not a source of the program
+        r = dap.request("breakpointLocations", {"source": {"path": path}, "line": 5});
+        assertTrue(r.success, r.message);
+        assertEq((), r.body.breakpoints);
+        r = dap.request("breakpointLocations", {"source": {"path": tmp.path + "/other.q"}, "line": 3});
+        assertTrue(r.success, r.message);
+        assertEq((), r.body.breakpoints);
+
+        # a breakpoint on the second statement of line 3, and one in the middle of the second statement of line 4
+        # (column 9 of "x = add(x, 4); x = add(x, 5);" is in the first statement, column 20 in the second)
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 3, "column": 19},
+            {"line": 4, "column": 20})});
+        assertTrue(r.success, r.message);
+        assertEq((True, True), (map $1.verified, r.body.breakpoints));
+        # the IDE shows each breakpoint at the statement that it is set on
+        assertEq(((3, 19), (4, 16)), (map ($1.line, $1.column), r.body.breakpoints));
+        list<int> bkpt_ids = map $1.id, r.body.breakpoints;
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        # the first statement of line 3 runs, the thread stops at its second statement
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        assertEq((bkpt_ids[0],), stopped.body.hitBreakpointIds);
+        int tid = stopped.body.threadId;
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq((3, 19, 3, 36), (frame.line, frame.column, frame.endLine, frame.endColumn));
+        # the first statement of the line ran
+        assertEq("\"é😀\"", evaluate(dap, tid, "s").body.result);
+
+        # the second breakpoint is on the second statement of line 4
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq((bkpt_ids[1],), stopped.body.hitBreakpointIds);
+        frame = topFrame(dap, tid);
+        assertEq((4, 16), (frame.line, frame.column));
+        assertEq("7", evaluate(dap, tid, "x").body.result);
+
+        finish(dap, proc, tid);
+        assertEq(("3\n",), dap.getOutput("stdout"));
+    }
+
+    stepInTargetTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, StepInProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 4}, {"line": 5}));
+        assertTrue(capabilities.supportsStepInTargetsRequest);
+        assertTrue(capabilities.supportsBreakpointLocationsRequest);
+        int tid = stopped.body.threadId;
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq(4, frame.line);
+
+        # the calls of the statement, with their locations: "int r = g(h(1));"
+        hash<auto> r = dap.request("stepInTargets", {"frameId": frame.id});
+        assertTrue(r.success, r.message);
+        assertEq((("h", 4, 11, 15), ("g", 4, 9, 16)), (map ($1.label, $1.line, $1.column, $1.endColumn),
+            r.body.targets));
+        int g_target = r.body.targets[1].id;
+        # only the top frame has targets
+        r = dap.request("stepInTargets", {"frameId": frame.id + 1});
+        assertTrue(r.success, r.message);
+        assertEq((), r.body.targets);
+
+        # stepping into g(): the thread stops in g() when the statement calls it with the value of h(1), not in the
+        # call of g() in h()
+        r = dap.request("stepIn", {"threadId": tid, "targetId": g_target});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("step", stopped.body.reason);
+        frame = topFrame(dap, tid);
+        assertEq(2, frame.line);
+        assertEq("4", evaluate(dap, tid, "x").body.result);
+
+        # line 5 calls g() only in h(), so it has h() only
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        frame = topFrame(dap, tid);
+        assertEq(5, frame.line);
+        r = dap.request("stepInTargets", {"frameId": frame.id});
+        assertEq(("h",), (map $1.label, r.body.targets));
+        r = dap.request("stepIn", {"threadId": tid, "targetId": r.body.targets[0].id});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("step", stopped.body.reason);
+        frame = topFrame(dap, tid);
+        assertEq(3, frame.line);
+        assertEq("5", evaluate(dap, tid, "x").body.result);
+        # negative: a target that the statement does not have
+        r = dap.request("stepIn", {"threadId": tid, "targetId": 9});
+        assertFalse(r.success);
+        assertRegex("no call 8 to step into", r.message);
+
+        finish(dap, proc, tid);
+        assertEq(("12\n",), dap.getOutput("stdout"));
+    }
+
+    #! Launches the given program with breakpoints and returns the first stopped event
+    /** @param breakpoints the source breakpoints of the program, as given in a \c setBreakpoints request
+    */
+    private hash<auto> launchToStop(DapClient dap, string path, list<auto> breakpoints) {
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": breakpoints});
+        assertTrue(r.success, r.message);
+        foreach hash<auto> b in (r.body.breakpoints) {
+            assertTrue(b.verified, sprintf("%y", r.body.breakpoints));
+        }
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        return dap.waitForEvent("stopped");
+    }
+
+    #! Returns the variables of a variable reference as a hash by name
+    private hash<auto> getVariables(DapClient dap, int ref, *hash<auto> args) {
+        hash<auto> r = dap.request("variables", {"variablesReference": ref} + args);
+        assertTrue(r.success, r.message);
+        return (map {$1.name: $1}, r.body.variables) ?? {};
+    }
+
+    #! Returns the variable reference of the given scope of the top frame of a thread
+    private int getScope(DapClient dap, int tid, string scope) {
+        hash<auto> frame = topFrame(dap, tid);
+        hash<auto> r = dap.request("scopes", {"frameId": frame.id});
+        assertTrue(r.success, r.message);
+        return (select r.body.scopes, $1.name == scope)[0].variablesReference;
+    }
+
+    # a launched program ends when the IDE disconnects, also a thread that runs forever
+    terminateTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, "%modern\nint n;\nwhile (True) {\n    ++n;\n}\n");
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        assertTrue(capabilities.supportTerminateDebuggee);
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the default of terminateDebuggee for a launched program
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends with the program");
+        assertEq(0, proc.exitCode());
+    }
+
+    # the program is ended and launched again; the IDE sets the breakpoints again after the "initialized" event
+    restartTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 3},));
+        assertTrue(capabilities.supportsRestartRequest);
+        assertEq("breakpoint", stopped.body.reason);
+        hash<auto> r = dap.request("restart", {"arguments": {"program": path, "stopOnEntry": False}});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 3},)});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.breakpoints[0].verified, sprintf("%y", r.body.breakpoints));
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        assertEq(3, topFrame(dap, tid).line);
+        # the end of the first run did not end the session
+        assertEq((), dap.getEvents("exited") + dap.getEvents("terminated"));
+        finish(dap, proc, tid);
+        # the first run ended at the breakpoint, before its output
+        assertEq(1, (select dap.getOutput("stdout"), $1 =~ /total: 5/).size());
+        # the end of the second run is reported
+        assertEq(1, dap.getEvents("exited").size());
+    }
+
+    # integers are shown in hexadecimal with the hex option of the format argument
+    hexFormatTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 8},));
+        int tid = stopped.body.threadId;
+        assertTrue(capabilities.supportsValueFormattingOptions);
+        hash<auto> frame = topFrame(dap, tid);
+        hash<auto> r = dap.request("evaluate", {"expression": "total * 3", "frameId": frame.id, "context": "watch",
+            "format": {"hex": True}});
+        assertTrue(r.success, r.message);
+        assertEq("0xf", r.body.result);
+        r = dap.request("evaluate", {"expression": "-total", "frameId": frame.id, "context": "watch",
+            "format": {"hex": True}});
+        assertEq("-0x5", r.body.result);
+        # without the option, and a value that is not an integer
+        assertEq("15", evaluate(dap, tid, "total * 3").body.result);
+        r = dap.request("evaluate", {"expression": "h.name", "frameId": frame.id, "context": "watch",
+            "format": {"hex": True}});
+        assertEq("\"invoice\"", r.body.result);
+        # variables and their elements
+        hash<auto> vars = getVariables(dap, getScope(dap, tid, "Locals"), {"format": {"hex": True}});
+        assertEq("0x5", vars.total.value);
+        hash<auto> h = getVariables(dap, vars.h.variablesReference, {"format": {"hex": True}});
+        assertEq(("0x1", "0x2", "0x3"), map $1.value,
+            getVariables(dap, h.lines.variablesReference, {"format": {"hex": True}}).iterator());
+        finish(dap, proc, tid);
+    }
+
+    # an exception that matches a common pitfall is shown with a hint, and a variable that was declared but not
+    # assigned is shown as such
+    trapHintTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, "%modern\n"                     # 1
+            "sub f() {\n"                                                # 2
+            "    *int src;\n"                                            # 3
+            "    int count = src;\n"                                     # 4
+            "    printf(\"%d\\n\", count);\n"                             # 5
+            "}\n"                                                        # 6
+            "f();\n");                                                   # 7
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setExceptionBreakpoints", {"filters": ("uncaught",)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("exception", stopped.body.reason);
+        assertEq("RUNTIME-TYPE-ERROR", stopped.body.text);
+        int tid = stopped.body.threadId;
+        assertEq(4, topFrame(dap, tid).line);
+        r = dap.request("exceptionInfo", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        assertEq("RUNTIME-TYPE-ERROR", r.body.exceptionId);
+        assertRegex("^<lvalue> expects type 'int', but got no value instead\n\nhint \\(NO-VALUE-FOR-TYPE\\): ",
+            r.body.description);
+        assertRegex("\n  - assign the variable before it is read", r.body.description);
+        # the message is the description of the exception only
+        assertEq("<lvalue> expects type 'int', but got no value instead", r.body.details.message);
+
+        hash<auto> locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        assertEq("NOTHING (declared but not assigned)", locals.count.value);
+        assertEq("int", locals.count.type);
+        # a variable whose type allows no value is not unassigned
+        assertEq("NOTHING", locals.src.value);
+        assertEq("nothing", locals.src.type);
+
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
+    #! Evaluates an expression with the top frame of a thread and returns the response
+    private hash<auto> evaluate(DapClient dap, int tid, string expr, string eval_context = "watch") {
+        return dap.request("evaluate", {"expression": expr, "frameId": topFrame(dap, tid).id,
+            "context": eval_context});
+    }
+
+    variablesTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 20},));
+        int tid = stopped.body.threadId;
+
+        # the global variables of the program
+        hash<auto> vars = getVariables(dap, getScope(dap, tid, "Globals"));
+        assertEq("Account", vars.acct.type);
+        # the object has the members of its class and of its parent class, also private ones
+        assertEq(4, vars.acct.namedVariables);
+        assertEq("hash<auto> (3)", vars.h.value);
+        assertEq(3, vars.h.namedVariables);
+        assertEq("h", vars.h.evaluateName);
+        # the local variables of the top-level code
+        hash<auto> locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        assertEq(250, locals.big.indexedVariables);
+        assertEq("list (250)", locals.big.value);
+        assertEq(0, locals.r.variablesReference);
+
+        # the keys of a hash, and the elements of a list in it
+        hash<auto> h = getVariables(dap, vars.h.variablesReference);
+        assertEq(("name", "lines", "nested"), keys h);
+        assertEq("\"invoice\"", h.name.value);
+        assertEq("h{\"lines\"}", h.lines.evaluateName);
+        hash<auto> lines = getVariables(dap, h.lines.variablesReference);
+        assertEq(("0", "1", "2"), keys lines);
+        assertEq("3", lines."2".value);
+        assertEq("h{\"lines\"}[2]", lines."2".evaluateName);
+        assertEq("\"v\"", getVariables(dap, h.nested.variablesReference).k.value);
+
+        # the members of an object, also private ones and those of parent classes
+        hash<auto> acct = getVariables(dap, vars.acct.variablesReference);
+        assertEq(("id", "balance", "meta", "name"), keys acct);
+        assertEq("100", acct.balance.value);
+        assertEq("7", acct.id.value);
+        assertEq("acct.balance", acct.balance.evaluateName);
+        hash<auto> meta = getVariables(dap, acct.meta.variablesReference);
+        assertEq(("\"a\"", "\"b\""), map $1.value, getVariables(dap, meta.tags.variablesReference).iterator());
+
+        # the elements of a long list are paged
+        hash<auto> part = getVariables(dap, locals.big.variablesReference,
+            {"filter": "indexed", "start": 100, "count": 3});
+        assertEq(("100", "101", "102"), keys part);
+        assertEq("101", part."101".value);
+        assertEq({}, getVariables(dap, locals.big.variablesReference, {"filter": "named"}));
+
+        # the local variables of a function and their values
+        hash<auto> r = dap.request("stepIn", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("stopped");
+        locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        assertEq("5", locals.n.value);
+        assertEq("n", locals.n.evaluateName);
+
+        # the references of a thread are not valid once it has resumed
+        int old_ref = vars.h.variablesReference;
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        r = dap.request("variables", {"variablesReference": old_ref});
+        assertFalse(r.success);
+        assertRegex("thread has resumed", r.message);
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(("r: 10\n",), dap.getOutput("stdout"));
+    }
+
+    setVariableTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 20},));
+        int tid = stopped.body.threadId;
+        hash<auto> vars = getVariables(dap, getScope(dap, tid, "Globals"));
+
+        # a key of a nested hash
+        hash<auto> h = getVariables(dap, vars.h.variablesReference);
+        hash<auto> r = dap.request("setVariable", {"variablesReference": h.nested.variablesReference, "name": "k",
+            "value": "\"w\""});
+        assertTrue(r.success, r.message);
+        assertEq("\"w\"", r.body.value);
+        assertEq("\"w\"", evaluate(dap, tid, "h.nested.k").body.result);
+
+        # an element of a list
+        r = dap.request("setVariable", {"variablesReference": h.lines.variablesReference, "name": "1",
+            "value": "20"});
+        assertTrue(r.success, r.message);
+        assertEq("20", evaluate(dap, tid, "h.lines[1]").body.result);
+
+        # a private member of an object, which the object's method returns
+        hash<auto> acct = getVariables(dap, vars.acct.variablesReference);
+        r = dap.request("setVariable", {"variablesReference": vars.acct.variablesReference, "name": "balance",
+            "value": "7"});
+        assertTrue(r.success, r.message);
+        assertEq("7", evaluate(dap, tid, "acct.getBalance()").body.result);
+
+        # negative: a value of the wrong type for a typed list, and an element that does not exist
+        hash<auto> locals = getVariables(dap, getScope(dap, tid, "Locals"));
+        r = dap.request("setVariable", {"variablesReference": locals.big.variablesReference, "name": "0",
+            "value": "\"x\""});
+        assertFalse(r.success);
+        r = dap.request("setVariable", {"variablesReference": h.lines.variablesReference, "name": "9",
+            "value": "1"});
+        assertFalse(r.success);
+        assertRegex("no element 9", r.message);
+
+        # a global variable, which the program uses; the value is an expression
+        r = dap.request("setVariable", {"variablesReference": getScope(dap, tid, "Globals"), "name": "h",
+            "value": "{\"name\": \"other-\" + acct.name}"});
+        assertTrue(r.success, r.message);
+        assertEq(1, r.body.namedVariables);
+        assertEq("\"other-acct\"", evaluate(dap, tid, "h.name").body.result);
+
+        finish(dap, proc, tid);
+    }
+
+    evaluateTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 13},));
+        int tid = stopped.body.threadId;
+
+        # watches with the local variables of the frame and the global variables of the program
+        hash<auto> r = evaluate(dap, tid, "i + 10");
+        assertTrue(r.success, r.message);
+        assertEq("10", r.body.result);
+        assertEq("integer", r.body.type);
+        assertEq("\"invoice-5\"", evaluate(dap, tid, "sprintf(\"%s-%d\", h.name, n)").body.result);
+        assertEq("100", evaluate(dap, tid, "acct.getBalance()").body.result);
+        # a hover
+        assertEq("hash<auto> (3)", evaluate(dap, tid, "h", "hover").body.result);
+
+        # a structured value is shown as a tree
+        r = evaluate(dap, tid, "h.lines");
+        assertTrue(r.success, r.message);
+        assertEq(3, r.body.indexedVariables);
+        assertEq(("1", "2", "3"), map $1.value, getVariables(dap, r.body.variablesReference).iterator());
+
+        # the debug console: an expression, an expression with "$", and a debugger command
+        r = evaluate(dap, tid, "n * 2", "repl");
+        assertEq("10", r.body.result);
+        r = evaluate(dap, tid, "$n", "repl");
+        assertEq("5", r.body.result);
+        r = evaluate(dap, tid, "help", "repl");
+        assertTrue(r.success, r.message);
+        assertEq("", r.body.result);
+        # the shortcuts of the command line, such as "n" for "go stepover", and aliases, such as "backtrace" for "bt",
+        # are not commands in the debug console, as they can be the names of variables
+        r = evaluate(dap, tid, "n", "repl");
+        assertEq("5", r.body.result);
+        foreach string word in ("locals", "continue", "backtrace") {
+            r = evaluate(dap, tid, word, "repl");
+            assertFalse(r.success, word);
+            # evaluated as an expression
+            assertRegex("^DEBUG-EVALUATE-ERROR: ", r.message, word);
+        }
+
+        # the code of the program: a function, and a class whose private member is read by its method
+        r = evaluate(dap, tid, "work(n) + new Account().getBalance()", "repl");
+        assertTrue(r.success, r.message);
+        assertEq("110", r.body.result);
+
+        # negative: a syntax error, an unknown variable, and code that the expressions may not run
+        r = evaluate(dap, tid, "n +");
+        assertFalse(r.success);
+        # the error is given without the errors of the commands that it was sent with
+        assertRegex("^DEBUG-EVALUATE-ERROR: ", r.message);
+        r = evaluate(dap, tid, "no_such_name");
+        assertEq("DEBUG-EVALUATE-ERROR: cannot resolve bareword 'no_such_name' to any reachable object", r.message);
+        r = evaluate(dap, tid, "no_such_variable + 1");
+        assertFalse(r.success);
+        r = evaluate(dap, tid, "system(\"true\")");
+        assertFalse(r.success);
+        # an expression without a frame
+        r = dap.request("evaluate", {"expression": "1 + 1", "context": "watch"});
+        assertFalse(r.success);
+
+        # an assignment in an expression does not change the program's variable
+        evaluate(dap, tid, "total = 1000");
+        assertEq("0", evaluate(dap, tid, "total").body.result);
+
+        # the breakpoint in the loop stops the thread in the other iterations
+        assertEq((13, 13, 13, 13), runToEnd(dap, proc, tid));
+    }
+
+    #! Continues the thread until the program ends and returns the lines of the stops on the way
+    private list<int> runToEnd(DapClient dap, Process proc, int tid) {
+        list<int> lines = ();
+        while (True) {
+            hash<auto> r = dap.request("continue", {"threadId": tid});
+            assertTrue(r.success, r.message);
+            hash<auto> m = dap.waitFor(bool sub (hash<auto> m) {
+                return m.type == "event" && (m.event == "stopped" || m.event == "terminated");
+            }, "stopped or terminated event");
+            if (m.event == "terminated") {
+                break;
+            }
+            push lines, topFrame(dap, tid).line;
+        }
+        hash<auto> r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        return lines;
+    }
+
+    conditionalBreakpointTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        # the breakpoint stops the thread only when its condition is true
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 13, "condition": "i == 3"},));
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        assertEq("3", evaluate(dap, tid, "i").body.result);
+        assertEq((), runToEnd(dap, proc, tid));
+        assertEq(("r: 10\n",), dap.getOutput("stdout"));
+
+        # negative: a condition that raises an error when it is evaluated stops the thread, and the error is shown
+        Process proc2 = startAdapter();
+        on_exit if (proc2.running()) {
+            proc2.terminate();
+        }
+        DapClient dap2(proc2);
+        stopped = launchToStop(dap2, path, ({"line": 13, "condition": "i.nosuchmethod()"},));
+        assertEq("breakpoint", stopped.body.reason);
+        assertRegex("nosuchmethod", dap2.getOutput("console").join(""));
+        tid = stopped.body.threadId;
+        assertEq("0", evaluate(dap2, tid, "i").body.result);
+        # every hit stops the thread
+        assertEq((13, 13, 13, 13), runToEnd(dap2, proc2, tid));
+
+        # negative: a breakpoint with a condition that cannot be parsed with the variables of its statement is not
+        # set, and the IDE shows why
+        Process proc3 = startAdapter();
+        on_exit if (proc3.running()) {
+            proc3.terminate();
+        }
+        DapClient dap3(proc3);
+        launch(dap3, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap3.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
+            {"line": 13, "condition": "i =="},
+            {"line": 13, "condition": "nosuchvar > 1"},
+        )});
+        assertTrue(r.success, r.message);
+        assertEq((False, False), map $1.verified, r.body.breakpoints);
+        assertRegex("^invalid condition \"i ==\": ", r.body.breakpoints[0].message);
+        assertRegex("^invalid condition \"nosuchvar > 1\": .*nosuchvar", r.body.breakpoints[1].message);
+        r = dap3.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # no breakpoint was left set: the program runs to its end
+        dap3.waitForEvent("terminated");
+        assertEq((), dap3.getEvents("stopped"));
+        dap3.request("disconnect");
+        proc3.closeStdin();
+        assertTrue(proc3.wait(30s), "the adapter ends");
+    }
+
+    hitConditionTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        # blanks are allowed also between the characters of an operator
+        foreach hash<auto> i in ({"cond": ">= 4", "values": ("3", "4")}, {"cond": "%2", "values": ("1", "3")},
+                {"cond": "2", "values": ("1",)}, {"cond": "> = 4", "values": ("3", "4")}) {
+            Process proc = startAdapter();
+            on_exit if (proc.running()) {
+                proc.terminate();
+            }
+            DapClient dap(proc);
+            hash<auto> stopped = launchToStop(dap, path, ({"line": 13, "hitCondition": i.cond},));
+            int tid = stopped.body.threadId;
+            list<string> values = (evaluate(dap, tid, "i").body.result,);
+            while (True) {
+                hash<auto> r = dap.request("continue", {"threadId": tid});
+                assertTrue(r.success, r.message);
+                hash<auto> m = dap.waitFor(bool sub (hash<auto> m) {
+                    return m.type == "event" && (m.event == "stopped" || m.event == "terminated");
+                }, "stopped or terminated event");
+                if (m.event == "terminated") {
+                    break;
+                }
+                push values, evaluate(dap, tid, "i").body.result;
+            }
+            assertEq(i.values, values, i.cond);
+            dap.request("disconnect");
+            proc.closeStdin();
+            assertTrue(proc.wait(30s), "the adapter ends");
+        }
+
+        # negative: a breakpoint with an invalid hit condition is not set, and the IDE shows why
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
+            {"line": 13, "hitCondition": "often"},
+        )});
+        assertTrue(r.success, r.message);
+        assertFalse(r.body.breakpoints[0].verified);
+        # the IDE shows the reason in plain words, without the code of the error
+        assertEq("invalid hit condition \"often\"; give a number, optionally after ==, >, >=, <, <= or %",
+            r.body.breakpoints[0].message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # no breakpoint was left set: the program runs to its end
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        dap.request("disconnect");
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
+    logpointTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": (
+            {"line": 13, "logMessage": "i={i} total={total} name={h.name} bad={i.nosuchmethod()}"},
+        )});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the logpoint writes its message and does not stop the thread
+        dap.waitForEvent("terminated");
+        assertEq((), dap.getEvents("stopped"));
+        list<string> log = select dap.getOutput("console"), $1 =~ /^i=/;
+        assertEq(5, log.size(), sprintf("%y", log));
+        assertRegex("^i=0 total=0 name=invoice bad=<[A-Z-]+: .*nosuchmethod", log[0]);
+        assertRegex("^i=4 total=6 ", log[4]);
+        assertEq(("r: 10\n",), dap.getOutput("stdout"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
+    conditionalStepTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        # a breakpoint before the loop, and one in the loop whose condition is never true
+        hash<auto> stopped = launchToStop(dap, path, ({"line": 11}, {"line": 13, "condition": "i < 0"}));
+        int tid = stopped.body.threadId;
+        assertEq(11, topFrame(dap, tid).line);
+        # stepping onto the statement of the breakpoint stops there as a step
+        int line;
+        while (line != 13) {
+            hash<auto> r = dap.request("next", {"threadId": tid});
+            assertTrue(r.success, r.message);
+            stopped = dap.waitForEvent("stopped");
+            line = topFrame(dap, tid).line;
+        }
+        assertEq("step", stopped.body.reason);
+        # running on, the breakpoint does not stop the thread
+        assertEq((), runToEnd(dap, proc, tid));
+    }
+
+    #! A client that starts the adapter with sockets for its standard input and output, as Visual Studio Code does,
+    #! runs a program with a logpoint and prints the messages that it gets; Qore cannot give a socket to a process
+    const SocketClient = "import json, socket, subprocess, sys, os
+qore, adapter, prog = sys.argv[1:4]
+a_in, c_in = socket.socketpair()
+a_out, c_out = socket.socketpair()
+p = subprocess.Popen([qore, adapter], stdin=a_in.fileno(), stdout=a_out.fileno())
+a_in.close(); a_out.close()
+buf = b''
+seq = 0
+def send(cmd, args):
+    global seq
+    seq += 1
+    m = json.dumps({'seq': seq, 'type': 'request', 'command': cmd, 'arguments': args}).encode()
+    c_in.sendall(b'Content-Length: %d\\r\\n\\r\\n' % len(m) + m)
+def read():
+    global buf
+    while True:
+        i = buf.find(b'\\r\\n\\r\\n')
+        if i >= 0:
+            if not buf.startswith(b'Content-Length:'):
+                print('CORRUPTED %r' % buf[:80])
+                sys.exit(1)
+            n = int(buf[:i].split(b':')[1])
+            if len(buf) >= i + 4 + n:
+                m = json.loads(buf[i + 4:i + 4 + n])
+                buf = buf[i + 4 + n:]
+                return m
+        d = c_out.recv(65536)
+        if not d:
+            print('EOF')
+            sys.exit(1)
+        buf += d
+send('initialize', {'adapterID': 'qore', 'linesStartAt1': True, 'pathFormat': 'path'})
+send('launch', {'program': prog, 'stopOnEntry': False})
+send('setBreakpoints', {'source': {'path': prog}, 'breakpoints': [{'line': 13, 'logMessage': 'i={i}'}]})
+send('configurationDone', {})
+while True:
+    m = read()
+    if m.get('event') == 'output':
+        print('%s: %s' % (m['body']['category'], m['body']['output'].rstrip()))
+    elif m.get('event') == 'terminated':
+        print('terminated')
+        break
+send('disconnect', {})
+c_in.close()
+print('exit code: %d' % p.wait(30))
+";
+
+    socketTest() {
+        *string python = (backquote("command -v python3 2>/dev/null") =~ x/^(\S+)/)[0];
+        if (!python) {
+            testSkip("python3 is not available to start the adapter with sockets");
+        }
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, DataProgram);
+        string client = tmp.path + "/client.py";
+        {
+            File f();
+            f.open2(client, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(SocketClient);
+        }
+        *string module_dir = ENV.QORE_MODULE_DIR;
+        Process proc(python, ("-I", client, qore_exe, adapter, path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (module_dir ? ":" + module_dir : ""),
+            },
+        });
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        proc.wait();
+        list<string> lines = proc.readStdout(1048576).split("\n");
+        # the output of the program is captured, so that it does not corrupt the protocol, and it is sent before the
+        # end of the session
+        assertEq(("console: i=0", "console: i=1", "console: i=2", "console: i=3", "console: i=4", "stdout: r: 10",
+            "terminated", "exit code: 0"), (select lines, $1 =~ /^(console: i=|stdout: |terminated|exit code)/),
+            lines.join("\n"));
+    }
+
+    #! Runs a program in the adapter started with the given arguments and environment, and returns the client
+    private DapClient runLogged(string path, list<string> args, *hash<auto> env) {
+        Process proc = startAdapter(args, env);
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        return dap;
+    }
+
+    logTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp);
+
+        # with a log file, the log is written to the file only
+        string log = tmp.path + "/adapter.log";
+        DapClient dap = runLogged(path, ("-v", "-l", log));
+        assertRegex("receiveVsc: .*\"launch\"", ReadOnlyFile::readTextFile(log));
+        assertEq((), select dap.getOutput("console"), $1 =~ /receiveVsc:/);
+
+        # without a log file, the log is written to the default file and shown in the debug console, each message
+        # as one line
+        dap = runLogged(path, ("-v",), {"HOME": tmp.path});
+        assertRegex("receiveVsc: .*\"launch\"", ReadOnlyFile::readTextFile(tmp.path + "/.qoredebugadapter.log"));
+        list<string> console = dap.getOutput("console");
+        assertTrue((select console, $1 =~ /receiveVsc: .*"launch"/).size() > 0, sprintf("%y", console));
+        assertEq((), select console, $1 =~ /\r/ || $1 =~ /\n\n$/ || $1 !~ /\n$/);
+    }
+
+    childProcessTest() {
+        TmpDir tmp("qore-vda-test-");
+        string pid_file = tmp.path + "/child.pid";
+        # the child process keeps the adapter's stdout open after the program has ended
+        string path = writeProgram(tmp, sprintf("%%modern\n"
+            "system(\"sleep 1000 & echo $! > %s\");\n"
+            "printf(\"parent done\\n\");\n", pid_file));
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        on_exit {
+            *string pid = is_file(pid_file) ? trim(ReadOnlyFile::readTextFile(pid_file)) : NOTHING;
+            if (pid =~ /^[0-9]+$/) {
+                system("kill " + pid);
+            }
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the end of the program is reported after its output, while the child process still runs
+        dap.waitForEvent("terminated");
+        assertEq(("parent done\n",), dap.getOutput("stdout"));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+    }
+
+    attachTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, AttachProgram);
+        # the server logs to stderr
+        Process server(qore_exe, (server_script, "-v", path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        # the server writes its port when it listens
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        # the server holds the program at its start until a client attaches; the program runs when the client has set
+        # its breakpoints
+        attachSession(server, port, path, False);
+        # the program runs when a client attaches; the runtime stops its thread at its next statement, and the thread
+        # is held there until the client has set its breakpoints
+        attachSession(server, port, path, True);
+
+        # the server ends with the program
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+        assertEq(0, server.exitCode());
+    }
+
+    # the columns of a line of a source that the adapter cannot read are converted with the text that the debug
+    # server gives
+    remoteColumnTest() {
+        TmpDir tmp("qore-vda-test-");
+        writeProgram(tmp, ColumnProgram);
+        # the server parses the program with a relative path in its directory, which is not the directory of the adapter
+        assertFalse(is_file("target.q"));
+        Process server(qore_exe, (server_script, "-v", "target.q"), {
+            "cwd": tmp.path,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+
+        # the statements of line 3 after the string of characters of more than one byte: with the text of the line,
+        # the columns count UTF-16 code units, otherwise they would count bytes (22 and 41)
+        r = dap.request("breakpointLocations", {"source": {"path": "target.q"}, "line": 3});
+        assertTrue(r.success, r.message);
+        assertEq((1, 19, 38), (map $1.column, r.body.breakpoints));
+        r = dap.request("setBreakpoints", {"source": {"path": "target.q"}, "breakpoints": (
+            {"line": 3, "column": 38},
+        )});
+        assertTrue(r.success, r.message);
+        assertEq((True, 3, 38), (r.body.breakpoints[0].verified, r.body.breakpoints[0].line,
+            r.body.breakpoints[0].column));
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        # the thread stops at the third statement, which the stack frame gives with its columns
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq((3, 38), (frame.line, frame.column));
+        assertEq("3", evaluate(dap, tid, "x").body.result);
+
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "3\n";
+        }, "program output");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+    }
+
+    # the "code" exception filter stops threads at the exceptions with the codes of its condition
+    exceptionCodeTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, UncaughtProgram);
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path});
+        assertTrue(capabilities.supportsExceptionFilterOptions);
+        hash<auto> r = dap.request("setExceptionBreakpoints", {"filters": (), "filterOptions": (
+            {"filterId": "code", "condition": "CAUGHT-2, NO-SUCH-ERROR"},
+        )});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        # the thread stops at CAUGHT-2 in each frame that it leaves, and at no other exception
+        list<string> stops = ();
+        while (True) {
+            hash<auto> m = dap.waitFor(bool sub (hash<auto> m) {
+                return m.type == "event" && (m.event == "stopped" || m.event == "terminated");
+            }, "stopped or terminated event");
+            if (m.event == "terminated") {
+                break;
+            }
+            push stops, m.body.text;
+            r = dap.request("continue", {"threadId": m.body.threadId});
+            assertTrue(r.success, r.message);
+        }
+        assertTrue(stops.size() > 0);
+        assertEq(("CAUGHT-2",), keys (map {$1: True}, stops));
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+    }
+
+    # a debug server with a token accepts only the clients that give it
+    tokenTest() {
+        TmpDir tmp("qore-vda-test-");
+        writeProgram(tmp, ColumnProgram);
+        File f();
+        f.open2(tmp.path + "/token", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("s3cret\n");
+        f.close();
+        Process server(qore_exe, (server_script, "-k", "token", "target.q"), {
+            "cwd": tmp.path,
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+        string url = sprintf("ws://localhost:%d", port);
+
+        # negative: no token and a wrong token
+        list<list<string>> refused = (("-a", url), ("-a", url, "-H", "Authorization=Bearer wrong"));
+        foreach list<string> args in (refused) {
+            Process proc = startAdapter(args);
+            on_exit if (proc.running()) {
+                proc.terminate();
+            }
+            DapClient dap(proc);
+            hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+                "columnsStartAt1": True, "pathFormat": "path"});
+            assertFalse(r.success, sprintf("%y", args));
+            assertRegex("401", r.message);
+            proc.closeStdin();
+            assertTrue(proc.wait(30s), "the adapter ends");
+        }
+
+        # the token
+        Process proc = startAdapter(("-a", url, "-H", "Authorization=Bearer s3cret"));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "3\n";
+        }, "program output");
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        server.write("end\n");
+        assertTrue(server.wait(30s), "the debug server ends");
+    }
+
+    # the IDE is told why the debug server cannot be reached
+    noServerTest() {
+        # a port that is bound but does not accept connections
+        Socket sock();
+        sock.bind("localhost:0");
+        int port = sock.getSocketInfo().port;
+
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertFalse(r.success);
+        assertRegex(sprintf("^DEBUG-CONNECT-ERROR: cannot connect to the debug server at ws://localhost:%d: ", port),
+            r.message);
+        # the error of the connection is given: Linux refuses a connection to a port that is bound but does not
+        # listen, while on macOS the connection times out
+        assertRegex("SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: localhost:[0-9]+\\): "
+            + "(Connection refused|Operation timed out)", r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    # the session ends with a message when the debug server ends
+    serverClosedTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, AttachProgram);
+        # the server logs to stderr
+        Process server(qore_exe, (server_script, "-v", path), {
+            "env": Process::getEnvironment() + {
+                "QORE_MODULE_DIR": qlib_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""),
+            },
+        });
+        on_exit if (server.running()) {
+            server.terminate();
+        }
+        string line = readServerOutput(server, "\n");
+        int port = (line =~ x/listening on port ([0-9]+)/)[0].toInt();
+
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("initialized");
+
+        server.terminate();
+        server.wait();
+        dap.waitForEvent("terminated");
+        assertEq((sprintf("the connection to the debug server at ws://localhost:%d was closed\n", port),),
+            dap.getOutput("important"));
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+    }
+
+    #! Attaches to the program of the debug server, and stops at a breakpoint in a thread that the program starts
+    /** @param running if the program is running when it is attached; its thread then gets the line of input that
+        starts a thread in the configuration phase
+    */
+    private attachSession(Process server, int port, string path, bool running) {
+        Process proc = startAdapter(("-a", sprintf("ws://localhost:%d", port)));
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        # the program is given by its script name
+        r = dap.request("attach", {"program": "target.q"});
+        assertTrue(r.success, r.message);
+        # the client can set its breakpoints as soon as the program is debugged
+        dap.waitForEvent("initialized");
+        assertEq({"name": "target.q", "isLocalProcess": False, "startMethod": "attach"},
+            dap.waitForEvent("process").body);
+
+        int main_tid;
+        if (running) {
+            # the thread of the program stops at its next statement, and it is held until the configuration phase
+            # has ended
+            server.write("thread\n");
+            main_tid = dap.waitForEvent("thread").body.threadId;
+        } else {
+            # the thread of the program that the server holds
+            main_tid = dap.waitForEvent("thread").body.threadId;
+        }
+        r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 3},)});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.breakpoints[0].verified, sprintf("%y", r.body));
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        if (!running) {
+            server.write("thread\n");
+        }
+
+        # the thread that the program starts stops at the breakpoint
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int tid = stopped.body.threadId;
+        assertNeq(main_tid, tid);
+        hash<auto> frame = topFrame(dap, tid);
+        assertEq("work", frame.name);
+        assertEq(3, frame.line);
+        # the output that the thread wrote before it stopped has been sent before the stop
+        assertEq(("work\n",), dap.getOutput("stdout"));
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        assertEq(sprintf("Thread %d", tid), (select r.body.threads, $1.id == tid)[0].name);
+
+        # the thread runs to its end
+        r = dap.request("continue", {"threadId": tid});
+        assertTrue(r.success, r.message);
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "thread" && m.body.threadId == tid && m.body.reason == "exited";
+        }, "thread exited event");
+        # the output of the program is also written by the server
+        assertEq("work\ndone\n", readServerOutput(server, "done\n"));
+        # the output of the program is sent to the IDE
+        dap.waitFor(bool sub (hash<auto> m) {
+            return m.type == "event" && m.event == "output" && m.body.category == "stdout" && m.body.output == "done\n";
+        }, "program output");
+        # the log of the server is not sent as the output of the program
+        assertEq((), (select dap.getOutput("stderr"), $1 =~ /\[INFO\]/));
+        # no other thread was reported as stopped
+        assertEq((), dap.getEvents("stopped"));
+        # the events of the debug server are not written to the debug console
+        assertEq((), (select dap.getOutput("console"), $1 =~ /(interrupt|run)\//));
+
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    stopAllThreadsTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, StopAllProgram);
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        # all threads stop together by default
+        launch(dap, {"program": path, "stopOnEntry": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 33},)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int main_tid = stopped.body.threadId;
+        assertEq(33, topFrame(dap, main_tid).line);
+
+        # the thread that runs stops at its next statement; it is reported without taking the focus
+        stopped = dap.waitForEvent("stopped");
+        assertEq("pause", stopped.body.reason);
+        assertTrue(stopped.body.preserveFocusHint);
+        int busy_tid = stopped.body.threadId;
+        assertNeq(main_tid, busy_tid);
+        hash<auto> frame = topFrame(dap, busy_tid);
+        assertEq("busy", frame.name);
+        assertTrue(inlist(frame.line, (11, 12)), sprintf("%y", frame));
+
+        # the threads have their current names, also the waiting thread, which has not stopped since it set its name
+        r = dap.request("threads", NOTHING, False);
+        assertTrue(r.success, r.message);
+        hash<string, string> names = map {$1.id: $1.name}, r.body.threads;
+        assertEq(3, names.size(), sprintf("%y", names));
+        assertEq(sprintf("Main Thread (%d)", main_tid), names{main_tid});
+        if (HAVE_THREAD_NAME) {
+            assertEq(sprintf("busy (%d)", busy_tid), names{busy_tid});
+            int waiter_tid = (select keys names, !inlist($1.toInt(), (main_tid, busy_tid)))[0].toInt();
+            assertEq(sprintf("waiter (%d)", waiter_tid), names{waiter_tid});
+        }
+
+        # a step of the main thread stops it at its next statement, while the other threads stay stopped
+        r = dap.request("next", {"threadId": main_tid});
+        assertTrue(r.success, r.message);
+        stopped = dap.waitForEvent("stopped");
+        assertEq("step", stopped.body.reason);
+        assertEq(main_tid, stopped.body.threadId);
+        assertEq(34, topFrame(dap, main_tid).line);
+        assertEq(frame.line, topFrame(dap, busy_tid).line);
+
+        # all threads continue; the waiting thread, whose stop was requested, runs on when the main thread releases it
+        r = dap.request("continue", {"threadId": main_tid});
+        assertTrue(r.success, r.message);
+        assertTrue(r.body.allThreadsContinued);
+        dap.waitForEvent("terminated");
+        assertEq(("done\n",), dap.getOutput("stdout"));
+        assertEq((), dap.getEvents("stopped"));
+        # both threads continued
+        list<int> continued = map $1.body.threadId, dap.getEvents("continued");
+        assertTrue(inlist(main_tid, continued), sprintf("%y", continued));
+        assertTrue(inlist(busy_tid, continued), sprintf("%y", continued));
+
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    stopOneThreadTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, StopAllProgram);
+
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path, "stopAllThreads": False});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 33},)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        int main_tid = stopped.body.threadId;
+
+        # only the main thread continues; the program ends only if the other threads were not stopped
+        r = dap.request("continue", {"threadId": main_tid});
+        assertTrue(r.success, r.message);
+        assertFalse(r.body.allThreadsContinued);
+        dap.waitForEvent("terminated");
+        assertEq(("done\n",), dap.getOutput("stdout"));
+        assertEq((), dap.getEvents("stopped"));
+
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+        assertEq((), dap.stray);
+    }
+
+    outputOrderTest() {
+        TmpDir tmp("qore-vda-test-");
+        string path = writeProgram(tmp, "%modern\n"                    # 1
+            "printf(\"before\\n\");\n"                                   # 2
+            "stderr.print(\"err\\n\");\n"                                # 3
+            "int x = 1;\n"                                                # 4
+            "printf(\"after %d\\n\", x);\n");                            # 5
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path});
+        hash<auto> r = dap.request("setBreakpoints", {"source": {"path": path}, "breakpoints": ({"line": 4},)});
+        assertTrue(r.success, r.message);
+        r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        hash<auto> stopped = dap.waitForEvent("stopped");
+        assertEq("breakpoint", stopped.body.reason);
+        # the output of both streams before the stop has been sent before the stop
+        assertEq(("before\n",), dap.getOutput("stdout"));
+        assertEq(("err\n",), dap.getOutput("stderr"));
+        finish(dap, proc, stopped.body.threadId);
+        assertEq(("before\n", "after 1\n"), dap.getOutput("stdout"));
+    }
+
+    # a file whose name does not end in .q is parsed in %modern mode without the directive, and a .q file in the
+    # old-style mode, as the interpreter parses them
+    sourceModeTest() {
+        TmpDir tmp("qore-vda-test-");
+        map runToOutput(writeProgram(tmp, $1.program, $1.name), $1.output), (
+            {"name": "modern.qr", "program": "int x = 2;\nprintf(\"modern: %d\\n\", x);\n", "output": "modern: 2\n"},
+            {"name": "modern", "program": "int x = 3;\nprintf(\"modern: %d\\n\", x);\n", "output": "modern: 3\n"},
+            {"name": "old.q", "program": "my $x = 4;\nprintf(\"old: %d\\n\", $x);\n", "output": "old: 4\n"},
+        );
+    }
+
+    #! Launches the program without breakpoints and checks its output
+    private runToOutput(string path, string output) {
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        launch(dap, {"program": path});
+        hash<auto> r = dap.request("configurationDone");
+        assertTrue(r.success, r.message);
+        dap.waitForEvent("terminated");
+        assertEq((output,), dap.getOutput("stdout"), path);
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
+        assertEq(0, proc.exitCode());
+    }
+
+    #! Returns the output of the debug server up to the end of the given text
+    private string readServerOutput(Process server, string end) {
+        string out = "";
+        while (out.find(end) < 0) {
+            *string s = server.readStdout(1024, DapClient::MessageTimeout);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the debug server did not write %y: %y", end, out);
+            }
+            out += s;
+        }
+        return out;
     }
 
     endOfInputTest() {

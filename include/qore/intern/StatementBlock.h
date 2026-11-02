@@ -277,9 +277,16 @@ public:
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     // assign inherited local var list from parent program
+    //! Returns the number of the top-level local variables inherited from the parent Program, which are the first
+    //! ones of getLVList() and which the code of this Program cannot refer to
+    DLLLOCAL unsigned getInheritedLocalVarCount() const {
+        return inherited_lvars;
+    }
+
     DLLLOCAL void assignLocalVars(const LVList* lvl) {
         assert(!lvars);
         lvars = new LVList(*lvl);
+        inherited_lvars = lvl->size();
     }
 
     DLLLOCAL void setupLVList(QoreParseContext& parse_context) {
@@ -302,6 +309,9 @@ protected:
     statement_list_t::iterator ehwm;
     // true only the first time parseInit() is called
     bool first;
+    // the number of the local vars at the beginning of lvars that are inherited from the parent program; they are
+    // instantiated at runtime for the code of the parent program, but they are not visible to the code of this program
+    unsigned inherited_lvars = 0;
 
     // Cached IR for top-level code (avoids re-lowering on repeat calls)
     mutable QoreIRFunction* cached_toplevel_ir = nullptr;

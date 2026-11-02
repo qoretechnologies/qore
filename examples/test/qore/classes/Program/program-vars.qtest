@@ -15,6 +15,7 @@ class ProgramVarsTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("ProgramVarsTest", "1.0", \ARGV) {
         addTestCase("var test", \varTest());
+        addTestCase("declared types and unassigned variables", \declaredTypeTest());
         set_return_value(main());
     }
 
@@ -24,18 +25,18 @@ class ProgramVarsTest inherits QUnit::Test {
             p.parse("hash sub test1(int frame) { code c = sub () { if (frame > 10) throw 1; }; c(); return get_local_vars(frame); } hash sub test2(int frame) { int i = 1; string str = 'hi'; return test1(frame); } hash sub test3() { try { throw 1; } catch (hash<ExceptionInfo> ex) { return get_local_vars(0); }}", "");
 
             hash vh = (
-                "str": ("type": "local", "value": "hi"),
-                "i": ("type": "local", "value": 1),
-                "argv": ("type": "local", "value": NOTHING),
-                "frame": ("type": "local", "value": 1),
+                "str": ("type": "local", "value": "hi", "declaredType": "string"),
+                "i": ("type": "local", "value": 1, "declaredType": "int"),
+                "argv": ("type": "local", "value": NOTHING, "declaredType": "*list<auto>"),
+                "frame": ("type": "local", "value": 1, "declaredType": "int"),
                 );
 
             assertEq(vh, p.callFunction("test2", 1));
 
             vh = (
-                "c": ("type": "local", "value": NOTHING),
-                "frame": ("type": "closure", "value": 0),
-                "argv": ("type": "local", "value": NOTHING),
+                "c": ("type": "local", "value": NOTHING, "declaredType": "code"),
+                "frame": ("type": "closure", "value": 0, "declaredType": "int"),
+                "argv": ("type": "local", "value": NOTHING, "declaredType": "*list<auto>"),
                 );
 
             hash pvh = p.callFunction("test2", 0);
@@ -48,6 +49,7 @@ class ProgramVarsTest inherits QUnit::Test {
             vh = (
                 "ex": (
                     "type": "local",
+                    "declaredType": "hash<ExceptionInfo>",
                     "value": new hash<ExceptionInfo>((
                         "type": "User",
                         "file": "",
@@ -62,6 +64,7 @@ class ProgramVarsTest inherits QUnit::Test {
                 "argv": (
                     "type": "local",
                     "value": NOTHING,
+                    "declaredType": "*list<auto>",
                 ),
             );
             auto v = p.callFunction("test3");
@@ -69,5 +72,23 @@ class ProgramVarsTest inherits QUnit::Test {
             v.ex.value -= "callstack";
             assertEq(vh, v);
         }
+    }
+
+    declaredTypeTest() {
+        Program p(PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_ALLOW_DEBUGGER);
+        p.parse("hash<auto> sub t() { int i; *int oi; string s = 'x'; auto a; hash<auto> h; softint si; int ci; "
+            "code c = int sub () { return ci; }; return get_local_vars(0); }", "");
+        hash<auto> lv = p.callFunction("t");
+        # a variable whose type requires a value is unassigned if it has no value
+        assertEq({"type": "local", "value": NOTHING, "declaredType": "int", "unassigned": True}, lv.i);
+        assertEq({"type": "local", "value": NOTHING, "declaredType": "hash<auto>", "unassigned": True}, lv.h);
+        assertEq({"type": "local", "value": NOTHING, "declaredType": "softint", "unassigned": True}, lv.si);
+        # also a closure-bound variable
+        assertEq({"type": "closure", "value": NOTHING, "declaredType": "int", "unassigned": True}, lv.ci);
+        # a variable with an optional type has no value without being unassigned
+        assertEq({"type": "local", "value": NOTHING, "declaredType": "*int"}, lv.oi);
+        assertEq({"type": "local", "value": "x", "declaredType": "string"}, lv.s);
+        # a variable without a type has no declared type
+        assertEq({"type": "local", "value": NOTHING}, lv.a);
     }
 }

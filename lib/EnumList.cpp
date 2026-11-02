@@ -89,7 +89,8 @@ const QoreEnumDecl* EnumList::find(const char* name) const {
 EnumList::EnumList(const EnumList& old, const QoreParseOptions& po, qore_ns_private* ns) {
     for (auto& i : old.hm) {
         if (!i.second->isSystem()) {
-            if ((po & PO_NO_ENUM) || !qore_enum_decl_private::get(*i.second)->isPublic()) {
+            if ((po & PO_NO_ENUM)
+                || (!qore_enum_decl_private::get(*i.second)->isPublic() && !q_inherit_all_user_code)) {
                 continue;
             }
         } else {

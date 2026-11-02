@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# qdbg-mcp: an MCP server that lets coding agents debug Qore programs
+
+%modern
+%allow-debugger
+%no-debugging
+
+%requires qore >= 3.0
+%requires HttpServer
+%requires DebugMcpServer
+%requires Logger
+%requires Util
+
+%exec-class QdbgMcp
+
+class QdbgMcp {
+    private {
+        hash<auto> opts = {
+            "help": "h,help",
+            "verbose": "v,verbose:+",
+            "listen": "l,listen=s@",
+            "path": "p,path=s",
+            "token_file": "k,token-file=s",
+            "no_launch": "no-launch",
+            "log_file": "L,log-file=s",
+        };
+        HttpServer server;
+        DebugMcpServer handler;
+        #! signaled when the server ends
+        Counter running(1);
+    }
+
+    constructor() {
+        GetOpt g(opts);
+        hash<auto> opt;
+        try {
+            opt = g.parse3(\ARGV);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s: error: %s\n", get_script_name(), ex.desc);
+            help(-1);
+        }
+        if (opt.help) {
+            help(0);
+        }
+        if (ARGV) {
+            stderr.printf("%s: error: unexpected argument %y\n", get_script_name(), ARGV[0]);
+            help(-1);
+        }
+        try {
+            # the log is written to a file only, as the output of a launched script is given to the agent
+            Logger logger();
+            logger.setLevel(opt.verbose > 1 ? "DEBUG" : (opt.verbose ? "INFO" : "ERROR"));
+            if (opt.log_file) {
+                LoggerAppenderFile appender("log",
+                    new LoggerLayoutPattern("%d{YYYY-MM-DD HH:mm:SS.xx} T%t [%p]: %m%n"), opt.log_file);
+                # the appender writes nothing until it is opened
+                appender.open();
+                logger.addAppender(appender);
+            }
+            # the token of the clients, from a file or the environment, as the arguments of a process can be read by
+            # other users
+            *string token = opt.token_file
+                ? trim(ReadOnlyFile::readTextFile(opt.token_file))
+                : ENV.QDBG_MCP_TOKEN;
+            if (exists token && !token.val()) {
+                throw "QDBG-MCP-ERROR", "the token of the server is empty";
+            }
+            handler = new DebugMcpServer(logger,
+                token ? new DebugMcpTokenAuthenticator(token) : new PermissiveAuthenticator(),
+                {"allow_launch": !opt.no_launch, "session_logger": logger});
+            server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+            string path = opt.path ?? "mcp";
+            server.setHandler("mcp", path, MimeTypeJson, handler);
+            server.setDefaultHandler("mcp", handler);
+            if (opt.listen) {
+                foreach string l in (opt.listen) {
+                    hash<auto> info = server.addListener(http_get_listener_options_from_bind(l));
+                    # a client can run code with the permissions of the server, so a server that other hosts can
+                    # reach must require a token
+                    if (!token && l !~ /^(\/|127\.|localhost:|\[::1\]:)/) {
+                        throw "QDBG-MCP-ERROR", sprintf("the server would listen on %y without a token; any client "
+                            "that can reach it could run code (see -k)", l);
+                    }
+                    stdout.printf("MCP server listening on %s\n", info.desc ?? l);
+                }
+            } else {
+                # only local clients by default
+                int port = server.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).port;
+                stdout.printf("MCP server listening on http://127.0.0.1:%d/%s\n", port, path);
+            }
+            stdout.sync();
+            code stop = sub (int sig) {
+                running.dec();
+            };
+            set_signal_handler(SIGINT, stop);
+            set_signal_handler(SIGTERM, stop);
+            running.waitForZero();
+            remove_signal_handler(SIGINT);
+            remove_signal_handler(SIGTERM);
+            handler.endSession();
+            server.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            if (opt.verbose) {
+                stderr.printf("%s\n", get_exception_string(ex));
+            } else {
+                stderr.printf("%s: error: %s (%s)\n", get_script_name(), ex.desc, ex.err);
+            }
+            exit(-1);
+        }
+    }
+
+    private help(int rc) {
+        printf("usage: %s [options]\n"
+            "Runs an MCP server that lets coding agents, such as Claude Code, debug Qore programs: launch a script or\n"
+            "attach to a debug server, set breakpoints, run until a thread pauses, and read the call stack, the\n"
+            "variables and the values of expressions.  The server runs until SIGINT (Ctrl+C) or SIGTERM.\n"
+            "\n"
+            "  -h, --help                   show this help\n"
+            "  -l, --listen=address         listen on an address, such as 127.0.0.1:8100 or a UNIX socket path\n"
+            "                               (can be given more than once); the default is a free port of 127.0.0.1\n"
+            "  -p, --path=path              the path of the MCP endpoint (default: mcp)\n"
+            "  -k, --token-file=file        require the token in the file from the clients, which they send as\n"
+            "                               \"Authorization: Bearer <token>\"; the QDBG_MCP_TOKEN environment\n"
+            "                               variable gives it too; required for an address that other hosts can reach\n"
+            "      --no-launch              do not launch scripts in the process of the server; only attach to debug\n"
+            "                               servers\n"
+            "  -L, --log-file=file          write the log of the server to a file\n"
+            "  -v, --verbose                log more details (with -L); -v -v logs all of them\n"
+            "\n"
+            "Example, with Claude Code:\n"
+            "  %s -l 127.0.0.1:8100\n"
+            "  claude mcp add --transport http qore-debug http://127.0.0.1:8100/mcp\n",
+            get_script_name(), get_script_name());
+        exit(rc);
+    }
+}

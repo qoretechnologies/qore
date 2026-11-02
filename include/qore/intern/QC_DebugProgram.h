@@ -90,7 +90,15 @@ private:
       /* catch all exceptions from debug code, optionally we could assimilate on demand or create exception handler
        * but developer can try/catch by himself to handle it
        */
-      // xsink->assimilate(xsink2);
+      // a debugger ends the thread, as when it ends the program, with THREAD-CANCELLED, which the thread raises at the
+      // statement, function or event that the callback was made for; the other exceptions of the code of the
+      // debugger do not change the program
+      if (xsink && xsink2.isException()) {
+         QoreValue err = xsink2.getExceptionErr();
+         if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
+            xsink->assimilate(xsink2);
+         }
+      }
    }
 
 public:

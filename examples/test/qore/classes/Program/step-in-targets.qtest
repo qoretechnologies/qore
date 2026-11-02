@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StepInTargetsTest
+
+#! ProgramControl::getStepInTargets()
+class StepInTargetsTest inherits QUnit::Test {
+    private {
+        #! the comments are the line numbers
+        const Source = "%modern\n"                                                       # 1
+            "int sub g(int x) { return x * 2; }\n"                                        # 2
+            "int sub f(int x) { return x; }\n"                                            # 3
+            "class C {\n"                                                                 # 4
+            "    constructor(int x) {}\n"                                                 # 5
+            "    int m(int x) { return x; }\n"                                            # 6
+            "    static int s(int x) { return x; }\n"                                     # 7
+            "}\n"                                                                         # 8
+            "int r = f(g(1));\n"                                                          # 9
+            "C c = new C(r);\n"                                                           # 10
+            "r = c.m(r) + C::s(r) + strlen(\"x\");\n"                                     # 11
+            "code cl = int sub (int y) { return g(y); };\n"                               # 12
+            "r = cl(1);\n"                                                                # 13
+            "if (g(r) > 0) { r = f(r); }\n"                                               # 14
+            "r = g(g(1)) + (r ? f(1) : g(2));\n"                                          # 15
+            "object o = c; r = o.m(1);\n"                                                 # 16
+            "foreach int i in ((f(1), g(2))) { r += i; }\n"                               # 17
+            "hash<auto> h = {\"a\": f(1), \"b\": (g(1),)};\n";                            # 18
+
+        #! the Program of the test source, which a ProgramControl does not keep
+        Program pgm;
+        ProgramControl pc;
+    }
+
+    constructor() : QUnit::Test("StepInTargetsTest", "1.0") {
+        pgm = new Program(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        pgm.parse(Source, "src");
+        pc = pgm.getProgram();
+        addTestCase("the calls of a statement", \targetsTest());
+        addTestCase("the locations of the calls", \locationTest());
+        addTestCase("errors", \errorTest());
+        set_return_value(main());
+    }
+
+    #! returns the names of the targets of the statements of a line that starts at the given column
+    private list<string> getNames(int line, int column = 0) {
+        foreach int id in (pc.findStatementIds("src", line)) {
+            if (pc.getStatementIdInfo(id).start_column == column) {
+                return map $1.name, pc.getStepInTargets(id);
+            }
+        }
+        throw "TEST-ERROR", sprintf("no statement at %d:%d", line, column);
+    }
+
+    targetsTest() {
+        # the arguments of a call are evaluated before it
+        assertEq(("g", "f"), getNames(9));
+        # a constructor
+        assertEq(("C::constructor",), getNames(10));
+        # methods and static methods; builtin functions are not stepped into
+        assertEq(("C::m", "C::s"), getNames(11));
+        # a closure is called later; the call of a call reference is given with the name of its variable
+        assertEq((), getNames(12));
+        assertEq(("cl",), getNames(13));
+        # the condition of an if statement, not its blocks
+        assertEq(("g",), getNames(14));
+        # each call, also repeated ones; both branches of the ternary operator
+        assertEq(("g", "g", "f", "g"), getNames(15));
+        # a method of an object of an unknown class
+        assertEq(("m",), getNames(16, 14));
+        # the list of a foreach statement
+        assertEq(("f", "g"), getNames(17));
+        # hashes and lists
+        assertEq(("f", "g"), getNames(18));
+
+        # the statement of a target is the start of the called code, if it is known when the code is parsed
+        hash<StepInTargetInfo> target = pc.getStepInTargets(pc.findStatementId("src", 9))[0];
+        assertEq(pc.findFunctionStatementId("g", ("int",)), target.statement_id);
+        assertEq("g", target.function);
+        # the name that a method has in the call stack has no class
+        target = pc.getStepInTargets(pc.findStatementId("src", 11))[0];
+        assertEq(("C::m", "m"), (target.name, target.function));
+        # the called code of a call reference and of a method of an object of an unknown class is only known at runtime
+        target = pc.getStepInTargets(pc.findStatementId("src", 13))[0];
+        assertEq(("cl", "", 0), (target.name, target.function, target.statement_id));
+        int id = (select pc.findStatementIds("src", 16), pc.getStatementIdInfo($1).start_column == 14)[0];
+        target = pc.getStepInTargets(id)[0];
+        assertEq(("m", "m", 0), (target.name, target.function, target.statement_id));
+    }
+
+    locationTest() {
+        list<hash<StepInTargetInfo>> targets = pc.getStepInTargets(pc.findStatementId("src", 9));
+        # "int r = f(g(1));": g(1) at columns 10-14, f(g(1)) at columns 8-15
+        assertEq(((9, 9, 10, 14), (9, 9, 8, 15)), (map ($1.start_line, $1.end_line, $1.start_column, $1.end_column),
+            targets));
+    }
+
+    errorTest() {
+        # negative: a statement ID that does not exist
+        assertThrows("PROGRAM-STATEMENT-ERROR", \pc.getStepInTargets(), (999999,));
+        # a Program that cannot be debugged
+        Program nodbg(PO_NEW_STYLE | PO_NO_DEBUGGING, True);
+        nodbg.parse("int x = 1;", "src");
+        assertThrows("DEBUGGING", \nodbg.getProgram().getStepInTargets(), (1,));
+    }
+}

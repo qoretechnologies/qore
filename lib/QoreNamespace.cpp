@@ -73,6 +73,7 @@
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/QC_AbstractPollableIoObjectBase.h"
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_FilePollOperation.h"
@@ -251,6 +252,9 @@ DLLLOCAL void preinitSocketClass();
 
 StaticSystemNamespace* staticSystemNamespace;
 
+// the structured information of runtime errors that match a language trap; see QoreRuntimeDiagnostic.h
+const TypedHashDecl* hashdeclRuntimeDiagnosticInfo = nullptr;
+
 const TypedHashDecl* hashdeclStatInfo,
     * hashdeclDirStatInfo,
     * hashdeclFilesystemInfo,
@@ -260,6 +264,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclKeyValueInfo,
     * hashdeclExceptionInfo,
     * hashdeclStatementInfo,
+    * hashdeclStepInTargetInfo,
     * hashdeclNetIfInfo,
     * hashdeclScanStatsInfo,
     * hashdeclScanWaitInfo,
@@ -964,7 +969,7 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, const QorePar
     nsmap_t::iterator last = nsmap.begin();
     for (nsmap_t::const_iterator i = old.nsmap.begin(), e = old.nsmap.end(); i != e; ++i) {
         // issue #3504: do not copy namespaces if API should not be imported
-        if (!qore_ns_private::isPublic(*i->second)
+        if ((!qore_ns_private::isPublic(*i->second) && !q_inherit_all_user_code)
             || (skip_builtin && i->second->priv->builtin)
             || (skip_user && !i->second->priv->builtin)) {
             continue;
@@ -1451,6 +1456,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclCallStackInfo = init_hashdecl_CallStackInfo(qns);
     hashdeclExceptionInfo = init_hashdecl_ExceptionInfo(qns);
     hashdeclStatementInfo = init_hashdecl_StatementInfo(qns);
+    hashdeclStepInTargetInfo = init_hashdecl_StepInTargetInfo(qns);
     hashdeclNetIfInfo = init_hashdecl_NetIfInfo(qns);
     hashdeclScanStatsInfo = init_hashdecl_ScanStatsInfo(qns);
     hashdeclScanWaitInfo = init_hashdecl_ScanWaitInfo(qns);
@@ -1460,6 +1466,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclParseDiagnosticEditInfo = init_hashdecl_ParseDiagnosticEditInfo(qns);
     hashdeclParseDiagnosticFixInfo = init_hashdecl_ParseDiagnosticFixInfo(qns);
     hashdeclParseDiagnosticInfo = init_hashdecl_ParseDiagnosticInfo(qns);
+    hashdeclRuntimeDiagnosticInfo = init_hashdecl_RuntimeDiagnosticInfo(qns);
     hashdeclObjectSerializationInfo = init_hashdecl_ObjectSerializationInfo(qns);
     hashdeclSerializationInfo = init_hashdecl_SerializationInfo(qns);
     hashdeclIndexedObjectSerializationInfo = init_hashdecl_IndexedObjectSerializationInfo(qns);

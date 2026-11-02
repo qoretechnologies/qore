@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
@@ -1217,12 +1218,11 @@ extern "C" DLLEXPORT void qore_rt_dbg_synthetic_block_step(const char* file, int
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
+    // without a file, the block is given; otherwise the block that starts at the line, if any
     const StatementBlock* dbg_block = nullptr;
     QoreProgram* pgm = getProgram();
-    if (pgm) {
-        AbstractStatement* stmt = qore_program_private::get(*pgm)->getStatementFromIndex(file,
-                static_cast<int>(abs_line));
-        dbg_block = dynamic_cast<const StatementBlock*>(stmt);
+    if (file && pgm) {
+        dbg_block = qore_program_private::get(*pgm)->getBlockFromIndex(file, static_cast<int>(abs_line));
     }
     if (!dbg_block) {
         dbg_block = static_cast<const StatementBlock*>(statements_block);
@@ -6594,11 +6594,10 @@ extern "C" DLLEXPORT const uint64_t* qore_rt_list_get_data_unchecked(uint64_t li
 
 extern "C" DLLEXPORT void qore_rt_raise_typed_foreach_nothing(int32_t value_kind, ExceptionSink* xsink) {
     if (xsink) {
-        const char* type_name = value_kind == 1 ? "float"
-            : value_kind == 2 ? "bool" : value_kind == 3 ? "string" : "int";
-        xsink->raiseException("RUNTIME-TYPE-ERROR",
-            "<foreach lvalue assignment> expects type '%s', but got no value instead",
-            type_name);
+        // raised by the type, as by the AST interpreter, for the same message and runtime diagnostic
+        const QoreTypeInfo* ti = value_kind == 1 ? floatTypeInfo
+            : value_kind == 2 ? boolTypeInfo : value_kind == 3 ? stringTypeInfo : bigIntTypeInfo;
+        ti->doTypeException("lvalue", 0, "<foreach lvalue assignment>", QoreValue(), xsink);
     }
 }
 
@@ -10201,8 +10200,9 @@ public:
         return pgm ? pgm : saved_pgm;
     }
 
+    //! returns the statement of the caller that made the call, as the frames of the AST interpreter do
     DLLLOCAL const AbstractStatement* getStatement() const override {
-        return statements;
+        return saved_stmt;
     }
 
 private:
@@ -10263,8 +10263,9 @@ public:
         return saved_pgm;
     }
 
+    //! returns the statement of the caller that made the call, as the frames of the AST interpreter do
     DLLLOCAL const AbstractStatement* getStatement() const override {
-        return statements;
+        return saved_stmt;
     }
 
 private:
@@ -15542,7 +15543,7 @@ extern "C" DLLEXPORT void qore_rt_check_valid_object_call_receiver(
         return;
     }
     if (xsink) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED",
+        qore_raise_deleted_object(xsink, 
             "cannot call a method on an object that has already been deleted");
     }
 }
@@ -17008,7 +17009,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return false;
     }
     if (!o->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
             "already been deleted", qc->getName(), method->getName());
         result = toBits(QoreValue());
         return true;
@@ -17202,7 +17203,7 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     }
     if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
-            xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
+            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
                 "already been deleted", qc->getName(), method->getName());
             return toBits(QoreValue());
         }
@@ -17270,7 +17271,7 @@ static uint64_t qore_rt_dot_eval_method_direct_impl(uint64_t base_bits, const Qo
         case NT_WEAKREF: {
             QoreObject* o = base.get<WeakReferenceNode>()->get();
             if (!o) {
-                xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on a deleted weak reference",
+                qore_raise_deleted_object(xsink, "cannot call %s::%s() on a deleted weak reference",
                     qc->getName(), method->getName());
                 return toBits(QoreValue());
             }
@@ -17407,7 +17408,7 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
     if (base.getType() == NT_WEAKREF) {
         QoreObject* o = base.get<const WeakReferenceNode>()->get();
         if (!o || !o->isValid()) {
-            xsink->raiseException("OBJECT-ALREADY-DELETED",
+            qore_raise_deleted_object(xsink, 
                 "cannot call %s::%s() on a deleted weak reference",
                 qc->getName(), method->getName());
             return toBits(QoreValue());
@@ -17489,7 +17490,7 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
     if (base.getType() == NT_WEAKREF) {
         QoreObject* o = base.get<const WeakReferenceNode>()->get();
         if (!o || !o->isValid()) {
-            xsink->raiseException("OBJECT-ALREADY-DELETED",
+            qore_raise_deleted_object(xsink, 
                 "cannot call '%s()' on a deleted weak reference", method_name);
             return toBits(QoreValue());
         }

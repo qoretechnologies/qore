@@ -31,12 +31,17 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_ProgramControl.h"
+#include "qore/intern/QC_Program.h"
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/LocalVar.h"
+
+#include <set>
+#include <string>
 
 //! statement information hash as returned by @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
 /**
@@ -62,6 +67,36 @@ hashdecl StatementInfo {
     int end_line;
     //! list of assigned breakpoints, unavailable if @ref no-debugging "%no-debugging" (since 0.9)
     *list breakpoints;
+    //! the 0-based column of the first character of the statement in its start line, or -1 if unknown, as for a block or for a statement of AOT-compiled code; a column counts bytes (since %Qore 3.0)
+    int start_column = -1;
+    //! the 0-based column after the last character of the statement in its end line, or -1 if unknown (since %Qore 3.0)
+    int end_column = -1;
+    //! @ref True if the statement is in the body of a try statement of its function, method or top-level code, so an exception that it raises can be caught there (since %Qore 3.0)
+    bool in_try = False;
+    //! the names of the local variables that the statement can refer to, also those that it declares and the top-level local variables of the program, which have global scope, from the innermost one, as debuggers use them to check the expressions of breakpoints; not set if they are not known, as for a statement of AOT-compiled code (since %Qore 3.0)
+    *list<string> locals;
+}
+
+//! A call of a statement that a debugger can step into
+/** @see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"
+
+    @since %Qore 3.0
+*/
+hashdecl StepInTargetInfo {
+    //! the name of the called function, or of the method or constructor with its class
+    string name;
+    //! the name that the called code has in the call stack: the name of the function, or of the method without its class, as a method of a subclass can be called; empty for a call of a call reference
+    string function;
+    //! the ID of the statement block of the called code, or 0 if the called code is only known at runtime
+    int statement_id = 0;
+    //! the start line of the call
+    int start_line;
+    //! the end line of the call
+    int end_line;
+    //! the 0-based column of the first character of the call in its start line, or -1 if unknown; a column counts bytes
+    int start_column = -1;
+    //! the 0-based column after the last character of the call in its end line, or -1 if unknown
+    int end_column = -1;
 }
 
 //! The ProgramControl class provides safe information about a Qore program
@@ -98,6 +133,60 @@ ProgramControl::destructor() {
    printd(5, "ProgramControl::destructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
    // the object holds its own reference to the Program
    p->deref(xsink);
+}
+
+//! Creates a Program whose code can refer to all code of this Program, for evaluating expressions in a debugger
+/** The new Program inherits all user code of this Program: its functions, classes, constants, hashdecls, enums,
+    typedefs, namespaces and global variables, also those that are not public, which a Program created with
+    @ref Qore::Program::constructor() "Program::constructor()" does not inherit.  Functions and methods run in this
+    Program, classes are the same classes, so the objects of this Program can be used, and global variables are
+    shared.  This Program is not changed; code that is added to it later is not inherited.
+
+    @param parse_options the parse options of the new Program; the restrictions of this Program apply as well;
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" is kept also when this Program does not have it, as it only
+    allows code to be parsed in the new Program more than once
+
+    @return the new Program
+
+    @par Example:
+    @code{.py}
+Program pgm = pc.createEvalProgram(PO_NEW_STYLE | PO_LOCKDOWN | PO_ALLOW_REPARSE);
+pgm.parse("auto sub eval() { return calculate(Limit); }", "eval");
+auto v = pgm.callFunction("eval");
+    @endcode
+
+    @throw PROGRAM-OPTION-ERROR the parse options contain options that can only be set by the system
+    @throw PROGRAM-ERROR this Program is being parsed
+
+    @since %Qore 3.0
+*/
+Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
+    if (parse_options & PO_SYSTEM_OPS) {
+        return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted "
+            "options that can only be set by the system", parse_options);
+    }
+    // the namespace of this Program is copied when the new Program is created
+    if (qore_program_private::get(*p)->parsing_in_progress) {
+        return xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code "
+            "cannot be inherited");
+    }
+    QoreProgram* pgm;
+    {
+        InheritAllUserCodeHelper all_user_code;
+        pgm = new QoreProgram(p, parse_options);
+    }
+    // a child Program has only the positive options of its parent; this one only allows the new Program to be
+    // parsed again
+    if (parse_options & PO_ALLOW_REPARSE) {
+        qore_program_private::get(*pgm)->setParseOptionsIntern(PO_ALLOW_REPARSE);
+    }
+    // the code that creates the Program controls it, as does this Program, its parent, whose chain the new Program
+    // already has
+    const QoreProgram* creator = getProgram();
+    if (creator) {
+        qore_program_private::addCreator(*pgm, *creator);
+    }
+    return new QoreObject(QC_PROGRAM, getProgram(), pgm);
 }
 
 //! Returns the current binary-or'ed parse option mask for the Program object
@@ -349,6 +438,27 @@ list<Breakpoint> ProgramControl::getBreakpoints() {
     return l;
 }
 
+//! Returns the top-level local variables of the Program in the current thread
+/** Top-level local variables have global scope: code in functions and methods can refer to them, and each thread has
+    its own values of them.  Debuggers evaluate expressions with them, as the code that a thread runs sees them
+
+    @return a hash of the top-level local variables that are instantiated in the current thread; the keys are the
+    names of the variables, and the values are hashes as returned by @ref Qore::get_local_vars() "get_local_vars()"
+
+    @par Example:
+    @code{.py}
+hash<auto> h = pc.getTopLevelLocalVars();
+    @endcode
+
+    @since %Qore 3.0
+*/
+hash<auto> ProgramControl::getTopLevelLocalVars() [dom=DEBUGGER] {
+   if (!p->checkAllowDebugging(xsink)) {
+      return QoreValue();
+   }
+   return qore_program_private::get(*p)->getTopLevelLocalVars(xsink);
+}
+
 //! get information related to statement id
 /**
    @param statement_id the statement ID to resolve
@@ -374,6 +484,22 @@ hash<StatementInfo> ProgramControl::getStatementIdInfo(int statement_id, bool li
    ph->setKeyValueIntern("offset", s->loc->offset);
    ph->setKeyValueIntern("start_line", s->loc->start_line);
    ph->setKeyValueIntern("end_line", s->loc->end_line);
+   ph->setKeyValueIntern("start_column", s->loc->start_column);
+   ph->setKeyValueIntern("end_column", s->loc->end_column);
+   ph->setKeyValueIntern("in_try", s->isInTry());
+   if (s->isScopeKnown()) {
+      // an inner variable hides an outer one with the same name
+      ReferenceHolder<QoreListNode> locals(new QoreListNode(stringTypeInfo), xsink);
+      std::set<std::string> names;
+      for (const LocalVar* lv = s->getScopeLocalVars(); lv; lv = lv->getParseScopePrev()) {
+         if (names.insert(lv->getName()).second) {
+            locals->push(new QoreStringNode(lv->getName()), xsink);
+         }
+      }
+      // the top-level variables have global scope: all code of the Program can refer to them
+      qore_program_private::get(*p)->addTopLevelLocalVarNames(**locals, names, xsink);
+      ph->setKeyValueIntern("locals", locals.release());
+   }
    if (list_breakpoints && p->checkAllowDebugging(xsink)) {
       QoreBreakpointList_t bl;
       p->getStatementBreakpoints(s, bl);
@@ -424,9 +550,91 @@ int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
         return 0;
     AbstractStatement* s = p->findStatement(file->c_str(), line);
     if (!s) {
-        return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s:" QLLD "\"", file->c_str(), (int64)line);
+        // without a file, the line is searched in all files
+        if (file->empty()) {
+            return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "there is no statement on line " QLLD
+                " where the program can pause", (int64)line);
+        }
+        return xsink->raiseException("PROGRAM-STATEMENT-ERROR", "there is no statement on line " QLLD " of \"%s\" "
+            "where the program can pause", (int64)line, file->c_str());
     }
     return p->getStatementId(s);
+}
+
+//! Finds the statements of a line in a file
+/**
+   @param file the name of the file or the label of the source, which is resolved as with
+   @ref Qore::ProgramControl::findStatementId() "ProgramControl::findStatementId()"
+   @param line the line to find the statements of
+
+   @return the IDs of the statements that start on the line in the order of their columns, the first being the
+   statement that @ref Qore::ProgramControl::findStatementId() "ProgramControl::findStatementId()" finds if it has no
+   column; if no statement starts on the line, the innermost statement that contains it; an empty list if no
+   statement is found
+
+   @par Example:
+   @code{.py}
+# a breakpoint on the second statement of line 10 of a file with "a(); b();" on it
+list<int> ids = pc.findStatementIds("file.q", 10);
+Breakpoint bp();
+bp.assignStatement(ids[1]);
+   @endcode
+
+   A debugger can find the statement of a column of the line with
+   @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()", which gives the columns
+   of each statement
+
+   @throw PROGRAM-STATEMENT-ERROR the source label contains a NUL character
+
+   @see
+      @ref Qore::ProgramControl::findStatementId "ProgramControl::findStatementId()"
+
+   @since %Qore 3.0
+*/
+list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_ARGS] {
+    // the label is looked up as a C string, which would be cut at a NUL character and name another source
+    if (q_check_no_nul(file->c_str(), file->size(), "source label", "source labels", "PROGRAM-STATEMENT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
+    if (!p->checkAllowDebugging(xsink)) {
+        return QoreValue();
+    }
+    return qore_program_private::get(*p)->findStatementIds(file->c_str(), line, xsink);
+}
+
+//! Returns the calls of a statement that a debugger can step into
+/**
+   @param statement_id the ID of the statement
+
+   @return the calls that the statement makes, in the order in which they are evaluated, without the calls of the
+   blocks of the statement and of closures that it creates; also calls whose called code is only known at runtime,
+   such as calls of methods of objects of unknown classes and of call references, whose \c statement_id is 0; calls
+   of builtin code and of the user code of other Programs are not given, as a debugger of this Program does not
+   stop in them.  A debugger steps into a call by matching the functions that the statement calls with the
+   \c function of the call and the number of earlier calls with it in the list; when an operand of a conditional
+   operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated, a later call with the same
+   \c function can be stepped into instead
+   (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>)
+
+   @par Example:
+   @code{.py}
+# step into g() in "f(g(x));"
+hash<StepInTargetInfo> target = (select pc.getStepInTargets(statement_id), $1.name == "g")[0];
+   @endcode
+
+   @throw PROGRAM-STATEMENT-ERROR the statement ID cannot be resolved
+
+   @see
+      @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"
+
+   @since %Qore 3.0
+*/
+list<hash<StepInTargetInfo>> ProgramControl::getStepInTargets(int statement_id) [flags=NAMED_ARGS] {
+    if (!p->checkAllowDebugging(xsink)) {
+        return QoreValue();
+    }
+    return qore_program_private::get(*p)->getStepInTargets(statement_id, xsink);
 }
 
 //! Find the first statement for function entry point
@@ -450,7 +658,7 @@ int ProgramControl::findFunctionStatementId(string function_name, *list params) 
     AbstractStatement* s = p->findFunctionStatement(function_name->c_str(), params, xsink);
     if (!s) {
         if (!*xsink) {
-            xsink->raiseException("PROGRAM-STATEMENT-ERROR", "cannot find statement for \"%s()\"",
+            xsink->raiseException("PROGRAM-STATEMENT-ERROR", "\"%s()\" has no statement where the program can pause",
                 function_name->c_str());
         }
         return QoreValue();

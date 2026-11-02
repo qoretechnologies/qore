@@ -4,7 +4,7 @@
   
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,7 @@ DLLEXPORT extern qore_classid_t CID_PROGRAMCONTROL;
 DLLLOCAL extern QoreClass* QC_PROGRAMCONTROL;
 DLLLOCAL QoreClass *initProgramControlClass(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_StatementInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_StepInTargetInfo(QoreNamespace& ns);
 
 #include <qore/QoreProgram.h>
 

@@ -43,7 +43,9 @@ GlobalVariableList::GlobalVariableList(const GlobalVariableList& old, const Qore
     map_var_t::iterator last = vmap.begin();
     for (map_var_t::const_iterator i = old.vmap.begin(), e = old.vmap.end(); i != e; ++i) {
         //printd(5, "GlobalVariableList::GlobalVariableList() this: %p v: %p '%s' pub: %d\n", this, i->second, i->second->getName(), i->second->isPublic());
-        if (!i->second->isPublic())
+        // all global variables are inherited for a debugger, except thread-local ones, such as the local variables
+        // of the top-level code, whose values are those of each thread
+        if (!i->second->isPublic() && (!q_inherit_all_user_code || i->second->isThreadLocal()))
             continue;
         Var* v = new Var(const_cast<Var*>(i->second));
         last = vmap.insert(last, map_var_t::value_type(v->getName(), v));

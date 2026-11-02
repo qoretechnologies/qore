@@ -237,10 +237,11 @@ module.exports = grammar({
         '%no-negative-offsets',
         '%lockdown',
         '%modern',
-        // the include path and legacy module path forms are unquoted
+        // the include path and module path forms can be unquoted; lib/scanner.lpp reads the rest of the line, and
+        // the quotes of a quoted path are removed
         seq('%append-include-path', $._same_line, choice($.string, $.directive_argument)),
         seq('%append-module-path', $._same_line, choice($.string, $.directive_argument)),
-        seq('%prepend-module-path', $._same_line, $.string),
+        seq('%prepend-module-path', $._same_line, choice($.string, $.directive_argument)),
         seq('%include', $._same_line, choice($.string, $.directive_argument)),
         // Parse options without arguments that lib/scanner.lpp accepts
         '%allow-reparse',

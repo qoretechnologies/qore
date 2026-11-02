@@ -6,7 +6,7 @@
 
   Qore Programming language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -77,6 +77,14 @@ public:
          last_col = col - 1;
          last_line = lineno;
       }
+   }
+
+   //! Reverts the last update(), for a token that the scanner gives back with yyless(0) to scan it again
+   /** update() made the end of the last token the start of the given-back one, so its end is restored from there
+   */
+   DLLLOCAL void revertUpdate() {
+      last_line = first_line;
+      last_col = first_col;
    }
 };
 
