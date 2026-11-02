@@ -956,6 +956,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             }
+            // the handler in this frame that an exception the instruction raises branches to; the invoke forms print
+            // it with their targets above
+            if (inst->exception_target && inst->opcode != QoreIROpcode::Invoke
+                    && inst->opcode != QoreIROpcode::InvokeMethodDirect
+                    && inst->opcode != QoreIROpcode::InvokeDotEvalMethodDirect) {
+                out << " exception:" << inst->exception_target->name;
+            }
             out << "\n";
         }
     }

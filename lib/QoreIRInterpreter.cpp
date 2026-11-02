@@ -7115,6 +7115,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         ephemeral_weak_ref_slots.clear();
     };
 
+    // Routes an exception that the given instruction raised to its handler in this frame, if it has one: only the
+    // raising statement's temps are released (see design/ir-exception-branch-temp-scope.md), and execution continues
+    // at the start of the handler block.  Returns false if the instruction has no handler in this frame; the caller
+    // then leaves the frame with the exception.
+    auto branchToExceptionTarget = [&](const QoreIRInstruction* raising) -> bool {
+        if (!raising->exception_target) {
+            return false;
+        }
+        cleanupToTempScope(raising->temp_scope_id, true, false, true);
+        prev_block = block;
+        block = raising->exception_target;
+        ip = 0;
+        return true;
+    };
+
     const std::vector<uint8_t>& return_protected_slots = func.interpreter_return_protected_slots;
     const std::vector<uint8_t>& cross_block_slots = func.interpreter_cross_block_slots;
     const std::vector<uint32_t>& return_value_slot_ids = func.interpreter_return_value_slot_ids;
@@ -7439,11 +7454,11 @@ next_instruction:
                     new QoreListNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
+                bool failed = false;
                 for (size_t i = 0; i < inst->operands.size(); ++i) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "IR list literal construction")) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        failed = true;
+                        break;
                     }
                     const auto& operand = inst->operands[i];
                     QoreValue value = getIRValue(values, operand);
@@ -7456,10 +7471,18 @@ next_instruction:
                         vcommon = false;
                     }
                     if (list->push(stored, xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        failed = true;
+                        break;
                     }
+                }
+                if (failed) {
+                    // the partial list is released when the case's scope is left
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 if (declared_type) {
                     qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(declared_vtype);
@@ -7500,9 +7523,7 @@ next_instruction:
                 bool vcommon = false;
                 for (size_t i = 0; i < pair_operand_count; i += 2) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "IR hash literal construction")) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        break;
                     }
                     QoreValue key_val = getIRValue(values, inst->operands[i]);
                     // hash keys are stored in the default encoding
@@ -7524,11 +7545,7 @@ next_instruction:
                     }
                 }
                 if (*xsink) {
-                    if (inst->exception_target) {
-                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                        prev_block = block;
-                        block = inst->exception_target;
-                        ip = 0;
+                    if (branchToExceptionTarget(inst)) {
                         break;
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -7567,11 +7584,11 @@ next_instruction:
                 hp->hm.reserve(n);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
+                bool failed = false;
                 for (size_t i = 0; i < n; ++i) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "IR hash literal construction")) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        failed = true;
+                        break;
                     }
                     QoreValue value = getIRValue(values, inst->operands[i]);
                     QoreValue stored = value.needsRef() ? value.refSelf() : value;
@@ -7588,10 +7605,18 @@ next_instruction:
                         hash->setKeyValue(ckeys[i].c_str(), stored, xsink);
                     }
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        failed = true;
+                        break;
                     }
+                }
+                if (failed) {
+                    // the partial hash is released when the case's scope is left
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 if (declared_type) {
                     hp->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
@@ -9343,12 +9368,11 @@ load_local_done:
                             } else {
                                 assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                             }
-                            if (xsink && *xsink) {
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
+                            // on error the store below is skipped, and the container-slot cleanup that follows runs
+                            // before the common tail routes the exception, as for an error raised by the store
+                            if (!(xsink && *xsink)) {
+                                l = new_l;
                             }
-                            l = new_l;
                         }
 
                         // NOTE: the index resolution and the store below must not exit the instruction early on
@@ -9363,7 +9387,7 @@ load_local_done:
                         // negative index reaches QoreListNode::setEntry() as a huge size_t and writes before the
                         // start of the entry array, corrupting the heap.  Same semantics as
                         // qore_rt_list_index_store_cow() (JIT) and qore_rt_list_index_store_cow_aot() (AOT).
-                        if (index < 0) {
+                        if (index < 0 && !(xsink && *xsink)) {
                             if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS)) {
                                 index += static_cast<int64_t>(l->size());
                             }
@@ -9945,13 +9969,12 @@ load_local_done:
                     ReferenceHolder<QoreListNode> result(
                         new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
                     size_t sz = l->size();
-                    bool routed_to_handler = false;
+                    bool failed = false;
                     for (size_t i = 0; i < sz; ++i) {
                         if (i && !(i % 100) && qore_check_cancel(xsink,
                                 "IR select hash-key positive-int loop")) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
+                            failed = true;
+                            break;
                         }
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() != NT_HASH) {
@@ -9963,25 +9986,21 @@ load_local_done:
                         QoreValue value = elem.get<const QoreHashNode>()->getKeyValue(
                             select_inst->key1.c_str(), xsink);
                         if (*xsink) {
-                            if (inst->exception_target) {
-                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                                prev_block = block;
-                                block = inst->exception_target;
-                                ip = 0;
-                                routed_to_handler = true;
-                                break;
-                            }
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
+                            failed = true;
+                            break;
                         }
                         if (value.getAsBigInt() > 0) {
                             result->push(elem.refSelf(), xsink);
                         }
                     }
                     // the partially built result is discarded by the ReferenceHolder
-                    if (routed_to_handler) {
-                        break;
+                    if (failed) {
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
                     }
                     out = result.release();
                 }
@@ -10787,6 +10806,9 @@ load_local_done:
                     && store_mode != AssignmentMode::Element
                     && normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                 if (xsink && *xsink) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -10853,6 +10875,9 @@ load_local_done:
                     }
                     LValueHelper helper(xsink);
                     if (local_inst->local->getLValue(helper, false, true)) {
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -12406,6 +12431,7 @@ load_local_done:
                 // destructor-raised exceptions propagate.  If no sentinel is
                 // present (malformed IR), falls back to a full drain rather
                 // than looping forever.
+                bool raised = xsink && *xsink;
                 cleanupToTempScope(inst->temp_scope_id, false, true);
                 while (!weak_load_temp_slots.empty()) {
                     uint32_t id = weak_load_temp_slots.begin()->first;
@@ -12417,6 +12443,18 @@ load_local_done:
                 // without tying lifetime to source lines, because a single
                 // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
+                if (!raised && xsink && *xsink) {
+                    // a temporary's destructor raised an exception, which the statement raises, as in the AST
+                    // interpreter (QoreStatementTempScope): the statement's temps and its mark are gone, so the
+                    // handler is entered without releasing anything else
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    return returnAfterUnhandledException();
+                }
                 ++ip;
                 break;
             }
@@ -13030,6 +13068,12 @@ load_local_done:
                 QoreValue right = getIRValue(values, inst->operands[1]);
                 QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
+                    res.discard(xsink);
+                    // an operation with a handler in this frame - such as a compound assignment to an element of a
+                    // fixed aggregate that qore_ir_scalar_replace_fixed_aggregates() replaced - raises there
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -15764,6 +15808,9 @@ load_local_done:
                 res = QoreValue(false);
             }
             if (xsink && *xsink) {
+                if (branchToExceptionTarget(inst)) {
+                    break;
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
@@ -15785,6 +15832,9 @@ load_local_done:
                 res = QoreValue(false);
             }
             if (xsink && *xsink) {
+                if (branchToExceptionTarget(inst)) {
+                    break;
+                }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
@@ -16025,7 +16075,13 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
+                    // a thread that could not be started raises the exception in this frame, which the enclosing
+                    // try block handles, as in the AST interpreter
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
                     return false;
                 }
                 // Invalidate external caches after spawning background thread

@@ -4647,6 +4647,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         operation.left,
                         right,
                     };
+                    // the operation keeps the handler of the path operation
+                    // it replaces: a division by zero raises there, and the
+                    // interpreter and native code branch to it from the
+                    // operation itself
                     replacement_inst->exception_target =
                         old->exception_target;
                     replacement_inst->temp_scope_id = old->temp_scope_id;

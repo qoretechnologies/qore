@@ -90,6 +90,21 @@ list, in each execution mode and from a compiled module.
 took the frame-exit path: the interpreter returned from the frame and the exception escaped an enclosing `try` in
 the same function, which AST mode caught. `lowerExpression()` sets their target from `getCurrentExceptionTarget()`.
 
+The interpreter's `branchToExceptionTarget()` applies the rule; an instruction that has no target leaves the frame.
+`BackgroundInt` (a thread that cannot be started), `SwitchRegexMatch` and `SwitchCaseMatch` had targets that the
+interpreter ignored, as did the binary operations, such as `DivAssignInt`, that
+`qore_ir_scalar_replace_fixed_aggregates()` puts in place of an `LValuePathCompound` and that keep its target; native
+code checks the exception after the division-by-zero helper of `DivAssignInt` and `DivAssignFloat`. `MakeList`,
+`MakeHash` and `MakeHashConstKeys` get a target from the lowering when they can raise (`qoreIrContainerLiteralMayRaise()`:
+a value checked against a declared element type, a key evaluated at runtime, or a cancellation check); the others get
+none, which keeps them available to the optimizations of fixed aggregates.
+
+`DiscardTemps` gets the active target too (`QoreIRLowering::createDiscardTemps()`): a temporary's destructor can raise
+when the statement ends, and the statement raises it, as `QoreStatementTempScope` does in the AST interpreter. The
+statement's temps and its mark are already gone then, so the branch releases nothing else; native code checks the
+exception after the release (`QoreIRToLLVM`, `QoreIROpcode::DiscardTemps`), where `getExceptionEdgeTarget()` finds no
+mark for the scope. An instruction that has a target prints it as `exception:<block>` (`QoreIRPrinter`).
+
 ## Why it matters: typed foreach
 
 A typed foreach (`foreach int`/`float`/`bool`/`string`) does not allocate an
@@ -130,3 +145,7 @@ rethrows, nested typed loops, `continue` / `break` / `return` out of a handler,
 exceptions that leave the loop, `on_error` handlers, throws nested several statement
 scopes below the `try`, and failing `context` initializers, context row references
 and `find` expressions inside a typed foreach.
+
+`examples/test/qore/statements/exception-handler-same-frame/exception-handler-same-frame.qtest` raises an exception
+from each of the instructions above in a try block, and compares the output in every execution mode and of a
+qcc-compiled executable with the AST interpreter's.

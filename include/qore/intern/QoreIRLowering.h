@@ -152,6 +152,13 @@ public:
     bool lowerStatementBlock(const StatementBlock* block, std::string& error);
     void setParseContext(QoreParseContext* parse_context);
 
+    //! Closes the innermost temp scope with a DiscardTemps instruction that has the active exception handler
+    /** A temporary's destructor can raise an exception when the scope's temporaries are released at the end of the
+        statement; the statement raises it, as in the AST interpreter, so it must branch to an enclosing try block's
+        handler in the same function instead of leaving the frame.
+    */
+    QoreIRInstruction* createDiscardTemps(const QoreProgramLocation* loc);
+
     //! Compile all handler bodies to separate QoreIRFunction objects and attach to OnBlockExit instructions
     //! @param handlers handlers to compile for this block level
     //! @param parent_func parent function for slot inheritance

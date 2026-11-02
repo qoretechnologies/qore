@@ -1319,7 +1319,7 @@ static QoreIRLoopInvariantHoists qoreIrHoistLoopInvariantValues(QoreIRLowering& 
     size_t local_count = 0;
     for (LocalVar* local : ordered) {
         if (qoreIrListSizeHoistAnalysisCancelled(local_count++)) {
-            builder.createDiscardTemps(loc);
+            lowering.createDiscardTemps(loc);
             return {};
         }
         QoreIRValue list_value = builder.createLoadLocal(local, loc)->result;
@@ -1328,17 +1328,17 @@ static QoreIRLoopInvariantHoists qoreIrHoistLoopInvariantValues(QoreIRLowering& 
     size_t value_count = 0;
     for (const QoreValue& value_expr : value_candidates) {
         if (qoreIrListSizeHoistAnalysisCancelled(value_count++)) {
-            builder.createDiscardTemps(loc);
+            lowering.createDiscardTemps(loc);
             return {};
         }
         QoreIRValue value = lowering.lowerExpression(value_expr, error);
         if (!value.isValid()) {
-            builder.createDiscardTemps(loc);
+            lowering.createDiscardTemps(loc);
             return {};
         }
         hoisted.values.emplace(value_expr.getInternalNode(), value);
     }
-    builder.createDiscardTemps(loc);
+    lowering.createDiscardTemps(loc);
     return hoisted;
 }
 
@@ -1731,7 +1731,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ? cond
             : builder.createUnaryOp(QoreIROpcode::ToBool, cond, if_stmt->loc)->result;
         if (condition_needs_cleanup) {
-            builder.createDiscardTemps(if_stmt->loc);
+            createDiscardTemps(if_stmt->loc);
         }
         QoreIRBasicBlock* then_block = createBlock("if.then");
         QoreIRBasicBlock* merge_block = createBlock("if.merge");
@@ -1849,7 +1849,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ? cond
             : builder.createUnaryOp(QoreIROpcode::ToBool, cond, stmt->loc)->result;
         if (condition_needs_cleanup) {
-            builder.createDiscardTemps(stmt->loc);
+            createDiscardTemps(stmt->loc);
         }
         builder.createBranchIf(cond_bool, body_block, exit_block);
 
@@ -1940,7 +1940,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 ? cond
                 : builder.createUnaryOp(QoreIROpcode::ToBool, cond, while_stmt->loc)->result;
             if (condition_needs_cleanup) {
-                builder.createDiscardTemps(while_stmt->loc);
+                createDiscardTemps(while_stmt->loc);
             }
             builder.createBranchIf(cond_bool, body_block, exit_block);
         }
@@ -2014,7 +2014,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     return false;
                 }
             } else if (init_scope) {
-                builder.createDiscardTemps(stmt->loc);
+                createDiscardTemps(stmt->loc);
             }
         }
         QoreValue cond_expr = for_stmt->getCond();
@@ -2078,7 +2078,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 ? cond_value
                 : builder.createUnaryOp(QoreIROpcode::ToBool, cond_value, stmt->loc)->result;
             if (condition_needs_cleanup) {
-                builder.createDiscardTemps(stmt->loc);
+                createDiscardTemps(stmt->loc);
             }
             builder.createBranchIf(cond_bool, body_block, exit_block);
         }
@@ -2125,7 +2125,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 if (blockHasTerminator(builder.getBlock())) {
                     builder.abandonTempScope();
                 } else {
-                    builder.createDiscardTemps(stmt->loc);
+                    createDiscardTemps(stmt->loc);
                 }
             }
         }
@@ -3974,7 +3974,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             break;
         }
         if (statement_needs_cleanup) {
-            builder.createDiscardTemps((*it)->loc);
+            createDiscardTemps((*it)->loc);
         } else {
             builder.setExceptionTempScopeId(previous_exception_temp_scope_id);
         }
@@ -6626,6 +6626,46 @@ bool QoreIRLowering::constantContainerLoadsByReference(const QoreValue& expr) co
     return i != constant_reverse_map->end() && !i->second.deferred_init;
 }
 
+//! Returns true if building a list or hash literal can raise an exception
+/** The construction (MakeList, MakeHash, MakeHashConstKeys) checks each value against the declared element type of
+    a typed literal, and checks for cancellation every 100 entries.  An instruction that can raise needs the active
+    exception handler, or the exception escapes an enclosing try block in the same function; one that cannot raise is
+    given none, which keeps the literal available to the optimizations of fixed aggregates.
+
+    @param ti the literal's type, nullptr if it has none
+    @param hash true for a hash literal, false for a list
+    @param count the number of entries
+    @param entry returns the expression of the entry with the given index
+*/
+template <typename F>
+static bool qoreIrContainerLiteralMayRaise(const QoreTypeInfo* ti, bool hash, size_t count, F&& entry) {
+    if (count > 50) {
+        return true;
+    }
+    if (!ti) {
+        return false;
+    }
+    if (qore_type_contains_type_parameter(ti)) {
+        return true;
+    }
+    const QoreTypeInfo* vt = hash ? QoreTypeInfo::getUniqueReturnComplexHash(ti)
+        : QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (!vt) {
+        vt = hash ? QoreTypeInfo::getReturnComplexHashOrNothing(ti) : QoreTypeInfo::getReturnComplexListOrNothing(ti);
+    }
+    if (!vt || vt == anyTypeInfo || vt == autoTypeInfo) {
+        return false;
+    }
+    // a constant value whose type is accepted as it is cannot fail the check
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue value = entry(i);
+        if (!value.isValue() || !QoreTypeInfo::superSetOf(vt, value.getTypeInfo())) {
+            return true;
+        }
+    }
+    return false;
+}
+
 QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& error) {
     // TAG_ENUM must be checked first: getType() returns the base type (e.g., NT_INT),
     // so base-type-specific paths below would strip enum identity
@@ -6692,7 +6732,12 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             }
             // Extract complexTypeInfo from constant list
             const QoreTypeInfo* cti = qore_list_private::get(*list)->complexTypeInfo;
-            return builder.createMakeList(values, nullptr, cti)->result;
+            auto* inst = builder.createMakeList(values, nullptr, cti);
+            if (qoreIrContainerLiteralMayRaise(cti, false, list->size(),
+                    [list](size_t i) { return list->retrieveEntry(i); })) {
+                inst->exception_target = getCurrentExceptionTarget();
+            }
+            return inst->result;
         }
     }
     if (expr.getType() == NT_HASH && expr.isValue()) {
@@ -6715,7 +6760,19 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             }
             // Extract complexTypeInfo from constant hash
             const QoreTypeInfo* cti = qore_hash_private::get(*hash)->complexTypeInfo;
-            return builder.createMakeHash(values, nullptr, cti)->result;
+            // the keys are those of a hash, which are valid
+            auto* inst = builder.createMakeHash(values, nullptr, cti);
+            std::vector<QoreValue> entries;
+            entries.reserve(hash->size());
+            ConstHashIterator entry_it(hash);
+            while (entry_it.next()) {
+                entries.push_back(entry_it.get());
+            }
+            if (qoreIrContainerLiteralMayRaise(cti, true, entries.size(),
+                    [&entries](size_t i) { return entries[i]; })) {
+                inst->exception_target = getCurrentExceptionTarget();
+            }
+            return inst->result;
         }
     }
     if (expr.getType() == NT_STRING && expr.isValue()) {
@@ -7657,6 +7714,12 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
         handler = exception_stack.back();
     }
     builder.createGuardNotNothing(value, handler, guard_loc);
+}
+
+QoreIRInstruction* QoreIRLowering::createDiscardTemps(const QoreProgramLocation* loc) {
+    QoreIRInstruction* inst = builder.createDiscardTemps(loc);
+    inst->exception_target = getCurrentExceptionTarget();
+    return inst;
 }
 
 QoreIRBasicBlock* QoreIRLowering::getCurrentExceptionTarget() const {
@@ -11550,7 +11613,17 @@ QoreIRValue QoreIRLowering::lowerContainerLiteral(const QoreValue& expr, std::st
         if (cti == autoHashTypeInfo) {
             cti = nullptr;
         }
-        return builder.createMakeHashConstKeys(std::move(keys), values, nullptr, cti)->result;
+        std::vector<QoreValue> entries;
+        entries.reserve(hash->size());
+        ConstHashIterator entry_it(hash);
+        while (entry_it.next()) {
+            entries.push_back(entry_it.get());
+        }
+        auto* inst = builder.createMakeHashConstKeys(std::move(keys), values, nullptr, cti);
+        if (qoreIrContainerLiteralMayRaise(cti, true, entries.size(), [&entries](size_t i) { return entries[i]; })) {
+            inst->exception_target = getCurrentExceptionTarget();
+        }
+        return inst->result;
     }
 
     if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
@@ -11568,7 +11641,12 @@ QoreIRValue QoreIRLowering::lowerContainerLiteral(const QoreValue& expr, std::st
         if (cti == autoListTypeInfo) {
             cti = nullptr;
         }
-        return builder.createMakeList(values, nullptr, cti)->result;
+        auto* inst = builder.createMakeList(values, nullptr, cti);
+        if (qoreIrContainerLiteralMayRaise(cti, false, list->size(),
+                [list](size_t i) { return list->retrieveEntry(i); })) {
+            inst->exception_target = getCurrentExceptionTarget();
+        }
+        return inst->result;
     }
 
     return QoreIRValue();
@@ -11639,7 +11717,12 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
             }
             value_operands.push_back(value);
         }
-        return builder.createMakeHashConstKeys(std::move(const_keys), value_operands, hash->loc, parse_ti)->result;
+        auto* inst = builder.createMakeHashConstKeys(std::move(const_keys), value_operands, hash->loc, parse_ti);
+        if (qoreIrContainerLiteralMayRaise(parse_ti, true, values_vec.size(),
+                [&values_vec](size_t i) { return values_vec[i]; })) {
+            inst->exception_target = getCurrentExceptionTarget();
+        }
+        return inst->result;
     }
 
     // General path: alternating key-value operands
@@ -11657,7 +11740,8 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         operands.push_back(key);
         operands.push_back(value);
     }
-    return builder.createMakeHash(operands, hash->loc, parse_ti)->result;
+    // a key that is evaluated at runtime can be invalid
+    return withExceptionTarget(builder.createMakeHash(operands, hash->loc, parse_ti))->result;
 }
 
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
@@ -11698,7 +11782,11 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
             parse_ti = nullptr;
         }
     }
-    return builder.createMakeList(values, list->loc, parse_ti)->result;
+    auto* inst = builder.createMakeList(values, list->loc, parse_ti);
+    if (qoreIrContainerLiteralMayRaise(parse_ti, false, list->size(), [list](size_t i) { return list->get(i); })) {
+        inst->exception_target = getCurrentExceptionTarget();
+    }
+    return inst->result;
 }
 
 QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {
@@ -15226,7 +15314,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
         virtual_implicit = saved;
         if (!need_result) {
-            builder.createDiscardTemps(map->loc);
+            createDiscardTemps(map->loc);
             return builder.createConstNothing(map->loc)->result;
         }
         return expr_result;
@@ -15441,7 +15529,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                 set_inst->exception_target = exception_stack.back();
             }
         } else {
-            builder.createDiscardTemps(map->loc);
+            createDiscardTemps(map->loc);
         }
 
         // Increment index
@@ -15641,7 +15729,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // Append result to output list
         builder.createListAppend(result_list, expr_result, map->loc);
     } else {
-        builder.createDiscardTemps(map->loc);
+        createDiscardTemps(map->loc);
     }
 
     // Increment index for next iteration
@@ -16870,7 +16958,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
                 builder.createListAppend(result_list, map_result, ms->loc);
             }
         } else {
-            builder.createDiscardTemps(ms->loc);
+            createDiscardTemps(ms->loc);
         }
         QoreIRValue selected_output_index = output_index;
         if (use_typed_scalar_construction) {
@@ -17091,7 +17179,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     } else if (need_result) {
         builder.createListAppend(result_list, map_result, ms->loc);
     } else {
-        builder.createDiscardTemps(ms->loc);
+        createDiscardTemps(ms->loc);
     }
     QoreIRBasicBlock* append_exit_block = builder.getBlock();
     builder.createBranch(cont_block, ms->loc);
