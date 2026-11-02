@@ -20,6 +20,42 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 |---|---|
 | the module Program inherits the loader's restrictions (`get_masked_module_parse_options()`, `lib/ModuleManager.cpp`) and the parser refuses code that conflicts with them | the image's `FUNCTIONAL_DOMAIN` section (the compiling Program's `aot_used_dom`) is compared with the inherited restrictions (`qore_aot_module_init_impl()`, `lib/QoreAOTRuntime.cpp`) |
 
+### Reporting a refused AOT module
+
+The loader treats a refused AOT module like any AOT module that cannot be loaded: if the module's source is found
+(beside an explicitly given `.qmod`, or anywhere in the module path for a module found by name), the source module is
+loaded instead, and the source decides, as if there were no AOT module.  What loads is therefore what loads without
+the AOT module; only the report differs (`lib/ModuleManager.cpp`):
+
+- **the source fails as well** (normally, as it uses the refused functionality too): the exception of the source
+  module is followed in the same exception chain by the refusal of the AOT module (`next` in the exception hash),
+  with the note `(the binary module was not loaded; source module '<path>' was tried instead)`
+  (`qore_raise_binary_module_source_fallback_error()`), whatever the API and the warning mask, so that the caller
+  sees both why the image was not used and why the source failed;
+- **the source loads** (the AOT module and its source differ, as for an AOT module out of date with a source that no
+  longer uses the functionality): the refusal is reported as a `BINARY-MODULE-SOURCE-FALLBACK` warning through
+  the loader's warning path (`qore_report_module_load_warning()`); with a warning mask of 0 no warning is issued;
+- **no source is found**: the refusal is the exception of the load.
+
+The warning path of the loader's own warnings (`BINARY-MODULE-SOURCE-FALLBACK`, also for an out-of-date linked AOT
+module, and `BINARY-MODULE-STALE`):
+
+| Load | Warning |
+|---|---|
+| a `*Warn()` API (`Program::loadModuleWarn()`, `load_module_warn()`, `Program::loadApplyToUserModuleWarn()`, ...) | returned to the caller |
+| `%requires` or `%try-module` in code parsed with a warning mask (`Program::parse()`, the `qore` command line) | a parse warning of that parse action, at the directive, returned by `Program::parse()` and written by `qore` with the other warnings |
+| `%requires` or `%try-module` in the source of a user module | decided by the load of that user module (its parse action's warnings are errors, and its warning mask can be the module's own, set by `%modern`) |
+| an API without a warning sink (`Program::loadModule()`, `load_module()`, ...) | stderr |
+| any of these with a warning mask of 0 (the default of `Program::parse()`) | not issued |
+
+The frames that decide are kept in a thread-local chain (`QoreModuleLoadWarningFrame`): a run-time API load pushes
+its caller's warning sink and mask, a parse directive pushes the Program being parsed.  `BINARY-MODULE-STALE` and
+the out-of-date warning are issued even with a warning mask of 0 (on stderr if no frame can receive them), as the code
+that runs is not the code the caller would expect; a source module loaded instead of a refused AOT module is the
+module, so its warning follows the mask, as documented for the warning masks of the module loading and parse APIs.
+The test harness (`examples/test/LoaderWarnings.qm`) recognizes the warnings in both of the forms that `qore` writes
+(`warning: ...` on stderr, and a parse warning with its location line).
+
 `aot_used_dom` is filled by `qore_program_private::parseAddDomain()`, which every parse-time restriction check goes
 through: builtin functions, methods and classes, and, through `parse_check_restriction()` (`lib/thread.cpp`), the
 checks of the code itself: `background`, `thread_exit`, backquotes, definitions of functions, classes, constants and
@@ -66,3 +102,5 @@ threads.
 
 `examples/test/ir/ModuleParseOptionMask.qtest` runs every case with the source modules and with AOT modules compiled
 with `--compile-module`, in every execution mode, against the output of the source modules with the AST interpreter.
+`examples/test/ir/AOTModuleRestrictedFallback.qtest` checks the reports of a refused AOT module with every loading API
+and warning mask, with a source that fails and with one that loads.

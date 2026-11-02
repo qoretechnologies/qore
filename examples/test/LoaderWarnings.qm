@@ -41,6 +41,16 @@ module LoaderWarnings {
     - <tt>warning: binary module '...' for feature '...' failed to load; loading source module '...' instead: ...</tt>,
       when the AOT module cannot be loaded
 
+    A module loaded by a \c %%requires directive of a script that \c qore runs reports these warnings as parse warnings
+    of the script, which \c qore writes with the location of the directive, with the warning code in place of
+    <tt>warning:</tt>:
+    @verbatim
+warning encountered at script.q:2 (Qore builtin code)
+BINARY-MODULE-SOURCE-FALLBACK: binary module '...' for feature '...' failed to load; loading source module '...' ...
+    @endverbatim
+    and with a <tt>next warning:</tt> line between two warnings; the location line and a separator line that belong
+    to such a warning are part of it.
+
     The warnings are about the environment, not output of the program, which ran the source module.  A test that reads
     the standard error of a child process as its output separates them with split_loader_warnings() or removes them
     with strip_loader_warnings(); they are written to the standard error of the test, where they stay visible.
@@ -50,8 +60,42 @@ public namespace LoaderWarnings {
     /** @param line a line, with or without its line break
     */
     public bool sub is_loader_warning(string line) {
-        return line =~ /^warning: AOT module '.*' for feature '.*' is out of date: /
-            || line =~ /^warning: binary module '.*' for feature '.*' failed to load; loading source module '.*' /;
+        return line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): AOT module '.*' for feature '.*' is out of date: /
+            || line =~ /^(warning|BINARY-MODULE-SOURCE-FALLBACK): binary module '.*' for feature '.*' failed to load; loading source module '.*' /;
+    }
+
+    #! separates the module loader warnings from the other lines of the output of a child process
+    /** @param lines the lines, with or without their line breaks
+
+        @return a hash with \c lines, the other lines, and \c warnings, the module loader warnings without their line
+        breaks; for a warning written as a parse warning, the location line before it and a <tt>next warning:</tt>
+        line that separates it from another warning are not in either list
+    */
+    public hash<auto> sub split_loader_warning_lines(list<string> lines) {
+        list<string> rest = ();
+        list<string> warnings = ();
+        for (int i = 0; i < lines.size(); ++i) {
+            string line = lines[i];
+            # a parse warning: its location line followed by the warning
+            if (line =~ /^warning encountered at / && (i + 1) < lines.size()
+                    && lines[i + 1] =~ /^BINARY-MODULE-SOURCE-FALLBACK: / && is_loader_warning(lines[i + 1])) {
+                push warnings, trim(lines[i + 1], "\n");
+                ++i;
+                # the separator from the warning before it, or else from the warning after it
+                if (rest && trim(rest.last(), "\n") == "next warning:") {
+                    pop rest;
+                } else if ((i + 1) < lines.size() && trim(lines[i + 1], "\n") == "next warning:") {
+                    ++i;
+                }
+                continue;
+            }
+            if (line =~ /^warning: / && is_loader_warning(line)) {
+                push warnings, trim(line, "\n");
+                continue;
+            }
+            push rest, line;
+        }
+        return {"lines": rest, "warnings": warnings};
     }
 
     #! separates the module loader warnings from the other lines of a text
@@ -61,21 +105,17 @@ public namespace LoaderWarnings {
         their line breaks; the warnings are also written to the standard error of this process
     */
     public hash<auto> sub split_loader_warnings(string text) {
-        string rest = "";
-        list<string> warnings = ();
+        # the lines with their line breaks
+        list<string> lines = ();
         int start = 0;
         while (start < text.size()) {
             int end = text.find("\n", start);
-            string line = end < 0 ? text.substr(start) : text.substr(start, end - start + 1);
+            push lines, end < 0 ? text.substr(start) : text.substr(start, end - start + 1);
             start = end < 0 ? text.size() : end + 1;
-            if (is_loader_warning(line)) {
-                stderr.print(line);
-                push warnings, trim(line, "\n");
-                continue;
-            }
-            rest += line;
         }
-        return {"text": rest, "warnings": warnings};
+        hash<auto> h = split_loader_warning_lines(lines);
+        map stderr.printf("%s\n", $1), h.warnings;
+        return {"text": h.lines.join(""), "warnings": h.warnings};
     }
 
     #! returns the text without the module loader warnings, which are written to the standard error of this process

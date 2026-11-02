@@ -1436,8 +1436,8 @@ qcc of this Qore installation
     @endverbatim
 
     If the module's source is installed beside the compiled module, the source module is loaded instead and a
-    warning reports the refused compiled module.  After installing a %Qore library with a different AOT runtime
-    identity, rebuild all AOT-compiled modules that were built outside of the %Qore source tree (for example the
+    warning reports the refused compiled module (see @ref aot_module_source_fallback).  After installing a %Qore
+    library with a different AOT runtime identity, rebuild all AOT-compiled modules that were built outside of the %Qore source tree (for example the
     modules of binary module packages and applications).  Rebuilding the library for changes that do not affect
     generated code keeps the identity, so existing compiled modules keep loading.  Ordinary binary modules written
     in C/C++ are not affected.
@@ -1449,6 +1449,33 @@ qcc of this Qore installation
     configure-time \c LD_LIBRARY_PATH, so a library path that names another %Qore build tree does not make it
     compile for that tree's library, and the build fails before compiling any module when \c qcc reports no AOT
     runtime identity.
+
+    @subsection aot_module_source_fallback Loading the Source of an AOT Module That Cannot Be Loaded
+
+    When an AOT-compiled module (\c "*.qmod") cannot be loaded, because it was compiled for another AOT runtime
+    identity, is out of date with its sources, or uses functionality that the restrictions of the
+    @ref Qore::Program "Program" loading it do not allow (see @ref module_parse_option_masks), and the module's
+    source is found (beside a compiled module loaded by its path, or in the module path for a module loaded by its
+    name), the source module is loaded instead, as if there were no compiled module.  The loader reports why the
+    compiled module was not used:
+    - if the source module fails to load as well, its exception is followed in the exception chain (\c next in the
+      @ref Qore::ExceptionInfo "ExceptionInfo" hash) by the exception of the compiled module, which ends with
+      <tt>(the binary module was not loaded; source module '...' was tried instead)</tt>, so that both reasons are
+      reported;
+    - if the source module loads, a \c BINARY-MODULE-SOURCE-FALLBACK warning gives the reason; with a warning mask
+      of 0, no warning is issued, except for a compiled module that is out of date with its sources
+
+    The warnings of the module loader are reported where the warnings of the load go:
+    |!Module load|!Warning
+    |Program::loadModuleWarn(), load_module_warn(), Program::loadApplyToUserModuleWarn() and the other \c *Warn() \
+     methods|returned with the other warnings
+    |\c %%requires and \c %%try-module in code parsed with a warning mask, such as Program::parse() with a warning \
+     mask or a script run by \c qore|a parse warning at the directive, returned by Program::parse() (\c qore \
+     writes it with the other warnings)
+    |\c %%requires and \c %%try-module in the source of a user module|reported for the load of that user module
+    |Program::loadModule(), load_module() and the other methods and functions that cannot return warnings|written \
+     to stderr
+    |any load with a warning mask of 0, including Program::parse() without a warning mask|not issued
 
     @subsection aot_module_code_signing AOT Module Metadata, Stripping and Code Signing
 
@@ -1646,7 +1673,9 @@ public class Lookup {
     the @ref Qore::Program "Program" that loads it first, and a module whose code uses functionality that its loader
     may not use cannot be loaded by it.  Source modules (<tt>.qm</tt>) and @ref aot_compilation "AOT modules"
     (<tt>.qmod</tt>) are treated the same way: an AOT module records the restrictions that its code would conflict
-    with, which are checked when it is loaded.  A module that another @ref Qore::Program "Program" has loaded already
+    with, which are checked when it is loaded; a refused AOT module is reported with the source module that is loaded
+    instead, or that fails to load (see @ref aot_module_source_fallback).  A module that another
+    @ref Qore::Program "Program" has loaded already
     is not checked against the restrictions of a @ref Qore::Program "Program" that imports it: it is a capability that
     the host gave the @ref Qore::Program "Program", and its code runs with the restrictions of its callers as well as
     its own (see @ref user_module_runtime_context).
