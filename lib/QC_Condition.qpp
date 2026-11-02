@@ -163,6 +163,11 @@ printf("finally some_value is 0\n");
     @throw CONDITION-SIGNAL-ERROR This exception should never be thrown; it indicates a low-level error in executing
     the method
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method returns as soon as the interrupt is requested
+    @throw THREAD-CANCELLED the thread was cancelled while the method was blocked (see
+    @ref Qore::cancel_thread() "cancel_thread()"); the method returns as soon as cancellation is requested
+
+    @note The lock is held again when the method returns, also when it raises \c THREAD-CANCELLED or
+    \c PROGRAM-INTERRUPTED, so an @ref on_exit "on_exit" statement that releases it stays correct
 
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
@@ -202,6 +207,11 @@ while (some_value > 0) {
     @throw CONDITION-SIGNAL-ERROR This exception should never be thrown; it indicates a low-level error in executing
     the method
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked; the method returns as soon as the interrupt is requested
+    @throw THREAD-CANCELLED the thread was cancelled while the method was blocked (see
+    @ref Qore::cancel_thread() "cancel_thread()"); the method returns as soon as cancellation is requested
+
+    @note The lock is held again when the method returns, also when it raises \c THREAD-CANCELLED or
+    \c PROGRAM-INTERRUPTED, so an @ref on_exit "on_exit" statement that releases it stays correct
 
     @since %Qore 3.0
  */

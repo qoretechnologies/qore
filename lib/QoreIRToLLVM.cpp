@@ -6409,13 +6409,16 @@ void QoreIRToLLVM::registerCleanupArraySlot(llvm::AllocaInst* array, unsigned& c
 }
 
 void QoreIRToLLVM::finalizeInvokeCleanupArray() {
-    finalizeCleanupArray(invoke_cleanup_array, invoke_cleanup_array_count, invoke_cleanup_array_capacity);
-    finalizeCleanupArray(exit_cleanup_array, exit_cleanup_array_count, invoke_cleanup_array_capacity);
+    finalizeCleanupArray(invoke_cleanup_array, invoke_cleanup_array_count, invoke_cleanup_array_capacity,
+        "JIT invoke cleanup array finalization");
+    finalizeCleanupArray(exit_cleanup_array, exit_cleanup_array_count, invoke_cleanup_array_capacity,
+        "JIT exit cleanup array finalization");
     finalizeCleanupArray(preinst_exit_cleanup_array, preinst_exit_cleanup_array_count,
-        invoke_cleanup_array_capacity);
+        invoke_cleanup_array_capacity, "JIT pre-instantiated exit cleanup array finalization");
 }
 
-void QoreIRToLLVM::finalizeCleanupArray(llvm::AllocaInst*& array_ref, unsigned count, unsigned capacity) {
+void QoreIRToLLVM::finalizeCleanupArray(llvm::AllocaInst*& array_ref, unsigned count, unsigned capacity,
+        const char* what) {
     llvm::AllocaInst* array = array_ref;
     array_ref = nullptr;
     if (!array) {
@@ -6431,7 +6434,7 @@ void QoreIRToLLVM::finalizeCleanupArray(llvm::AllocaInst*& array_ref, unsigned c
     size_t scanned = 0;
     for (llvm::User* user : array->users()) {
         if (++scanned % 100 == 0
-                && qore_check_cancel(nullptr, "JIT invoke cleanup array finalization")) {
+                && qore_check_cancel(nullptr, what)) {
             // the array is left at its estimated capacity, which is correct but oversized
             return;
         }
@@ -36887,6 +36890,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_div_int",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_int, r_int, xsink_arg});
+            // a division by zero raises here: to the instruction's handler in this frame, such as the one that a
+            // scalar-replaced compound assignment to a fixed-aggregate element keeps, or out of the function
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* div_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(div_merge_bb);
 
             // Normal path: native division (result is raw i64)
@@ -36897,7 +36904,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(div_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "diva_result");
-            phi->addIncoming(exc_result, div_zero_bb);
+            phi->addIncoming(exc_result, div_zero_end_bb);
             phi->addIncoming(div_result, div_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -36922,6 +36929,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_div_float",
                     llvm::FunctionType::get(double_type, {double_type, double_type, ptr_type}, false));
             llvm::Value* exc_result = builder->CreateCall(helper, {l_float, r_float, xsink_arg});
+            // as for DivAssignInt: the exception goes to the instruction's handler or out of the function
+            emitExceptionCheck(module, llvm_func, inst);
+            llvm::BasicBlock* fdiv_zero_end_bb = builder->GetInsertBlock();
             builder->CreateBr(fdiv_merge_bb);
 
             // Normal path: native division (result is raw double)
@@ -36932,7 +36942,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Merge results
             builder->SetInsertPoint(fdiv_merge_bb);
             llvm::PHINode* phi = builder->CreatePHI(double_type, 2, "fdiva_result");
-            phi->addIncoming(exc_result, fdiv_zero_bb);
+            phi->addIncoming(exc_result, fdiv_zero_end_bb);
             phi->addIncoming(div_result, fdiv_ok_bb);
             values[inst->result.id] = phi;
             return true;
@@ -38819,6 +38829,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module, inst->temp_scope_id);
+            // a temporary's destructor can raise an exception, which the statement raises, as in the AST interpreter:
+            // a statement in a try block branches to its handler here, and any other statement leaves the function
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

@@ -26,7 +26,7 @@ public namespace QoreOnnxExport {
 
 #! Exports trained Qore ML models to ONNX format
 /** Constructs ONNX computation graphs from fitted model parameters and
-    serializes them via protobuf. The exported \c .onnx files can be loaded
+    serializes them via protobuf. The exported <tt>.onnx</tt> files can be loaded
     by any ONNX-compatible runtime (ONNX Runtime, TensorFlow, PyTorch, etc.).
 
     @par Supported Algorithms

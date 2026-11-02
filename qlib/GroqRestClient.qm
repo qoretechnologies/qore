@@ -425,9 +425,9 @@ public class GroqLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return "groq";
     }
     #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
-    /** Evidence, https://console.groq.com/docs/api-reference: "qwen3 models support \c none to disable
-        reasoning" (\c qwen/qwen3.8-27b and \c qwen/qwen3-32b), and "\c openai/gpt-oss-20b and
-        \c openai/gpt-oss-120b support 'low', 'medium', or 'high'"; other models have not been verified.
+    /** Evidence, https://console.groq.com/docs/api-reference: &ldquo;qwen3 models support \c none to disable
+        reasoning&rdquo; (\c qwen/qwen3.8-27b and \c qwen/qwen3-32b), and &ldquo;\c openai/gpt-oss-20b and
+        \c openai/gpt-oss-120b support 'low', 'medium', or 'high'&rdquo;; other models have not been verified.
 
         @param model the model ID
 
@@ -478,12 +478,12 @@ public class GroqLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProviderFa
         };
     }
     #! Returns the provider's information for a model
-    /** The GPT-OSS models cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
-        "LlmProviderInfo::reasoning_always_on").
+    /** The GPT-OSS models cannot turn reasoning off
+        (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
 
-        Evidence, https://console.groq.com/docs/api-reference: "\c openai/gpt-oss-20b and \c openai/gpt-oss-120b
+        Evidence, https://console.groq.com/docs/api-reference: &ldquo;\c openai/gpt-oss-20b and \c openai/gpt-oss-120b
         support 'low', 'medium', or 'high'. 'medium' is the default value. Values outside a model's supported set are
-        rejected with a 400."; "qwen3 models support \c none to disable reasoning".
+        rejected with a 400.&rdquo;; &ldquo;qwen3 models support \c none to disable reasoning&rdquo;.
         https://console.groq.com/docs/reasoning: with \c reasoning_format \c "hidden", "The model will still reason,
         but the reasoning content will not be returned in the response."
 

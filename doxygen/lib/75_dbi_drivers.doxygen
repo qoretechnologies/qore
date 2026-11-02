@@ -232,7 +232,7 @@ static int mydb_close_sink(Datasource* ds, ExceptionSink* xsink) {
 
     Furthermore, DBI placeholders and bind specifications must be processed as well before executing the query.  The following DBI-specific format codes can appear in the query string:
     - \c %v means bind the corresponding argument by value
-    - \c :name means \c "name" is an output parameter and should be returned as an output value in an output hash (only valid for \ref dbi_exec exec)
+    - <tt>:name</tt> means \c "name" is an output parameter and should be returned as an output value in an output hash (only valid for \ref dbi_exec exec)
     - \c %s means include the string directly in the query as-is without any escaping (useful for table or database name prefixes)
     - \c %d means interpret the corresponding argument as a number (either integer or float, depending on the type of the argument) and include directly in the string
 

@@ -429,8 +429,7 @@ module GoogleCloudStorageDataProvider {
     <a href="https://cloud.google.com/storage/docs/json_api">JSON API</a>.
 
     The following classes are provided:
-    - @ref GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider
-      "GoogleCloudStorageDataProvider": the main data provider class
+    - @ref GoogleCloudStorageDataProvider::GoogleCloudStorageDataProvider "GoogleCloudStorageDataProvider": the main data provider class
 
     @section googlecloudstoragedataprovider_flat_keys Object Names Are a Flat Key Space
 

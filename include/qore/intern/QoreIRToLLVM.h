@@ -1737,8 +1737,9 @@ private:
     /** @param array the array, set to null
         @param count the number of slots registered in the array
         @param capacity the number of slots the array has room for
+        @param what the operation named in the cancellation check of the scan of the array's users
     */
-    void finalizeCleanupArray(llvm::AllocaInst*& array, unsigned count, unsigned capacity);
+    void finalizeCleanupArray(llvm::AllocaInst*& array, unsigned count, unsigned capacity, const char* what);
 
     // Conservative upper bound for the cleanup pointer array.  Overflow falls
     // back to the expanded cleanup path, so the estimate only affects whether

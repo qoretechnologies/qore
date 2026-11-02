@@ -221,6 +221,9 @@ code sub get_reader() {
 }
 ";
 
+    #! the sandboxed code in %modern, which every execution mode can run (the others run only on the AST tier)
+    const ModernSandboxedSource = "%modern\n" + SandboxedSource;
+
     constructor() : QUnit::Test("thread sandbox inheritance", "1.0", \ARGV) {
         addTestCase("trusted code reads for an unsandboxed caller on every thread kind", \testUnsandboxed());
         addTestCase("the sandbox governs the trusted code on the calling thread", \testSync());
@@ -237,6 +240,8 @@ code sub get_reader() {
         addTestCase("the sandboxed code can cancel an inheriting thread", \testCancelInScope());
         addTestCase("the sandboxed code cannot cancel a thread started for another caller", \testCancelOutOfScope());
         addTestCase("thread limit: background in the sandboxed Program", \testLimitOwnBackground());
+        addTestCase("thread limit: background in a %modern sandboxed Program in every execution mode",
+            \testLimitOwnBackgroundModes());
         addTestCase("thread limit: threads trusted code starts for the sandboxed code", \testLimitTrustedBackground());
         addTestCase("thread limit: call_async()", \testLimitCallAsync());
         addTestCase("thread limit: shared ThreadPool workers do not count", \testLimitThreadPool());
@@ -282,9 +287,18 @@ code sub get_reader() {
     }
 
     #! returns a sandboxed Program whose manager denies the filesystem
-    private Program getSandboxed(*SandboxManager sm) {
+    /** @param sm the sandbox manager; one that denies the filesystem if not given
+        @param mode the execution mode of the Program, which then runs the sandboxed code in %modern; the default mode
+        and the code without %modern if not given
+    */
+    private Program getSandboxed(*SandboxManager sm, *ExecMode mode) {
         Program p(PO_NEW_STYLE);
-        p.parse(SandboxedSource, "sandboxed");
+        if (exists mode) {
+            p.setExecMode(mode);
+            p.parse(ModernSandboxedSource, "sandboxed");
+        } else {
+            p.parse(SandboxedSource, "sandboxed");
+        }
         if (!sm) {
             sm = new SandboxManager();
             sm.setFilesystemDefaultPolicy(False);
@@ -405,6 +419,26 @@ code sub get_reader() {
         assertEq(NT_INT, l[0].typeCode());
         assertEq(NT_INT, l[1].typeCode());
         assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 2 reached", l[2]);
+    }
+
+    testLimitOwnBackgroundModes() {
+        # the background operator raises the failure to start a thread in the sandboxed code, where its try block
+        # handles it, whatever the execution mode
+        hash<string, ExecMode> modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+        foreach string name in (keys modes) {
+            SandboxManager sm();
+            sm.setMaxThreads(2);
+            Program p = getSandboxed(sm, modes{name});
+            Queue gate();
+            # the threads that started are released however the call ends, so that a failure cannot leave them
+            # waiting
+            on_exit release(gate, 2);
+            list<auto> l = p.callFunction("start_blocked", 3, gate);
+            assertEq(3, l.size(), name);
+            assertEq(NT_INT, l[0].typeCode(), name);
+            assertEq(NT_INT, l[1].typeCode(), name);
+            assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 2 reached", l[2], name);
+        }
     }
 
     testLimitTrustedBackground() {

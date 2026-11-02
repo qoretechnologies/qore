@@ -35,8 +35,7 @@ public const NonIndexedQueryHeaders = {
 
 #! The \c fields option, describing an item's column values
 /** The type is refined per list by
-    @ref SharePointDataProvider::SharePointListItemWriteDataProviderBase::getRequestTypeWithOptionsImpl()
-    "getRequestTypeWithOptionsImpl()", which reads the list's columns and gives each one its own
+    @ref SharePointDataProvider::SharePointListItemWriteDataProviderBase::getRequestTypeWithOptionsImpl() "getRequestTypeWithOptionsImpl()", which reads the list's columns and gives each one its own
     typed field.
 */
 public const ItemFieldsField = {

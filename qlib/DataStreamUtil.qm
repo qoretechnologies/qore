@@ -79,7 +79,17 @@ module DataStreamUtil {
     - @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()": sets up Connect streaming headers
     - @ref DataStreamUtil::connect_set_non_chunked_headers() "connect_set_non_chunked_headers()": sets up Connect unary headers
 
-    @section datastreamprotocol DataStream Protocol
+    @section datastreamutildocs DataStreamUtil Documentation
+
+    - @subpage datastreamprotocol "DataStream Protocol": the DataStream v1 protocol: data serialization, the
+      request and response headers, trailers, compression, and example messages
+    - @subpage connectprotocol "Connect Protocol (DataStream 2.0)": the Connect framing format, headers,
+      end-of-stream responses, example messages, and protocol detection
+    - @subpage datastreamutilrelnotes "Release Notes": the changes in each version
+*/
+/** @page datastreamprotocol DataStream Protocol
+
+    @tableofcontents
 
     The DataStream protocol is based on <a href="http://tools.ietf.org/html/rfc2616">HTTP 1.1</a> (<a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>) chunked transfers where each chunk contains UTF-8 encoded <a href="http://www.yaml.org/">YAML</a>-serialized data with optional compression and where each chunk is an independently decodable and parsable entity.  This differs from standard HTTP chunked transfers in that content encoding and semantic completeness of a message are defined over the entire message body.  By using DataStream instead of standard HTTP chunked transfer, data can be streamed from one server to another and be usable immediately on receipt on the remote end.
 
@@ -91,7 +101,7 @@ module DataStreamUtil {
 
     @note <a href="http://tools.ietf.org/html/rfc6648">RFC 6648</a> deprecates the use of an \c "X-" prefix in non-standardized HTTP headers and trailers, therefore no such prefix exists for DataStream headers and trailers.
 
-    @subsection datastreamprotocoldata DataStream Data Serialization
+    @section datastreamprotocoldata DataStream Data Serialization
 
     DataStream uses UTF-8 encoded <a href="http://www.yaml.org/">YAML</a> for data serialization to allow for maximum data fidelity over the HTTP link.
 
@@ -99,7 +109,7 @@ module DataStreamUtil {
 
     For chunked DataStream requests and responses, the \c Content-Type header is set to \c "application/octet-stream" (to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk) and the content-type of each atomic chunk is given by the \c DataStream-Content-Type header which should be set to \c "text/x-yaml;charset=utf-8" (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8").  Data compression is supported and is applied to each chunk atomically as DataStream-specific content encoding after chunk data serialization; the reverse operation is applied before YAML data deserialization to native data structures by the receiver.
 
-    @subsection datastreamprocotolchunkedrequests DataStream Chunked Request Headers
+    @section datastreamprocotolchunkedrequests DataStream Chunked Request Headers
 
     The following headers are set with DataStream chunked requests:\n
     <b>DataStream Chunked Request Headers</b>
@@ -108,58 +118,58 @@ module DataStreamUtil {
     |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
     |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
     |\c DataStream-Content-Type|<tt>text/x-yaml;charset=utf-8</tt>|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
-    |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
+    |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 <tt>&quot;Not Acceptable&quot;</tt> error must be returned
     |[\c DataStream-Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
-    |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
+    |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> be included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
     |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
 
     @note \c "Content-Encoding" and \c "Content-Length" headers <b>MUST NOT</b> be included in DataStream chunked transfers
 
-    @subsection datastreamprocotolnonchunkedrequests DataStream Non-Chunked Request Headers
+    @section datastreamprocotolnonchunkedrequests DataStream Non-Chunked Request Headers
 
     The following headers are set with DataStream non-chunked requests:\n
     <b>DataStream Non-Chunked Request Headers</b>
     |!Header|!Value|!Description
     |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
     |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
-    |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
+    |\c DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 <tt>&quot;Not Acceptable&quot;</tt> error must be returned
     |[\c DataStream-Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
     |[\c Content-Type]|<tt>text/x-yaml;charset=utf-8</tt>|<b>MUST</b> be included in requests with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in requests without a message body in which case it <b>MUST</b> be ignored by the server (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
-    |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the request body
+    |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> be included if data compression is used in the request body
     |[\c Content-Length]|number|This header is required in non-chunked requests with a message body
 
-    @subsection datastreamprocotolchunkedresponses DataStream Chunked Response Headers
+    @section datastreamprocotolchunkedresponses DataStream Chunked Response Headers
 
     The following headers are set with DataStream chunked responses:\n
     <b>DataStream Chunked Response Headers</b>
     |!Header|!Value|!Description
     |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
     |\c DataStream-Content-Type|\c text/x-yaml;charset=utf-8|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
-    |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
+    |[\c DataStream-Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> be included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
     |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
     |\c Trailer|\c DataStream-Error|<b>MUST</b> be included as this trailer record will be sent after chunked data is transferred if an error occurs on the sending side, in which case the trailer will be assigned a string giving information about the error that occurred
 
     @note \c "Content-Encoding" and \c "Content-Length" headers <b>MUST NOT</b> be included in DataStream chunked transfers
 
-    @subsection datastreamprocotolnonchunkedresponses DataStream Non-Chunked Response Headers
+    @section datastreamprocotolnonchunkedresponses DataStream Non-Chunked Response Headers
 
     The following headers are set with DataStream non-chunked responses:\n
     <b>DataStream Non-Chunked Response Headers</b>
     |!Header|!Value|!Description
     |\c Content-Type|<tt>text/x-yaml;charset=utf-8</tt>|<b>MUST</b> be included in responses with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in responses without a message body in which case it <b>MUST</b> be ignored by the client (receivers accept the charset name in any case and with or without the hyphen, as in \c "utf8")
     |\c Content-Length|number|<b>MUST</b> be included in non-chunked responses with a message body
-    |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the response body
+    |[\c Content-Encoding]|one of <tt>identity, bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> be included if data compression is used in the response body
 
-    @subsection datastreamtrailers DataStream Trailers
+    @section datastreamtrailers DataStream Trailers
 
     The following trailer may be sent with DataStream chunk responses after all data has been transferred:\n
     <b>DataStream Chunked Response Trailers</b>
     |!Trailer|!Description
     |\c DataStream-Error|This trailer is sent when the chunked data transfer is complete if there were any errors on the sending side.  If so, the value will be a string describing the error
 
-    @subsection datastreamprotocolcompression DataStream Compression
+    @section datastreamprotocolcompression DataStream Compression
 
-    Compression of chunked message bodies is supported by applying DataStream content encoding as specified by the \c DataStream-Content-Encoding header on each chunk individually (after YAML data serialization) before sending and then applying the reverse operation each chunk immediately after reception and before YAML deserialization; this is analogous to standard HTTP content encoding (which is applied to the message body as a whole) but is applied to each chunk separately.
+    Compression of chunked message bodies is supported by applying DataStream content encoding as specified by the \c DataStream-Content-Encoding header on each chunk individually (after YAML data serialization) before sending and then applying the reverse operation to each chunk immediately after reception and before YAML deserialization; this is analogous to standard HTTP content encoding (which is applied to the message body as a whole) but is applied to each chunk separately.
 
     Data compression is identified in a DataStream transfer by the following header:
     - \c "DataStream-Content-Encoding": set to one of \c "identity", \c "bzip2", \c "gzip", or \c "deflate" if data compression is used
@@ -170,7 +180,7 @@ module DataStreamUtil {
 
     @see <a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>
 
-    @subsection datastreamrequestexample Example DataStream Request
+    @section datastreamrequestexample Example DataStream Request
     @verbatim
 PUT /api/system?action=dataStream HTTP/1.1
 Accept: text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,application/octet-stream
@@ -186,7 +196,7 @@ Connection: Keep-Alive
 Host: localhost:8001
     @endverbatim
 
-    @subsection datastreamresponseexample Example DataStream Response
+    @section datastreamresponseexample Example DataStream Response
     @verbatim
 HTTP/1.1 200 OK
 Content-Type: application/octet-stream
@@ -198,8 +208,10 @@ Connection: Keep-Alive
 Date: Sun, 20 Apr 2014 07:49:51 GMT
 Server: Qorus-HTTP-Server/0.3.7
     @endverbatim
+*/
+/** @page connectprotocol Connect Protocol (DataStream 2.0)
 
-    @section connectprotocol Connect Protocol (DataStream 2.0)
+    @tableofcontents
 
     The Connect protocol supersedes DataStream v1 with 5-byte framed messages, support for all
     4 RPC patterns (unary, server streaming, client streaming, bidirectional streaming), and
@@ -211,7 +223,7 @@ Server: Qorus-HTTP-Server/0.3.7
     provide low-level framing utilities that can be used directly when integrating Connect
     framing with existing DataStream infrastructure.
 
-    @subsection connectprotocolframing Connect Framing Format
+    @section connectprotocolframing Connect Framing Format
 
     Every Connect message (and every gRPC message) uses a 5-byte envelope header followed by
     the serialized payload:
@@ -226,11 +238,11 @@ Server: Qorus-HTTP-Server/0.3.7
     <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md">gRPC Length-Prefixed-Message</a>
     specification.  This means a Connect-framed message can be parsed by gRPC tooling and vice versa.
 
-    @subsection connectprotocolheaders Connect Streaming Headers
+    @section connectprotocolheaders Connect Streaming Headers
 
     <b>Connect Streaming Request Headers</b>
     |!Header|!Value|!Description
-    |\c Content-Type|\c application/connect+yaml|Streaming content type: \c application/connect+{codec}
+    |\c Content-Type|\c application/connect+yaml|Streaming content type: <tt>application/connect+{codec}</tt>
     |\c Connect-Protocol-Version|\c 1|Connect protocol version (required)
     |[\c Connect-Content-Encoding]|e.g. \c gzip|Optional compression of individual message payloads
     |\c Transfer-Encoding|\c chunked|Required for HTTP/1.1 streaming; implicit for HTTP/2 and HTTP/3
@@ -242,11 +254,11 @@ Server: Qorus-HTTP-Server/0.3.7
 
     <b>Connect Unary Request/Response Headers</b>
     |!Header|!Value|!Description
-    |\c Content-Type|\c application/yaml|Unary content type: \c application/{codec}
+    |\c Content-Type|\c application/yaml|Unary content type: <tt>application/{codec}</tt>
     |\c Connect-Protocol-Version|\c 1|Connect protocol version (required in requests)
     |[\c Connect-Timeout-Ms]|e.g. \c 5000|Optional request timeout in milliseconds
 
-    @subsection connectprotocolendstream EndStreamResponse
+    @section connectprotocolendstream EndStreamResponse
 
     Streaming responses end with a special frame that has the \c CONNECT_FLAG_END_STREAM flag
     (\c 0x02) set.  The payload of this frame is always JSON (regardless of the message codec)
@@ -263,7 +275,7 @@ EndStreamResponse (success with trailing metadata):
 {"metadata":{"x-request-id":"abc-123","x-trace":"def-456"}}
     @endverbatim
 
-    @subsection connectprotocolexample Example Connect Request and Response
+    @section connectprotocolexample Example Connect Request and Response
 
     Unary Connect POST request:
     @verbatim
@@ -287,21 +299,22 @@ Content-Length: 38
 message: "Hello, Hello, World!!"
     @endverbatim
 
-    @subsection connectprotocoldetection Protocol Detection
+    @section connectprotocoldetection Protocol Detection
 
     The @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()" function
     detects whether an incoming HTTP request uses the Connect protocol by checking for:
     - the \c Connect-Protocol-Version header (value \c "1"), or
-    - a Connect streaming content type (\c application/connect+{codec})
+    - a Connect streaming content type (<tt>application/connect+{codec}</tt>)
 
     This allows a single server handler to serve both Connect and DataStream v1 clients
     transparently.  See the
     @ref datastreamrequesthandlerintro "DataStreamRequestHandler"
     module for automatic dual-protocol handling.
+*/
+/** @page datastreamutilrelnotes Release Notes
 
-    @section datastreamutilrelnotes Release Notes
 
-    @subsection datastreamutil_v1_4 DataStreamUtil v1.4
+    @section datastreamutil_v1_4 DataStreamUtil v1.4
     - fixed @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()",
       @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()",
       @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()" and
@@ -309,8 +322,8 @@ message: "Hello, Hello, World!!"
       hash whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>; adding the string headers
       raised \c RUNTIME-TYPE-ERROR
     - added @ref DataStreamUtil::DataStreamMimeTypeYaml "DataStreamMimeTypeYaml", the YAML media type that DataStream
-      messages are sent with (\c "text/x-yaml", as before), and @ref DataStreamUtil::ds_is_yaml_type()
-      "ds_is_yaml_type()", which tells whether a received media type is a YAML media type
+      messages are sent with (\c "text/x-yaml", as before), and
+      @ref DataStreamUtil::ds_is_yaml_type() "ds_is_yaml_type()", which tells whether a received media type is a YAML media type
     - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()" and
       @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()" label DataStream data with
       the registered charset name \c utf-8 instead of the alias \c utf8; receivers accept both
@@ -333,13 +346,13 @@ message: "Hello, Hello, World!!"
     - added \c %strict-args compile-time requirement
     - updated copyright year to 2025
 
-    @subsection datastreamutil_v1_1 DataStreamUtil v1.1
+    @section datastreamutil_v1_1 DataStreamUtil v1.1
     - minor updates for complex types
 
-    @subsection datastreamutil_v1_0_1 DataStreamUtil v1.0.1
+    @section datastreamutil_v1_0_1 DataStreamUtil v1.0.1
     - fixed a bug handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
 
-    @subsection datastreamutil_v1_0 DataStreamUtil v1.0
+    @section datastreamutil_v1_0 DataStreamUtil v1.0
     - initial release
 */
 

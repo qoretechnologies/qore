@@ -40,7 +40,7 @@
 
 //! The private data of a builtin class whose objects have a descriptor that can be polled for I/O readiness
 /** A builtin class whose private data derives this class declares \c vparent=AbstractPollableIoObjectBase in its
-    \c .qpp file: its objects can then be passed as the \c socket of a @ref Qore::SocketPollInfo "SocketPollInfo"
+    <tt>.qpp</tt> file: its objects can then be passed as the \c socket of a @ref Qore::SocketPollInfo "SocketPollInfo"
     hash and as the I/O object of an operation submitted to the @ref Qore::AsyncIoController "AsyncIoController", and
     the async I/O controller keeps their descriptor open while it has it registered (see holdPollableDescriptor()).
     Classes in binary modules can derive it as well as the classes of the library.

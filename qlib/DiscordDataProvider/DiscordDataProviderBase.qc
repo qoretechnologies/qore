@@ -65,8 +65,8 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object
-    /** @param rest a synchronous REST client; API calls are made with a @ref DiscordRestClient::DiscordRestClientIo
-        "DiscordRestClientIo" created from it with @ref getAsyncClient()
+    /** @param rest a synchronous REST client; API calls are made with a
+        @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo" created from it with @ref getAsyncClient()
         @param logger an optional logger
     */
     constructor(DiscordRestClient rest, *Logger::LoggerInterface logger) {

@@ -153,8 +153,8 @@ list<string> l = v.getCodeFlagList();
     - \c "NAMED_ARGS": the variant has the @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag set
     - \c "OWN_PROGRAM_STATE": the variant has the @ref Qore::Reflection::CF_OWN_PROGRAM_STATE "CF_OWN_PROGRAM_STATE"
       flag set
-    - \c "CURRENT_THREAD_ONLY": the variant has the @ref Qore::Reflection::CF_CURRENT_THREAD_ONLY
-      "CF_CURRENT_THREAD_ONLY" flag set
+    - \c "CURRENT_THREAD_ONLY": the variant has the
+      @ref Qore::Reflection::CF_CURRENT_THREAD_ONLY "CF_CURRENT_THREAD_ONLY" flag set
     - \c "MODULE_OWNED": the variant has the @ref Qore::Reflection::CF_MODULE_OWNED "CF_MODULE_OWNED" flag set
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
@@ -409,8 +409,8 @@ bool b = v.isNamedCallable();
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note builtin variants accept named arguments only when they have the @ref Qore::Reflection::CF_NAMED_ARGS
-    "CF_NAMED_ARGS" flag; varargs-only signatures reject named-argument calls because there are no fixed parameters to
+    @note builtin variants accept named arguments only when they have the
+    @ref Qore::Reflection::CF_NAMED_ARGS "CF_NAMED_ARGS" flag; varargs-only signatures reject named-argument calls because there are no fixed parameters to
     bind
 
     @see getNamedParameterNames()

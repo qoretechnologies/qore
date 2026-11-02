@@ -34,8 +34,8 @@ ModuleName/
     |-SomeModuleFunction.ql
     @endcode \n
 
-    The \c .qm file is parsed first, then the other files in the bytewise order of their names.  Parse directives
-    belong in the \c .qm file: the parse options and the warnings it sets apply to every file of the module.  A warning
+    The <tt>.qm</tt> file is parsed first, then the other files in the bytewise order of their names.  Parse directives
+    belong in the <tt>.qm</tt> file: the parse options and the warnings it sets apply to every file of the module.  A warning
     directive in another file, such as @ref disable-warning "%disable-warning", applies only to that file.
 
     Use the load_module() function to load %Qore modules at run-time; however, note that any module providing parse support (classes, constants, functions, etc) must be loaded at parse time using the @ref requires "%requires" or @ref try-module "%try-module" parse directive.
@@ -1309,6 +1309,20 @@ ModuleName/
     |binary|<a href="https://github.com/qoretechnologies/module-zmq">zmq</a>|Provides <a href="https://zeromq.org/">ZeroMQ</a> \
         distributed queue and clustering API support
 
+    @subsection module_load_concurrency Concurrent Module Loading
+
+    Module loading does not serialize on a process-global lock.  Each module is initialized by one thread, and other
+    threads that need the same module wait for that thread; a wait that would close a cycle between threads raises a
+    \c CIRCULAR-MODULE-DEPENDENCY exception instead of deadlocking.
+
+    Because loading a module can call into a module that is already loaded (for example to import Java classes
+    through it), a module must never hold one of its private locks across the start of a module load, whether the
+    load is started directly or by anything that can load a module, such as a callback from a foreign runtime: the
+    thread loading the module can need that lock while the holder waits for the load.  In the C++ API, binary modules
+    can have debug builds check this by marking such a lock with \c QoreModuleInnerLockHelper; the
+    \c QoreModuleLoadLockHelper class, which libqore uses around module loads, asserts that no marked lock is held
+    when a thread starts its outermost module load (see \c qore/ModuleManager.h).
+
     @section binary_modules Binary Modules
 
     Binary modules are written in C++ and delivered in binary form. They must conform to the %Qore Module API and have the file extension \c "*.qmod". Binary modules normally depend on other shared libraries and therefore can only be loaded if the libraries they require are present on the system and can be found in the library path.
@@ -1370,6 +1384,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     however declarations in the root namespace must be marked @ref mod_public "public" to be exported to importing
     @ref Qore::Program "Program" objects.
 
+    @anchor user_module_exports
     If a user module imports other modules with the <tt>%requires(reexport)</tt> form of the @ref requires "%requires"
     parse directive, then any loaded definitions will also be loaded into the importing @ref Qore::Program "Program".
 
@@ -1516,6 +1531,13 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
       @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN" permissions except that
       @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set
 
+    @anchor module_deletion_order
+    When the process exits, the objects that the Programs of user and AOT-compiled modules hold through opaque
+    references (\c \@=) are released first, while all module Programs still exist.  Then a module is deleted only
+    after every module that requires it; a binary module that no remaining module requires is deleted before the user
+    and AOT-compiled modules, while the asynchronous I/O services still run, and a module imported into a Program that
+    a binary module owns is deleted after that binary module, unless that module requires it.
+
     @subsection mod_public The "public" Keyword
 
     Only objects defined with the <b><tt>public</tt></b> keyword are made available in @ref Qore::Program "Program" objects importing the user module.  All other declarations and definitions are private to the module.
@@ -1606,6 +1628,17 @@ public class Lookup {
     @ref Qore::Program "Program's" options for them, and its network and filesystem access is governed by the
     @ref Qore::SandboxManager "SandboxManager" of the @ref Qore::Program "Program" that it runs for (see
     @ref sandbox_po_limitations).
+
+    The caller's restrictions also apply to the module code that a module function or method calls and to a
+    @ref call_reference "call reference" to a method of an object that module code created.  They only ever narrow
+    what the code may do: an explicitly-allowed option such as @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" or
+    @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER" applies only if both the caller and the module have it, module
+    code keeps the restrictions of its own @ref Qore::Program "Program", and the code of another
+    @ref Qore::Program "Program" that module code runs (with @ref Qore::Program::run() "Program::run()", for example)
+    keeps that @ref Qore::Program "Program's" restrictions.  The module's \c init and \c del closures run with the
+    module's own options.  Some builtins that act only on the module's own state or on the calling thread, or that
+    run the module's own code asynchronously, are checked differently when module code calls them; see
+    @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
 
     @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
 

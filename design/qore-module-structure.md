@@ -432,10 +432,17 @@ errors. Run its regression tests with
 `python3 examples/test/cmake/test_rendered_doc_refs.py -v`; `DOXYGEN_EXECUTABLE`
 selects the Doxygen version for its rendering integration test.
 
+A module logo in the documentation has a fixed size in pixels, never a size relative to the page (a
+`style="width:40%"` logo grows with the browser window): a square logo, or one up to 2:1, has `width="96"`, and a
+wider wordmark `height="48"`, so that its text stays readable, as in
+`<img src="example-logo.svg" width="96" alt="Example logo"/>`.
+
 Check mainpage layout and logo placement with
 `python3 doxygen/check-module-mainpage.py --logo amqp-logo.svg ../module-amqp/build/docs/amqp/html/index.html`.
 This rejects heading/single-link pairs and verifies that the exported logo appears
-inside the intro section. Its rendering tests are in
+inside the intro section with a standard size; `--sources` checks the size of every logo (an image whose source or
+alternative text names a logo) in documentation sources, which the `check-module-release-notes` CI job runs for
+`qlib/` and `modules/`. Its rendering tests are in
 `examples/test/cmake/test_module_mainpage_layout.py`.
 
 Check release-note source templates and user modules with

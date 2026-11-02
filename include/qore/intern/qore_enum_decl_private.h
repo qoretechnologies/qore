@@ -215,7 +215,7 @@ public:
         return loc;
     }
 
-    //! Sets the declaration location of an enum not created by the parser (a deserialized \c .qo shell)
+    //! Sets the declaration location of an enum not created by the parser (a deserialized <tt>.qo</tt> shell)
     DLLLOCAL void setParseLocation(const QoreProgramLocation* l) {
         saved_location.set(l->getFile(), l->start_line, l->end_line, l->getSource(), l->offset,
             l->getLanguage());

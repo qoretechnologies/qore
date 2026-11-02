@@ -118,8 +118,8 @@ if (!h) {
     - Fixed incorrect log message in SASL XOAUTH2 login
       (<a href="https://github.com/qoretechnologies/qore/issues/5163">issue 5163</a>)
     - A command or message ID with a NUL, CR or LF character, which would end the command line and start another
-      command (for example \c "1\r\nDELE 2" given to @ref Pop3Client::Pop3Client::getMessage()
-      "Pop3Client::getMessage()"), raises \c POP3-SERVER-ERROR (\c POP3-FETCH-ERROR in
+      command (for example \c "1\r\nDELE 2" given to
+      @ref Pop3Client::Pop3Client::getMessage() "Pop3Client::getMessage()"), raises \c POP3-SERVER-ERROR (\c POP3-FETCH-ERROR in
       @ref Pop3Client::Pop3RetrPollOperation "Pop3RetrPollOperation") before anything is sent; the list variant
       of @ref Pop3Client::Pop3Client::del() "Pop3Client::del()" checks every ID before it deletes any message
     - A user name or password with a NUL, CR or LF character, which would end the \c USER, \c PASS or \c APOP

@@ -68,12 +68,12 @@ module QoreModelRegistry {
     are isolated from other tenants. A single shared registry instance can serve
     multiple independent tenants with full data isolation.
 
-    The artifact storage layer supports both native Qore \c .qml models and
+    The artifact storage layer supports both native Qore <tt>.qml</tt> models and
     multi-file model packages. A package can contain an ONNX model, HuggingFace
     \c tokenizer.json, model \c config.json, SafeTensors weights, generation
     configuration, and other named artifacts. The registry inspects package
     metadata safely: JSON and SafeTensors headers are parsed, but PyTorch pickle
-    artifacts (\c .pt, \c .pth, \c .bin) are never deserialized or executed.
+    artifacts (<tt>.pt</tt>, <tt>.pth</tt>, <tt>.bin</tt>) are never deserialized or executed.
 
     Locally executable artifacts use explicit runtime metadata:
     - native Qore ML artifacts use the \c qore-ml runtime
@@ -81,7 +81,18 @@ module QoreModelRegistry {
     - SafeTensors/PyTorch source packages are metadata-only until converted to
       ONNX or connected to an external runtime
 
-    @par Single-Tenant Example:
+    Documentation:
+    - @subpage qoremodelregistrygettingstarted "Getting Started": registering, loading and tagging models, and
+      multi-tenant registries
+    - @subpage qoremodelregistrycookbook "Cookbook": complete examples for HuggingFace/ONNX packages, ONNX
+      deployment contracts, package registration through the DataProvider API, and safe PyTorch metadata
+    - @subpage qoremodelregistryreleasenotes "Release Notes": the changes in each version
+*/
+/** @page qoremodelregistrygettingstarted QoreModelRegistry Getting Started
+
+    @tableofcontents
+
+    @section qoremodelregistrygettingstartedsingletenant Single-Tenant Example
     @code{.py}
 %requires QoreModelRegistry
 %requires ml
@@ -108,7 +119,7 @@ reg.tag("customer-segments", vid, "production");
 auto prod_model = reg.loadByTag("customer-segments", "production");
     @endcode
 
-    @par Multi-Tenant Example:
+    @section qoremodelregistrygettingstartedmultitenant Multi-Tenant Example
     @code{.py}
 %requires QoreModelRegistry
 
@@ -131,7 +142,13 @@ QoreModelRegistry::ModelRegistry admin({"path": "/var/models"});
 list<string> tenants = admin.listTenants();  # ("acme-corp", "globex-inc")
     @endcode
 
-    @par HuggingFace/ONNX Package Example:
+    See @ref qoremodelregistrycookbook for complete examples with model packages.
+*/
+/** @page qoremodelregistrycookbook QoreModelRegistry Cookbook
+
+    @tableofcontents
+
+    @section qoremodelregistrycookbookonnxpackage HuggingFace/ONNX Package Example
     @code{.py}
 %requires QoreModelRegistry
 %requires ml
@@ -215,7 +232,7 @@ QoreModelRegistry::ModelExecutableAdapter optimized =
     reg.loadOnnxArtifactAdapter("bge-small-en", vid, "model.cpu.ort", NOTHING);
     @endcode
 
-    @par ONNX Deployment Contract Example:
+    @section qoremodelregistrycookbookonnxdeployment ONNX Deployment Contract Example
     @code{.py}
 %requires QoreModelRegistry
 %requires QoreOnnxTools
@@ -293,7 +310,7 @@ if (it.next()) {
 }
     @endcode
 
-    @par DataProvider Package Registration Example:
+    @section qoremodelregistrycookbookdataprovider DataProvider Package Registration Example
     @code{.py}
 %requires QoreModelRegistry
 
@@ -317,7 +334,7 @@ AbstractDataProvider artifacts = versions.getChildProvider(version.version_id);
 
 hash<auto> tokenizer_note = artifacts.createRecord({
     "artifact_name": "tokenizer-notes.json",
-    "artifact_data": binary("{\"source\":\"curated\"}"),
+    "artifact_data": binary('{"source":"curated"}'),
     "role": "metadata",
     "format": "json",
     "safe_to_parse": True,
@@ -330,8 +347,12 @@ while (it.next()) {
 }
     @endcode
 
-    @par Safe PyTorch Metadata Example:
+    @section qoremodelregistrycookbookpytorch Safe PyTorch Metadata Example
     @code{.py}
+%requires QoreModelRegistry
+
+QoreModelRegistry::ModelRegistry reg({"path": "/var/models"});
+
 string vid = reg.registerPackage("/srv/models/torch-source", {
     "name": "torch-source",
 });
@@ -345,9 +366,9 @@ printf("kind=%s safety=%s executable=%y\n",
 # throws a descriptive ML-REGISTRY-ERROR instead of attempting unsafe execution.
 reg.loadExecutable("torch-source", vid);
     @endcode
+*/
+/** @page qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
 
-    @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
-
-    @subsection qoremodelregistry_1_0 QoreModelRegistry Module Version 1.0
+    @section qoremodelregistry_1_0 QoreModelRegistry Module Version 1.0
     - initial release
 */

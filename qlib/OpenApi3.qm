@@ -62,7 +62,7 @@ module OpenApi3 {
 
     @section openapi3intro OpenApi3 Module Introduction
 
-    The %OpenApi3 module provides a <a href="https://swagger.io/">OpenApi 3 REST API validation API</a> to %Qore.
+    The %OpenApi3 module provides an <a href="https://swagger.io/">OpenApi 3 REST API validation API</a> to %Qore.
 
     The primary classes provided by this module:
     - @ref OpenApi3::OpenApi3Loader "OpenApi3Loader": provides static methods for loading %OpenApi3 schemas
@@ -75,9 +75,21 @@ module OpenApi3 {
 
     JSON and YAML serialization and deserialization are supported; XML is currently not supported.
 
-    @section openapi3_usage OpenApi3 Usage
+    @section openapi3docs OpenApi3 Documentation
 
-    @subsection openapi3_client OpenApi3 Client-Side Usage
+    - @subpage openapi3_usage "OpenApi3 Usage": REST schema validation on the client side with RestClientIo and on
+      the server side with RestHandler
+    - @subpage openapi3_generator "OpenApi3 Schema Generator": generating OpenAPI 3.0.3 schemas from \@SCHEMA
+      blocks in source code, with the API and the \c qore-openapi3-gen tool
+    - @subpage openapi3schemasupport "Schema Support": OpenAPI 3.1 constructs, schema composition, and security
+      requirements
+    - @subpage openapi3_relnotes "OpenApi3 Module Release Notes": the changes in each version
+*/
+/** @page openapi3_usage OpenApi3 Usage
+
+    @tableofcontents
+
+    @section openapi3_client OpenApi3 Client-Side Usage
 
     Use the \a openapi3 or \a validator options in the \c RestClientIo::constructor() call to use
     <a href="https://swagger.io/">OpenApi 3</a> REST schema validation on the client side with the
@@ -128,7 +140,7 @@ AbstractRestSchemaValidator schema = rc.getValidator();
 schema.setBasePath("/new/path");
     @endcode
 
-    @subsection openapi3_server OpenApi3 Server-Side Usage
+    @section openapi3_server OpenApi3 Server-Side Usage
 
     Enforce <a href="https://swagger.io/">OpenApi3</a> REST API validation on the server side by passing a
     @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" object to the \c RestHandler::constructor() call as in the
@@ -144,19 +156,21 @@ schema.setBasePath("/new/path");
 OpenApi3Schema openapi3 = OpenApi3Loader::fromFile(ENV.SCHEMA_DIR + DirSep + "MySchema.yaml");
 RestHandler handler(NOTHING, openapi3);
     @endcode
+*/
+/** @page openapi3_generator OpenApi3 Schema Generator
 
-    @section openapi3_generator OpenApi3 Schema Generator
+    @tableofcontents
 
     The %OpenApi3 module includes classes for generating OpenAPI 3.0.3 schemas from Qore source code
     using \@SCHEMA documentation blocks.
 
-    @subsection openapi3_generator_classes Generator Classes
+    @section openapi3_generator_classes Generator Classes
 
     - @ref OpenApi3::OpenApi3SchemaTokenizer "OpenApi3SchemaTokenizer": parses \@SCHEMA blocks from source code
     - @ref OpenApi3::OpenApi3TypeMapper "OpenApi3TypeMapper": maps Qore types to OpenAPI types
     - @ref OpenApi3::OpenApi3SchemaGenerator "OpenApi3SchemaGenerator": generates complete OpenAPI 3.0.3 schemas
 
-    @subsection openapi3_schema_block Schema Block Format
+    @section openapi3_schema_block Schema Block Format
 
     Document REST endpoints using \@SCHEMA blocks in Qore source code comments:
 
@@ -178,7 +192,7 @@ RestHandler handler(NOTHING, openapi3);
     @ENDSCHEMA
 * /
 hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
-    // implementation
+    # implementation
 }
     @endverbatim
 
@@ -197,11 +211,11 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
     |\c date|string|date-time
     |\c binary|string|binary
     |\c hash|object|-
-    |\c hash<TypeName>|\$ref: "#/components/schemas/TypeName"|-
-    |\c list<T>|array (items: T)|-
-    |\c *type|type + nullable: true|-
+    |<tt>hash&lt;TypeName&gt;</tt>|\$ref: "#/components/schemas/TypeName"|-
+    |<tt>list&lt;T&gt;</tt>|array (items: T)|-
+    |<tt>*type</tt>|type + nullable: true|-
 
-    @subsection openapi3_generator_usage Generator Usage
+    @section openapi3_generator_usage Generator Usage
 
     @par Programmatic API
     @code{.py}
@@ -252,24 +266,30 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
 #   -d, --description=DESC API description
 #   -s, --server=URL       Server URL (can be repeated)
 #   -b, --base-path=PATH   Base path prefix for endpoints
+#   -v, --verbose          Increase verbosity
+#   -h, --help             Show the help message
     @endcode
+*/
+/** @page openapi3schemasupport Schema Support
+
+    @tableofcontents
 
     @section openapi3_31 OpenAPI 3.1 Support
 
-    Documents declaring \c "openapi": \c "3.1.x" are supported alongside 3.0.x; call
+    Documents declaring <tt>&quot;openapi&quot;: &quot;3.1.x&quot;</tt> are supported alongside 3.0.x; call
     @ref OpenApi3::OpenApi3Schema::is31OrLater() "OpenApi3Schema::is31OrLater()" to determine which specification
     version a loaded schema declares.  The JSON Schema 2020-12 constructs adopted by OpenAPI 3.1 are handled as
     follows.
 
     |!Construct|!Handling
-    |\c type as a list (ex: \c {["string", "null"]})|the first non-\c "null" entry is the schema type; a \c "null" \
-entry sets @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"
+    |\c type as a list (ex: <tt>[&quot;string&quot;, &quot;null&quot;]</tt>)|the first non-\c "null" entry is the schema type; a \
+\c "null" entry sets @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"
     |\c type as the scalar string \c "null"|the schema is unconstrained (type \c "any") and \
 @ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"; @ref OpenApi3::SchemaObject::nullType "nullType" \
 is set
-    |\c "null" as an \c anyOf / \c oneOf member|the composition is @ref RestSchemaValidator::AbstractSchemaObject::nullable \
-"nullable"; the \c "null" member is excluded from the union type, so \c {anyOf: [{type: "string"}, {type: "null"}]} \
-produces the same type as \c {type: ["string", "null"]}
+    |\c "null" as an \c anyOf / \c oneOf member|the composition is \
+@ref RestSchemaValidator::AbstractSchemaObject::nullable "nullable"; the \c "null" member is excluded from the union type, so \
+<tt>{anyOf: [{type: &quot;string&quot;}, {type: &quot;null&quot;}]}</tt> produces the same type as <tt>{type: [&quot;string&quot;, &quot;null&quot;]}</tt>
     |\c discriminator as an object|\c propertyName is required and gives \
 @ref RestSchemaValidator::AbstractSchemaObject::discriminator "discriminator"; \c mapping, if present, gives \
 @ref OpenApi3::SchemaObject::discriminatorMapping "discriminatorMapping".  The Swagger 2.0 string form is also \
@@ -278,7 +298,7 @@ accepted
     |\c examples as a list|available as @ref OpenApi3::SchemaObject::examples "SchemaObject::examples"
     |\c contentEncoding / \c contentMediaType|available as the members of the same names
     |top-level \c webhooks|parsed as @ref OpenApi3::OpenApi3Schema::webhooks "OpenApi3Schema::webhooks"
-    |\c info.summary, SPDX \c license.identifier, \c jsonSchemaDialect|parsed
+    |<tt>info.summary</tt>, SPDX <tt>license.identifier</tt>, \c jsonSchemaDialect|parsed
     |\c mutualTLS security schemes|parsed
     |\c prefixItems, \c const|validated and preserved in serialized data types
     |\c unevaluatedProperties|accepted; not modeled in the %Qore type system
@@ -312,10 +332,11 @@ or a date, and a \c date-time string property of an object alternative a date
     Schemes within a hash are combined with AND, hashes are alternatives (OR), and an empty hash
     allows anonymous access. This supports APIs requiring simultaneous credentials, such as an
     API key and token. Invalid scope lists and undefined schemes are rejected.
+*/
+/** @page openapi3_relnotes OpenApi3 Module Release Notes
 
-    @section openapi3_relnotes OpenApi3 Module Release Notes
 
-    @subsection openapi3_1_0 OpenApi3 v1.0
+    @section openapi3_1_0 OpenApi3 v1.0
     - initial release
 */
 
@@ -1566,7 +1587,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         type
         @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an Accept
+        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an Accept
         header field is present, and if the server cannot send a response which is acceptable according to the
         combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To ensure this
         happens, if an Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must be thrown
@@ -2218,7 +2239,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         type
         @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an Accept
+        @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an Accept
         header field is present, and if the server cannot send a response which is acceptable according to the
         combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To ensure this
         happens, if an Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must be thrown
@@ -7310,8 +7331,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         list names
         @param location the location of the schema in its document, if known; a reference is identified by the
         schema it refers to, and a schema with the same name and content as one parsed before is that schema,
-        with its location; see @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity()
-        "getSchemaIdentity()"
+        with its location; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type

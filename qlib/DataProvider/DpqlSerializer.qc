@@ -101,7 +101,7 @@ public const DpqlOperatorPrecedence = {
 #! Operators whose grouping cannot change the result
 /** Re-parsing rebuilds a left-associative tree, so an argument at the same precedence as its
     parent comes back re-associated. For these operators that is harmless — \c a && (b && c) and
-    \c (a && b) && c answer the same question — so the parentheses are noise and are dropped.
+    <tt>(a</tt> && b) && c answer the same question — so the parentheses are noise and are dropped.
 
     Everything else keeps them, and \c + is deliberately not on this list: it concatenates when an
     operand is a string, so \c 1 + (2 + "a") is \c "12a" while \c 1 + 2 + "a" is \c "3a". Rendering
@@ -226,7 +226,7 @@ public class DpqlSerializer {
         LOOSER than the context returned here.
 
         The first argument never needs them: it is where left-associative parsing puts a
-        same-precedence child back, so \c (1 - 2) - 3 reads as \c 1 - 2 - 3 and comes back
+        same-precedence child back, so <tt>(1</tt> - 2) - 3 reads as \c 1 - 2 - 3 and comes back
         identical. A later argument does, because re-parsing would re-associate it — and
         \c 1 - (2 - 3) rendered as \c 1 - 2 - 3 is not the same expression, it is 2 rendered as -4.
 
@@ -636,7 +636,7 @@ public class DpqlSerializer {
     }
 
     #! Returns a template reference as DPQL writes it
-    /** A value of letters, digits, \c _, \c . and \c * is written as it is (\c $local:order.id); any other value,
+    /** A value of letters, digits, \c _, <tt>.</tt> and \c * is written as it is (\c $local:order.id); any other value,
         and an empty one, is written in braces (\c $local:{order id}, \c $var:{}), as \c $local: without a value is
         not a template
 
@@ -668,7 +668,7 @@ string dpql = DpqlSerializer::templateReference("local", "order id") + " == 1";
 
     #! Returns the DPQL field reference for a field path, as the serializer writes it
     /** A path that the tokenizer reads bare, in any script, is written bare (<tt>\@order.id</tt>); any other is
-        quoted (<tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>)
+        quoted (<tt>\@&quot;create.order-id&quot;</tt>, <tt>\@&quot;Unit\\.Price&quot;</tt>)
 
         @param field the field path (the \c field of a @ref DataProviderFieldReference)
 
@@ -692,7 +692,7 @@ string dpql = DpqlSerializer::fieldReference("Unit\\.Price") + " > 100";
     #! Returns an accessor or wildcard expression as the serializer writes it with accessors, or @ref nothing
     /** An index, slice or key accessor, or a list or hash wildcard, whose value is a field reference or another
         accessor is written as accessors after the field reference: <tt>\@orders[*].id</tt>, <tt>\@items[0]</tt>,
-        <tt>\@h{a, "b c"}</tt>, <tt>\@prices{*}.amount</tt>.  Any other expression, or one whose indexes, keys or
+        <tt>\@h{a, &quot;b c&quot;}</tt>, <tt>\@prices{*}.amount</tt>.  Any other expression, or one whose indexes, keys or
         wildcard body cannot be written as accessors, gives @ref nothing.
 
         @param exp the expression
@@ -734,7 +734,7 @@ string dpql = DpqlSerializer::fieldReference("Unit\\.Price") + " > 100";
     #! Returns the DPQL field reference to one key of a record
     /** A key that the tokenizer reads bare and that has no dot is written <tt>\@key</tt>; any other is quoted, with
         its dots escaped, as a dot in a field reference separates the parts of a path: the key <tt>Unit.Price</tt> is
-        <tt>\@"Unit\\.Price"</tt>, and the key <tt>order-id</tt> is <tt>\@"order-id"</tt>
+        <tt>\@&quot;Unit\\.Price&quot;</tt>, and the key <tt>order-id</tt> is <tt>\@&quot;order-id&quot;</tt>
 
         @param key the key, such as the name of a field of a record type
 
@@ -760,7 +760,7 @@ string dpql = DpqlSerializer::fieldReferenceForKey("Unit.Price") + " == 10";
     /** The keys are joined into a field path, each escaped with
         @ref AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()", and the path is
         written as the serializer writes a field reference: bare if the tokenizer reads it bare
-        (<tt>\@create.items</tt>), quoted otherwise (<tt>\@"create.order-id"</tt>, <tt>\@"order.Unit\\.Price"</tt>)
+        (<tt>\@create.items</tt>), quoted otherwise (<tt>\@&quot;create.order-id&quot;</tt>, <tt>\@&quot;order.Unit\\.Price&quot;</tt>)
 
         @param key_list the keys of the path, the first a field of the record
 
@@ -785,7 +785,7 @@ string dpql = DpqlSerializer::fieldReferenceForPath(("create", "order-id"));
     #! Returns a key as it is written after the dot that follows an accessor
     /** After an accessor, <tt>.name</tt> is the key \c name (<tt>\@orders[*].id</tt>), and a key that is not a bare
         member name is quoted after the dot, where the quoted text is the one key, dots included:
-        <tt>.\@"Unit.Price"</tt>; a backslash in it is written <tt>\\\\</tt> and a quote <tt>\\"</tt>
+        <tt>.\@&quot;Unit.Price&quot;</tt>; a backslash in it is written <tt>\\\\</tt> and a quote <tt>\\&quot;</tt>
 
         @param key the key
 
@@ -809,8 +809,8 @@ string dpql = "@orders[*]." + DpqlSerializer::memberNameForKey("Unit.Price");
 
     #! Returns a field path as it is written between the quotes of <tt>\@"..."</tt>
     /** The dots of the path are written as they are, as they separate its parts in a quoted name too; a dot that
-        is part of a key is escaped in the path (<tt>a\\.b</tt>) and is written so (<tt>\@"a\\.b"</tt>); any other
-        backslash is written <tt>\\\\</tt>, and a quote <tt>\\"</tt>
+        is part of a key is escaped in the path (<tt>a\\.b</tt>) and is written so (<tt>\@&quot;a\\.b&quot;</tt>); any other
+        backslash is written <tt>\\\\</tt>, and a quote <tt>\\&quot;</tt>
 
         @param field the field path
 
@@ -839,7 +839,7 @@ string dpql = "@orders[*]." + DpqlSerializer::memberNameForKey("Unit.Price");
         return rv;
     }
 
-    #! Serializes a wildcard accessor as it is written: the source, \c [*] or \c {*}, and the accessors after it
+    #! Serializes a wildcard accessor as it is written: the source, <tt>[*]</tt> or \c {*}, and the accessors after it
     /** An expression for each item that the accessor syntax cannot write is written with \c map, which is what the
         wildcard means; this only happens with an expression that was not parsed from DPQL.
 
@@ -939,7 +939,7 @@ string dpql = "@orders[*]." + DpqlSerializer::memberNameForKey("Unit.Price");
     }
 
     #! Returns the field path that the accessors after a wildcard start with, or @ref nothing
-    /** After \c [*] the path is written <tt>.name.name</tt>, or <tt>{"key"}</tt> for a single key that is not a
+    /** After <tt>[*]</tt> the path is written <tt>.name.name</tt>, or <tt>{&quot;key&quot;}</tt> for a single key that is not a
         name; after \c {*} it is the path after \c value
 
         @since DataProvider 3.10
@@ -1039,7 +1039,7 @@ string dpql = "@orders[*]." + DpqlSerializer::memberNameForKey("Unit.Price");
     #! Serializes the key accessor of a DP_FUNC_KEY expression whose keys are literals, without its base
     /** A single key that is a name, after an accessor, is written <tt>.name</tt>, as the parser reads
         <tt>.name</tt> after an accessor (<tt>\@create.items[0].id</tt>); other keys are written <tt>{key}</tt>,
-        quoted if they are not bare keys (<tt>{"a b"}</tt>).
+        quoted if they are not bare keys (<tt>{&quot;a b&quot;}</tt>).
 
         After a field reference, a key is always written <tt>{key}</tt>: <tt>\@a.b</tt> is the field \c a.b, not the
         key \c b of the field \c a, so that the expression is parsed back as it is.

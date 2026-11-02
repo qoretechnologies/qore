@@ -59,7 +59,7 @@ module ElasticSearchLoggerAppender {
 
     @htmlonly
     <div class="image">
-      <img src="elastic-logo.svg" alt="ElasticSearch Logo" style="width:40%;">
+      <img src="elastic-logo.svg" width="96" alt="ElasticSearch Logo">
     </div>
     @endhtmlonly
 

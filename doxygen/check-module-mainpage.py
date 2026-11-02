@@ -58,6 +58,37 @@ class PageParser(HTMLParser):
         self.stack[-1].children.append(data)
 
 
+# a module logo has a fixed size in pixels, never a size relative to the page: square logos (up to 2:1) are 96 pixels
+# wide, wider wordmarks 48 pixels high (see design/qore-module-structure.md)
+LOGO_SIZES = ({'width': '96'}, {'height': '48'})
+IMG = re.compile(r'<img\s[^>]*>', re.IGNORECASE)
+ATTR = re.compile(r'([A-Za-z-]+)\s*=\s*"([^"]*)"')
+
+
+def logo_size_issue(attrs):
+    """Returns an error message if a logo image does not have one of the standard sizes, or None."""
+    size = {key: attrs[key] for key in ('width', 'height') if key in attrs}
+    style = attrs.get('style') or ''
+    if re.search(r'\b(width|height)\s*:', style) or size not in LOGO_SIZES:
+        shown = ' '.join(f'{key}="{value}"' for key, value in sorted(attrs.items()) if key in ('width', 'height', 'style'))
+        return (f'logo {attrs.get("src", "")} has the size [{shown or "none"}]; a logo has width="96", or height="48" '
+                'for a wordmark wider than 2:1, and no style size')
+    return None
+
+
+def inspect_logo_sources(text):
+    """Returns a list of (line number, message) for each logo image of documentation source text with another size."""
+    issues = []
+    for match in IMG.finditer(text):
+        attrs = {key.lower(): value for key, value in ATTR.findall(match.group())}
+        if 'logo' not in (attrs.get('src', '') + attrs.get('alt', '')).lower() or attrs.get('src', '').startswith('cid:'):
+            continue
+        issue = logo_size_issue(attrs)
+        if issue:
+            issues.append((text.count('\n', 0, match.start()) + 1, issue))
+    return issues
+
+
 def inspect_mainpage(html, logo=None):
     parser = PageParser()
     parser.feed(html)
@@ -90,8 +121,13 @@ def inspect_mainpage(html, logo=None):
             links = [a for a in body[0].find('a') if a.attrs.get('href')]
             if len(links) == 1 and body[0].text() == links[0].text() and not body[0].find('img'):
                 issues.append(f'redundant heading with a single navigation link: {nodes[start].text()}')
-    if logo and not any(image.attrs.get('src') == logo for node in intro_nodes for image in node.find('img')):
+    logo_images = [image for node in intro_nodes for image in node.find('img') if image.attrs.get('src') == logo]
+    if logo and not logo_images:
         issues.append(f'logo is missing from the intro section: {logo}')
+    for image in logo_images:
+        issue = logo_size_issue(dict(image.attrs))
+        if issue:
+            issues.append(issue)
     return issues
 
 
@@ -99,8 +135,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('pages', nargs='+', type=Path)
     parser.add_argument('--logo', help='expected logo filename in the intro section')
+    parser.add_argument('--sources', action='store_true',
+                        help='check the logo image sizes of documentation sources instead of rendered pages')
     args = parser.parse_args()
     failures = 0
+    if args.sources:
+        for path in args.pages:
+            try:
+                issues = inspect_logo_sources(path.read_text(encoding='utf-8', errors='replace'))
+            except OSError as error:
+                issues = [(0, str(error))]
+            for number, issue in issues:
+                print(f'{path}:{number}: {issue}', file=sys.stderr)
+                failures += 1
+        print(f'Checked {len(args.pages)} sources; {failures} logo size errors')
+        return int(bool(failures))
     for page in args.pages:
         try:
             issues = inspect_mainpage(page.read_text(encoding='utf-8'), args.logo)

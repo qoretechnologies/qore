@@ -118,7 +118,7 @@
     |\c u|extends Posix character matching to Unicode characters
     |\c g|makes global substitutions or global extractions (only applicable with the substitution and extraction \
         operators)
-    |\c U|makes quantifiers ungreedy by default; individual quantifiers can be made greedy by appending \c ? \
+    |\c U|makes quantifiers ungreedy by default; individual quantifiers can be made greedy by appending <tt>?</tt> \
         (since %Qore 3.0)
 
     @section qore_regex_brace_delimiters Brace-Delimited Regular Expressions
@@ -249,8 +249,8 @@
     @section qore_regex_named_groups Named Capture Groups
 
     %Qore supports PCRE2 named capture groups using <tt>(?&lt;name&gt;...)</tt> or <tt>(?P&lt;name&gt;...)</tt> syntax.  Named groups
-    can be extracted as hash values using regex_extract_named(), the @ref Qore::Regex::extractNamedGroups()
-    "Regex::extractNamedGroups()" method, or the @ref Qore::RegexExtract::extractNamedGroups()
+    can be extracted as hash values using regex_extract_named(), the
+    @ref Qore::Regex::extractNamedGroups() "Regex::extractNamedGroups()" method, or the @ref Qore::RegexExtract::extractNamedGroups()
     "RegexExtract::extractNamedGroups()" method.
 
     @par Example:

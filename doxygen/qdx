@@ -16,6 +16,7 @@ const Opts = {
     "extra_pfx":  "X,extra-prefix=s",
     "extra":      "E,extra-files=s@",
     "help":       "h,help",
+    "nohl":       "H,no-highlight",
     "keepdollar": "k,keep-dollar",
     "moddx":      "M,module-dx=s",
     "nmp":        "N,no-mainpage",
@@ -91,8 +92,10 @@ class qdx {
   -S,--strict-tables  treat documentation table issues as errors
   -t,--tag=ARG        tag argument for doxyfile
   -T,--top-srcdir=ARG the top source directory
+  -H,--no-highlight   do not highlight Qore code fragments when post-processing
   -h,--help           this help text
   Env: QORE_DOC_DEFINES=NAME[,NAME...] for conditional parsing symbols
+       QORE_DOC_NO_CODE_HIGHLIGHT=1 is the same as --no-highlight
 ", get_script_name());
       exit(1);
     }
@@ -253,9 +256,16 @@ class qdx {
 
     postProcessIntern(string ifn, bool tex) {
         FileInputStream inf(ifn);
-        InputStreamLineIterator ins = tex
-            ? new QorePostProcessingTexInputStreamLineIterator(inf)
-            : new QorePostProcessingInputStreamLineIterator(inf);
+        InputStreamLineIterator ins;
+        if (tex) {
+            ins = new QorePostProcessingTexInputStreamLineIterator(inf);
+        } else {
+            QorePostProcessingInputStreamLineIterator i(inf);
+            if (!highlightCode(ifn)) {
+                i.setHighlightCode(False);
+            }
+            ins = i;
+        }
 
         string ofn = ifn + ".new";
 
@@ -266,6 +276,18 @@ class qdx {
         on_success rename(ofn, ifn);
 
         map w.write($1), ins;
+    }
+
+    # returns True if the Qore code fragments of the given HTML or JS file are highlighted
+    private bool highlightCode(string ifn) {
+        *string nohl = ENV.QORE_DOC_NO_CODE_HIGHLIGHT;
+        if (o.nohl || (nohl && nohl.toBool())) {
+            return False;
+        }
+        # the documentation of Python and Java sources has code in these languages; doxygen lists the sources at the
+        # end of the page, after the code
+        string html = File::readTextFile(ifn);
+        return html !~ /was generated from the following files?:.*?\.(java|py)<\/li>/s;
     }
 
     fixParam(reference line) {

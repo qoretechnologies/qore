@@ -393,8 +393,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
     #! Checks the field options of the processor
     /** The options named \c fields or ending in \c _field name fields of the input by their paths: a path with the
         DPQL wildcard <tt>[*]</tt> or <tt>{*}</tt> is refused
-        (@ref DataProvider::AbstractDataProvider::checkFieldPathOption()
-        "AbstractDataProvider::checkFieldPathOption()"), and so are two fields in \c fields that give the same output
+        (@ref DataProvider::AbstractDataProvider::checkFieldPathOption() "AbstractDataProvider::checkFieldPathOption()"), and so are two fields in \c fields that give the same output
         field name (@ref checkDerivedFieldNames()), or a \c target_field that gives the same name as a different field
         in \c fields: the events give the target with the fields, named the same way
 
@@ -435,8 +434,7 @@ public class AbstractDataProviderMLProcessor inherits DataProvider::AbstractData
     #! Returns the name of an output field derived from an input field: its path as it is written, with a prefix or
     #! a suffix
     /** The path is written as its keys joined with dots
-        (@ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
-        "AbstractDataProvider::getFieldPathDisplayName()"): the field <tt>Unit\\.Price</tt> gives
+        (@ref DataProvider::AbstractDataProvider::getFieldPathDisplayName() "AbstractDataProvider::getFieldPathDisplayName()"): the field <tt>Unit\\.Price</tt> gives
         \c Unit.Price_normalized, and \c order.id gives \c order.id_ewma
 
         @param field_path the field path of the input field

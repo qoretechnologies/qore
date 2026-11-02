@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ExceptionHandlerSameFrameTest
+
+#! Tests that an exception raised in a try block is handled by its catch block in the same function in every execution mode
+/** IR code branches from an instruction that raises an exception to the handler of the enclosing try block in the
+    same function; an instruction without that branch leaves the function, and the exception escaped the try block.
+    The worker raises an exception from each such instruction, inside a try block, and its output must be that of
+    the AST interpreter in every execution mode and as a qcc-compiled executable:
+    - a background expression whose thread cannot be started (a method call on a local, an argument evaluated by the
+      background helper, a function call and a static method call)
+    - a regex case of a switch statement whose match fails, and a case whose comparison fails
+    - a division by zero in a compound assignment to an element of a fixed list, which the optimizer replaces with a
+      scalar operation
+    - a typed hash literal, with constant keys and with keys evaluated at runtime, and a typed list literal, with a
+      value of the wrong type
+    - the destructor of a statement's temporary that raises when the statement ends, also in an if condition and in
+      a loop over a temporary list; and without a handler in the function, where the exception leaves the function
+
+    The on_exit handlers of the try blocks run before the handlers, as with the AST interpreter.
+*/
+class ExceptionHandlerSameFrameTest inherits QUnit::Test {
+    public {
+        #! the output of the cases that start a thread, if the thread stack size can be set
+        const BackgroundExpected = (
+            "  on_exit",
+            "background method: caught THREAD-CREATION-FAILURE",
+            "  on_exit",
+            "background helper: caught THREAD-CREATION-FAILURE",
+            "  on_exit",
+            "background function: caught THREAD-CREATION-FAILURE",
+            "  on_exit",
+            "background static method: caught THREAD-CREATION-FAILURE",
+        );
+
+        #! the output of the other cases
+        const Expected = (
+            "  on_exit",
+            "switch regex: caught REGEX-ERROR",
+            "  on_exit",
+            "switch case: caught ENCODING-CONVERSION-ERROR",
+            "  caught DIVISION-BY-ZERO",
+            "div int: -1",
+            "div int ok: 7",
+            "  caught DIVISION-BY-ZERO",
+            "div float: -1.0",
+            "div float ok: 2.5",
+            "  on_exit",
+            "hash const keys: caught RUNTIME-TYPE-ERROR",
+            "  on_exit",
+            "hash const keys ok: {a: 1}",
+            "  on_exit",
+            "hash keys: caught RUNTIME-TYPE-ERROR",
+            "  on_exit",
+            "hash keys ok: {a: 1}",
+            "  on_exit",
+            "typed list: caught RUNTIME-TYPE-ERROR",
+            "  on_exit",
+            "discard temps: caught DTOR-ERR",
+            "  on_exit",
+            "discard temps if: caught DTOR-ERR",
+            "discard temps plain: caught DTOR-ERR",
+            "discard temps if plain: caught DTOR-ERR",
+            "discard temps loop: 1:DTOR-ERR 2:DTOR-ERR",
+            "  on_exit",
+            "discard temps out: escaped DTOR-ERR",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        #! the output expected from the worker
+        list<string> expected = ();
+    }
+
+    constructor() : QUnit::Test("ExceptionHandlerSameFrame", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a qore run from the PATH has no directory in its name; its library and qcc are found next to it
+        if (qore_bin !~ /\//) {
+            foreach string dir in ((ENV.PATH ?? "").split(":")) {
+                if (dir && is_executable(dir + "/" + qore_bin)) {
+                    qore_bin = dir + "/" + qore_bin;
+                    break;
+                }
+            }
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        worker = get_script_dir() + DirSep + "exception-handler-same-frame-worker.q";
+
+        # the worker runs every case in three rounds
+        for (int i = 0; i < 3; ++i) {
+            expected += sprintf("round %d", i);
+            if (HAVE_MANAGE_STACK) {
+                expected += BackgroundExpected;
+            }
+            expected += Expected;
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        string ast = run("ast");
+        checkOutput("ast", ast);
+        foreach string mode in ("ir", "jit", "tiered") {
+            string out = run(mode);
+            checkOutput(mode, out);
+            assertEq(ast, out, mode + " as ast");
+        }
+        # tiered execution after promotion to IR and JIT
+        string out = run("tiered", "--jit-ir-threshold=1 --jit-jit-threshold=1 ");
+        checkOutput("tiered, promoted", out);
+        assertEq(ast, out, "tiered, promoted as ast");
+    }
+
+    testCompiled() {
+        if (!is_file(qcc_bin)) {
+            testSkip(sprintf("no qcc binary at %y", qcc_bin));
+        }
+        TmpDir tmp("qore-exception-handler-same-frame-");
+        string exe = tmp.path + DirSep + "worker";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe)));
+    }
+
+    private string run(string mode, string opts = "") {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s%s",
+            libqore_dir, libqore_dir, qore_bin, mode, opts, worker));
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq(expected, lines, label + ": " + out);
+    }
+}

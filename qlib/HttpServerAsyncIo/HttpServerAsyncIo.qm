@@ -253,8 +253,8 @@ public namespace HttpServerAsyncIo {
         For HTTP/2, the \c hdr hash also includes:
         - \c method: The HTTP method
         - \c path: The request path
-        - \c :authority: The :authority pseudo-header value
-        - \c :scheme: The :scheme pseudo-header value
+        - <tt>:authority:</tt> The :authority pseudo-header value
+        - <tt>:scheme:</tt> The :scheme pseudo-header value
     */
     public hashdecl HttpConnectionInfo {
         #! The socket for this connection

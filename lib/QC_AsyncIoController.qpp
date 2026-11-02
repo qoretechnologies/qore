@@ -422,8 +422,13 @@ static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[Abstr
 }
 
 //! Cancels an operation by key on the global singleton
-/** @param key the operation key to cancel
-    @return @ref True "True" if an operation was found and canceled
+/** The operation is found on whichever I/O thread runs it.
+
+    @param key the operation key to cancel
+    @return @ref True "True" if an operation was found and canceled; when called on an I/O thread of the controller
+    (in a poll operation's callback, for example), an operation on another I/O thread is canceled asynchronously, as
+    an I/O thread never waits for another one, so @ref True "True" then only means that the cancel was requested, also
+    when no operation has the key
     @since %Qore 3.0
 */
 static bool AsyncIoController::cancelByKey(string key) [flags=NAMED_ARGS] {

@@ -120,6 +120,8 @@ module ProviderIndex {
       then not complete; an app that registered its info and connection scheme before failing is indexed with them;
       failures that are not those of individual apps or actions fail the build, and an index worker whose apps or
       actions failed indexes the others and succeeds
+    - an output directory that is not readable, writable, and traversable is reported as a
+      \c PROVIDER-INDEX-ERROR before the index is built
     - indexes written by this version require ProviderIndexUtil 1.2 or later
     - index dependencies now use exact registered module names rather than source or compiled artifact paths,
       so installing an equivalent compiled module does not change its dependency identity

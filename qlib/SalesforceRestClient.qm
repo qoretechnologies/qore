@@ -296,8 +296,8 @@ public const BulkJobContentTypes = {
 public class SalesforceRestClientBase {
     private {
         #! The instance URL; the org's API host, returned by the OAuth2 login as \c instance_url
-        /** Declared here rather than in @ref SalesforceRestClient::SalesforceRestClient
-            "SalesforceRestClient" so that the async client shares one implementation of the org
+        /** Declared here rather than in
+            @ref SalesforceRestClient::SalesforceRestClient "SalesforceRestClient" so that the async client shares one implementation of the org
             identity accessors below.
 
             @since %SalesforceRestClient 2.1
@@ -1764,8 +1764,8 @@ public class SalesforceRestClientIo inherits RestClientIo::RestClientIo, Salesfo
     #! Returns @ref True if this client is already rooted at a versioned REST API base
     /** @return @ref True if this client's connection path is a \c "/services/data/v<version>" base
 
-        @note the check is on @ref RestClientIo::RestClientIo::getConnectionPath()
-        "getConnectionPath()" rather than on the URL, because
+        @note the check is on
+        @ref RestClientIo::RestClientIo::getConnectionPath() "getConnectionPath()" rather than on the URL, because
         @ref RestClientIo::RestClientIo::getUrl() "getUrl()" returns the URL as a string and has no
         parsed path component.
 

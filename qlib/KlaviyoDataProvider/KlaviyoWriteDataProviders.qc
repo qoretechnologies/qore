@@ -603,8 +603,8 @@ public class KlaviyoSubscribeProfileDataProvider inherits KlaviyoHandWrittenData
 }
 
 #! Withdraws marketing consent for a profile
-/** The mirror of @ref KlaviyoDataProvider::KlaviyoSubscribeProfileDataProvider
-    "KlaviyoSubscribeProfileDataProvider", and hand-written for the same reason: Klaviyo withdraws consent
+/** The mirror of
+    @ref KlaviyoDataProvider::KlaviyoSubscribeProfileDataProvider "KlaviyoSubscribeProfileDataProvider", and hand-written for the same reason: Klaviyo withdraws consent
     by creating a bulk <b>delete</b> job whose body has the same shape.
 
     Which channels are withdrawn follows from what is supplied, exactly as it did in the application being

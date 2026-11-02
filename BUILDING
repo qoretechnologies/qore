@@ -41,6 +41,10 @@ for Perl-Compatible Regular Expressions. Install libpcre2-dev (Debian/Ubuntu), p
    - Core/Qore: OpenSSL 0.9.7 or higher (3.0 or better recommended)
    - QUIC/HTTP/3 support: OpenSSL 3.5 or higher (required for QUIC TLS API)
 	http://www.openssl.org
+The configuration fails, naming both libraries, when a shared library linked into the Qore library, or a
+library of a binary module that links OpenSSL itself, loads another OpenSSL than the one that Qore found:
+two OpenSSL libraries in one process crash when an object of one is used by the other.  Set
+OPENSSL_ROOT_DIR, or install a build of the library that uses the same OpenSSL.
 
 *) bzlib 1.0.4 or higher
 
@@ -67,9 +71,20 @@ Required for Zstandard compression support. Install libzstd-dev (Debian/Ubuntu),
 	https://lz4.github.io/lz4/
 Required for LZ4 compression support. Install liblz4-dev (Debian/Ubuntu), lz4-devel (RHEL/Fedora), or lz4-dev (Alpine).
 
-*) nghttp2
+*) nghttp2 1.70.0 or higher
 	https://nghttp2.org/
 Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu), nghttp2-devel (RHEL/Fedora), or nghttp2-dev (Alpine).
+When no adequate system installation is found, the pinned release is downloaded and linked statically
+(see "Downloaded Dependency Sources" below); this also applies to c-ares, ngtcp2 and nghttp3.  Installing
+the system packages gives faster builds and distribution security updates.
+
+*) c-ares 1.34.8 or higher
+	https://c-ares.org/
+Required for asynchronous DNS resolution, so that host name lookups never block the threads of the async
+I/O controller.  1.34.8 is the minimum because of CVE-2026-33630, CVE-2026-69184 and CVE-2026-69186.
+c-ares 1.34.7 and 1.34.8 can lose a query (c-ares issue 1280): the statically linked c-ares is patched,
+and Qore starts a lookup again whose query a system c-ares lost.
+Install libc-ares-dev (Debian/Ubuntu), c-ares-devel (RHEL/Fedora), or c-ares-dev (Alpine).
 
 *) Kerberos 5 / GSSAPI
 	https://web.mit.edu/kerberos/
@@ -78,7 +93,7 @@ Install libkrb5-dev (Debian/Ubuntu), krb5-devel (RHEL/Fedora), or krb5-dev (Alpi
 On macOS, install kerberos5 with MacPorts or krb5 with Homebrew when the system
 Kerberos headers are not sufficient for building the GSSAPI extension support.
 
-*) ngtcp2 + ngtcp2_crypto_ossl + nghttp3
+*) ngtcp2 1.25.0 or higher + ngtcp2_crypto_ossl + nghttp3 1.18.0 or higher
 	https://github.com/ngtcp2/ngtcp2
 	https://github.com/ngtcp2/nghttp3
 Required for QUIC/HTTP/3 support. The ngtcp2_crypto_ossl backend requires OpenSSL 3.5+ (the QUIC TLS API).
@@ -112,6 +127,31 @@ location to both the ngtcp2 and Qore builds:
 
     # Qore build with custom OpenSSL:
     cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DOPENSSL_ROOT_DIR=/opt/openssl-3.5
+
+*) Eigen3 3.4 or higher (Eigen 5.x is also accepted)
+	https://eigen.tuxfamily.org/
+Required for the linear algebra of the builtin ml module.  Install libeigen3-dev (Debian/Ubuntu),
+eigen3-devel (RHEL/Fedora), eigen-dev (Alpine), eigen (Homebrew), or eigen3 (MacPorts).
+
+*) ICU
+	https://icu.unicode.org/
+Required for the Unicode CLDR locale data of the builtin i18n module.  Install libicu-dev (Debian/Ubuntu),
+libicu-devel (RHEL/Fedora), icu-dev and icu-data-full (Alpine), icu4c (Homebrew), or icu (MacPorts).
+
+*) libprotobuf
+	https://protobuf.dev/
+Required for the builtin protobuf module.  Install libprotobuf-dev (Debian/Ubuntu), protobuf-devel
+(RHEL/Fedora), protobuf-dev (Alpine), protobuf (Homebrew), or protobuf3-cpp (MacPorts).
+
+*) ONNX Runtime (optional)
+	https://onnxruntime.ai/
+Enables the OnnxModel class of the ml module, which runs pre-trained ONNX models; without it, OnnxModel
+raises MISSING-FEATURE-ERROR and all native ML algorithms are still available.  Install onnxruntime-dev
+(Alpine) or onnxruntime (Homebrew), or a release from https://github.com/microsoft/onnxruntime/releases.
+-DQORE_WITH_ONNXRUNTIME=OFF disables it, and -DQORE_REQUIRE_ONNXRUNTIME=ON fails the configuration when
+it cannot be enabled.
+
+On macOS, CMake searches the MacPorts (/opt/local) and Homebrew prefixes for these dependencies.
 
 *) Rust toolchain with cargo (optional)
 	https://rustup.rs/
@@ -166,6 +206,16 @@ can provide a GitLab access token elsewhere.  The token is sent only to the mirr
 cmake -P cmake/QoreCheckThirdPartySources.cmake checks that every download in the build takes
 its source from cmake/third-party-sources.cmake; with -DQORE_THIRD_PARTY_MIRROR=<base URL>, it
 also checks that the mirror has every archive with its pinned SHA-256.
+
+
+Reproducible Builds
+-------------------
+
+The qpp and qcc tools take --file-prefix-map=<old>=<new> options, which map source paths in generated
+metadata, debug information and exception locations.  The CMake build passes each -ffile-prefix-map option
+of the C++ compiler flags (CMAKE_CXX_FLAGS and those of the build type) to both, for example:
+
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_CXX_FLAGS="-ffile-prefix-map=$PWD/..=/usr/src/qore"
 
 
 Documentation Without Java Bindings

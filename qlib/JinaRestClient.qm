@@ -53,8 +53,10 @@ module JinaRestClient {
 
     @section jinarestclientintro JinaRestClient Introduction
 
-    The %JinaRestClient module provides an API for calling
-    <a href="https://jina.ai">Jina AI</a> REST services — embeddings and reranking.
+    The %JinaRestClient module provides a REST client and a connection for the <a href="https://jina.ai">Jina AI</a>
+    API: embeddings, reranking, classification, models and batch processing; the
+    @ref jinadataproviderintro "JinaDataProvider" module also uses its connections for the Jina content services
+    (reading URLs, web search, segmentation, chat and DeepSearch).
 
     Jina exposes:
     - <tt>/v1/embeddings</tt> — embedding models (<tt>jina-embeddings-v3</tt>,

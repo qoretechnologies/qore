@@ -232,7 +232,7 @@ module MemcachedDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="memcached-logo.svg" alt="Memcached Logo" style="width:40%;">
+      <img src="memcached-logo.svg" width="96" alt="Memcached Logo">
     </div>
     @endhtmlonly
 

@@ -634,8 +634,8 @@ nothing JsonStreamWriter::nullValue() {
     - hashes become JSON objects
     - lists become JSON arrays
     - strings, integers, floats, booleans, and NOTHING/NULL are written as their JSON equivalents
-    - arbitrary-precision numbers are written with all of their digits, as by @ref Qore::Json::make_json()
-      "make_json()"; a float or number that is not an ordinary number (NaN or an infinity) is written as \c null
+    - arbitrary-precision numbers are written with all of their digits, as by
+      @ref Qore::Json::make_json() "make_json()"; a float or number that is not an ordinary number (NaN or an infinity) is written as \c null
 
     @par Example:
     @code{.py}

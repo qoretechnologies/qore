@@ -439,8 +439,7 @@ public const string DPAD_PASS_THROUGH = "pass-through";
 #! Modified pass-through data
 /** The output type is a modification of the input type based on the processor's configuration.
     The actual output type must be computed using
-    @ref AbstractDataProvider::getPipelineProcessorOutputTypeWithInputType()
-    "getPipelineProcessorOutputTypeWithInputType()" with the input type from the preceding
+    @ref AbstractDataProvider::getPipelineProcessorOutputTypeWithInputType() "getPipelineProcessorOutputTypeWithInputType()" with the input type from the preceding
     pipeline state.
 
     @since %DataProvider 3.6
@@ -2241,7 +2240,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @par Failure mode
         Returns @ref False on any error (scheme not registered, @c ConnectionProvider not loaded, @c cls
         absent, etc.).  This is the conservative default: if we cannot prove the scheme is REST, we do
-        not inject.  In normal init order, both real registration paths (qlib @c *RestClient.qm and
+        not inject.  In normal init order, both real registration paths (qlib <tt>*RestClient.qm</tt> and
         module-v8 @c TypeScriptActionInterface) register the scheme @em before the app, so this
         unknown-state path is not expected.
 

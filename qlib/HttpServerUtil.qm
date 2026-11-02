@@ -128,21 +128,24 @@ module HttpServerUtil {
     |\c user|*string|set by the authenticator if the request was authenticated to a specific user
     |\c uctx|*hash|any user thread context for the listener (see @ref HttpServer::HttpListenerInterface::addUserThreadContext() "HttpListenerInterface::addUserThreadContext()")
 
-    @section httpserverutil_relnotes HttpServerUtil Module Release Notes
+    See @subpage httpserverutil_relnotes "HttpServerUtil Module Release Notes" for the changes in each version.
+*/
+/** @page httpserverutil_relnotes HttpServerUtil Module Release Notes
 
-    @subsection httputil1_6 HttpServerUtil 1.6
+
+    @section httputil1_6 HttpServerUtil 1.6
     - fixed @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" to accept a response or header hash
       whose values all have the same type, such as a literal <tt>{"code": 204}</tt>; setting the response headers
       raised \c RUNTIME-TYPE-ERROR
-    - added @ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections()
-      "AbstractHttpSocketHandlerInterface::startClosingConnections()" and
+    - added
+      @ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections() "AbstractHttpSocketHandlerInterface::startClosingConnections()" and
       @ref HttpServer::AbstractHttpSocketHandlerInterface::waitForConnectionsClosed() "waitForConnectionsClosed()",
       which the HTTP server calls before it or a listener stops, so dedicated connections can be closed with their
       protocol's closing handshake, all at the same time
     - request handlers receive the compression level of each content encoding for response bodies compressed on the
       fly in \c cx."compression-levels", and the weight of each acceptable content encoding in
-      \c cx."header-info"."accept-encoding-weights"; @ref HttpServer::AbstractHttpRequestHandler::encodeBody()
-      "AbstractHttpRequestHandler::encodeBody()" accepts a compression level, and returns a string body as binary
+      \c cx."header-info"."accept-encoding-weights";
+      @ref HttpServer::AbstractHttpRequestHandler::encodeBody() "AbstractHttpRequestHandler::encodeBody()" accepts a compression level, and returns a string body as binary
       data for the \c identity encoding instead of raising a \c RUNTIME-TYPE-ERROR exception
     - generated response charset parameters canonicalize aliases such as \c utf8 to \c utf-8,
       allowing strict XML clients to parse the response; string stream bodies also receive
@@ -167,10 +170,8 @@ module HttpServerUtil {
       receives HTTP 413 (Content Too Large); before, a small compressed body could expand to an unbounded size in
       memory before any size limit applied (a "decompression bomb")
       - added the \c max_decoded_body_size listener option, the
-        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
-        "AbstractHttpRequestHandler::max_decoded_body_size" handler override,
-        @ref HttpServer::AbstractHttpRequestHandler::decodeRequestBody()
-        "AbstractHttpRequestHandler::decodeRequestBody()",
+        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size "AbstractHttpRequestHandler::max_decoded_body_size" handler override,
+        @ref HttpServer::AbstractHttpRequestHandler::decodeRequestBody() "AbstractHttpRequestHandler::decodeRequestBody()",
         and a \c max_size parameter to
         @ref HttpServer::AbstractHttpRequestHandler::decodeBody() "AbstractHttpRequestHandler::decodeBody()"
     - added @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()" and
@@ -200,22 +201,27 @@ module HttpServerUtil {
     - added \c sync option to allow non-blocking listener addition in async I/O mode
     - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support in decodeBody() and encodeBody()
       (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
+    - added the \c http_version option of @ref HttpServer::HttpListenerOptionInfo "HttpListenerOptionInfo" for
+      HTTP/2 and HTTP/3 mode control
+    - added @ref HttpServer::StreamResponseProducer "StreamResponseProducer", which streams a response body from a
+      worker thread for @ref Qore::InputStream "InputStream" bodies that cannot be read in the I/O thread on HTTP/2
+      and HTTP/3
 
-    @subsection httputil1_3 HttpServerUtil 1.3
+    @section httputil1_3 HttpServerUtil 1.3
     - allow authentication methods to set the call context
       (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
 
-    @subsection httputil1_2 HttpServerUtil 1.2
+    @section httputil1_2 HttpServerUtil 1.2
     - allow handlers to remove thread-local auth information after requests have been handled
 
-    @subsection httputil1_1 HttpServerUtil 1.1
+    @section httputil1_1 HttpServerUtil 1.1
     - implemented support for reloading X.509 certificate information without manually restarting listeners
       (<a href="https://github.com/qoretechnologies/qore/issues/4574">issue 4574</a>)
 
-    @subsection httputil1_0_12 HttpServerUtil 1.0.12
+    @section httputil1_0_12 HttpServerUtil 1.0.12
     - updated version to match %Qore and server version
 
-    @subsection httputil1_0 HttpServerUtil 1.0
+    @section httputil1_0 HttpServerUtil 1.0
     - fixed a bug handling wildcard address binds in
       @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4266">issue 4266</a>)
@@ -224,7 +230,7 @@ module HttpServerUtil {
     - added support for the Logger module for logging
       (<a href="https://github.com/qoretechnologies/qore/issues/4157">issue 4157</a>)
 
-    @subsection httputil0911 HttpServerUtil 0.9.11
+    @section httputil0911 HttpServerUtil 0.9.11
     - fixed a bug where it was not possible to include CORS headers or any context-sensitive information in a 401
       response
       (<a href="https://github.com/qoretechnologies/qore/issues/4136">issue 4136</a>)
@@ -232,18 +238,18 @@ module HttpServerUtil {
       <tt>Transfer-Encoding: chunked</tt> header in the response
       (<a href="https://github.com/qoretechnologies/qore/issues/4109">issue 4109</a>)
 
-    @subsection httputil095 HttpServerUtil 0.9.5
+    @section httputil095 HttpServerUtil 0.9.5
     - aligned version with the HttpServer module version
 
-    @subsection httputil094 HttpServerUtil 0.9.4
+    @section httputil094 HttpServerUtil 0.9.4
     - added support for sending chunked replies from an @ref Qore::InputStream "InputStream"
       (<a href="https://github.com/qoretechnologies/qore/issues/3702">issue 3702</a>)
 
-    @subsection httputil03121 HttpServerUtil 0.3.12.1
+    @section httputil03121 HttpServerUtil 0.3.12.1
     - improved sensitive data masking in log messages
       (<a href="https://github.com/qoretechnologies/qore/issues/2621">issue 2621</a>)
 
-    @subsection httputil0312 HttpServerUtil 0.3.12
+    @section httputil0312 HttpServerUtil 0.3.12
     - fixed a bug in AbstractAuthenticator::do401() where the \a msg argument was ignored
       (<a href="https://github.com/qoretechnologies/qore/issues/1047">issue 1047</a>)
     - added logic to allow sensitive data to be masked in log messages
@@ -251,13 +257,13 @@ module HttpServerUtil {
     - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - moved @ref HttpServer::parse_uri_query() to the @ref utilintro "Util" module
 
-    @subsection httputil03112 HttpServerUtil 0.3.11.2
+    @section httputil03112 HttpServerUtil 0.3.11.2
     - eliminated excess logging of each HTTP chunk sent or received
 
-    @subsection httputil03111 HttpServerUtil 0.3.11.1
+    @section httputil03111 HttpServerUtil 0.3.11.1
     - aligned version with HttpServer module version
 
-    @subsection httputil0311 HttpServerUtil 0.3.11
+    @section httputil0311 HttpServerUtil 0.3.11
     - moved here from the @ref httpserverintro "HttpServer" module, which imports this module with the \c reexport
       option
     - implemented support for notifying persistent connections when the connection is terminated while a persistent
@@ -296,8 +302,7 @@ public const date<relative> ReadTimeout = DefaultTimeout;
     @see
     - @ref HttpServer::HttpServerOptionInfo::max_decoded_body_size "HttpServerOptionInfo::max_decoded_body_size"
     - @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size "HttpListenerOptionInfo::max_decoded_body_size"
-    - @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
-      "AbstractHttpRequestHandler::max_decoded_body_size"
+    - @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size "AbstractHttpRequestHandler::max_decoded_body_size"
 
     @since HttpServerUtil 1.6
 */
@@ -580,8 +585,8 @@ public hashdecl HttpResponseInfo {
         HTTP/3 acknowledged), not necessarily read by the client application.
 
         The callback runs on a server thread (the request's thread or a handler pool thread, never an I/O
-        thread), after the handler's @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData()
-        "saveThreadLocalData()" has been called and before its
+        thread), after the handler's
+        @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData() "saveThreadLocalData()" has been called and before its
         @ref HttpServer::AbstractHttpRequestHandler::restoreThreadLocalData() "restoreThreadLocalData()" is called,
         as with @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()".  Exceptions are
         logged in the HTTP server's error log and do not affect the connection.  With HTTP/1.x keep-alive
@@ -712,8 +717,8 @@ public hashdecl HttpHandlerResponseInfo {
         HTTP/3 acknowledged), not necessarily read by the client application.
 
         The callback runs on a server thread (the request's thread or a handler pool thread, never an I/O
-        thread), after the handler's @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData()
-        "saveThreadLocalData()" has been called and before its
+        thread), after the handler's
+        @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData() "saveThreadLocalData()" has been called and before its
         @ref HttpServer::AbstractHttpRequestHandler::restoreThreadLocalData() "restoreThreadLocalData()" is called,
         as with @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()".  Exceptions are
         logged in the HTTP server's error log and do not affect the connection.  With HTTP/1.x keep-alive
@@ -876,8 +881,7 @@ public hashdecl HttpListenerOptionInfo {
         - a negative value means no limit
 
         A handler can override the limit with
-        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
-        "AbstractHttpRequestHandler::max_decoded_body_size".
+        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size "AbstractHttpRequestHandler::max_decoded_body_size".
 
         @since HttpServerUtil 1.6
     */
@@ -952,7 +956,7 @@ public class CookieHelper {
 /** @param cx the call context hash
     @param hdr the header hash
 
-    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT with any \c :protocol value
+    @return @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT with any <tt>:protocol</tt> value
 
     @since %HttpServerUtil 1.0.15
 */
@@ -1590,8 +1594,8 @@ public class HttpListenerInterface inherits AbstractLogger {
     /** @return the maximum size in bytes of a decompressed request body; a negative value means no limit; this
         implementation returns @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize"
 
-        @see @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size
-        "HttpListenerOptionInfo::max_decoded_body_size"
+        @see
+        @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size "HttpListenerOptionInfo::max_decoded_body_size"
 
         @since HttpServerUtil 1.6
     */
@@ -2969,14 +2973,14 @@ public class CallbackInputStream inherits InputStream {
 
     Backpressure: when the session's buffer is full, the send primitive either
     returns @c 1 (HTTP/3) or raises @c HTTP2-FLOW-CONTROL (HTTP/2).  In both
-    cases the producer blocks on @ref Qore::Socket::waitForHttp2StreamDrain()
-    "waitForHttp2StreamDrain()" / @ref Qore::Socket::waitForQuicStreamDrain()
+    cases the producer blocks on
+    @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()" / @ref Qore::Socket::waitForQuicStreamDrain()
     "waitForQuicStreamDrain()" until the peer's window advances, then retries
     the same chunk (no data loss).
 
     Error handling: any exception from @c read() or a stream-level send error
-    triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
-    "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
+    triggers a per-stream reset via
+    @ref Qore::Socket::resetHttp2Stream() "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
     "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
 
     Lifecycle: the producer holds the InputStream's thread affinity for the
@@ -3168,8 +3172,7 @@ public class AbstractHttpRequestHandler {
 
             - a positive value is the limit, and overrides the limit of the listener
             - \c 0 (the default) uses the limit of the listener; see
-              @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size
-              "HttpListenerOptionInfo::max_decoded_body_size"
+              @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size "HttpListenerOptionInfo::max_decoded_body_size"
             - a negative value means no limit
 
             @since HttpServerUtil 1.6

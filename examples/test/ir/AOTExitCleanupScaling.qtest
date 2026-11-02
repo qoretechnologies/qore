@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTExitCleanupScalingTest
+
+# The code compiled for a function grows linearly with the function: every exit of a function (each return) releases
+# the temporaries of the statements it leaves, and that release was emitted inline as a load, a store and a decref
+# call for every temporary of the whole function, so a function with many statements and many returns -- such as a
+# large switch whose cases return a string -- grew with the square of its size.  A Qorus unit with one such switch of
+# about 1300 cases compiled to 2.7 million LLVM instructions in that one function and took 6.3 GiB of memory to
+# compile.  The release is now one runtime call for large functions.
+#
+# The test compiles two such functions, one four times the size of the other, and compares the size of their
+# objects: linear growth gives about four times the size, quadratic growth about sixteen.  It also runs the larger
+# one to check that every case still returns its string and releases its temporaries.
+class AOTExitCleanupScalingTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTExitCleanupScalingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a switch with returning cases compiles to code linear in its size", \testScaling());
+
+        set_return_value(main());
+    }
+
+    #! a function with a nested string switch of sections x nkeys cases, each returning a string
+    private static string switchSource(int sections, int nkeys) {
+        list<string> l = ("%modern", "",
+            "*string sub lookup(string section, string key) {", "    switch (section) {");
+        for (int a = 0; a < sections; ++a) {
+            l += sprintf("        case \"sec%d\":", a);
+            l += "            switch (key) {";
+            for (int b = 0; b < nkeys; ++b) {
+                l += sprintf("                case \"key_%d_%d\":", a, b);
+                l += sprintf("                    return \"text %d %d\";", a, b);
+            }
+            l += "            }";
+            l += "            break;";
+        }
+        l += "    }";
+        l += "    return;";
+        l += "}";
+        l += "";
+        # the main code checks every case and a miss
+        l += "int errors;";
+        l += sprintf("for (int a = 0; a < %d; ++a) {", sections);
+        l += sprintf("    for (int b = 0; b < %d; ++b) {", nkeys);
+        l += "        string expected = sprintf(\"text %d %d\", a, b);";
+        l += "        if (lookup(\"sec\" + a, sprintf(\"key_%d_%d\", a, b)) != expected) {";
+        l += "            ++errors;";
+        l += "        }";
+        l += "    }";
+        l += "}";
+        l += "if (exists lookup(\"sec0\", \"none\")) {";
+        l += "    ++errors;";
+        l += "}";
+        l += "printf(\"errors=%d\\n\", errors);";
+        return (foldl $1 + "\n" + $2, l) + "\n";
+    }
+
+    private static string q(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! compiles a switch of the given size to an executable and returns the size of its object
+    private int compile(string dir, int sections, int nkeys, *reference<string> exe) {
+        string src = join_paths(dir, sprintf("switch%d.q", sections * nkeys));
+        File f();
+        f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(switchSource(sections, nkeys));
+        f.close();
+        string out_dir = join_paths(dir, sprintf("obj%d", sections * nkeys));
+        mkdir(out_dir);
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O1 -c --output-dir=%s %s 2>&1",
+            q(libqore_dir), q(libqore_dir), q(qcc_bin), q(out_dir), q(src)), \rc);
+        assertEq(0, rc, sprintf("compiling %d cases: %s", sections * nkeys, out));
+        list<string> objs = glob(join_paths(out_dir, "*.qo"));
+        assertEq(1, objs.size(), "one object");
+        exe = join_paths(dir, sprintf("switch%d", sections * nkeys));
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O1 -o %s %s 2>&1",
+            q(libqore_dir), q(libqore_dir), q(qcc_bin), q(exe), q(src)), \rc);
+        assertEq(0, rc, sprintf("linking %d cases: %s", sections * nkeys, out));
+        return hstat(objs[0]).size;
+    }
+
+    testScaling() {
+        TmpDir tmp("qore-aot-exit-cleanup-scaling-");
+        string small_exe;
+        string large_exe;
+        int small = compile(tmp.path, 2, 100, \small_exe);
+        int large = compile(tmp.path, 8, 100, \large_exe);
+        float ratio = large.toFloat() / small;
+        printf("object sizes: 200 cases: %d bytes, 800 cases: %d bytes, ratio %.2f\n", small, large, ratio);
+        # four times the cases: linear growth gives about 4, quadratic about 16
+        assertLt(6.0, ratio, "the object grows linearly with the cases");
+
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", q(libqore_dir), q(libqore_dir),
+            q(large_exe)), \rc);
+        assertEq(0, rc, "the compiled program ran: " + out);
+        assertEq("errors=0\n", out, "every case returns its string");
+    }
+}

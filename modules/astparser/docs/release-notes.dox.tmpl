@@ -7,6 +7,17 @@
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
 
     @section astparser_3_0 astparser Module Version 3.0
+    - %Qore source is parsed with a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a> grammar
+      instead of a bison/flex parser; the generated parser is part of the source distribution, so building the
+      module needs neither a Rust toolchain nor the tree-sitter CLI, which are only needed to change the grammar
+      (see the \c BUILDING file)
+    - added @ref astparser::AstTree::getHighlights() "AstTree::getHighlights()" and the
+      @ref astparser::AstHighlight "AstHighlight" hashdecl to highlight source with the highlight query of the
+      tree-sitter grammar (\c queries/highlights.scm, installed in <tt>share/qore/treesitter/tree-sitter-qore/queries</tt>
+      for editors that use tree-sitter)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5573">issue 5573</a>)
+    - added @ref astparser::AstTree::getErrorRanges() "AstTree::getErrorRanges()" and the
+      @ref astparser::AstErrorRange "AstErrorRange" hashdecl to get the ranges of the source that cannot be parsed
     - added @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()" and
       @ref astparser::AstTree::identifierFilterContains() "AstTree::identifierFilterContains()" to test whether an
       identifier can occur in a file without keeping its syntax tree or reading it again
@@ -34,4 +45,12 @@
     - added \c ASUK_TypedefDeclName and \c ASUK_TypedefTypeName constants for typedef usage kinds
     - fixed off-by-one bug in @ref astparser::AstTree::getNodesInfo() "AstTree::getNodesInfo()" line and column
       numbers (now returns 0-indexed values consistent with LSP convention)
+    - @ref astparser::AstParser::parseFile() "AstParser::parseFile()" and
+      @ref astparser::AstTree::printTree() "AstTree::printTree()" require the filesystem functional domain and
+      follow the filesystem policy of a @ref Qore::SandboxManager "SandboxManager"; \c printTree() raises an
+      exception when the file cannot be written
+    - parsing, printing and searching syntax trees can be @ref thread_cancellation "cancelled": the methods raise
+      \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED when the thread is cancelled or the program is interrupted
+    - added the typedef and enum AST declaration, symbol and usage constants
+      (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
 */

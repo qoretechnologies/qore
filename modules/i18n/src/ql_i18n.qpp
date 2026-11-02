@@ -3230,7 +3230,7 @@ nothing clear_thread_locale() [dom=LOCALE_CONTROL] {
 /** Unicode formatting extensions are stripped from catalog identity.
 
     @param locale locale tag
-    @return fallback chain such as \c ("fr-CA", "fr", "root")
+    @return fallback chain such as <tt>(&quot;fr-CA&quot;</tt>, "fr", "root")
 
     @throw I18N-LOCALE-ERROR if \a locale is invalid or contains a NUL character
 */

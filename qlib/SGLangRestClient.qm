@@ -216,8 +216,8 @@ public class SGLangRestClientBase {
 
 #! this class provides the REST client API for communication with SGLang servers
 /** A \c model option is required; it names the model served by the target
-    SGLang instance and is exposed via @ref SGLangRestClientBase::getModel()
-    "getModel()".  If the target deployment requires authentication, pass an
+    SGLang instance and is exposed via
+    @ref SGLangRestClientBase::getModel() "getModel()".  If the target deployment requires authentication, pass an
     \c apikey; it will be sent as the \c Authorization: \c Bearer header.
 */
 public class SGLangRestClient inherits RestClient::RestClient, SGLangRestClientBase {
@@ -419,8 +419,8 @@ public class SGLangLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return "sglang";
     }
     #! Turns reasoning off for the model of a request, or selects its lowest reasoning setting
-    /** Applied to a request with a @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget
-        "reasoning_token_budget" of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning
+    /** Applied to a request with a
+        @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning
         "disable_reasoning": the hybrid Qwen3 and DeepSeek-V3.1/V3.2 models turn thinking off.
 
         Models are recognized when the served model name is the Hugging Face model ID.  Evidence,
@@ -482,8 +482,8 @@ public class SGLangLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
         };
     }
     #! Returns the provider's information for a model
-    /** Models that always reason cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
-        "LlmProviderInfo::reasoning_always_on"); they are recognized when the served model name is the Hugging Face
+    /** Models that always reason cannot turn reasoning off
+        (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on"); they are recognized when the served model name is the Hugging Face
         model ID.
 
         Evidence:

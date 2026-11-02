@@ -91,8 +91,8 @@ class CsvHelper {
     }
 
     #! Checks a number format
-    /** A number format, as for @ref Qore::format_number() "format_number()" and @ref Qore::parse_number()
-        "parse_number()", is the thousands separator (\c "?" for none), optionally followed by the decimal separator,
+    /** A number format, as for @ref Qore::format_number() "format_number()" and
+        @ref Qore::parse_number() "parse_number()", is the thousands separator (\c "?" for none), optionally followed by the decimal separator,
         optionally followed by one or more digits giving the number of decimals for output (ex: \c ".", \c ".,",
         \c ".,2").  The separators are different characters that are not digits or signs.
 

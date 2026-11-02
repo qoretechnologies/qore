@@ -30,7 +30,7 @@
     and change the data of the debugged code.
 
     The debuggers parse a script in the mode that the interpreter gives its file (see
-    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()"): a file whose name ends in \c .q is
+    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()"): a file whose name ends in <tt>.q</tt> is
     parsed in the default mode, other files in @ref modern "%modern" mode, as \c qore runs them.
 
     @section debugging_features Debugging Features
@@ -39,12 +39,15 @@
 
     A breakpoint is set on a statement, which is given by:
     - its line in a file or source label; a line in a statement of more than one line is the statement that contains
-      it
+      it.  The file can also be given with another path than it was parsed with, such as an absolute path for a
+      program started with a relative path: it is then matched as an absolute path, made absolute with the working
+      directory that the file was parsed in (see
+      @ref Qore::ProgramControl::findStatementId() "ProgramControl::findStatementId()")
     - its line and column, for a statement of a line with more than one statement, as in
       <tt>int x = f(1); int y = g(2);</tt>; the breakpoint is on the last statement of the line that starts at or
       before the column
-    - a function, possibly with the types of its parameters to select one variant of an overloaded function; the
-      breakpoint is on the start of the function
+    - a function, possibly with the types of its parameters to select one variant of an overloaded function (a
+      function with one variant can be given by its name only); the breakpoint is on the start of the function
 
     A breakpoint can have:
     - a condition: an expression that is evaluated with the variables of the thread that hits the breakpoint; the
@@ -189,7 +192,7 @@ qdbg myfile.q < commands.txt
     @endcode
 
     Files of commands have one command on each line; lines that start with \c # are comments.  \c qdbg and
-    \c qdbg-remote run the commands of the init file, \c .qdbginit in the home folder, at their start, unless \c -n is
+    \c qdbg-remote run the commands of the init file, <tt>.qdbginit</tt> in the home folder, at their start, unless \c -n is
     given, or of the file of \c -i instead, and then the files of \c -x, and continue with the commands of their input;
     the \c script command runs a file of commands at the prompt.  A command of a file that resumes a thread waits until
     a thread pauses, and the first command that fails ends the file.  A file of commands in the current folder is not

@@ -69,7 +69,7 @@ const list<string> DpqlMonthNames = ("January", "February", "March", "April", "M
 #! What a diagnostic says of \c exists without a field after it
 const DpqlExistsNeedsFieldMessage = "'exists' needs a field after it, such as exists @name.";
 
-#! What a diagnostic says of a \c . without a key after it
+#! What a diagnostic says of a <tt>.</tt> without a key after it
 const DpqlDotNeedsKeyMessage = "A '.' must be followed by the name of a key: pick one from the list, or remove the "
     "'.'.";
 
@@ -1564,7 +1564,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     }
 
     #! Parses \c exists and its field reference, which can be in parentheses
-    /** @param name_tok the \c exists token, which has been read; the next token is a field reference or \c (
+    /** @param name_tok the \c exists token, which has been read; the next token is a field reference or <tt>(</tt>
 
         @return the @ref DP_OP_EXISTS expression
 
@@ -1772,13 +1772,13 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         return result;
     }
 
-    #! Parses a wildcard accessor (\c [*] or \c {*}) and the accessors after it
+    #! Parses a wildcard accessor (<tt>[*]</tt> or \c {*}) and the accessors after it
     /** The wildcard is \c map written as an accessor: the accessors after it are the expression evaluated for each
         item of the source, which is the expression before the wildcard:
         - <tt>source[*]</tt>: a first step that names a field (<tt>.name</tt>, <tt>.\@name</tt> or a single
-          <tt>{"key"}</tt>) is a field reference of the item, as in the body of \c map, with the following
+          <tt>{&quot;key&quot;}</tt>) is a field reference of the item, as in the body of \c map, with the following
           <tt>.name</tt> steps (<tt>\@orders[*].customer.name</tt> is <tt>map \@customer.name, \@orders</tt>);
-          other accessors apply to the item itself (@ref DP_FUNC_WILDCARD_ITEM), and so does a trailing \c [*]
+          other accessors apply to the item itself (@ref DP_FUNC_WILDCARD_ITEM), and so does a trailing <tt>[*]</tt>
         - <tt>source{*}</tt>: the accessors apply to \c \@value (<tt>\@prices{*}.amount</tt> is
           <tt>map \@value.amount, \@prices</tt>)
 
@@ -1820,7 +1820,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         };
     }
 
-    #! Parses the accessors after \c [*]: the expression evaluated for each item
+    #! Parses the accessors after <tt>[*]:</tt> the expression evaluated for each item
     /** @since DataProvider 3.10
     */
     private auto parseListWildcardBody() {
@@ -1922,9 +1922,9 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     #! Returns the field path of a field token: the text after \c @, or the text between the quotes of
     #! <tt>\@"..."</tt> with its escapes decoded
     /** Dots separate the parts of the path in quoted names as in bare ones; quotes are only for characters that a
-        bare name cannot hold.  In a quoted name, \c \\" is a quote, \c \\\\ a backslash, \c \\n, \c \\r and
+        bare name cannot hold.  In a quoted name, <tt>\\&quot;</tt> is a quote, \c \\\\ a backslash, \c \\n, \c \\r and
         \c \\t a line feed, a carriage return and a tab, and \c \\. a dot that is part of a key, which the path
-        keeps escaped (<tt>\@"a\\.b"</tt> is the field path <tt>a\\.b</tt>, the key <tt>a.b</tt>); any other escape
+        keeps escaped (<tt>\@&quot;a\\.b&quot;</tt> is the field path <tt>a\\.b</tt>, the key <tt>a.b</tt>); any other escape
         is an error (@ref DPQL_FIELD_NAME_ESCAPES)
 
         @param tok a @ref DPQL_TOK_FIELD token
@@ -1947,7 +1947,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
     #! Returns the key that a field token names after a dot that follows an accessor
     /** As getFieldTokenName(), but the name is one key, in which an escaped dot is a dot
-        (<tt>\@r[0].\@"a\\.b"</tt> and <tt>\@r[0].\@"a.b"</tt> are both the key <tt>a.b</tt>)
+        (<tt>\@r[0].\@&quot;a\\.b&quot;</tt> and <tt>\@r[0].\@&quot;a.b&quot;</tt> are both the key <tt>a.b</tt>)
 
         @param tok a @ref DPQL_TOK_FIELD token
 
@@ -2266,7 +2266,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     }
 
     #! Unescapes a string by processing escape sequences
-    /** Handles \\n, \\r, \\t, \\\\, \\', \\" and passes through other backslash sequences
+    /** Handles \\n, \\r, \\t, \\\\, \\', \\&quot; and passes through other backslash sequences
     */
     private string unescapeString(string content) {
         if (index(content, "\\") < 0) {
@@ -2334,7 +2334,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
     #! Returns what is wrong with a part of a date literal that is out of its range, or nothing if no part is
     /** The tokenizer has read the literal as a date (@ref DpqlTokenizer): \c YYYY-MM-DD, optionally followed by a
-        time (\c T or a space, \c HH:MM, optional \c :SS and fraction, and an optional time zone)
+        time (\c T or a space, \c HH:MM, optional <tt>:SS</tt> and fraction, and an optional time zone)
 
         @param text the date literal
 

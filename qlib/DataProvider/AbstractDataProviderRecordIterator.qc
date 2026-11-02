@@ -222,10 +222,10 @@ public const string DP_FUNC_SLICE = "slice";
 #! Key function: access hash values by key (e.g., \c key(\@record, "name"))
 public const string DP_FUNC_KEY = "key";
 
-#! List wildcard accessor: the accessors after \c [*] evaluated for each item of a list (e.g., <tt>\@orders[*].id</tt>)
+#! List wildcard accessor: the accessors after <tt>[*]</tt> evaluated for each item of a list (e.g., <tt>\@orders[*].id</tt>)
 /** Written <tt>source[*]</tt> in DPQL; its arguments are the source and the expression evaluated for each item, which
     is evaluated as the body of @ref DP_OP_MAP "map" is: <tt>\@orders[*].id</tt> is <tt>map \@id, \@orders</tt>.
-    When the accessors after \c [*] do not start with a field, they are applied to the item itself, which is given by
+    When the accessors after <tt>[*]</tt> do not start with a field, they are applied to the item itself, which is given by
     @ref DP_FUNC_WILDCARD_ITEM
 
     @see @ref dpql_wildcards
@@ -246,8 +246,8 @@ public const string DP_FUNC_LIST_WILDCARD = "list_wildcard";
 public const string DP_FUNC_HASH_WILDCARD = "hash_wildcard";
 
 #! The item of the innermost enclosing list wildcard (@ref DP_FUNC_LIST_WILDCARD)
-/** Used for the accessors after \c [*] that do not start with a field, such as \c [0] in <tt>\@matrix[*][0]</tt>, and
-    for a trailing \c [*]; it has no meaning outside of a list wildcard and is not written in DPQL
+/** Used for the accessors after <tt>[*]</tt> that do not start with a field, such as <tt>[0]</tt> in <tt>\@matrix[*][0]</tt>, and
+    for a trailing <tt>[*]</tt>; it has no meaning outside of a list wildcard and is not written in DPQL
 
     @see @ref dpql_wildcards
 

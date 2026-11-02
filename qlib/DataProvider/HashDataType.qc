@@ -32,6 +32,12 @@ public namespace DataProvider {
 
     Additionally, adding any fields before calling setDefaultOtherFieldType() will also remove compatibility with
     unknown fields
+
+    @anchor hashdatatype_optional_by_defaults
+    A record type whose added fields all have default values is optional: it gives the record of the default values
+    when no value is provided, and like any other optional type it has @ref nothing and @ref null among its accepted
+    types, supports no type options, and its description restores an optional type.  A mandatory field without a default value keeps
+    the record mandatory (see addField()).
 */
 public class HashDataType inherits QoreDataType {
     private {

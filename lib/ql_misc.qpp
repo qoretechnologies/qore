@@ -75,8 +75,6 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
 
-// Single definition; declared DLLLOCAL in qore_program_private.h and also called from
-// ql_object.cpp.
 // raises an exception and returns -1 if code governed by a sandbox manager calls a module parse option mask API;
 // the APIs change what modules may do in the whole process: they carry the PROCESS functional domain, so code with
 // PO_NO_PROCESS_CONTROL cannot call them, and sandboxed code cannot call them either
@@ -114,6 +112,8 @@ static QoreHashNode* q_module_parse_option_mask_info(const QoreModuleParseOption
     return h.release();
 }
 
+// Single definition; declared DLLLOCAL in qore_program_private.h and also called from
+// ql_object.cpp.
 QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
     // The authoritative thread-current Program is the correct target for builtins
     // that operate on "the Program this call is running in" (set_return_value(),
@@ -802,6 +802,11 @@ nothing remove_signal_handler(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
     QUIC and HTTP/3 messages go to the global async I/O logger; when none is set, they go to the logger of the
     global async I/O controller (@ref Qore::AsyncIoController::setLogger() "AsyncIoController::setLogger()"), so an
     application that only sets the controller's logger receives them as well.
+
+    An HTTP/3 client request that is cancelled before any response header, for example by its timeout, logs the
+    transport state of its connection at warning level: how much of the request was sent and acknowledged, when the
+    connection last sent and received, and its flow-control and congestion state; with
+    \c QORE_QUIC_STALL_TRACE set, the connection's last QUIC events are logged as well.
  */
 ///@{
 //! Sets the global logger for async I/O, QUIC, and HTTP/3 operations
@@ -1531,6 +1536,10 @@ string resolve_url(string base, string reference, int options = 0) [flags=PURE,N
     An encoding declared in the body (an XML declaration, a \c meta element, or an \c \@charset rule) is ignored if
     it is not a supported encoding, and a UTF-16 declaration in HTML or CSS means UTF-8, as the text could not have
     been read to find it otherwise (WHATWG Encoding).  The \c charset parameter is used as given.
+
+    The \c charset parameter of the \c Content-Type is read as in RFC 9110: parameter names match
+    case-insensitively and only as whole names, and a quoted value (ex: <tt>charset="UTF-8"</tt>) is unquoted, with
+    a <tt>;</tt> inside the quotes not ending it; a value in single quotes is also unquoted.
 
     The assumed encoding is ISO-8859-1 by default, the default character set of text media types in HTTP/1.1
     (RFC 2616 section 3.7.1); every octet is a valid ISO-8859-1 character, so text in an unknown encoding is never
@@ -3349,51 +3358,6 @@ nothing add_module_parse_option_mask(string module, softint strip, softint add =
     }
     QMM.addModuleParseOptionMask(module->c_str(),
         QoreModuleParseOptionMask{QoreParseOptions(strip), QoreParseOptions(add)}, xsink);
-}
-
-//! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result
-/** This function historically wrapped the call in libqore's process-global module-load lock so that
-    a module could order that lock before its own private locks.  That global lock has been
-    <b>retired</b> (holding it across a nested module load reformed a process-wide deadlock), so this
-    function now simply calls \a callable directly and returns its result.  It is retained for
-    backwards compatibility.
-
-    A module that previously used this to avoid a lock-order inversion should instead ensure its own
-    private locks are <b>never held across a module load</b> (directly via @ref load_module(), or
-    indirectly via lazy provider/schema loading or a callback from a foreign runtime).  libqore now
-    detects genuine cross-thread module dependency cycles and raises a
-    \c CIRCULAR-MODULE-DEPENDENCY exception instead of relying on a global serialization lock.
-
-    @param callable The @ref call_reference "call reference" or @ref closure "closure" to call
-    @param ... Any optional arguments to the @ref call_reference "call reference" or @ref closure
-    "closure"
-
-    @return the value returned by \a callable
-
-    @par Example:
-    @code{.py}
-return call_with_module_load_lock(\initIntern(), app);
-    @endcode
-
-    @note The @ref call_reference "call reference" or @ref closure "closure" called could also throw
-    other exceptions
-
-    @see
-    - load_module()
-    - call_function()
-
-    @since %Qore 3.0
-*/
-auto call_with_module_load_lock(code callable, ...) [dom=MODULES] {
-    ReferenceHolder<QoreListNode> vargs(xsink);
-    // if there are arguments to pass, create argument list by copying the current list after the
-    // callable
-    if (num_args(args) > 1) {
-        vargs = args->copyListFrom(1);
-    }
-    // the process-global module-load lock has been retired (see QoreModuleLoadLockHelper); this is
-    // now a direct pass-through call retained for backwards compatibility
-    return callable->invoke(*vargs, xsink);
 }
 
 //! Loads in a %Qore user module at run-time with using the given @ref Qore::Program "Program" object as the container for the user module code

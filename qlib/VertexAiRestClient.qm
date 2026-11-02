@@ -95,9 +95,9 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     the endpoint that creates it: one created through the global endpoint is a \c global resource, which a model in
     a multi-region location cannot use.
 
-    Chat requests use \c :generateContent, and streamed chat requests use
-    \c :streamGenerateContent with SSE framing (\c alt=sse).  Embeddings use the
-    \c :predict endpoint on text-embedding publisher models (Gecko / Text
+    Chat requests use <tt>:generateContent</tt>, and streamed chat requests use
+    <tt>:streamGenerateContent</tt> with SSE framing (\c alt=sse).  Embeddings use the
+    <tt>:predict</tt> endpoint on text-embedding publisher models (Gecko / Text
     Embedding Gecko).
 
     @par Connection options
@@ -227,7 +227,7 @@ public string sub vertexApiUrl(string location) {
         sent as the \c x-goog-user-project header so quota and billing are
         attributed to that project (matches the behavior of the official Google
         client libraries when a credential has a \c quota_project_id).  Not
-        required for the project-scoped \c :generateContent / \c :predict
+        required for the project-scoped <tt>:generateContent</tt> / <tt>:predict</tt>
         endpoints, where the project in the URL path is authoritative.
 
     @return the request header hash
@@ -339,10 +339,10 @@ string sub ensureVertexUrl(string url, *hash<auto> options) {
     (regional Vertex AI endpoint + projects/locations/publishers/models
     path segments) and the auth mechanism (GcpAuth Bearer token) differ.
 
-    Chat requests use \c :generateContent; streamed chat requests use
-    \c :streamGenerateContent with SSE framing (\c alt=sse) and deliver each
+    Chat requests use <tt>:generateContent</tt>; streamed chat requests use
+    <tt>:streamGenerateContent</tt> with SSE framing (\c alt=sse) and deliver each
     response chunk as it arrives.  Claude and Llama models on Vertex AI, which
-    use \c :rawPredict, are not supported.
+    use <tt>:rawPredict</tt>, are not supported.
 */
 public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProvider {
     public {
@@ -416,7 +416,7 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
             suffix ?? "generateContent");
     }
 
-    #! Returns the Vertex \c :generateContent REST path for this request
+    #! Returns the Vertex <tt>:generateContent</tt> REST path for this request
     string getRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         return getVertexPath(opts);
     }

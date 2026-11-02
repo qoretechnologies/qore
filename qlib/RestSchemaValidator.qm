@@ -79,6 +79,25 @@ module RestSchemaValidator {
     - @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
     - @ref RestSchemaValidator::NullRestSchemaValidator "NullRestSchemaValidator"
 
+    @section restschemavalidator_data_types Data Types of REST Schemas
+
+    The data types that a REST schema (OpenAPI or Swagger) gives its operations, which are the types of the options
+    and fields of REST schema data providers and their actions, follow these rules:
+    - the type of an object schema is the type of a request value, which has no field for a property that the schema
+      declares \c readOnly: a request value with such a field is refused with a \c RUNTIME-TYPE-ERROR exception;
+      the type of a response value
+      (@ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseDataType() "getResponseDataType()") has the
+      read-only properties, and an OpenAPI one has no field for a \c writeOnly property
+    - the type of a field for a scalar property enforces the constraints of the property's schema, such as
+      \c maxLength, \c maximum, \c pattern and \c enum, before a request is sent, also when it converts a value
+      from a string, and a value that does not meet them is refused with a \c RUNTIME-TYPE-ERROR or
+      \c TYPE-VALUE-ERROR exception; the description of the type gives the constraints
+    - the \c default of a property or parameter is the remote default value of its field, which is shown and never
+      applied or sent (see @ref dataprovider_remote_default_values)
+    - a nullable enumeration, which OpenAPI 3.1 writes as an \c anyOf or \c oneOf of the enumeration and the
+      \c null type, offers the values of the enumeration as its choices, with the display names that the schema
+      gives them, as a plain enumeration does; as an optional field, it also accepts no value and \c NULL
+
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
@@ -136,7 +155,11 @@ module RestSchemaValidator {
       (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
     - accept opaque GLB model responses as binary media
     - enforce boolean enumerations and preserve false values in generated enumeration examples
-    - preserve opaque audio, image, and video response bytes in the null schema validator
+    - preserve opaque audio, image, and video response bytes in the null schema validator, and opaque PDF response
+      bytes on synchronous and asynchronous transports
+    - fixed validating a request or response value holding @ref NULL "NULL", which raised
+      \c RUNTIME-OVERLOAD-ERROR; \c NULL is validated as no value, so a \c nullable property accepts it and any other
+      property raises \c SCHEMA-VALIDATION-ERROR, and the value is left unchanged
     - retain nullable value types and independent presence requirements across cached field uses
     - extracted shared base classes for schema validation across Swagger, OpenApi3, and AsyncApi modules:
       - @ref RestSchemaValidator::AbstractObjectBase "AbstractObjectBase": vendor extensions support
@@ -151,8 +174,8 @@ module RestSchemaValidator {
       recursive property from recursing forever, and a use whose description or default differs from it now
       gets its own copy over the same type
     - fixed a parameter description being joined to its schema's when one already contains the other, which
-      published a repeated sentence such as \c "Agent run ID.: Agent run ID. New run IDs are returned with
-      the \c agent_run_ prefix."; whichever says more is now kept
+      published a repeated sentence such as <tt>"Agent run ID.: Agent run ID. New run IDs are returned with
+      the agent_run_ prefix."</tt>; whichever says more is now kept
     - added abstract \c check() method to @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
     - added CBOR serialization/deserialization support (\c "application/cbor") when the \c json module
       version 1.12+ is available (RFC 8949)
@@ -1455,8 +1478,7 @@ public namespace RestSchemaValidator {
 
             #! @ref True if this object holds types it caches through opaque references
             /** Set when the schema first lets this object hold a cache entry through an opaque reference; see
-                @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
-                "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
+                @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely() "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
             */
             bool holds_opaque_type_caches;
 
@@ -1701,8 +1723,8 @@ public namespace RestSchemaValidator {
 
             @return @ref True if the cache entry is to be assigned with the opaque assignment operator (\c \@=)
 
-            @see @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
-            "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
+            @see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely() "AbstractRestSchemaValidator::holdTypeCacheOpaquely()"
 
             @since RestSchemaValidator 2.5
         */
@@ -1718,10 +1740,9 @@ public namespace RestSchemaValidator {
 
         #! Releases the types and fields that this object caches
         /** Called by the schema for every schema object it let hold a cache entry through an opaque reference (see
-            @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely()
-            "AbstractRestSchemaValidator::holdTypeCacheOpaquely()") when it is destroyed, or when it stops letting
-            schema objects do so (see @ref RestSchemaValidator::AbstractRestSchemaValidator::stopOpaqueTypeCaches()
-            "AbstractRestSchemaValidator::stopOpaqueTypeCaches()").  The garbage collector does not follow those
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::holdTypeCacheOpaquely() "AbstractRestSchemaValidator::holdTypeCacheOpaquely()") when it is destroyed, or when it stops letting
+            schema objects do so (see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::stopOpaqueTypeCaches() "AbstractRestSchemaValidator::stopOpaqueTypeCaches()").  The garbage collector does not follow those
             references, so a cycle running through one, as from a schema object to the type it caches and from a
             union alternative of that type back to the schema object, is only released here.
 
@@ -1920,8 +1941,7 @@ public namespace RestSchemaValidator {
 
         #! Returns @ref True if the value consists of scalar values only, also in its lists and hashes
         /** Such a value cannot refer to a schema; see
-            @ref RestSchemaValidator::AbstractRestSchemaValidator::stopOpaqueTypeCaches()
-            "AbstractRestSchemaValidator::stopOpaqueTypeCaches()"
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::stopOpaqueTypeCaches() "AbstractRestSchemaValidator::stopOpaqueTypeCaches()"
 
             @since RestSchemaValidator 2.5
         */
@@ -2741,8 +2761,8 @@ if (schema && schema.isTypeBuildActive() && schema.holdTypeCacheOpaquely(self)) 
             caching it is reachable from the types that other schema objects hold through opaque references, through
             the union alternatives that refer to it.  If the value referred to the schema, the schema would then be
             part of a cycle that the garbage collector cannot see and would never be destroyed, so the opaque type
-            caches are released (see @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches()
-            "AbstractRestSchemaObject::releaseTypeCaches()") once the type build in progress has finished, or now if
+            caches are released (see
+            @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches() "AbstractRestSchemaObject::releaseTypeCaches()") once the type build in progress has finished, or now if
             there is none, and the types they held are built again when they are next asked for, through ordinary
             references.
 
@@ -2958,7 +2978,7 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             supported type
             @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-            @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an
+            @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an
             \c Accept header field is present, and if the server cannot send a response which is acceptable according
             to the combined \c Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To
             ensure this happens, if an \c Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must
@@ -3193,7 +3213,7 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             @throw ACCEPT-ERROR the response body could not be serialized because the client does not accept a supported type
             @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-            @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an Accept header field is present, and if the server cannot send a response which is acceptable according to the combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To ensure this happens, if
+            @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an Accept header field is present, and if the server cannot send a response which is acceptable according to the combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To ensure this happens, if
             an Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must be thrown
         */
         private abstract hash<HttpResponseInfo> processResponseImpl(string method, string path, int code,
@@ -3585,7 +3605,7 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
             supported type; results in a <tt>406 Not Acceptable</tt> error being returned to the client
             @throw SERIALIZATION-ERROR the response body could not be serialized due to an error
 
-            @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html>RFC 2616 section 14</a>: If an
+            @note <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">RFC 2616 section 14</a>: If an
             \c Accept header field is present, and if the server cannot send a response which is acceptable according
             to the combined Accept field value, then the server SHOULD send a 406 (not acceptable) response.  To
             ensure this happens, if an \c Accept error of this nature occurs in this call, an \c "ACCEPT-ERROR" must

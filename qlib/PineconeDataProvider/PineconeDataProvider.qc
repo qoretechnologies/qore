@@ -32,8 +32,8 @@ public namespace PineconeDataProvider {
     @section pineconedataprovider_router One Router for the Whole Root
 
     24 of the 52 actions are sent to the selected index's own host rather than to the connection's, and
-    resolving that host costs a control-plane call.  A @ref RestSchemaActions::RestSchemaHostRouter
-    "RestSchemaHostRouter" is created here and shared by every child, so the resolution is paid once per
+    resolving that host costs a control-plane call.  A
+    @ref RestSchemaActions::RestSchemaHostRouter "RestSchemaHostRouter" is created here and shared by every child, so the resolution is paid once per
     index for as long as this provider lives and all 24 actions on one index share a single client.
 
     The router holds the parent client, which is what keeps two connections to Pinecone apart: two

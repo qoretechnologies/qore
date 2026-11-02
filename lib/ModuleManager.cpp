@@ -3195,7 +3195,7 @@ namespace {
 //! Sets the parse option mask of the masked module load in progress in this thread; nested loads add to it
 class QoreLoadParseOptionMaskHelper {
 public:
-    DLLLOCAL QoreLoadParseOptionMaskHelper(const QoreModuleParseOptionMask& mask) : saved(thread_load_po_mask) {
+    QoreLoadParseOptionMaskHelper(const QoreModuleParseOptionMask& mask) : saved(thread_load_po_mask) {
         if (saved) {
             combined = *saved;
         }
@@ -3203,7 +3203,7 @@ public:
         thread_load_po_mask = &combined;
     }
 
-    DLLLOCAL ~QoreLoadParseOptionMaskHelper() {
+    ~QoreLoadParseOptionMaskHelper() {
         thread_load_po_mask = saved;
     }
 

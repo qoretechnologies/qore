@@ -2301,6 +2301,12 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             endif()
             set(_qore_qjar_env QORE_MODULE_DIR=${_qore_qjar_module_dir} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
 
+            # QORE_DOCS_NO_CODE_HIGHLIGHT keeps doxygen's highlighting for documentation with code in other languages
+            set(_qdx_post_opts)
+            if (QORE_DOCS_NO_CODE_HIGHLIGHT)
+                set(_qdx_post_opts --no-highlight)
+            endif()
+
             set(_qore_binary_java_step)
             if (QORE_GENERATE_JAVA_BINDINGS)
                 set(_qore_binary_java_step
@@ -2311,7 +2317,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             add_custom_target(${_docs_targ}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_dox_output}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_working_dir}/Doxyfile
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${_dox_output}/html ${_dox_output}/html/search
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${_qdx_post_opts} ${_dox_output}/html ${_dox_output}/html/search
                 ${_qore_binary_java_step}
                 WORKING_DIRECTORY ${_working_dir}
                 COMMENT "Generating API documentation with Doxygen"

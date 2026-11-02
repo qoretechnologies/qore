@@ -167,9 +167,12 @@ printf("%Y\n", ans.body);
     - \c request-serialization: the type of message serialization in the request; see
       @ref RestClient::RestClient::DataSerializationOptions for possible values when used with the null REST schema validator
 
-    @section restclientrelnotes Release Notes
+    See @subpage restclientrelnotes "Release Notes" for the changes in each version.
+*/
+/** @page restclientrelnotes Release Notes
 
-    @subsection restclientv2_7 RestClient v2.7
+
+    @section restclientv2_7 RestClient v2.7
     - fixed @ref RestClient::RestClient::constructor() "RestClient::constructor()" to accept a \c headers option
       whose values all have the same type, such as a literal \c {"X-Count": 1}, with the \c content_encoding
       option; adding the \c Accept-Encoding header raised \c RUNTIME-TYPE-ERROR
@@ -184,7 +187,13 @@ printf("%Y\n", ans.body);
       \c "application/yaml", which the servers of %Qore releases before 3.0 do not decode
     - added support for the OAuth2 \c implicit grant type, and the
       @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
-      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features
+      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features, the
+      \c oauth2_redirect_passthrough_state option for providers that do not pass the \c state parameter through
+      the redirect, and <tt>{{option_name}}</tt> template substitution in \c oauth2_auth_args values for providers
+      that use non-standard parameter names
+    - added Kerberos/SPNEGO HTTP Negotiate authentication (the \c negotiate_auth option and related options) for
+      synchronous and polling requests, @ref restclientiointro "RestClientIo" requests, SSE readers and polling
+      pings
     - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
       in exception arguments, the request information (\c info) of a failed request or debug messages, nor where
       a server echoes it in an error: headers whose names contain \c token, \c secret, \c api-key or \c apikey,
@@ -213,8 +222,8 @@ printf("%Y\n", ans.body);
       missing, instead of raising \c OAUTH2-ERROR when it is created with a connection; the grant type is not used,
       and the token is not refreshed
     - polling pings decode response bodies by the rules shared by all HTTP clients instead of as ISO-8859-1
-      without a charset; added @ref RestClient::RestClient::getPollResponseBodyText()
-      "RestClient::getPollResponseBodyText()"
+      without a charset; added
+      @ref RestClient::RestClient::getPollResponseBodyText() "RestClient::getPollResponseBodyText()"
     - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
       providers with a @ref restclientiointro "RestClientIo" client and no longer connects
       to the server to create them
@@ -259,16 +268,19 @@ printf("%Y\n", ans.body);
       @ref RestClient::RestClient::copySelf() "copySelf()" hook, so a subclass that customizes authentication or
       headers, such as @ref awsrestclientintro "AwsRestClient", keeps that behaviour on the copy
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
-    - added @ref RestClient::RestClient::doRequestWithResponseLimit()
-      "RestClient::doRequestWithResponseLimit()" for memory-safe bounded REST responses
+    - added
+      @ref RestClient::RestClient::doRequestWithResponseLimit() "RestClient::doRequestWithResponseLimit()" for memory-safe bounded REST responses
     - added CBOR serialization support (\c "cbor" data option) when the \c json module
       version 1.12+ is available (RFC 8949)
     - added the official \c "application/yaml" MIME type (RFC 9512) to the accepted content types
       for inbound responses
     - fixed non-blocking polling with connections that use basic auth
       (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
+    - added the @ref RestClient::RestClientPool "RestClientPool" class, a thread-safe connection pool for
+      @ref RestClient::RestClient "RestClient" objects based on
+      @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
 
-    @subsection restclientv2_3_2 RestClient v2.3.2
+    @section restclientv2_3_2 RestClient v2.3.2
     - fixed acqquiring OAuth2 tokens when the \c oauth2_token_use_basic_auth option is set
       (<a href="https://github.com/qoretechnologies/qore/issues/4991">issue 4991</a>)
     - fixed an infinite loop bug handling token request errors with the \c client_credentials grant
@@ -278,119 +290,119 @@ printf("%Y\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/4820">issue 4820</a>)
     - added a get() method without any body (which shouldn't be sent in GET requests in any case)
 
-    @subsection restclientv2_3_1 RestClient v2.3.1
+    @section restclientv2_3_1 RestClient v2.3.1
     - fixed passing the correct path to the signature method
       (<a href="https://github.com/qoretechnologies/qore/issues/4953">issue 4953</a>)
 
-    @subsection restclientv2_3_0 RestClient v2.3.0
+    @section restclientv2_3_0 RestClient v2.3.0
     - implemented support for custom token operations
 
-    @subsection restclientv2_2_0 RestClient v2.2.0
+    @section restclientv2_2_0 RestClient v2.2.0
     - major updates and improvements to OAuth2 handling
       (<a href="https://github.com/qoretechnologies/qore/issues/4820">issue 4820</a>)
     - allow the username to be set without a password; assume an empty password
 
-    @subsection restclientv2_1_1 RestClient v2.1.1
+    @section restclientv2_1_1 RestClient v2.1.1
     - fixed a bug where the OAuth2 refresh token was sometimes dropped when an access token was acquired
       (<a href="https://github.com/qoretechnologies/qore/issues/4821">issue 4821</a>)
     - fixed a bug returning the token URL
       (<a href="https://github.com/qoretechnologies/qore/issues/4809">issue 4809</a>)
 
-    @subsection restclientv2_1 RestClient v2.1
+    @section restclientv2_1 RestClient v2.1
     - added @ref RestClient::RestClient::setOAuth2Options() "RestClient::setOAuth2Options()"
     - do not try to get another OAuth2 token if the token was just retrieved
       (<a href="https://github.com/qoretechnologies/qore/issues/4796">issue 4796</a>)
 
-    @subsection restclientv2_0 RestClient v2.0
+    @section restclientv2_0 RestClient v2.0
     - implemented support for OAuth2 authorization flows
       (<a href="https://github.com/qoretechnologies/qore/issues/4766">issue 4766</a>)
     - fixed handling polling pings of REST connections to respect the connection parameters and behave like the
       non-polling ping
       (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
 
-    @subsection restclientv1_10_1 RestClient v1.10.1
+    @section restclientv1_10_1 RestClient v1.10.1
     - fixed URI path reporting in REST error messages
       (<a href="https://github.com/qoretechnologies/qore/issues/4760">issue 4760</a>)
 
-    @subsection restclientv1_10 RestClient v1.10
+    @section restclientv1_10 RestClient v1.10
     - implemented the \c swagger_lax_parsing option to try to parse invalid Swagger schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/4741">issue 4741</a>)
 
-    @subsection restclientv1_9_3 RestClient v1.9.3
+    @section restclientv1_9_3 RestClient v1.9.3
     - allow connection options designating files to be selected as files
       (<a href="https://github.com/qoretechnologies/qore/issues/4725">issue 4725</a>)
 
-    @subsection restclientv1_9_2 RestClient v1.9.2
+    @section restclientv1_9_2 RestClient v1.9.2
     - support full ping operations, also with polling, using an authenticated request
       (<a href="https://github.com/qoretechnologies/qore/issues/4677">issue 4677</a>)
     - apply the \c swagger_base_path argument to all REST validators
       (<a href="https://github.com/qoretechnologies/qore/issues/4663">issue 4663</a>)
 
-    @subsection restclientv1_9_1 RestClient v1.9.1
+    @section restclientv1_9_1 RestClient v1.9.1
     - non-blocking polling fixes
       (<a href="https://github.com/qoretechnologies/qore/issues/4595">issue 4595</a>)
 
-    @subsection restclientv1_9 RestClient v1.9
+    @section restclientv1_9 RestClient v1.9
     - enable the deserialized body to be returned in REST exception info when possible
       (<a href="https://github.com/qoretechnologies/qore/issues/4591">issue 4591</a>)
 
-    @subsection restclientv1_8 RestClient v1.8
+    @section restclientv1_8 RestClient v1.8
     - added support for the DataProvider API
       (<a href="https://github.com/qoretechnologies/qore/issues/4564">issue 4564</a>)
 
-    @subsection restclientv1_7_5 RestClient v1.7.5
+    @section restclientv1_7_5 RestClient v1.7.5
     - fixed a bug where REST schema validation was not applied in all contexts with specialized REST clients; this
       was enabled by refactoring the internal code that allowed the validation to be applied
       (<a href="https://github.com/qoretechnologies/qore/issues/4518">issue 4518</a>)
 
-    @subsection restclientv1_7_4 RestClient v1.7.4
+    @section restclientv1_7_4 RestClient v1.7.4
     - removed erroneous / extraneous URI encoding on REST paths before sending
       (<a href="https://github.com/qoretechnologies/qore/issues/4360">issue 4360</a>)
 
-    @subsection restclientv1_7_3 RestClient v1.7.3
+    @section restclientv1_7_3 RestClient v1.7.3
     - additional fixes to REST path handling with schema validators with a base path
       (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
-    @subsection restclientv1_7_2 RestClient v1.7.2
+    @section restclientv1_7_2 RestClient v1.7.2
     - better fixes to REST URI path handling with schema validation; ensure that the connection path is always cleared
       when a REST validator is present
       (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
-    @subsection restclientv1_7_1 RestClient v1.7.1
+    @section restclientv1_7_1 RestClient v1.7.1
     - added the \a swagger_base_path option to REST clients and connections to allow for Swagger schemas to have their
       base path overridden
       (<a href="https://github.com/qoretechnologies/qore/issues/4059">issue 4059</a>)
 
-    @subsection restclientv1_7 RestClient v1.7
+    @section restclientv1_7 RestClient v1.7
     - implemented support for a data provider scheme cache and rich option information for connections
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
     - fixed a bug handling complex \c Content-Type headers in responses
       (<a href="https://github.com/qoretechnologies/qore/issues/4019">issue 4019</a>)
 
-    @subsection restclientv1_6_1 RestClient v1.6.1
+    @section restclientv1_6_1 RestClient v1.6.1
     - added the @c no_charset option to options
       (<a href="https://github.com/qoretechnologies/qore/issues/3328">issue 3328</a>)
 
-    @subsection restclientv1_6 RestClient v1.6
+    @section restclientv1_6 RestClient v1.6
     - fixed a bug where the \c "response-code" key of the info output hash could be missing in some clases
       (<a href="https://github.com/qoretechnologies/qore/issues/3237">issue 3237</a>)
     - all connection clases have unified constructor
 
-    @subsection restclientv1_5 RestClient v1.5
+    @section restclientv1_5 RestClient v1.5
     - added the \c RestConnection::getConstructorInfo() "RestConnection::getConstructorInfo()"
       method to allow connections to be created dynamically, potentially in another process from a network
       call (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
-    @subsection restclientv1_4_2 RestClient v1.4.2
+    @section restclientv1_4_2 RestClient v1.4.2
     - fixed a bug handling default options including timeouts in REST connections in
       @ref RestClient::RestConnection "RestConnection"
       (<a href="https://github.com/qoretechnologies/qore/issues/3321">issue 3321</a>)
 
-    @subsection restclientv1_4_1 RestClient v1.4.1
+    @section restclientv1_4_1 RestClient v1.4.1
     - added support for REST requests with binary message bodies; added the \c "bin" serialization method
       (<a href="https://github.com/qoretechnologies/qore/issues/2816">issue 2816</a>)
 
-    @subsection restclientv1_4 RestClient v1.4
+    @section restclientv1_4 RestClient v1.4
     - added support for the \c text/plain Content-Type
     - added the @ref RestClient::RestConnection "RestConnection" class to support the
       @ref connectionproviderintro "ConnectionProvider" module
@@ -399,7 +411,7 @@ printf("%Y\n", ans.body);
       @ref restschemavalidatorintro "RestSchemaValidator" module and the @ref swaggerintro "Swagger" module
     - added default support for the HTTP \c "PATCH" method
 
-    @subsection restclientv1_3_1 RestClient v1.3.1
+    @section restclientv1_3_1 RestClient v1.3.1
     - added support for the \c "url" encoding for URL form encoded message bodies
       (<a href="https://github.com/qoretechnologies/qore/issues/1436">issue 1436</a>)
     - added support for the \c "rawxml" data type; when parsing XML responses, if the XML cannot be parsed as XML-RPC
@@ -408,7 +420,7 @@ printf("%Y\n", ans.body);
     - fixed a bug where an empty chunked response would cause a spurious exception to be thrown
       (<a href="https://github.com/qoretechnologies/qore/issues/1448">issue 1448</a>)
 
-    @subsection restclientv1_3 RestClient v1.3
+    @section restclientv1_3 RestClient v1.3
     - added:
       - @ref RestClient::RestClient::addDefaultHeaders() "RestClient::addDefaultHeaders()"
       - @ref RestClient::RestClient::getDefaultHeaders() "RestClient::getDefaultHeaders()"
@@ -422,18 +434,18 @@ printf("%Y\n", ans.body);
       status code < 100 or >= 300 to allow for error-handling in the client
     - fixed issues where multiple leading \c "/" chars were sometimes present in the request URI path
     - doc updates
-    @subsection restclientv1_2 RestClient v1.2
+    @section restclientv1_2 RestClient v1.2
     - allow the Content-Type header to be overriden in REST requests
     - added \a hdr args to REST methods
     - fixed a bug using the module when the yaml module is not available
     - ensure URI paths are absolute
 
-    @subsection restclientv1_1 RestClient v1.1
+    @section restclientv1_1 RestClient v1.1
     - updated to use encode_url() before sending HTTP messages
     - add charset=xxx to \c "Content-Type" header in requests
     - fixed \c "Accept" header in requests
 
-    @subsection restclientv1_0 RestClient v1.0
+    @section restclientv1_0 RestClient v1.0
     - initial release
 */
 
@@ -946,8 +958,8 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
         @ref restclientiointro "RestClientIo") call this hook before
         running the schema validator's request processing step.
 
-        Called with no argument by @ref RestSchemaValidator::AbstractRestSchemaObject
-        "AbstractRestSchemaObject::getDataTypeIntern()" to extract a default body
+        Called with no argument by
+        @ref RestSchemaValidator::AbstractRestSchemaObject "AbstractRestSchemaObject::getDataTypeIntern()" to extract a default body
         containing injected fields, which are used as defaults for required body
         fields in generated data provider types.
 
@@ -1107,8 +1119,8 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
     }
 
     #! Returns the complete response body
-    /** A text body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
-        "decode_http_body()"), and any other body is returned as binary data
+    /** A text body is decoded by the rules shared by all HTTP clients (see
+        @ref Qore::decode_http_body() "decode_http_body()"), and any other body is returned as binary data
 
         @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
     */
@@ -5116,8 +5128,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         const string RCF_OAUTH2 = "oauth2";
 
         #! The feature claimed for each OAuth2 grant type that has no authorization step
-        /** Grants with an authorization step are handled by @ref RestClient::RestConnection::checkAuthCodeFeature()
-            "checkAuthCodeFeature()" instead, since their features are claimed only when the connection also holds
+        /** Grants with an authorization step are handled by
+            @ref RestClient::RestConnection::checkAuthCodeFeature() "checkAuthCodeFeature()" instead, since their features are claimed only when the connection also holds
             every option needed to make the authorization request.  The grants here have no such request, so the
             feature follows from the grant type alone.
 

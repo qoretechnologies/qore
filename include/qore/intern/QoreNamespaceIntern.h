@@ -496,7 +496,7 @@ public:
 
     //! Registers an enum's members as constants of this namespace, the enum's member-access namespace
     /** Every path that makes an enum's members addressable as \c Enum::Member comes here: a parsed
-        declaration, a module merge, a system enum and a deserialized \c .qo shell.
+        declaration, a module merge, a system enum and a deserialized <tt>.qo</tt> shell.
 
         Each member is declared where its enum is declared.  A compile that folds \c Enum::Member leaves no
         trace of it in the emitted object, so the constant's location is the only record of the provider -- a

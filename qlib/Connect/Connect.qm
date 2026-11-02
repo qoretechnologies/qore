@@ -76,9 +76,40 @@ module Connect {
     - <b>gRPC interop</b>: when the \c grpc module is available, the same server handler
       can serve both Connect and gRPC clients simultaneously
 
-    @section connectquickstart Quick Start
+    Documentation:
+    - @subpage connectquickstart "Quick Start": complete server and client examples for all four RPC patterns
+    - @subpage connectcodecs "Codecs and Error Handling": serialization codecs, per-message compression and the
+      error code table
+    - @subpage connecttransport "Transport Protocols": HTTP/2, HTTP/3 (QUIC), QUIC datagrams and HTTP/1.1
+    - @subpage connectreflection "Service Reflection (Discovery)": describing and discovering services at runtime
 
-    @subsection connectquickstart_unary Unary RPC
+    @section connectclasses Classes
+
+    - @ref Connect::ConnectHandler "ConnectHandler": server-side HTTP request handler
+    - @ref Connect::ConnectClient "ConnectClient": client for making Connect RPC calls
+    - @ref Connect::ConnectClientStream "ConnectClientStream": client-side streaming handle
+    - @ref Connect::ConnectServerStream "ConnectServerStream": server-side streaming handle
+    - @ref Connect::ConnectHelper "ConnectHelper": framing, headers, protocol utilities
+    - @ref Connect::ConnectError "ConnectError": error model and serialization
+    - @ref Connect::ConnectCompression "ConnectCompression": per-message compression utilities
+    - @ref Connect::ConnectTypeHelper "ConnectTypeHelper": type serialization for reflection
+    - @ref Connect::ConnectReflectionClient "ConnectReflectionClient": client-side reflection helper
+    - @ref Connect::ConnectDatagramStream "ConnectDatagramStream": client-side datagram stream handle
+    - @ref Connect::ConnectServerDatagramStream "ConnectServerDatagramStream": server-side datagram stream handle
+    - @ref Connect::AbstractConnectCodec "AbstractConnectCodec": codec interface
+    - @ref Connect::YamlConnectCodec "YamlConnectCodec": YAML codec implementation
+    - @ref Connect::JsonConnectCodec "JsonConnectCodec": JSON codec implementation
+    - @ref Connect::CborConnectCodec "CborConnectCodec": CBOR codec implementation
+    - @ref Connect::GrpcDetection "GrpcDetection": gRPC/gRPC-Web protocol detection (always available)
+
+    See @subpage connectrelnotes "Release Notes" for the changes in each version.
+*/
+
+/** @page connectquickstart Quick Start
+
+    @tableofcontents
+
+    @section connectquickstart_unary Unary RPC
 
     @code{.py}
 %modern
@@ -100,7 +131,7 @@ auto response = client.call("Greeter", "SayHello", {"name": "World"});
 printf("Response: %y\n", response);
     @endcode
 
-    @subsection connectquickstart_serverstream Server Streaming
+    @section connectquickstart_serverstream Server Streaming
 
     @code{.py}
 # --- Server ---
@@ -120,7 +151,7 @@ while (*auto msg = stream.read()) {
 hash<ConnectCallResult> result = stream.finish();
     @endcode
 
-    @subsection connectquickstart_clientstream Client Streaming
+    @section connectquickstart_clientstream Client Streaming
 
     @code{.py}
 # --- Server ---
@@ -141,7 +172,7 @@ stream.writesDone();
 hash<ConnectCallResult> result = stream.finish();
     @endcode
 
-    @subsection connectquickstart_bidi Bidirectional Streaming
+    @section connectquickstart_bidi Bidirectional Streaming
 
     @code{.py}
 # --- Server ---
@@ -159,6 +190,11 @@ stream.write({"text": "Hello"});
 stream.writesDone();
 hash<ConnectCallResult> result = stream.finish();
     @endcode
+*/
+
+/** @page connectcodecs Codecs and Error Handling
+
+    @tableofcontents
 
     @section connectcodec Codec System
 
@@ -210,19 +246,22 @@ hash<ConnectCallResult> result = stream.finish();
 
     For unary RPCs, errors are returned as JSON bodies with an HTTP error status.
     For streaming RPCs, errors are carried in the EndStreamResponse frame.
+*/
 
-    @section connecttransport Transport Protocols
+/** @page connecttransport Transport Protocols
+
+    @tableofcontents
 
     The Connect module supports three HTTP transport protocols:
 
-    @subsection connecttransport_h2 HTTP/2
+    @section connecttransport_h2 HTTP/2
 
     HTTP/2 is the primary transport for Connect streaming RPCs.  It provides
     multiplexed streams over a single TCP connection with TLS.  All four RPC
     patterns (unary, server streaming, client streaming, bidirectional) are
     supported.
 
-    To force HTTP/2, set the \c protocol option to \c "h2" when creating a
+    To force HTTP/2, set the \c protocol option to <tt>&quot;h2&quot;</tt> when creating a
     @ref Connect::ConnectClient "ConnectClient":
 
     @code{.py}
@@ -230,7 +269,7 @@ ConnectClient client("https://example.com:8080", NOTHING,
     <ConnectClientOptions>{"protocol": "h2"});
     @endcode
 
-    @subsection connecttransport_h3 HTTP/3 (QUIC)
+    @section connecttransport_h3 HTTP/3 (QUIC)
 
     HTTP/3 runs over QUIC, providing several advantages over HTTP/2:
 
@@ -244,20 +283,20 @@ ConnectClient client("https://example.com:8080", NOTHING,
       loss on one stream does not block other streams
     - <b>Built-in encryption</b>: TLS 1.3 is integrated into the QUIC handshake
 
-    To force HTTP/3, set the \c protocol option to \c "h3":
+    To force HTTP/3, set the \c protocol option to <tt>&quot;h3&quot;</tt>:
 
     @code{.py}
 ConnectClient client("https://example.com:8080", NOTHING,
     <ConnectClientOptions>{"protocol": "h3"});
     @endcode
 
-    The default protocol is \c "auto", which tries HTTP/3 first and falls back
+    The default protocol is <tt>&quot;auto&quot;</tt>, which tries HTTP/3 first and falls back
     to HTTP/2 if QUIC is not available.
 
     @note HTTP/3 support requires the Qore runtime to be compiled with QUIC
-    support.  Use \c "h2" if QUIC is not available in your environment.
+    support.  Use <tt>&quot;h2&quot;</tt> if QUIC is not available in your environment.
 
-    @subsection connecttransport_datagram QUIC Datagrams (RFC 9221)
+    @section connecttransport_datagram QUIC Datagrams (RFC 9221)
 
     QUIC datagrams (RFC 9221) provide an alternative to QUIC streams for sending
     messages.  Unlike streams, datagrams are:
@@ -337,20 +376,23 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     @note Datagram support requires HTTP/3 (QUIC). Attempting to use datagrams
     over HTTP/2 or HTTP/1.1 will throw \c CONNECT-DATAGRAM-NOT-SUPPORTED.
 
-    @subsection connecttransport_h1 HTTP/1.1
+    @section connecttransport_h1 HTTP/1.1
 
     HTTP/1.1 is supported for unary RPCs only.  Streaming patterns require
     HTTP/2 or HTTP/3 for multiplexed framing.
+*/
 
-    @section connectreflection Service Reflection (Discovery)
+/** @page connectreflection Service Reflection (Discovery)
+
+    @tableofcontents
 
     Connect servers automatically register a built-in reflection service
-    (\c qore.connect.reflection) that enables clients to discover available
+    (<tt>qore.connect.reflection</tt>) that enables clients to discover available
     services, methods, RPC types, and request/response type schemas at runtime.
 
-    @subsection connectreflection_server Server Side
+    @section connectreflection_server Server Side
 
-    Type information is attached to methods via overloaded \c register* methods
+    Type information is attached to methods via overloaded <tt>register*</tt> methods
     that accept optional @ref DataProvider::AbstractDataProviderType parameters:
 
     @code{.py}
@@ -377,7 +419,7 @@ handler.registerUnary("Greeter", "SayHello", \sayHelloHandler(), req_type, resp_
     \c request_type and \c response_type.  The module re-exports the @ref dataproviderintro "DataProvider" module
     for its type API.
 
-    @subsection connectreflection_client Client Side
+    @section connectreflection_client Client Side
 
     Use @ref Connect::ConnectReflectionClient "ConnectReflectionClient" to discover
     services from a running server:
@@ -388,27 +430,11 @@ ConnectReflectionClient refl(client);
 list<string> services = refl.listServices();
 hash<string, hash<auto>> all = refl.discoverAll();
     @endcode
+*/
 
-    @section connectclasses Classes
+/** @page connectrelnotes Release Notes
 
-    - @ref Connect::ConnectHandler "ConnectHandler": server-side HTTP request handler
-    - @ref Connect::ConnectClient "ConnectClient": client for making Connect RPC calls
-    - @ref Connect::ConnectClientStream "ConnectClientStream": client-side streaming handle
-    - @ref Connect::ConnectServerStream "ConnectServerStream": server-side streaming handle
-    - @ref Connect::ConnectHelper "ConnectHelper": framing, headers, protocol utilities
-    - @ref Connect::ConnectError "ConnectError": error model and serialization
-    - @ref Connect::ConnectCompression "ConnectCompression": per-message compression utilities
-    - @ref Connect::ConnectTypeHelper "ConnectTypeHelper": type serialization for reflection
-    - @ref Connect::ConnectReflectionClient "ConnectReflectionClient": client-side reflection helper
-    - @ref Connect::ConnectDatagramStream "ConnectDatagramStream": client-side datagram stream handle
-    - @ref Connect::ConnectServerDatagramStream "ConnectServerDatagramStream": server-side datagram stream handle
-    - @ref Connect::AbstractConnectCodec "AbstractConnectCodec": codec interface
-    - @ref Connect::YamlConnectCodec "YamlConnectCodec": YAML codec implementation
-    - @ref Connect::GrpcDetection "GrpcDetection": gRPC/gRPC-Web protocol detection (always available)
-
-    @section connectrelnotes Release Notes
-
-    @subsection connect_v1_3 Connect Module Version 1.3
+    @section connect_v1_3 Connect Module Version 1.3
     - initial release
 */
 

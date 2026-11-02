@@ -9,7 +9,7 @@
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
     - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings
 
-    Alternatively, files with any extension except \c .q (for example \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all, automatically enable @ref modern "%modern" mode without any parse directive. Only files whose filename ends in exactly \c .q stay in legacy mode by default. The environment variable \c QORE_OLD_STYLE_DEFAULT (set to any non-empty value other than \c "0") globally disables this auto-enable, restoring the pre-3.0 opt-in-only default.
+    Alternatively, files with any extension except <tt>.q</tt> (for example <tt>.qr</tt>, <tt>.qc</tt>, <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>), as well as files with no extension at all, automatically enable @ref modern "%modern" mode without any parse directive. Only files whose filename ends in exactly <tt>.q</tt> stay in legacy mode by default. The environment variable \c QORE_OLD_STYLE_DEFAULT (set to any non-empty value other than \c "0") globally disables this auto-enable, restoring the pre-3.0 opt-in-only default.
 
     @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings", @ref strict-warnings "%strict-warnings") are still supported for backward compatibility and fine-grained control.
 
@@ -69,7 +69,7 @@
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br/><br/>Since %Qore 0.8.6
     |@ref exec-class "%exec-class" <em>@ref qore_classes "class_name"</em>|Instantiates the named class as the application class; also turns on @ref no-top-level "%no-top-level". If the program is read from stdin or from the command line, an argument must be given specifying the class name. Any top level statements before this directive are silently ignored
     |@ref fp-fast-math "%fp-fast-math"|Allows optimizers to use IEEE-unsafe floating-point reassociation and contraction, but only for operations whose metadata also opts in. Set programmatically with the string \c "fp-fast-math" on @ref Qore::ParseOptions<br/><br/>Since %Qore 3.0
-    |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, <tt>\|\|</tt>, and \c () operators
+    |@ref parse_if "%if" <em>expression</em>|Opens a @ref conditional_parsing "conditionally-parsed" block with boolean expression support; supports \c defined(SYMBOL), \c !, \c &&, <tt>\|\|</tt>, and <tt>()</tt> operators
     |@ref ifdef "%ifdef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is defined, then the block after the @ref ifdef "%ifdef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br/><br/>Since %Qore 0.8.3
     |@ref ifndef "%ifndef" <em>define_name</em>|Opens a @ref conditional_parsing "conditionally-parsed" block; if the given @ref conditional_parsing "parse define" is not defined, then the block after the @ref ifndef "%ifndef" is parsed until either an @ref elif "%elif", @ref else "%else", or an @ref endif "%endif" <br/><br/>Since %Qore 0.8.3
     |@ref include "%include" <em>file_name</em>|Starts parsing \a file_name immediately. Parsing resumes with the current input after \a file_name has been completely parsed
@@ -77,7 +77,7 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than \c .q (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br/><br/>Since %Qore 3.0
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than <tt>.q</tt> (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br/><br/>Since %Qore 3.0
     |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br/><br/>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br/><br/>Since %Qore 0.8.4
@@ -165,8 +165,15 @@
     - @ref variable_declarations "global variables"
     - (non-class) @ref constants "constants" \n\n
 
+    @anchor bare_refs_top_level_locals
+    In a method, a bare name refers to the method's own local variables first, then to the class's members,
+    constants, static variables and methods, and only then to a top-level local variable of the program, which has
+    global scope like a global variable (see @ref threading_and_variables).  In a static method, a bare name of an
+    instance member is a parse error, also when a top-level local variable or a global variable has the same name;
+    give the top-level local variable a different name.
+
     @note
-    - when using this option (or @ref new-style "%new-style) the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them
+    - when using this option (or @ref new-style "%new-style") the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them
     - ref implicit_arguments "implicit arguments" are still referenced with the \c "$" character even when this parse option is set.
 
     @since %Qore 0.8.1
@@ -1160,7 +1167,7 @@ i+ =4;
     n/a
 
     @par Description:
-    Provides else-if functionality in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if". The expression uses the same syntax as @ref parse_if "%if", supporting \c defined(SYMBOL), \c !, \c &&, \c ||, and \c () operators.
+    Provides else-if functionality in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if". The expression uses the same syntax as @ref parse_if "%if", supporting \c defined(SYMBOL), \c !, \c &&, \c ||, and <tt>()</tt> operators.
 
     @par Example:
     @code{.py}
@@ -1245,7 +1252,7 @@ i+ =4;
     - \c @@assert statements are parsed and executed at runtime, throwing an \c ASSERTION-ERROR exception
       if the condition is false
     - \c @@debug statements are parsed and executed at runtime for their side effects (e.g., logging);
-      supports both expression form \c @@debug(expr) and block form \c @@debug \c { \c ... \c }
+      supports both expression form \c @@debug(expr) and block form \c @@debug \c { <tt>...</tt> \c }
 
     Without this directive, both \c @@assert and \c @@debug statements are completely skipped at parse time,
     providing zero runtime overhead when debugging is disabled.
@@ -1417,7 +1424,7 @@ sub validate_input(int value, int max_value) {
     - \c ! - logical NOT operator
     - \c && - logical AND operator
     - \c || - logical OR operator
-    - \c () - parentheses for grouping
+    - <tt>()</tt> - parentheses for grouping
 
     @par Examples:
     @code{.py}
@@ -1592,7 +1599,7 @@ sub validate_input(int value, int max_value) {
     Because @ref streaming-any "%streaming-any" is enabled, \c any is parsed as the @ref streaming_any "any streaming operator" in expression contexts while remaining available as the @ref any_type "any" type name in declarations for compatibility. In @ref modern "%modern" code, use @ref auto_type "auto" for unrestricted declarations unless complex runtime type stripping is specifically required.
 
     @par File Extension:
-    Starting with %Qore 3.0, files with any extension except \c .q automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore, as well as files with no extension at all. Only files whose filename ends in exactly \c .q stay in legacy mode by default, preserving backward compatibility for existing scripts.
+    Starting with %Qore 3.0, files with any extension except <tt>.q</tt> automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as <tt>.qr</tt>, <tt>.qc</tt>, <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>, as well as files with no extension at all. Only files whose filename ends in exactly <tt>.q</tt> stay in legacy mode by default, preserving backward compatibility for existing scripts.
 
     @code{.py}
     # hello.qr - no parse directives needed!
@@ -1603,7 +1610,7 @@ sub validate_input(int value, int max_value) {
     @endcode
 
     @par Environment Override:
-    Setting the \c QORE_OLD_STYLE_DEFAULT environment variable to any non-empty value other than \c "0" disables the extension-based auto-enable globally; under this override, only the \c %%modern parse directive, the \c -M command-line flag, or an explicit @ref Qore::PO_MODERN programmatic option will enable modern mode. This escape hatch is intended for users rolling legacy code bases forward without renaming every source file to \c .q.
+    Setting the \c QORE_OLD_STYLE_DEFAULT environment variable to any non-empty value other than \c "0" disables the extension-based auto-enable globally; under this override, only the \c %%modern parse directive, the \c -M command-line flag, or an explicit @ref Qore::PO_MODERN programmatic option will enable modern mode. This escape hatch is intended for users rolling legacy code bases forward without renaming every source file to <tt>.q</tt>.
 
     @note
     - All examples in the %Qore documentation assume @ref modern "%modern" mode.
@@ -1632,7 +1639,7 @@ sub validate_input(int value, int max_value) {
 
     @note
     - For new code, consider using @ref modern "%modern" instead, which includes @ref new-style "%new-style" plus additional recommended options.
-    - when using this option (or @ref allow-bare-refs "%allow-bare-refs) the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them
+    - when using this option (or @ref allow-bare-refs "%allow-bare-refs") the lack of \c "$" characters in variable names makes it necessary to declare local variables before using them
 
     @since %Qore 0.8.1
 
@@ -2083,7 +2090,7 @@ sub validate_input(int value, int max_value) {
     @ref QoreParseOptions::STREAMING_ANY
 
     @par Description:
-    Treats ambiguous \c any expressions as the @ref streaming_any "any" streaming operator in expression contexts. This means \c "any values" is parsed as "does \c values yield at least one element" in expression-only positions such as after \c return or an assignment operator. The @ref any_type "any" type name remains available in declaration contexts such as variable declarations, parameters, return types, and member declarations for compatibility. New modern declarations should use @ref auto_type "auto" instead.
+    Treats ambiguous \c any expressions as the @ref streaming_any "any" streaming operator in expression contexts. This means <tt>any values</tt> is parsed as: does <tt>values</tt> yield at least one element in expression-only positions such as after \c return or an assignment operator. The @ref any_type "any" type name remains available in declaration contexts such as variable declarations, parameters, return types, and member declarations for compatibility. New modern declarations should use @ref auto_type "auto" instead.
 
     In syntactic positions that can also be declaration or parameter lists, such as direct function-call arguments, write the source expression explicitly as \c "any (values)". Predicate forms such as \c "any $1 > 0, values" and \c "any isValid($1), values" are parsed as the streaming operator when it is enabled.
 
@@ -2488,7 +2495,7 @@ sub legacy() {
     iterate a plain @ref context "context" loop and perform grouping manually.
 
     This option is implied by @ref modern "%modern" and therefore applies to all
-    \c .qr files and any program started with the \c -M command-line flag or the
+    <tt>.qr</tt> files and any program started with the \c -M command-line flag or the
     @ref Qore::PO_MODERN option constant.
 
     @note This is an extended parse option (bit 69). The Qore constant \c PO_NO_SUMMARIZE

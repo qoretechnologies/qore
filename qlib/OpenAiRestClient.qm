@@ -130,18 +130,17 @@ stream.close();
       that of \c https://gateway.example.com/project/v1), is used as it is, and \c /v1 is appended to any other
       path; a provider that publishes at its own path, such as Perplexity, keeps it
     - Preserve reasoning-only stream frames for compatible providers such as DeepSeek.
-    - the provider factory reports, with @ref OpenAiRestClient::OpenAiLlmProviderFactory::getModelInfo()
-      "OpenAiLlmProviderFactory::getModelInfo()", which OpenAI models cannot turn hidden reasoning off
+    - the provider factory reports, with
+      @ref OpenAiRestClient::OpenAiLlmProviderFactory::getModelInfo() "OpenAiLlmProviderFactory::getModelInfo()", which OpenAI models cannot turn hidden reasoning off
       (\c reasoning_always_on): the o-series, \c gpt-5, \c gpt-5-mini, \c gpt-5-nano, \c gpt-5-codex, the GPT-5
       pro models, \c gpt-6-astra and \c gpt-6.1-sol;
-      @ref OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort()
-      "OpenAiLlmProvider::getLowestReasoningEffort()" returns their lowest reasoning effort
+      @ref OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort() "OpenAiLlmProvider::getLowestReasoningEffort()" returns their lowest reasoning effort
     - the reasoning effort \c none is refused before the request is sent for every model that does not accept it
     - a reasoning token budget of zero or
       @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off with the
       reasoning effort \c none on the models that accept it, and selects the lowest effort of the models that cannot
-      turn reasoning off (@ref OpenAiRestClient::OpenAiLlmProvider::getOffReasoningEffort()
-      "OpenAiLlmProvider::getOffReasoningEffort()")
+      turn reasoning off
+      (@ref OpenAiRestClient::OpenAiLlmProvider::getOffReasoningEffort() "OpenAiLlmProvider::getOffReasoningEffort()")
     - the arguments of a tool call that are not a JSON object are kept in the \c _raw key, as those of a streamed
       call are
     - the finish reason \c model_length (the model's context length was reached) is an output limit, as \c length
@@ -161,6 +160,26 @@ stream.close();
     - fixed @ref OpenAiRestClient::OpenAiRestClientBase::getOptions() "OpenAiRestClientBase::getOptions()" and
       the client constructors to accept an option hash whose values all have the same type, such as
       \c {"use_schema": True}; adding the schema path raised \c RUNTIME-TYPE-ERROR
+    - native OpenAI reasoning requests made through the LLM interface use the Responses API, including strict
+      structured output, streaming, encrypted reasoning continuation and completion status; OpenAI-compatible
+      servers use Chat Completions unless the \c openai_api provider option selects the Responses API
+    - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is the base for any backend that speaks the
+      OpenAI chat-completions wire format (xAI Grok, Perplexity, Azure OpenAI, etc.); the
+      @ref OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPath() "getChatCompletionsPath()" hook lets a
+      derived provider use another URL path
+    - added the \c chat-model connection option (default \c "gpt-4o-mini"), the model used when the connection is
+      selected for chat; @ref QoreLlmUtils::AbstractLlmProvider::getRequestModel() "getRequestModel()" falls back
+      to the @ref QoreLlmUtils::AbstractLlmProvider::getDefaultModel() "getDefaultModel()" hook, so a chat request
+      always carries a model; providers whose model is not an OpenAI model name (Azure, which routes by deployment)
+      return @ref nothing
+    - OpenAI-compatible requests preserve reasoning effort, strict tool schemas, JSON output formats, parallel-tool
+      controls and service-tier selection through the generic LLM facade; GPT-5 and GPT-6 reasoning requests use
+      the supported output-token field and omit unsupported sampling defaults, and explicitly disabled reasoning is
+      preserved
+    - streaming completions request and keep the provider's token usage, including usage delivered after the final
+      content or tool-call chunk; cache-write usage is kept for both OpenAI token detail formats without counting
+      reasoning twice; chat clients keep usage and output-limit status when tool arguments are incomplete, and
+      truncated or content-filtered responses are not given as executable tool calls
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - initial release
@@ -1108,7 +1127,7 @@ class OpenAiStrictOutputSchema {
 
     This class is the reusable base for <b>any</b> OpenAI-compatible chat
     backend that speaks the OpenAI wire shape (\c messages, \c tools,
-    \c response_format, \c usage, SSE \c data: deltas with \c [DONE]
+    \c response_format, \c usage, SSE \c data: deltas with <tt>[DONE]</tt>
     terminator) with \c Authorization: \c Bearer authentication.  Concrete
     subclasses register a distinct
     @ref QoreLlmUtils::AbstractLlmProviderFactory under a vendor-specific
@@ -2210,14 +2229,14 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         Documentation:
         - https://developers.openai.com/api/docs/guides/gpt-5: \c minimal is "our fastest option that still reaps
           the benefits of the reasoning model paradigm"; no effort below it turns reasoning off on \c gpt-5
-        - https://github.com/openai/openai-python/blob/v2.14.0/src/openai/types/shared/reasoning.py: "All models before
-          \c gpt-5.1 default to \c medium reasoning effort, and do not support \c none"; "The \c gpt-5-pro model
-          defaults to (and only supports) \c high reasoning effort"
-        - https://developers.openai.com/api/docs/guides/reasoning: "GPT-6 Astra does not support \c none reasoning
-          effort"; https://developers.openai.com/api/docs/models/gpt-6.1-sol: "The none and minimal reasoning efforts
+        - https://github.com/openai/openai-python/blob/v2.14.0/src/openai/types/shared/reasoning.py: &ldquo;All models before
+          \c gpt-5.1 default to \c medium reasoning effort, and do not support \c none&rdquo;; &ldquo;The \c gpt-5-pro model
+          defaults to (and only supports) \c high reasoning effort&rdquo;
+        - https://developers.openai.com/api/docs/guides/reasoning: &ldquo;GPT-6 Astra does not support \c none reasoning
+          effort&rdquo;; https://developers.openai.com/api/docs/models/gpt-6.1-sol: "The none and minimal reasoning efforts
           are not supported"
-        - https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning: "\c gpt-5-codex also does not
-          support \c reasoning_effort \c minimal", and as a model before \c gpt-5.1 it does not support \c none
+        - https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning: &ldquo;\c gpt-5-codex also does not
+          support \c reasoning_effort \c minimal&rdquo;, and as a model before \c gpt-5.1 it does not support \c none
 
         @param model the model ID; a \c "models/" prefix and a snapshot date suffix are ignored
 
@@ -2377,8 +2396,7 @@ public class OpenAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvider
     #! Returns the provider's information for a model
     /** OpenAI reasoning models that do not accept the reasoning effort \c "none" cannot turn hidden reasoning off
         (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on"); see
-        @ref OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort()
-        "OpenAiLlmProvider::getLowestReasoningEffort()" for the models and the evidence.
+        @ref OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort() "OpenAiLlmProvider::getLowestReasoningEffort()" for the models and the evidence.
 
         @param model the model ID that calls are made with
 

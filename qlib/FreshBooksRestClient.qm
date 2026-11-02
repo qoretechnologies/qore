@@ -478,8 +478,8 @@ public class FreshBooksRestClientIo inherits RestClientIo::RestClientIo, FreshBo
     }
 
     #! Creates the object with the given options
-    /** @param opts constructor options; in addition to the options of @ref RestClientIo::RestClientIo
-        "RestClientIo", the following options are supported:
+    /** @param opts constructor options; in addition to the options of
+        @ref RestClientIo::RestClientIo "RestClientIo", the following options are supported:
         - \c account_id: the FreshBooks account ID (required for accounting endpoints)
         - \c business_id: the FreshBooks business ID (required for time tracking endpoints)
         @param shared_mgr optional shared connection manager

@@ -269,8 +269,8 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
     #! Returns an enriched error description that includes the Insightly API error message if available
     /** Insightly returns error bodies in several inconsistent shapes depending on the endpoint and
         error class (all observed live):
-        - List with uppercase keys: \c [{"FIELD_NAME": "...", "MESSAGE": "..."}]  (validation)
-        - List with TitleCase keys: \c [{"Name": "...", "Message": "..."}]  (malformed JSON)
+        - List with uppercase keys: <tt>[{&quot;FIELD_NAME&quot;:</tt> "...", "MESSAGE": "..."}]  (validation)
+        - List with TitleCase keys: <tt>[{&quot;Name&quot;:</tt> "...", "Message": "..."}]  (malformed JSON)
         - Plain text string: \c "Field 'ownerUserId' must contain a valid id"
         - Plain number (echoed ID) or empty body
 

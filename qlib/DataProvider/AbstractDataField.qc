@@ -56,6 +56,8 @@ public hashdecl DataFieldInfo {
     auto remote_default_value;
 
     #! for enum fields; allowed values
+    /** A field whose type is optional also accepts no value and @ref null, which are not among its allowed values
+    */
     *list<hash<AllowedValueInfo>> allowed_values;
 
     #! Does the field accept values not defined in allowed_values too?
@@ -103,7 +105,7 @@ public class AbstractDataField inherits Qore::Serializable {
         #! Abbreviations whose full stop does not end a sentence
         /** @ref getShortDescription() takes the first sentence of a long description, and a full stop that
             ends one of these does not end a sentence.  Xero documents an argument as
-            <tt>"e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included"</tt>,
+            <tt>&quot;e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included&quot;</tt>,
             whose first "sentence" is otherwise the single letter \c "e".
 
             Compared case-insensitively.
@@ -452,7 +454,7 @@ public class AbstractDataField inherits Qore::Serializable {
         NUL character, which cannot be a key of the set of choices
         @note Failed conversion leaves the previous choices and membership rules unchanged.
         @par Example
-        A currency list with choices \c ("EUR", "USD") accepts \c ("EUR", "EUR") and rejects \c ("GBP",).
+        A currency list with choices <tt>(&quot;EUR&quot;</tt>, "USD") accepts <tt>(&quot;EUR&quot;</tt>, "EUR") and rejects <tt>(&quot;GBP&quot;,)</tt>.
     */
     AbstractDataField setElementAllowedValues(list<auto> element_allowed_values,
             *bool element_allowed_values_creatable) {

@@ -784,6 +784,9 @@ module GmailDataProvider {
     - added the \c max_messages_per_cycle watch option to bound the work one cycle can do; the limit is
       applied from the oldest end of the backlog, so the cursor still advances contiguously and the
       remaining messages are delivered by the following cycles rather than skipped
+    - message watches persist the last delivered timestamp and the IDs of the messages delivered in the same second
+      when the host application configures checkpoint storage, so retained messages are not processed again after a
+      service reload
 
     @subsection gmaildataprovider_v1_0 GmailDataProvider v1.0
     - initial release

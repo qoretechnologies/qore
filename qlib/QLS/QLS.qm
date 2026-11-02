@@ -76,13 +76,56 @@ module QLS {
     - @ref QLS::ParamValidator "ParamValidator": validates incoming request parameters against
       required fields and types
 
-    @section qlsfeatures Supported LSP Features
+    @section qlsdocs QLS Documentation
+
+    - @subpage qlsusage "Using QLS": editor integration, VS Code configuration, and running the server from code
+    - @subpage qlsfeatures "Supported LSP Features": every supported LSP method, by category
+    - @subpage qlsarchitecture "Architecture": document stores, workspace indexing and its options, the server
+      loop, diagnostics, document synchronization, and builtin symbols
+    - @subpage qlsrelnotes "Release Notes": the changes in each version
+*/
+/** @page qlsusage Using QLS
+
+    @tableofcontents
+
+    @section qls_editor Editor Integration
+
+    QLS is installed as the @c qls system command and communicates via JSON-RPC over
+    stdin/stdout, making it compatible with any editor that supports the LSP standard.
+
+    @section qls_vscode VS Code Configuration
+
+    Add the following to your VS Code <tt>settings.json</tt> to use QLS:
+
+    @code{.json}
+{
+    "qore.executable": "/usr/bin/qore",
+    "qore.useQLS": true
+}
+    @endcode
+
+    @section qls_programmatic Programmatic Usage
+
+    @code{.py}
+%requires QLS
+
+# Create and run the server (reads stdin, writes stdout)
+QLS::QLSServer server();
+server.main();
+    @endcode
+
+    For testing, you can call @ref QLS::QLSServer::handleRequest() "handleRequest()" directly
+    with JSON-RPC message strings to simulate editor requests.
+*/
+/** @page qlsfeatures Supported LSP Features
+
+    @tableofcontents
 
     The following table lists all LSP features supported by QLS, organized by category:
 
     <b>Navigation</b>
     |!Feature|!LSP Method|!Description
-    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; declarations in the source show the documentation of their @c #! and @c /** doc comments, with parameters, return values, exceptions and code examples, also while the document has syntax errors, as do signature help and completion items; members accessed with @c . are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
+    |Hover|@c textDocument/hover|Shows type, documentation, and source info for the symbol under the cursor; declarations in the source show the documentation of their <tt>#!</tt> and <tt>/**</tt> doc comments, with parameters, return values, exceptions and code examples, also while the document has syntax errors, as do signature help and completion items; members accessed with <tt>.</tt> are resolved by the types of their receivers, including the methods of basic types and the members of typed hashes (see @ref qls_builtins)
     |Go to Definition|@c textDocument/definition|Jumps to the definition of a symbol
     |Go to Declaration|@c textDocument/declaration|Jumps to the declaration of a symbol; declarations are definitions in %Qore
     |Document Links|@c textDocument/documentLink|Links the module names and paths of @c %%requires, @c %%try-module and @c %%include directives to their source files, resolving module names like %Qore with the document's module path directives, @c QORE_MODULE_DIR and the library module path
@@ -92,10 +135,10 @@ module QLS {
 
     <b>Code Intelligence</b>
     |!Feature|!LSP Method|!Description
-    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters @c . (member access), @c : (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it; the members of builtin classes include inherited members, and the receivers of @c . can be calls such as @c now() (see @ref qls_builtins)
-    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters @c ( and @c ,, including the functions of builtin namespaces and the methods of builtin types
+    |Code Completion|@c textDocument/completion|Context-aware completions with trigger characters <tt>.</tt> (member access), <tt>:</tt> (namespace/static), and normal identifier completion; uses @ref qorecodecompletionintro "QoreCodeCompletion"; callables are inserted as snippets with the cursor between the parentheses, VS Code clients are asked to show parameter hints and further suggestions after callables and namespaces, and documentation is Markdown when the client supports it; the members of builtin classes include inherited members, and the receivers of <tt>.</tt> can be calls such as @c now() (see @ref qls_builtins)
+    |Signature Help|@c textDocument/signatureHelp|Function/method parameter hints with trigger characters <tt>(</tt> and <tt>,</tt>, including the functions of builtin namespaces and the methods of builtin types
     |Inlay Hints|@c textDocument/inlayHint|Shows parameter names at call sites as inline hints
-    |Semantic Tokens|@c textDocument/semanticTokens/full, @c .../full/delta and @c .../range|Full semantic syntax highlighting with node-level classification
+    |Semantic Tokens|@c textDocument/semanticTokens/full, <tt>.../full/delta</tt> and <tt>.../range</tt>|Full semantic syntax highlighting with node-level classification
     |Document Highlight|@c textDocument/documentHighlight|Highlights all occurrences of the symbol under the cursor
     |Linked Editing|@c textDocument/linkedEditingRange|Edits the occurrences of a local variable or parameter together; occurrences of variables with the same name in other functions are not included
     |Inline Values|@c textDocument/inlineValue|Shows the values of the local variables and parameters of the function where the debugger stopped, in the visible lines up to the stopped line
@@ -103,7 +146,7 @@ module QLS {
     <b>Refactoring</b>
     |!Feature|!LSP Method|!Description
     |Rename|@c textDocument/rename (with @c textDocument/prepareRename)|Renames a symbol across all documents in the workspace
-    |File Rename|@c workspace/willRenameFiles|Updates the @c %%include and module path directives that refer to renamed or moved %Qore files, and the relative paths of moved files; relative, @c ${SCRIPT_DIR} and absolute paths keep their form (paths use @c / as the separator)
+    |File Rename|@c workspace/willRenameFiles|Updates the @c %%include and module path directives that refer to renamed or moved %Qore files, and the relative paths of moved files; relative, <tt>${SCRIPT_DIR}</tt> and absolute paths keep their form (paths use <tt>/</tt> as the separator)
     |Code Actions|@c textDocument/codeAction|Quick fixes: sort imports, add @c %modern directive
 
     <b>Code Structure</b>
@@ -122,42 +165,13 @@ module QLS {
     |!Feature|!LSP Method|!Description
     |Document Formatting|@c textDocument/formatting|Whole-document formatting via @ref qorecodeformatintro "QoreCodeFormat"
     |Range Formatting|@c textDocument/rangeFormatting|Formats the selected lines: the whole document is formatted, as the formatter needs the complete syntax tree, and only the changed lines that overlap the selection are returned
-    |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on @c }
+    |On-Type Formatting|@c textDocument/onTypeFormatting|Auto-indent on Enter, auto-dedent on <tt>}</tt>
     |Code Lens|@c textDocument/codeLens|Shows reference counts across open and workspace documents above declarations; the lenses run the \c qls.showReferences client command with the document URI and the position of the declared name
     |Diagnostics|@c textDocument/publishDiagnostics, @c textDocument/diagnostic, @c workspace/diagnostic|Reports Qore parse errors and warnings for standalone scripts and syntax errors for other files (see @ref qls_diagnostics)
+*/
+/** @page qlsarchitecture Architecture
 
-    @section qlsusage Usage
-
-    @subsection qls_editor Editor Integration
-
-    QLS is installed as the @c qls system command and communicates via JSON-RPC over
-    stdin/stdout, making it compatible with any editor that supports the LSP standard.
-
-    @subsection qls_vscode VS Code Configuration
-
-    Add the following to your VS Code @c settings.json to use QLS:
-
-    @code{.json}
-{
-    "qore.executable": "/usr/bin/qore",
-    "qore.useQLS": true
-}
-    @endcode
-
-    @subsection qls_programmatic Programmatic Usage
-
-    @code{.py}
-%requires QLS
-
-# Create and run the server (reads stdin, writes stdout)
-QLS::QLSServer server();
-server.main();
-    @endcode
-
-    For testing, you can call @ref QLS::QLSServer::handleRequest() "handleRequest()" directly
-    with JSON-RPC message strings to simulate editor requests.
-
-    @section qlsarchitecture Architecture
+    @tableofcontents
 
     @verbatim
     Editor  <-->  JSON-RPC (Messenger)  <-->  QLSServer  <-->  Document  <-->  astparser/CSTSearcher
@@ -178,7 +192,7 @@ server.main();
     Cross-document features (find references, rename, call hierarchy) search across all three
     stores to provide workspace-wide results.
 
-    @subsection qls_indexing Workspace Indexing
+    @section qls_indexing Workspace Indexing
 
     A syntax tree takes roughly 20 times the size of its source in memory, so files that are not
     open in the editor are not kept as syntax trees.  Each file is parsed once, the symbols that it
@@ -208,7 +222,7 @@ server.main();
 
     These limits can be set with the @c initializationOptions of the @c initialize request:
     |!Option|!Type|!Description
-    |@c excludeDirs|list of strings|shell-style glob patterns (@c * and @c ?) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
+    |@c excludeDirs|list of strings|shell-style glob patterns (<tt>*</tt> and <tt>?</tt>) for subdirectory names that are not searched; replaces @ref QLS::Files::DefaultExcludeDirs
     |@c maxIndexFileSize|int|files larger than this many bytes are not indexed; @c 0 means no limit (default: @ref QLS::Files::DefaultMaxIndexFileSize)
     |@c treeCacheSize|int|syntax trees of indexed files are cached up to this many bytes of source; @c 0 disables the cache (default: @ref QLS::DefaultTreeCacheSize)
     |@c diagnostics|string|@c "qore" (the default) to check standalone scripts with the %Qore parser, or @c "syntax" to only report syntax errors (see @ref qls_diagnostics)
@@ -227,13 +241,13 @@ server.main();
 
     Options with invalid values are logged and ignored.
 
-    @subsection qls_loop Server Loop
+    @section qls_loop Server Loop
 
     @ref QLS::QLSServer::main() "QLSServer::main()" reads messages in a background thread, so that
-    @c $/cancelRequest notifications are seen while a request is processed.  The workspace is indexed after the
+    <tt>$/cancelRequest</tt> notifications are seen while a request is processed.  The workspace is indexed after the
     client's @c initialized notification, one file at a time while no message is waiting, so requests are answered
     during indexing with the files indexed so far:
-    - clients that support work done progress (@c window.workDoneProgress) are asked to create a progress token
+    - clients that support work done progress (<tt>window.workDoneProgress</tt>) are asked to create a progress token
       and get @c begin, @c report and @c end notifications for the workspace files
     - standard module files are indexed after the workspace files, so the first lookup in a standard module does
       not have to wait for them
@@ -250,10 +264,10 @@ server.main();
     @ref QLS::QLSServer::cancelRequest() "cancelRequest()".  To run the server on other streams, pass an
     @ref QLS::LspConnection "LspConnection" to @ref QLS::QLSServer::main() "main()".
 
-    @subsection qls_diagnostics Diagnostics
+    @section qls_diagnostics Diagnostics
 
-    Standalone scripts (@c .q, @c .qr and @c .qtest files, and files without an extension that start with a
-    @c qore @c "#!" line) are checked with the %Qore parser when they are opened and when they are saved:
+    Standalone scripts (<tt>.q</tt>, <tt>.qr</tt> and <tt>.qtest</tt> files, and files without an extension that start with a
+    <tt>qore</tt> <tt>#!</tt> line) are checked with the %Qore parser when they are opened and when they are saved:
     <tt>qore --diag-format=json -W</tt> parses the file in a separate process, so the modules that the script
     requires are loaded there and not in the server.  The diagnostics include type errors, unresolved symbols,
     errors in required modules (at their @c %%requires directive) and warnings, and are shown while the document has
@@ -276,9 +290,9 @@ server.main();
     changed since the client's last result are reported as unchanged, and clients are asked to pull the
     diagnostics again when background indexing is done and when workspace files change.
 
-    @subsection qls_sync Document Synchronization and Symbols
+    @section qls_sync Document Synchronization and Symbols
 
-    Open documents are synchronized incrementally (@c TextDocumentSyncKind.Incremental): clients send only the
+    Open documents are synchronized incrementally (<tt>TextDocumentSyncKind.Incremental</tt>): clients send only the
     changed ranges, with positions in UTF-16 code units as defined by LSP.  Save notifications are requested.
 
     @c textDocument/documentSymbol returns a tree of @c DocumentSymbol objects when the client supports
@@ -287,7 +301,7 @@ server.main();
     Clients without this capability, and requests with the @c retType parameter used by the VS Code extension
     API, get a flat list of @c SymbolInformation objects with qualified names.
 
-    @subsection qls_builtins Builtin Symbols
+    @section qls_builtins Builtin Symbols
 
     Hover, completion and signature help cover the builtin API of %Qore: its functions, classes, constants,
     hashdecls, enums and namespaces, which are extracted with the @c reflection module and documented with the
@@ -295,7 +309,7 @@ server.main();
     metadata: the methods of @c \<string\> can be called on strings, for example, and the methods of @c \<value\> on
     all values.
 
-    Members accessed with @c . are resolved by the types of their receivers, which
+    Members accessed with <tt>.</tt> are resolved by the types of their receivers, which
     @ref astparser::AstTreeSearcher::getExpressionChain() returns as chains of variables, calls and members; in
     @code{.py}
 string text = now().format("YYYY-MM-DD") + ": " + hstat(path).size;
@@ -305,10 +319,11 @@ string text = now().format("YYYY-MM-DD") + ": " + hstat(path).size;
     parent classes and the methods of the @c \<object\> and @c \<value\> pseudo-classes, and typed hashes have the
     methods of the @c \<hash\> pseudo-class.  Names declared in the open documents or the workspace, such as a
     function named like a builtin function, are resolved as source symbols instead of builtin symbols.
+*/
+/** @page qlsrelnotes Release Notes
 
-    @section qlsrelnotes Release Notes
 
-    @subsection qls_v1_0 v1.0
+    @section qls_v1_0 v1.0
     - initial release
 */
 

@@ -602,7 +602,7 @@ public class DpqlActionSession {
     #! Returns the span type of each token: by its token type, and for a word by where it is
     /** A word (@ref DPQL_TOK_IDENTIFIER) is typed as the parser reads it:
         - after a dot or in a key accessor (<tt>\@a[*].b</tt>, <tt>\@x{map}</tt>): \c field, as are the string and
-          number keys of a key accessor (<tt>\@x{"k", 2}</tt>)
+          number keys of a key accessor (<tt>\@x{&quot;k&quot;, 2}</tt>)
         - after an operand: \c operator for \c between, \c in, \c and, \c not before \c in or \c between, and an
           infix comparison operator of the expressions (ex: \c like)
         - in a value position: \c operator for a prefix operator (ex: \c map, \c count, \c first), \c identifier for

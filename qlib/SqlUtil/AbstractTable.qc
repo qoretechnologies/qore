@@ -90,8 +90,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               and foreign key relationships between tables
             - \c deferrable: (@ref bool_type) if @ref True "True", constraint checks can be deferred until
               transaction commit; only the PostgreSQL and Oracle drivers support deferrable foreign constraints
-              (see @ref SqlUtil::AbstractTable::supportsDeferrableForeignConstraints()
-              "supportsDeferrableForeignConstraints()"), which create, describe and compare them; every other
+              (see
+              @ref SqlUtil::AbstractTable::supportsDeferrableForeignConstraints() "supportsDeferrableForeignConstraints()"), which create, describe and compare them; every other
               driver (MySQL, SQL Server and Sybase, SQLite and Firebird) refuses this option with
               \c FOREIGN-CONSTRAINT-ERROR.  The SQL of a foreign constraint object gives deferrability only on
               PostgreSQL and Oracle, so a @ref SqlUtil::AbstractForeignConstraint::deferrable "deferrable" member
@@ -165,8 +165,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c trigger_map: (@ref hash_type) a hash for automatically renaming triggers; if the source name (key) exists and the target name (value) does not exist, then the source trigger is automatically renamed
             - \c db_table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining tables in the database and foreign key relationships between tables
             - \c force: (\c bool_type) if @ref True "True" and supported by the driver and object, any objects dropped will be dropped with \c FORCE or \c CASCADE options
-            - \c foreign_constraint_alignment: (@ref SqlUtil::SchemaForeignConstraintAlignment
-              "SchemaForeignConstraintAlignment") the foreign constraints of the tables of a schema alignment; set by
+            - \c foreign_constraint_alignment:
+              (@ref SqlUtil::SchemaForeignConstraintAlignment "SchemaForeignConstraintAlignment") the foreign constraints of the tables of a schema alignment; set by
               @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()"
         */
         const AlignTableOptions = TableCreationOptions + {
@@ -1356,8 +1356,8 @@ target.createAsSelectCommit(source, {
 
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1384,8 +1384,8 @@ target.createAsSelect(source, {"columns": ("id", "name")});
 
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1415,8 +1415,8 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
 
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1449,8 +1449,8 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
 
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param args an optional reference to a list for any bind arguments
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
@@ -1488,8 +1488,8 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
 
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
-        hash" for information about this argument
+        @param select_hash a hash of conditions for the select statement; see
+        @ref select_option_hash "select option hash" for information about this argument
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -3842,8 +3842,7 @@ table.insertCommit(row);
     }
 
     #! inserts a row into the table without any transaction management; a transaction will be in progress after this method is successfully executed
-    /** @ingroup inserts
-        @par Example:
+    /** @par Example:
         @code{.py}
 table.insert(row);
         @endcode
@@ -5737,8 +5736,8 @@ string sql = table.getSelectSql(sh, \args);
     /** Pure determinism guard — no DB rejects non-unique orderby+offset+limit
         at the SQL level; the check exists so pagination across pages doesn't
         silently mis-order rows that share an orderby key.  Strict callers
-        should opt in via the @ref select_option_orderby
-        "orderby_no_unique" select option (default: False — i.e. require
+        should opt in via the
+        @ref select_option_orderby "orderby_no_unique" select option (default: False — i.e. require
         uniqueness) or override this method in a DB-specific subclass.
 
         Default returns True (current behavior preserved); DB-specific
@@ -6197,15 +6196,15 @@ string sql = table.getSelectSql(sh, \args);
         - the \c "tablecode" callback option, if present (see
           @ref SqlUtil::AbstractTable::SqlDataCallbackOptions "SqlDataCallbackOptions"; note that plain select
           calls take no such option)
-        - the resolver registered with @ref SqlUtil::sqlutil_register_table_resolver()
-          "sqlutil_register_table_resolver()", if any
+        - the resolver registered with
+          @ref SqlUtil::sqlutil_register_table_resolver() "sqlutil_register_table_resolver()", if any
         - otherwise a new table object is created for the name
 
         A resolved table reads its entire description from the database the first time SQL is generated for it,
         so an application that already holds resolved table objects should register a resolver returning them;
         otherwise every SQL-generation call for a query with a name-referenced join or sub-select re-reads the
-        description of every referenced table.  Register @ref SqlUtil::sqlutil_get_cached_table()
-        "sqlutil_get_cached_table()" to use the cache provided by this module instead.
+        description of every referenced table.  Register
+        @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()" to use the cache provided by this module instead.
 
         @param table the table name to resolve
         @param opt optional call options; the \c "tablecode" option is used to resolve the name if present
@@ -8918,7 +8917,7 @@ bool reclaimed = table.dropEmptyPartitionCommit(partition, 1000, 5000);
 
     #! detaches a partition without transaction management
     /** Detaches the named partition from this table, turning it into a standalone table with the same name and
-        data, without dropping the data (PostgreSQL @c ALTER @c TABLE @c ... @c DETACH @c PARTITION semantics).
+        data, without dropping the data (PostgreSQL <tt>ALTER TABLE ... DETACH PARTITION</tt> semantics).
 
         @param partition_name the name of the partition to detach
         @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"

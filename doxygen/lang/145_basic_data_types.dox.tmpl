@@ -318,7 +318,7 @@ list<int> cps = map $1.ord(), iterate "café";   # (99, 97, 102, 233)
     @par Description:
     %Qore "number" values are arbitrary-precision numbers as provided by the <a href="http://gmplib.org">GMP</a> and <a href="http://www.mpfr.org">MPFR</a> libraries. Inside, they are implemented as floating-point values and therefore comparing them entails the same problems as comparing floats. You should not compare two number values for equality directly.\n\n
     Operations with number values are generally slower than those with @ref float "floats" but support far greater accuracy.  To give an immediate number value; write an integer or floating-point value and append an \c "n" to it, designating a "number" value.\n\n
-    In numeric operations where at least one argument is a number type, the other operands will generally be automatically converted to a number type and the result of the operation will also be a number type.  When an operator acts on two values of type number, the result of the operation has the precision of the operand with the greatest precision.
+    In numeric operations where at least one argument is a number type, the other operands will generally be automatically converted to a number type and the result of the operation will also be a number type.  When an operator acts on two values of type number, the result of the operation has the precision of the operand with the greatest precision.  @anchor number_max_precision The precision of a number, also of the result of an assignment operator such as @ref multiply_equals_operator "*=", is at most 8192 bits.
 
     @par Immediate Value Example:
     - \c -500.494n
@@ -383,6 +383,7 @@ YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
 
     Note that if no time zone information is given, the local time zone will be assumed. If a time zone UTC offset is given, it is given in units of time east of UTC (i.e. \c +05:00 means five hours east of UTC).
 
+    @anchor date_string_conversion
     When a string is converted to a date (@ref Qore::date(string) "date(string)",
     @ref Qore::TimeZone::date(string) "TimeZone::date(string)"), these forms of ISO 8601 and RFC 3339 are read as well:
     - a time of hours and minutes, or after the time designator \c T of only the hour, also with a zone designator:
@@ -406,7 +407,19 @@ YYYY-MM-DD[THH:mm:SS[.n*]][Z|[+-]HH[:mm[:SS]]]@endverbatim
       in parentheses after the UTC offset (<tt>2026-01-01 10:00:00.500000 Thu +02:00 (CET)</tt>); the weekday is not
       checked, and the zone name is not read: the offset gives the zone
 
-    White space after the date or the time is ignored; any other text after it raises \c INVALID-DATE.
+    White space after the date or the time is ignored; any other text after it raises \c INVALID-DATE.  Conversions
+    that do not raise exceptions, such as assigning a string to a \c softdate, ignore such text.
+
+    @anchor date_extended_years
+    In a string converted to a date, a year separated from the month by a hyphen can have more than four digits and a
+    sign, within the range of a signed 32-bit integer: <tt>12345-09-09</tt>, <tt>+12345-09-09</tt>,
+    <tt>-0004-02-29</tt>; a signed year has at least four digits.  The basic format without separators
+    (<tt>YYYYMMDD</tt>) has a four-digit year.  Dates use the proleptic Gregorian calendar with astronomical year zero
+    (year \c 0 is 1 BC, and \c -0004 is a leap year); date output, including the \c YYYY and \c IF
+    @ref date_formatting "format codes", writes at least four digits after the sign of a negative year, and
+    @ref Qore::get_years() "get_years()" and @ref <date>::years() "<date>::years()" return the complete year.  This
+    syntax is that of %Qore: code implementing XML Schema or another format must apply that format's own lexical rules
+    to its date strings.
 
     Or an alternative format (with a \c '-' instead of a \c 'T' to separate the time component):
 
@@ -435,7 +448,15 @@ prompt% qore -X '18:35:26+08:00'
 1970-01-01 18:35:26 Thu +08:00 (+08)
     @endcode
 
-    The year must be a four-digit number, and all other values except microseconds must be two-digit numbers. If microseconds are present, at least one and up to 6 digits may be given after the decimal point. Pad the numbers with leading zeros if the numbers are smaller than the required number of digits. The hour component must be in 24-hour time format. Except for the month and day values, all other values start with 0 (hour = 00 - 23, minute and second: 00 - 59). Any deviation from this format will cause a parse exception.
+    The year of a date literal has exactly four digits and no sign (\c 0000 - \c 9999); a longer or signed year can
+    only be given in a string converted to a date (see @ref date_extended_years).  All other values except
+    microseconds must be two-digit numbers. If microseconds are present, at least one and up to 6 digits may be given
+    after the decimal point. Pad the numbers with leading zeros if the numbers are smaller than the required number of
+    digits. The hour component must be in 24-hour time format. Except for the month and day values, all other values
+    start with 0 (hour = 00 - 23, minute and second: 00 - 59).  Text that does not have this format is not a date
+    literal: it is read as other tokens, which can form a different expression or raise a parse exception;
+    <tt>12345-09-09</tt> and <tt>2010-13-01</tt> are integer subtractions, and <tt>-0004-02-29</tt> negates the date
+    literal <tt>0004-02-29</tt>.
 
     When a date/time value is converted to an integer or vice-versa, a 64-bit offset in seconds from the start of the "epoch" is used for the conversion. %Qore's "zero date" (the start of %Qore's "epoch") is January 1, 1970 UTC. When calculating second offsets from this date, a 64-bit integer is used.
 
@@ -709,6 +730,14 @@ False@endverbatim
     The special types @ref null and @ref nothing are not equivalent and are generally not automatically converted to or from any other type.
 
     When date types are converted from strings, any of the following formats can be used: \c "YYYYMMDDHHmmSS[.us][Z|+-HH[:MM[:SS]]]", \c "YYYY-MM-DD HH:mm:SS.us", \c "YYYY-MM-DDTHH:mm:SS", \c "YYYY-MM-DDTHH:mm:SS[.us][Z|+-HH[:MM[:SS]]]", and most reasonable combinations thereof. If the time zone component is missing, then the local time zone will be assumed (see @ref time_zones).
+
+    @anchor string_to_float_conversion
+    When a string is converted to a @ref float "float", the longest prefix of the string that forms a valid
+    floating-point number is converted as \c strtod() converts it in the classic locale, on every platform: leading
+    whitespace is skipped, trailing characters are ignored, the decimal point is always \c '.', and the hexadecimal,
+    \c inf and \c nan forms are accepted, so a stringified infinite or NaN value converts back to its value (ex:
+    \c "1x" converts to \c 1.0 and \c "0x10" to \c 16.0).  A string with no such prefix, including an empty or
+    whitespace-only string, converts to \c 0.0.
 
     When dates are converted to and from integer, floating-point, and arbitrary-percision numeric values, the a 64-bit second offset from January 1, 1970 in the local time zone is used for the conversion. For example @code{.py} int(2006-01-01)@endcode gives \c 1136073600 (regardless of the local time zone the date is in). This is for backwards-compatibility with %Qore before @ref time_zones "time zone support" was available; to get the second offset of a date from \c 1970-01-01Z (i.e. the true epoch offset), call get_epoch_seconds() instead.
 

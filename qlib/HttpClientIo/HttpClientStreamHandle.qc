@@ -97,8 +97,7 @@ public class HttpClientStreamHandle {
 
         #! Connect timeout configured for this stream's connection
         /** Informational: the
-            @ref HttpClientIo::HttpClientConnectionManagerOptions::connect_timeout
-            "connect_timeout option" contract is enforced by the transport
+            @ref HttpClientIo::HttpClientConnectionManagerOptions::connect_timeout "connect_timeout option" contract is enforced by the transport
             connection's own connect-phase deadline (armed with this value at
             connection creation), which fails the connection with a
             protocol-specific error (e.g. \c QUIC-HANDSHAKE-TIMEOUT).  Readiness
@@ -150,8 +149,8 @@ public class HttpClientStreamHandle {
     #! Sets the maximum size of a response body that is returned whole, after its content encoding is decoded
     /** @param max_size the maximum size in bytes; <= 0 means no limit
 
-        @see @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size
-        "max_response_body_size"
+        @see
+        @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size "max_response_body_size"
     */
     setMaxResponseBodySize(int max_size) {
         max_response_body_size = max_size;
@@ -199,8 +198,8 @@ public class HttpClientStreamHandle {
 
     #! Sets the inactivity timeout of requests
     /** A request fails with \c HTTPCLIENT-TIMEOUT if no data is received on its connection for this time; see the
-        \c io_timeout option of @ref HttpClientIo::HttpClientConnectionManagerOptions
-        "HttpClientConnectionManagerOptions"
+        \c io_timeout option of
+        @ref HttpClientIo::HttpClientConnectionManagerOptions "HttpClientConnectionManagerOptions"
 
         @param io_timeout the inactivity timeout; 0 means no inactivity timeout
 
@@ -1121,8 +1120,8 @@ public class HttpClientStreamHandle {
     }
 
     #! Converts a binary text response body to a string in its character encoding
-    /** The body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
-        "decode_http_body()"): a text body becomes a string in its character encoding, without any byte order mark,
+    /** The body is decoded by the rules shared by all HTTP clients (see
+        @ref Qore::decode_http_body() "decode_http_body()"): a text body becomes a string in its character encoding, without any byte order mark,
         and any other body stays binary.  A character encoding sent as the content encoding of the body is its
         charset, as with @ref Qore::HTTPClient "HTTPClient".
 

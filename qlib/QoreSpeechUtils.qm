@@ -43,8 +43,8 @@ module QoreSpeechUtils {
     @section qorespeechutilsintro QoreSpeechUtils Module Introduction
 
     The %QoreSpeechUtils module provides the provider-neutral abstraction
-    layer for speech AI backends — parallel to @ref qoreragutilsintro
-    "QoreRagUtils" for retrieval-augmented generation.
+    layer for speech AI backends — parallel to
+    @ref qoreragutilsintro "QoreRagUtils" for retrieval-augmented generation.
 
     Two abstract building blocks:
     - @ref QoreSpeechUtils::AbstractTranscriber — automatic speech

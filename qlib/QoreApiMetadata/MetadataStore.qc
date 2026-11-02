@@ -488,7 +488,7 @@ public class QoreApiMetadata {
     }
 
     #! Convert a glob pattern to a regex string
-    /** Supports \c * (matches any sequence) and \c ? (matches single char).
+    /** Supports \c * (matches any sequence) and <tt>?</tt> (matches single char).
         The returned string is suitable for the Regex class constructor.
         @param pattern the glob pattern
         @return anchored regex string

@@ -96,8 +96,7 @@ printf("%Y\n", ans.body);
     listing, without generating tokens; saved connections that ping the model listing are switched to the account
     listing when they are loaded.
 
-    @ref FireworksRestClient::FireworksLlmProviderFactory::getModelInfo()
-    "FireworksLlmProviderFactory::getModelInfo()" reports which models cannot turn hidden reasoning off
+    @ref FireworksRestClient::FireworksLlmProviderFactory::getModelInfo() "FireworksLlmProviderFactory::getModelInfo()" reports which models cannot turn hidden reasoning off
     (\c reasoning_always_on): the GPT-OSS models and MiniMax M2. A reasoning token budget of zero or
     @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off on GLM 4.7
     (reasoning effort \c none) and selects the lowest effort, \c low, of the GPT-OSS models and MiniMax M2;

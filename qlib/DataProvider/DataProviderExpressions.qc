@@ -162,10 +162,11 @@ bool sub dp_field_exists(hash<auto> rec, auto operand) {
 
 #! Returns the steps of a findIn location
 /** The location is the grammar of Qorus's findIn: steps separated by dots, each step possibly ending with an offset in
-    a list (\c "[n]", negative from the end).  Its escapes are those of a field path
-    (@ref AbstractDataProvider::getFieldPath()): \c "\." is a dot and \c "\\" a backslash of a step, so that a step
-    ending with a backslash can be followed by another; \c "\ " is a space, \c "\[" and \c "\]" are brackets of a
-    step and not an offset (\c "tags\[0]" is the key \c "tags[0]"), and any other backslash is itself.  A location
+    a list (<tt>[n]</tt>, negative from the end).  Its escapes are those of a field path
+    (@ref AbstractDataProvider::getFieldPath()): <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a step, so
+    that a step ending with a backslash can be followed by another; a backslash before a space is a space,
+    <tt>\\[</tt> and <tt>\\]</tt> are brackets of a step and not an offset (<tt>tags\\[0]</tt> is the key
+    <tt>tags[0]</tt>), and any other backslash is itself.  A location
     joined from keys escaped with @ref AbstractDataProvider::escapeFieldPathKey() gives the keys back, if no key ends
     with an offset.
 
@@ -579,7 +580,7 @@ list<auto> sub dp_map_source(auto source, auto body, *auto filter, *hash<auto> t
 const DpWildcardItemKey = "$dpql-wildcard-item";
 
 #! Returns True if the body of a list wildcard applies its accessors to the item itself
-/** The accessors after \c [*] apply to the item itself when they do not start with a field: the innermost base of
+/** The accessors after <tt>[*]</tt> apply to the item itself when they do not start with a field: the innermost base of
     the accessor chain is then @ref DP_FUNC_WILDCARD_ITEM.  Otherwise the body is evaluated as the body of
     \c map is.
 

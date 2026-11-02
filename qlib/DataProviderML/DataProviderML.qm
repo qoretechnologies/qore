@@ -1598,9 +1598,24 @@ module DataProviderML {
     - <b>Explain what drives change</b>: separate long-term growth trends from seasonal cycles
       and random noise in any time series
 
-    @section dataproviderml_whentouse When to Use Each Processor
+    Documentation:
+    - @subpage dataproviderml_whentouse "When to Use Each Processor": choosing a processor for anomaly detection,
+      clustering, forecasting and analysis, with a pipeline example
+    - @subpage dataproviderml_field_paths "Field Paths in Options and Events": how processor options and events
+      name nested fields
+    - @subpage dataproviderml_columnar "Columnar and DataFrame Input": shaped input, compact output modes and ONNX
+      tensor batching
+    - @subpage dataproviderml_registry_artifacts "Registry-Backed AI Artifacts": loading tokenizers and ONNX models
+      from QoreModelRegistry packages
 
-    @subsection dataproviderml_anomaly Anomaly Detection — "Is this data point unusual?"
+    See @subpage dataproviderml_relnotes "Release Notes" for the changes in each version.
+*/
+
+/** @page dataproviderml_whentouse When to Use Each Processor
+
+    @tableofcontents
+
+    @section dataproviderml_anomaly Anomaly Detection — "Is this data point unusual?"
 
     - @ref DataProviderML::QoreIsolationForestProcessor "isolation-forest": best for catching
       <b>globally unusual</b> records across all your data — e.g., a transaction for \$50,000 when
@@ -1610,7 +1625,7 @@ module DataProviderML {
       customers but unusual for budget customers, or a 90°F reading is fine outdoors but
       anomalous in a server room
 
-    @subsection dataproviderml_clustering Clustering — "What groups exist in my data?"
+    @section dataproviderml_clustering Clustering — "What groups exist in my data?"
 
     - @ref DataProviderML::QoreDBSCANClusteringProcessor "dbscan-clustering": best when you
       <b>don't know how many groups</b> exist and groups may have irregular shapes — e.g.,
@@ -1624,7 +1639,7 @@ module DataProviderML {
       multiple groups</b> — e.g., a customer might be 70%% "budget shopper" and 30%% "impulse
       buyer", or a transaction might be 60%% likely legitimate and 40%% suspicious
 
-    @subsection dataproviderml_forecasting Forecasting and Prediction — "What happens next?"
+    @section dataproviderml_forecasting Forecasting and Prediction — "What happens next?"
 
     - @ref DataProviderML::QoreHoltWintersProcessor "holt-winters": best for <b>time series with
       seasonal patterns</b> — e.g., forecasting monthly revenue that peaks every December, predicting
@@ -1634,7 +1649,7 @@ module DataProviderML {
       square footage and location, predicting delivery time from distance and package weight, or
       forecasting demand from advertising spend
 
-    @subsection dataproviderml_analysis Data Analysis — "What's really going on in this data?"
+    @section dataproviderml_analysis Data Analysis — "What's really going on in this data?"
 
     - @ref DataProviderML::QorePCAProcessor "pca": best for <b>simplifying high-dimensional
       data</b> — e.g., compressing 50 sensor readings into 3 combined values that capture 95%% of
@@ -1669,12 +1684,13 @@ module DataProviderML {
     Each processor adds its output fields to the record, so downstream processors and business
     logic can combine anomaly scores, cluster assignments, and forecasts for comprehensive
     decision-making.
+*/
 
-    @section dataproviderml_field_paths Field Paths in Options and Events
+/** @page dataproviderml_field_paths Field Paths in Options and Events
 
     The fields that a processor reads are given in its options as @ref dpql_field_paths "field paths": dots separate
-    the keys of a nested field, and a dot that is part of a key is escaped, so \c order.amount is the key \c amount
-    of the key \c order, and <tt>Unit\\.Price</tt> is the key \c Unit.Price.
+    the keys of a nested field, and a dot that is part of a key is escaped, so <tt>order.amount</tt> is the key \c amount
+    of the key \c order, and <tt>Unit\\.Price</tt> is the key <tt>Unit.Price</tt>.
 
     The events that the processors emit name these fields in two ways:
     - the \c field of an analytics event, such as
@@ -1685,15 +1701,15 @@ module DataProviderML {
       and can be given back to a processor as it is
     - the keys of the \c record_values, \c scaled_values and \c imputed_values hashes of an event are the display
       names of the fields: the keys of each path joined with dots, as
-      @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
-      "AbstractDataProvider::getFieldPathDisplayName()" gives them (\c Unit.Price for <tt>Unit\\.Price</tt>); an
+      @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName() "AbstractDataProvider::getFieldPathDisplayName()" gives them (<tt>Unit.Price</tt> for <tt>Unit\\.Price</tt>); an
       output field named after an input field is named the same way
     .
-    To show the field of an event, use @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
-    "AbstractDataProvider::getFieldPathDisplayName()";
+    To show the field of an event, use
+    @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName() "AbstractDataProvider::getFieldPathDisplayName()";
     @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" gives its keys.
+*/
 
-    @section dataproviderml_columnar Columnar and DataFrame Input
+/** @page dataproviderml_columnar Columnar and DataFrame Input
 
     DataProviderML processors accept the standard DataProvider pipeline shapes:
     \c RowRecords, \c HashOfLists, \c BufferColumns, and \c DataFrameBlock.  This
@@ -1713,22 +1729,22 @@ module DataProviderML {
     token-count column, \c schema-validation appends validation columns or
     filters invalid rows, \c embed-text appends an \c embedding column by
     default or flat dense \c embedding_0, \c embedding_1, ... columns with
-    \c output_mode = "columns", and
+    <tt>output_mode = &quot;columns&quot;</tt>, and
     \c rerank-text emits the configured top-k rows with \c reranker_score and
     \c reranker_rank columns while preserving the negotiated shape.
 
     StandardScaler, MinMaxScaler, KMeans, and PCA also support
-    \c output_mode = "dataframe".  This mode returns flat DataFrame columns
+    <tt>output_mode = &quot;dataframe&quot;</tt>.  This mode returns flat DataFrame columns
     instead of nested event hashes, which is clearer and much faster for
-    analytical pipelines.  The default \c output_mode remains \c "events" for
-    compatibility.  In DataFrame mode, \c include_input_fields = False can omit
+    analytical pipelines.  The default \c output_mode remains <tt>&quot;events&quot;</tt> for
+    compatibility.  In DataFrame mode, <tt>include_input_fields = False</tt> can omit
     unchanged input columns when the next step only needs model outputs.  KMeans additionally supports
-    \c include_centroid_distances = False when only the winning \c cluster and
+    <tt>include_centroid_distances = False</tt> when only the winning \c cluster and
     nearest \c distance are needed.
 
     ONNX processors also support compact output modes for high-throughput
-    scoring.  \c output_mode = "columns" or \c "dataframe" returns model output
-    tensors as flat dense output columns, while \c output_mode = "tensor"
+    scoring.  <tt>output_mode = &quot;columns&quot;</tt> or <tt>&quot;dataframe&quot;</tt> returns model output
+    tensors as flat dense output columns, while <tt>output_mode = &quot;tensor&quot;</tt>
     returns raw @ref Qore::ML::Tensor "ML::Tensor" outputs for callers that can
     consume tensor data directly.  When shaped input columns are already stored
     with the model's expected dtype, the processor can build the input tensor
@@ -1737,8 +1753,8 @@ module DataProviderML {
     Row-aligned tensor outputs from multiple windows are concatenated before
     compact column conversion, so scalar and vector model outputs remain dense
     buffer columns when the model returns dense tensor data.
-    Multi-column dense feature frames use @ref Qore::ML::Tensor::fromColumns()
-    "ML::Tensor::fromColumns()" to pack top-level numeric buffer columns into
+    Multi-column dense feature frames use
+    @ref Qore::ML::Tensor::fromColumns() "ML::Tensor::fromColumns()" to pack top-level numeric buffer columns into
     model tensors in native code.  Shaped ONNX inputs smaller than
     \c window_size are processed immediately as partial tensor batches; larger
     shaped inputs are split into \c window_size batches with the final
@@ -1791,20 +1807,40 @@ DataFrame::DataFrame clusters = kmeans.processRecordsShape(
 # clusters has compact analytical columns:
 #   cluster: buffer<int64>
 #   distance: buffer<float64>
-    DataFrame::DataFrame summary = clusters.groupBy(("cluster",)).agg({
+DataFrame::DataFrame summary = clusters.groupBy(("cluster",)).agg({
         "distance": ("mean", "max"),
         "cluster": "count",
 });
     @endcode
 
-    @section dataproviderml_registry_artifacts Registry-Backed AI Artifacts
+    @par BufferColumns example:
+    @code{.py}
+%requires DataProviderML
+
+auto columns = ColumnarResult::fromColumnHash({
+    "x": new buffer<float64>((1.0, 2.0, 3.0)),
+    "y": new buffer<float64>((10.0, 20.0, 30.0)),
+});
+
+DataProviderML::QoreStandardScalerProcessor scaler({
+    "fields": "x,y",
+    "window_size": 3,
+});
+
+ColumnarResult scaled = scaler.processRecordsShape(
+    columns, DataProviderShape::BufferColumns);
+assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-scaler", "standard-scaler");
+    @endcode
+*/
+
+/** @page dataproviderml_registry_artifacts Registry-Backed AI Artifacts
 
     Text and ONNX processors can load model package artifacts directly from
     @ref qoremodelregistryintro "QoreModelRegistry". This avoids scattering
-    \c tokenizer.json and ONNX files across pipeline hosts and keeps the model,
+    <tt>tokenizer.json</tt> and ONNX files across pipeline hosts and keeps the model,
     tokenizer, and metadata versioned together. When a package includes
-    \c tokenizer_config.json, those companion settings are loaded with
-    \c tokenizer.json so tokenizer utilities can use model-level limits and
+    <tt>tokenizer_config.json</tt>, those companion settings are loaded with
+    <tt>tokenizer.json</tt> so tokenizer utilities can use model-level limits and
     chat templates. For ONNX packages, the processor can also read the
     registry execution plan's \c runtime, \c entry_artifact,
     \c output_shapes, \c tokenizer, \c preprocess, \c postprocess, and
@@ -1899,8 +1935,8 @@ auto logits = proc.processRecordsShape(token_batches,
 
     In event mode, task-aware registry plans such as \c regression and
     \c sequence-classification require their planned value or label output to
-    be included in \c output_names. Use \c output_mode = "columns" or
-    \c output_mode = "tensor" when a pipeline needs raw selected tensors
+    be included in \c output_names. Use <tt>output_mode = &quot;columns&quot;</tt> or
+    <tt>output_mode = &quot;tensor&quot;</tt> when a pipeline needs raw selected tensors
     without task-specific event shaping.
 
     @par Registry causal-LM example:
@@ -1949,29 +1985,10 @@ auto replies = generator.processRecordsShape(prompts,
     DataProviderShape::BufferColumns);
 list<string> generated = replies.getColumn("generated_text").toList();
     @endcode
+*/
+/** @page dataproviderml_relnotes Release Notes
 
-    @par BufferColumns example:
-    @code{.py}
-%requires DataProviderML
-
-auto columns = ColumnarResult::fromColumnHash({
-    "x": new buffer<float64>((1.0, 2.0, 3.0)),
-    "y": new buffer<float64>((10.0, 20.0, 30.0)),
-});
-
-DataProviderML::QoreStandardScalerProcessor scaler({
-    "fields": "x,y",
-    "window_size": 3,
-});
-
-ColumnarResult scaled = scaler.processRecordsShape(
-    columns, DataProviderShape::BufferColumns);
-assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-scaler", "standard-scaler");
-    @endcode
-
-    @section dataproviderml_relnotes Release Notes
-
-    @subsection dataproviderml_v1_0 DataProviderML v1.0
+    @section dataproviderml_v1_0 DataProviderML v1.0
     - initial release
 */
 
@@ -2448,8 +2465,7 @@ public namespace DataProviderML {
         #! The field that was profiled: its field path as it is given in the \c fields option
         /** The @ref dpql_field_paths "field path" is written as it is given, with a dot that is part of a key
             escaped (<tt>Unit\\.Price</tt>), so it names the field without ambiguity;
-            @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
-            "AbstractDataProvider::getFieldPathDisplayName()" gives the name to show for it (see
+            @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName() "AbstractDataProvider::getFieldPathDisplayName()" gives the name to show for it (see
             @ref dataproviderml_field_paths)
         */
         string field_name;

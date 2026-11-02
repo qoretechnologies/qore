@@ -151,8 +151,8 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
       @ref DataStreamClient::DataStreamClient::sendRawStream() "sendRawStream()",
       @ref DataStreamClient::DataStreamClient::getRawStream() "getRawStream()", a request signed by
       \c sendAndDecodeResponse(), and the DataStream requests, which add their protocol headers, raised
-      \c RUNTIME-TYPE-ERROR, and so did @ref DataStreamClient::DataStreamClient::addDefaultHeaders()
-      "addDefaultHeaders()" with headers that are not strings, such as <tt>{"X-Count": 1}</tt>
+      \c RUNTIME-TYPE-ERROR, and so did
+      @ref DataStreamClient::DataStreamClient::addDefaultHeaders() "addDefaultHeaders()" with headers that are not strings, such as <tt>{"X-Count": 1}</tt>
     - a response is read as YAML with any YAML media type: \c "application/yaml" (RFC 9512),
       \c "application/x-yaml", \c "text/x-yaml" or \c "text/yaml"; requests are sent with \c "text/x-yaml", the
       YAML media type of the DataStream protocol, which the servers of earlier releases require

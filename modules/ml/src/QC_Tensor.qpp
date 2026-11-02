@@ -687,7 +687,7 @@ static Tensor Tensor::fromBuffer(auto data, list<int> shape, bool zero_copy = Fa
     @param dtype optional tensor dtype; when omitted, the first column's buffer
         type is used and all columns must have the same type
 
-    @return a Tensor with shape \c (rows, columns)
+    @return a Tensor with shape <tt>(rows</tt>, columns)
 
     This method is optimized for DataFrame and DataProvider columnar pipelines
     that need to feed multi-feature ONNX models. It packs column buffers into
@@ -743,7 +743,7 @@ Tensor Tensor::reshape(list<int> shape) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 }
 
 //! Creates a rank-1 Tensor view over the same backing buffer
-/** @return a Tensor with shape \c (size(),) sharing the same dense backing
+/** @return a Tensor with shape <tt>(size(),)</tt> sharing the same dense backing
         buffer
 
     This is useful when feeding runtimes or postprocessing code that expects a
@@ -1200,11 +1200,11 @@ hash<auto> Tensor::topK(int k, int axis = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS] 
 }
 
 //! Pools transformer token embeddings using an attention mask
-/** @param attention_mask Tensor with shape \c (batch, tokens)
+/** @param attention_mask Tensor with shape <tt>(batch</tt>, tokens)
     @param strategy pooling strategy: \c "mean", \c "max", or \c "cls"
-    @return a Tensor with shape \c (batch, embedding_dim)
+    @return a Tensor with shape <tt>(batch</tt>, embedding_dim)
 
-    The receiver must have shape \c (batch, tokens, embedding_dim). This method
+    The receiver must have shape <tt>(batch</tt>, tokens, embedding_dim). This method
     avoids converting full hidden-state tensors to nested Qore lists when
     producing sentence embeddings from ONNX transformer outputs.
 
@@ -1291,7 +1291,7 @@ Tensor Tensor::l2NormalizeRows() [flags=RET_VALUE_ONLY] {
 /** @return a list of \c buffer<T> values, one for each logical column
 
     Rank-1 tensors return one buffer with the tensor data. Rank-2 tensors are
-    interpreted as row-major \c (rows, columns) matrices and return one
+    interpreted as row-major <tt>(rows</tt>, columns) matrices and return one
     contiguous buffer per column. This method is intended for DataFrame and
     DataProvider columnar output paths that need flat dense columns without
     first materializing nested row lists.

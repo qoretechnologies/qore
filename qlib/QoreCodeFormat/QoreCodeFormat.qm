@@ -100,7 +100,7 @@ int result = very_long_variable_name + another_long_variable_name + yet_another_
 int result = very_long_variable_name + another_long_variable_name
         + yet_another_variable + final_variable;
       @endcode
-    - Ternary expressions wrap @c ? and @c : on continuation lines
+    - Ternary expressions wrap <tt>?</tt> and <tt>:</tt> on continuation lines
     - Hash and list literals wrap individual items when the collection exceeds the line limit
 
     @subsection qorecodeformat_idempotency Idempotency

@@ -54,8 +54,8 @@
     }
     @endcode
 
-    @warning This pattern must <b>not</b> be used for strings; see @ref string_value_access
-    "Accessing String Values".  A string value has two possible representations, and
+    @warning This pattern must <b>not</b> be used for strings; see
+    @ref string_value_access "Accessing String Values".  A string value has two possible representations, and
     @ref QoreValue::get() "get<QoreStringNode>()" returns \c nullptr for one of them even though
     @ref QoreValue::getType() "getType()" returns \ref NT_STRING.
 

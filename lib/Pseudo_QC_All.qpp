@@ -309,7 +309,7 @@ bool <value>::callp() [const;flags=CONSTANT] {
     @par Example:
     @code{.py}
 printf("iterating %d element%s\n", val.lsize(), val.lsize() == 1 ? "" : "s");
-foreach any element in (val) {
+foreach auto element in (val) {
     do_something(element);
 }
     @endcode

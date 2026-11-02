@@ -47,7 +47,7 @@ module DebugLinenoiseCmdLine {
     <a href="https://github.com/qoretechnologies/module-linenoise">linenoise</a> module.
 
     @subsection dlcl_v0_2 v0.2
-    - files of commands: the init file (\c .qdbginit in the home folder, or the file of \c -i, unless \c -n is given)
+    - files of commands: the init file (<tt>.qdbginit</tt> in the home folder, or the file of \c -i, unless \c -n is given)
       and the files of \c -x are run at the start; see
       @ref DebugLinenoiseCmdLine::DebugLinenoiseCommandLine::getStartupCommandFiles() "getStartupCommandFiles()"
     - with input that is not a terminal, a command that resumes a thread returns when a thread pauses, or when the
@@ -309,7 +309,7 @@ public namespace DebugLinenoiseCmdLine {
             the home folder), \c no_init (\c -n: no such file), and \c execute (\c -x: files of commands that are run
             after it)
 
-            @return the init file, which is the file of \c -i or \c .qdbginit in the home folder if it exists, unless
+            @return the init file, which is the file of \c -i or <tt>.qdbginit</tt> in the home folder if it exists, unless
             \c no_init is set, and the files of \c execute
 
             @since DebugLinenoiseCmdLine 0.2

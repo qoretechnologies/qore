@@ -865,8 +865,8 @@ public:
 
         @since %Qore 0.9
 
-        @note since %Qore 3.0 the data is freed when the family's root is destroyed, also for a thread that is still
-        alive; before, it was not freed at all for a thread that had left every Program of the family
+        @note the data of a thread is freed when the family's root is destroyed even if the thread is still alive, so
+        the data of a thread that has left every Program of the family does not outlive the family
     */
     DLLEXPORT QoreHashNode* getThreadData();
 

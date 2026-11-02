@@ -318,7 +318,7 @@ module QdrantDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="qdrant-logo.svg" alt="Qdrant Logo" style="width:40%;">
+      <img src="qdrant-logo.svg" width="96" alt="Qdrant Logo">
     </div>
     @endhtmlonly
 

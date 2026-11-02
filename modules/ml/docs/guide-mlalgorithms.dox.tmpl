@@ -401,7 +401,7 @@ if (caps.has_onnx) {
 
     A caller that must prove which model produced a result needs to identify the content the
     session actually loaded. A model path, file size, modification time or execution provider name
-    does not identify that content, and neither does a digest of the \c .onnx bytes alone: when a
+    does not identify that content, and neither does a digest of the <tt>.onnx</tt> bytes alone: when a
     model stores tensors in external data files, identical model bytes produce different results
     depending on files the model only refers to.
 
@@ -460,8 +460,8 @@ printf("content: %s (%d external dependencies)\n", identity.digest, identity.dep
     provider, or when a requested device path is unavailable, the policy resolves to host
     memory (optionally with an explicit error instead of a silent fallback).
 
-    Device binding is configured through the @ref Qore::ML::OnnxDeviceBindingConfig
-    "device_binding" field of @ref Qore::ML::OnnxSessionConfig "OnnxSessionConfig":
+    Device binding is configured through the
+    @ref Qore::ML::OnnxDeviceBindingConfig "device_binding" field of @ref Qore::ML::OnnxSessionConfig "OnnxSessionConfig":
 
     |!Field|!Meaning
     |\c enabled|Enables device-aware input/output binding.
@@ -505,8 +505,8 @@ printf("content: %s (%d external dependencies)\n", identity.digest, identity.dep
       to host with zero transfers and a \c provider_host_resolutions bump.
       Outputs are returned as host @ref Qore::ML::Tensor "Tensors".
 
-    - <b>Metal/UMA buffers</b> (via @ref Qore::ML::Tensor::toDevice()
-      "Tensor::toDevice(\"metal\")") allocate an \c MTLBuffer with
+    - <b>Metal/UMA buffers</b> (via
+      @ref Qore::ML::Tensor::toDevice() "Tensor::toDevice(\"metal\")") allocate an \c MTLBuffer with
       \c MTLStorageModeShared. On UMA, the CPU and GPU see the bytes at the same
       physical address, so binding a Metal-tagged input to any provider (CPU,
       CoreML, WebGPU) is zero-copy through CPU memory info. The transfer

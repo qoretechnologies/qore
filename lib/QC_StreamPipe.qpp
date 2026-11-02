@@ -107,8 +107,8 @@ qclass StreamPipe [arg=StreamPipe* pipe; ns=Qore; flags=final; internal_members=
 
 //! Creates the StreamPipe
 /** @param sync_close if True, then the output stream's close() method blocks until the input stream's @ref PipeInputStream::finishClose() "finishClose()" method is called
-    @param timeout_ms a timeout period with a resolution of milliseconds (a @ref relative_dates
-           "relative date/time value"; integer arguments will be assumed to be milliseconds);
+    @param timeout_ms a timeout period with a resolution of milliseconds (a
+           @ref relative_dates "relative date/time value"; integer arguments will be assumed to be milliseconds);
            if not given or negative the operations will never time out
     @param buffer_size the size of the internal buffer
  */

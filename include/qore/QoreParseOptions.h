@@ -277,7 +277,7 @@ public:
     DLLEXPORT static const QoreParseOptions NO_STREAM_FUSION;
 
     //! extended option: prefer the \c any streaming operator in legacy ambiguous expression contexts (bit 83)
-    /** Source-only \c any operator usage should use the parenthesized form (\c any \c (source)) so
+    /** Source-only \c any operator usage should use the parenthesized form (\c any <tt>(source)</tt>) so
         \c any \c name; remains a declaration. This option is implied by \c PO_MODERN for compatibility
         with the initial streaming-operator implementation. \c NO_ANY_OPERATOR disables the operator.
         @since %Qore 3.0
@@ -320,7 +320,7 @@ public:
 
     //! extended option: allow the @ref opaque_assignment_operator "opaque assignment operator (@=)" (bit 88)
     /** An opaque reference is a strong reference that the deterministic garbage collector does not
-        follow.  It is unsafe in a way \c := is not: a cycle running through an opaque reference
+        follow.  It is unsafe in a way <tt>:=</tt> is not: a cycle running through an opaque reference
         cannot be collected by cycle detection, so misuse causes a standing memory leak that lives
         until the owning @ref Qore::Program "Program" is torn down.  Only set this option for code
         that can show the referenced value does not reference the holder back.  Not included in

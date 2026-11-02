@@ -182,7 +182,7 @@ while (true) {
     @section interruptible_io_sandboxing Sandboxing
 
     Check every filesystem and network access against the program's sandbox before making it, and mark functions
-    and methods with their functional domains in \c .qpp files (\c dom=FILESYSTEM, \c dom=NETWORK,
+    and methods with their functional domains in <tt>.qpp</tt> files (\c dom=FILESYSTEM, \c dom=NETWORK,
     \c dom=PROCESS, ...), so that a @ref Qore::Program "Program"'s restrictions are enforced.
 
     @subsection interruptible_io_sandbox_threads Carrying the Caller's Sandbox onto Another Thread

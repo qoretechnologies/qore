@@ -138,7 +138,7 @@ module ElasticSearchDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="elastic-logo.svg" alt="ElasticSearch Logo" style="width:40%;">
+      <img src="elastic-logo.svg" width="96" alt="ElasticSearch Logo">
     </div>
     @endhtmlonly
 
@@ -257,6 +257,10 @@ module ElasticSearchDataProvider {
       the <tt>NdjsonDataProvider</tt> module, which this module requires
     - the request and response data type classes are now public, so types serialized in a provider index can be
       restored by programs that import the module
+    - added the Bulk API with NDJSON requests and partial failure handling, bulk operations on
+      \c ElasticSearchIndexTableDataProvider, the Scroll API (\c scroll-search) for efficient iteration over large
+      result sets, and the Aggregations API (terms, histogram, date_histogram, metrics, etc.)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
     @subsection elasticsearchdataprovider_v1_1 ElasticSearchDataProvider v1.1
     - added support for the data provider action catalog API

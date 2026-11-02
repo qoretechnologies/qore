@@ -558,9 +558,11 @@ public class McpClient {
     #! Creates the MCP client
     /**
         @param url the URL of the MCP server endpoint
-        @param opts optional client options
+        @param opts optional client options; the \c headers option gives extra default headers as a hash: a value
+        that is not a string is converted to a string, and the elements of a list are sent as repeated headers
 
         @throw MCP-CLIENT-ERROR if URL is invalid
+        @throw RUNTIME-TYPE-ERROR a value of the \c headers option is a hash, \c NULL or has no value
     */
     constructor(string url, *hash<auto> opts) {
         self.url = url;

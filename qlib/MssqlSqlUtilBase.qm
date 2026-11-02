@@ -192,11 +192,11 @@ hash<auto> desc = {
       SQL, instead of double quotes in queries and DML, which needed \c QUOTED_IDENTIFIER on; a name that database
       drivers would read as SQL also in brackets is refused with \c IDENTIFIER-ERROR (see @ref mssql_identifiers)
     - fixed @ref SqlUtil::iop_seq() "iop_seq()", which gave the sequence as a bind value, which SQL Server does not
-      accept, and the next value of a sequence (@ref SqlUtil::AbstractDatabase::getNextSequenceValue()
-      "AbstractDatabase::getNextSequenceValue()"), index rebuilding (@ref SqlUtil::AbstractDatabase::rebuildIndex()
+      accept, and the next value of a sequence
+      (@ref SqlUtil::AbstractDatabase::getNextSequenceValue() "AbstractDatabase::getNextSequenceValue()"), index rebuilding (@ref SqlUtil::AbstractDatabase::rebuildIndex()
       "AbstractDatabase::rebuildIndex()", which now takes the table of the index in the required \c table_name
-      option) and statistics updates (@ref SqlUtil::AbstractDatabase::computeStatistics()
-      "AbstractDatabase::computeStatistics()"), which gave identifiers as bind values as well
+      option) and statistics updates
+      (@ref SqlUtil::AbstractDatabase::computeStatistics() "AbstractDatabase::computeStatistics()"), which gave identifiers as bind values as well
     - added foreign constraint referential actions: \c on_delete and \c on_update, which are described from the
       database and aligned; \c RESTRICT, which SQL Server does not have, is refused with
       \c FOREIGN-CONSTRAINT-ERROR, as is any action on Sybase (see @ref mssql_fk_actions)
@@ -216,9 +216,9 @@ hash<auto> desc = {
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed column renaming; \c sp_rename was called with an \c "@objtype" of \c "COLUMNS", which the server
       rejects, and with a quoted new column name, which would have made the quoting part of the name
-    - fixed default values read from SQL Server: a string or expression default value (ex: \c ('abc'),
-      \c (getdate())) kept its parentheses and never matched its declared value, and an expression in two pairs of
-      parentheses lost its inner ones (ex: \c ((1)+(2))), so schema alignment changed the default value on every
+    - fixed default values read from SQL Server: a string or expression default value (ex: <tt>('abc')</tt>,
+      <tt>(getdate())</tt>) kept its parentheses and never matched its declared value, and an expression in two pairs of
+      parentheses lost its inner ones (ex: <tt>((1)+(2))</tt>), so schema alignment changed the default value on every
       run
     - fixed changing the default value of a column: the existing default constraint is dropped by its name in the
       database before the new one is added; adding it failed with "Column already has a DEFAULT bound to it"

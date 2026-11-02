@@ -105,9 +105,9 @@
       significant digits; finite floats now round trip exactly, including signed zero and values
       outside the integer range, using the fewest of 15, 16, or 17 significant digits that do (so \c 99.99
       stays \c 99.99), and non-finite floats use standard YAML spellings
-    - fixed scalar resolution silently converting digit-free tokens such as \c . and \c .e3 to zero;
+    - fixed scalar resolution silently converting digit-free tokens such as <tt>.</tt> and <tt>.e3</tt> to zero;
       malformed exponents and malformed Qore numeric suffixes now remain strings
-    - added YAML \c .inf and \c .nan spellings, including their specified case variants, to implicit
+    - added YAML <tt>.inf</tt> and <tt>.nan</tt> spellings, including their specified case variants, to implicit
       resolution and explicit \c !!float parsing; invalid explicitly tagged floats now raise a parser error
       instead of converting a partial value or aborting on empty input
     - fixed implicit type resolution incorrectly converting literal and folded block scalar text to other types

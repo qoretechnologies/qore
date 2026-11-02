@@ -229,9 +229,12 @@ $function$
     to use functionality like
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
-    @section pgsql_relnotes Release Notes
+    See @subpage pgsql_relnotes "Release Notes" for the changes in each version.
+*/
+/** @page pgsql_relnotes Release Notes
 
-    @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+
+    @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" for
       <tt>REFRESH MATERIALIZED VIEW</tt>, with the \c concurrent option for <tt>REFRESH MATERIALIZED VIEW
       CONCURRENTLY</tt>
@@ -316,8 +319,8 @@ $function$
     - fixed @ref SqlUtil::AbstractDatabase::getProcedure() "getProcedure()" raising \c RUNTIME-TYPE-ERROR for a
       procedure that does not exist, so that a schema with a procedure that did not exist could not be aligned
     - Added the size of the current schema (\c current_schema(): the first existing schema of the connection's
-      \c search_path; see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
-      "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
+      \c search_path; see
+      @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()"), which measures only that schema's relations instead of
       the whole database with \c pg_database_size().
     - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
       and the precision was given as the scale, so that the cast failed or changed the value
@@ -409,47 +412,47 @@ $function$
     - fixed @ref SqlUtil::AbstractTable::updatePhysicalPlacement() "updatePhysicalPlacement()" starting the
       transaction again when it is called in an open transaction, which made PostgreSQL log a warning for each call
 
-    @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
+    @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
 
-    @subsection pgsqlsqlutilbasev171 PgsqlSqlUtilBase v1.7.1
+    @section pgsqlsqlutilbasev171 PgsqlSqlUtilBase v1.7.1
     - fixed bugs handling table objects in schemas other than \c public
       (<a href="https://github.com/qoretechnologies/qore/issues/4602">issue 4602</a>)
 
-    @subsection pgsqlsqlutilbasev17 PgsqlSqlUtilBase v1.7
+    @section pgsqlsqlutilbasev17 PgsqlSqlUtilBase v1.7
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
       expression support
       (<a href="https://github.com/qoretechnologies/qore/issues/4538">issue 4538</a>)
 
-    @subsection pgsqlsqlutilbasev16 PgsqlSqlUtilBase v1.6
+    @section pgsqlsqlutilbasev16 PgsqlSqlUtilBase v1.6
     - added supoport for the \c XML, \c JSON, and \c JSONB types
       (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
 
-    @subsection pgsqlsqlutilbasev153 PgsqlSqlUtilBase v1.5.3
+    @section pgsqlsqlutilbasev153 PgsqlSqlUtilBase v1.5.3
     - fixed handling column names that use reserved words
       (<a href="https://github.com/qoretechnologies/qore/issues/4348">issue 4348</a>)
 
-    @subsection pgsqlsqlutilbasev152 PgsqlSqlUtilBase v1.5.2
+    @section pgsqlsqlutilbasev152 PgsqlSqlUtilBase v1.5.2
     - added APIs to enable duplicate record creation errors to be detected
       (<a href="https://github.com/qoretechnologies/qore/issues/4308">issue 4308</a>)
 
-    @subsection pgsqlsqlutilbasev151 PgsqlSqlUtilBase v1.5.1
+    @section pgsqlsqlutilbasev151 PgsqlSqlUtilBase v1.5.1
     - fixed bugs dropping foreign constraints and indices when aligning tables
       (<a href="https://github.com/qoretechnologies/qore/issues/4246">issue 4246</a>)
 
-    @subsection pgsqlsqlutilbasev15 PgsqlSqlUtilBase v1.5
+    @section pgsqlsqlutilbasev15 PgsqlSqlUtilBase v1.5
     - implemented atomic merge support
       (<a href="https://github.com/qoretechnologies/qore/issues/3963">issue 3963</a>)
 
-    @subsection pgsqlsqlutilbasev141 PgsqlSqlUtilBase v1.4.1
+    @section pgsqlsqlutilbasev141 PgsqlSqlUtilBase v1.4.1
     - fixed a bug generating literal date/time values for SQL queries
       (<a href="https://github.com/qoretechnologies/qore/issues/3948">issue 3948</a>)
 
-    @subsection pgsqlsqlutilbasev14 PgsqlSqlUtilBase v1.4
+    @section pgsqlsqlutilbasev14 PgsqlSqlUtilBase v1.4
     - added support for the DataProvider module
       (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
-    @subsection pgsqlsqlutilbasev131 PgsqlSqlUtilBase v1.3.1
+    @section pgsqlsqlutilbasev131 PgsqlSqlUtilBase v1.3.1
     - fixed compatibility with PostgreSQL 12
       (<a href="https://github.com/qoretechnologies/qore/issues/3589">issue 3589</a>)
     - fixed comparison of triggers with column restrictions with table alignment
@@ -457,31 +460,31 @@ $function$
     - fixed quoting of reserved words in column names in table alignment
       (<a href="https://github.com/qoretechnologies/qore/issues/3400">issue 3400</a>)
 
-    @subsection pgsqlsqlutilbasev13 PgsqlSqlUtilBase v1.3
+    @section pgsqlsqlutilbasev13 PgsqlSqlUtilBase v1.3
     - added support for serializing and deserializing @ref SqlUtil::AbstractTable "AbstractTable" objects
       (<a href="https://github.com/qoretechnologies/qore/issues/2663">issue 2663</a>)
 
-    @subsection pgsqlsqlutilbasev121 PgsqlSqlUtilBase v1.2.1
+    @section pgsqlsqlutilbasev121 PgsqlSqlUtilBase v1.2.1
     - implemented support for custom column operators
       (<a href="https://github.com/qoretechnologies/qore/issues/2314">issue 2314</a>)
     - fixed a bug where default column values were compared incorrectly leading to false positives when comparing and
       aligning DB schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/2527">issue 2527</a>)
 
-    @subsection pgsqlsqlutilbasev12 PgsqlSqlUtilBase v1.2
+    @section pgsqlsqlutilbasev12 PgsqlSqlUtilBase v1.2
     - updated for complex types
 
-    @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.1.2
+    @section pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.1.2
     - fixed a bug in setting a \c comment for a table column
       (<a href="https://github.com/qoretechnologies/qore/issues/1886">issue 1886</a>)
     - implemented @ref SqlUtil::cop_trunc_date() operator
       (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
-    @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.1.1
+    @section pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.1.1
     - implemented the \a force option (i.e. cascade) for dropping code objects
       (<a href="https://github.com/qoretechnologies/qore/issues/1314">issue 1314</a>)
 
-    @subsection pgsqlsqlutilbasev11 PgsqlSqlUtilBase v1.1
+    @section pgsqlsqlutilbasev11 PgsqlSqlUtilBase v1.1
     - added support for \c cop_cast operator
       (<a href="https://github.com/qoretechnologies/qore/issues/535">feature 535</a>)
     - added support for the following datatypes and aliases: bool, float, int, timetz, timestamptz, varbit
@@ -498,7 +501,7 @@ $function$
     - added support for listing PostgreSQL types and materialized views
       (<a href="https://github.com/qoretechnologies/qore/issues/699">issue 699</a>)
 
-    @subsection pgsqlsqlutilbasev10 PgsqlSqlUtilBase v1.0
+    @section pgsqlsqlutilbasev10 PgsqlSqlUtilBase v1.0
     - initial release
 */
 

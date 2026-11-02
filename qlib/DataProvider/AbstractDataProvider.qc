@@ -334,8 +334,8 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     bool supports_bulk_read = False;
 
     #! Native bulk read shapes supported by the data provider
-    /** If not set, the provider is assumed to return @ref DataProvider::DataProviderShape::HashOfLists
-        "HashOfLists" from bulk read APIs.  Providers that can preserve dense columnar data should include
+    /** If not set, the provider is assumed to return
+        @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists" from bulk read APIs.  Providers that can preserve dense columnar data should include
         @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
         @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
 
@@ -350,8 +350,8 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     bool supports_bulk_create = False;
 
     #! Native bulk create input shapes supported by the data provider
-    /** If not set, the provider is assumed to accept @ref DataProvider::DataProviderShape::HashOfLists
-        "HashOfLists".  Providers that can consume dense columnar data directly should include
+    /** If not set, the provider is assumed to accept
+        @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists".  Providers that can consume dense columnar data directly should include
         @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
         @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
 
@@ -366,8 +366,8 @@ public hashdecl DataProviderSummaryInfo inherits NameDescInfo {
     bool supports_bulk_upsert = False;
 
     #! Native bulk upsert input shapes supported by the data provider
-    /** If not set, the provider is assumed to accept @ref DataProvider::DataProviderShape::HashOfLists
-        "HashOfLists".  Providers that can consume dense columnar data directly should include
+    /** If not set, the provider is assumed to accept
+        @ref DataProvider::DataProviderShape::HashOfLists "HashOfLists".  Providers that can consume dense columnar data directly should include
         @ref DataProvider::DataProviderShape::BufferColumns "BufferColumns" or
         @ref DataProvider::DataProviderShape::DataFrameBlock "DataFrameBlock".
 
@@ -964,7 +964,7 @@ public hashdecl DataProviderExpressionBaseInfo {
         it.  It is still a valid expression: it is parsed, evaluated, typed and serialized as part of that
         construct, and its \c role still gives the contexts where the construct can be used.
 
-        @ref DP_FUNC_WILDCARD_ITEM is internal: it is the item of a list wildcard (\c [*]), which the accessors after
+        @ref DP_FUNC_WILDCARD_ITEM is internal: it is the item of a list wildcard (<tt>[*]</tt>), which the accessors after
         the wildcard start from when they do not start with a field, as in <tt>\@matrix[*][0]</tt>; the wildcards
         themselves (@ref DP_FUNC_LIST_WILDCARD and @ref DP_FUNC_HASH_WILDCARD) are not internal.
 
@@ -1055,9 +1055,9 @@ public hashdecl IndexedDataProviderExpressionInfo inherits DataProviderExpressio
     @since DataProvider 3.3
 */
 public hashdecl DataProviderRangeSpec {
-    #! Start index of the range (NOTHING for open start, e.g., \c [..5])
+    #! Start index of the range (NOTHING for open start, e.g., <tt>[..5]</tt>)
     *int start;
-    #! End index of the range (NOTHING for open end, e.g., \c [2..])
+    #! End index of the range (NOTHING for open end, e.g., <tt>[2..]</tt>)
     *int end;
 }
 
@@ -1066,7 +1066,7 @@ public hashdecl DataProviderFieldReference {
     #! The field path of the field being referenced
     /** Dots separate the parts of the path, the keys read one after the other from the record; a dot that is part
         of a key is escaped with a backslash, and so is a backslash: \c "order.id" is the key \c id of the key
-        \c order, and <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
+        \c order, and <tt>&quot;Unit\\\\.Price&quot;</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
         (@ref AbstractDataProvider::getFieldPath(), @ref AbstractDataProvider::escapeFieldPathKey(),
         @ref dpql_field_paths).  A query language names it by its keys, never by this text
         (@ref AbstractDataProvider::getFieldPathName())
@@ -1357,7 +1357,7 @@ public hashdecl DataProviderBaseInfo {
     #! Required constructor option combinations
     /** If set it indicates that there are multiple possibilities for the set of required options for the data
         provider's hash constructor (if any); the format of this string is the required option names separated by
-        commas (\c ","); multiple possibilities must be separated by pipe chars (\c "|""); ex:
+        commas (\c ","); multiple possibilities must be separated by pipe chars (<tt>|</tt>); ex:
         \c "client_id,client_secret,tenant|token";if this option is set, then the \c required attribute of options is
         ignored
     */
@@ -2704,8 +2704,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
     #! Creates the given records in the data provider from any supported bulk shape
     /** @param recs a shaped record block; supported shapes are @ref DataProviderShape::HashOfLists "HashOfLists",
-        @ref DataProviderShape::BufferColumns "BufferColumns", @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock", and a single row record
+        @ref DataProviderShape::BufferColumns "BufferColumns",
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock", and a single row record
         @param create_options the create options after processing by validateCreateOptions()
 
         @return the data written to the data provider for each record in bulk format
@@ -2901,8 +2901,8 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
     #! Upserts the given records in the data provider from any supported bulk shape
     /** @param recs a shaped record block; supported shapes are @ref DataProviderShape::HashOfLists "HashOfLists",
-        @ref DataProviderShape::BufferColumns "BufferColumns", @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock", and a single row record
+        @ref DataProviderShape::BufferColumns "BufferColumns",
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock", and a single row record
         @param upsert_options the upsert options; will be processed by validateUpsertOptions()
 
         @return an array of upsert results corresponding to each record in order
@@ -6263,7 +6263,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @throw any error that evaluating the expression raises, with its own description; a result that the
         expression's return type does not accept raises the type's error with
-        <tt>error in return value type "<type>" for "<expression>" expression: </tt> before its description
+        <tt>error in return value type &quot;<type>&quot; for &quot;<expression>&quot; expression: </tt> before its description
 
         @since DataProvider 2.3
         @since DataProvider 3.11 an error that evaluating the expression raises is not described as an error in the
@@ -6536,11 +6536,11 @@ hash<DataProviderExpression> exp = AbstractDataProvider::translateFieldReference
         <tt>p\\q</tt> the key <tt>p\\q</tt>.  @ref escapeFieldPathKey() escapes a key so that this reads it back
         exactly: for any keys, joining their escaped forms with \c "." gives a path whose parts are the keys.
 
-        The empty path has no parts; an empty part is kept (<tt>a.</tt> is \c ("a", "")).
+        The empty path has no parts; an empty part is kept (<tt>a.</tt> is <tt>(&quot;a&quot;</tt>, "")).
 
         @param field the field path, such as \c "order.id" or \c "create.order-id"
 
-        @return the keys of the path: \c ("order", "id") and \c ("create", "order-id") for these, and \c ("a.b",)
+        @return the keys of the path: <tt>(&quot;order&quot;</tt>, "id") and <tt>(&quot;create&quot;</tt>, "order-id") for these, and <tt>(&quot;a.b&quot;,)</tt>
         for <tt>a\\.b</tt>
 
         @since DataProvider 3.11
@@ -6691,7 +6691,7 @@ string name = AbstractDataProvider::getFieldPathDisplayName("Unit\\.Price");
     #! Checks that the field paths given in a field option of a processor have no wildcard
     /** A field option names one field by its path (@ref getFieldPath()).  The DPQL wildcards <tt>[*]</tt> and
         <tt>{*}</tt>, which take every element of a list or every value of a hash in an expression, are not part of a
-        field path: a path with one would be read as a key with \c [*] or \c {*} in its name, so it is refused.
+        field path: a path with one would be read as a key with <tt>[*]</tt> or \c {*} in its name, so it is refused.
 
         @param err the exception code to throw
         @param option the name of the option
@@ -6940,8 +6940,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
     /** A condition is evaluated by its truthiness, so a value of any type converts to a boolean value; however a
         string or a date as a condition is almost always an error, as with <tt>\@status && \@id > 1</tt>, so a
         string or a date type (including types that also accept @ref nothing and soft types) cannot be used as a
-        condition and must be compared explicitly instead (ex: <tt>\@status == "open"</tt> or
-        <tt>\@x != ""</tt>).
+        condition and must be compared explicitly instead (ex: <tt>\@status == &quot;open&quot;</tt> or
+        <tt>\@x != &quot;&quot;</tt>).
 
         All other types can be used as a condition: \c bool, \c int, \c float, \c number, \c list, \c hash,
         \c binary, a type that also accepts @ref nothing, and a type that can be any type (\c auto or \c any).
@@ -7344,7 +7344,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         @param uoptions the options provided
         @param required_options If provided, it indicates that there are multiple possibilities for the set of
         required options; the format of this string is the required option names separated by commas (\c ",");
-        multiple possibilities must be separated by pipe chars (\c "|""); ex: client_id,client_secret,tenant|token;
+        multiple possibilities must be separated by pipe chars (<tt>|</tt>); ex: client_id,client_secret,tenant|token;
         if this option is passed, then the \c required attribute of options is ignored
 
         @return All options after processing
@@ -7441,7 +7441,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         @param err The error code in case of any errors; this is the exception code (\c err) that will be raised
         @param options The options provided
         @param required_options The format of this string is the required option names separated by commas (\c ",");
-        multiple possibilities must be separated by pipe chars (\c "|""); ex: client_id,client_secret,tenant|token
+        multiple possibilities must be separated by pipe chars (<tt>|</tt>); ex: client_id,client_secret,tenant|token
 
         @note The error code passed as \c err is thrown if any errors are detected
     */
@@ -8328,8 +8328,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
     #! Creates records from any shaped bulk block
     /** The default implementation converts the input to hash-of-lists compatibility format. Providers that list
-        @ref DataProviderShape::BufferColumns "BufferColumns" or @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock" in \c bulk_create_shapes should override this method to consume those shapes directly.
+        @ref DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock" in \c bulk_create_shapes should override this method to consume those shapes directly.
 
         @since DataProvider 3.5
     */
@@ -8361,8 +8361,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
     #! Upserts records from any shaped bulk block
     /** The default implementation converts the input to hash-of-lists compatibility format. Providers that list
-        @ref DataProviderShape::BufferColumns "BufferColumns" or @ref DataProviderShape::DataFrameBlock
-        "DataFrameBlock" in \c bulk_upsert_shapes should override this method to consume those shapes directly.
+        @ref DataProviderShape::BufferColumns "BufferColumns" or
+        @ref DataProviderShape::DataFrameBlock "DataFrameBlock" in \c bulk_upsert_shapes should override this method to consume those shapes directly.
 
         @since DataProvider 3.5
     */
@@ -9339,7 +9339,7 @@ hash<auto> rec = AbstractDataProvider::setFieldValue({"order": {"id": 1}}, "orde
         dot or a backslash that is part of a key is escaped (<tt>Unit\\.Price</tt>).  The record passed is not
         changed; the record returned does not have the last key of the path, and each hash on the path is copied as
         a plain hash (<tt>hash<auto></tt>).  A hash that the removal leaves empty is kept: removing \c address.city
-        from <tt>{"address": {"city": "Prague"}}</tt> gives <tt>{"address": {}}</tt>.
+        from <tt>{&quot;address&quot;: {&quot;city&quot;: &quot;Prague&quot;}}</tt> gives <tt>{&quot;address&quot;: {}}</tt>.
 
         When the record has no value at the path, because a key on the path is missing or a value on the path before
         its last key is not a hash (where @ref getFieldValue() gives @ref nothing), the record is returned as it is.

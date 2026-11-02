@@ -79,7 +79,7 @@ public:
         connection is in CONNECTING state until @ref waitForReadyOrError
         returns.
 
-        @param target_host target hostname (used for the @c :authority
+        @param target_host target hostname (used for the <tt>:authority</tt>
             pseudo-header and connect)
         @param target_port target TCP port
         @param ssl_required if @c true, SSL/TLS is required (HTTPS) and
@@ -126,7 +126,7 @@ public:
         @param adopted_sock_priv the priv pointer inside @a adopted_sock_obj
             (raw — kept alive by the wrapper).  Must match the wrapper's
             priv.
-        @param target_host target hostname (for @c :authority pseudo-header)
+        @param target_host target hostname (for <tt>:authority</tt> pseudo-header)
         @param target_port target TCP port
         @param max_concurrent_streams advisory cap on concurrent streams
         @param xsink exception sink — set on construction failure

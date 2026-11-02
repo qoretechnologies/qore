@@ -10,6 +10,13 @@
 
     The signals that a fault raises synchronously in the thread that executes the faulting instruction - \c SIGSEGV, \c SIGBUS, \c SIGILL, \c SIGFPE and \c SIGTRAP - are never masked and cannot have %Qore-language handlers: a fault such as a stack overflow terminates the process with the operating system's default action, or is handled by a native component of the process that installs its own handler (a JVM, for example).
 
+    @anchor signal_thread_sigchld
+    \c SIGCHLD, which is reserved by the library and cannot have a %Qore-language handler, is not blocked in any
+    thread, and the signal handling thread does not wait for it, so that components that watch the end of their child
+    processes through \c SIGCHLD (such as the \c process module) receive it.  A signal that a module takes over and
+    releases is restored as it was: the signal handling thread waits for it again only if it did before, and a signal
+    reserved by the library is reserved again.
+
     When a process embeds a JVM through the \c jni module, and especially when it also loads other native runtimes that use synchronous signals such as \c SIGSEGV (for example JavaScript or Python runtimes), ensure that the JVM's signal-chaining library is active before the process starts. On Linux JVMs that provide \c libjsig.so, set \c LD_PRELOAD to the full path of \c libjsig.so in the process environment, for example:
     @code{.sh}
     export LD_PRELOAD=/path/to/libjvm/server/libjsig.so${LD_PRELOAD:+:$LD_PRELOAD}
@@ -36,6 +43,10 @@
     - A signal handler that does not terminate will block the execution of further signal handlers and will block signal handling changes (such as updating the signal mask), resulting in a %Qore process that must be killed manually. Because all %Qore signal handling code is executed serially in a single thread, %Qore signal handlers should execute and return quickly to give time to execute other handlers.
     - Signal handlers may install or remove signal handlers using set_signal_handler() or remove_signal_handler(), however in this case, changes to signal handling are made after the signal handler returns.
     - A signal handler that is replaced or removed while it runs, by the handler itself or by another thread, keeps running: the handler's code and the values that its closure captured are released only after it returns.
+    - The signal handling thread is woken internally with a signal (see the valgrind note below).  If a container
+      security policy denies this wakeup, the denial is reported on @ref Qore::stderr "stderr", and a change to
+      signal handling or the shutdown of the process completes after a bounded wait instead of hanging.  On
+      platforms without timed signal waits, a denied wakeup is reported as a fatal error.
     - Under valgrind, run %Qore with signal handling disabled (<tt>qore -b</tt>): the signal handling thread is woken internally with \c SIGSYS, which valgrind treats as a fault signal and can deliver with its default action, terminating the process with "Bad system call".
     - Signal handlers cannot call fork(); any attempt to call fork() in a signal handler will result in an an exception.
     - fork() (called externally to a signal handler) is handled as follows: the signal handling thread is terminated, fork() is executed, all signals are masked in the primary thread in the new process, then the signal handling thread is resumed in the parent process only.  The signal handler thread cannot be reliably started in the child process because pthread_create() is not async-signal safe, therefore signal handling is disabled in the child process.  No signals can be received or handled while the signal handling thread is terminated.

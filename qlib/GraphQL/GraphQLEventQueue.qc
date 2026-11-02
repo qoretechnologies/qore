@@ -36,8 +36,8 @@ public namespace GraphQLHandler {
     implementation.
 */
 public class GraphQLCancellableSource inherits Qore::AbstractIterator {
-    #! cancels the source: unblocks any thread waiting in @ref Qore::AbstractIterator::next()
-    #! "next()", which then returns @ref False, ending the subscription stream
+    #! cancels the source: unblocks any thread waiting in
+    #! @ref Qore::AbstractIterator::next() "next()", which then returns @ref False, ending the subscription stream
     /** must be safe to call from a thread other than the one iterating the source
     */
     abstract cancel();

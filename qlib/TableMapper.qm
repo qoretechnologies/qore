@@ -62,8 +62,8 @@ module TableMapper {
     @section inboundtablemapper_sequences Inserting Sequence Values with the InboundTableMapper Class
 
     @ref TableMapper::InboundTableMapper "InboundTableMapper" objects can be used to insert sequence values in the
-    target table, and the values inserted are returned in the output value of @ref TableMapper::InboundTableMapper::insertRow()
-    "InboundTableMapper::insertRow()" and also present in the argument to any @ref TableMapper::InboundTableMapper::setRowCode() "rowcode" call when using the @ref tablemapper_bulk_insert_api "bulk insert API" on supported databases (databases supporting the \c returning clause in insert statements).
+    target table, and the values inserted are returned in the output value of
+    @ref TableMapper::InboundTableMapper::insertRow() "InboundTableMapper::insertRow()" and also present in the argument to any @ref TableMapper::InboundTableMapper::setRowCode() "rowcode" call when using the @ref tablemapper_bulk_insert_api "bulk insert API" on supported databases (databases supporting the \c returning clause in insert statements).
 
     The mapper field options are:
     - \c sequence: inserts the value of the given sequence into the target column and increments the sequence
@@ -88,7 +88,7 @@ const DataMap = (
     # output column: "explicit_count": maps from the input "Count" field
     "explicit_count": "Count",
     # output column: "implicit_count": runs the given code on the input record and retuns the result, the code returns the number of "Products" sub-records
-    "implicit_count": int sub (any ignored, hash rec) { return rec.Products.size(); },
+    "implicit_count": int sub (auto ignored, hash rec) { return rec.Products.size(); },
     # output column: "order_date": converts the "OrderDate" string input field to a date in the specified format
     "order_date": ("name": "OrderDate", "date_format": "DD.MM.YYYY HH:mm:SS.us"),
     # output column: order_type: given as a constant value
@@ -123,7 +123,7 @@ Table table(ds, "order_table");
 const DataMap = (
     "id": True,
     "foo": "name",
-    "bar": ("code": string sub (any ignored, hash rec) { return format_date("YYYYMMDD", rec."order_table"); }),
+    "bar": ("code": string sub (auto ignored, hash rec) { return format_date("YYYYMMDD", rec."order_table"); }),
 );
 # SqlUtil select hash
 hash sh = (
@@ -213,44 +213,47 @@ on_error table1.rollback();
 
     Additionally, the value is provided to any row code set with @ref TableMapper::InboundTableMapper::setRowCode(); see @ref tablemapper_bulk_insert_api for more information.
 
-    @section tablemapperrelnotes Release Notes
+    See @subpage tablemapperrelnotes "Release Notes" for the changes in each version.
+*/
+/** @page tablemapperrelnotes Release Notes
 
-    @subsection tablemapperv1_3_1 TableMapper v1.3.1
+
+    @section tablemapperv1_3_1 TableMapper v1.3.1
     - fixed @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" to accept a record set
       whose values all have the same type, such as a literal <tt>{"a": ("1", "2")}</tt>; adding a constant value from
       the second argument raised \c RUNTIME-TYPE-ERROR
 
-    @subsection tablemapperv1_3 TableMapper v1.3
+    @section tablemapperv1_3 TableMapper v1.3
     - updated the module to use the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" class instead of the @ref Qore::SQL::SQLStatement "SQLStatement"
     - deprecated @ref TableMapper::AbstractSqlStatementOutboundMapper::getRowIterator() "AbstractSqlStatementOutboundMapper::getRowIterator()" for @ref TableMapper::AbstractSqlStatementOutboundMapper::getStatement() "AbstractSqlStatementOutboundMapper::getStatement()"
 
-    @subsection tablemapperv1_2_2 TableMapper v1.2.2
+    @section tablemapperv1_2_2 TableMapper v1.2.2
     - updated to use the new SQL statement DBI method for efficient execution of queries only for describing
       result sets with outbound mappers to solve performance problems related to mappers that
       have statements with large data sets (<a href="https://github.com/qoretechnologies/qore/issues/2773">issue 2773</a>)
     - fixed @ref TableMapper::RawSqlStatementOutboundMapper "RawSqlStatementOutboundMapper" to be usable without subclassing
       (<a href="https://github.com/qoretechnologies/qore/issues/2775">issue 2775</a>)
 
-    @subsection tablemapperv1_2_1 TableMapper v1.2.1
+    @section tablemapperv1_2_1 TableMapper v1.2.1
     - fixed issues where where description fields of input and output records for automatically-generated options did not reflect column comments and could not be overridden with user input (<a href="https://github.com/qoretechnologies/qore/issues/2520">issue 2520</a>)
 
-    @subsection tablemapperv1_2 TableMapper v1.2
+    @section tablemapperv1_2 TableMapper v1.2
     - added support for upserts in @ref TableMapper::InboundTableMapper (<a href="https://github.com/qoretechnologies/qore/issues/1067">issue 1067</a>)
     - added @ref TableMapper::InboundTableMapper::queueData "queueData(list, __7_ hash)"
     - fixed a bug with the @ref TableMapper::SqlStatementOutboundMapper::iterator() method; corrected the iterator object return value which was causing \c AbstractMapperIterator::mapBulk() to fail (<a href="https://github.com/qoretechnologies/qore/issues/979">issue 979</a>)
     - fixed a bug with @ref TableMapper::SqlStatementOutboundMapper; it would throw an error if the required \c "table" or \c "sh" options were used and only worked with subclasses that declared these options (<a href="https://github.com/qoretechnologies/qore/issues/981">issue 981</a>)
     - updated for complex types
 
-    @subsection tablemapperv1_1_4 TableMapper v1.1.4
+    @section tablemapperv1_1_4 TableMapper v1.1.4
     - fixed a bug in flush messages in the @ref TableMapper::InboundTableMapper "InboundTableMapper" class (<a href="https://github.com/qoretechnologies/qore/issues/1849">issue 1849</a>)
 
-    @subsection tablemapperv1_1_3 TableMapper v1.1.3
+    @section tablemapperv1_1_3 TableMapper v1.1.3
     - fixed bugs handling mapper fields with no input records in list mode (<a href="https://github.com/qoretechnologies/qore/issues/1736">issue 1736</a>)
 
-    @subsection tablemapperv1_1_2 TableMapper v1.1.2
+    @section tablemapperv1_1_2 TableMapper v1.1.2
     - performance enhancements for @ref TableMapper::InboundTableMapper::queueData() "InboundTableMapper::queueData()" when called with a hash of lists (<a href="https://github.com/qoretechnologies/qore/issues/1626">issue 1626</a>)
 
-    @subsection tablemapperv1_1_1 TableMapper v1.1.1
+    @section tablemapperv1_1_1 TableMapper v1.1.1
     - fixed runtime option propagation to @ref TableMapper::SqlStatementMapperIterator "SqlStatementMapperIterator" from @ref TableMapper::AbstractSqlStatementOutboundMapper::iterator() "AbstractSqlStatementOutboundMapper::iterator()" (<a href="https://github.com/qoretechnologies/qore/issues/1418">issue 1418</a>)
     - fixed @ref TableMapper::SqlStatementMapperIterator::getCount() "SqlStatementMapperIterator::getCount()" (<a href="https://github.com/qoretechnologies/qore/issues/1417">issue 1417</a>)
     - added the following methods:
@@ -263,7 +266,7 @@ on_error table1.rollback();
       - @ref TableMapper::SqlStatementMapperIterator::replaceRuntime() "SqlStatementMapperIterator::replaceRuntime()"
       - @ref TableMapper::SqlStatementMapperIterator::setRuntime() "SqlStatementMapperIterator::setRuntime()"
 
-    @subsection tablemapperv1_1 TableMapper v1.1
+    @section tablemapperv1_1 TableMapper v1.1
     - added table name and datasource description to error messages
     - added the getDatasource() method to classes
     - implemented more efficient support for inserts from a sequence for databases supporting the \c "returning" clause in insert statements; now such inserts are made in a single round trip instead of n + 1 where n is the number of sequences in the insert
@@ -279,7 +282,7 @@ on_error table1.rollback();
     - added the @ref TableMapper::SqlStatementMapperIterator "SqlStatementMapperIterator" class
     - added the @ref TableMapper::SqlStatementOutboundMapper "SqlStatementOutboundMapper" class
 
-    @subsection tablemapperv1_0 TableMapper v1.0
+    @section tablemapperv1_0 TableMapper v1.0
     - initial release
 */
 
@@ -390,7 +393,7 @@ const DbMapper = {
     "available": "Available",
     "in_transit": "InTransit",
     "status": {"constant": "01"},
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
 };
 
 InboundTableMapper mapper(table, DbMapper);
@@ -429,7 +432,7 @@ const DbMapper = {
     "available": "Available",
     "in_transit": "InTransit",
     "status": {"constant": "01"},
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
 };
 
 InboundTableMapper mapper(table, DbMapper);
@@ -1431,7 +1434,7 @@ const DbMapper = (
     "available": "Available",
     "in_transit": "InTransit",
     "status": ("constant": "01"),
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
     );
 
 InboundTableMapperIterator i(input, table, DbMapper);
@@ -1465,7 +1468,7 @@ const DbMapper = (
     "available": "Available",
     "in_transit": "InTransit",
     "status": ("constant": "01"),
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
     );
 
 InboundTableMapperIterator i(input, table, DbMapper);
@@ -1498,7 +1501,7 @@ const DbMapper = (
     "ordered": "Ordered",
     "available": "Available",
     "in_transit": "InTransit",
-    "total": int sub (any x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
+    "total": int sub (auto x, hash rec) { return rec.Available.toInt() + rec.Ordered.toInt() + rec.InTransit.toInt(); },
     );
 
 InboundTableMapper mapper(table, DbMapper);

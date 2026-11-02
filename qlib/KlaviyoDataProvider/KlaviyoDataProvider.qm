@@ -148,6 +148,15 @@ module KlaviyoDataProvider {
     and <b>segments</b> it evaluates continuously, records what they did as <b>events</b> against <b>metrics</b>, and
     sends <b>campaigns</b> to them.
 
+    Documentation:
+    - @subpage klaviyodataproviderguide "KlaviyoDataProvider Guide": the preserved action and option identities,
+      the pinned schema and API revision, the exported actions, filtering, sorting and paging, polled events, and
+      the record tables
+    - @subpage klaviyodataprovider_examples "KlaviyoDataProvider Examples": getting the data provider, creating a
+      profile, listing and paging, recording and reacting to events, and calling an endpoint the manifest does not
+      export
+    - @subpage klaviyodataproviderrelnotes "Release Notes": the changes in each version
+
     @section klaviyodataprovider_generated Mostly Generated, Deliberately Not Entirely
 
     Most of the actions this application exports are <b>generated from Klaviyo's own OpenAPI 3 description</b>
@@ -158,6 +167,16 @@ module KlaviyoDataProvider {
     Nine actions are hand-written, because Klaviyo's description cannot express what they do as one flat
     option shape - a relationship body is an array, and an event or a subscription nests envelopes three and
     four levels deep.  See @ref klaviyomanifest_handwritten.
+*/
+/** @page klaviyodataproviderrelnotes Release Notes
+
+
+    @section klaviyodataproviderv1_0 KlaviyoDataProvider v1.0
+    - initial release
+*/
+/** @page klaviyodataproviderguide KlaviyoDataProvider Guide
+
+    @tableofcontents
 
     @section klaviyodataprovider_parity Two Identities Were Preserved
 
@@ -174,16 +193,16 @@ of Klaviyo's JSON:API envelope, so \c create_profile offers \c email rather than
     |@ref RestSchemaActions::RestSchemaFieldOverlayInfo::lift "lift"|publishes a grouping object's \
 properties as options, so a profile's address is \c city and \c zip rather than a \c location hash
     |@ref RestSchemaActions::RestSchemaFieldOverlayInfo::merge "merge"|publishes a response envelope's \
-properties beside the identity, so a result carries \c email rather than \c attributes.email
+properties beside the identity, so a result carries \c email rather than <tt>attributes.email</tt>
 
     @section klaviyodataprovider_pinned The Pinned Schema, and the Revision With It
 
     Klaviyo versions its API by a dated revision - \c 2026-07-15 here - sent as a \c revision header, and
-    carries it in the description's \c info.version.  So pinning the description pins the API version as
+    carries it in the description's <tt>info.version</tt>.  So pinning the description pins the API version as
     well, and the two move together:
 
     |!Property|!Value
-    |Source|https://github.com/klaviyo/openapi \c openapi/stable.json
+    |Source|https://github.com/klaviyo/openapi <tt>openapi/stable.json</tt>
     |Revision|\c 2026-07-15
     |Stable until|2027-07-15, removed 2028-07-15
     |Imported|2026-08-13
@@ -214,12 +233,12 @@ properties beside the identity, so a result carries \c email rather than \c attr
     Three conventions are worth knowing before using these actions:
 
     - <b>Filters are structured, not typed.</b>  Klaviyo's own filter syntax is a string of predicates -
-      \c "any(name,[\"a\",\"b\"])" - and this application publishes named fields instead, assembling the
+      <tt>any(name,[&quot;a&quot;,&quot;b&quot;])</tt> - and this application publishes named fields instead, assembling the
       string when the request is built.  A field a listing does not publish is reachable through
       \c make-api-call.
-    - <b>Sorting is a field and a direction</b>, not Klaviyo's signed token; \c "-created" is
-      \c "{field: \"created\", direction: \"desc\"}" here.
-    - <b>Paging is by cursor.</b>  A listing answers \c links.next, published as \c next, and that value is
+    - <b>Sorting is a field and a direction</b>, not Klaviyo's signed token; <tt>&quot;-created&quot;</tt> is
+      <tt>{field: &quot;created&quot;, direction: &quot;desc&quot;}</tt> here.
+    - <b>Paging is by cursor.</b>  A listing answers <tt>links.next</tt>, published as \c next, and that value is
       passed back as \c cursor; it is absent once the collection is exhausted.  Klaviyo caps the page size
       per endpoint - 10 on lists and segments, 50 on tags, 100 on profiles and campaigns - and rejects a
       larger value rather than clamping it.
@@ -274,9 +293,12 @@ properties beside the identity, so a result carries \c email rather than \c attr
     @see @ref KlaviyoDataProvider::KlaviyoRecordTables "KlaviyoRecordTables" for the whole of it, including
     why campaigns are scoped rather than searched and why a profile is not deleted here.
 
-    @section klaviyodataprovider_examples Examples
+*/
+/** @page klaviyodataprovider_examples KlaviyoDataProvider Examples
 
-    @subsection klaviyodataprovider_ex_provider Getting the Data Provider
+    @tableofcontents
+
+    @section klaviyodataprovider_ex_provider Getting the Data Provider
 
     From a connection, which is how a data-provider-aware caller reaches it:
 
@@ -299,7 +321,7 @@ KlaviyoDataProvider klaviyo(new KlaviyoRestClientIo({
 }));
     @endcode
 
-    @subsection klaviyodataprovider_ex_profile Creating a Profile
+    @section klaviyodataprovider_ex_profile Creating a Profile
 
     @code{.py}
 hash<auto> profile = klaviyo.getChildProviderEx("create_profile").doRequest({
@@ -312,7 +334,7 @@ hash<auto> profile = klaviyo.getChildProviderEx("create_profile").doRequest({
 printf("created %s\n", profile.id);
     @endcode
 
-    @subsection klaviyodataprovider_ex_list Listing and Paging
+    @section klaviyodataprovider_ex_list Listing and Paging
 
     @code{.py}
 AbstractDataProvider list_profiles = klaviyo.getChildProviderEx("list_profiles");
@@ -333,7 +355,7 @@ while (True) {
 printf("%d profiles\n", all.size());
     @endcode
 
-    @subsection klaviyodataprovider_ex_event Recording an Event
+    @section klaviyodataprovider_ex_event Recording an Event
 
     @code{.py}
 klaviyo.getChildProviderEx("create_event").doRequest({
@@ -344,7 +366,7 @@ klaviyo.getChildProviderEx("create_event").doRequest({
 });
     @endcode
 
-    @subsection klaviyodataprovider_ex_events Reacting to an Event
+    @section klaviyodataprovider_ex_events Reacting to an Event
 
     @code{.py}
 class ProfileObserver inherits DataProvider::Observer {
@@ -358,7 +380,7 @@ event.registerObserver(new ProfileObserver());
 cast<DelayedObservable>(event).observersReady();
     @endcode
 
-    @subsection klaviyodataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+    @section klaviyodataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
 
     The application exports a reviewed subset of Klaviyo's API.  For anything else, the generic API call
     action reaches the rest of it with the same connection and authentication:
@@ -370,11 +392,6 @@ hash<auto> res = klaviyo.getChildProviderEx("__call__").doRequest({
 });
 printf("%d flows\n", res.body.data.size());
     @endcode
-
-    @section klaviyodataproviderrelnotes Release Notes
-
-    @subsection klaviyodataproviderv1_0 KlaviyoDataProvider v1.0
-    - initial release
 */
 
 #! contains all public definitions in the KlaviyoDataProvider module

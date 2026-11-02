@@ -33,6 +33,6 @@ auto km2 = Qore::ML::ml_load_model("/models/customer_segments.qml");
 hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     @endcode
 
-    The native \c .qml format is a compact binary format with CRC-32 integrity checking.
+    The native <tt>.qml</tt> format is a compact binary format with CRC-32 integrity checking.
     All algorithm types are supported.
 */

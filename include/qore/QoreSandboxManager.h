@@ -387,8 +387,8 @@ public:
         @return true if allowed, false if denied (exception raised)
 
         The rules are applied in this order:
-        - an IPv4-mapped IPv6 address (\c ::%ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
-          unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
+        - an IPv4-mapped IPv6 address (<tt>::%ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+          unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
           checked as the loopback address
         - a denied IP range containing the address denies the connection, also for an allowed host name, so a host
           name that resolves to a blocked network (DNS rebinding) is denied
@@ -411,13 +411,13 @@ public:
 
         Binding is controlled like a connection to the local address, without host names: an IPv4-mapped address is
         checked as the IPv4 address it carries; a denied IP range containing the address denies the bind, unless
-        the address is a loopback address (\c 127.0.0.0/8 or \c ::1), because a socket bound there can only be
+        the address is a loopback address (\c 127.0.0.0/8 or <tt>::1</tt>), because a socket bound there can only be
         reached from the local host, which is less than a bind on all interfaces exposes (denied ranges still deny
         connections to loopback addresses); a
         specific port outside the allowed ports for the protocol denies the bind (a system-assigned port, port 0, is
         not restricted); an address outside all configured allowed IP ranges denies the bind; otherwise the default
-        policy decides.  A wildcard address (\c 0.0.0.0 or \c ::) binds all interfaces, so it is allowed by an
-        allowed IP range only if the range contains the wildcard address itself (\c 0.0.0.0/0 or \c ::/0).
+        policy decides.  A wildcard address (\c 0.0.0.0 or <tt>::</tt>) binds all interfaces, so it is allowed by an
+        allowed IP range only if the range contains the wildcard address itself (\c 0.0.0.0/0 or <tt>::/0</tt>).
     */
     DLLEXPORT bool checkBind(const struct sockaddr* addr, socklen_t len,
                              int proto, ExceptionSink* xsink);
@@ -481,8 +481,7 @@ private:
     QoreSandboxManager sm;
     sm.filesystem().setSandboxRoot("/sandbox", xsink);
     sm.network().blockPrivateNetworks();
-    sm.setMemoryLimit(100 * 1024 * 1024);  // 100MB
-    sm.setWallTimeLimit(30000);            // 30 seconds
+    sm.setMaxThreads(4);
 
     QoreProgram* pgm = new QoreProgram(PO_NEW_STYLE);
     pgm->setSandboxManager(&sm);
@@ -514,39 +513,6 @@ public:
     //! Gets the network security manager (const version)
     DLLEXPORT const QoreNetworkSecurityManager& network() const;
 
-    //! Sets maximum memory usage in bytes
-    /** @param bytes Maximum memory allocation in bytes (0 = unlimited)
-
-        @note This limit is checked when allocating memory in sandboxed code.
-        Exceeding the limit raises a SANDBOX-MEMORY-LIMIT exception.
-    */
-    DLLEXPORT void setMemoryLimit(size_t bytes);
-
-    //! Gets the memory limit
-    DLLEXPORT size_t getMemoryLimit() const;
-
-    //! Sets maximum CPU time in milliseconds
-    /** @param ms Maximum CPU time in milliseconds (0 = unlimited)
-
-        @note CPU time is checked periodically during execution.
-        Exceeding the limit raises a SANDBOX-TIMEOUT exception.
-    */
-    DLLEXPORT void setCPUTimeLimit(int64 ms);
-
-    //! Gets the CPU time limit
-    DLLEXPORT int64 getCPUTimeLimit() const;
-
-    //! Sets maximum wall clock time in milliseconds
-    /** @param ms Maximum wall clock time in milliseconds (0 = unlimited)
-
-        @note Wall time is checked periodically during execution.
-        Exceeding the limit raises a SANDBOX-TIMEOUT exception.
-    */
-    DLLEXPORT void setWallTimeLimit(int64 ms);
-
-    //! Gets the wall time limit
-    DLLEXPORT int64 getWallTimeLimit() const;
-
     //! Sets maximum number of threads
     /** @param count Maximum number of threads (0 = unlimited)
 
@@ -565,17 +531,6 @@ public:
 
     //! Gets the max threads limit
     DLLEXPORT int getMaxThreads() const;
-
-    //! Sets maximum recursion depth
-    /** @param depth Maximum recursion depth (0 = unlimited)
-
-        @note This limits function call stack depth.
-        Exceeding the limit raises a SANDBOX-RECURSION-LIMIT exception.
-    */
-    DLLEXPORT void setMaxRecursionDepth(int depth);
-
-    //! Gets the max recursion depth
-    DLLEXPORT int getMaxRecursionDepth() const;
 
     //! Requests graceful interruption of sandboxed code
     /** This sets an interrupt flag that is checked at various points
@@ -737,20 +692,8 @@ private:
     //! Network security manager
     QoreNetworkSecurityManager net_mgr;
 
-    //! Memory limit in bytes (0 = unlimited)
-    size_t memory_limit;
-
-    //! CPU time limit in milliseconds (0 = unlimited)
-    int64 cpu_time_limit;
-
-    //! Wall time limit in milliseconds (0 = unlimited)
-    int64 wall_time_limit;
-
     //! Maximum threads (0 = unlimited)
     std::atomic<int> max_threads;
-
-    //! Maximum recursion depth (0 = unlimited)
-    int max_recursion;
 
     //! Interrupt flag
     std::atomic<bool> interrupt_requested;

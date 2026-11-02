@@ -636,7 +636,7 @@ public namespace Hl7v2Util {
                 "artifact is bundled with Qore.";
         }
 
-        #! Generates a schema from all \c .xsd files below the given directory
+        #! Generates a schema from all <tt>.xsd</tt> files below the given directory
         Hl7v2Schema generateSchemaFromDirectory(string dir, *hash<auto> opts = NOTHING) {
             string source_dir = normalize_dir(dir);
             if (!is_dir(source_dir)) {

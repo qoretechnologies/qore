@@ -168,9 +168,12 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @c root requests producer text. Option and allowed-value messages without stable identities remain incomplete;
     app legal notices retain their original text.
 
-    @section connectionproviderrelnotes Release Notes
+    See @subpage connectionproviderrelnotes "Release Notes" for the changes in each version.
+*/
+/** @page connectionproviderrelnotes Release Notes
 
-    @subsection connectionprovider_3_1 ConnectionProvider 3.1
+
+    @section connectionprovider_3_1 ConnectionProvider 3.1
     - added source-owned connection presentation and catalogs for shared scheme options and setup messages;
       see @ref connectionprovider_presentation
     - the errors of invalid connections, of connection URLs with control characters and of inaccessible filesystem
@@ -183,10 +186,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       @ref False "False")
     - made the default ping timings public so that connections monitored on a dedicated thread can bound
       their own pings with the same values:
-      - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout
-        "PollingConnectionMonitor::DefaultPingTimeout"
-      - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingRepeat
-        "PollingConnectionMonitor::DefaultPingRepeat"
+      - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout "PollingConnectionMonitor::DefaultPingTimeout"
+      - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingRepeat "PollingConnectionMonitor::DefaultPingRepeat"
     - added async connection acquisition for the built-in connection types that have native async transports:
       - @ref ConnectionProvider::HttpConnection::getAsync() "HttpConnection::getAsync()" returns a
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
@@ -194,14 +195,10 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
         @ref FtpClientIo::FtpClientPollOperation "FtpClientPollOperation"
     - added support for named-connection file locations (\c "conn://" in the \c FileLocationHandler module):
       - @ref ConnectionProvider::FileLocationRedirect "FileLocationRedirect"
-      - @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect()
-        "AbstractConnection::getFileLocationRedirect()"
-      - @ref ConnectionProvider::AbstractConnection::supportsFileLocations()
-        "AbstractConnection::supportsFileLocations()"
-      - @ref ConnectionProvider::AbstractConnection::getFileLocationHandler()
-        "AbstractConnection::getFileLocationHandler()"
-      - @ref ConnectionProvider::AbstractConnection::getConfinedFileLocationPath()
-        "AbstractConnection::getConfinedFileLocationPath()"
+      - @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect() "AbstractConnection::getFileLocationRedirect()"
+      - @ref ConnectionProvider::AbstractConnection::supportsFileLocations() "AbstractConnection::supportsFileLocations()"
+      - @ref ConnectionProvider::AbstractConnection::getFileLocationHandler() "AbstractConnection::getFileLocationHandler()"
+      - @ref ConnectionProvider::AbstractConnection::getConfinedFileLocationPath() "AbstractConnection::getConfinedFileLocationPath()"
       \n
       implemented for @ref ConnectionProvider::FilesystemConnection "FilesystemConnection",
       @ref ConnectionProvider::FtpConnection "FtpConnection", and
@@ -220,18 +217,17 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - added @ref ConnectionProvider::HttpClientIoPollOperation "HttpClientIoPollOperation" (with
       @ref ConnectionProvider::HttpClientIoPollOptions "HttpClientIoPollOptions"), a non-blocking HTTP request poll
-      operation following redirects, and @ref ConnectionProvider::HttpConnectPollOperation
-      "HttpConnectPollOperation"; @ref ConnectionProvider::HttpBasedConnection::startPollConnect()
+      operation following redirects, and
+      @ref ConnectionProvider::HttpConnectPollOperation "HttpConnectPollOperation"; @ref ConnectionProvider::HttpBasedConnection::startPollConnect()
       "HttpBasedConnection::startPollConnect()" uses the latter for connections without ping options whose client
       object has no \c startPollConnect() method, which raised an error before
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
-    - added @ref ConnectionProvider::HttpConnection::getAsyncConnectionManager()
-      "HttpConnection::getAsyncConnectionManager()"; timeout options given as relative dates are accepted
+    - added
+      @ref ConnectionProvider::HttpConnection::getAsyncConnectionManager() "HttpConnection::getAsyncConnectionManager()"; timeout options given as relative dates are accepted
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
-    - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()
-      "AbstractConnection::supportsAsyncRequestApi()" and
-      @ref ConnectionProvider::AbstractConnection::startPollRequest()
-      "AbstractConnection::startPollRequest()" for async HTTP request support
+    - added
+      @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi() "AbstractConnection::supportsAsyncRequestApi()" and
+      @ref ConnectionProvider::AbstractConnection::startPollRequest() "AbstractConnection::startPollRequest()" for async HTTP request support
     - added @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" for async HTTP
       requests via non-blocking I/O; it and @ref ConnectionProvider::HttpPingPollOperation "HttpPingPollOperation"
       (used by the polling pings of HTTP and HTTP-based connections) make their requests with
@@ -251,12 +247,22 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - omit sensitive declared connection options from ping and connection diagnostics
     - added async HTTP ping polling support for HTTP and HTTP-based connections
     - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
+    - added the \c max_response_body_size option to @ref ConnectionProvider::HttpConnection "HttpConnection" and
+      the connections based on it, which limits the size of a response body received into memory, as received and
+      after its content encoding is decoded, for both the synchronous and the asynchronous clients
+    - the \c http_version option of @ref ConnectionProvider::HttpConnection "HttpConnection" and of the
+      connections based on it, such as @ref RestClient::RestConnection "RestConnection", also accepts \c "auto",
+      the default, \c "2.0" and \c "3.0"
+    - added the \c amqp and \c amqps connection schemes for the
+      <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module, and the \c sglang scheme and the
+      \c chromas, \c milvuss, \c ollamas, \c sglangs and \c weaviates TLS schemes to
+      @ref ConnectionProvider::ConnectionSchemeCache::SchemeMap "ConnectionSchemeCache::SchemeMap"
 
-    @subsection connectionprovider_2_0_1 ConnectionProvider 2.0.1
+    @section connectionprovider_2_0_1 ConnectionProvider 2.0.1
     - make the original connection status available when pings are made so that status changes can be detected
       (<a href="https://github.com/qoretechnologies/qore/issues/4957">issue 4957</a>)
 
-    @subsection connectionprovider_2_0 ConnectionProvider 2.0
+    @section connectionprovider_2_0 ConnectionProvider 2.0
     - allow connection default values to be set to no value when creating new connections
     - fixed a bug where the I/O thread could stall and no longer ping any connection
       (<a href="https://github.com/qoretechnologies/qore/issues/4896">issue 4896</a>)
@@ -265,7 +271,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - added support for returning data provider subtypes
       (<a href="https://github.com/qoretechnologies/qore/issues/4766">issue 4766</a>)
 
-    @subsection connectionprovider_1_11 ConnectionProvider 1.11
+    @section connectionprovider_1_11 ConnectionProvider 1.11
     - added the \c encode_chars HTTP / REST connection option
       (<a href="https://github.com/qoretechnologies/qore/issues/4869">issue 4869</a>)
     - fixed a deadlock issue with connection updates in code using this module
@@ -275,7 +281,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - allow connections to be added, updated, and removed while already holding the connection lock
       (<a href="https://github.com/qoretechnologies/qore/issues/4849">issue 4849</a>)
 
-    @subsection connectionprovider_1_10 ConnectionProvider 1.10
+    @section connectionprovider_1_10 ConnectionProvider 1.10
     - assume connections are up until they are proven to be down
       (<a href="https://github.com/qoretechnologies/qore/issues/4789">issue 4789</a>)
     - fixed a bug where the @ref ConnectionProvider::InvalidConnection "InvalidConnection" class would report an
@@ -286,46 +292,46 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - added a connection-defined capability list to connection info
       (<a href="https://github.com/qoretechnologies/qore/issues/4771">issue 4771</a>)
 
-    @subsection connectionprovider_1_9_2 ConnectionProvider 1.9.2
+    @section connectionprovider_1_9_2 ConnectionProvider 1.9.2
     - fixed a bug where the @ref ConnectionProvider::HttpConnection "HttpConnection" scheme could not be used
       (<a href="https://github.com/qoretechnologies/qore/issues/4753">issue 4753</a>)
     - allow connection options designating files to be selected as files
       (<a href="https://github.com/qoretechnologies/qore/issues/4725">issue 4725</a>)
 
-    @subsection connectionprovider_1_9_1 ConnectionProvider 1.9.1
+    @section connectionprovider_1_9_1 ConnectionProvider 1.9.1
     - added a transaction capability flag for data providers to the connection info hash
       (<a href="https://github.com/qoretechnologies/qore/issues/4722">issue 4722</a>)
 
-    @subsection connectionprovider_1_9 ConnectionProvider 1.9
+    @section connectionprovider_1_9 ConnectionProvider 1.9
     - ensure that exception attributes from ping errors are serializable
       (<a href="https://github.com/qoretechnologies/qore/issues/4708">issue 4708</a>)
 
-    @subsection connectionprovider_1_8 ConnectionProvider 1.8
+    @section connectionprovider_1_8 ConnectionProvider 1.8
     - added the \c headers option to HTTP connections (@ref ConnectionProvider::HttpConnection "HttpConnection")
       (<a href="https://github.com/qoretechnologies/qore/issues/4695">issue 4695</a>)
 
-    @subsection connectionprovider_1_7_4 ConnectionProvider 1.7.4
+    @section connectionprovider_1_7_4 ConnectionProvider 1.7.4
     - set connection status to \c OK after a successful manual ping operation
       (<a href="https://github.com/qoretechnologies/qore/issues/4685">issue 4685</a>)
 
-    @subsection connectionprovider_1_7_3 ConnectionProvider 1.7.3
+    @section connectionprovider_1_7_3 ConnectionProvider 1.7.3
     - support full ping operations, also with polling, using an authenticated request
       (<a href="https://github.com/qoretechnologies/qore/issues/4677">issue 4677</a>)
     - fixed bugs handling child capability attributes in connections
       (<a href="https://github.com/qoretechnologies/qore/issues/4656">issue 4656</a>)
 
-    @subsection connectionprovider_1_7_2 ConnectionProvider 1.7.2
+    @section connectionprovider_1_7_2 ConnectionProvider 1.7.2
     - removed unnecessary extraneous inheritance of @ref Qore::Serializable "Serializable" from the
       @ref ConnectionProvider::AbstractConnectionWithInfo "AbstractConnectionWithInfo" class
     - added support for the \c pre_encoded_urls option in the @ref ConnectionProvider::HttpConnection "HttpConnection"
       class
       (<a href="https://github.com/qoretechnologies/qore/issues/4656">issue 4656</a>)
 
-    @subsection connectionprovider_1_7_1 ConnectionProvider 1.7.1
+    @section connectionprovider_1_7_1 ConnectionProvider 1.7.1
     - non-blocking polling fixes
       (<a href="https://github.com/qoretechnologies/qore/issues/4595">issue 4595</a>)
 
-    @subsection connectionprovider_1_7 ConnectionProvider 1.7
+    @section connectionprovider_1_7 ConnectionProvider 1.7
     - allow multiple connections to be polled from a single thread; added:
       - @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor"
       - @ref ConnectionProvider::AbstractConnection::supportsPollingApi() "AbstractConnection::supportsPollingApi()"
@@ -335,35 +341,35 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - fixed a bug acquiring a data provider object from connection objects
       (<a href="https://github.com/qoretechnologies/qore/issues/4584">issue 4584</a>)
 
-    @subsection connectionprovider_1_6 ConnectionProvider 1.6
+    @section connectionprovider_1_6 ConnectionProvider 1.6
     - added data provider capability info to connection info
       (<a href="https://github.com/qoretechnologies/qore/issues/4579">issue 4579</a>)
 
-    @subsection connectionprovider_1_5 ConnectionProvider 1.5
+    @section connectionprovider_1_5 ConnectionProvider 1.5
     - updated the @ref ConnectionProvider::AbstractConnection::getInfo() "AbstractConnection::getInfo()" method
     - added the @ref ConnectionProvider::AbstractConnection::getExtendedInfo() "AbstractConnection::getExtendedInfo()"
       method
 
-    @subsection connectionprovider_1_4_1 ConnectionProvider 1.4.1
+    @section connectionprovider_1_4_1 ConnectionProvider 1.4.1
     - connection path options are subjected to environment variable substitution
       (<a href="https://github.com/qoretechnologies/qore/issues/4236">issue 4236</a>)
 
-    @subsection connectionprovider_1_4 ConnectionProvider 1.4
+    @section connectionprovider_1_4 ConnectionProvider 1.4
     - implemented support for a data provider scheme cache and rich option information for connections
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
-    @subsection connectionprovider_1_3 ConnectionProvider 1.3
+    @section connectionprovider_1_3 ConnectionProvider 1.3
     - implemented support for serializing connections and removed the \c AbstractConnection::getConstructorInfo() and
       \c AbstractConnection::getConstructorInfoImpl() methods
       (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - implemented support for the data provider API
       (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
-    @subsection connectionprovider_1_2_1 ConnectionProvider 1.2.1
+    @section connectionprovider_1_2_1 ConnectionProvider 1.2.1
     - implemented support for connection tags as the attribute \c "tags"
       (<a href="https://github.com/qoretechnologies/qore/issues/3486">issue 3486</a>)
 
-    @subsection connectionprovider_1_2 ConnectionProvider 1.2
+    @section connectionprovider_1_2 ConnectionProvider 1.2
     - the @ref ConnectionProvider::AbstractConnection::constructor() "AbstractConnection::constructor()" refactoring
     - all connection clases have unified constructor
     - old constructors and static make() constructors are deprecated
@@ -372,17 +378,17 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - it allows their reimplementation in the inherited class. It can be used
       to parse strange and unexpected URLs like eg. pure json strings, or Datasource connection strings.
 
-    @subsection connectionprovider_1_1 ConnectionProvider 1.1
+    @section connectionprovider_1_1 ConnectionProvider 1.1
     - the \c AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
       method (and supporting declarations) was added to allow connections to be created dynamically,
       potentially in another process from a network call
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
-    @subsection connectionprovider_1_0_1 ConnectionProvider 1.0.1
+    @section connectionprovider_1_0_1 ConnectionProvider 1.0.1
     - removed unnecessary serialization from ConnectionProvider::AbstractConnection::get() "AbstractConnection::get()"
       (<a href="https://github.com/qoretechnologies/qore/issues/2880">issue 2880</a>)
 
-    @subsection connectionprovider_1_0 ConnectionProvider 1.0
+    @section connectionprovider_1_0 ConnectionProvider 1.0
     - initial release
 */
 
@@ -655,8 +661,8 @@ public hashdecl ConnectionDataInfo {
 }
 
 #! Describes how to satisfy a file location through an existing file location handler scheme
-/** As returned by @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect()
-    "AbstractConnection::getFileLocationRedirect()"
+/** As returned by
+    @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect() "AbstractConnection::getFileLocationRedirect()"
 
     Connections that map cleanly onto a scheme already supported by the \c FileLocationHandler module return this
     hash instead of implementing file I/O themselves; the \c "conn://" location handler then re-enters normal

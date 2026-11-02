@@ -59,13 +59,13 @@
     |@ref logical_or_operator "||"|\c 19|@ref logical_or_operator "logical OR operator"|@code{.py} (a = 1) || (b < 10)@endcode
     |@ref range_operator ".. (range)"|\c 20|@ref range_operator "range operator"|@code{.py} 3..7@endcode
     |@ref conditional_operator "? :"|\c 21|@ref conditional_operator "conditional operator"|@code{.py} a == 2 ? "yes" : "no"@endcode
-    |@ref null_coalescing_operator "??"|\c 21|@ref null_coalescing_operator "null coalescing operator"|@code{.py} any var = a ?? b@endcode
-    |@ref value_coalescing_operator "?*, ?:"|\c 21|@ref value_coalescing_operator "value coalescing operator"|@code{.py} any var = a ?* b@endcode @code{.py} any var = a ?: b@endcode
+    |@ref null_coalescing_operator "??"|\c 21|@ref null_coalescing_operator "null coalescing operator"|@code{.py} auto var = a ?? b@endcode
+    |@ref value_coalescing_operator "?*, ?:"|\c 21|@ref value_coalescing_operator "value coalescing operator"|@code{.py} auto var = a ?* b@endcode @code{.py} auto var = a ?: b@endcode
     |@ref comma_operator ","|\c 22|@ref comma_operator "comma operator"|@code{.py} 1, 2, 3, 4, 5@endcode
     |@ref unshift "unshift"|\c 23|@ref unshift "unshift list element operator"|@code{.py} unshift list, val@endcode
     |@ref push "push"|\c 23|@ref push "push list element operator"|@code{.py} push list, val@endcode
     |@ref splice "splice"|\c 23|@ref splice "splice list or string operator"|@code{.py} splice list, 2, 2, (1, 2, 3)@endcode
-    |@ref extract "extract"|\c 23|@ref extract "extract list or string operator"|@code{.py} my sublist = extract list, 2, 2, (1, 2, 3)@endcode
+    |@ref extract "extract"|\c 23|@ref extract "extract list or string operator"|@code{.py} list sublist = extract list, 2, 2, (1, 2, 3)@endcode
     |@ref map "map"|\c 23|@ref map "map operator"|@code{.py} map closure($1), list@endcode
     |@ref hmap "hash map"|\c 23|@ref hmap "hash map operator"|@code{.py} map {expr($1) : expr($1)}, list@endcode
     |@ref foldl "foldl"|\c 23|@ref foldl "fold left to right operator"|@code{.py} foldl closure($1 - $2), list@endcode
@@ -169,7 +169,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     <em>@ref expressions "container_expression"</em> <tt>{</tt> <em>@ref expressions "expression"</em> <tt>}</tt>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} printf("%s\n", hash{getName()});@endcode
@@ -199,7 +199,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     <em>@ref expressions "hash_or_object_expression"</em> <tt>.</tt> <i>expression</i> <br>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} printf("%s\n", hash.name);@endcode
@@ -244,7 +244,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     <em>@ref expressions "buffer_expression"</em><tt>[</tt><em>@ref expressions "index_expression"</em><tt>]</tt><br>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py}
@@ -316,7 +316,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     <em>lvalue</em><tt>++</tt>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} i++;@endcode
@@ -360,7 +360,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     <em>lvalue</em><tt>--</tt>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     i--;
@@ -527,7 +527,7 @@ delete l[2,5..7,8];
     <tt><b>remove</b></tt> \a lvalue
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py}
@@ -577,6 +577,7 @@ list nlist = remove l[2,5..7,8];
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: removes any type-safe information from the output evaluated hash expression
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>: removes any type-safe information from the output evaluated list expression
 
+    @anchor cast_auto_containers
     @note \c cast<hash<auto>>(...), \c cast<hash<string,\ auto>>(...), and \c cast<list<auto>>(...) are parse-time errors.  These target types do not coerce values to hashes or lists; the \c auto subtype accepts all values of an already-valid container unchanged, making these casts misleading no-ops.  Use \c cast<hash>(...) or \c cast<list>(...) to assert the hard container type and strip container type metadata.  Use \c cast<softlist<auto>>(...) when scalar-to-list coercion is required; \c cast<softlist<auto>>(NOTHING) returns an empty list.  There is no \c softhash type.
 
     @par Examples
@@ -597,10 +598,10 @@ hash<MyType1> h = cast<hash<MyType1>>(h2);
 hash<string, MyClass>h = cast<hash<string, MyClass>(get_untyped_hash());
 
 # removes key type information from a type-safe hash
-any h = cast<hash>(new hash<MyHashdecl>());
+auto h = cast<hash>(new hash<MyHashdecl>());
 
 # removes element type information from a type-safe list
-any l = cast<list>(new list<int>(1));
+auto l = cast<list>(new list<int>(1));
     @endcode
 
     <b>Target Type Argument Processed by cast<>()</b>
@@ -608,8 +609,8 @@ any l = cast<list>(new list<int>(1));
     |<em>@ref qore_classes "class_identifier"</em>|This must be a literal unquoted string giving a class name or a namespace-qualified path to a class (ex: \c Namespace::MyClass); a runtime check for compatibility with the target class is performed on the evaluated expression
     |<tt>@ref object_type "object"&lt;</tt><em>@ref qore_classes "class_identifier"</em><tt>&gt;</tt>|this is equivalent to <em>@ref qore_classes "class_identifier"</em> alone; a runtime check for compatibility with the target class is performed on the evaluated expression
     |<em>@ref hashdecl "hashdecl_identifier"</em>|This must be a literal unquoted string giving a @ref hashdecl "type-safe hash" name or a namespace-qualified path to a type-safe hash (ex: \c Namespace::MyHash); a runtime check for compatibility with the target @ref hashdecl "hashdecl" is performed on the evaluated expression; any keys missing from the expression that have default initializer expressions in the @ref hashdecl "hashdecl" are initialized accordingly
-    |<tt>@ref hash_type "hash"&lt;string, </tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The second type in the type parameter list gives the hash key value type; runtime type compatibility checks are performed but no conversions are made; a runtime exception will be thrown if the evaluated expression does not correspond to the declared type
-    |<tt>@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The single type in the type parameter list gives the list element value type; runtime type compatibility checks are performed but no conversions are made; a runtime exception will be thrown if the evaluated expression does not correspond to the declared type
+    |<tt>@ref hash_type "hash"&lt;string, </tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The second type in the type parameter list gives the hash value type; the values, including those of nested containers, are converted to it as an assignment converts them, and a value that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
+    |<tt>@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The single type in the type parameter list gives the list element type; the elements, including those of nested containers, are converted to it as an assignment converts them, and an element that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
 
     @throw RUNTIME-CAST-ERROR The expression given does not evaluate to a value that can be converted to the given type
 
@@ -720,7 +721,7 @@ if (!exists error_code)
     <tt><b>shift</b></tt> \a lvalue
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} *string a = shift ARGV;@endcode
@@ -743,7 +744,7 @@ if (!exists error_code)
     <tt><b>pop</b></tt> \a lvalue
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} a = pop list;@endcode
@@ -814,7 +815,7 @@ if (!exists error_code)
     If possible, <em>@ref expressions "iterator_expression"</em> is evaluated using @ref op_functional "lazy functional evaluation".
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Syntax
     <tt><b>map</b></tt> <em>@ref expressions "map_expression"</em><tt>,</tt> <em>@ref expressions "iterator_expression" [, @ref expressions "select_expression"]</em>
@@ -834,6 +835,11 @@ map printf("%s\n", $1), hash.keyIterator();
     |<em>@ref expressions "map_expression"</em>|The expression to map on the list; the implicit argument <tt>$1</tt> represents the current element being processed
     |<em>@ref expressions "iterator_expression"</em>|The data to process; if this is not a list then the <em>@ref expressions "map_expression"</em> is run on the single argument passed, unless the <em>@ref expressions "iterator_expression"</em> is an object inheriting the @ref Qore::AbstractIterator "AbstractIterator" class; in this case the <b><tt>map</tt></b> operator iterates the object by calling @ref Qore::AbstractIterator::next() "AbstractIterator::next()"; if supported, this expression is evaluated using @ref op_functional "lazy functional evaluation"
     |<em>[@ref expressions "select_expression"]</em>|An optional expression than can be used to filter out elements of the list before the <em>@ref expressions "map_expression"</em> is applied; if this expression evaluates to @ref False "False" on an element, then the element will be skipped and the <em>@ref expressions "map_expression"</em> will not be applied on that element.
+
+    The list returned has the common type of its values as its element type when all values have one (ex: a
+    \c map over a <tt>list&lt;auto&gt;</tt> holding only ints returns a <tt>list&lt;int&gt;</tt>); otherwise it
+    has the element type of the map expression.  Each value is converted to that element type as it is stored.
+    The @ref hmap "hash map" and @ref select "select" operators type their results in the same way.
 
     This operator does not throw any exceptions (however note that exceptions could be thrown by expressions executed by this operator).
 
@@ -905,7 +911,7 @@ hash h = map {$1 : $1 * 2}, (1, 2, 3), $1 > 1;
     <tt><b>foldl</b></tt> \a expression, \a iterator_expression
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Examples
     The following returns <tt><b>foldl</b></tt> expression returns \c 5
@@ -939,7 +945,7 @@ string str = foldl $1 + ", " + $2, list;
     <tt><b>foldr</b></tt> \a expression, \a iterator_expression
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py}
@@ -969,7 +975,7 @@ foldr $1 - $2, (10, 4, 1);
     <tt><b>select</b></tt> \a iterator_expression, \a expression
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py}
@@ -2051,7 +2057,7 @@ if (x || y)
     \a expression ? \a if_true_expression : \a if_false_expression
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} a = (z > 100 ? "Big" : "Small");@endcode
@@ -2072,7 +2078,7 @@ if (x || y)
     \a expression1 ?? \a expression2
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} x = a ?? b ?? c;@endcode
@@ -2098,13 +2104,13 @@ if (x || y)
     \a expression1 ?: \a expression2
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} x = a ?* b ?* c;@endcode
     @code{.py} x = a ?: b ?: c;@endcode
 
-    @note \c ?: is an alias for \c ?*.  The two characters must be adjacent.  The \c ?:
+    @note <tt>?:</tt> is an alias for <tt>?*</tt>.  The two characters must be adjacent.  The <tt>?:</tt>
     value-coalescing alias is different from the conditional operator written as
     <tt>\a condition ? \a if_true_expression : \a if_false_expression</tt>.
 
@@ -2241,7 +2247,7 @@ if (x || y)
     \a lvalue <tt>=</tt> \a expression
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py} a = 1;@endcode
@@ -2249,6 +2255,21 @@ if (x || y)
     <b>Arguments Processed by =</b>
     |!Argument|!Processing
     |All|Assigns the value of \a expression to \a lvalue
+
+    @anchor compound_assignment_conversion
+    @note The compound assignment operators (\c +=, \c -=, \c *=, \c /=, \c %=, \c &=, <tt>|=</tt>, \c ^=, \c <<= and
+    \c >>=), \c ++ and \c -- store their result as an assignment of the result does: converted to the declared type
+    of the lvalue, or to the value type of the hash or list holding it, or refused with \c RUNTIME-TYPE-ERROR (ex:
+    with \c x holding 1.5, <tt>softint v = 10; v *= x</tt> leaves the int 15, and <tt>timeout t; t *= x</tt>
+    raises \c RUNTIME-TYPE-ERROR as <tt>timeout t = x</tt> does).  An operation whose result is refused leaves no
+    new hash key or list element behind.
+
+    @anchor compound_assignment_parse_checks
+    @note A compound assignment, \c ++ or \c -- whose result the declared type of its lvalue can never accept is
+    refused at parse time with \c PARSE-TYPE-ERROR.  An lvalue declared with an or-nothing type (ex: \c *string,
+    \c *date, <tt>*list&lt;auto&gt;</tt>) is checked as its plain type, so a statement refused for the plain type is
+    refused for it as well (ex: <tt>*string s; s -= 1;</tt>, whose message is
+    <tt>lvalue has type '*string', but the -= operator will assign it an integer value</tt>).
 
     <hr>
     @subsection weak_assignment_operator Weak Reference Assignment Operator (:=)
@@ -2274,7 +2295,7 @@ if (x || y)
     \a lvalue <tt>:=</tt> <em>@ref expressions "rvalue_expression"</em>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py}object a := get_object_from_cache();@endcode
@@ -2292,8 +2313,8 @@ if (x || y)
     its target alive exactly as \c = does and can never dangle; what differs is that a cycle running through
     it cannot be detected, and therefore cannot be collected.\n<br>
     This makes it the opposite trade from the @ref weak_assignment_operator "weak assignment operator (:=)":
-    \c := gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
-    ownership and asks the collector to ignore the reference.  A mistake with \c := loses an object that is
+    <tt>:=</tt> gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
+    ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
     still in use; a mistake with \c \@= leaks one.
 
     @par Warning
@@ -2309,7 +2330,7 @@ if (x || y)
     \a lvalue <tt>\@=</tt> <em>@ref expressions "rvalue_expression"</em>
 
     @par Return Type
-    @ref any_type "any"
+    @ref auto_type "auto"
 
     @par Example
     @code{.py}connections{id} @= conn;@endcode
@@ -2385,7 +2406,7 @@ if (x || y)
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref string_type "string")|the hash key represented by \a expression will be removed from the \a lvalue
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
     |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
-    |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int lvalue does not accept
+    |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses with \c RUNTIME-TYPE-ERROR and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)

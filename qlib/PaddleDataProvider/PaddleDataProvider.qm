@@ -118,6 +118,14 @@ module PaddleDataProvider {
     processing, sales tax and invoicing, and pays out the balance.  An integration works with catalog
     products and prices, customers, transactions, subscriptions and reports.
 
+    Documentation:
+    - @subpage paddledataproviderguide "PaddleDataProvider Guide": the pinned schema, the exported actions,
+      amounts, timestamps and the response envelope, paging, the record-based tables, and webhook events
+    - @subpage paddledataprovider_examples "PaddleDataProvider Examples": getting the data provider, listing and
+      paging, creating a product and a price, reacting to an event, and calling an endpoint the manifest does not
+      export
+    - @subpage paddledataproviderrelnotes "Release Notes": the changes in each version
+
     @section paddledataprovider_generated Generated, Not Hand-Written
 
     The actions this application exports are <b>generated from Paddle's own OpenAPI 3.1 description</b> by
@@ -130,6 +138,16 @@ module PaddleDataProvider {
     identifiers should be selectable rather than typed, or which of several endpoints is the one to
     reach for.  Those come from an application-owned manifest and UX overlay in
     @ref PaddleDataProvider::PaddleManifest "PaddleManifest".
+*/
+/** @page paddledataproviderrelnotes Release Notes
+
+
+    @section paddledataproviderv1_0 PaddleDataProvider v1.0
+    - initial release
+*/
+/** @page paddledataproviderguide PaddleDataProvider Guide
+
+    @tableofcontents
 
     @section paddledataprovider_pinned The Pinned Schema
 
@@ -137,12 +155,12 @@ module PaddleDataProvider {
     cannot alter the contract of an action that existing workflows already call:
 
     |!Property|!Value
-    |Source|https://github.com/PaddleHQ/paddle-openapi \c v1/openapi.yaml at commit \c 540ea17369325ff866b65ecf6c5105592f16fb5d
+    |Source|https://github.com/PaddleHQ/paddle-openapi <tt>v1/openapi.yaml</tt> at commit \c 540ea17369325ff866b65ecf6c5105592f16fb5d
     |SHA-256|\c e1ac347eb3c5ff208fdbd6af9c4b3f7e9e4e9212be881468ee4f97792058734b
     |Upstream updated|2026-07-09
     |Imported|2026-09-17
 
-    The committed copy is pruned to the exported operations, the two \c /notification-settings
+    The committed copy is pruned to the exported operations, the two <tt>/notification-settings</tt>
     operations the webhook event providers call, and everything they reference - 17 of 70 paths and
     244 of 519 component schemas.  That is not only a size reduction: the full 7.4 MB document
     takes around a second to parse, which is not a reasonable cost to pay on every data provider
@@ -169,20 +187,20 @@ module PaddleDataProvider {
 
     Three conventions are worth knowing before using these actions:
 
-    - <b>Amounts are strings in the currency's smallest unit.</b>  \c "1000" is $10.00 in USD, but ¥1000 in
+    - <b>Amounts are strings in the currency's smallest unit.</b>  <tt>&quot;1000&quot;</tt> is $10.00 in USD, but ¥1000 in
       JPY, which has no minor unit.  They are strings rather than numbers so that no precision is lost
       in transit.
     - <b>Timestamps are RFC 3339 strings</b>, not epoch counts, so they need no conversion - unlike Stripe,
       this application has no timestamp codec anywhere.
-    - <b>Every response is an envelope.</b>  A listing action returns Paddle's \c {data, meta} envelope
-      whole, because \c meta.pagination carries the cursor without which the next page cannot be
+    - <b>Every response is an envelope.</b>  A listing action returns Paddle's <tt>{data, meta}</tt> envelope
+      whole, because <tt>meta.pagination</tt> carries the cursor without which the next page cannot be
       fetched.  A single-entity action returns just the entity: its \c meta holds only a request ID,
       so there is nothing to keep.
 
     @section paddledataprovider_pagination Paging Through a Listing
 
-    A listing returns at most 200 records.  \c meta.pagination.has_more says whether another page
-    exists, and \c meta.pagination.next is the URL of that page, with its \c after cursor already set -
+    A listing returns at most 200 records.  <tt>meta.pagination.has_more</tt> says whether another page
+    exists, and <tt>meta.pagination.next</tt> is the URL of that page, with its \c after cursor already set -
     pass that cursor to the same action's \c after option to continue.
 
     \c next is returned even on the last page, so paging on its presence never terminates; page on
@@ -204,7 +222,7 @@ module PaddleDataProvider {
     Nothing in Paddle is deleted: a customer, a product or a price is <b>archived</b> by setting its status,
     which is an update, so no delete action is registered.
 
-    The record-based actions are registered against \c "tables/{table}", each naming its table in the path,
+    The record-based actions are registered against <tt>&quot;tables/{table}&quot;</tt>, each naming its table in the path,
     and their options are resolved from the chosen table rather than declared once for the application.
 
     @section paddledataprovider_events Events
@@ -218,9 +236,9 @@ module PaddleDataProvider {
     see an update at all, and costs a request per interval whether or not anything happened.
 
     <b>Every delivery is verified.</b>  A notification destination is a URL anyone on the internet can post
-    to; without verification it would accept a fabricated \c transaction.completed, which is enough to
+    to; without verification it would accept a fabricated <tt>transaction.completed</tt>, which is enough to
     make an integration provision a paid plan nobody paid for, or a fabricated
-    \c subscription.canceled, enough to cut off a paying customer.  A delivery whose
+    <tt>subscription.canceled</tt>, enough to cut off a paying customer.  A delivery whose
     \c Paddle-Signature does not verify against the destination's signing secret is dropped, as is one
     old enough to be a replay of a captured delivery.  There is no option that turns this off.
 
@@ -232,9 +250,12 @@ module PaddleDataProvider {
     - <b>Paddle sends the entity in full, not a diff.</b>  An update event does not say which field
       changed, so compare against what you hold if that matters.
 
-    @section paddledataprovider_examples Examples
+*/
+/** @page paddledataprovider_examples PaddleDataProvider Examples
 
-    @subsection paddledataprovider_ex_provider Getting the Data Provider
+    @tableofcontents
+
+    @section paddledataprovider_ex_provider Getting the Data Provider
 
     From a connection, which is how a data-provider-aware caller reaches it:
 
@@ -257,9 +278,9 @@ PaddleDataProvider paddle(new PaddleRestClientIo({
 }));
     @endcode
 
-    @subsection paddledataprovider_ex_list Listing, and Paging Through a Listing
+    @section paddledataprovider_ex_list Listing, and Paging Through a Listing
 
-    A listing returns Paddle's envelope, so \c meta.pagination is what drives the loop.  Page on
+    A listing returns Paddle's envelope, so <tt>meta.pagination</tt> is what drives the loop.  Page on
     \c has_more: \c next is returned even on the last page, so a loop that tests for its presence never
     terminates.
 
@@ -286,9 +307,9 @@ printf("%d active customers\n", all.size());
     Set \c skip_count when walking a large collection: it asks Paddle to skip the count query it would
     otherwise run for every page.
 
-    @subsection paddledataprovider_ex_catalog Creating a Product and a Price
+    @section paddledataprovider_ex_catalog Creating a Product and a Price
 
-    A product carries no price of its own, so selling anything takes both.  \c unit_price.amount is a
+    A product carries no price of its own, so selling anything takes both.  <tt>unit_price.amount</tt> is a
     string in the <b>smallest unit</b> of its currency.
 
     @code{.py}
@@ -315,7 +336,7 @@ printf("created price %y for product %y\n", price.id, product.id);
 paddle.getChildProviderEx("archive_product").doRequest({"product_id": product.id});
     @endcode
 
-    @subsection paddledataprovider_ex_events Reacting to an Event
+    @section paddledataprovider_ex_events Reacting to an Event
 
     Subscribing registers a notification destination with Paddle and removes it again when the
     subscription stops; every delivery is signature-verified before an observer sees it.
@@ -334,7 +355,7 @@ event.registerObserver(new PaymentObserver());
 cast<DelayedObservable>(event).observersReady();
     @endcode
 
-    @subsection paddledataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+    @section paddledataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
 
     The application exports a reviewed subset of Paddle's API.  For anything else, the generic API call
     action reaches the rest of it with the same connection and authentication:
@@ -346,11 +367,6 @@ hash<auto> res = paddle.getChildProviderEx("__call__").doRequest({
 });
 printf("%d event types\n", res.body.data.size());
     @endcode
-
-    @section paddledataproviderrelnotes Release Notes
-
-    @subsection paddledataproviderv1_0 PaddleDataProvider v1.0
-    - initial release
 */
 
 #! contains all public definitions in the PaddleDataProvider module

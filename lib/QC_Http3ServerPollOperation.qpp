@@ -999,6 +999,11 @@ static QoreHashNode* takeAllResponseSendCallbacks(QoreObject* self, Http3ServerP
     @note QUIC uses UDP, so this operation works with a UDP socket bound via
     @ref Qore::Socket::bindINET() "Socket::bindINET()" with SOCK_DGRAM.
 
+    @note A client whose first Initial datagram is lost or arrives after its second, as can happen when a
+    ClientHello with a post-quantum key share spans two datagrams, is answered with a QUIC Retry
+    (<a href="https://datatracker.ietf.org/doc/html/rfc9000#section-8.1.2">RFC 9000 section 8.1.2</a>), and the
+    client's next Initial is accepted even if its first datagram is lost again.
+
     @since %Qore 3.0
 */
 qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase<*hash<auto>>; private_members=object sock,string goal,auto data_save];

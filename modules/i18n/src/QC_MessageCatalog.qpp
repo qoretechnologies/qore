@@ -1615,7 +1615,7 @@ string MessageCatalog::tc(string id, string source, string locale, *hash<auto> v
 /** Unicode formatting extensions are stripped from catalog identity.
 
     @param locale requested locale
-    @return list such as \c ("fr-CA", "fr", "root")
+    @return list such as <tt>(&quot;fr-CA&quot;</tt>, "fr", "root")
 
     @throw I18N-CATALOG-ERROR if \a locale contains a NUL character or exceeds the catalog bound
 */

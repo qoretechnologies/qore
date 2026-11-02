@@ -111,8 +111,8 @@ hash<RestResponseInfo> resp2 = f2.get(30s);
     and capped at 8s. A policy has a 30s total budget; a positive caller timeout further limits it.
     Retry-After seconds and HTTP dates are honored even when longer than the backoff cap, provided the
     remaining budget permits another request. Setting max_retries to zero disables retries.
-    By default an attempt may use the whole remaining budget; @ref RestClientIo::RestRetryOptions::attempt_timeout
-    "attempt_timeout" bounds one attempt, so an attempt whose connection delivers nothing times out and is
+    By default an attempt may use the whole remaining budget;
+    @ref RestClientIo::RestRetryOptions::attempt_timeout "attempt_timeout" bounds one attempt, so an attempt whose connection delivers nothing times out and is
     retried within the budget.
 
     Only explicitly transient HTTP and transport errors are retried. Cancellation interrupts backoff
@@ -598,39 +598,33 @@ hash<RestResponseInfo> resp = f.get(30s);
           exceptions (default: \c False)
         - \c connect_timeout: connection timeout
         - \c timeout: the overall deadline for a response, including its body; see
-          @ref HttpClientIo::HttpClientConnectionManagerOptions::request_timeout
-          "HttpClientConnectionManagerOptions::request_timeout"
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::request_timeout "HttpClientConnectionManagerOptions::request_timeout"
         - \c io_timeout: the maximum time without receiving data for a request; see
-          @ref HttpClientIo::HttpClientConnectionManagerOptions::io_timeout
-          "HttpClientConnectionManagerOptions::io_timeout"
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::io_timeout "HttpClientConnectionManagerOptions::io_timeout"
         - \c protocol: protocol selection: \c "auto" (default), \c "h2", or \c "h3"
         - \c max_connections_per_host: maximum connections per host (0 = unlimited)
         - \c max_streams_per_connection: maximum streams per connection (0 = unlimited)
         - \c max_response_body_size: the maximum size in bytes of a response body, as received and after its
           content encoding is decoded (0, the default, means no limit); a larger body fails the request with
           \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; see
-          @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size
-          "HttpClientConnectionManagerOptions::max_response_body_size"
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size "HttpClientConnectionManagerOptions::max_response_body_size"
         - \c assume_encoding: the character encoding assumed for text response bodies whose encoding is not
-          determined otherwise (default: ISO-8859-1); see @ref Qore::get_http_body_encoding()
-          "get_http_body_encoding()"
+          determined otherwise (default: ISO-8859-1); see
+          @ref Qore::get_http_body_encoding() "get_http_body_encoding()"
         - \c pre_encoded_urls: if \c True, request paths are already percent-encoded: they are only validated,
           and a character that must be encoded raises \c URL-ENCODING-ERROR; otherwise the characters that a request
-          target may not contain are percent-encoded (see @ref HttpClientIo::encode_http_request_target()
-          "encode_http_request_target()"), as with the synchronous @ref RestClient::RestClient "RestClient", except
+          target may not contain are percent-encoded (see
+          @ref HttpClientIo::encode_http_request_target() "encode_http_request_target()"), as with the synchronous @ref RestClient::RestClient "RestClient", except
           that percent-encoded octets are kept
         - \c encode_chars: additional characters to percent-encode in request paths
         - \c encoding: the character encoding of string request bodies; see @ref setEncoding()
         - \c encoding_passthru: if \c True, response bodies with a content coding (\c Content-Encoding) are
           returned as received and not deserialized; see
-          @ref HttpClientIo::HttpClientConnectionManagerOptions::encoding_passthru
-          "HttpClientConnectionManagerOptions::encoding_passthru"
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::encoding_passthru "HttpClientConnectionManagerOptions::encoding_passthru"
         - \c allow_get_body: if \c True, GET requests can have a body, for APIs that require one; see
-          @ref HttpClientIo::HttpClientConnectionManagerOptions::allow_get_body
-          "HttpClientConnectionManagerOptions::allow_get_body"
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::allow_get_body "HttpClientConnectionManagerOptions::allow_get_body"
         - \c enable_http3: if \c False, HTTP/3 is never used; see
-          @ref HttpClientIo::HttpClientConnectionManagerOptions::enable_http3
-          "HttpClientConnectionManagerOptions::enable_http3"
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::enable_http3 "HttpClientConnectionManagerOptions::enable_http3"
         - \c ssl_verify_mode: SSL verification mode
         - \c ssl_verify_cert: if \c True, the server certificate is verified (\c SSL_VERIFY_PEER), as with
           @ref RestClient::RestClient "RestClient"; ignored if \c ssl_verify_mode is set
@@ -1198,8 +1192,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Creates a new RestClientIo with the given options
         /** @param opts0 constructor options; see class documentation for valid keys
-            @param shared_mgr an optional shared @ref HttpClientIo::HttpClientConnectionManager
-                "HttpClientConnectionManager" to use instead of creating a new one. When provided,
+            @param shared_mgr an optional shared
+                @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" to use instead of creating a new one. When provided,
                 the manager is not closed by @ref close() — the caller retains ownership.
                 This allows multiple RestClientIo instances to share a single connection pool,
                 reducing connection overhead for services that talk to the same host.
@@ -1929,8 +1923,8 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
 
         #! Sets the character encoding of string request bodies
         /** A string request body is converted to this encoding before it is sent, and the \c charset parameter of
-            its \c Content-Type gives this encoding, as with @ref Qore::HTTPClient::setEncoding()
-            "HTTPClient::setEncoding()"; the same as the \c encoding constructor option
+            its \c Content-Type gives this encoding, as with
+            @ref Qore::HTTPClient::setEncoding() "HTTPClient::setEncoding()"; the same as the \c encoding constructor option
 
             @param encoding the character encoding
 
@@ -3124,8 +3118,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             until @ref Qore::AbstractPollOperation::goalReached() "goalReached()", then reads the
             @ref RestClient::RestResponseInfo "RestResponseInfo" from
             @ref Qore::AbstractPollOperation::getOutput() "getOutput()".  That is the contract
-            @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
-            "getIoPollerForLocation()" and other \c AbstractPollOperation consumers expect.
+            @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()" and other \c AbstractPollOperation consumers expect.
 
             Request preparation -- OAuth2 token check, body serialization, authentication headers, and any
             subclass signing -- happens before this returns, so a request that cannot be built fails here
@@ -5465,8 +5458,8 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         }
 
         #! Creates a new pool/client with the given options
-        /** @param client_opts options passed to the @ref RestClientIo::constructor()
-                "RestClientIo constructor"
+        /** @param client_opts options passed to the
+                @ref RestClientIo::constructor() "RestClientIo constructor"
             @param pool_opts pool configuration options (optional; the pool machinery
                 is present for API compatibility but \c acquire() always returns \c self)
             @param shared_mgr an optional external shared
@@ -5825,8 +5818,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     #! Prepares the operation without submitting it to the async I/O controller
     /** The caller drives @ref continuePoll() itself -- which is what
         @ref Qore::AbstractPollOperation "AbstractPollOperation" consumers such as
-        @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
-        "getIoPollerForLocation()" do.  Submitting to the controller as well would leave two drivers calling
+        @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()" do.  Submitting to the controller as well would leave two drivers calling
         @ref continuePoll() on the same operation.
     */
     startCallerDriven() {

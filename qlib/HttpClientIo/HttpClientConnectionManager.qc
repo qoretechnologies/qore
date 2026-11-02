@@ -754,8 +754,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param method HTTP method (e.g., "POST")
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
-        @param body_streaming if True, the request body is sent with @ref HttpClientStreamHandle::sendData()
-        "sendData()" while the response is read (with chunked transfer encoding over HTTP/1.1)
+        @param body_streaming if True, the request body is sent with
+        @ref HttpClientStreamHandle::sendData() "sendData()" while the response is read (with chunked transfer encoding over HTTP/1.1)
         @param body request body (optional)
 
         @return the stream handle ready for reading

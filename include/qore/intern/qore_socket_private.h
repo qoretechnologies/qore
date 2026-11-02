@@ -1325,7 +1325,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         The system gives the lowest free descriptor number to the next socket or file opened by any thread, so a
         descriptor number read before a concurrent close can already belong to another connection when it is used:
         closing or shutting it down again would close or break that connection.  Every release of the descriptor
-        (@ref close_and_reset(), @ref replaceDescriptor()) and every @c ::shutdown() made without the outer lock
+        (@ref close_and_reset(), @ref replaceDescriptor()) and every <tt>::shutdown()</tt> made without the outer lock
         therefore happen under this lock, and a release happens exactly once.  It also serialises the SSL
         shutdown/deref pair, which crashed inside SSL_shutdown on freed state when two closers both saw an SSL
         object (CI job 170545), with the references that other threads take to the TLS connection (getSsl(),
@@ -2160,7 +2160,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     /** Must be called by the outer @c QoreSocketObject::close() BEFORE it
         acquires @c priv->m.  Without this pre-step, a deadlock arises
         when another thread is holding @c priv->m (or @c Http2Session::m
-        via an H2 sync poll / send) and is itself blocked in a @c ::poll
+        via an H2 sync poll / send) and is itself blocked in a <tt>::poll</tt>
         / @c SSL_read / @c SSL_write on this fd — that thread cannot
         release its mutex until the I/O returns, which in turn requires
         the fd to be closed or shut down.  The close path is the caller
@@ -2178,7 +2178,7 @@ struct qore_socket_private : public QoreReferenceCounter {
              @ref Http2Session::isSessionClosed and return promptly —
              releasing @c Http2Session::m.
 
-          2. Issue @c ::shutdown(fd, SHUT_RDWR) on the raw fd.  The
+          2. Issue <tt>::shutdown(fd</tt>, SHUT_RDWR) on the raw fd.  The
              kernel returns any pending blocking @c recv / @c send with
              EPIPE / ECONNRESET, making @c isSocketDataAvailable /
              @c asyncIoWait return.  The fd is read and shut down under
@@ -3387,7 +3387,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 #endif // windows
     }
 
-    //! Converts an IPv4-mapped IPv6 socket address (\c ::ffff:a.b.c.d) to the IPv4 socket address it represents
+    //! Converts an IPv4-mapped IPv6 socket address (<tt>::ffff:a.b.c.d</tt>) to the IPv4 socket address it represents
     /** A dual-stack IPv6 socket carries the traffic of IPv4 nodes with IPv4-mapped IPv6 addresses (RFC 4291 section
         2.5.5.2); the node is an IPv4 node, so it is reported with its IPv4 address and address family.  Other
         addresses are left unchanged.

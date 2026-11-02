@@ -72,6 +72,23 @@ module RestSchemaActions {
     |Which operations are exported, and their stable action identity|an application-owned manifest
     |Names, ordering, grouping, reference data and semantic types|an application-owned UX overlay
 
+    Documentation:
+    - @subpage restschemaactionsguide "Building Actions from a Schema": pruning, the operation manifest, request
+      flattening, the UX overlay, wire codecs, reference data and execution
+    - @subpage restschemaactions_hosts "A Host That Varies per Request": APIs whose data plane is sharded per
+      object, and how the host is resolved and restricted
+    - @subpage restschemaactions_records "Record-Based Tables": presenting a REST collection as a searchable,
+      writable record table
+    - @subpage restschemaactionslifecycle "Importing and Updating Schemas": importing a pinned schema revision and
+      reviewing drift before adopting an update
+
+    See @subpage restschemaactionsrelnotes "Release Notes" for the changes in each version.
+*/
+
+/** @page restschemaactionsguide Building Actions from a Schema
+
+    @tableofcontents
+
     @section restschemaactions_pruning Schema Normalization and Pruning
 
     @ref RestSchemaActions::RestSchemaPruner "RestSchemaPruner" reduces a schema to the operations an
@@ -162,17 +179,33 @@ module RestSchemaActions {
     it forwards named options of the action being filled in into the listing action, and the dropdown
     stays empty until they have values, rather than offering identifiers from some other scope.
 
-    @section restschemaactions_hosts A Host That Varies per Request
+    @section restschemaactions_execution Execution
+
+    @ref RestSchemaActions::RestSchemaActionSetDataProvider "RestSchemaActionSetDataProvider" resolves
+    each action ID to a @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider",
+    which rebuilds the transport request and executes it through
+    @ref restschemadataproviderintro "RestSchemaDataProvider".
+
+    The action publishes the <b>success response body</b> as its output type, not the HTTP envelope, so
+    downstream users are not made to navigate a wrapper merely because execution also has a status and
+    headers.  When an operation declares more than one success response with a body, no output
+    contract is guessed: registration fails until the manifest selects one.
+
+    @note Actions can currently only be generated from OpenAPI 3 schemas; a Swagger 2.0 schema is
+    rejected with a clear error rather than handled by untested code paths.
+*/
+
+/** @page restschemaactions_hosts A Host That Varies per Request
 
     A connection addresses one host and every action on it sends there.  That is what makes a
     connection's URL the boundary sandboxing and network allow-listing are expressed against, and it is
     true of nearly every API.
 
     It is not true of an API whose data plane is <b>sharded per object</b>.  Pinecone's control plane lives
-    at \c api.pinecone.io and describes indexes; the 24 operations that read and write vectors go to a
+    at <tt>api.pinecone.io</tt> and describes indexes; the 24 operations that read and write vectors go to a
     per-index host that only the control plane knows, and its own description says so, declaring the
-    data-plane server as the template \c "https://{index_host}".  None of those operations names an index
-    anywhere - the index *is* the host - so neither the connection nor the schema can supply it.
+    data-plane server as the template <tt>&quot;https://{index_host}&quot;</tt>.  None of those operations names an index
+    anywhere - the index <i>is</i> the host - so neither the connection nor the schema can supply it.
 
     @ref RestSchemaActions::RestSchemaHostSourceInfo "RestSchemaHostSourceInfo" declares where the host
     comes from: the action that resolves it, the option carrying the lookup key, and the field of the
@@ -192,46 +225,19 @@ module RestSchemaActions {
     @note A host that comes out of a response is a host the <b>service</b> chose, and the request that follows
     carries the connection's credentials to it.
     @ref RestSchemaActions::RestSchemaHostSourceInfo::allowed_host_suffixes "allowed_host_suffixes" is
-    therefore required, and is matched label by label so that \c "evil-pinecone.io" does not pass for
-    \c "pinecone.io"; the scheme comes from the declaration and never from the response, so a service
+    therefore required, and is matched label by label so that <tt>&quot;evil-pinecone.io&quot;</tt> does not pass for
+    <tt>&quot;pinecone.io&quot;</tt>; the scheme comes from the declaration and never from the response, so a service
     cannot move a credentialed request onto cleartext.  Anything else fails closed, before the request is
     made.
 
     This is deliberately narrow.  A server <b>variable</b> that the connection's own URL supplies - Confluence
-    declares \c "https://{your-domain}/wiki/api/v2" - already works and needs none of this, and a path- or
-    operation-level \c "servers" is refused at import time rather than silently ignored.
+    declares <tt>&quot;https://{your-domain}/wiki/api/v2&quot;</tt> - already works and needs none of this, and a path- or
+    operation-level <tt>&quot;servers&quot;</tt> is refused at import time rather than silently ignored.
+*/
 
-    @section restschemaactions_import Importing a Schema
+/** @page restschemaactions_records Record-Based Tables
 
-    @ref RestSchemaActions::RestSchemaImporter "RestSchemaImporter" produces the committed artifact:
-    download a named upstream revision, prune it to the manifest's operations, write it, and update the
-    application's provenance record.  \c tools/rest-schema-import.qr is its command-line front end and
-    also runs the drift report below, so that an update is one reproducible command rather than an ad-hoc
-    program written once per application.
-
-    It normalizes a trailing slash and a path-parameter <b>name</b> when resolving a manifest entry against a
-    document, because neither changes the operation, and comparing paths as strings therefore reports
-    operations as withdrawn when they are merely spelled differently.  Every match that needed normalizing
-    is reported and fails the import: the manifest still has to name the path exactly as the document
-    declares it, or @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" will not resolve it
-    at run time.
-
-    @section restschemaactions_execution Execution
-
-    @ref RestSchemaActions::RestSchemaActionSetDataProvider "RestSchemaActionSetDataProvider" resolves
-    each action ID to a @ref RestSchemaActions::RestSchemaActionDataProvider "RestSchemaActionDataProvider",
-    which rebuilds the transport request and executes it through
-    @ref restschemadataproviderintro "RestSchemaDataProvider".
-
-    The action publishes the <b>success response body</b> as its output type, not the HTTP envelope, so
-    downstream users are not made to navigate a wrapper merely because execution also has a status and
-    headers.  When an operation declares more than one success response with a body, no output
-    contract is guessed: registration fails until the manifest selects one.
-
-    @note Actions can currently only be generated from OpenAPI 3 schemas; a Swagger 2.0 schema is
-    rejected with a clear error rather than handled by untested code paths.
-
-    @section restschemaactions_records Record-Based Tables
+    @tableofcontents
 
     An action is a request; a <b>record table</b> is a collection a caller can search, create in, update and
     delete from with the standard record API, and with the standard search expressions the rest of the
@@ -242,7 +248,7 @@ module RestSchemaActions {
     manifest already exports</b>, so the paths, the request contracts, the escaping, the codecs and the
     published response shapes stay in one place.
 
-    @subsection restschemaactions_records_hybrid Hybrid Pushdown
+    @section restschemaactions_records_hybrid Hybrid Pushdown
 
     A REST collection is not a table.  The service evaluates a fixed set of filters, expressed as query
     arguments or - in the two cases where a vendor publishes a query language - as a filter expression, and
@@ -261,7 +267,7 @@ module RestSchemaActions {
     Truncating the fetch at the limit and filtering afterwards is the way to get this wrong: asked for ten
     closed issues from a repository holding ten closed among a hundred, it answers with one.
 
-    @subsection restschemaactions_records_exact Exactness Is the Load-Bearing Property
+    @section restschemaactions_records_exact Exactness Is the Load-Bearing Property
 
     Each filter rule says whether the service's filter means <b>exactly</b> what the operator means.  It
     defaults to @ref False, which is the answer that cannot produce a wrong result: the filter is sent and
@@ -269,7 +275,7 @@ module RestSchemaActions {
     for costs a little client-side work and nothing else.  Declaring a rule exact is a statement about the
     API, and it is the one way this machinery can under-return.
 
-    @subsection restschemaactions_records_native What Native Search Means
+    @section restschemaactions_records_native What Native Search Means
 
     @ref DataProvider::DataProviderBaseInfo::supports_native_search "supports_native_search" is declared only by
     a table whose API takes a filter <b>expression</b> and can therefore evaluate a whole tree.  A table that
@@ -285,7 +291,7 @@ module RestSchemaActions {
     function rendering a value.  An operator the language spells without quite meaning it is listed in
     \c inexact_ops, so it narrows the listing and the predicate is still answered here.
 
-    @subsection restschemaactions_records_smaller A Language Is Usually Smaller Than the Renderer Assumes
+    @section restschemaactions_records_smaller A Language Is Usually Smaller Than the Renderer Assumes
 
     No vendor in this family publishes a complete boolean algebra, and assuming one is how a search comes back
     wrong rather than empty:
@@ -303,7 +309,7 @@ module RestSchemaActions {
     predicate all stay declarative.  A hook that also decided pushdown would put the honesty of those flags
     inside a closure.
 
-    @subsection restschemaactions_records_raw A Rendered Query Is Already in Wire Form
+    @section restschemaactions_records_raw A Rendered Query Is Already in Wire Form
 
     The argument a table renders its query into is often the same argument an <b>action</b> publishes in a
     curated form.  Klaviyo's \c filter takes a whole filter expression, and the listing actions put a wire
@@ -318,7 +324,7 @@ module RestSchemaActions {
     skipped.  This is what lets a table reuse the listing action the manifest already exports instead of
     declaring a second copy of the same path with the codec left off.
 
-    @subsection restschemaactions_records_type What the Columns Are
+    @section restschemaactions_records_type What the Columns Are
 
     A listing returns a <b>projection</b>; reading one record returns the <b>record</b>.  A vendor describes both
     and the two rarely agree - GitLab describes a project with 24 fields in its listing and 161 in its single
@@ -345,7 +351,7 @@ module RestSchemaActions {
     Bitbucket is the case: it addresses a repository by a \c slug it returns in every response and declares
     in no schema, and without that column the table could not address a record at all.
 
-    @subsection restschemaactions_records_paths The Paths a Record Is Read Through
+    @section restschemaactions_records_paths The Paths a Record Is Read Through
 
     @ref RestSchemaActions::RestSchemaRecordListingInfo::records_path "records_path",
     @ref RestSchemaActions::RestSchemaRecordTableInfo::record_path "record_path" and
@@ -359,12 +365,12 @@ module RestSchemaActions {
     calls.  Only a response that describes its fields can be checked; a union describes none, and an
     unverifiable path is left alone rather than reported on a guess.
 
-    @subsection restschemaactions_records_identity Addressing One Record
+    @section restschemaactions_records_identity Addressing One Record
 
     A table addresses a record by whatever the API's paths take, which is not always one value and is not
     always a top-level field.  @ref RestSchemaActions::RestSchemaRecordTableInfo::id_parts "id_parts"
     declares a composite identity as option to record field path - GitHub names a repository by its
-    \c {owner} and its \c {repo}, and carries the first as a nested \c "owner.login".
+    <tt>{owner}</tt> and its <tt>{repo}</tt>, and carries the first as a nested <tt>&quot;owner.login&quot;</tt>.
 
     That is a different thing from
     @ref RestSchemaActions::RestSchemaRecordTableInfo::scope_options "scope_options", and the difference is
@@ -378,13 +384,33 @@ module RestSchemaActions {
     predicate that also asks something more is not, because answering only the identity half would return -
     or write to - a record the caller did not match.
 
-    @subsection restschemaactions_records_actions A Table Is Reached by an Action
+    @section restschemaactions_records_actions A Table Is Reached by an Action
 
     Declaring the providers is only half of it: a table no action reaches is offered to nobody.
     @ref RestSchemaActions::RestSchemaTablesDataProvider::registerRecordActions() "registerRecordActions()"
-    registers the record-based actions against \c "<container>/{table}", and the IDs are the application's to
+    registers the record-based actions against <tt>&quot;&lt;container&gt;/{table}&quot;</tt>, and the IDs are the application's to
     choose - where a native application replaces an existing one, they are the IDs the superseded application
     registered.
+*/
+
+/** @page restschemaactionslifecycle Importing and Updating Schemas
+
+    @tableofcontents
+
+    @section restschemaactions_import Importing a Schema
+
+    @ref RestSchemaActions::RestSchemaImporter "RestSchemaImporter" produces the committed artifact:
+    download a named upstream revision, prune it to the manifest's operations, write it, and update the
+    application's provenance record.  <tt>tools/rest-schema-import.qr</tt> is its command-line front end and
+    also runs the @ref restschemaactions_drift "drift report", so that an update is one reproducible command rather than an ad-hoc
+    program written once per application.
+
+    It normalizes a trailing slash and a path-parameter <b>name</b> when resolving a manifest entry against a
+    document, because neither changes the operation, and comparing paths as strings therefore reports
+    operations as withdrawn when they are merely spelled differently.  Every match that needed normalizing
+    is reported and fails the import: the manifest still has to name the path exactly as the document
+    declares it, or @ref RestSchemaActions::RestSchemaActionSet "RestSchemaActionSet" will not resolve it
+    at run time.
 
     @section restschemaactions_drift Schema Updates
 
@@ -404,10 +430,11 @@ module RestSchemaActions {
     ||the request content type or the published response changing
 
     An update is then: import a named revision, run the report, adopt it or stop.
+*/
 
-    @section restschemaactionsrelnotes Release Notes
+/** @page restschemaactionsrelnotes Release Notes
 
-    @subsection restschemaactionsv1_0 RestSchemaActions v1.0
+    @section restschemaactionsv1_0 RestSchemaActions v1.0
     - initial release
 */
 

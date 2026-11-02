@@ -99,6 +99,16 @@ sub run_cases() {
     check("softint -= relative date", auto sub () { softint x = 10; x -= id(1h); return x; });
     check("softint = softint - relative date", auto sub () { softint x = 10; x = x - id(1h); return x; });
     check("timeout -= relative date", auto sub () { timeout t = 5000; t -= id(1s); return t; });
+    # an untyped lvalue holding an int subtracts the integer value of the date, as += adds it
+    check("any -= absolute date", auto sub () { any x = 10; x -= id(2001-01-01T00:00:00Z); return x; });
+    check("any -= literal absolute date", auto sub () { any x = 10; x -= 2001-01-01T00:00:00Z; return x; });
+    check("any -= relative date", auto sub () { any x = 10; x -= id(1h); return x; });
+    check("untyped hash member -= absolute date", auto sub () {
+        hash h = {"v": 10};
+        h.v -= id(2001-01-01T00:00:00Z);
+        return h.v;
+    });
+    check("any += absolute date", auto sub () { any x = 10; x += id(2001-01-01T00:00:00Z); return x; });
     check("int -= NOTHING", auto sub () { int x; x -= id(NOTHING); return x; });
     check("*int -= NOTHING", auto sub () { *int x; x -= id(NOTHING); return x; });
     check("int -= int", auto sub () { int x = 10; x -= id(3); return x; });

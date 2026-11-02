@@ -3357,8 +3357,8 @@ nothing Http1ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flag
 }
 
 //! Sets the encoding assumed for text response bodies whose character encoding is not determined otherwise
-/** Response bodies are decoded by the rules documented for @ref Qore::get_http_body_encoding()
-    "get_http_body_encoding()"; the assumed encoding is used for text types without a default of their own and
+/** Response bodies are decoded by the rules documented for
+    @ref Qore::get_http_body_encoding() "get_http_body_encoding()"; the assumed encoding is used for text types without a default of their own and
     without an encoding declaration.
 
     @param encoding the assumed encoding; the default is ISO-8859-1

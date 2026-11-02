@@ -91,8 +91,7 @@ printf("%Y\n", ans.body);
     Together AI connections belong to the Together AI app and use the service URL; the connection ping verifies the
     API key with the authenticated model catalog, without inference.
 
-    @ref TogetherRestClient::TogetherLlmProviderFactory::getModelInfo()
-    "TogetherLlmProviderFactory::getModelInfo()" reports which models cannot turn hidden reasoning off
+    @ref TogetherRestClient::TogetherLlmProviderFactory::getModelInfo() "TogetherLlmProviderFactory::getModelInfo()" reports which models cannot turn hidden reasoning off
     (\c reasoning_always_on): \c openai/gpt-oss-20b and <tt>openai/gpt-oss-120b</tt>. A reasoning token budget
     of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off on
     the hybrid models (\c reasoning \c {"enabled": false}) and selects the lowest effort, \c low, of the GPT-OSS
@@ -347,8 +346,8 @@ public class TogetherLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return "together";
     }
     #! Turns reasoning off for the model of a request, or selects its lowest reasoning setting
-    /** Evidence, https://docs.together.ai/docs/inference/chat/reasoning: the hybrid models "support both
-        reasoning and non-reasoning modes via \c reasoning={"enabled": True/False}": \c MiniMaxAI/MiniMax-M3,
+    /** Evidence, https://docs.together.ai/docs/inference/chat/reasoning: the hybrid models &ldquo;support both
+        reasoning and non-reasoning modes via <tt>reasoning={&quot;enabled&quot;: True/False}</tt>&rdquo;: \c MiniMaxAI/MiniMax-M3,
         \c deepseek-ai/DeepSeek-V4-Pro-0813, \c zai-org/GLM-5.2, \c moonshotai/Kimi-K3, \c Qwen/Qwen3.6-Plus and
         \c Qwen/Qwen3.5-9B; GPT-OSS has the reasoning efforts \c low, \c medium and \c high.  The models that are
         available only for dedicated inference have not been verified.
@@ -407,11 +406,11 @@ public class TogetherLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
         };
     }
     #! Returns the provider's information for a model
-    /** The GPT-OSS models cannot turn reasoning off (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on
-        "LlmProviderInfo::reasoning_always_on").
+    /** The GPT-OSS models cannot turn reasoning off
+        (@ref QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
 
-        Evidence, https://docs.together.ai/docs/inference/chat/reasoning: the hybrid models support "both reasoning
-        and non-reasoning modes via \c reasoning={"enabled": True/False}", while GPT-OSS has an "Adjustable effort",
+        Evidence, https://docs.together.ai/docs/inference/chat/reasoning: the hybrid models support &ldquo;both reasoning
+        and non-reasoning modes via <tt>reasoning={&quot;enabled&quot;: True/False}</tt>&rdquo;, while GPT-OSS has an "Adjustable effort",
         \c low, \c medium or \c high, and no setting that turns reasoning off.  The models that are available only
         for dedicated inference, such as DeepSeek-R1, have not been verified.
 

@@ -45,7 +45,7 @@ module QoreOnnxExport {
     @section qoreonnxexportintro QoreOnnxExport Module Introduction
 
     The %QoreOnnxExport module exports trained %Qore ML models to ONNX (Open Neural
-    Network Exchange) format. The exported \c .onnx files can be loaded by any
+    Network Exchange) format. The exported <tt>.onnx</tt> files can be loaded by any
     ONNX-compatible runtime — ONNX Runtime, TensorFlow, PyTorch, etc. — enabling
     interoperability between Qore's ML module and the broader ML ecosystem.
 

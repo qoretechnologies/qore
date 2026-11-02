@@ -220,7 +220,7 @@ public string sub gcsEncodeObject(string name) {
     Note that the obvious alternative — splitting on \c "/", encoding each segment and rejoining —
     is only correct when @ref Qore::split() "split()" is passed
     \c keep_trailing_empty: by default it discards a trailing empty field, so
-    \c split("/", "dir/") yields \c ("dir") and the rejoin silently drops the trailing slash,
+    \c split("/", "dir/") yields <tt>(&quot;dir&quot;)</tt> and the rejoin silently drops the trailing slash,
     addressing a *different* object.  \c "dir/" is a perfectly valid Google Cloud Storage object name
     — it is how folder placeholders are written — so that would be a silent data error rather than a
     failure.  See @ref split_trailing_empty_fields.

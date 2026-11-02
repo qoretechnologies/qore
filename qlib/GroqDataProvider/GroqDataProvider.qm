@@ -123,10 +123,8 @@ module GroqDataProvider {
 
     The following data providers are exposed:
     - @ref GroqDataProvider::GroqDataProvider "GroqDataProvider" — the root provider
-    - @ref GroqDataProvider::GroqChatCompletionDataProvider
-      "GroqChatCompletionDataProvider" — OpenAI-compatible chat
-    - @ref GroqDataProvider::GroqListModelsDataProvider
-      "GroqListModelsDataProvider" — lists the currently-available models
+    - @ref GroqDataProvider::GroqChatCompletionDataProvider "GroqChatCompletionDataProvider" — OpenAI-compatible chat
+    - @ref GroqDataProvider::GroqListModelsDataProvider "GroqListModelsDataProvider" — lists the currently-available models
 
     See the <a href="https://console.groq.com/docs/models">Groq models documentation</a>
     for the currently-available models.

@@ -231,9 +231,12 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
     float.  The average of a float is as Firebird gives it, a float, as is the average of an expression of no known
     type, such as an alias or, with @ref SqlUtil::cop_avg() "cop_avg()", another column operator.
 
-    @section xdbcfirebird_relnotes Release Notes
+    See @subpage xdbcfirebird_relnotes "Release Notes" for the changes in each version.
+*/
+/** @page xdbcfirebird_relnotes Release Notes
 
-    @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+
+    @section xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
     - added support for the \c on_delete and \c on_update referential actions of foreign constraints; \c RESTRICT,
       which Firebird has no clause for, is refused with \c FOREIGN-CONSTRAINT-ERROR (see
       @ref xdbcfirebird_fk_actions)
@@ -301,7 +304,7 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
     - added support for @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" and the \c truncate_date expression,
       which were refused as unknown
 
-    @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
+    @section xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
 */
 

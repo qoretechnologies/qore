@@ -967,7 +967,7 @@ sse.setEventQueue();
     #! Background-thread entry point for the event loop (weak-ref path).
     /** Receives the owning @ref ServerSentEventClient as a strong-ref
         argument, then immediately converts it to a WEAK reference via
-        @c remove + @c := and signals @c started.dec().  The background
+        @c remove + <tt>:=</tt> and signals @c started.dec().  The background
         thread thereafter holds only a weak ref, so the destructor can
         fire as soon as all external strong refs drop.
 
@@ -1118,7 +1118,7 @@ sse.setEventQueue();
     #! Background-thread entry point for the reconnect loop (weak-ref path).
     /** Mirrors @ref runEventLoop "runEventLoop": receives @c client0 as a strong-ref
         argument, immediately converts it to a weak ref via @c remove +
-        @c :=, then drives the reconnect via short instance-method
+        <tt>:=</tt>, then drives the reconnect via short instance-method
         invocations so the destructor can fire between iterations.
 
         @since ServerSentEventClient 1.1

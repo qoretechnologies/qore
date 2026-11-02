@@ -256,9 +256,12 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
     See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
 
-    @section websocketclient_relnotes WebSocketClient Module Release History
+    See @subpage websocketclient_relnotes "WebSocketClient Module Release History" for the changes in each version.
+*/
+/** @page websocketclient_relnotes WebSocketClient Module Release History
 
-    @subsection wsc_v2_5 v2.5
+
+    @section wsc_v2_5 v2.5
     - fixed the @ref WebSocketClient::WebSocketClient "WebSocketClient" constructor to accept a \c headers option
       whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, with the \c token or
       \c cookie option; adding the \c Authorization or \c Cookie header raised \c RUNTIME-TYPE-ERROR
@@ -269,9 +272,13 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       7.1.5 and 7.1.6), over HTTP/1.1, HTTP/2 and HTTP/3, so the close code and reason reported after the close are
       those of the server's CLOSE frame; before, the client closed the connection as soon as its own CLOSE frame was
       sent.  When the server does not answer within the connection's I/O timeout, the connection ends with code 1006
-      and the reason \c "close handshake timed out"
+      and the reason <tt>"close handshake timed out"</tt>;
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" and
+      @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" send the CLOSE frame and wait for the end of the
+      close handshake before closing the connection
     - a CLOSE frame without a status code, which is reported with the close code 1005 (RFC 6455 section 7.1.5), is
-      answered with a CLOSE frame without a status code; before, the connection was closed without an answer
+      answered with a CLOSE frame without a status code; before, it was answered with the status code 1005, which
+      RFC 6455 section 7.4.1 does not allow to be sent
     - a data message sent after the close handshake started raises \c WEBSOCKET-CLOSING-ERROR: no data frame may
       follow a CLOSE frame (RFC 6455 section 5.5.1)
     - the connect and reconnect log messages give the URL without its password
@@ -296,8 +303,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         async I/O mode is enabled
       - added @ref WebSocketClient::WebSocketClient::connectAsync() "WebSocketClient::connectAsync()" for
         fully non-blocking connect + event loop startup
-      - added @ref WebSocketClient::WebSocketClient::getPollOperation()
-        "WebSocketClient::getPollOperation()" for advanced async I/O usage
+      - added
+        @ref WebSocketClient::WebSocketClient::getPollOperation() "WebSocketClient::getPollOperation()" for advanced async I/O usage
     - added the @ref WebSocketClient::WebSocketClientPollOperation "WebSocketClientPollOperation" class
       implementing @ref Qore::AbstractPollOperation for non-blocking WebSocket I/O with buffer-based
       frame parsing, thread-safe send/receive queues, and full protocol support (text, binary, ping/pong,
@@ -306,8 +313,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       - automatic detection and use of HTTP/3 extended CONNECT when connecting to HTTP/3 servers
       - added @ref WebSocketClient::WebSocketClient::isHttp3() "WebSocketClient::isHttp3()" method to check if
         HTTP/3 WebSocket is being used
-      - added \c http3 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
-        "WebSocketClient::getConnectionInfo()"
+      - added \c http3 key to
+        @ref WebSocketClient::WebSocketClient::getConnectionInfo() "WebSocketClient::getConnectionInfo()"
       - data provider's \c ws-connected-event now includes \c http3 field indicating HTTP/3 usage
     - debug info now includes \c http3 field for HTTP/3 WebSocket connections
     - added async polling API support for WebSocket connections
@@ -325,15 +332,15 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       - automatic detection and use of HTTP/2 extended CONNECT when connecting to HTTP/2 servers
       - added @ref WebSocketClient::WebSocketClient::isHttp2() "WebSocketClient::isHttp2()" method to check if
         HTTP/2 WebSocket is being used
-      - added \c http2 key to @ref WebSocketClient::WebSocketClient::getConnectionInfo()
-        "WebSocketClient::getConnectionInfo()"
+      - added \c http2 key to
+        @ref WebSocketClient::WebSocketClient::getConnectionInfo() "WebSocketClient::getConnectionInfo()"
       - data provider's \c ws-connected-event now includes \c http2 field indicating HTTP/2 usage
       - in the default \c "auto" HTTP-version mode, a \c wss:// connection falls back to an HTTP/1.1 \c 101
         Upgrade on a new HTTP/1.1 connection when the server negotiates HTTP/2 or HTTP/3 but the extended
         \c CONNECT handshake fails (for example behind a reverse proxy that does not implement RFC 8441/9220);
         there is no fallback when a specific HTTP version was requested or HTTP/3 was required
-    - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
-      "AbstractDataProvider::setDebugCollector()" for the WebSocket data provider
+    - added debug info collection support via
+      @ref DataProvider::AbstractDataProvider::setDebugCollector() "AbstractDataProvider::setDebugCollector()" for the WebSocket data provider
     - debug info includes WebSocket message type, size, timing, connection protocol, and error info
     - added WebSocket extension support with permessage-deflate compression
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
@@ -344,11 +351,13 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
         method
       - added @ref WebSocketClient::WebSocketClient::getActiveExtensions() "WebSocketClient::getActiveExtensions()"
         method
-    - added optional AsyncAPI validation support via @ref WebSocketClient::WebSocketClient::setAsyncApiValidator()
-      "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
+    - added optional AsyncAPI validation support via
+      @ref WebSocketClient::WebSocketClient::setAsyncApiValidator() "WebSocketClient::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
+    - added the \c heartbeat and \c idle_timeout constructor options for the pacing of PING frames and the detection
+      of peers that stop responding
 
-    @subsection wsc_v2_3 v2.3
+    @section wsc_v2_3 v2.3
     - added the @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" class, added
       support in the @ref WebSocketClient::WebSocketClient "WebSocketClient" class for tokens and a logger instead of
       log closures / callbacks
@@ -356,42 +365,42 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
     - added support for protocol version 13
 
-    @subsection wsc_v2_2 v2.2
+    @section wsc_v2_2 v2.2
     - fixed creating example WebSocket client data providers from factories with templated option values
       (<a href="https://github.com/qoretechnologies/qore/issues/4716">issue 4716</a>)
     - added a "wait for message" API data provider to the WebSocket client data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4716">issue 4716</a>)
 
-    @subsection wsc_v2_1_1 v2.1.1
+    @section wsc_v2_1_1 v2.1.1
     - the data provider factory uses the delayed observable class instead
       (<a href="https://github.com/qoretechnologies/qore/issues/4701">issue 4701</a>)
 
-    @subsection wsc_v2_1 v2.1
+    @section wsc_v2_1 v2.1
     - fixed a deadlock deleting the client object when it goes out of scope in the event thread
       (<a href="https://github.com/qoretechnologies/qore/issues/4697">issue 4697</a>)
     - added the \c headers option to allow auth headers to be set in WebSocket client connections and data providers
       (<a href="https://github.com/qoretechnologies/qore/issues/4694">issue 4694</a>)
 
-    @subsection wsc_v2_0 v2.0
+    @section wsc_v2_0 v2.0
     - added support for events and messages from the DataProvider API
       (<a href="https://github.com/qoretechnologies/qore/issues/4557">issue 4557</a>)
 
-    @subsection wsc_v1_9_1 v1.9.1
+    @section wsc_v1_9_1 v1.9.1
     - added support for continuation frames
       (<a href="https://github.com/qoretechnologies/qore/issues/4073">issue 4073</a>)
 
-    @subsection wsc_v1_9 v1.9
+    @section wsc_v1_9 v1.9
     - implemented support for a data provider scheme cache and rich option information for connections
       (<a href="https://github.com/qoretechnologies/qore/issues/4025">issue 4025</a>)
 
-    @subsection wsc_v1_8 v1.8
+    @section wsc_v1_8 v1.8
     - removed the \c WebSocketConnectionObject::getConstructorInfo() and
       \c WebSocketConnectionObject::getConstructorInfoImpl() methods
       (<a href="https://github.com/qoretechnologies/qore/issues/3696">issue 3696</a>)
     - added support for socket events
       (<a href="https://github.com/qoretechnologies/qore/issues/3425">issue 3425</a>)
 
-    @subsection wsc_v1_7 v1.7
+    @section wsc_v1_7 v1.7
     - all connection clases have unified constructor
     - added the \c WebSocketConnectionObject::getConstructorInfo()
       method to allow connections to be created dynamically, potentially in another process from a network
@@ -399,20 +408,20 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
     - add WebSocketClient handling of WSCC_GoingAway event
 
-    @subsection wsc_v1_6_3 v1.6.3
+    @section wsc_v1_6_3 v1.6.3
     - added missing exception handling in the connection close callback
       (<a href="https://github.com/qoretechnologies/qore/issues/3225">issue 3225</a>)
 
-    @subsection wsc_v1_6_2 v1.6.2
+    @section wsc_v1_6_2 v1.6.2
     - allowed the handling of \c PING messages to be customized
       (<a href="https://github.com/qoretechnologies/qore/issues/2887">issue 2887</a>)
 
-    @subsection wsc_v1_6_1 v1.6.1
+    @section wsc_v1_6_1 v1.6.1
     - added @ref WebSocketClient::WebSocketClient::pong() "WebSocketClient::pong()" to allow an unsolicited \c PONG
       message to be sent as a unidirectional keep-alive message from the client to the server
       (<a href="https://github.com/qoretechnologies/qore/issues/2566">issue 2566</a>)
 
-    @subsection wsc_v1_6 v1.6
+    @section wsc_v1_6 v1.6
     - added the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnectionObject" class to support the
       @ref connectionproviderintro "ConnectionProvider" module
     - updated for complex types
@@ -424,24 +433,24 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       (<a href="https://github.com/qoretechnologies/qore/issues/2062">issue 2062</a>)
     - added support for the \c yield option in the constructor
 
-    @subsection wsc_v1_5 v1.5
+    @section wsc_v1_5 v1.5
     - added timeout values to @ref Qore::Socket "Socket" and @ref Qore::HTTPClient "HTTPClient" calls
       (<a href="https://github.com/qoretechnologies/qore/issues/1725">issue 1725</a>)
 
-    @subsection wsc_v1_4 v1.4
+    @section wsc_v1_4 v1.4
     - fixed a bug parsing and generating the websocket close status code
       (<a href="https://github.com/qoretechnologies/qore/issues/1216">issue 1216</a>)
 
-    @subsection wsc_v1_3 v1.3
+    @section wsc_v1_3 v1.3
     - ignore \c SOCKET-NOT-OPEN errors when closing (server already closed the connection)
 
-    @subsection wsc_v1_2 v1.2
+    @section wsc_v1_2 v1.2
     - prepend \c "WebSocketClient: " to log messages
 
-    @subsection wsc_v1_1 v1.1
+    @section wsc_v1_1 v1.1
     - added socket instrumention support from Qore 0.8.9
 
-    @subsection wsc_v1_0 v1.0
+    @section wsc_v1_0 v1.0
     - initial release
 */
 
@@ -822,10 +831,20 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
         #! TID of the thread running handleAsyncShutdown(), used to detect self-deadlock
         /** Set before closingConnection() so the destructor path can detect that it's being
-            called from within handleAsyncShutdown() on the same thread and skip waitTidCleared().
+            called from within handleAsyncShutdown() on the same thread and skip waitTidCleared();
+            reset once closingConnection() has returned, because the thread is a pool thread that later runs other
+            tasks.
             @since WebSocketClient 2.4
         */
         int async_shutdown_tid = -2;
+
+        #! The state event Queue of the HTTP/1.1 poll operation
+        /** Gets an event with \c done set when the operation ends; a close started by the client waits on it for the
+            close handshake to end; see sendCloseAndWaitUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        *Queue<hash<SocketPollStateInfo>> async_state_queue;
     }
 
     #! Creates the WebSocket client object from the arguments
@@ -853,7 +872,7 @@ WebSocketClient ws(\event(), {
         plus the following keys; its \c timeout option (default: 15 seconds) also bounds the close handshake: a
         close started by the client waits for the server's close frame, as RFC 6455 section 5.5.1 requires, at most
         this time, and the connection then ends with the close code 1006 and the reason
-        \c "close handshake timed out"
+        <tt>"close handshake timed out"</tt>
         - \c asyncapi: the path or URL to an AsyncAPI schema file for message validation; only used if
           \a validator is not provided (see the @ref asyncapiintro "AsyncApi" module)
         - \c asyncapi_channel: the channel name to use for AsyncAPI validation; required if \a asyncapi or
@@ -1431,6 +1450,12 @@ ws.connect();
                     # Async mode has no event thread; -1 is only a sentinel.  Clean
                     # up directly instead of waiting for a thread termination signal
                     # that might never be produced if no delivery task is active.
+                    # First let the close handshake started above end (RFC 6455 section 5.5.1); the lock is
+                    # released while waiting, and if the delivery pipeline tore the connection down meanwhile, it
+                    # has also started the reconnect, as the stop flag is not set.
+                    if (sendCloseAndWaitUnlocked(WSCC_NormalClosure)) {
+                        return True;
+                    }
                     stopAsyncIo();
                     shutdownAndCloseUnlocked();
                     {
@@ -1898,6 +1923,10 @@ ws.setEventQueue();
 
         @return a @ref WebSocketSendPollOperation for the async send
 
+        @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
+        for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
+        5.5.1)
+
         @since WebSocketClient 2.4
     */
     WebSocketSendPollOperation startPollSend(string str) {
@@ -1908,6 +1937,10 @@ ws.setEventQueue();
     /** @param bin the binary data to send
 
         @return a @ref WebSocketSendPollOperation for the async send
+
+        @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
+        for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
+        5.5.1)
 
         @since WebSocketClient 2.4
     */
@@ -1922,6 +1955,10 @@ ws.setEventQueue();
 
         @return a @ref WebSocketSendPollOperation for the async send
 
+        @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
+        for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
+        5.5.1)
+
         @since WebSocketClient 2.4
     */
     WebSocketSendPollOperation startPollSend(data msg, int op, bool fin) {
@@ -1929,9 +1966,18 @@ ws.setEventQueue();
     }
 
     #! Internal method to create a poll send operation
-    /** @since WebSocketClient 2.4
+    /** @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started
+
+        @since WebSocketClient 2.4
     */
     private WebSocketSendPollOperation startPollSendIntern(data msg, int op, bool fin) {
+        # no data frame may follow a close frame (RFC 6455 section 5.5.1)
+        if (op < WSOP_Close) {
+            *object op_obj = poll_op;
+            if (op_obj) {
+                op_obj.checkDataSend();
+            }
+        }
         int rsv_bits = 0;
         # Apply extension transforms if active
         if (active_extensions) {
@@ -2151,8 +2197,8 @@ ws.setEventQueue();
             if (tid == -1 && async_shutdown_tid == gettid()) {
                 # We're on the async shutdown thread — handleAsyncShutdown() will call clearTid()
                 # after closingConnection() returns. Don't wait; just clean up what we can.
-                # Send WebSocket close frame before closing to avoid server SOCKET-CLOSED errors
-                try { sendClose(cmd); } catch () {}
+                # handleAsyncShutdown() runs once the poll operation has ended and has already released it, so
+                # there is no close handshake left to run here.
                 stopAsyncIo();
                 shutdownAndCloseUnlocked();
                 return;
@@ -2167,8 +2213,12 @@ ws.setEventQueue();
                 # which means no I/O events will fire, no callbacks will be invoked,
                 # and clearTid() would never be called — causing waitTidCleared() to
                 # hang forever.
-                # Send WebSocket close frame before closing to avoid server SOCKET-CLOSED errors
-                try { sendClose(cmd); } catch () {}
+                # First run the close handshake: send the close frame and wait for the server's (RFC 6455 section
+                # 5.5.1), at most the close timeout.  The lock is released while waiting, so the delivery
+                # pipeline may tear the connection down meanwhile: then there is nothing left to do here.
+                if (sendCloseAndWaitUnlocked(cmd)) {
+                    return;
+                }
                 stopAsyncIo();
                 shutdownAndCloseUnlocked();
                 {
@@ -2196,6 +2246,95 @@ ws.setEventQueue();
             # Reconnect thread: wait for the event thread to terminate
             waitTidCleared(tid);
             cid = -1;
+        }
+    }
+
+    #! Runs the close handshake of a close the client starts in async mode
+    /** Sends the client's close frame if no close was started yet, then waits until the poll operation has ended:
+        when the server's close frame arrives, when the connection is lost, or at the close timeout, when the
+        operation ends with the close code 1006 (see
+        @ref Qore::WebSocketClientPollOperationBase::setCloseTimeout() "setCloseTimeout()").
+
+        Must be called with \c m held.  \c m is released while waiting, because the poll operation's callbacks and
+        the delivery pipeline (handleAsyncShutdown()) need it.  No wait is made on a thread that runs a callback of
+        the operation, which the operation would need to finish first.
+
+        @param cmd the close code to send
+
+        @return @ref True "True" if the connection was torn down by another thread (clearTid() was called) while
+        \c m was released, in which case the caller has nothing left to clean up
+
+        @since WebSocketClient 2.5
+    */
+    private bool sendCloseAndWaitUnlocked(int cmd) {
+        *object op = poll_op;
+        if (!op || op.goalReached()) {
+            return False;
+        }
+        if (!async_close_sent) {
+            try {
+                sendClose(cmd);
+                async_close_sent = True;
+            } catch (hash<ExceptionInfo> ex) {
+                # the close frame cannot be sent, so there is no close handshake to wait for
+                logDebug("cannot send the close frame: %s: %s", ex.err, ex.desc);
+                return False;
+            }
+            # the close frame is sent by the thread driving the operation
+            wakeAsyncIo();
+        }
+        if (op.isCallbackThread()) {
+            return False;
+        }
+        *Queue<hash<SocketPollStateInfo>> state_queue = async_state_queue;
+        int gen = tid_generation;
+        {
+            m.unlock();
+            on_exit m.lock();
+
+            if (op instanceof WebSocketClientHcioPollOp) {
+                cast<WebSocketClientHcioPollOp>(op).waitClosed();
+            } else if (state_queue) {
+                waitPollOperationEnd(state_queue);
+            }
+        }
+        return tid_generation != gen;
+    }
+
+    #! Waits until the HTTP/1.1 poll operation has ended
+    /** The controller puts an event with \c done set on the operation's state Queue when the operation ends for
+        any reason, also when it is canceled or the controller shuts down.  The operation ends at the latest at its
+        close timeout; the wait is bounded by twice that time only to guard against an operation whose steps are
+        not run, for example when all callback workers of the controller are busy.
+
+        @param state_queue the state Queue of the operation
+    */
+    private waitPollOperationEnd(Queue<hash<SocketPollStateInfo>> state_queue) {
+        # the close timeout of the operation: the I/O timeout, or the default close timeout of
+        # WebSocketClientPollOperationBase, 15 seconds; see startAsyncIo()
+        timeout close_timeout = timeout_ms > 0 ? timeout_ms : 15s;
+        date deadline = now_us() + milliseconds(close_timeout * 2);
+        while (True) {
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                logWarn("the WebSocket close handshake did not end within %y; closing the connection",
+                    milliseconds(close_timeout * 2));
+                return;
+            }
+            hash<SocketPollStateInfo> event;
+            try {
+                event = state_queue.get(remaining);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    continue;
+                }
+                rethrow;
+            }
+            if (event.done) {
+                # leave the event for any other thread waiting for the operation to end
+                state_queue.push(event);
+                return;
+            }
         }
     }
 
@@ -2346,12 +2485,18 @@ ws.setEventQueue();
                     poll_op.setIdleTimeout(async_idle_timeout_ms);
                 }
                 async_wake_socket = ws_sock;
+                # the controller reports the end of the operation on the state Queue, which a close started by the
+                # client waits for; see sendCloseAndWaitUnlocked()
+                async_state_queue = new Queue<hash<SocketPollStateInfo>>();
                 # Submit to the global async I/O controller
                 controller.submit(<SocketPollOperationInfo>{
                     "sock": ws_sock,
                     "spop": poll_op,
                     "owner": async_owner,
                     "to": -1s,
+                    "stateQueue": async_state_queue,
+                    # only the end of the operation is waited for
+                    "notifyStates": WebSocketClientPollOperation::STATE_CLOSED,
                 });
                 controller.wakeSocket(ws_sock);
                 return;
@@ -2362,6 +2507,8 @@ ws.setEventQueue();
             # that reads from the stream handle and parses WS frames.
             poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
                 logger, raw_callback, on_poll_complete);
+            # the end of a close started by the client is waited for with WebSocketClientHcioPollOp::waitClosed()
+            remove async_state_queue;
             async_owner = "wsc-hcio-" + get_random_string(12);
             async_close_sent = False;
             # Cache the socket for wake calls
@@ -2397,6 +2544,8 @@ ws.setEventQueue();
         # (observed as PSEUDO-METHOD-DOES-NOT-EXIST <nothing>::clearCallbacks()
         # in the GraphQLHandler subscription robustness test).
         *object op = remove poll_op;
+        # a thread waiting for the operation to end keeps its own reference to the Queue
+        remove async_state_queue;
 
         # Clear the delivery callback BEFORE cancelling — cancelByOwner dispatches
         # onComplete asynchronously to a worker, which would reference a destroyed
@@ -2723,6 +2872,12 @@ ws.setEventQueue();
         {
             m.lock();
             on_exit m.unlock();
+
+            # closingConnection() has returned; this pool thread may run another task of this client later, such as
+            # a delivery whose callback calls disconnect(), which must not be taken for one made from here
+            if (async_shutdown_tid == gettid()) {
+                async_shutdown_tid = -2;
+            }
 
             # Check again: disconnectUnlocked() may have cleared tid while we were
             # in closingConnection()
@@ -5430,6 +5585,18 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
         on_poll_complete = NOTHING;
     }
 
+    #! @cond nodoc
+    #! Returns True if the current thread runs a callback of the operation
+    /** Received frames, and with them the raw frame callback, are processed with \c drain_mutex held, by the step
+        of the operation or its completion: a thread doing that cannot wait for the operation to end.
+
+        @since WebSocketClient 2.5
+    */
+    bool isCallbackThread() {
+        return drain_mutex.lockOwner();
+    }
+    #! @endcond
+
     #! Aborts the operation
     abort() {
         WebSocketClientPollOperationBase::abort();
@@ -5495,8 +5662,8 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
         reason of the server's CLOSE frame (RFC 6455 sections 7.1.5 and 7.1.6), also when the close was started with
         @ref Qore::WebSocketClientPollOperationBase::sendClose() "sendClose()", so a client that needs its own code
         and reason after the close keeps them itself; without a CLOSE frame from the server, with code 1006 and a
-        reason describing the end, for example \c "close handshake timed out" when the server did not answer a close
-        within the I/O timeout given to the constructor.
+        reason describing the end, for example <tt>"close handshake timed out"</tt> when the server did not answer a
+        close within the I/O timeout given to the constructor.
     */
     *hash<auto> getReceivedMessage(timeout to = -1) {
         if (to < 0) {
@@ -5769,6 +5936,11 @@ public class WebSocketClientHcioPollOp {
         /** @since WebSocketClient 2.5
         */
         *int close_timer_id;
+
+        #! Reaches zero when the connection is closed; see markClosedAndEnqueue() and waitClosed()
+        /** @since WebSocketClient 2.5
+        */
+        Counter closed_counter(1);
     }
 
     #! Creates the adapter and registers for async stream data delivery
@@ -6077,7 +6249,7 @@ public class WebSocketClientHcioPollOp {
 
     #! Sets how long a close started by the client waits for the server's close frame
     /** When the server's close frame does not arrive in time, the connection ends with the close code 1006 and the
-        reason \c "close handshake timed out", which are reported in a \c "closed" message.
+        reason <tt>"close handshake timed out"</tt>, which are reported in a \c "closed" message.
 
         @param ms the time in milliseconds; 0 means no limit
 
@@ -6235,14 +6407,62 @@ public class WebSocketClientHcioPollOp {
         return closed;
     }
 
+    #! @cond nodoc
+    #! Returns True if the current thread processes received frames, and with them runs the raw frame callback
+    /** Such a thread cannot wait for the server's close frame, which it would have to process itself.
+
+        @since WebSocketClient 2.5
+    */
+    bool isCallbackThread() {
+        return process_mutex.lockOwner();
+    }
+
+    #! Waits until the connection is closed
+    /** A close started by the client ends when the server's close frame arrives, when the stream ends, or at the
+        close timeout (see @ref setCloseTimeout()).  The wait itself ends the close at the close timeout, when the
+        close timer of the async I/O controller has not done so, for example because the controller has stopped.
+        Without a close timeout, the wait ends the close after 15 seconds, the default close timeout of an HTTP/1.1
+        connection, so that it ends also when the stream can no longer end.
+
+        @since WebSocketClient 2.5
+    */
+    waitClosed() {
+        int to;
+        string cause;
+        {
+            AutoLock al(heartbeat_mutex);
+            to = close_timeout_ms ? close_timeout_ms : 15000;
+            cause = pending_close_cause;
+        }
+        if (closed_counter.waitForZero(to)) {
+            # no close frame was received, so the close code is 1006, which is never sent in a close frame (RFC 6455
+            # section 7.4.1)
+            if (markClosedAndEnqueue(WSCC_AbnormalClosure, "close handshake timed out",
+                    cause.val() ? cause : NOTHING)) {
+                notifyDelivery();
+            }
+        }
+    }
+    #! @endcond
+
+    #! Checks that a data frame can still be sent on the connection
+    /** @throw WEBSOCKET-CLOSING-ERROR a close frame was sent or received, or the connection has closed: no data
+        frame may follow a close frame (RFC 6455 section 5.5.1)
+    */
+    checkDataSend() {
+        if (ws_close_sent || isClosed()) {
+            throw "WEBSOCKET-CLOSING-ERROR", "cannot send a data frame on a WebSocket connection whose close "
+                "handshake has started; no data frame may follow a close frame (RFC 6455 section 5.5.1)";
+        }
+    }
+
     #! Queues an outgoing frame with extension transforms and client masking
     /** @throw WEBSOCKET-CLOSING-ERROR a data frame is sent after a close frame was sent or received: no data frame
         may follow a close frame (RFC 6455 section 5.5.1)
     */
     private queueOutgoingFrame(data msg, int op, bool fin) {
-        if (op < WSOP_Close && (ws_close_sent || isClosed())) {
-            throw "WEBSOCKET-CLOSING-ERROR", "cannot send a data frame on a WebSocket connection whose close "
-                "handshake has started; no data frame may follow a close frame (RFC 6455 section 5.5.1)";
+        if (op < WSOP_Close) {
+            checkDataSend();
         }
         int rsv_bits = 0;
         if (active_extensions) {
@@ -6400,6 +6620,7 @@ public class WebSocketClientHcioPollOp {
             }
             cancelHeartbeatTimerLocked();
             cancelCloseTimerLocked();
+            closed_counter.dec();
         }
 
         if (event_type == "error") {

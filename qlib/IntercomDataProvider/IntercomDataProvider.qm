@@ -133,6 +133,28 @@ module IntercomDataProvider {
     \c leads who have not - the companies they belong to, and the conversations you have had with them,
     alongside a help center of articles.
 
+    The module exports actions generated from Intercom's own OpenAPI 3 description, two polling events, and seven of
+    Intercom's collections as record tables.
+
+    Documentation:
+    - @subpage intercomdataproviderguide "Actions, Events and Tables": how the actions are generated, the pinned
+      schema and API revision, the action groups, timestamps, searching and paging, the polling events and the
+      record tables
+    - @subpage intercomdataprovider_examples "Examples": getting the data provider, searching and paging, tagging a
+      contact, events and calling endpoints the application does not export
+    - @subpage intercomdataproviderrelnotes "Release Notes": the changes in each version
+*/
+/** @page intercomdataproviderrelnotes Release Notes
+
+
+    @section intercomdataproviderv1_0 IntercomDataProvider v1.0
+    - initial release
+*/
+
+/** @page intercomdataproviderguide Actions, Events and Tables
+
+    @tableofcontents
+
     @section intercomdataprovider_generated Generated, Not Hand-Written
 
     The actions this application exports are <b>generated from Intercom's own OpenAPI 3 description</b> by the
@@ -147,14 +169,14 @@ module IntercomDataProvider {
 
     @section intercomdataprovider_pinned The Pinned Schema, and the API Revision With It
 
-    Intercom versions its API by a dated revision - \c 2.16 here - sent as an \c Intercom-Version header,
+    Intercom versions its API by a dated revision - <tt>2.16</tt> here - sent as an \c Intercom-Version header,
     and publishes one OpenAPI description per revision.  So pinning the description pins the API version
     as well, and the two move together:
 
     |!Property|!Value
-    |Source|https://github.com/intercom/Intercom-OpenAPI \c descriptions/2.16/api.intercom.io.yaml
+    |Source|https://github.com/intercom/Intercom-OpenAPI <tt>descriptions/2.16/api.intercom.io.yaml</tt>
     |SHA-256|\c 57be9a3f321bfc3b67a073f5ed14d1920a9450f5eb11a43caed8dfcdda14a2dc
-    |Revision|\c 2.16
+    |Revision|<tt>2.16</tt>
     |Imported|2026-08-13
 
     A request that sends no revision header rides whichever revision the workspace's app package happens to
@@ -192,10 +214,10 @@ module IntercomDataProvider {
       %Qore @ref date "date" values and converted when the request is built; the values inside a search
       \c query are not, because a query is an opaque structure to the schema - compare against a number
       there.
-    - <b>Searching takes a filter tree.</b>  \c query is either a single \c "{field, operator, value}" filter
-      or \c "{operator: \"AND\", value: [ ... ]}" combining several, nested as deeply as needed.  A field
-      Intercom does not define on a contact is searched by naming it \c "custom_attributes.<name>".
-    - <b>Paging is by cursor, with two exceptions.</b>  A listing answers \c pages.next.starting_after and
+    - <b>Searching takes a filter tree.</b>  \c query is either a single <tt>{field, operator, value}</tt> filter
+      or <tt>{operator: &quot;AND&quot;, value: [ ... ]}</tt> combining several, nested as deeply as needed.  A field
+      Intercom does not define on a contact is searched by naming it <tt>custom_attributes.&lt;name&gt;</tt>.
+    - <b>Paging is by cursor, with two exceptions.</b>  A listing answers <tt>pages.next.starting_after</tt> and
       that value is passed back as \c starting_after; \c pages is absent once the collection is exhausted.
       <b>List Companies</b> pages by number instead, and <b>List Tags</b>, <b>List Teammates</b> and <b>List Tags on
       Contact</b> are not paged at all.
@@ -241,7 +263,7 @@ module IntercomDataProvider {
     search endpoints take in their request body, and the rest of a search is applied to the records as they
     arrive, with the caller's limit counting <b>matching</b> records.  Which field accepts which operator was
     measured against a live workspace rather than read from the description, which enumerates no fields at
-    all: a contact's timestamps take \c = \c < \c > and refuse \c !=, while a conversation's accept it.
+    all: a contact's timestamps take <tt>=</tt> <tt>&lt;</tt> <tt>&gt;</tt> and refuse <tt>!=</tt>, while a conversation's accept it.
 
     Intercom has <b>no <tt>&gt;=</tt>, no <tt>&lt;=</tt></b> and no negation of a sub-expression; those are evaluated here rather
     than mapped onto a neighbouring operator, which would silently drop the boundary records.
@@ -249,10 +271,13 @@ module IntercomDataProvider {
     @see @ref IntercomDataProvider::IntercomRecordTables "IntercomRecordTables", including why a company is
     updated through \c UpdateCompany rather than \c createOrUpdateCompany - the two mean different things by
     \c company_id, and using the wrong one creates a company instead of changing it.
+*/
 
-    @section intercomdataprovider_examples Examples
+/** @page intercomdataprovider_examples Examples
 
-    @subsection intercomdataprovider_ex_provider Getting the Data Provider
+    @tableofcontents
+
+    @section intercomdataprovider_ex_provider Getting the Data Provider
 
     From a connection, which is how a data-provider-aware caller reaches it:
 
@@ -272,7 +297,7 @@ AbstractDataProvider intercom = get_connection("intercom").getDataProvider();
 IntercomDataProvider intercom(new IntercomRestClientIo({"token": ENV.INTERCOM_TOKEN}));
     @endcode
 
-    @subsection intercomdataprovider_ex_search Searching, and Paging Through the Result
+    @section intercomdataprovider_ex_search Searching, and Paging Through the Result
 
     @code{.py}
 AbstractDataProvider search = intercom.getChildProviderEx("SearchContacts");
@@ -299,7 +324,7 @@ while (True) {
 printf("%d users signed up this year\n", all.size());
     @endcode
 
-    @subsection intercomdataprovider_ex_tag Tagging a Contact
+    @section intercomdataprovider_ex_tag Tagging a Contact
 
     @code{.py}
 intercom.getChildProviderEx("attachTagToContact").doRequest({
@@ -308,7 +333,7 @@ intercom.getChildProviderEx("attachTagToContact").doRequest({
 });
     @endcode
 
-    @subsection intercomdataprovider_ex_events Reacting to an Event
+    @section intercomdataprovider_ex_events Reacting to an Event
 
     @code{.py}
 class ContactObserver inherits DataProvider::Observer {
@@ -322,7 +347,7 @@ event.registerObserver(new ContactObserver());
 cast<DelayedObservable>(event).observersReady();
     @endcode
 
-    @subsection intercomdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
+    @section intercomdataprovider_ex_call Calling an Endpoint the Manifest Does Not Export
 
     The application exports a reviewed subset of Intercom's API.  For anything else, the generic API call
     action reaches the rest of it with the same connection and authentication:
@@ -334,11 +359,6 @@ hash<auto> res = intercom.getChildProviderEx("__call__").doRequest({
 });
 printf("%d teams\n", res.body.teams.size());
     @endcode
-
-    @section intercomdataproviderrelnotes Release Notes
-
-    @subsection intercomdataproviderv1_0 IntercomDataProvider v1.0
-    - initial release
 */
 
 #! contains all public definitions in the IntercomDataProvider module

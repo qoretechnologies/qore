@@ -176,6 +176,31 @@ module EdifactUtil {
       use in data pipelines and integration workflows
     - <b>Flexible I/O:</b> Support for files, streams, and in-memory string processing
 
+    Documentation:
+    - @subpage edifactutil_structure "EDIFACT Message Structure": interchange hierarchy, service segments,
+      delimiters and common message types
+    - @subpage edifactutilreadwrite "Reading and Writing EDIFACT Messages": iterators and writers with their
+      options
+    - @subpage edifactutil_usage "Usage Examples": complete parsing, generation, schema loading and \c qdp
+      examples
+    - @subpage edifactutil_directory "Directory Schema Cache": loading, caching and validating EDIFACT
+      directory releases, and the test fixture generator
+    - @subpage edifactutil_dataprovider "DataProvider Integration": the read, write and schema data providers
+      and \c qdp actions
+
+    @subsection edifactutil_arch Architecture Overview
+
+    EDIFACT support is layered so parsing/writing can work without directory schemas, while
+    schema-aware workflows can be enabled when directory flat files are available.
+
+    - \c EdifactBase / \c EdifactDelimiters: core parsing utilities and UNA delimiter handling
+    - Readers/Writers: the \c EdifactAbstractIterator classes parse messages, the \c EdifactAbstractWriter
+      classes generate interchanges
+    - Schema support: \c EdifactDirectoryLoader loads flat-file directories into \c EdifactSchema
+    - Cache/registry: \c EdifactDirectoryCache persists schemas, \c EdifactSchemaRegistry loads releases
+    - DataProvider: the \c EdifactReadDataProvider, \c EdifactWriteDataProvider and
+      \c EdifactSchemaDataProvider data providers expose the module via \c qdp
+
     @subsection edifactutil_classes Available Classes
 
     <b>Delimiter Configuration</b>
@@ -207,7 +232,12 @@ module EdifactUtil {
     - @ref EdifactUtil::EdifactWriteDataProvider "EdifactWriteDataProvider": Data provider for writing
     - @ref EdifactUtil::EdifactSchemaDataProvider "EdifactSchemaDataProvider": Data provider for loading schemas
 
-    @section edifactutil_structure EDIFACT Message Structure
+    See @subpage edifactutil_relnotes "Release Notes" for the changes in each version.
+*/
+
+/** @page edifactutil_structure EDIFACT Message Structure
+
+    @tableofcontents
 
     An EDIFACT message has the following hierarchical structure:
 
@@ -220,7 +250,7 @@ module EdifactUtil {
                     └── Component (sub-element within composite)
     @endverbatim
 
-    @subsection edifactutil_segments Service Segments
+    @section edifactutil_segments Service Segments
 
     EDIFACT defines the following service segments for message structure:
 
@@ -233,20 +263,52 @@ module EdifactUtil {
     |\c UNG|Group Header|Optional functional group header
     |\c UNE|Group Trailer|Optional functional group trailer
 
-    @subsection edifactutil_delimiters Delimiters
+    @section edifactutil_delimiters Delimiters
 
     EDIFACT uses the following default delimiters (configurable via UNA segment):
 
     |!Delimiter|!Default|!Description
-    |Component separator|\c ":"|Separates components within composite elements
-    |Element separator|\c "+"|Separates data elements within a segment
-    |Decimal notation|\c "."|Decimal point character
-    |Release character|\c "?"|Escape character for special characters
-    |Segment terminator|\c "'"|Ends each segment
+    |Component separator|<tt>&quot;:&quot;</tt>|Separates components within composite elements
+    |Element separator|<tt>&quot;+&quot;</tt>|Separates data elements within a segment
+    |Decimal notation|<tt>&quot;.&quot;</tt>|Decimal point character
+    |Release character|<tt>&quot;?&quot;</tt>|Escape character for special characters
+    |Segment terminator|<tt>&quot;'&quot;</tt>|Ends each segment
 
-    The release character (\c "?" by default) is used to escape special characters in data.
-    For example, \c "?+" represents a literal \c "+" character, and \c "??" represents a
-    literal \c "?" character.
+    The release character (<tt>&quot;?&quot;</tt> by default) is used to escape special characters in data.
+    For example, <tt>&quot;?+&quot;</tt> represents a literal <tt>&quot;+&quot;</tt> character, and
+    <tt>&quot;??&quot;</tt> represents a literal <tt>&quot;?&quot;</tt> character.
+
+    @section edifactutil_message_types Common Message Types
+
+    EDIFACT defines hundreds of standard message types. Some commonly used ones include:
+
+    |!Type|!Name|!Description
+    |\c ORDERS|Purchase Order|Order for goods or services
+    |\c ORDRSP|Order Response|Response to a purchase order
+    |\c INVOIC|Invoice|Commercial invoice
+    |\c DESADV|Despatch Advice|Shipment notification
+    |\c RECADV|Receiving Advice|Goods receipt confirmation
+    |\c REMADV|Remittance Advice|Payment remittance details
+    |\c PRICAT|Price/Sales Catalogue|Product and pricing information
+    |\c IFTMIN|Instruction Message|Transport booking request
+    |\c IFTSTA|Transport Status Report|Shipment status update
+    |\c CODECO|Container Gate-in/Gate-out|Terminal gate movement report
+    |\c COPARN|Container Announcement|Container announcement
+    |\c COPRAR|Container Discharge/Loading|Container discharge/load order
+    |\c COARRI|Container Discharge/Loading Report|Container arrival/departure report
+    |\c MSCONS|Metered Services Consumption|Utility consumption report
+    |\c UTILMD|Utility Master Data|Utility master data message
+    |\c UTILTS|Utility Time Series|Utility time series message
+    |\c CONTRL|Control Message|Syntax/acknowledgement control message
+    |\c APERAK|Application Error/Ack|Application error and acknowledgement
+    |\c MEDREQ|Medical Service Request|Healthcare request message
+    |\c MEDRPT|Medical Service Report|Healthcare report message
+    |\c MEDADV|Medical Service Advice|Healthcare advice message
+*/
+
+/** @page edifactutilreadwrite Reading and Writing EDIFACT Messages
+
+    @tableofcontents
 
     @section edifactutil_reading Reading EDIFACT Messages
 
@@ -285,7 +347,7 @@ while (iter.next()) {
     |!Option|!Type|!Description
     |\c encoding|string|Character encoding for the data (default: auto-detect)
     |\c skip_service_segments|bool|If True, skip UNA/UNB/UNZ/UNH/UNT in iteration (default: False)
-    |\c extended_record|bool|If True, return extended format with 'type' and 'record' keys (default: False)
+    |\c extended_record|bool|If True, return extended format with \c type and \c record keys (default: False)
 
     @code{.py}
 # Skip service segments to iterate only over business data
@@ -362,17 +424,174 @@ string edifact_output = w.getData();
     |\c encoding|string|Character encoding for output (default: ISO-8859-1)
     |\c write_una|bool|If True, write UNA segment at start (default: True)
     |\c line_break|bool|If True, add newline after each segment (default: False)
-    |\c syntax_identifier|string|Syntax identifier for UNB (default: "UNOC")
-    |\c syntax_version|string|Syntax version for UNB (default: "3")
+    |\c syntax_identifier|string|Syntax identifier for UNB (default: \c UNOC)
+    |\c syntax_version|string|Syntax version for UNB (default: \c 3)
+*/
 
-    @section edifactutil_dataprovider DataProvider Integration
+/** @page edifactutil_usage Usage Examples
+
+    @tableofcontents
+
+    See @ref edifactutilreadwrite for the iterator and writer options used here.
+
+    @section edifactutil_usage_parse Parse EDIFACT data
+
+    @code{.py}
+%requires EdifactUtil
+
+string edi = "UNA:+.? 'UNB+UNOA:1+SENDER+RECEIVER+240101:1200+1'";
+EdifactDataIterator r(edi);
+list<hash<auto>> segments = map $1, r;
+    @endcode
+
+    @section edifactutil_usage_write Generate EDIFACT data
+
+    @code{.py}
+%requires EdifactUtil
+
+EdifactDataWriter w();
+
+w.writeInterchangeHeader(<EdifactInterchangeInfo>{
+    "sender_id": "SENDER",
+    "recipient_id": "RECEIVER",
+    "control_reference": "REF001",
+});
+w.writeMessageHeader(<EdifactMessageInfo>{
+    "message_reference": "1",
+    "message_type": "ORDERS",
+    "message_version": "D",
+    "message_release": "01B",
+});
+w.writeSegment("BGM", (("220",), ("PO-123",)));
+w.writeSegment("DTM", (("137", "20240101", "102"),));
+w.writeMessageTrailer();
+w.writeInterchangeTrailer();
+
+string out = w.getData();
+    @endcode
+
+    @section edifactutil_usage_schema Load a schema from a directory release
+
+    @code{.py}
+%requires EdifactUtil
+
+string release_dir = "/path/to/edifact/D21A";
+list<string> cache_warnings = ();
+
+EdifactSchema schema = EdifactSchemaRegistry::loadRelease("D21A", (
+    "dir": release_dir,
+    "skip_cache_read": True,
+    "loader_opts": ("strict": True),
+    "cache_error": "warn",
+    "cache_warnings": \cache_warnings,
+));
+    @endcode
+
+    @section edifactutil_usage_qdp DataProvider usage
+
+    @verbatim
+qdp '@Edifact/read{path=/tmp/in.edi}' search {}
+qdp '@Edifact/write{path=/tmp/out.edi}' create ("messages": $data)
+qdp '@Edifact/schema{release=D21A,dir=/path/to/edifact/D21A,skip_cache_read=true,cache_error=warn}' search {}
+    @endverbatim
+
+    When \c cache_error is \c warn, the schema data provider includes any cache load warnings
+    in the \c cache_warnings field of the returned record.
+
+    @code{.py}
+%requires EdifactUtil
+%requires DataProvider
+
+# Get a data provider for reading
+auto provider = DataProvider::getFactoryObjectFromExample(
+    "edifactread",
+    {"path": "orders.edi"}
+);
+
+# Iterate over records
+AbstractDataProviderRecordIterator i = provider.searchRecords();
+while (i.next()) {
+    hash<auto> rec = i.getValue();
+    printf("Segment: %s\n", rec.tag);
+}
+    @endcode
+*/
+
+/** @page edifactutil_directory Directory Schema Cache
+
+    @tableofcontents
+
+    EDIFACT directory data is not shipped with this module. Instead, directory flat files
+    can be loaded and cached locally. Set \c QORE_EDIFACT_DIRCACHE to override the cache
+    location; the default is <tt>~/.qore/edifact</tt>.
+
+    Cached schemas are stored as Qore value strings with quoted hash keys for reliable
+    round-tripping. Cache load failures are treated as cache misses so directory loading
+    can rebuild a fresh cache (unless \c cache_only is set). Use \c cache_error and
+    \c cache_warnings to control and observe parse/type errors from cache loads.
+
+    Options for @ref EdifactUtil::EdifactSchemaRegistry::loadRelease() "EdifactSchemaRegistry::loadRelease()":
+
+    - \c dir: directory containing flat files for the release
+    - \c reload: ignore the in-memory registry and reload
+    - \c skip_cache_read: do not read from the on-disk cache
+    - \c cache_only: load only from cache (throws on cache miss)
+    - \c cache_error: how to handle cache parse/type errors (one of \c ignore, \c warn, \c error; default:
+      \c warn)
+      - \c ignore: treat as cache miss without warnings
+      - \c warn: treat as cache miss and append warnings to \c cache_warnings (if provided); otherwise
+        emit a warning via \c warn()
+      - \c error: throw \c EDIFACT-CACHE-ERROR on cache parse/type errors
+    - \c cache_warnings: optional list reference (use <tt>\\cache_warnings</tt>) to receive warning strings when
+      \c cache_error is \c warn
+    - \c loader_opts: options passed to \c EdifactDirectoryLoader
+      - \c strict: validate EDMD content strictly (segment table header, indentation, structure)
+      - wrapped segment-table continuation lines are ignored
+
+    @code{.py}
+%requires EdifactUtil
+
+# Load from a local directory of flat files (EDMD/EDSD/EDCD/EDED/EDCL)
+auto schema = EdifactSchemaRegistry::loadRelease("D01B", (
+    "dir": "/path/to/edifact/D01B",
+    "skip_cache_read": True,
+    "loader_opts": ("strict": True),
+));
+    @endcode
+
+    For a CLI example, see <tt>examples/edifact-schema-load.qr</tt>, which exposes the same options.
+
+    @section edifactutil_directory_strict Strict EDMD Validation
+
+    When <tt>loader_opts.strict</tt> is set, EDMD parsing enforces additional structural checks to catch
+    malformed directory data early. In strict mode, the loader throws \c EDIFACT-EDMD-ERROR if:
+
+    - the segment table header (<tt>Pos Tag Name</tt>) is missing
+    - tab indentation is used in the segment table
+    - a segment group has no children
+    - a segment entry is missing a name
+
+    Use strict mode for validation pipelines or CI to ensure directory sources are clean and
+    consistent before caching or distribution.
+
+    @section edifactutil_fixture_gen Fixture Generator
+
+    The repository includes a helper script for creating minimal EDIFACT directory fixtures
+    for tests. The script lives at <tt>tools/edifact-fixture-gen.qr</tt>.
+
+    @par Example: Generate a Fixture Set
+    @verbatim qore tools/edifact-fixture-gen.qr --release D11A --message IFTMIN --code 610 --desc "Transport instruction message"
+    @endverbatim
+*/
+
+/** @page edifactutil_dataprovider DataProvider Integration
 
     The module integrates with the Qore DataProvider framework, enabling use in data pipelines
-    and integration workflows.
+    and integration workflows; see @ref edifactutil_usage_qdp for read and write examples.
 
     Schema loading is available as a DataProvider action (\c edifactschema), which accepts
     \c release, \c dir, and cache-related options (including \c skip_cache_read) for use with
-    \c qdp.
+    \c qdp; see @ref edifactutil_directory for the options.
 
     @par qdp Example: Load a Schema via App Action
     @verbatim qdp '@Edifact/schema{release=D01B,dir=/path/to/edifact/D01B,skip_cache_read=true}' search {}
@@ -397,194 +616,10 @@ string edifact_output = w.getData();
     @par qdp Example: Show Schema Keys
     @verbatim qdp '@Edifact/schema{release=D01B,dir=/path/to/edifact/D01B}' search '{}' -q
     @endverbatim
+*/
+/** @page edifactutil_relnotes Release Notes
 
-    @section edifactutil_fixture_gen Fixture Generator
-
-    The repository includes a helper script for creating minimal EDIFACT directory fixtures
-    for tests. The script lives at \c tools/edifact-fixture-gen.qr.
-
-    @par Example: Generate a Fixture Set
-    @verbatim qore tools/edifact-fixture-gen.qr --release D11A --message IFTMIN --code 610 --desc "Transport instruction message"
-    @endverbatim
-
-    @code{.py}
-%requires EdifactUtil
-%requires DataProvider
-
-# Get a data provider for reading
-auto provider = DataProvider::getFactoryObjectFromExample(
-    "edifactread",
-    {"path": "orders.edi"}
-);
-
-# Iterate over records
-AbstractDataProviderRecordIterator i = provider.searchRecords();
-while (i.next()) {
-    hash<auto> rec = i.getValue();
-    printf("Segment: %s\n", rec.tag);
-}
-    @endcode
-
-    @section edifactutil_message_types Common Message Types
-
-    EDIFACT defines hundreds of standard message types. Some commonly used ones include:
-
-    |!Type|!Name|!Description
-    |\c ORDERS|Purchase Order|Order for goods or services
-    |\c ORDRSP|Order Response|Response to a purchase order
-    |\c INVOIC|Invoice|Commercial invoice
-    |\c DESADV|Despatch Advice|Shipment notification
-    |\c RECADV|Receiving Advice|Goods receipt confirmation
-    |\c REMADV|Remittance Advice|Payment remittance details
-    |\c PRICAT|Price/Sales Catalogue|Product and pricing information
-    |\c IFTMIN|Instruction Message|Transport booking request
-    |\c IFTSTA|Transport Status Report|Shipment status update
-    |\c CODECO|Container Gate-in/Gate-out|Terminal gate movement report
-    |\c COPARN|Container Announcement|Container announcement
-    |\c COPRAR|Container Discharge/Loading|Container discharge/load order
-    |\c COARRI|Container Discharge/Loading Report|Container arrival/departure report
-    |\c MSCONS|Metered Services Consumption|Utility consumption report
-    |\c UTILMD|Utility Master Data|Utility master data message
-    |\c UTILTS|Utility Time Series|Utility time series message
-    |\c CONTRL|Control Message|Syntax/acknowledgement control message
-    |\c APERAK|Application Error/Ack|Application error and acknowledgement
-    |\c MEDREQ|Medical Service Request|Healthcare request message
-    |\c MEDRPT|Medical Service Report|Healthcare report message
-    |\c MEDADV|Medical Service Advice|Healthcare advice message
-
-    @section edifactutil_arch Architecture Overview
-
-    EDIFACT support is layered so parsing/writing can work without directory schemas, while
-    schema-aware workflows can be enabled when directory flat files are available.
-
-    - \c EdifactBase / \c EdifactDelimiters: core parsing utilities and UNA delimiter handling
-    - Readers/Writers: \c EdifactReader parses messages, \c EdifactWriter generates interchanges
-    - Schema support: \c EdifactDirectoryLoader loads flat-file directories into \c EdifactSchema
-    - Cache/registry: \c EdifactDirectoryCache persists schemas, \c EdifactSchemaRegistry loads releases
-    - DataProvider: \c EdifactRead/Write/Schema data providers expose the module via \c qdp
-
-    @section edifactutil_usage Usage Examples
-
-    @subsection edifactutil_usage_parse Parse EDIFACT data
-
-    @code{.py}
-%requires EdifactUtil
-
-string edi = "UNA:+.? 'UNB+UNOA:1+SENDER+RECEIVER+240101:1200+1'";
-EdifactReader r(edi);
-list<hash<auto>> messages = r.readAll();
-    @endcode
-
-    @subsection edifactutil_usage_write Generate EDIFACT data
-
-    @code{.py}
-%requires EdifactUtil
-
-EdifactWriter w((
-    "sender_id": "SENDER",
-    "recipient_id": "RECEIVER",
-    "control_reference": "REF001",
-));
-
-w.addMessage((
-    "message_reference": "1",
-    "message_type": "ORDERS",
-    "message_version": "D",
-    "message_release": "01B",
-    "segments": (
-        ("BGM", ("220", "PO-123")),
-        ("DTM", (("137", "20240101", "102"),)),
-    ),
-));
-
-string out = w.getText();
-    @endcode
-
-    @subsection edifactutil_usage_schema Load a schema from a directory release
-
-    @code{.py}
-%requires EdifactUtil
-
-string release_dir = "/path/to/edifact/D21A";
-list<string> cache_warnings = ();
-
-EdifactSchema schema = EdifactSchemaRegistry::loadRelease("D21A", (
-    "dir": release_dir,
-    "skip_cache_read": True,
-    "loader_opts": ("strict": True),
-    "cache_error": "warn",
-    "cache_warnings": \cache_warnings,
-));
-    @endcode
-
-    @subsection edifactutil_usage_qdp DataProvider usage
-
-    @verbatim
-qdp '@Edifact/read{path=/tmp/in.edi}' search {}
-qdp '@Edifact/write{path=/tmp/out.edi}' create ("messages": $data)
-qdp '@Edifact/schema{release=D21A,dir=/path/to/edifact/D21A,skip_cache_read=true,cache_error=warn}' search {}
-    @endverbatim
-
-    When \c cache_error is \c "warn", the schema data provider includes any cache load warnings
-    in the \c cache_warnings field of the returned record.
-
-    @section edifactutil_directory Directory Schema Cache
-
-    EDIFACT directory data is not shipped with this module. Instead, directory flat files
-    can be loaded and cached locally. Set \c QORE_EDIFACT_DIRCACHE to override the cache
-    location; the default is \c "~/.qore/edifact".
-
-    Cached schemas are stored as Qore value strings with quoted hash keys for reliable
-    round-tripping. Cache load failures are treated as cache misses so directory loading
-    can rebuild a fresh cache (unless \c cache_only is set). Use \c cache_error and
-    \c cache_warnings to control and observe parse/type errors from cache loads.
-
-    Options for \c EdifactSchemaRegistry::loadRelease():
-
-    - \c dir: directory containing flat files for the release
-    - \c reload: ignore the in-memory registry and reload
-    - \c skip_cache_read: do not read from the on-disk cache
-    - \c cache_only: load only from cache (throws on cache miss)
-    - \c cache_error: how to handle cache parse/type errors (one of \c "ignore", \c "warn", \c "error"; default: \c "warn")
-        - \c "ignore": treat as cache miss without warnings
-    - \c "warn": treat as cache miss and append warnings to \c cache_warnings (if provided); otherwise
-      emit a warning via \c warn()
-        - \c "error": throw \c EDIFACT-CACHE-ERROR on cache parse/type errors
-    - \c cache_warnings: optional list reference (use \c \\cache_warnings) to receive warning strings when
-      \c cache_error is \c "warn"
-    - \c loader_opts: options passed to \c EdifactDirectoryLoader
-        - \c strict: validate EDMD content strictly (segment table header, indentation, structure)
-        - wrapped segment-table continuation lines are ignored
-
-    @code{.py}
-%requires EdifactUtil
-
-# Load from a local directory of flat files (EDMD/EDSD/EDCD/EDED/EDCL)
-auto schema = EdifactSchemaRegistry::loadRelease("D01B", (
-    "dir": "/path/to/edifact/D01B",
-    "skip_cache_read": True,
-    "loader_opts": ("strict": True),
-));
-    @endcode
-
-    For a CLI example, see \c examples/edifact-schema-load.qr, which exposes the same options.
-
-    @subsection edifactutil_directory_strict Strict EDMD Validation
-
-    When \c loader_opts.strict is set, EDMD parsing enforces additional structural checks to catch
-    malformed directory data early. In strict mode, the loader throws \c EDIFACT-EDMD-ERROR if:
-
-    - the segment table header ("Pos Tag Name") is missing
-    - tab indentation is used in the segment table
-    - a segment group has no children
-    - a segment entry is missing a name
-
-    Use strict mode for validation pipelines or CI to ensure directory sources are clean and
-    consistent before caching or distribution.
-
-    @section edifactutil_relnotes Release Notes
-
-    @subsection edifactutil_v1_0 Version 1.0
+    @section edifactutil_v1_0 Version 1.0
     - initial release
 */
 

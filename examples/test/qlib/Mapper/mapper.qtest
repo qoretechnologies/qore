@@ -576,6 +576,7 @@ public class MapperTest inherits QUnit::Test {
         addTestCase("submapper test", \submapperTest());
         addTestCase("ignore_missing_input test", \ignoreMissingInputTest());
         addTestCase("use_input_record test", \useInputRecordTest());
+        addTestCase("trunc_all option", \truncAllTest());
         addTestCase("nullable output", \nullableOutputTest());
         addTestCase("list test", \listTest());
         addTestCase("runtime keys", \runtimeKeys());
@@ -848,6 +849,18 @@ public class MapperTest inherits QUnit::Test {
     }
 
     # issue #3823
+    # the documented trunc_all constructor option is accepted and truncates fields without a "trunc" key
+    truncAllTest() {
+        assertThrows("STRING-TOO-LONG", sub () {
+            Mapper m({"a": ("maxlen": 3)});
+            m.mapData({"a": "abcdef"});
+        });
+        Mapper m({"a": ("maxlen": 3), "b": ("maxlen": 3, "trunc": False)}, {"trunc_all": "true"});
+        assertEq({"a": "abc", "b": "ab"}, m.mapData({"a": "abcdef", "b": "ab"}));
+        # a field with an explicit "trunc" key keeps its own setting
+        assertThrows("STRING-TOO-LONG", \m.mapData(), {"a": "x", "b": "abcdef"});
+    }
+
     useInputRecordTest() {
         {
             Mapper m({

@@ -648,8 +648,8 @@ public class DataSchema inherits AbstractVersionedSchema {
     }
 
     #! Returns the column a field reference of a populate expression names
-    /** The field of a field reference is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
-        "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name
+    /** The field of a field reference is a field path
+        (@ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name
 
         @param table the table
         @param col_name the column being populated

@@ -54,8 +54,8 @@ module GraphQLDataProvider {
     GraphQL query and mutation fields.
 
     The generated executor is transport-agnostic; to expose it over HTTP or WebSocket, pass it to a
-    @ref GraphQLHandler::GraphQLHandler "GraphQLHandler" (from the @ref graphqlhandlerintro
-    "GraphQLHandler" module).
+    @ref GraphQLHandler::GraphQLHandler "GraphQLHandler" (from the
+    @ref graphqlhandlerintro "GraphQLHandler" module).
 
     To use this module, use \c "%requires GraphQLDataProvider" in your code.
 

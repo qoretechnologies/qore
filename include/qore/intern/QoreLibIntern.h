@@ -1866,7 +1866,7 @@ DLLLOCAL extern ParseOptionMaps pomaps;
     qore_program_private::applyParseOptionImplications()), so it is not tested separately.
 
     Other options, including the \c PO_BROKEN_* compatibility options, do not affect acceptance.  Code whose final
-    parse options lack any of these bits (for example a \c .q file without \c %modern, code with only
+    parse options lack any of these bits (for example a <tt>.q</tt> file without \c %modern, code with only
     \c %new-style, or \c %modern code in which a later \c %old-style, \c %require-dollar, \c %assume-global or
     \c %loose-args directive disabled one of them) is executed by the AST interpreter only.
 */

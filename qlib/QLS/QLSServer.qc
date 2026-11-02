@@ -3855,9 +3855,9 @@ string param_doc = doc.params[0].description;
         # the documentation of a callable in the source is in its doc comment
         *string methodDoc;
         if (sourceDocComment) {
-            hash<auto> doc = QLSServer::parseDocComment(sourceDocComment);
-            methodDoc = doc.description;
-            hash<string, string> paramDocs = map {$1.name: $1.description}, doc.params;
+            hash<auto> doc_info = QLSServer::parseDocComment(sourceDocComment);
+            methodDoc = doc_info.description;
+            hash<string, string> paramDocs = map {$1.name: $1.description}, doc_info.params;
             params = map $1 + {"description": paramDocs{$1.name}}, params;
         }
 

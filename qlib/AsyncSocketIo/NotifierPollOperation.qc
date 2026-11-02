@@ -35,13 +35,12 @@ public namespace AsyncSocketIo {
     along with the notifier, block on the returned @ref Qore::Thread::Queue "Queue",
     and the I/O thread drives the fd wait.
 
-    After the operation completes, callers should invoke @ref Qore::EventNotifier::acknowledge()
-    "acknowledge()" on the notifier to drain the fd (matching the behavior of the
+    After the operation completes, callers should invoke
+    @ref Qore::EventNotifier::acknowledge() "acknowledge()" on the notifier to drain the fd (matching the behavior of the
     former @ref Qore::Socket::poll() "Socket::poll()"-based pattern).
 
     Typical usage via the convenience wrapper
-    @ref AsyncSocketIo::AsyncSocketIoController::waitForNotifier()
-    "AsyncSocketIoController::waitForNotifier()":
+    @ref AsyncSocketIo::AsyncSocketIoController::waitForNotifier() "AsyncSocketIoController::waitForNotifier()":
 
     @code{.py}
     if (controller.waitForNotifier(notifier, 5s)) {

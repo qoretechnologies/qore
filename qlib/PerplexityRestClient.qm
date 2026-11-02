@@ -76,6 +76,12 @@ module PerplexityRestClient {
     - @ref PerplexityRestClient::PerplexityChatSseStreamIo "PerplexityChatSseStreamIo"
     - @ref PerplexityRestClient::PerplexityRestConnection "PerplexityRestConnection"
 
+    The module registers the \c perplexity mode in the
+    @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" with
+    @ref PerplexityRestClient::PerplexityLlmProvider "PerplexityLlmProvider", an OpenAI-compatible chat provider
+    that uses Perplexity's \c /chat/completions path.  The \c chat-model connection option sets the model used when
+    the connection is selected for chat (default: \c "sonar").
+
     @section perplexityrestclientrelnotes Release Notes
 
     @subsection perplexityrestclientv1_0 PerplexityRestClient v1.0
@@ -452,8 +458,7 @@ public class PerplexityRestConnection inherits RestClient::RestConnection {
     publishes the endpoint at \c /chat/completions (not \c /v1/chat/completions),
     so this provider reuses @ref OpenAiRestClient::OpenAiLlmProvider for body
     construction and response parsing, and only overrides
-    @ref OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPath()
-    "getChatCompletionsPath()" to point at the Perplexity URL.
+    @ref OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPath() "getChatCompletionsPath()" to point at the Perplexity URL.
 
     @par Configuration
 
@@ -552,9 +557,9 @@ public class PerplexityLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProv
         QoreLlmUtils::LlmProviderInfo::reasoning_always_on "LlmProviderInfo::reasoning_always_on").
 
         Evidence:
-        - https://docs.perplexity.ai/docs/legacy/sonar/models/sonar-reasoning-pro: "The \c sonar-reasoning-pro model is
-          designed to output a <think> section containing reasoning tokens, immediately followed by a valid JSON
-          object"
+        - https://docs.perplexity.ai/docs/legacy/sonar/models/sonar-reasoning-pro: &ldquo;The \c sonar-reasoning-pro model is
+          designed to output a <tt>&lt;think&gt;</tt> section containing reasoning tokens, immediately followed by a valid JSON
+          object&rdquo;
         - https://docs.perplexity.ai/docs/legacy/sonar/models/sonar-deep-research: the reasoning effort is \c low,
           \c medium (the default) or \c high, with no setting that turns reasoning off
         - \c sonar and \c sonar-pro are "Non-reasoning model"s; the deprecated \c sonar-reasoning has not been

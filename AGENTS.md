@@ -13,6 +13,7 @@
 - Optional integrations live in `modules/` (versioned separately).
 - Parser/AST tooling lives in `modules/astparser/`; `qlib/Qdx.qm` and `doxygen/qdx` use it for docs.
 - The `astparser` parser is a **tree-sitter grammar**: edit `modules/astparser/grammars/tree-sitter-qore/grammar.js`, then regenerate the committed `src/parser.c`/`src/grammar.json`/`src/node-types.json` with `npx tree-sitter-cli@0.26.13 generate` (version pinned in `package.json`; needs node, `nvm use v24`). CMake compiles the committed `parser.c` directly and never runs tree-sitter, so changes to language syntax accepted by the core parser (`lib/parser.ypp`, `lib/scanner.lpp`) must be reflected in `grammar.js` too, or `qdx`/docs builds will fail to parse them.
+- The grammar's highlight query `modules/astparser/grammars/tree-sitter-qore/queries/highlights.scm` is compiled into astparser (`AstTree::getHighlights()`) and used by `qdx --post` to highlight Qore code in the HTML docs (`Qdx::QoreCodeFragmentHighlighter`); a grammar change that renames or removes node types, fields or tokens must update it, or the query fails to compile (`modules/astparser/test/highlights.qtest`). See `design/doc-code-highlighting.md`.
 
 ## Build, Test, and Development Commands
 - `cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr` configures the recommended CMake build.
@@ -38,6 +39,19 @@
   `|cell|cell`, no trailing `|`, no `|---|---|` alignment row, literal pipes escaped as `\|`.
   A Markdown table renders as literal text in the generated HTML. See `design/doc-tables.md`;
   malformed tables fail the build (`QORE_DOX_TABLE_STRICT`, on by default in this repo).
+
+## Release Notes
+- The language release notes are `doxygen/lang/900_release_notes.dox.tmpl`; see `design/release-notes.md`.
+- **Never add text directly after a `@section qore_X_Y_Z` line or after its `@par Release Summary`.** A new entry goes
+  into the matching subsection of the newest section: `_compatibility` or `_new_features` as a `@par Title` block
+  (`@parblock` for more than one paragraph), `_updated_modules`, `_new_builtin_modules`, `_new_user_modules` or
+  `_bug_fixes` as a bullet. The summary lists only headline-level highlights.
+- Entries are one-sentence summaries (at most four lines) that link (`@ref`) to the reference documentation, which
+  holds the details; put any detail there first. Describe only changes relative to the last *release*: a fix to
+  functionality that no release has shipped is not an entry.
+- Never write a backslash before a double quote (`\\"`) in doxygen text: it breaks the markup that follows.
+- `python3 -I doxygen/check-release-notes.py` checks the structure (CI and the `docs-lang*` targets run it); check the
+  rendered page with `cmake --build build --target docs-lang-final-fast`.
 
 ## Testing Guidelines
 - Primary tests are Qore scripts under `examples/test/` with the `*.qtest` suffix; a binary module's own tests are in

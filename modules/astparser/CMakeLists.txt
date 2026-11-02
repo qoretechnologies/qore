@@ -119,6 +119,7 @@ include_directories(BEFORE ${CMAKE_SOURCE_DIR}/include)
 set(ASTPARSER_DIRECT_CPP_SRC
     src/astparser-module.cpp
     src/AstParser.cpp
+    src/AstHighlighter.cpp
     src/AstParserHolder.cpp
     src/AstTreeHolder.cpp
     src/AstTreePrinter.cpp
@@ -146,6 +147,18 @@ set(ASTPARSER_CPP_SRC
 set(QORE_DOX_ASTPARSER_TMPL_SRC
     docs/mainpage.dox.tmpl
     docs/release-notes.dox.tmpl
+)
+
+# The highlight query of the grammar is compiled into the module for AstTree::getHighlights()
+set(ASTPARSER_HIGHLIGHT_QUERY ${TS_QORE_GRAMMAR_DIR}/queries/highlights.scm)
+set(ASTPARSER_HIGHLIGHT_QUERY_HEADER ${CMAKE_CURRENT_BINARY_DIR}/astparser_highlight_query.h)
+add_custom_command(
+    OUTPUT ${ASTPARSER_HIGHLIGHT_QUERY_HEADER}
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${ASTPARSER_HIGHLIGHT_QUERY} -DOUTPUT=${ASTPARSER_HIGHLIGHT_QUERY_HEADER}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedHighlightQuery.cmake
+    DEPENDS ${ASTPARSER_HIGHLIGHT_QUERY} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedHighlightQuery.cmake
+    COMMENT "Embedding the Qore highlight query"
+    VERBATIM
 )
 
 qore_wrap_qpp_value(ASTPARSER_QPP_SOURCES DOXLIST _dox_src METALIST ASTPARSER_QPP_META_SRC ${ASTPARSER_QPP_SRC})
@@ -178,11 +191,11 @@ if (SINGLE_COMPILATION_UNIT)
 
     file(WRITE ${ASTPARSER_SCU_PATH} "${_scu_content}")
 
-    add_library(${astparser_module_name} MODULE ${ASTPARSER_SCU_PATH})
+    add_library(${astparser_module_name} MODULE ${ASTPARSER_SCU_PATH} ${ASTPARSER_HIGHLIGHT_QUERY_HEADER})
 
     # Declare file-level dependencies so cmake rebuilds the SCU object when
     # any generated file changes (qpp → .cpp)
-    set(_scu_deps ${ASTPARSER_QPP_SOURCES})
+    set(_scu_deps ${ASTPARSER_QPP_SOURCES} ${ASTPARSER_HIGHLIGHT_QUERY_HEADER})
     # Also depend on direct source files
     foreach(_f ${ASTPARSER_DIRECT_CPP_SRC})
         get_filename_component(_abs ${_f} ABSOLUTE)
@@ -198,7 +211,8 @@ if (SINGLE_COMPILATION_UNIT)
         LINK_DEPENDS "$<TARGET_FILE:tree-sitter-qore-grammar>"
     )
 else (SINGLE_COMPILATION_UNIT)
-    add_library(${astparser_module_name} MODULE ${ASTPARSER_CPP_SRC} ${ASTPARSER_QPP_SOURCES})
+    add_library(${astparser_module_name} MODULE ${ASTPARSER_CPP_SRC} ${ASTPARSER_QPP_SOURCES}
+        ${ASTPARSER_HIGHLIGHT_QUERY_HEADER})
 endif (SINGLE_COMPILATION_UNIT)
 
 # Link against tree-sitter libraries and add include paths
@@ -231,6 +245,11 @@ install(FILES
 install(FILES
     ${TS_QORE_GRAMMAR_DIR}/grammar.js
     DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore
+    COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT}
+)
+install(FILES
+    ${ASTPARSER_HIGHLIGHT_QUERY}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/treesitter/tree-sitter-qore/queries
     COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT}
 )
 

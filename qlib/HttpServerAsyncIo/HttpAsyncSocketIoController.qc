@@ -112,8 +112,8 @@ public enum HttpVersionMode : string {
     4. Manage idle keep-alive connections
     5. Handle streaming protocols (SSE, WebSocket)
 
-    All I/O polling is delegated to an @ref AsyncSocketIo::AsyncSocketIoController
-    "AsyncSocketIoController" instance, using callback-based result delivery for
+    All I/O polling is delegated to an
+    @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" instance, using callback-based result delivery for
     efficient state machine transitions without a separate I/O thread.
 
     Multiple HttpServer instances can share a single controller for efficient

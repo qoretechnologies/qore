@@ -3499,6 +3499,8 @@ public:
 
     std::string name;
     std::string display_name;
+    //! the count of the on_block_exit handlers lowered for this function; numbers their names deterministically
+    uint32_t handler_name_seq = 0;
     //! Source QoreFunction this IR was lowered from.
     const QoreFunction* source_qf = nullptr;
     //! Exact source variant this IR was lowered from. Direct-call

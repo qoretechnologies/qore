@@ -148,7 +148,7 @@ module EmpathicBuildingDataProvider {
 
     @htmlonly
     <div class="image">
-      <img src="Haltian-EmpathicBuilding.svg" alt="Haltian Empathic Building Logo" style="width:40%;">
+      <img src="Haltian-EmpathicBuilding.svg" width="96" alt="Haltian Empathic Building Logo">
     </div>
     @endhtmlonly
 

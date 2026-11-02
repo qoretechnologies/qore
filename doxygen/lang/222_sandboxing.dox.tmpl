@@ -114,7 +114,7 @@ Program p(opts);
     While parse options are effective for completely disabling functionality, they have limitations:
 
     - <b>Binary</b>: Cannot allow partial access (e.g., allow some files but not others)
-    - <b>No resource limits</b>: Cannot limit memory, CPU time, or thread count
+    - <b>No resource limits</b>: Cannot limit the number of threads
     - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
     - <b>No SSRF prevention</b>: Cannot block specific IP ranges
     - <b>The Program's own code</b>: @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
@@ -135,7 +135,7 @@ Program p(opts);
 
     - @ref sandbox_filesystem "Filesystem access control" with allow/deny path lists
     - @ref sandbox_network "Network access control" with IP range and hostname filtering
-    - @ref sandbox_resources "Resource limits" for memory, CPU time, and threads
+    - a @ref sandbox_resources "thread limit"
     - @ref sandbox_interrupt "Safe code interruption" for stopping runaway code
 
     @subsection sandbox_manager_usage Basic Usage
@@ -147,8 +147,6 @@ Program p(opts);
 
 # Create and configure sandbox
 SandboxManager sm();
-sm.setMemoryLimit(100 * 1024 * 1024);  # 100MB memory limit
-sm.setWallTimeLimit(30000);             # 30 second timeout
 sm.setMaxThreads(4);                    # Max 4 threads
 sm.blockPrivateNetworks();              # SSRF prevention
 sm.setFilesystemDefaultPolicy(False);   # Deny filesystem by default
@@ -210,6 +208,15 @@ authenticate();
     - <b>Sandbox root</b>: Restrict all access to within a specific directory (chroot-like)
     - <b>Allow/deny lists</b>: Fine-grained path-based access control
     - <b>Access modes</b>: Control read, write, execute, delete, and create permissions separately
+
+    The filesystem policy applies to every file access made for the code: the global filesystem functions such as
+    @ref Qore::stat() "stat()", @ref Qore::rename() "rename()" and @ref Qore::mkdir() "mkdir()",
+    @ref Qore::File "File" and @ref Qore::Dir "Dir", UNIX domain sockets, @ref Qore::system() "system()" and
+    @ref Qore::exec() "exec()", and the file access of modules such as \c i18n, \c json and \c krb5.  Code run with
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or through a
+    capability from @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"
+    does not inherit the sandboxed caller's policy for any of these accesses (see @ref sandbox_provenance for the
+    provenance that \c callWithSystemPolicy() still enforces).
 
     @subsection sandbox_fs_comparison Parse Options vs SandboxManager
 
@@ -460,6 +467,14 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     - the destination of a connection made through an HTTP proxy: the proxy is checked as the address connected
       to, and every address the destination resolves to is checked as well, because the proxy connects to it on
       the client's behalf; a destination that cannot be resolved cannot be checked and is denied
+    - every reuse of an open connection that a connection pool or a shared client keeps: the connections of
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" (and of the clients built on it,
+      such as @ref RestClientIo::RestClientIo "RestClientIo" and
+      @ref WebSocketClient::WebSocketClient "WebSocketClient"), including that of a persistent session, and the
+      connection of a @ref Qore::HTTPClient "HTTPClient" object (and of the clients built on it, such as
+      @ref RestClient::RestClient "RestClient") are handed only to code whose policy allows where they lead, checked
+      as a new connection would be, with the policy as it is at that moment; for a connection through a proxy, both
+      the proxy and the destination must be allowed
 
     The sandbox that governs an operation is the one of the thread that starts it; an operation continued on an
     async I/O thread keeps that sandbox, and so does a task submitted to a @ref Qore::Thread::ThreadPool "ThreadPool"
@@ -469,7 +484,7 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
     -# an IPv4-mapped IPv6 address (<tt>&#58;&#58;ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
-       unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
+       unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
        checked as the loopback address
     -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a
        blocked network (DNS rebinding) is denied
@@ -480,13 +495,13 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
     not restricted by allowed ports, and denied IP ranges do not deny a bind to a loopback address (\c 127.0.0.0/8
-    or \c ::1, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
+    or <tt>::1</tt>, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
     is less than a bind on all interfaces exposes, so a sandbox that blocks private networks, such as with
     @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", can still run a
     local listener, while connections to loopback addresses stay denied.  Denied ranges still deny a bind to any
     other address in them, such as a private interface address; allowed ports, allowed IP ranges and the default
     policy apply to loopback binds as to any other bind.  A bind on all interfaces uses the wildcard address, which an allowed IP range
-    only allows if it contains the wildcard address itself (for example \c 0.0.0.0/0 or \c ::/0); with the default
+    only allows if it contains the wildcard address itself (for example \c 0.0.0.0/0 or <tt>::/0</tt>); with the default
     deny policy and no allowed IP ranges, no socket can be bound.
 
     A UNIX domain socket is a file: in addition to the network policy, connecting to one requires read and write
@@ -514,35 +529,32 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     @section sandbox_resources Resource Limits
 
-    Resource limits prevent denial-of-service attacks and runaway code. Unlike parse options,
-    SandboxManager can limit resources rather than completely disable features.
+    A SandboxManager limits the number of threads that sandboxed code runs at once, which prevents it from
+    exhausting the process's threads; unlike a parse option, the limit restricts the feature rather than disabling
+    it.  Code that runs for too long is stopped with
+    @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" (see @ref sandbox_interrupt), and the stack
+    used by each thread is bounded as for all %Qore code.
 
     @code{.py}
 SandboxManager sm();
 
-# Memory limit (bytes) - prevents memory exhaustion
-sm.setMemoryLimit(100 * 1024 * 1024);  # 100MB
-
-# CPU time limit (milliseconds) - prevents CPU-bound infinite loops
-sm.setCPUTimeLimit(10000);  # 10 seconds of CPU time
-
-# Wall clock time limit (milliseconds) - prevents I/O-bound hangs
-sm.setWallTimeLimit(30000);  # 30 seconds total
-
 # Thread limit - prevents fork bombs
 sm.setMaxThreads(4);
-
-# Recursion depth limit - prevents stack overflow
-sm.setMaxRecursionDepth(100);
     @endcode
 
-    When limits are exceeded, appropriate exceptions are raised:
+    Starting a thread beyond the limit raises \c THREAD-CREATION-FAILURE.
 
-    |!Exception|!Cause
-    |\c SANDBOX-MEMORY-LIMIT|Memory limit exceeded
-    |\c SANDBOX-TIMEOUT|CPU or wall time limit exceeded
-    |\c SANDBOX-THREAD-LIMIT|Thread limit exceeded
-    |\c SANDBOX-RECURSION-LIMIT|Recursion depth exceeded
+    A thread started on behalf of sandboxed code runs under the same sandbox as the code that started it: the
+    @ref background "background" operator, @ref Qore::call_async() "call_async()",
+    @ref Qore::parallel_map() "parallel_map()", @ref Qore::parallel_foreach() "parallel_foreach()", an
+    @ref Qore::AsyncIoController "AsyncIoController" timer callback, and threads that modules start for the caller
+    all carry the caller's filesystem and network policy, interrupts, cancellation scope and thread limit.  A thread
+    that serves many callers, such as a @ref Qore::Thread::ThreadPool "ThreadPool" worker or an async I/O thread, is
+    governed per task by the sandbox of the code that submitted the task, including the steps of a poll operation
+    implemented in %Qore (\c continuePoll() and \c onComplete()), so an asynchronous HTTP request follows a redirect
+    or retries a connection only to an address that the sandbox allows.
+    @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" limits the number of such threads
+    running at once; starting another one raises \c THREAD-CREATION-FAILURE.
 
     @section sandbox_interrupt Safe Code Interruption
 
@@ -584,15 +596,15 @@ sm.clearInterrupt();
 
     The interrupt mechanism is checked at:
     - <b>Loop boundaries</b>: while, for, foreach, do-while (checked before each iteration)
-    - <b>Sleep functions</b>: sleep(), usleep() (polled every 100ms)
-    - <b>Lock acquisition</b>: Mutex::lock(), RWLock::readLock(), RWLock::writeLock() (polled every 500ms)
-    - <b>Auto-lock constructors</b>: AutoLock, AutoReadLock, AutoWriteLock (polled every 500ms)
-    - <b>Queue operations</b>: Queue::get(), Queue::pop() (polled every 500ms)
-    - <b>Thread synchronization</b>: Counter::waitForZero(), Condition::wait(), Gate::enter() (polled every 500ms)
-    - <b>File I/O</b>: File read, write, and lock operations (polled at I/O poll interval)
-    - <b>Stream I/O</b>: PipeInputStream::read(), PipeOutputStream::write() (polled at I/O poll interval)
-    - <b>Standard I/O</b>: StdoutOutputStream::write(), StderrOutputStream::write() (polled at I/O poll interval)
-    - <b>Database operations</b>: Datasource transaction lock acquisition (polled at I/O poll interval)
+    - <b>Sleep functions</b>: sleep(), usleep()
+    - <b>Lock acquisition</b>: Mutex::lock(), RWLock::readLock(), RWLock::writeLock()
+    - <b>Auto-lock constructors</b>: AutoLock, AutoReadLock, AutoWriteLock
+    - <b>Queue operations</b>: Queue::get(), Queue::pop()
+    - <b>Thread synchronization</b>: Counter::waitForZero(), Condition::wait(), Gate::enter()
+    - <b>File I/O</b>: File read, write, and lock operations
+    - <b>Stream I/O</b>: PipeInputStream::read(), PipeOutputStream::write()
+    - <b>Standard I/O</b>: StdoutOutputStream::write(), StderrOutputStream::write()
+    - <b>Database operations</b>: Datasource transaction lock acquisition
 
     When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
@@ -600,20 +612,13 @@ sm.clearInterrupt();
     Without a SandboxManager, children remain in the current process group and receive terminal signals (for example,
     Ctrl-C) along with the parent.
 
-    @subsection sandbox_interrupt_polling Polling Mechanism
+    @subsection sandbox_interrupt_polling Waking Blocked Threads
 
-    For blocking operations, the interrupt mechanism uses a polling approach where the operation
-    is performed with a timeout, then the interrupt status is checked, and the operation is
-    retried if no interrupt was requested. This ensures that blocked threads can be interrupted
-    even when waiting on locks or I/O operations.
-
-    |!Operation Type|!Polling Interval|!Latency
-    |sleep(), usleep()|100ms|Fast response for timed waits
-    |Threading primitives|500ms|Lower overhead for lock contention
-    |I/O operations|500ms|Consistent with threading primitives
-
-    @note The polling mechanism only incurs overhead when a @ref Qore::SandboxManager "SandboxManager"
-    is attached to the Program. Normal programs without a SandboxManager have zero polling overhead.
+    A thread blocked at a check point (a sleep, a lock or condition wait, or a wait for I/O) is woken as soon as
+    @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" is called, so the wait ends at once with
+    \c PROGRAM-INTERRUPTED; there is no polling interval.  The same mechanism ends the waits of a thread cancelled
+    with @ref Qore::cancel_thread() "cancel_thread()"; see @ref cancel_check_points "Cancellation Check Points"
+    for the full list of check points.
 
     @section sandbox_presets Security Presets
 
@@ -627,11 +632,7 @@ sm.clearInterrupt();
 SandboxManager sm = SandboxManager::createLockdown();
 # - No filesystem access
 # - No network access
-# - Memory limit: 10MB
-# - CPU time: 1 second
-# - Wall time: 5 seconds
 # - Max threads: 1
-# - Max recursion: 100
     @endcode
 
     @subsection sandbox_websafe Web-Safe Mode
@@ -642,11 +643,7 @@ SandboxManager sm = SandboxManager::createLockdown();
 SandboxManager sm = SandboxManager::createWebSafe();
 # - No filesystem access
 # - Network allowed but private networks blocked (SSRF prevention)
-# - Memory limit: 100MB
-# - CPU time: 10 seconds
-# - Wall time: 30 seconds
 # - Max threads: 4
-# - Max recursion: 200
     @endcode
 
     @section sandbox_combining Combining Parse Options and SandboxManager
@@ -662,8 +659,7 @@ SandboxManager sm();
 sm.addFilesystemAllowedPath("/data/uploads", QSEC_READ | QSEC_WRITE);
 sm.blockPrivateNetworks();
 sm.setNetworkDefaultPolicy(True);
-sm.setMemoryLimit(50 * 1024 * 1024);
-sm.setWallTimeLimit(10000);
+sm.setMaxThreads(4);
 
 p.setSandboxManager(sm);
     @endcode
@@ -675,7 +671,7 @@ p.setSandboxManager(sm);
     @code{.py}
 SandboxManager sm();
 sm.blockPrivateNetworks();
-sm.setMemoryLimit(100 * 1024 * 1024);
+sm.setMaxThreads(4);
 
 # Get full configuration
 hash<auto> config = sm.getConfiguration();
@@ -696,10 +692,7 @@ hash<auto> net_config = sm.getNetworkConfiguration();
     |\c FILESYSTEM-ACCESS-DENIED|SandboxManager|Filesystem access blocked by security policy
     |\c NETWORK-ACCESS-DENIED|SandboxManager|Network connection blocked by security policy
     |\c PROGRAM-INTERRUPTED|SandboxManager|Execution interrupted via requestInterrupt()
-    |\c SANDBOX-MEMORY-LIMIT|SandboxManager|Memory limit exceeded
-    |\c SANDBOX-TIMEOUT|SandboxManager|CPU or wall time limit exceeded
-    |\c SANDBOX-THREAD-LIMIT|SandboxManager|Thread limit exceeded
-    |\c SANDBOX-RECURSION-LIMIT|SandboxManager|Recursion depth exceeded
+    |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 
     @section sandbox_best_practices Best Practices
@@ -713,10 +706,9 @@ hash<auto> net_config = sm.getNetworkConfiguration();
        - Blocks access to cloud metadata endpoints (169.254.169.254)
        - Blocks access to internal services
 
-    3. <b>Set reasonable resource limits</b>
-       - Memory limits prevent memory exhaustion
-       - Time limits prevent infinite loops
+    3. <b>Limit threads and stop runaway code</b>
        - Thread limits prevent fork bombs
+       - @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" stops code that runs too long
 
     4. <b>Use deny-by-default policies</b>
        - Only explicitly allow what is needed
@@ -739,7 +731,7 @@ hash<auto> net_config = sm.getNetworkConfiguration();
 
     Before deploying sandboxed code execution:
 
-    - [ ] Define maximum resource limits (memory, CPU, wall time, threads)
+    - [ ] Define the maximum number of threads
     - [ ] Block private networks if any network access is allowed
     - [ ] Use deny-by-default for filesystem access
     - [ ] Implement timeout monitoring with interrupt handling

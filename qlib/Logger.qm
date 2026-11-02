@@ -65,9 +65,18 @@ module Logger {
 
     Abstract base classes must be subclassed to implement the desired functionality.
 
-    @subsection logger_scenarios Scenarios
+    Documentation:
+    - @subpage logger_scenarios "Scenarios": complete examples of synchronous, multithreaded and application server
+      logging with sandboxed @ref Qore::Program "Program" containers
+    - @subpage logger_backpressure "Memory-Based Backpressure": limiting the memory used by queued log events,
+      backpressure behavior and queue monitoring
+    - @subpage loggerreleasenotes "Release Notes": the changes in each version
+*/
+/** @page logger_scenarios Logger Scenarios
 
-    @par One Thread
+    @tableofcontents
+
+    @section logger_scenarios_one_thread One Thread
 
     The user code will log to a @ref Qore::Logger::Logger "Logger" object, and the logging is performed to the
     appender synchronously.
@@ -83,7 +92,7 @@ module Logger {
     l.error("the %s is not perfect", "world");
     @endcode
 
-    @par Multiple Threads
+    @section logger_scenarios_multiple_threads Multiple Threads
 
     The user code will log from multiple threads; the events are pushed to a
     @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" object. The processing is done in a dedicated thread
@@ -117,7 +126,7 @@ module Logger {
     }
     @endcode
 
-    @par Application Server Running Logging From a Few Sandboxed Program Containers
+    @section logger_scenarios_appserver_few Application Server Running Logging From a Few Sandboxed Program Containers
 
     In this example, the appserver provides a logger API for a few sandboxed programs. The appserver is
     responsible for the <b>Log4q</b> configuration; i.e. it prepares loggers, appenders, filters, etc.
@@ -165,7 +174,7 @@ module Logger {
     }
     @endcode
 
-    @par Application Server Running Many Sandboxed Program Containers
+    @section logger_scenarios_appserver_many Application Server Running Many Sandboxed Program Containers
 
     This example is basically the same as the previous example, but to avoid I/O bottlenecks in logging, the
     appserver processing thread gets the event from a queue and passes it to the appender in another worker
@@ -213,8 +222,8 @@ module Logger {
     }
     # wait till finished
     @endcode
-
-    @subsection logger_backpressure Memory-Based Backpressure
+*/
+/** @page logger_backpressure Logger Memory-Based Backpressure
 
     Starting with version 1.1, the @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" class supports
     memory-based backpressure to prevent unbounded memory growth when log producers outpace consumers.
@@ -273,8 +282,12 @@ if (laq.isFull()) {
     - @ref Qore::Logger::LoggerAppenderQueue::maxBytes() "maxBytes()": Returns the memory limit (-1 if unlimited)
     - @ref Qore::Logger::LoggerAppenderQueue::currentBytes() "currentBytes()": Returns current queued bytes
     - @ref Qore::Logger::LoggerAppenderQueue::isFull() "isFull()": Returns @ref True if at or above the limit
+*/
+/** @page loggerreleasenotes Logger Module Release Notes
 
-    @subsection logger_v1_1 v1.1
+    @tableofcontents
+
+    @section logger_v1_1 v1.1
     - searchable appenders can describe their search sources with hashes whose values all have the same type,
       such as \c {"name": "x", "kind": "memory"}
     - Added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
@@ -289,28 +302,28 @@ if (laq.isFull()) {
     - Added \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool"
       constructor
 
-    @subsection logger_v1_0 v1.0
+    @section logger_v1_0 v1.0
     - Split classes into the @ref logger_binintro "logger_bin" module for performance reasons
       (<a href="https://github.com/qoretechnologies/qore/issues/4884">issue 4884</a>)
     - Added a reopen event for rotatable appenders
 
-    @subsection logger_v0_6 v0.6
+    @section logger_v0_6 v0.6
     - Fixed a bug where file rotate could result in logging exceptions; removed explicit atomic lock operations and
       implemented low-level atomic file handling instead
       (<a href="https://github.com/qoretechnologies/qore/issues/4842">issue 4842</a>)
 
-    @subsection logger_v0_5 v0.5
-    - added \c LoggerInterface "LoggerInterface" and @ref Logger::LoggerWrapper "LoggerWrapper" classes
+    @section logger_v0_5 v0.5
+    - added @ref Qore::Logger::LoggerInterface "LoggerInterface" and @ref Logger::LoggerWrapper "LoggerWrapper" classes
       (<a href="https://github.com/qoretechnologies/qore/issues/4776">issue 4776</a>)
 
-    @subsection logger_v0_4 v0.4
+    @section logger_v0_4 v0.4
     - added the @ref Logger::StdoutAppender "StdoutAppender" class
 
-    @subsection logger_v0_3 v0.3
+    @section logger_v0_3 v0.3
     - fixed a race condition handling log file rotation with active logs
       (<a href="https://github.com/qoretechnologies/qore/issues/4583">issue 4583</a>)
 
-    @subsection logger_v0_2 v0.2
+    @section logger_v0_2 v0.2
     - added support for the \c %%h and \c %%P patterns for hostname and PID, respectively
       (<a href="https://github.com/qoretechnologies/qore/issues/4179">issue 4179</a>)
     - allow file appenders to be reopened
@@ -319,11 +332,11 @@ if (laq.isFull()) {
       directly to \c Logger objects
       (<a href="https://github.com/qoretechnologies/qore/issues/4164">issue 4164</a>)
 
-    @subsection logger_v0_1_1 v0.1.1
-    - added Logger::Logger::logArgs() "Logger::logArgs()"
+    @section logger_v0_1_1 v0.1.1
+    - added @ref Qore::Logger::Logger::logArgs() "Logger::logArgs()"
       (<a href="https://github.com/qoretechnologies/qore/issues/3492">issue 3492</a>)
 
-    @subsection logger_v0_1 v0.1
+    @section logger_v0_1 v0.1
     - initial release
 */
 

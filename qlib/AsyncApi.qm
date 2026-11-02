@@ -76,9 +76,27 @@ module AsyncApi {
 
     JSON and YAML serialization and deserialization are supported.
 
-    @section asyncapi_usage AsyncApi Usage
+    The module also generates AsyncAPI 3.0.0 schemas from annotations in %Qore source code, through an API and the
+    \c qore-asyncapi-gen command-line tool.
 
-    @subsection asyncapi_generic Generic Usage
+    Documentation:
+    - @subpage asyncapi_usage "AsyncApi Usage": validating messages with any transport, and the built-in WebSocket
+      integration
+    - @subpage asyncapi_generator "AsyncApi Schema Generator": the source annotation formats, the generator classes
+      and the \c qore-asyncapi-gen command-line tool
+    - @subpage asyncapi_relnotes "AsyncApi Module Release Notes": the changes in each version
+*/
+/** @page asyncapi_relnotes AsyncApi Module Release Notes
+
+
+    @section asyncapi_1_0 AsyncApi v1.0
+    - initial release
+*/
+/** @page asyncapi_usage AsyncApi Usage
+
+    @tableofcontents
+
+    @section asyncapi_generic Generic Usage
 
     The %AsyncApi module can be used directly with any messaging client for message validation:
 
@@ -103,7 +121,7 @@ my_client.send(msg);
 schema.validateIncomingMessage("myChannel", \received_msg, headers);
     @endcode
 
-    @subsection asyncapi_client WebSocket Integration
+    @section asyncapi_client WebSocket Integration
 
     The module provides built-in integration with WebSocket client and handler modules for
     automatic message validation.
@@ -125,13 +143,15 @@ hash<auto> opts = {
 WebSocketClient wsc(sub (data msg) { printf("Received: %y\n", msg); }, opts);
 wsc.setAsyncApiValidator(asyncapi, "myChannel");
     @endcode
+*/
+/** @page asyncapi_generator AsyncApi Schema Generator
 
-    @section asyncapi_generator AsyncApi Schema Generator
+    @tableofcontents
 
     The %AsyncApi module also provides classes for generating AsyncAPI 3.0.0 schemas from Qore source code
     annotations. This allows you to document your event-driven APIs directly in your source code.
 
-    @subsection asyncapi_generator_classes Generator Classes
+    @section asyncapi_generator_classes Generator Classes
 
     The following classes are available for schema generation:
     - @ref AsyncApi::AsyncApiSchemaTokenizer "AsyncApiSchemaTokenizer": parses \@EVENT, \@WEBSOCKET,
@@ -139,7 +159,7 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     - @ref AsyncApi::AsyncApiTypeMapper "AsyncApiTypeMapper": maps Qore types to JSON Schema types
     - @ref AsyncApi::AsyncApiSchemaGenerator "AsyncApiSchemaGenerator": generates complete AsyncAPI 3.0.0 schemas
 
-    @subsection asyncapi_event_format Event Block Format
+    @section asyncapi_event_format Event Block Format
 
     Document events in your source code using the \@EVENT block format:
 
@@ -159,7 +179,7 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     * /
     @endverbatim
 
-    @subsection asyncapi_channel_format Channel Format
+    @section asyncapi_channel_format Channel Format
 
     Document WebSocket channels using the \@WEBSOCKET block format:
 
@@ -243,7 +263,7 @@ wsc.setAsyncApiValidator(asyncapi, "myChannel");
     * /
     @endverbatim
 
-    @subsection asyncapi_generator_example Generator Example
+    @section asyncapi_generator_example Generator Example
 
     @par Programmatic Usage
     @code{.py}
@@ -280,7 +300,7 @@ string yaml = gen.toYaml();
 print(yaml);
     @endcode
 
-    @subsection asyncapi_cli_tool Command-Line Tool
+    @section asyncapi_cli_tool Command-Line Tool
 
     The \c qore-asyncapi-gen command-line tool can generate AsyncAPI schemas from source files:
 
@@ -290,20 +310,15 @@ qore-asyncapi-gen -t "My Event API" -V "1.0.0" -o events.yaml src/*.qclass
     @endcode
 
     @par Options
-    - \c -o, \c --output=FILE: Output file (default: stdout)
-    - \c -f, \c --format=FORMAT: Output format: yaml|json (default: yaml)
-    - \c -t, \c --title=TITLE: API title
-    - \c -V, \c --api-version=VER: API version
-    - \c -d, \c --description=DESC: API description
-    - \c -s, \c --server=URL: Server URL (can be specified multiple times)
-    - \c -c, \c --channel=PATH: Channel path (can be specified multiple times)
-    - \c -v, \c --verbose: Increase verbosity
-    - \c -h, \c --help: Show help message
-
-    @section asyncapi_relnotes AsyncApi Module Release Notes
-
-    @subsection asyncapi_1_0 AsyncApi v1.0
-    - initial release
+    - <tt>-o</tt>, <tt>--output=FILE</tt>: Output file (default: stdout)
+    - <tt>-f</tt>, <tt>--format=FORMAT</tt>: Output format: <tt>yaml|json</tt> (default: yaml)
+    - <tt>-t</tt>, <tt>--title=TITLE</tt>: API title
+    - <tt>-V</tt>, <tt>--api-version=VER</tt>: API version
+    - <tt>-d</tt>, <tt>--description=DESC</tt>: API description
+    - <tt>-s</tt>, <tt>--server=URL</tt>: Server URL (can be specified multiple times)
+    - <tt>-c</tt>, <tt>--channel=PATH</tt>: Channel path (can be specified multiple times)
+    - <tt>-v</tt>, <tt>--verbose</tt>: Increase verbosity
+    - <tt>-h</tt>, <tt>--help</tt>: Show help message
 */
 
 #! main namespace for all public %AsyncApi declarations

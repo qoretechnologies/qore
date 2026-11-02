@@ -107,6 +107,20 @@ module DebugCmdLine {
       expressions, the exception filters and the \c stopall option with the breakpoints, and \c session \c save and
       \c session \c load without a file name show an error; the \c session command showed the number of stopped
       threads twice
+    - \c go without arguments runs the current thread until its next breakpoint or exception instead of resuming it
+      in the mode of its last command; \c up and \c down show the line of the frame they select, \c frame \c set
+      shows the frame that it selects and checks its number, and a display expression that cannot be evaluated is
+      shown with the reason
+    - fixed the \c thread \c set, \c help \c thread and \c help \c thread \c set commands, and \c bt \c all and
+      \c thread \c list failing with an error or showing no description; fixed \c session \c save writing no file
+      without breakpoints, and \c session \c load failing with a type error for a file that is not a session file
+    - the tools: \c qdbg-remote \c -h shows the help without a URL; fixed the usage of \c qdbg-remote and
+      \c qdbg-vsc-adapter showing 1 as the default of \c -w (1500 milliseconds); fixed \c qdbg \c -z,
+      \c qdbg-vsc-adapter \c -z and the \c timeZone of a Visual Studio Code launch configuration failing with a UTC
+      offset, such as \c +01:00; an error at the start of \c qdbg or \c qdbg-server is shown on one line, with its
+      call stack with \c -v; the unused \c -r option of \c qdbg-server is removed; \c qdbg-server listens on
+      \c 127.0.0.1 unless a listener is given with \c -l, and with \c -k or the \c QDBG_SERVER_TOKEN environment
+      variable it requires a bearer token from its clients (see @ref debugging_remote)
 
     @subsection dcl_v0_1_2 v0.1.2
     - removed Linenoise stuff to new module
@@ -1858,7 +1872,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         #! Returns the name of the variable and the keys of a path of a value, as \c "h.lines[1]" or \c "h{key}"
-        /** @param p the path: a variable name and optionally \c .member, \c [index], \c {key} or \c {"key"} parts
+        /** @param p the path: a variable name and optionally <tt>.member</tt>, <tt>[index]</tt>, \c {key} or \c {"key"} parts
 
             @return a hash with \c name, the name of the variable, and \c path, the list of the keys
 

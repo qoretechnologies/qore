@@ -146,7 +146,7 @@ abstract string AbstractLineIterator::getValue();
     @param line_separator the end of line string to be readded in case of a field split between lines, if the
     iterator does not report the line end that it removed from the line
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
-    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
+    @param quote_escape the escape of a quote character in a quoted field: <tt>&quot;\\\\&quot;</tt> (the default) for a backslash
     before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a quote in a quoted
     field is only escaped by doubling it and a backslash is an ordinary character
 
@@ -166,7 +166,7 @@ list<string> list = "some,'text with spaces, and commas, here is another one! ,'
     @since
     - %Qore 0.9.8 added this method
     - %Qore 3.0 added the \c quote_escape parameter; a quoted field starting with an even number of quotes, such as
-      <tt>""""</tt>, is read as escaped quotes; a quoted field whose first line ends with its opening quote continues on
+      <tt>&quot;&quot;&quot;&quot;</tt>, is read as escaped quotes; a quoted field whose first line ends with its opening quote continues on
       the next line; and the line ends of a field read from a native line iterator are kept as they are in the data
  */
 list<string> AbstractLineIterator::getSplitLine(string separator, string quote, string line_separator = "\n",

@@ -1433,7 +1433,10 @@ if (NOT QUIC_FOUND_SYSTEM)
     # Link against the FetchContent-built static library targets.
     # nghttp3/ngtcp2 use "_static" suffix for static targets when
     # ENABLE_STATIC_LIB=ON and ENABLE_SHARED_LIB=OFF.
-    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2_static ngtcp2_crypto_ossl_static nghttp3_static)
+    # ngtcp2_static is not named: ngtcp2_crypto_ossl_static links it, so CMake places it after the crypto library,
+    # where the static link needs it; naming it as well put it on the link line twice, which the macOS linker warns
+    # about ("ignoring duplicate libraries")
+    list(APPEND LIBQORE_OPTIONAL_LIBS ngtcp2_crypto_ossl_static nghttp3_static)
 endif()
 
 if (WIN32 OR MINGW OR MSYS)
@@ -1632,7 +1635,6 @@ add_executable(qpp
 target_compile_definitions(qpp PUBLIC HAVE_UNIX_CONFIG_H)
 # just fake qpp for macro
 set(QORE_QPP_EXECUTABLE ${CMAKE_BINARY_DIR}/qpp)
-target_link_libraries(qpp ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
 # malformed documentation tables are silently emitted as literal text, so they must fail the build
 # in this repo; see design/doc-tables.md
@@ -1842,6 +1844,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRToLLVM.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreAOT.cpp
+    lib/QoreAOTBatchMemory.cpp
     lib/QoreAOTRuntime.cpp
     lib/QoreAOTBinary.cpp
     lib/QoreAOTInstRegistry.cpp
@@ -2476,6 +2479,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTRuntime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp\"
@@ -3030,9 +3034,14 @@ set(_qcc_format_sources
 #                      emit objects or reconstruct their serialized contents.
 #   QoreAOTClassRuntime executes already-selected class-local initializers;
 #                      codegen selection remains tracked in QoreIRToLLVM.cpp.
+#   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
+#                      how many objects are compiled at once, never what they
+#                      contain (the objects are the same with any worker count).
 set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTStringRuntime.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTClassRuntime.cpp
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
@@ -3321,6 +3330,18 @@ if (DOXYGEN_FOUND)
     add_dependencies(docs-lib qore)
     add_dependencies(docs docs-lib)
 
+    # the language release notes must keep the structure described in design/release-notes.md; the check is also
+    # run by the check-module-release-notes CI job, so it is optional here when Python is not available
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if (Python3_Interpreter_FOUND)
+        add_custom_target(check-release-notes
+            COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_SOURCE_DIR}/doxygen/check-release-notes.py
+                ${CMAKE_SOURCE_DIR}/doxygen/lang/900_release_notes.dox.tmpl
+            COMMENT "Checking the structure of the language release notes"
+            VERBATIM
+        )
+    endif()
+
     # lang - two-pass build:
     # 1. docs-lang: builds with empty TAGFILES, generates qore.tag for modules to use
     # 2. docs-lang-final: rebuilds after modules are built, with module tagfiles for cross-referencing
@@ -3343,6 +3364,9 @@ if (DOXYGEN_FOUND)
     # qdx and qjar load the binary modules in QORE_DOC_TOOL_MODULES (see QoreMacros.cmake):
     # they must be built first, and neither tool may race a module relink.
     add_dependencies(docs-lang qore ${QORE_DOC_TOOL_MODULES})
+    if (TARGET check-release-notes)
+        add_dependencies(docs-lang check-release-notes)
+    endif()
     # C++ API documentation links to core language types and execution-mode sections.
     add_dependencies(docs-lib docs-lang)
     # docs will depend on docs-lang-final, not docs-lang (added after modules are defined)
@@ -4327,6 +4351,10 @@ endif()
         VERBATIM
     )
     add_dependencies(docs-lang-final-fast qore ${QORE_DOC_TOOL_MODULES})
+    if (TARGET check-release-notes)
+        add_dependencies(docs-lang-final check-release-notes)
+        add_dependencies(docs-lang-final-fast check-release-notes)
+    endif()
 
     # docs-lang-final depends on all module docs (so their tagfiles exist)
     foreach(mod ${QORE_USER_MODULE_NAMES})

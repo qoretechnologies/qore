@@ -146,8 +146,8 @@ module DiscordDataProvider {
       @ref DiscordDataProvider::DiscordDataProviderBase::getAsyncClient() "DiscordDataProviderBase::getAsyncClient()"
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - the child data providers take a @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
-    - added @ref DiscordDataProvider::DiscordDataProvider::getAsyncRestConnection()
-      "DiscordDataProvider::getAsyncRestConnection()" and
+    - added
+      @ref DiscordDataProvider::DiscordDataProvider::getAsyncRestConnection() "DiscordDataProvider::getAsyncRestConnection()" and
       @ref DiscordDataProvider::DiscordDataProviderBase::getRestClient() "DiscordDataProviderBase::getRestClient()";
       @ref DiscordDataProvider::DiscordDataProvider::getRestConnection() "DiscordDataProvider::getRestConnection()"
       is deprecated

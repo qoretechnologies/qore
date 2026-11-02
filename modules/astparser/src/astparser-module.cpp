@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 
+#include "AstHighlighter.h"
 #include "QC_AstParser.h"
 #include "QC_AstTree.h"
 #include "QC_AstTreeSearcher.h"
@@ -58,10 +59,14 @@ extern "C" DLLEXPORT void astparser_qore_module_desc(QoreModuleInfo& mod_info) {
 QoreNamespace AstParserNS("Qore::astparser");
 
 const TypedHashDecl* hashdeclAstExpressionLink;
+const TypedHashDecl* hashdeclAstHighlight;
+const TypedHashDecl* hashdeclAstErrorRange;
 
 static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // hashdecls are initialized first, as the methods of the classes use them
     hashdeclAstExpressionLink = init_hashdecl_AstExpressionLink(AstParserNS);
+    hashdeclAstHighlight = init_hashdecl_AstHighlight(AstParserNS);
+    hashdeclAstErrorRange = init_hashdecl_AstErrorRange(AstParserNS);
     AstParserNS.addSystemClass(initAstTreeClass(AstParserNS));
     AstParserNS.addSystemClass(initAstParserClass(AstParserNS));
     AstParserNS.addSystemClass(initAstTreeSearcherClass(AstParserNS));
@@ -73,5 +78,5 @@ static void astparser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exc
 }
 
 static void astparser_module_delete() {
-    // nothing to do here in this case
+    AstHighlighter::cleanup();
 }

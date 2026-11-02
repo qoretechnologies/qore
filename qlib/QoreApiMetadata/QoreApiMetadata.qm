@@ -51,7 +51,7 @@ module QoreApiMetadata {
 
     - <b>astparser</b> (tree-sitter CST): source-level parsing with documentation comments
     - <b>reflection</b>: runtime introspection with accurate types but no documentation
-    - <b>qpp metadata</b>: builtin documentation from \c .meta.json files
+    - <b>qpp metadata</b>: builtin documentation from <tt>.meta.json</tt> files
 
     @par Data Model
 
@@ -74,7 +74,7 @@ module QoreApiMetadata {
 
     - @ref QoreApiMetadata::AstMetadataExtractor "AstMetadataExtractor" - source parsing via astparser
     - @ref QoreApiMetadata::ReflectionMetadataExtractor "ReflectionMetadataExtractor" - runtime reflection
-    - @ref QoreApiMetadata::QppDocIndex "QppDocIndex" - qpp \c .meta.json documentation loader
+    - @ref QoreApiMetadata::QppDocIndex "QppDocIndex" - qpp <tt>.meta.json</tt> documentation loader
     - @ref QoreApiMetadata::SymbolMerger "SymbolMerger" - merges all pipelines with priority
 
     @par Public API

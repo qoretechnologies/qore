@@ -422,8 +422,7 @@ module LinkedInOrganizationsDataProvider {
     can retrieve the data their organization has generated on the platform.
 
     The following classes are provided:
-    - @ref LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProvider
-      "LinkedInOrganizationsDataProvider": the main data provider class
+    - @ref LinkedInOrganizationsDataProvider::LinkedInOrganizationsDataProvider "LinkedInOrganizationsDataProvider": the main data provider class
 
     @section linkedinorganizationsdataprovider_access Access
 
@@ -454,8 +453,7 @@ module LinkedInOrganizationsDataProvider {
     - the cursor reports the position in a listing sorted <b>newest first</b>, so following it walks
       *backwards* through history.  It is therefore not a "resume where we left off" token in the
       way a delta feed's cursor is; see
-      @ref LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider
-      "LinkedInNewPostDataProvider" for what the \c new-post trigger does instead.
+      @ref LinkedInOrganizationsDataProvider::LinkedInNewPostDataProvider "LinkedInNewPostDataProvider" for what the \c new-post trigger does instead.
 
     The cursor is also reported in two different places depending on the API family — nested under
     \c metadata.paginationCursorMetdata for the feed finders (LinkedIn's own spelling) and directly

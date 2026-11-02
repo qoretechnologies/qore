@@ -99,11 +99,11 @@ sub example(hash<auto> source) {
 %new-style
 
 our int a = 1;                  # this is a global variable
-our (string b, any c, hash d);  # list of global variables
+our (string b, auto c, hash d); # list of global variables
 
 if (a == 1) {
     int a = 2;
-    my (string b, any c);
+    my (string b, auto c);
     # a, b, and c are local variables,
     # the use of which will not affect the
     # global variables of the same name

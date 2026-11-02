@@ -317,7 +317,7 @@ public class AbstractFileLocationHandler {
     #! Returns a location as an absolute URI path
     /** Used by handlers bound to an already-authenticated client, where the location is a path on that client's
         target rather than a URL.  A leading slash is added if missing, since HTTP/2 and HTTP/3 require the
-        \c :path pseudo-header to be absolute and a relative path would otherwise be rejected at the transport
+        <tt>:path</tt> pseudo-header to be absolute and a relative path would otherwise be rejected at the transport
         layer rather than reported here.
 
         @param location the location string
@@ -458,8 +458,8 @@ string uri = AbstractFileLocationHandler::getFileUri("/var/data/my file#1.xml");
 
     #! Returns the local path named by an absolute \c file:// URI
     /** This is the inverse of @ref getFileUri(): use it to read a resource whose URI was obtained by resolving a
-        reference against a \c file:// @ref FileLocationHandler::FileResourceInfo::effective_location
-        "effective location", as the \c file:// scheme of this module takes a literal path rather than a
+        reference against a \c file://
+        @ref FileLocationHandler::FileResourceInfo::effective_location "effective location", as the \c file:// scheme of this module takes a literal path rather than a
         percent-encoded URI.
 
         The URI must have one of the forms \c file:/path, \c file:///path, or \c file://localhost/path (RFC 8089);

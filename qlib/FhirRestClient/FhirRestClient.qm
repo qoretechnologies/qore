@@ -71,14 +71,30 @@ module FhirRestClient {
       helpers with a non-blocking @ref restclientiointro "RestClientIo" client
       supporting HTTP/1.1, HTTP/2, and HTTP/3
     - @ref FhirRestClient::FhirRestClientBase "FhirRestClientBase": the FHIR
-      helper methods, constants, and path and Bundle builders shared by both clients
+      helper methods, constants, and path and Bundle builders shared by both clients, including the FHIR version of a
+      content type; request paths are percent-encoded, and absolute Bundle pagination links are followed by their path
     - @ref FhirRestClient::FhirRestConnection "FhirRestConnection": connection
-      object for \c fhir:// and \c fhirs:// URLs; \c get() returns a
+      object for <tt>fhir://</tt> and <tt>fhirs://</tt> URLs; \c get() returns a
       \c FhirRestClient and \c getAsync() a \c FhirRestClientIo
 
-    @section fhirrestclientexamples FhirRestClient Examples
+    Documentation:
+    - @subpage fhirrestclientexamples "FhirRestClient Examples": direct client use, SMART Backend Services
+      authentication, search, create and update, transaction Bundles, resource builders, connection provider use and
+      OperationOutcome errors
+    - @subpage fhirrestclientrelnotes "Release Notes": the changes in each version
+*/
+/** @page fhirrestclientrelnotes Release Notes
 
-    @subsection fhirrestclientexampledirect Direct Client Use
+
+    @section fhirrestclientv1_0 FhirRestClient v1.0
+    - initial release
+*/
+
+/** @page fhirrestclientexamples FhirRestClient Examples
+
+    @tableofcontents
+
+    @section fhirrestclientexampledirect Direct Client Use
 
     @code{.py}
 %requires FhirRestClient
@@ -102,7 +118,7 @@ hash<auto> patient = client.readResource("Patient", "example");
 printf("Patient: %y\n", patient);
     @endcode
 
-    @subsection fhirrestclientexamplesmartbackend SMART Backend Services Authentication
+    @section fhirrestclientexamplesmartbackend SMART Backend Services Authentication
 
     SMART Backend Services client assertions can be generated directly or
     mapped to @ref RestClientIo::RestClientIo OAuth2 options. The returned
@@ -125,7 +141,7 @@ string assertion = FhirRestClient::FhirRestClient::makeSmartBackendClientAsserti
 });
     @endcode
 
-    @subsection fhirrestclientexamplesearch Search with Repeated Parameters
+    @section fhirrestclientexamplesearch Search with Repeated Parameters
 
     List-valued search parameters are emitted as repeated query parameters. This
     is useful for parameters such as \c _include and \c _revinclude.
@@ -151,7 +167,7 @@ hash<auto> all_pages = client.searchAllResources("Patient", {
 printf("Fetched %d patient entries\n", all_pages.entry.size());
     @endcode
 
-    @subsection fhirrestclientexamplewrite Create and Update Resources
+    @section fhirrestclientexamplewrite Create and Update Resources
 
     Create and update helpers return the full REST response so callers can read
     status codes and FHIR versioning headers such as \c ETag.
@@ -183,11 +199,11 @@ hash<RestClient::RestResponseInfo> patched = client.patchResource("Patient", cre
 },), "application/json-patch+json", updated.headers.etag);
     @endcode
 
-    @subsection fhirrestclientexamplebundle Transaction Bundle Write
+    @section fhirrestclientexamplebundle Transaction Bundle Write
 
     Transaction and batch \c Bundle resources are submitted to the FHIR service
     base. Helper methods build common write entries with the correct
-    \c Bundle.entry.request metadata.
+    <tt>Bundle.entry.request</tt> metadata.
 
     @code{.py}
 hash<auto> patient_entry = FhirRestClient::FhirRestClientBase::makeConditionalCreateBundleEntry(
@@ -201,7 +217,7 @@ hash<RestClient::RestResponseInfo> transaction_response = client.submitBundle(tr
 printf("Transaction status: %d\n", transaction_response.status_code);
     @endcode
 
-    @subsection fhirrestclientexampleobservation Observation Builder
+    @section fhirrestclientexampleobservation Observation Builder
 
     The module includes small FHIR JSON builders for common coded resources and
     elements. UCUM helpers normalize common unit aliases but do not embed a
@@ -226,7 +242,7 @@ hash<auto> provenance = FhirRestClient::fhir_make_provenance({
 });
     @endcode
 
-    @subsection fhirrestclientexampleconnection Connection Provider Use
+    @section fhirrestclientexampleconnection Connection Provider Use
 
     The module registers \c fhir and \c fhirs connection schemes. These schemes
     map to HTTP and HTTPS while applying FHIR JSON defaults.
@@ -247,7 +263,7 @@ FhirRestClient::FhirRestClientIo async_client = conn.getAsync();
 hash<auto> bundle = async_client.searchAllResources("Patient", {"family": "Smith"});
     @endcode
 
-    @subsection fhirrestclientexampleerrors OperationOutcome Errors
+    @section fhirrestclientexampleerrors OperationOutcome Errors
 
     Helper methods map FHIR \c OperationOutcome error responses to
     \c FHIR-OPERATION-OUTCOME exceptions. The exception argument includes the
@@ -265,27 +281,6 @@ try {
     }
 }
     @endcode
-
-    @section fhirrestclientrelnotes Release Notes
-
-    @subsection fhirrestclientv1_0 FhirRestClient v1.0
-    - initial FHIR JSON REST client and \c fhir / \c fhirs connection schemes
-    - \c CapabilityStatement and SMART configuration discovery helpers
-    - SMART OAuth2 endpoint mapping to \c RestClient OAuth2 options
-    - \c FhirRestClientBase::makeSmartOAuth2ClientOptions() accepts caller options whose values all have the same
-      type, such as a literal \c {"oauth2_scopes": ("system/Observation.write",)}
-    - SMART Backend Services JWT client assertion generation and mapping to
-      \c RestClientIo OAuth2 options
-    - CapabilityStatement resource type discovery and content-type FHIR version helpers
-    - basic read, create, transaction/batch Bundle submit, update, conditional update, patch, delete, search,
-      paginated search, and validation helpers
-    - terminology \c $validate-code, \c $lookup, \c $translate, and \c $expand helpers
-    - FHIR JSON builders for Coding, CodeableConcept, Reference, UCUM Quantity,
-      Observation, AuditEvent, and Provenance
-    - OperationOutcome summary and exception mapping for helper methods
-    - \c FhirRestClientIo: the FHIR helper methods with a non-blocking \c RestClientIo client, returned by
-      \c FhirRestConnection::getAsync(); request paths are percent-encoded, and absolute Bundle pagination links
-      are followed by their path
 */
 
 #! the %FhirRestClient namespace holds all public definitions in the %FhirRestClient module

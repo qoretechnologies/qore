@@ -114,8 +114,8 @@ module GeminiBodyShape {
     thinking-level equivalent, except zero: Gemini 3.x cannot turn thinking off, so a budget of zero selects the
     lowest thinking level that every provider accepts for the model, \c LOW (see @ref lowestThinkingLevel()). Even
     \c LOW spends reasoning tokens, and they come out of the output budget: the provider factories report this for
-    each model with \c reasoning_always_on (@ref QoreLlmUtils::AbstractLlmProviderFactory::getModelInfo()
-    "getModelInfo()"), so that a caller can leave room for them. Without an explicit level, other budgets (including
+    each model with \c reasoning_always_on
+    (@ref QoreLlmUtils::AbstractLlmProviderFactory::getModelInfo() "getModelInfo()"), so that a caller can leave room for them. Without an explicit level, other budgets (including
     -1) leave the model default. \c disable_reasoning selects the least thinking of the Gemini 3.x and Gemini 2.5
     models like a budget of zero, and wins over \c reasoning_effort; it is not mapped for other models.
     Older models, including Gemini 2.5, retain sampling parameters and numeric thinking budgets; Gemini 2.5 Pro cannot
@@ -235,13 +235,16 @@ try {
 }
     @endcode
 
-    @section geminibodyshaperelnotes Release Notes
+    See @subpage geminibodyshaperelnotes "Release Notes" for the changes in each version.
+*/
+/** @page geminibodyshaperelnotes Release Notes
+
 
     Gemini and Vertex AI streaming calls now report an incomplete response when the stream ends without
     a model completion or safety-block verdict. Partial output is no longer reported as a successful completion.
 
 
-    @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
+    @section geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
 */
 
@@ -1200,7 +1203,7 @@ class GeminiSchemaShaper {
 
     #! Returns the summary of one schema value
     /** @param node the schema
-        @param levels the levels of nesting still shown in full; below them an object is \c {…} and an array \c […]
+        @param levels the levels of nesting still shown in full; below them an object is \c {…} and an array <tt>[…]</tt>
         @param budget the maximum length of the summary of an object's members, or -1 for no limit (used only at the
         top level)
         @param refs the references being expanded, to show a recursive reference as \c {…}
@@ -2713,7 +2716,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
 
     #! Returns the \c streamGenerateContent SSE path for the given request
     /** The default derives the path from @ref getRequestPath() by replacing its
-        \c :generateContent method with \c :streamGenerateContent and requesting
+        <tt>:generateContent</tt> method with <tt>:streamGenerateContent</tt> and requesting
         SSE framing with \c alt=sse.
 
         @param opts per-call overrides
@@ -2721,7 +2724,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @return the streaming request path
 
         @throw LLM-CONFIG-ERROR the path returned by @ref getRequestPath() does
-        not end with \c :generateContent
+        not end with <tt>:generateContent</tt>
     */
     string getStreamRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         string path = getRequestPath(opts);

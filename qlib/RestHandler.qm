@@ -55,7 +55,8 @@ module RestHandler {
 
     The %RestHandler module provides functionality for implementing REST services with the %Qore HTTP server.
 
-    To use this module, use \c "%requires RestHandler" and \c "%requires HttpServer" in your code.
+    To use this module, use <tt>&quot;%requires RestHandler&quot;</tt> and <tt>&quot;%requires HttpServer&quot;</tt> in
+    your code.
 
     All the public symbols in the module are defined in the RestHandler namespace.
 
@@ -65,8 +66,8 @@ module RestHandler {
     - @ref RestHandler::RestHandler "RestHandler": this class can be used to plug in to the %Qore
       @ref httpserverintro "HttpServer" to expose REST services
 
-    see example file \c "restserver.qr" in the examples directory for an example of using this module to implement REST
-    services.
+    See example file <tt>restserver.qr</tt> in the examples directory for an example of using this module to
+    implement REST services.
 
     @section restserialization Data Serialization Support
 
@@ -79,8 +80,8 @@ module RestHandler {
       de/serialization
 
     URL form encoding is supported as well for message bodies according to
-    <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a> with
-    \c "Content-Type: application/x-www-form-urlencoded".
+    <a href="https://tools.ietf.org/html/rfc1738">RFC 1738 2.2</a> with
+    <tt>&quot;Content-Type: application/x-www-form-urlencoded&quot;</tt>.
 
     For standard REST web service development, the @ref jsonintro "json"
     module will be required to support JSON serialization.
@@ -90,7 +91,23 @@ module RestHandler {
     client's declared capabilities (normally responses are serialized with the same serialization as the incoming
     message).
 
-    @section restimplementation Implementing REST Services
+    @section resthandlerdocs Documentation
+
+    - @subpage restimplementation "Implementing REST Services": dispatching requests to REST action methods, the HTTP
+      method to method name mapping, and the REST handler context argument
+    - @subpage resthierarchy "Implementing Object Hierarchies": child REST objects with
+      @ref RestHandler::AbstractRestClass::addClass() "addClass()" and
+      @ref RestHandler::AbstractRestClass::subClassImpl() "subClassImpl()"
+    - @subpage restargs "Argument and Message Body Handling": URI query arguments and message bodies
+    - @subpage resthandlerresponses "Exceptions and Raw Responses": how exceptions are returned and how to bypass
+      response serialization
+    - @subpage resthandler_relnotes "Release Notes": the changes in each version
+*/
+/** @page restimplementation Implementing REST Services
+
+    @tableofcontents
+
+    @section resthandlerdispatch REST Action Method Dispatching
 
     The class that models a REST entity or object in this module is
     @ref RestHandler::AbstractRestClass "AbstractRestClass".
@@ -105,21 +122,21 @@ module RestHandler {
     - <tt>httpmethod</tt>[<i>RequestRestAction</i>]
 
     For example:
-    - \c "GET /obj HTTP/1.1": matches method \c AbstractRestClass::get()
-    - \c "POST /obj HTTP/1.1": matches method \c AbstractRestClass::post()
-    - \c "DELETE /obj/subobj": match method \c AbstractRestClass::del()
-    - \c "GET /obj?action=status HTTP/1.1": matches method \c AbstractRestClass::getStatus()
-    - \c "PUT /obj?action=status HTTP/1.1": matches method \c AbstractRestClass::putStatus()
-    - \c "PATCH /obj?action=status HTTP/1.1": matches method \c AbstractRestClass::patchStatus()
+    - <tt>&quot;GET /obj HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::get()
+    - <tt>&quot;POST /obj HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::post()
+    - <tt>&quot;DELETE /obj/subobj&quot;</tt>: match method \c AbstractRestClass::del()
+    - <tt>&quot;GET /obj?action=status HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::getStatus()
+    - <tt>&quot;PUT /obj?action=status HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::putStatus()
+    - <tt>&quot;PATCH /obj?action=status HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::patchStatus()
 
     In other words, if a REST action is given in the request (either as a URI parameter or in the message body), the
     first letter of the action name is capitalized and appended to a lower case version of the HTTP method name
     (except \c "DELETE" is mapped to \c "del" because \c "delete" is a keyword); if such a method exists in your
     @ref RestHandler::AbstractRestClass "AbstractRestClass" specialization, then it is called.  If not, then, if the
-    REST action exists under a different HTTP method (ie a request comes with \c "HTTP GET /something?action=setData",
-    and  \c "putSetData" exists, but \c "getSetData" was used for the search), then a 405 \c "Method Not Allowed"
-    response is returned.  If no variation of the requested REST method exists, then a 501 \c "Not Implemented"
-    response is returned.
+    REST action exists under a different HTTP method (ie a request comes with
+    <tt>&quot;HTTP GET /something?action=setData&quot;</tt>, and \c "putSetData" exists, but \c "getSetData" was used
+    for the search), then a 405 <tt>&quot;Method Not Allowed&quot;</tt> response is returned.  If no variation of the
+    requested REST method exists, then a 501 <tt>&quot;Not Implemented&quot;</tt> response is returned.
 
     If a REST request is made with no action name, then a method in your class is attempted to be called with just the
     HTTP method name in lower case (except \c "DELETE" is mapped to \c "del" because \c "delete" is a keyword).
@@ -137,12 +154,12 @@ module RestHandler {
     method is defined in the last REST class, then this method will be run.
 
     For example (assuming no subclass match for the trailing \c "status" path component):
-    - \c "GET /obj/status HTTP/1.1": matches method \c AbstractRestClass::getStatus()
-    - \c "PUT /obj/status HTTP/1.1": matches method \c AbstractRestClass::putStatus()
-    - \c "PATCH /obj/status HTTP/1.1": matches method \c AbstractRestClass::patchStatus()
+    - <tt>&quot;GET /obj/status HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::getStatus()
+    - <tt>&quot;PUT /obj/status HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::putStatus()
+    - <tt>&quot;PATCH /obj/status HTTP/1.1&quot;</tt>: matches method \c AbstractRestClass::patchStatus()
 
-    It is recommended to avoid requiringg an \c "action" parameter, because this approach is generally not compatible
-    with REST schema solutions such as Swaggger/OAS or RAML.
+    It is recommended to avoid requiring an \c "action" parameter, because this approach is generally not compatible
+    with REST schema solutions such as Swagger/OAS or RAML.
 
     In all cases, the signature for these methods looks like:
     @code{.py}
@@ -199,18 +216,21 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     @endcode
 
     Assuming this object corresponds to URL path /files/info.txt, the following requests are supported:
-    - \c "GET /files/info.txt HTTP/1.1": calls the get() method above (no action)
-    - \c "PUT /files/info.txt/chown;user=username HTTP/1.1": calls the putChown() method above (such arguments
-      could also be passed in the message body; see @ref restargs for more information)
-    - \c "PUT /files/info.txt/chmod;mode=420 HTTP/1.1": calls the putChmod() method above (note that 420 = 0644)
-    - \c "PUT /files/info.txt/rename;newPath=/tmp/old.txt HTTP/1.1": calls the putRename() method above
-    - \c "PUT /files/info.txt?action=chown;user=username HTTP/1.1": calls the putChown() method above (such arguments
-      could also be passed in the message body; see @ref restargs for more information)
-    - \c "PUT /files/info.txt?action=chmod;mode=420 HTTP/1.1": calls the putChmod() method above
+    - <tt>&quot;GET /files/info.txt HTTP/1.1&quot;</tt>: calls the get() method above (no action)
+    - <tt>&quot;PUT /files/info.txt/chown;user=username HTTP/1.1&quot;</tt>: calls the putChown() method above (such
+      arguments could also be passed in the message body; see @ref restargs for more information)
+    - <tt>&quot;PUT /files/info.txt/chmod;mode=420 HTTP/1.1&quot;</tt>: calls the putChmod() method above (note that
+      420 = 0644)
+    - <tt>&quot;PUT /files/info.txt/rename;newPath=/tmp/old.txt HTTP/1.1&quot;</tt>: calls the putRename() method
+      above
+    - <tt>&quot;PUT /files/info.txt?action=chown;user=username HTTP/1.1&quot;</tt>: calls the putChown() method above
+      (such arguments could also be passed in the message body; see @ref restargs for more information)
+    - <tt>&quot;PUT /files/info.txt?action=chmod;mode=420 HTTP/1.1&quot;</tt>: calls the putChmod() method above
       (note that 420 = 0644)
-    - \c "PUT /files/info.txt?action=rename;newPath=/tmp/old.txt HTTP/1.1": calls the putRename() method above
+    - <tt>&quot;PUT /files/info.txt?action=rename;newPath=/tmp/old.txt HTTP/1.1&quot;</tt>: calls the putRename()
+      method above
 
-    @subsection rest_context_argument REST Handler Context Argument
+    @section rest_context_argument REST Handler Context Argument
 
     The REST handler context argument (\c cx) has the value passed to it from the HTTP server (documented in
     @ref httpserverutil_request_context), and sets values in the following table
@@ -224,10 +244,10 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     |\c rest_action_method|string|the name of the method that will be called on the @ref RestHandler::AbstractRestClass "AbstractRestClass" object
     |\c rest_api_path|string|the URI path after any prefix is removed used to resolve the REST API method
     |\c rest_method|*string|any original REST action name in the request (if any) with the first letter capitalized
+*/
+/** @page resthierarchy Implementing Object Hierarchies
 
-    @section resthierarchy Implementing Object Hierarchies
-
-    To implement a hisearchy of REST objects in the URL, each @ref RestHandler::AbstractRestClass "AbstractRestClass"
+    To implement a hierarchy of REST objects in the URL, each @ref RestHandler::AbstractRestClass "AbstractRestClass"
     subclass adds static subclass references using the
     @ref RestHandler::AbstractRestClass::addClass() "AbstractRestClass::addClass()" method and can also reimplement
     the @ref RestHandler::AbstractRestClass::subClassImpl() "subClassImpl()" method to return a child
@@ -235,9 +255,9 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     based on REST API arguments or the current application state.
 
     If no such sub object exists, then the method should return @ref nothing, which will cause a
-    <tt>404 Bad Request</tt> response to be returned by (to change this behavior, reimplement
+    <tt>404 Not Found</tt> response to be returned (to change this behavior, reimplement
     @ref RestHandler::RestHandler::unknownSubClassError() "unknownSubClassError()" in your specialization of
-    @ref RestHandler::RestHandler "RestHandler".  Otherwise, if an exception occurs handling the request, a
+    @ref RestHandler::RestHandler "RestHandler").  Otherwise, if an exception occurs handling the request, a
     <tt>409 Conflict</tt> response is returned; see @ref restexceptions for more information.
 
     The following is an example of a class implementing a
@@ -267,7 +287,7 @@ class WorkflowOrderRestClass inherits AbstractRestClass {
         }
     }
 
-    # supports \c GET requests on the object
+    # supports GET requests on the object
     hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
         return RestHandler::makeResponse(200, wf);
     }
@@ -288,12 +308,12 @@ class WorkflowOrderInstanceRestClass inherits AbstractRestClass {
         return oh.order_instanceid;
     }
 
-    # supports \c PUT requests where action=retry on the object
+    # supports PUT requests where action=retry on the object
     hash<HttpHandlerResponseInfo> putRetry(hash<auto> cx, *hash<auto> ah) {
         return RestHandler::makeResponse(200, api.retryOrder(oh.order_instanceid));
     }
 
-    # supports \c GET requests on the object
+    # supports GET requests on the object
     hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
         return RestHandler::makeResponse(200, oh);
     }
@@ -304,8 +324,8 @@ class WorkflowOrderInstanceRestClass inherits AbstractRestClass {
     can add subclasses by calling @ref RestHandler::RestHandler::addClass() "RestHandler::addClass()" as well; the
     value of the @ref RestHandler::AbstractRestClass::name() "AbstractRestClass::name()" method provides the name of
     the subclass.
-
-    @section restargs Argument and Message Body Handling
+*/
+/** @page restargs Argument and Message Body Handling
 
     There are two ways to pass arguments to REST action methods:
     - 1: pass them as URI query arguments
@@ -348,22 +368,26 @@ Content-Length: 16
     @endverbatim
 
     @par REST URI Arguments
-    REST URI arguments are available in the \a "ah" argument to the method.  REST URI arguments are provided
+    REST URI arguments are available in the <tt>ah</tt> argument to the method.  REST URI arguments are provided
     internally with the @ref HttpServer::parse_uri_query() "parse_uri_query" function.\n\n
-    If no URI query argument were provided in the request, then the \a "ah" parameter is populated by the deserialized
-    message body, if it is deserialized to a hash.
+    If no URI query argument were provided in the request, then the <tt>ah</tt> parameter is populated by the
+    deserialized message body, if it is deserialized to a hash.
 
     @par REST Message Body
-    The REST request message body is automatically deserialized and made available as \a "cx.body" in REST action
+    The REST request message body is automatically deserialized and made available as <tt>cx.body</tt> in REST action
     methods.\n\n
     If no message body was included in the client request, then any parsed URI parameters are copied to
-    \a "cx.body".\n\n
+    <tt>cx.body</tt>.\n\n
     For requests with long or complex arguments should send arguments as message bodies and not as serialized URI
     query arguments.
 
     @note The @ref RestHandler::RestHandler "RestHandler" class allows for HTTP \c GET requests to be served
     with a message body, but this is not compliant with HTTP 1.1 RFCs and therefore could lead to compatibility
     problems should this technique be used with other servers; see @ref httpclient_get_with_body for more information.
+*/
+/** @page resthandlerresponses Exceptions and Raw Responses
+
+    @tableofcontents
 
     @section restexceptions Exception Handling in REST Calls
 
@@ -375,7 +399,7 @@ Content-Length: 16
 
     @section resthandler_raw_response Raw Responses
     Set \c "raw_response" in the response hash to bypass serialization and schema validation and return the body
-    as-is.  The response must include a \c "Content-Type" header.
+    as-is.  The response must include a <tt>&quot;Content-Type&quot;</tt> header.
 
     Example:
     @code{.q}
@@ -394,10 +418,10 @@ Content-Length: 16
         }
     }
     @endcode
+*/
+/** @page resthandler_relnotes RestHandler Release Notes
 
-    @section resthandler_relnotes RestHandler Release Notes
-
-    @subsection rh_1_6_7 RestHandler v1.6.7
+    @section rh_1_6_7 RestHandler v1.6.7
     - fixed responses with headers whose values all have the same type, such as a literal
       \c {"X-Total-Count": 42}: a raw response without a \c Content-Type header raised \c RUNTIME-TYPE-ERROR, and
       a serialized response was answered with status 406 (Not Acceptable)
@@ -431,45 +455,45 @@ Content-Length: 16
     - fixed handling \c OPTIONS requests with an \c action parameter
       (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)
 
-    @subsection rh_1_6_3 RestHandler v1.6.3
+    @section rh_1_6_3 RestHandler v1.6.3
     - fixed handling multiple \c Accept headers in requests
       (<a href="https://github.com/qoretechnologies/qore/issues/4969">issue 4969</a>)
 
-    @subsection rh_1_6_2 RestHandler v1.6.2
+    @section rh_1_6_2 RestHandler v1.6.2
     - always set the \c socketobject request context property
       (<a href="https://github.com/qoretechnologies/qore/issues/4666">issue 4666</a>)
 
-    @subsection rh_1_6_1 RestHandler v1.6.1
+    @section rh_1_6_1 RestHandler v1.6.1
     - implemented the @ref RestHandler::RestHandler::errorResponseHeaders() to allow subclasses to return custom
       headers in error responses, such as when a request cannot be deserialized
       (<a href="https://github.com/qoretechnologies/qore/issues/4646">issue 4646</a>)
 
-    @subsection rh_1_6 RestHandler v1.6
+    @section rh_1_6 RestHandler v1.6
     - added request arguments to the
       @ref RestHandler::RestHandler::unknownSubClassError() "RestHandler::unknownSubClassError()"
       and @ref RestHandler::RestHandler::doGetPossibleSubClasses() "RestHandler::doGetPossibleSubClasses()" methods
       (<a href="https://github.com/qoretechnologies/qore/issues/4578">issue 4578</a>)
 
-    @subsection rh_1_5_2 RestHandler v1.5.2
+    @section rh_1_5_2 RestHandler v1.5.2
     - allow a logger to be set in validators
       (<a href="https://github.com/qoretechnologies/qore/issues/4509">issue 4509</a>)
 
-    @subsection rh_1_5_1 RestHandler v1.5.1
+    @section rh_1_5_1 RestHandler v1.5.1
     - improved error handling and sending error messages when exceptions contain non-serializable objects
       (<a href="https://github.com/qoretechnologies/qore/issues/4501">issue 4501</a>)
 
-    @subsection rh_1_5 RestHandler v1.5
+    @section rh_1_5 RestHandler v1.5
     - implemented support for allowing alternate REST method dispatch approaches to be implemented
       (<a href="https://github.com/qoretechnologies/qore/issues/4478">issue 4478</a>)
 
-    @subsection rh_1_4 RestHandler v1.4
+    @section rh_1_4 RestHandler v1.4
     - added missing make*() methods with REST responses to the @ref RestHandler::RestHandler "RestHandler" class
 
-    @subsection rh_1_3_2 RestHandler v1.3.2
+    @section rh_1_3_2 RestHandler v1.3.2
     - fixed a bug handling errors registering stream errors with a stream handler
       (<a href="https://github.com/qoretechnologies/qore/issues/4291">issue 4291</a>)
 
-    @subsection rh_1_3_1 RestHandler v1.3.1
+    @section rh_1_3_1 RestHandler v1.3.1
     - fixed a bug handling exceptions in REST methods with unserializable exception data
       (<a href="https://github.com/qoretechnologies/qore/issues/3667">issue 3667</a>)
     - renamed \c RestHandler::getPossibleSubClasses() to
@@ -483,7 +507,7 @@ Content-Length: 16
     - added debug loggging for REST schema validation errors
       (<a href="https://github.com/qoretechnologies/qore/issues/3410">issue 3410</a>)
 
-    @subsection rh_1_3 RestHandler v1.3
+    @section rh_1_3 RestHandler v1.3
     - added the @ref RestHandler::RestHandler::returnRestException() "RestHandler::returnRestException()" method that
       allows subclasses to determine how exceptions are handled
       (<a href="https://github.com/qoretechnologies/qore/issues/3235">issue 3235</a>)
@@ -495,20 +519,20 @@ Content-Length: 16
       class.
       (<a href="https://github.com/qoretechnologies/qore/issues/2994">issue 2994</a>)
 
-    @subsection rh_1_2_1 RestHandler v1.2.1
+    @section rh_1_2_1 RestHandler v1.2.1
     - updated to return a 400 Bad Request error when REST schema validation fails on messages received (<a href="https://github.com/qoretechnologies/qore/issues/2344">issue 2344</a>)
     - updated to return a 400 Bad Request error when there are string encoding errors with messages received (<a href="https://github.com/qoretechnologies/qore/issues/2398">issue 2398</a>)
     - updated to return a 404 Not Found error when REST subclass does not exist (<a href="https://github.com/qoretechnologies/qore/issues/2405">issue 2405</a>)
     - updated to return a 400 Bad Request error when ENCODING-CONVERSION-ERROR occurs during request parsing (<a href="https://github.com/qoretechnologies/qore/issues/2543">issue 2543</a>)
 
-    @subsection rh_1_2 RestHandler v1.2
+    @section rh_1_2 RestHandler v1.2
     - added logic to allow sensitive data to be masked in log messages (<a href="https://github.com/qoretechnologies/qore/issues/1086">issue 1086</a>)
     - added @ref RestHandler::RestHandler::handleExternalRequest "RestHandler::handleExternalRequest()" to allow for REST API methods to be called internally (i.e. without an HTTP call)
     - updated for complex types (<a href="https://github.com/qoretechnologies/qore/issues/1724">issue 1724</a>)
     - added support for REST schema validation
     - added default support for the HTTP \c "PATCH" method
 
-    @subsection rh_1_1 RestHandler v1.1
+    @section rh_1_1 RestHandler v1.1
     - added support for the HTTP \c OPTIONS method
     - return an error if an unsupported HTTP method is used in a REST call
     - fixed a type error in the ah member of @ref RestHandler::AbstractRestStreamRequestHandler
@@ -518,10 +542,10 @@ Content-Length: 16
     - send errors are now reported in the @ref RestHandler::AbstractRestStreamRequestHandler object so they can be properly logged (<a href="https://github.com/qoretechnologies/qore/issues/734">issue 734</a>)
     - unknown REST class errors with the base class are now reported consistently like all other such errors (<a href="https://github.com/qoretechnologies/qore/issues/859">issue 859</a>)
 
-    @subsection rh_1_0_1 RestHandler v1.0.1
+    @section rh_1_0_1 RestHandler v1.0.1
     - added support for URL form encoded formatted message bodies (<a href="https://github.com/qoretechnologies/qore/issues/1436">issue 1436</a>)
 
-    @subsection rh_1_0 RestHandler v1.0
+    @section rh_1_0 RestHandler v1.0
     - initial release
 */
 

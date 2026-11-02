@@ -104,9 +104,12 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
 "This is a test: æéìœü": header word b: "=?UTF-8?B?VGhpcyBpcyBhIHRlc3Q6IMOmw6nDrMWTw7w=?="
     @endverbatim
 
-    @section mimereleasenotes Release Notes
+    See @subpage mimereleasenotes "Release Notes" for the changes in each version.
+*/
+/** @page mimereleasenotes Release Notes
 
-    @subsection mime_1_9 v1.9
+
+    @section mime_1_9 v1.9
     - <b>changes that can affect backwards compatibility</b>: @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512
       type \c "application/yaml"; it was \c "text/x-yaml", which peers of %Qore releases before 3.0 require (see
       @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
@@ -244,32 +247,32 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - improved type safety by adding explicit type annotations to hash declarations
     - added \c %strict-args, \c %require-types, and \c %enable-all-warnings parse directives
 
-    @subsection mime_1_6_1 v1.6.1
+    @section mime_1_6_1 v1.6.1
     - fixed a bug in encoding URL values with non-ASCII characters in
       @ref Mime::mime_get_urlencoded_string() "mime_get_urlencoded_string()"
       (<a href="https://github.com/qoretechnologies/qore/issues/4935">issue 4935</a>)
     - @ref Mime::mime_decode_urlencoded_string() "mime_decode_urlencoded_string()" is now a wrapper for builtin
       function @ref Qore::decode_url() "decode_url()"
 
-    @subsection mime_1_6 v1.6
+    @section mime_1_6 v1.6
     - added the @ref Mime::is_mime_text() "is_mime_text()" and @ref Mime::is_filename_text() "is_filename_text()" functions
 
-    @subsection mime_1_5 v1.5
+    @section mime_1_5 v1.5
     - added a constant for SVG types
 
-    @subsection mime_1_4_4 v1.4.4
+    @section mime_1_4_4 v1.4.4
     - various fixes from downstream to Mime data handling
       (<a href="https://github.com/qoretechnologies/qore/issues/4352">issue 4352</a>)
 
-    @subsection mime_1_4_3 v1.4.3
+    @section mime_1_4_3 v1.4.3
     - fixed bugs parsing binary data in multipart messages
       (<a href="https://github.com/qoretechnologies/qore/issues/4223">issue 4223</a>)
 
-    @subsection mime_1_4_2 v1.4.2
+    @section mime_1_4_2 v1.4.2
     - fixed bugs parsing binary data in multipart messages
       (<a href="https://github.com/qoretechnologies/qore/issues/2936">issue 2936</a>)
 
-    @subsection mime_1_4_1 v1.4.1
+    @section mime_1_4_1 v1.4.1
     - allow the default type for unknown extensions to be overridden in
       @ref Mime::get_mime_type_from_ext() "get_mime_type_from_ext()"
       (<a href="https://github.com/qoretechnologies/qore/issues/3260">issue 3260</a>)
@@ -277,7 +280,7 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       repeated elements would be overwritten by subsequent keys with the same name
       (<a href="https://github.com/qoretechnologies/qore/issues/2761">issue 2761</a>)
 
-    @subsection mime_1_4 v1.4
+    @section mime_1_4 v1.4
     - added complex type support
     - added the following constants:
       - @ref Mime::MimeTypeMultipartFormData "MimeTypeMultipartFormData"
@@ -290,40 +293,40 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - fixed a bug parsing multipart messages where unnecessary characters were searched
       (<a href="https://github.com/qoretechnologies/qore/issues/2099">issue 2099</a>)
 
-    @subsection mime_1_3_4_1 v1.3.4.1
+    @section mime_1_3_4_1 v1.3.4.1
     - added support for generating and parsing MIME multipart form encoded data
 
-    @subsection mime_1_3_4 v1.3.4
+    @section mime_1_3_4 v1.3.4
     - added dependency on the Util module
     - replaced Mime::MultiPartMessage::getRandomString() with Util::get_random_string()
     - converted to new-style
 
-    @subsection mime_1_3_3 v1.3.3
+    @section mime_1_3_3 v1.3.3
     - added Mime::MimeTypeOctetStream constant
 
-    @subsection mime_1_3_2 v1.3.2
+    @section mime_1_3_2 v1.3.2
     - added mime type for WSDL files (\c "application/wsdl+xml")
     - added mappings for xls and xlst extensions to Mime::MimeTypes
 
-    @subsection mime_1_3_1 v1.3.1
+    @section mime_1_3_1 v1.3.1
     - added Mime::get_mime_type_from_ext()
     - minor corrections
     - added constants for css and js files + more extension -> mime type mappings
 
-    @subsection mime_1_3 v1.3
+    @section mime_1_3 v1.3
     - made get Mime::MultiPartMessage::getMsgAndHeaders() abstract as originally intended
     - added Mime::MultiPartMessage::parseBody() static method
 
-    @subsection mime_1_2_1 v1.2.1
+    @section mime_1_2_1 v1.2.1
     - fixed q-encoding mail headers (always encode '_' chars otherwise they will be decoded as spaces)
 
-    @subsection mime_1_2 v1.2
+    @section mime_1_2 v1.2
     - added MIME decoding functions
 
-    @subsection mime_1_1 v1.1
+    @section mime_1_1 v1.1
     - added initial Mime::MultiPartMessage classes
 
-    @subsection mime_1_0 v1.0
+    @section mime_1_0 v1.0
     - pulled MIME implementation out of other code and made a user module to aggregate MIME definitions and functions
 */
 
@@ -404,7 +407,7 @@ public namespace Mime {
     public const string MimeTypeSoapXml = "application/soap+xml";
 
     #! Mime type for yaml data files (RFC 9512)
-    /** @since Mime 1.8 the value is \c "application/yaml" (RFC 9512); it was \c "text/x-yaml", which peers of %Qore
+    /** @since %Mime 1.9 the value is \c "application/yaml" (RFC 9512); it was \c "text/x-yaml", which peers of %Qore
         releases before 3.0 require, and which @ref Mime::YamlMimeTypes "YamlMimeTypes" and
         @ref Mime::mime_check_equivalent_type() "mime_check_equivalent_type()" treat as equivalent
     */
@@ -429,7 +432,7 @@ public namespace Mime {
     public const string MimeTypeYamlRpc = "application/x-yaml";
 
     #! Official IANA MIME type for YAML (RFC 9512)
-    /** @since Mime 1.7
+    /** @since %Mime 1.9
     */
     public const string MimeTypeYamlApp = "application/yaml";
 
@@ -437,7 +440,7 @@ public namespace Mime {
     /** All of these MIME types represent YAML content and should be treated as equivalent
         when validating content types against API schemas.
 
-        @since Mime 1.8
+        @since %Mime 1.9
     */
     public const hash<string, bool> YamlMimeTypes = {
         MimeTypeYaml: True,
@@ -447,7 +450,7 @@ public namespace Mime {
     };
 
     #! MIME type for CBOR (RFC 8949)
-    /** @since Mime 1.7
+    /** @since %Mime 1.9
     */
     public const string MimeTypeCbor = "application/cbor";
 
@@ -563,7 +566,7 @@ public namespace Mime {
 
         @return True if an equivalent MIME type is found in the accepted set
 
-        @since Mime 1.8
+        @since %Mime 1.9
     */
     public bool sub mime_check_equivalent_type(string content, hash<string, bool> mime_types) {
         # check YAML equivalence
@@ -2110,7 +2113,7 @@ hash: (2 members)
                 key; if a header field is present more than once in a part, the value is a list of all values
                 received in the order received
               - \c body: the body of the part as a string; this can only be a binary object if the \a decode argument is @ref True "True", the part's content-encoding is base64 and the part's content type does not contain the word \c "text"
-              - \c [part]: if the \a decode parameter is @ref True "True" then any content-encoding for parts is decoded automatically; also parts that have parts themselves are processed recursively if this argument is set
+              - <tt>[part]:</tt> if the \a decode parameter is @ref True "True" then any content-encoding for parts is decoded automatically; also parts that have parts themselves are processed recursively if this argument is set
 
             @throw MULTIPART-PARSEBODY-ERROR no boundary found in body; no closing boundary; malformatted part or
             part header; a part has a repeated \c Content-Type or \c Content-Transfer-Encoding header and \a decode
@@ -3100,7 +3103,7 @@ hash: (2 members)
     /** This class is used for sending multiple messages in a digest format, commonly used for
         mailing list digests. Each part defaults to message/rfc822 content type.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartDigestMessage inherits MultiPartMessage {
         #! creates the object
@@ -3152,7 +3155,7 @@ hash: (2 members)
     /** This class is used for HTTP 206 Partial Content responses when serving multiple byte ranges.
         It's commonly used for resumable downloads and video streaming.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartByteRangesMessage inherits MultiPartMessage {
         #! creates the object
@@ -3214,7 +3217,7 @@ hash: (2 members)
         @note The actual cryptographic signing must be performed externally; this class only handles
         the MIME structure.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartSignedMessage inherits MultiPartMessage {
         private {
@@ -3294,7 +3297,7 @@ hash: (2 members)
 
         @note The actual encryption must be performed externally; this class only handles the MIME structure.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartEncryptedMessage inherits MultiPartMessage {
         private {
@@ -3368,7 +3371,7 @@ hash: (2 members)
     /** This class is used for encapsulating complete email messages, commonly used for
         forwarding messages as attachments.
 
-        @since %Mime 1.7
+        @since %Mime 1.9
     */
     public class MultiPartMessageMessage inherits MultiPartMessage {
         #! creates the object

@@ -784,7 +784,7 @@ const RE_Global = QRE_GLOBAL;
 */
 const RE_Unicode = PCRE2_UCP;
 
-//! makes quantifiers ungreedy by default (individual quantifiers can be made greedy by appending \c ?), equivalent to <tt>/U</tt>
+//! makes quantifiers ungreedy by default (individual quantifiers can be made greedy by appending <tt>?</tt>), equivalent to <tt>/U</tt>
 /** @since %Qore 3.0
 */
 const RE_Ungreedy = PCRE2_UNGREEDY;
@@ -922,15 +922,17 @@ hashdecl Qore::UnicodeByteOrderInfo {
 
     @subsection yaml_format_specifications YAML Format Specifications
 
-    The \c "%y" and \c "%Y" format specifications render values so that they can be parsed as YAML; this differs
-    from \c "%n" and \c "%N" for the following types:
+    The \c "%y" and \c "%Y" format specifications produce a YAML-like rendering for display; it is not YAML output
+    (use the \c yaml module's \c make_yaml() for that).  It differs from \c "%n" and \c "%N" for the following
+    types:
     - @ref absolute_dates "absolute date/time values" are rendered as YAML timestamps (ex:
       \c "2026-08-03 11:12:28.795991 +02:00"); the day of the week and the time zone name are omitted, since YAML
       timestamps cannot represent them
     - non-finite @ref float "floating-point" and @ref number "arbitrary-precision number" values are rendered as
       \c ".nan", \c ".inf", and \c "-.inf" instead of \c "nan.0", \c "inf.0", \c "@NaN@", and \c "@Inf@"
-    - @ref object "objects" are rendered as a single-key mapping from the class to the mapping of the object's
-      members; with \c "%y" the member mapping is a flow mapping
+    - @ref object "objects" are shown as a single-key mapping from the object's description to the mapping of its
+      members; this is for display only, as an object has no YAML representation (\c make_yaml() raises an
+      exception for an object); with \c "%y" the member mapping is a flow mapping
       (ex: <tt>{&lt;MyClass object&gt;: {a: 1, b: 2}}</tt>), and with \c "%Y" the members are indented in a block
       mapping:
       @verbatim
@@ -1574,9 +1576,9 @@ list<string> split(string separator, string str, bool with_separator = False, bo
     @param trim_unquoted remove leading and trailing whitespace from unquoted fields
     @param keep_trailing_empty keep the empty final field produced by a subject that ends with the separator; see
     @ref split_trailing_empty_fields
-    @param quote_escape the escape of a quote character in a quoted field: \c "\\\\" (the default) for a backslash
-    before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data, where a backslash is an
-    ordinary character
+    @param quote_escape the escape of a quote character in a quoted field: a string holding a single backslash (the
+    default) for a backslash before the quote; the quote character itself, or an empty string, for RFC 4180 CSV data,
+    where a backslash is an ordinary character
 
     @return a list of each component of a string separated by a separator string, with the separator and any enclosing
     quote characters removed
@@ -1596,7 +1598,7 @@ list<string> l = split(",", "some,'text with spaces',here", "'"); # returns ("so
     - %Qore 0.8.6 the \c trim_unquoted parameter was added
     - %Qore 0.9.4 processes doubled quote characters as an escaped quote within a quoted field
     - %Qore 3.0 added the \c keep_trailing_empty and \c quote_escape parameters; a quoted field starting with an
-      even number of quotes, such as <tt>""""</tt>, is split as escaped quotes, and a quoted field without its closing
+      even number of quotes, such as <tt>&quot;&quot;&quot;&quot;</tt>, is split as escaped quotes, and a quoted field without its closing
       quote raises \c SPLIT-ERROR
  */
 list<string> split(string separator, string str, string quote, bool trim_unquoted = False, bool keep_trailing_empty = False, string quote_escape = "\\") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -2579,7 +2581,7 @@ string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_O
     - \a thousands_separator and \a decimal_separator are single characters defining the thousands and decimal
       separator characters respectively, and
     - \a decimals is one or more digits defining how may decimals should appear after the decimal point
-    - if \a thousands_separator is the special character \c ?, then no thousands separator character will be output
+    - if \a thousands_separator is the special character <tt>?</tt>, then no thousands separator character will be output
     @param value the number to format
 
     @return a string of a formatted number according to a number argument and a format string; if the format string
@@ -2593,7 +2595,7 @@ string nstr = format_number(".,3", -48392093894.2349); # returns "-48.392.093.89
     @see <float>::format()
 
     @since
-    - %Qore 2.0 implemented support for supressing the thousands separator with the \c ? character
+    - %Qore 2.0 implemented support for supressing the thousands separator with the <tt>?</tt> character
  */
 string format_number(string format, softfloat value) [flags=CONSTANT,NAMED_ARGS] {
    return format_float_intern(*format, value, xsink);
@@ -2632,8 +2634,8 @@ string reverse(softstring str) [flags=CONSTANT,NAMED_ARGS] {
 print("hello\n");
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see printf() for a function that allows for formatted output
@@ -2899,8 +2901,8 @@ string vsprintf_bounded(string format, softlist<auto> values, *hash<FormatBounds
 f_printf("%5s", "a long string"); # will print out "a lon"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see
@@ -2937,8 +2939,8 @@ string f_printf() [flags=NOOP] {
 printf("%5s", "a long string"); # will print out "a long string"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see
@@ -2975,8 +2977,8 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see
@@ -3008,8 +3010,8 @@ string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TER
 vprintf("%5s %3d", ("a long string", 5000)); # will print out "a long string 5000"
     @endcode
 
-    @note the output is written whole, also when standard output is nonblocking (see @ref file_blocking_io
-    "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
+    @note the output is written whole, also when standard output is nonblocking (see
+    @ref file_blocking_io "ReadOnlyFile"); a wait for room ends with a \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED exception when the
     thread is cancelled or its @ref Qore::Program "Program" is interrupted
 
     @see

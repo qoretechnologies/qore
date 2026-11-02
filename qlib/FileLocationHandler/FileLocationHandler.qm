@@ -95,7 +95,7 @@ FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-08.csv", t
     - @ref FileLocationHandler::FileLocationHandlerConnection "FileLocationHandlerConnection": class handling
       \c "conn://" and \c "connection://" locations (a named connection plus a path)
     - @ref FileLocationHandler::FileLocationHandlerData "FileLocationHandlerData": class handling \c "data://"
-      locations (immedidate data in the location URL)
+      locations (immediate data in the location URL)
     - @ref FileLocationHandler::FileLocationHandlerDataProvider "FileLocationHandlerDataProvider": class driving an
       application's declared file API for \c "conn://" locations; not registered for a scheme of its own
     - @ref FileLocationHandler::FileLocationHandlerFile "FileLocationHandlerFile": class handling \c "file://"
@@ -114,15 +114,28 @@ FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-08.csv", t
     @section filelocationhandler_env FileLocationHandler Environment variable
 
     The \c QORE_FILE_LOCATION_HANDLERS environment variable will be read to initialize modules that provide support
-    for custom URL schemes; multiple modules can be separated by the OS-specific path separator (\c : on Linux / UNIX,
-    \c ; on Windows).
+    for custom URL schemes; multiple modules can be separated by the OS-specific path separator (<tt>:</tt> on Linux / UNIX,
+    <tt>;</tt> on Windows).
 
     Each module listed in this environment variable should call either
     @ref FileLocationHandler::FileLocationHandler::registerHandler() "FileLocationHandler::registerHandler()" or
     @ref FileLocationHandler::FileLocationHandler::tryRegisterHandler() "FileLocationHandler::tryRegisterHandler()" in
     its \c init code to register a handler for a new scheme.
 
-    @section filelocationhandler_conn Named Connection Locations
+    @section filelocationhandlerdocs FileLocationHandler Documentation
+
+    - @subpage filelocationhandler_conn "Named Connection Locations": <tt>conn://</tt> locations, how a named
+      connection is resolved, and restricting which connections a location string may reach
+    - @subpage filelocationhandler_nonblocking "Non-Blocking Reads": reading a location without blocking a thread
+    - @subpage filelocationhandler_resources "Resources with Metadata": retrieving data with the URI it came from,
+      its media type, and HTTP response details
+    - @subpage filelocationhandler_http "HTTP and REST Locations": how HTTP and REST locations are retrieved, and
+      their error, timeout, and redirect behavior
+    - @subpage filelocationhandler_relnotes "Release Notes": the changes in each version
+*/
+/** @page filelocationhandler_conn Named Connection Locations
+
+    @tableofcontents
 
     Locations with the \c conn or \c connection scheme name a connection and a path:
     @verbatim
@@ -142,12 +155,12 @@ string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/outb
     this module declares no dependency on it.  The \c QORE_CONNECTION_PROVIDERS environment variable must name at
     least one connection provider module.
 
-    @subsection filelocationhandler_conn_resolution How a Named Connection Is Resolved
+    @section filelocationhandler_conn_resolution How a Named Connection Is Resolved
 
     A connection can serve file locations in one of two ways; they are tried in this order:
 
     |!Order|!Mechanism|!Used by
-    |1|The connection returns its own handler from \c ConnectionProvider::AbstractConnection::getFileLocationHandler()|Connections that can stream or poll natively
+    |1|The connection returns its own handler from <tt>ConnectionProvider::AbstractConnection::getFileLocationHandler()</tt>|Connections that can stream or poll natively
     |2|The connection's application declares a \c DataProvider::DataProviderFileApiInfo file API, which is driven generically by @ref FileLocationHandler::FileLocationHandlerDataProvider "FileLocationHandlerDataProvider"|Any application that declares one
 
     A connection matching neither raises \c LOCATION-ERROR naming the connection and its type, so an unsupported
@@ -176,33 +189,7 @@ FileLocationHandler::writeFileToLocation("conn://prod-s3/reports/2026-09.csv", r
 string csv = FileLocationHandler::getTextFileFromLocation("conn://prod-sftp/orders.csv{encoding=ISO-8859-1}");
     @endcode
 
-    @section filelocationhandler_nonblocking Non-Blocking Reads
-
-    @ref FileLocationHandler::FileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()" returns an
-    @ref Qore::AbstractPollOperation "AbstractPollOperation" that reads the file without holding a thread blocked on
-    I/O.  No I/O is performed until the operation is driven, so the poller can be created cheaply and handed to an
-    event loop or to the async I/O controller.
-
-    Supported by \c "file://", \c "data://", \c "http://", \c "https://", \c "rest://", \c "rests://", \c "ftp://",
-    \c "ftps://", and \c "sftp://" locations, and by \c conn:// locations resolving to a connection that provides its
-    own handler.  \c "sftp://" requires the \c ssh2 module to provide \c SFTPClient::startPollGetFile().
-
-    @par Example
-    @code{.py}
-AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation("ftp://user:pass@host/orders.csv");
-while (!op.goalReached()) {
-    *hash<SocketPollInfo> info = op.continuePoll();
-    if (!info) {
-        break;
-    }
-    # wait for the descriptor to become ready; an event loop would register it instead
-    Socket::poll((info,), 30s);
-}
-binary contents = op.getOutput();
-    @endcode
-
-    @note Handlers that cannot support non-blocking reads throw \c UNIMPLEMENTED with a message saying why, so the
-    caller can fall back to a blocking read.
+    @section filelocationhandler_conn_filter Restricting Reachable Connections
 
     @note Location strings are frequently derived from user or partner data, and a named connection can reach any
     configured system.  Applications accepting untrusted location strings should restrict which connections are
@@ -222,8 +209,40 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
     If no filter is set in code, \c QORE_FILE_LOCATION_CONNECTIONS is used instead; when set, it lists the allowed
     connection names separated by @ref Qore::PathSep "PathSep" characters.  If neither is set, all connections are
     allowed.
+*/
+/** @page filelocationhandler_nonblocking Non-Blocking Reads
 
-    @section filelocationhandler_resources Resources with Metadata
+    @tableofcontents
+
+    @ref FileLocationHandler::FileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()" returns an
+    @ref Qore::AbstractPollOperation "AbstractPollOperation" that reads the file without holding a thread blocked on
+    I/O.  No I/O is performed until the operation is driven, so the poller can be created cheaply and handed to an
+    event loop or to the async I/O controller.
+
+    Supported by \c "file://", \c "data://", \c "http://", \c "https://", \c "rest://", \c "rests://", \c "ftp://",
+    \c "ftps://", and \c "sftp://" locations, and by <tt>conn://</tt> locations resolving to a connection that provides its
+    own handler.  \c "sftp://" requires the \c ssh2 module to provide \c SFTPClient::startPollGetFile().
+
+    @par Example
+    @code{.py}
+AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation("ftp://user:pass@host/orders.csv");
+while (!op.goalReached()) {
+    *hash<SocketPollInfo> info = op.continuePoll();
+    if (!info) {
+        break;
+    }
+    # wait for the descriptor to become ready; an event loop would register it instead
+    Socket::poll((info,), 30s);
+}
+binary contents = op.getOutput();
+    @endcode
+
+    @note Handlers that cannot support non-blocking reads throw \c UNIMPLEMENTED with a message saying why, so the
+    caller can fall back to a blocking read.
+*/
+/** @page filelocationhandler_resources Resources with Metadata
+
+    @tableofcontents
 
     @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()" and
     @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation() "getResourcePollerForLocation()"
@@ -248,10 +267,10 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
     @ref Qore::resolve_url() "resolve_url()" to resolve them.  It is known for these locations:
 
     |!Scheme|!Effective location
-    |\c file://, or no scheme|the absolute \c file:// URI of the file read, with \c "." and \c ".." removed and each path segment percent-encoded; see @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
-    |\c http://, \c https://, \c rest://, \c rests://|the URL of the final response, after any redirects
-    |\c conn://, \c connection://|the effective location reported for the resolved target, if any
-    |\c data://|none: the data is not retrieved from anywhere
+    |<tt>file://</tt>, or no scheme|the absolute <tt>file://</tt> URI of the file read, with <tt>.</tt> and <tt>..</tt> removed and each path segment percent-encoded; see @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
+    |<tt>http://</tt>, <tt>https://</tt>, <tt>rest://</tt>, <tt>rests://</tt>|the URL of the final response, after any redirects
+    |<tt>conn://</tt>, <tt>connection://</tt>|the effective location reported for the resolved target, if any
+    |<tt>data://</tt>|none: the data is not retrieved from anywhere
 
     Other handlers, including handlers registered by applications, report only what they can observe: the default
     implementation reads the data with the handler's existing methods and reports only the requested location, so
@@ -280,7 +299,7 @@ string base = res.info.effective_location ?? res.info.requested_location;
 string import_location = resolve_url(base, "../types/common.xsd", RESOLVE_URL_STRICT | RESOLVE_URL_NO_FRAGMENT);
     @endcode
 
-    The \c file:// scheme of this module takes a literal path, while an effective location is a percent-encoded
+    The <tt>file://</tt> scheme of this module takes a literal path, while an effective location is a percent-encoded
     URI; convert a \c file URI obtained by resolving a reference with
     @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri() "AbstractFileLocationHandler::getPathFromFileUri()"
     before retrieving it:
@@ -293,8 +312,10 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
 
     @note Response headers can be sensitive (for example \c Set-Cookie); the metadata is returned to the caller
     and is never logged by this module
+*/
+/** @page filelocationhandler_http HTTP and REST Locations
 
-    @section filelocationhandler_http HTTP and REST Locations
+    @tableofcontents
 
     \c "http://" and \c "https://" locations are retrieved with the
     @ref httpclientiointro "HttpClientIo" module, which supports HTTP/1.1, HTTP/2, and
@@ -304,9 +325,9 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
 
     |!Operation|!Implementation
     |text and binary reads, writes, and resources|the request is made as for the non-blocking reads, and it is driven on the calling thread until it completes
-    |non-blocking reads (\c getIoPollerForLocation() and \c getResourcePollerForLocation())|a poller that performs no blocking I/O: connections are established and responses are received with the event notifiers of the connection manager, and redirects are followed as the poller is driven
-    |stream reads (\c getBinaryStreamFromLocation() and \c getStreamReaderFromLocation())|the response headers are received before the stream is returned, so an error response raises an exception there; the body is read from the network as the stream is read, and any content encoding is decoded as it is read
-    |stream writes (\c getOutputStreamForLocation())|the data written is sent as the request body while it is written (with chunked transfer encoding for HTTP/1.1); the response status is checked when the stream is closed and reported by \c OutputStreamWrapper::waitForIo()
+    |non-blocking reads (\c getIoPollerForLocation() and <tt>getResourcePollerForLocation()</tt>)|a poller that performs no blocking I/O: connections are established and responses are received with the event notifiers of the connection manager, and redirects are followed as the poller is driven
+    |stream reads (\c getBinaryStreamFromLocation() and <tt>getStreamReaderFromLocation()</tt>)|the response headers are received before the stream is returned, so an error response raises an exception there; the body is read from the network as the stream is read, and any content encoding is decoded as it is read
+    |stream writes (<tt>getOutputStreamForLocation()</tt>)|the data written is sent as the request body while it is written (with chunked transfer encoding for HTTP/1.1); the response status is checked when the stream is closed and reported by \c OutputStreamWrapper::waitForIo()
 
     Requests and responses keep the behavior of the synchronous @ref Qore::HTTPClient "HTTPClient" used by earlier
     versions:
@@ -315,7 +336,7 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       non-blocking data reader returns the body of an error response, as it always has
     - a timeout raises \c SOCKET-TIMEOUT; the \c timeout option is the maximum time to wait for any I/O event
     - redirect errors raise \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED, \c HTTP-CLIENT-REDIRECT-ERROR, or
-      \c HTTP-CLIENT-UNKNOWN-PROTOCOL; up to 5 redirects are followed for \c http(s):// locations
+      \c HTTP-CLIENT-UNKNOWN-PROTOCOL; up to 5 redirects are followed for <tt>http(s)://</tt> locations
     - user information in the location is sent with HTTP basic authentication, and server certificates are only
       verified if the \c ssl_verify_cert option is set
     - content encodings are decoded unless the \c encoding_passthru option is set
@@ -323,13 +344,14 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       <tt>&quot; &lt; &gt; \\ ^ &#96; { | }</tt>) are percent-encoded; percent-encoded octets are sent as given
 
     Requests send an \c Accept header accepting any media type (<tt>&#42;/&#42;</tt>); a request body is sent with
-    \c "Content-Type: application/octet-stream" (binary data) or \c "text/plain" with the string's character
-    encoding.  Each request made for an unbound \c http(s):// location uses its own connection manager, like the
+    <tt>Content-Type: application/octet-stream</tt> (binary data) or \c "text/plain" with the string's character
+    encoding.  Each request made for an unbound <tt>http(s)://</tt> location uses its own connection manager, like the
     synchronous client created for each request in earlier versions.
+*/
+/** @page filelocationhandler_relnotes Release Notes
 
-    @section filelocationhandler_relnotes Release Notes
 
-    @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
+    @section filelocationhandler_v3_0 FileLocationHandler v3.0
     - fixed HTTP request headers whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>:
       the \c headers option of
       @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "getHttpHandlerForClient()" raised
@@ -341,23 +363,21 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       reads do (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"), with the \c encoding option as
       the assumed encoding; the option was used for every response
     - added @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
-      and @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri()
-      "AbstractFileLocationHandler::getPathFromFileUri()" to convert between local paths and \c file URIs
-    - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation()
-      "FileLocationHandler::getResourceFromLocation()" and
-      @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation()
-      "FileLocationHandler::getResourcePollerForLocation()", which return a resource's data together with its
+      and
+      @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri() "AbstractFileLocationHandler::getPathFromFileUri()" to convert between local paths and \c file URIs
+    - added
+      @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "FileLocationHandler::getResourceFromLocation()" and
+      @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation() "FileLocationHandler::getResourcePollerForLocation()", which return a resource's data together with its
       metadata: the effective location it was retrieved from, its media type and character encoding, and for
       HTTP locations the final response headers and the redirects followed; see
       @ref filelocationhandler_resources
     - \c "sftp://" locations (and \c conn:// locations resolving to them) support non-blocking reads with
-      @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
-      "getIoPollerForLocation()"; requires the \c ssh2 module with
+      @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()"; requires the \c ssh2 module with
       \c SFTPClient::startPollGetFile() (ssh2 2.0+)
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - \c "ftp://" and \c "ftps://" locations (and \c conn:// locations resolving to them) support non-blocking reads
-      with @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
-      "getIoPollerForLocation()"
+      with
+      @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()"
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added support for \c conn:// and \c connection:// locations naming a connection and a path
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
@@ -365,8 +385,8 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       application declaring a \c DataProvider::DataProviderFileApiInfo file API can serve \c conn:// locations
       generically; connections that can stream or poll natively supply their own handler instead, which takes
       precedence (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
-    - added @ref FileLocationHandler::AbstractFileLocationHandler::selfValidatesOptions()
-      "AbstractFileLocationHandler::selfValidatesOptions()" so that handlers that cannot know their effective
+    - added
+      @ref FileLocationHandler::AbstractFileLocationHandler::selfValidatesOptions() "AbstractFileLocationHandler::selfValidatesOptions()" so that handlers that cannot know their effective
       option set until the location is resolved can validate options themselves
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added @ref FileLocationHandler::AbstractFileLocationHandler::isBound() "AbstractFileLocationHandler::isBound()"
@@ -381,39 +401,38 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
         when the stream is opened instead of returning an empty stream
       - stream writes report an error response from \c OutputStreamWrapper::waitForIo()
       - the \c http_version option accepts \c "2.0" and \c "3.0"
-    - added @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient()
-      "FileLocationHandler::getHttpHandlerForClient()", which returns a handler bound to an already-authenticated
+    - added
+      @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "FileLocationHandler::getHttpHandlerForClient()", which returns a handler bound to an already-authenticated
       @ref Qore::HTTPClient "HTTPClient" or to an \c HttpClientIo::HttpClientConnectionManager with a URL, and
-      @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient()
-      "FileLocationHandler::getRestHandlerForClient()", which returns a handler bound to a
+      @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient() "FileLocationHandler::getRestHandlerForClient()", which returns a handler bound to a
       \c RestClientIo::RestClientIo client, or to one created from a synchronous \c RestClient::RestClient
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - fixed reading text from \c rest:// and \c rests:// locations with options whose values all have the same type,
       such as a literal <tt>{"encoding": "utf-8"}</tt>; adding the \c Accept header raised \c RUNTIME-TYPE-ERROR
 
-    @subsection filelocationhandler_v2_3 FileLocationHandler v2.3
+    @section filelocationhandler_v2_3 FileLocationHandler v2.3
     - implemented support for non-blocking I/O from file handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
 
-    @subsection filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
+    @section filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
     - allow handler information to be returned
       (<a href="https://github.com/qoretechnologies/qore/issues/4726">issue 4726</a>)
 
-    @subsection filelocationhandler_v2_2 FileLocationHandler v2.2
+    @section filelocationhandler_v2_2 FileLocationHandler v2.2
     - added support for \c rest:// and \c rests:// locations
       (<a href="https://github.com/qoretechnologies/qore/issues/4669">issue 4669</a>)
     - added support for runtime extensibility from environment variables
       (<a href="https://github.com/qoretechnologies/qore/issues/4667">issue 4667</a>)
 
-    @subsection filelocationhandler_v2_1 FileLocationHandler v2.1
+    @section filelocationhandler_v2_1 FileLocationHandler v2.1
     - added support for immediate <tt>data://</tt> locations
       (<a href="https://github.com/qoretechnologies/qore/issues/4626">issue 4626</a>)
 
-    @subsection filelocationhandler_v2_0 FileLocationHandler v2.0
+    @section filelocationhandler_v2_0 FileLocationHandler v2.0
     - updated for read/write operations and added streaming APIs
       (<a href="https://github.com/qoretechnologies/qore/issues/4424">issue 4424</a>)
 
-    @subsection filelocationhandler_v1_0 FileLocationHandler v1.0
+    @section filelocationhandler_v1_0 FileLocationHandler v1.0
     - initial release
 */
 

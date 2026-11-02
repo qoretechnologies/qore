@@ -341,8 +341,8 @@ GlobalVar var = GlobalVar::forName("::ENV");
     @return a global variable object corresponding to the name or namespace-justified path provided as an argument
 
     @throw UNKNOWN-GLOBAL-VAR cannot find a global variable with the given name or path, or the variable name contains a NUL character (since %Qore 3.0)
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character
-encoding" and an error occurs during encoding conversion
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+@ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static GlobalVar GlobalVar::forName(string path) [flags=RET_VALUE_ONLY] {
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
@@ -377,8 +377,8 @@ GlobalVar var = GlobalVar::forName(pgm, "::ENV");
     @return a global variable object corresponding to the name or namespace-justified path provided as an argument
 
     @throw UNKNOWN-GLOBAL-VAR cannot find a global variable with the given name or path, or the variable name contains a NUL character (since %Qore 3.0)
-    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character
-encoding" and an error occurs during encoding conversion
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+@ref default_encoding "default character encoding" and an error occurs during encoding conversion
     @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static GlobalVar GlobalVar::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {

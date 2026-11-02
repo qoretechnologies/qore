@@ -15,6 +15,16 @@
     - fixed @ref Qore::Json::JsonRpcClient::callIdWithInfo() "JsonRpcClient::callIdWithInfo()" and
       @ref Qore::Json::JsonRpcClient::callIdArgsWithInfo() "JsonRpcClient::callIdArgsWithInfo()" taking the call's ID
       as the method name and the method name as the first method argument
+    - a string with a NUL character is serialized whole, with the NUL character escaped as \c \\u0000; it was cut at
+      the NUL character
+    - the message of a JSON-RPC 1.1 error made by \c make_jsonrpc11_error() is serialized as a JSON string; only
+      double quotes and backslashes were escaped in it, so that a control character such as a line break made
+      invalid JSON
+    - fixed a crash of \c make_jsonrpc_request() for a JSON-RPC 1.0 request (version \c "1.0" or no version) with
+      no params
+    - the JSON-RPC version of a @ref Qore::Json::JsonRpcClient "JsonRpcClient" and of the JSON-RPC functions is
+      written to the request whole as a JSON string; a double quote in it ended the string, and a NUL character cut
+      it
     - a key with a NUL character in a JSON document, which a hash key cannot hold, raises \c JSON-PARSE-ERROR, which
       gives the key and the byte offset of the NUL character: the key was cut at the NUL character and could replace
       the value of another key

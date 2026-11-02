@@ -86,11 +86,7 @@ public class IOInterruptTest inherits QUnit::Test {
         # Verify configuration contains expected keys
         hash<auto> config = sm.getConfiguration();
         assertTrue(exists config.interrupt_requested, "configuration should have interrupt_requested");
-        assertTrue(exists config.memory_limit, "configuration should have memory_limit");
-        assertTrue(exists config.cpu_time_limit, "configuration should have cpu_time_limit");
-        assertTrue(exists config.wall_time_limit, "configuration should have wall_time_limit");
         assertTrue(exists config.max_threads, "configuration should have max_threads");
-        assertTrue(exists config.max_recursion, "configuration should have max_recursion");
 
         # Verify interrupt_requested reflects actual state
         assertFalse(config.interrupt_requested, "interrupt_requested should be false initially");

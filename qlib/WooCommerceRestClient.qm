@@ -482,8 +482,8 @@ hash<RestResponseInfo> resp = wc.restGet("products?per_page=10");
 */
 public class WooCommerceRestClientIo inherits RestClientIo::RestClientIo {
     #! Creates the object with the given options
-    /** @param opts the options of @ref WooCommerceRestClient::WooCommerceRestClient::constructor()
-        "WooCommerceRestClient::constructor()"; the options returned by
+    /** @param opts the options of
+        @ref WooCommerceRestClient::WooCommerceRestClient::constructor() "WooCommerceRestClient::constructor()"; the options returned by
         @ref RestClientIo::RestClientIo::getConstructorOptions() "getConstructorOptions()", which have the API URL
         and the Basic authentication credentials instead of \c store_url, \c consumer_key and \c consumer_secret,
         are also accepted, so that @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" works

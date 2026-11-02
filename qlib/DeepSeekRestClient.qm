@@ -107,8 +107,7 @@ printf("%Y\n", ans.body);
     @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off
     (\c thinking \c {"type": "disabled"}) on the DeepSeek V4 models; requests for models whose reasoning controls
     have not been verified are sent as given.
-    @ref DeepSeekRestClient::DeepSeekRestClientBase::getModelReasoningEfforts()
-    "DeepSeekRestClientBase::getModelReasoningEfforts()" returns the reasoning settings of the current models, and
+    @ref DeepSeekRestClient::DeepSeekRestClientBase::getModelReasoningEfforts() "DeepSeekRestClientBase::getModelReasoningEfforts()" returns the reasoning settings of the current models, and
     the default chat model is \c deepseek-flash. Forced tool calls are supported in non-thinking mode, and strict
     tool schemas are sent to the beta endpoint. Requested output schemas are applied in JSON mode with schema
     instructions, and strict output is validated locally. An explicit \c user_id is passed on for cache and

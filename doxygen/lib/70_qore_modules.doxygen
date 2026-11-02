@@ -7,7 +7,7 @@
     Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
-    Since %Qore 2.0, binary modules use Module API 2.0, which requires a single
+    Since %Qore 3.0, binary modules use Module API 2.0, which requires a single
     \c extern \c "C" module description function instead of the old-style exported global variables.
 
     @subsection module_header Module Description Function

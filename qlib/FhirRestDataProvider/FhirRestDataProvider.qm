@@ -51,8 +51,8 @@ module FhirRestDataProvider {
     <img src="fhir-logo.svg" width="96" alt="FhirRestDataProvider module logo"/>
 
     The %FhirRestDataProvider module exposes HL7 FHIR JSON servers through the
-    Qore DataProvider API. It builds on the @ref FhirRestClient::FhirRestClient
-    "FhirRestClient" module and targets FHIR R4-compatible servers.
+    Qore DataProvider API. It builds on the
+    @ref FhirRestClient::FhirRestClient "FhirRestClient" module and targets FHIR R4-compatible servers.
 
     This module provides a generic provider foundation for FHIR REST servers:
     - metadata discovery with \c CapabilityStatement and SMART configuration
@@ -187,8 +187,8 @@ hash<auto> patched = provider.getChildProvider("resources").getChildProvider("pa
 
     @subsection fhirrestdataproviderexampleerrors OperationOutcome Errors
 
-    Helper actions preserve @ref FhirRestClient::FhirRestClient
-    "FhirRestClient" exception behavior. FHIR \c OperationOutcome error responses
+    Helper actions preserve
+    @ref FhirRestClient::FhirRestClient "FhirRestClient" exception behavior. FHIR \c OperationOutcome error responses
     are mapped to \c FHIR-OPERATION-OUTCOME exceptions with the parsed outcome in
     the exception argument.
 

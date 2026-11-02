@@ -143,6 +143,56 @@
     QORE_DOC_DEFINES="NoXml,NoYaml" make docs
     @endcode
 
+    @subsection qore_cmake_module_docs Module Documentation and Cross-Module Links
+
+    The shared HTML header, stylesheet, icon and logo of the documentation are taken from the directory of the
+    SDK's installed \c Doxyfile.in, not from the module's \c CMAKE_INSTALL_PREFIX, so a module installed under
+    another prefix than %Qore can build its documentation with them.  The HTML footer is the module's own
+    \c docs/footer_template.html.
+
+    When %Qore's documentation was built before installation, the SDK installs the reference index of the language
+    documentation (\c share/qore/qore.tag) and the indexes of the bundled modules (\c share/qore/module-tags); an
+    external binary module whose documentation was built installs its index there too, under
+    \c CMAKE_INSTALL_DATADIR (default: \c share under the module's install prefix; \c DESTDIR staging and
+    <tt>cmake --install --prefix</tt> are honored).  The documentation of a module links to %Qore types and to the
+    API of the modules named in \c QORE_DOXYGEN_MODULES, set before \c find_package(Qore):
+    @code
+    set(QORE_DOXYGEN_MODULES DataProvider reflection json yaml)
+    find_package(Qore REQUIRED)
+    @endcode
+
+    <table>
+    <tr><th>Variable</th><th>Description</th></tr>
+    <tr><td>\c QORE_DOXYGEN_MODULES</td><td>The installed modules whose API documentation the module links to;
+        indexes that were not built are omitted</td></tr>
+    <tr><td>\c QORE_DOXYGEN_MODULE_TAG_DIR</td><td>The directory of the module indexes (default:
+        \c share/qore/module-tags of the %Qore installation)</td></tr>
+    <tr><td>\c QORE_DOXYGEN_MODULE_URL</td><td>The base HTML URL of the module documentation;
+        <tt>/&lt;module&gt;/html</tt> is appended (default: <tt>https://docs.qore.org/current/modules</tt>)</td></tr>
+    <tr><td>\c QORE_DOXYGEN_TAGFILE</td><td>The language reference index (default: \c share/qore/qore.tag of the
+        %Qore installation)</td></tr>
+    <tr><td>\c QORE_DOXYGEN_TAG_URL</td><td>The HTML location of the language reference (default:
+        <tt>https://docs.qore.org/current/lang/html</tt>)</td></tr>
+    </table>
+
+    A binary module that includes user modules builds its documentation in two passes, so that the binary module
+    and its user modules link to each other: the first pass generates the indexes and the final pass renders the
+    pages with all of them.  Call \c qore_binary_module_two_phase_docs() after \c qore_external_binary_module() and
+    all \c qore_external_user_module() calls, with the name of the binary module and the list of its user modules:
+    @code
+    qore_external_binary_module(krb5 ${PROJECT_VERSION})
+    qore_external_user_module("qlib/Krb5Util" "")
+    qore_binary_module_two_phase_docs(krb5 "Krb5Util")
+    @endcode
+
+    A module configured against a %Qore build tree, without installing %Qore, uses the build tree's documentation
+    template and language index.
+
+    The %Qore code fragments of the generated HTML documentation are highlighted as %Qore when it is post-processed
+    with <tt>qdx --post</tt>; set \c QORE_DOCS_NO_CODE_HIGHLIGHT before calling the documentation macros (or
+    \c QORE_DOC_NO_CODE_HIGHLIGHT in the environment of the build) to keep doxygen's highlighting for documentation
+    whose code fragments are in another language.
+
 
     @subsection QORE_DIST QORE_DIST
     
@@ -166,26 +216,26 @@
     @subsection qore_cmake_aot_macros AOT Module-Build Macros (qcc .qo pipeline)
 
     Most module authors do not need these directly: with \c QORE_BUILD_AOT_MODULES
-    (default \c ON), the standard user-module build compiles \c .qm/\c .qc sources to
-    \c .qmod artifacts with \c qcc automatically. The following functions in
+    (default \c ON), the standard user-module build compiles <tt>.qm/</tt><tt>.qc</tt> sources to
+    <tt>.qmod</tt> artifacts with \c qcc automatically. The following functions in
     \c cmake/QoreMacros.cmake are the lower-level building blocks of that AOT pipeline,
     exposed for projects that drive \c qcc compilation/linking themselves (for example a
-    module that ships pre-compiled \c .qo objects, or a C/C++ host that links Qore code).
+    module that ships pre-compiled <tt>.qo</tt> objects, or a C/C++ host that links Qore code).
     They participate in the @ref qcc_parallel_codegen "parallel codegen / make jobserver"
     model automatically. All take keyword arguments; see the macro definitions for the
     full argument set.
 
     Standard user-module AOT rules request \c --depfile-module-deps=source.
     Therefore module depfiles are independent of whether a required sibling's
-    generated \c .qmod exists when \c qcc runs, and a split dependency is
-    represented by its complete \c .qm / \c .qc / \c .ql source set. A resolved
+    generated <tt>.qmod</tt> exists when \c qcc runs, and a split dependency is
+    represented by its complete <tt>.qm</tt> / <tt>.qc</tt> / <tt>.ql</tt> source set. A resolved
     artifact is retained only when no source representation is available.
 
     - \c qore_qcc_compile_objects() — compile one or more Qore sources to relocatable
-      \c .qo objects with \c qcc (\c SOURCES, \c OUTPUT_DIR, \c LOAD_MODULES, \c STUBS,
+      <tt>.qo</tt> objects with \c qcc (\c SOURCES, \c OUTPUT_DIR, \c LOAD_MODULES, \c STUBS,
       \c PARSE_DEFINES, \c PARSE_OPTIONS, \c INCLUDE_DIR, \c MODULE_DIR, …); emits the
       custom commands and returns the generated object list.
-    - \c qore_qcc_link_objects() — link a set of \c .qo \c INPUTS into a final artifact
+    - \c qore_qcc_link_objects() — link a set of <tt>.qo</tt> \c INPUTS into a final artifact
       (\c OUTPUT, \c AGGREGATE_SYMBOL, \c MANIFEST_INPUTS, \c ALLOW_UNRESOLVED_IMPORTS, …).
     - \c qore_qcc_script_aggregate() — build a single script-context aggregate object
       from \c SOURCES for multi-file script/application AOT.
@@ -197,7 +247,7 @@
     - \c qore_write_if_changed() / \c qore_content_digest_target() — write a generated file
       only when its content changes, so downstream \c qcc steps re-run only on real changes.
     - \c qore_install_qmod_atomic(<built qmod> <install dir> <installed name> <component>) — install a
-      built \c .qmod by staging it beside its destination and renaming it into place, so a running process
+      built <tt>.qmod</tt> by staging it beside its destination and renaming it into place, so a running process
       that has the old module loaded keeps it intact; an installed module that is byte-identical to the
       built one is left alone, keeping its modification time.  The installed module is listed in
       \c install_manifest.txt either way.
