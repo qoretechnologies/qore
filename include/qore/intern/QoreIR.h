@@ -3352,6 +3352,13 @@ public:
     //! coordinator block returning the helper's result value through the
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
+
+    //! Transient (never serialized): the locals of the caller that the outlined helper can change or release
+    /** The caller releases its own references to their values (its reload storage) before the call, as the inline
+        code of the helper's instructions would, so that a value the helper removes, deletes or replaces is
+        destroyed when the helper releases it, not when the caller exits.
+    */
+    std::vector<const LocalVar*> released_locals;
 };
 
 class QoreIRBasicBlock {

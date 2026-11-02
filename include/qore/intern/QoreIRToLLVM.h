@@ -2105,6 +2105,16 @@ private:
     // enabling copy-on-write to skip the copy (in-place modification).
     void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
 
+    //! Releases this function's own references to the values of the locals that an outlined helper can change
+    /** Emitted before a CallAOTHelper call for its QoreIRCallAOTHelperInstruction::released_locals, in reverse
+        declaration order: the reload tracker and deferred slots and the duplicate reference of a pre-instantiated
+        local's cache, as the inline lowering of an lvalue operation does for its root local, so that the helper's
+        operation releases the last reference to a value it removes or replaces.  Only locals that the caller
+        reloads after the call are released.
+    */
+    void releaseLocalsForOutlinedHelper(const std::vector<const LocalVar*>& locals, llvm::Module& module,
+            llvm::Function* llvm_func);
+
     // Creates the reload tracker and deferred allocas of a local that a runtime reload can give them, so that the
     // scope exit of a block-scoped local releases them however the code that fills them is laid out: a reload in
     // a block lowered after the scope exit (such as the shared exception exit) creates them only then

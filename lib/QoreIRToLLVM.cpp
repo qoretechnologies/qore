@@ -9048,6 +9048,40 @@ void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
     }
 }
 
+void QoreIRToLLVM::releaseLocalsForOutlinedHelper(const std::vector<const LocalVar*>& locals, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (locals.empty()) {
+        return;
+    }
+    // releasing a reference can destroy a value: in reverse declaration order, as getReverseDeclarationOrder()
+    std::vector<std::pair<uint64_t, const void*>> ranked;
+    ranked.reserve(locals.size());
+    for (const LocalVar* local : locals) {
+        if (ranked.size() && !(ranked.size() % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM outlined helper local release order");
+        }
+        const void* key = reinterpret_cast<const void*>(local);
+        ranked.emplace_back(getLocalDeclarationRank(key, ranked.size()), key);
+    }
+    std::stable_sort(ranked.begin(), ranked.end(), [](const std::pair<uint64_t, const void*>& a,
+            const std::pair<uint64_t, const void*>& b) {
+        return a.first > b.first;
+    });
+    size_t count = 0;
+    for (const auto& entry : ranked) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM outlined helper local release");
+        }
+        const void* key = entry.second;
+        // only a local that the caller reloads after the call: any other one has no cache to refill
+        if (!canReloadLocalFromRuntime(key)) {
+            continue;
+        }
+        clearLocalCachedValue(key, module, llvm_func, LocalCacheClearMode::DuplicateRefsOnly);
+        clearLocalReloadTracker(key, module, llvm_func);
+    }
+}
+
 void QoreIRToLLVM::clearAllLocalReloadTrackers(llvm::Module& module, llvm::Function* llvm_func) {
     // clearing a tracker can release a local's value: in reverse declaration order
     const std::vector<const void*> keys = getReverseDeclarationOrder(local_allocas, local_allocas_release_order);
@@ -38975,6 +39009,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* helper_ft = llvm::FunctionType::get(i64_type,
                     {ptr_type, ptr_type}, false);
             auto helper = module.getOrInsertFunction(cah->helper_name, helper_ft);
+            // An outlined function-body helper changes or releases the values of the shared locals it writes on the
+            // runtime stack, but it cannot release this function's own references to them (the reload tracker and
+            // deferred slots, and the duplicate reference of a pre-instantiated local's cache); left in place, they
+            // keep a value that the helper removes, deletes or replaces alive until this function exits.  They are
+            // released here, as the inline code of those instructions does before it changes the local, and the
+            // locals are reloaded from the runtime stack after the call.
+            releaseLocalsForOutlinedHelper(cah->released_locals, module, llvm_func);
             llvm::Value* result = builder->CreateCall(helper,
                     {aot_ctx_arg, xsink_arg});
             // Outlined function-body helpers execute with this function's

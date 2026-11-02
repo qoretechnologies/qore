@@ -3918,6 +3918,9 @@ struct AOTOutlineLocalRef {
     bool lifecycle = false;   //!< InstantiateLocal / UninstantiateLocal
     bool weak_store = false;  //!< StoreLocal with weak (:=) semantics
     bool parse_reference = false;  //!< CreateParseRef (\local) access
+    //! the instruction can change or release the local's value: every reference but a plain read (LoadLocal,
+    //! LoadClosure, the operands of br.if.lt.local.int and the source of add.assign.local.int)
+    bool may_write = true;
     bool unknown = false;     //!< unidentifiable local reference — poisons outlining
 };
 
@@ -3941,18 +3944,22 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
             ref.lifecycle = inst->opcode == QoreIROpcode::InstantiateLocal
                 || inst->opcode == QoreIROpcode::UninstantiateLocal;
             ref.weak_store = inst->opcode == QoreIROpcode::StoreLocal && linst->mode != AssignmentMode::Normal;
+            ref.may_write = inst->opcode != QoreIROpcode::LoadLocal && inst->opcode != QoreIROpcode::LoadClosure;
             ref.unknown = !linst->local;
             cb(ref);
             break;
         }
         case QoreIROpcode::AddAssignLocalInt: {
             const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
-            for (const LocalVar* lv : {fused->target, fused->source}) {
-                AOTOutlineLocalRef ref;
-                ref.local = lv;
-                ref.unknown = !lv;
-                cb(ref);
-            }
+            AOTOutlineLocalRef target;
+            target.local = fused->target;
+            target.unknown = !fused->target;
+            cb(target);
+            AOTOutlineLocalRef source;
+            source.local = fused->source;
+            source.may_write = false;
+            source.unknown = !fused->source;
+            cb(source);
             break;
         }
         case QoreIROpcode::IncrementLocalInt: {
@@ -3968,6 +3975,7 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
             for (const LocalVar* lv : {fused->lhs, fused->rhs}) {
                 AOTOutlineLocalRef ref;
                 ref.local = lv;
+                ref.may_write = false;
                 ref.unknown = !lv;
                 cb(ref);
             }
@@ -4202,6 +4210,8 @@ struct AOTFnOutlineRegion {
     //! (plus params/selfid/argvid referenced only inside — someone outside
     //! owns their lifecycle either way).
     std::vector<const LocalVar*> shared_locals;
+    //! The shared locals whose value the region can change or release (see AOTOutlineLocalRef::may_write)
+    std::vector<const LocalVar*> written_shared_locals;
     //! Body locals whose every reference is inside the region.
     std::vector<const LocalVar*> contained_locals;
 };
@@ -4726,6 +4736,7 @@ private:
             }
         }
         std::unordered_set<const LocalVar*> region_locals;
+        std::unordered_set<const LocalVar*> region_written_locals;
         size_t temp_push_count = 0;
         size_t temp_discard_count = 0;
         for (size_t i = first; i <= last; ++i) {
@@ -4814,6 +4825,9 @@ private:
                 aotOutlineForEachLocalRef(inst, [&](const AOTOutlineLocalRef& ref) {
                     if (ref.local) {
                         region_locals.insert(ref.local);
+                        if (ref.may_write) {
+                            region_written_locals.insert(ref.local);
+                        }
                     }
                 });
             }
@@ -4918,6 +4932,9 @@ private:
                 // (return-path) clear — a true scope end is never followed
                 // by references to the same LocalVar.
                 region.shared_locals.push_back(lv);
+                if (region_written_locals.count(lv)) {
+                    region.written_shared_locals.push_back(lv);
+                }
             } else {
                 region.contained_locals.push_back(lv);
             }
@@ -5370,6 +5387,7 @@ private:
         std::unique_ptr<QoreIRBasicBlock> return_block_owned;
         {
             auto call = std::make_unique<QoreIRCallAOTHelperInstruction>(helper_name);
+            call->released_locals = region.written_shared_locals;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
