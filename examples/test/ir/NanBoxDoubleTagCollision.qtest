@@ -20,10 +20,17 @@
     8.71e307) were read back as short strings, NOTHING or opaque references, and could crash.
 
     Such doubles are now stored as heap float nodes in every tier, which also makes boxing a double
-    an allocation in compiled code: the fixture checks the values in every tier and AOT, and
-    measures resident set growth over many boxing operations, since each leaked node is a separate
-    allocation.  The same growth checks cover ints outside the 48-bit immediate range in fused AOT
-    aggregate projections, which boxed values that were then discarded.
+    an allocation in compiled code: the fixture checks the values in every tier and AOT, and counts
+    the heap floats that many boxing operations leave behind, which must be none.  The same leak
+    checks count the ints outside the 48-bit immediate range in fused AOT aggregate projections,
+    which boxed values that were then discarded.
+
+    The leak checks count the heap nodes themselves (dbg_get_live_bigfloat_count() and
+    dbg_get_live_bigint_count(), which need library debugging).  They used to compare the resident
+    set size of the process with a 2048 kB limit, which a leak-free run exceeded on hosts where
+    transparent huge pages back the heap: the first touch of one new page there makes a whole 2 MiB
+    huge page resident, so a run that touched 4 kB of new memory reported 2052 kB (CI pipeline
+    62463, job 218748, arm64).
 */
 class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
     private {
@@ -50,11 +57,11 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
         #! the summary that ends a run in which every check passed
         const Summary = "checked: 128\nerrors: 0\n";
 
-        #! the growth measurements printed in "rss" mode
-        const GrowthCases = ("locals", "handler", "projections", "closures");
+        #! the patterns whose leaked heap nodes are counted in "live" mode
+        const LeakCases = ("locals", "handler", "projections", "closures");
 
-        #! resident set growth that no leak-free run approaches; a leak of the 200000 iterations grows by megabytes
-        const MaxGrowthKb = 2048;
+        #! the iterations of each pattern, and the boxed values that the negative control retains
+        const LeakIterations = 200000;
     }
 
     constructor() : QUnit::Test("NanBoxDoubleTagCollisionTest", "1.0", \ARGV) {
@@ -78,11 +85,12 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
             string env = tier[1];
             string label = mode + (env ? " (promoted)" : "");
             addTestCase("boxing colliding doubles does not leak: " + label, sub () {
-                checkGrowth(mode, env);
+                checkLeaks(mode, env);
             });
         }
         addTestCase("colliding doubles: AOT", \testAot());
-        addTestCase("resident memory detects retained boxed values", \testRetainedGrowth());
+        addTestCase("live node counts detect retained boxed values", \testRetainedNodes());
+        addTestCase("leak output parsing", \testLeakOutputParsing());
 
         set_return_value(main());
     }
@@ -115,35 +123,83 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
         return ast_output;
     }
 
-    private checkGrowth(string mode, string env) {
-        if (!is_readable("/proc/self/smaps_rollup")) {
-            testSkip("accurate resident set size requires /proc/self/smaps_rollup");
+    #! skips the test case without library debugging, which the heap node counts need
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigfloat_count() and dbg_get_live_bigint_count() require library debugging");
         }
-        checkGrowthOutput(sprintf("exec-mode=%s %s", mode, env), run(mode, env, "rss"));
     }
 
-    private checkGrowthOutput(string label, string output) {
+    private checkLeaks(string mode, string env) {
+        checkDebugging();
+        checkLeakOutput(sprintf("exec-mode=%s %s", mode, env), run(mode, env, "live"));
+    }
+
+    #! parses the output of "live" mode: pattern -> ("floats": count, "ints": count)
+    /** @throw LEAK-OUTPUT-ERROR the output does not have one well-formed line for each pattern, in order
+    */
+    private static hash<string, hash<string, int>> parseLeakOutput(string output) {
         list<string> lines = output.split("\n");
-        assertEq(GrowthCases.size(), lines.size(), label + ": one growth measurement per pattern: " + output);
+        # the text after the last newline is an empty element
+        if (lines && lines.last() == "") {
+            pop lines;
+        }
+        if (lines.size() != LeakCases.size()) {
+            throw "LEAK-OUTPUT-ERROR", sprintf("expected one line for each of %y; got: %y", LeakCases, output);
+        }
+        hash<string, hash<string, int>> rv;
         foreach string line in (lines) {
-            *list<*string> m = (line =~ x/^([a-z-]+): (-?[0-9]+)$/);
-            assertTrue(exists m, label + ": growth line format: " + line);
-            if (m) {
-                assertTrue(m[1].toInt() < MaxGrowthKb, sprintf("%s: %s grew by %s kB", label, m[0], m[1]));
+            *list<*string> m = (line =~ x/^([a-z-]+): floats (-?[0-9]+) ints (-?[0-9]+)$/);
+            if (!m || m[0] != LeakCases[$#]) {
+                throw "LEAK-OUTPUT-ERROR", sprintf("line %d: expected the counts of %y; got: %y", $# + 1,
+                    LeakCases[$#], line);
             }
+            rv{m[0]} = {"floats": m[1].toInt(), "ints": m[2].toInt()};
+        }
+        return rv;
+    }
+
+    private checkLeakOutput(string label, string output) {
+        hash<string, hash<string, int>> counts;
+        try {
+            counts = parseLeakOutput(output);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("%s: %s: %s", label, ex.err, ex.desc));
+            return;
+        }
+        foreach hash<auto> i in (counts.pairIterator()) {
+            assertEq(0, i.value.floats, sprintf("%s: %s left heap floats behind", label, i.key));
+            assertEq(0, i.value.ints, sprintf("%s: %s left heap ints behind", label, i.key));
         }
     }
 
-    testRetainedGrowth() {
-        if (!is_readable("/proc/self/smaps_rollup")) {
-            testSkip("accurate resident set size requires /proc/self/smaps_rollup");
-        }
-        string output = run("ast", "", "rss-retained");
-        *list<*string> m = (output =~ x/^retained: ([0-9]+)\nvalues: 200000\n$/);
-        assertTrue(exists m, "all retained values remain live: " + output);
+    #! the counts see every boxed value that is kept alive, as a missing dereference would keep it
+    testRetainedNodes() {
+        checkDebugging();
+        string output = run("ast", "", "live-retained");
+        *list<*string> m = (output =~ x/^retained: floats ([0-9]+) ints ([0-9]+)\nvalues: ([0-9]+)\n$/);
+        assertTrue(exists m, "negative control output: " + output);
         if (m) {
-            assertTrue(m[0].toInt() >= MaxGrowthKb, "retained values exceed the leak threshold: " + output);
+            assertEq(LeakIterations, m[2].toInt(), "all values are retained: " + output);
+            assertEq(LeakIterations, m[0].toInt(), "each retained boxed double is a live heap float: " + output);
+            assertEq(0, m[1].toInt(), "no heap ints are retained: " + output);
         }
+    }
+
+    #! the leak checks reject output that does not give the counts of every pattern
+    testLeakOutputParsing() {
+        hash<string, hash<string, int>> counts = parseLeakOutput("locals: floats 0 ints 0\nhandler: floats 3 ints 0\n"
+            "projections: floats 0 ints -1\nclosures: floats 0 ints 0\n");
+        assertEq({"floats": 3, "ints": 0}, counts.handler);
+        assertEq({"floats": 0, "ints": -1}, counts.projections);
+        assertThrows("LEAK-OUTPUT-ERROR", "expected one line", \parseLeakOutput(),
+            ("locals: floats 0 ints 0\n",));
+        assertThrows("LEAK-OUTPUT-ERROR", "line 2", \parseLeakOutput(),
+            ("locals: floats 0 ints 0\nhandler: 0\nprojections: floats 0 ints 0\nclosures: floats 0 ints 0\n",));
+        assertThrows("LEAK-OUTPUT-ERROR", "line 1", \parseLeakOutput(),
+            ("handler: floats 0 ints 0\nlocals: floats 0 ints 0\nprojections: floats 0 ints 0\n"
+                "closures: floats 0 ints 0\n",));
+        assertThrows("LEAK-OUTPUT-ERROR", "expected one line", \parseLeakOutput(), ("",));
     }
 
     testAot() {
@@ -164,8 +220,8 @@ class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
         }
         assertEq(astOutput(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
             shellQuote(exe))), "AOT output matches AST");
-        if (is_readable("/proc/self/smaps_rollup")) {
-            checkGrowthOutput("AOT", backquote(sprintf("LD_LIBRARY_PATH=%s %s rss 2>&1", shellQuote(libqore_dir),
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            checkLeakOutput("AOT", backquote(sprintf("LD_LIBRARY_PATH=%s %s live 2>&1", shellQuote(libqore_dir),
                 shellQuote(exe))));
         }
     }

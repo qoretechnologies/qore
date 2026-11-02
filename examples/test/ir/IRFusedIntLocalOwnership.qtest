@@ -24,9 +24,11 @@
     - binding a reference argument read the lvalue back through a value accessor that creates
       a new heap node for a large int, in every tier including AST
 
-    The fixture checks the computed values in every tier and AOT, and measures resident set
-    growth over many updates: each leaked node is a separate allocation, so a leak grows by
-    megabytes while correct code reuses freed nodes.
+    The fixture checks the computed values in every tier and AOT, and counts the heap ints that
+    many updates leave behind (dbg_get_live_bigint_count(), which needs library debugging), which
+    must be none.  The count is exact; the resident set size of the process, which the checks used
+    to compare with a 2048 kB limit, also grows with no leak, by up to a whole 2 MiB huge page on
+    hosts where transparent huge pages back the heap.
 */
 class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
     private {
@@ -52,8 +54,8 @@ class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
         const Big = 1 << 50;
         const Edge = (1 << 47) - 2;
 
-        #! resident set growth that no leak-free run approaches; a leak of the 200000 updates grows by megabytes
-        const MaxGrowthKb = 2048;
+        #! the update patterns whose leaked heap ints are counted in "live" mode
+        const LeakCases = ("body", "direct", "runtime-stack", "closure");
     }
 
     constructor() : QUnit::Test("IRFusedIntLocalOwnershipTest", "1.0", \ARGV) {
@@ -71,10 +73,11 @@ class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
                 checkValues(mode, env);
             });
             addTestCase("large int updates do not leak: " + label, sub () {
-                checkGrowth(mode, env);
+                checkLeaks(mode, env);
             });
         }
         addTestCase("large int values: AOT", \testAot());
+        addTestCase("leak output parsing", \testLeakOutputParsing());
 
         set_return_value(main());
     }
@@ -110,22 +113,65 @@ class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
         assertEq(expected(), run(mode, env), sprintf("exec-mode=%s %s output", mode, env));
     }
 
-    private checkGrowth(string mode, string env) {
-        if (!is_readable("/proc/self/smaps_rollup")) {
-            testSkip("accurate resident set size requires /proc/self/smaps_rollup");
+    #! skips the test case without library debugging, which the heap int count needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigint_count() requires library debugging");
         }
-        string output = run(mode, env, "rss");
+    }
+
+    private checkLeaks(string mode, string env) {
+        checkDebugging();
+        checkLeakOutput(sprintf("exec-mode=%s %s", mode, env), run(mode, env, "live"));
+    }
+
+    #! parses the output of "live" mode: pattern -> heap ints left behind
+    /** @throw LEAK-OUTPUT-ERROR the output does not have one well-formed line for each pattern, in order
+    */
+    private static hash<string, int> parseLeakOutput(string output) {
         list<string> lines = output.split("\n");
-        assertEq(4, lines.size(), "one growth measurement per update pattern: " + output);
+        # the text after the last newline is an empty element
+        if (lines && lines.last() == "") {
+            pop lines;
+        }
+        if (lines.size() != LeakCases.size()) {
+            throw "LEAK-OUTPUT-ERROR", sprintf("expected one line for each of %y; got: %y", LeakCases, output);
+        }
+        hash<string, int> rv;
         foreach string line in (lines) {
             *list<*string> m = (line =~ x/^([a-z-]+): (-?[0-9]+)$/);
-            assertTrue(exists m, "growth line format: " + line);
-            if (m) {
-                int growth = m[1].toInt();
-                assertTrue(growth < MaxGrowthKb, sprintf("exec-mode=%s %s: %s grew by %d kB", mode, env, m[0],
-                    growth));
+            if (!m || m[0] != LeakCases[$#]) {
+                throw "LEAK-OUTPUT-ERROR", sprintf("line %d: expected the count of %y; got: %y", $# + 1,
+                    LeakCases[$#], line);
             }
+            rv{m[0]} = m[1].toInt();
         }
+        return rv;
+    }
+
+    private checkLeakOutput(string label, string output) {
+        hash<string, int> counts;
+        try {
+            counts = parseLeakOutput(output);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("%s: %s: %s", label, ex.err, ex.desc));
+            return;
+        }
+        foreach hash<auto> i in (counts.pairIterator()) {
+            assertEq(0, i.value, sprintf("%s: %s left heap ints behind", label, i.key));
+        }
+    }
+
+    #! the leak checks reject output that does not give the count of every pattern
+    testLeakOutputParsing() {
+        hash<string, int> counts = parseLeakOutput("body: 0\ndirect: 2\nruntime-stack: -1\nclosure: 0\n");
+        assertEq({"body": 0, "direct": 2, "runtime-stack": -1, "closure": 0}, counts);
+        assertThrows("LEAK-OUTPUT-ERROR", "expected one line", \parseLeakOutput(), ("body: 0\n",));
+        assertThrows("LEAK-OUTPUT-ERROR", "line 3", \parseLeakOutput(),
+            ("body: 0\ndirect: 0\nruntime-stack: x\nclosure: 0\n",));
+        assertThrows("LEAK-OUTPUT-ERROR", "line 1", \parseLeakOutput(),
+            ("direct: 0\nbody: 0\nruntime-stack: 0\nclosure: 0\n",));
+        assertThrows("LEAK-OUTPUT-ERROR", "expected one line", \parseLeakOutput(), ("",));
     }
 
     testAot() {
@@ -139,16 +185,9 @@ class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
         assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
         assertEq(expected(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
             shellQuote(exe))), "AOT output");
-        if (is_readable("/proc/self/smaps_rollup")) {
-            string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s rss 2>&1", shellQuote(libqore_dir),
-                shellQuote(exe)));
-            foreach string line in (output.split("\n")) {
-                *list<*string> m = (line =~ x/^([a-z-]+): (-?[0-9]+)$/);
-                assertTrue(exists m, "AOT growth line format: " + line);
-                if (m) {
-                    assertTrue(m[1].toInt() < MaxGrowthKb, sprintf("AOT: %s grew by %s kB", m[0], m[1]));
-                }
-            }
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            checkLeakOutput("AOT", backquote(sprintf("LD_LIBRARY_PATH=%s %s live 2>&1", shellQuote(libqore_dir),
+                shellQuote(exe))));
         }
     }
 

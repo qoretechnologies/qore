@@ -35,13 +35,35 @@
 
 #include <cmath>
 
+#ifdef DEBUG
+#include <atomic>
+
+namespace {
+//! the number of heap floats that exist in the process; see q_get_live_bigfloat_count()
+std::atomic<int64> live_bigfloat_count{0};
+}
+
+int64 q_get_live_bigfloat_count() {
+    return live_bigfloat_count.load(std::memory_order_relaxed);
+}
+#endif
+
 QoreBigFloatNode::QoreBigFloatNode(double n) : SimpleValueQoreNode(NT_FLOAT), val(n) {
+#ifdef DEBUG
+    live_bigfloat_count.fetch_add(1, std::memory_order_relaxed);
+#endif
 }
 
 QoreBigFloatNode::QoreBigFloatNode(const QoreBigFloatNode& old) : SimpleValueQoreNode(NT_FLOAT), val(old.val) {
+#ifdef DEBUG
+    live_bigfloat_count.fetch_add(1, std::memory_order_relaxed);
+#endif
 }
 
 QoreBigFloatNode::~QoreBigFloatNode() {
+#ifdef DEBUG
+    live_bigfloat_count.fetch_sub(1, std::memory_order_relaxed);
+#endif
 }
 
 double QoreBigFloatNode::getValue() const {
