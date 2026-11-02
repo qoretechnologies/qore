@@ -33,6 +33,7 @@ public class TryChildModuleTest inherits QUnit::Test {
 
     constructor() : Test("Try child module test", "1.0") {
         addTestCase("absent and present children", \basicTest());
+        addTestCase("an absent child issues no warning", \absentNoWarningTest());
         addTestCase("child module attach order", \orderTest());
         addTestCase("nested module load", \nestedTest());
         addTestCase("child module loaded first", \childFirstTest());
@@ -303,6 +304,37 @@ printf(\"loaded\\n\");
             "string sub broken_hello2() { return TcmBrokenBase::hello(); }\n");
         assertEq("hello", p2.callFunction("broken_hello2"));
         assertEq("failed", childInfo("TcmBrokenBase").TcmBroken.status);
+    }
+
+    absentNoWarningTest() {
+        # a child that is not installed is the documented optional case: no warning, even with all warnings
+        # enabled, so that code built with warnings as errors (qcc --warnings-are-errors) does not fail on it;
+        # TcmBase declares the absent TcmNoSuchChildModule
+        string out = runScript("%modern
+Program p(PO_NEW_STYLE);
+*hash<ExceptionInfo> w = p.parse(\"%requires TcmBase\\n\", \"requires\", WARN_ALL);
+printf(\"warn: %y\\n\", w ? w.err : NOTHING);
+");
+        assertEq("warn: null\n", out);
+
+        # qcc --warnings-are-errors compiles a module that requires it
+        string qcc = dirname(qore_bin) + "/qcc";
+        if (!is_executable(qcc)) {
+            testSkip("qcc is not available next to " + qore_bin);
+        }
+        TmpDir tmp();
+        string src = tmp.path + "/TcmAbsentUser.qm";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%requires TcmBase\nmodule TcmAbsentUser { version = \"1.0\"; desc = \"absent child "
+            "user\"; author = \"Qore Technologies, s.r.o.\"; license = \"MIT\"; }\npublic namespace "
+            "TcmAbsentUser { public int sub count() { return TcmBase::children.size(); } }\n");
+        f.close();
+        int rc;
+        out = backquote(sprintf("QORE_MODULE_DIR=%s %s --warnings-are-errors -m %s -o %s/TcmAbsentUser.qmod 2>&1",
+            dir, qcc, src, tmp.path), \rc);
+        assertEq(0, rc, out);
+        assertFalse(out =~ /MODULE-CHILD|warning/, out);
     }
 
     brokenReportTest() {
