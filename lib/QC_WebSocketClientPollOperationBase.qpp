@@ -1018,6 +1018,19 @@ nothing WebSocketClientPollOperationBase::sendText(string text) [flags=NAMED_ARG
     priv->queueSendText(text, xsink);
 }
 
+//! Checks that a data frame can still be sent on the connection
+/** Code that sends data frames on the connection by other means, such as a separate send operation, calls this
+    first, so that no data frame follows a close frame.  Thread-safe: can be called from any thread.
+
+    @throw WEBSOCKET-CLOSING-ERROR the close handshake has started (with @ref sendClose(), or a close frame from the
+    server) or the connection has closed: no data frame may follow a close frame (RFC 6455 section 5.5.1)
+
+    @since %Qore 3.0
+*/
+nothing WebSocketClientPollOperationBase::checkDataSend() {
+    priv->checkDataSend(xsink);
+}
+
 //! Sends a binary message with client masking
 /** The data is encoded as a masked WebSocket BINARY frame and queued for sending.
     Thread-safe: can be called from any thread.

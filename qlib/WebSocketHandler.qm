@@ -144,7 +144,8 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       the stop waits at most the close timeout in total.  The close code and reason reported for a connection are
       those of the client's close frame
     - a CLOSE frame without a status code, which is reported with the close code 1005 (RFC 6455 section 7.1.5), is
-      answered with a CLOSE frame without a status code; before, the connection was closed without an answer
+      answered with a CLOSE frame without a status code; before, it was answered with the status code 1005, which
+      RFC 6455 section 7.4.1 does not allow to be sent
     - a message sent on a connection that is closing raises \c WEBSOCKET-CLOSING-ERROR instead of being discarded
       without notice: no data frame may follow a close frame (RFC 6455 section 5.5.1);
       @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" skips the connections that are closing
@@ -222,6 +223,8 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
       "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)
+    - added the @ref WebSocketHandler::WebSocketHandler::hasExtensionSupport() "hasExtensionSupport()" and
+      @ref WebSocketHandler::WebSocketHandler::getSupportedExtensions() "getSupportedExtensions()" handler methods
 
     @subsection websockethandler_v2_1 Version 2.1
     - implemented support for a variable send timeout

@@ -151,6 +151,12 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
             \h2ClientCloseTimeoutTest());
         addTestCase("HTTP/3: a close the server does not answer ends at the client's close timeout",
             \h3ClientCloseTimeoutTest());
+        addTestCase("HTTP/2: disconnect() waits for the server's close frame", \h2DisconnectTest());
+        addTestCase("HTTP/3: disconnect() waits for the server's close frame", \h3DisconnectTest());
+        addTestCase("HTTP/2: disconnect() ends at the close timeout when the server does not answer",
+            \h2DisconnectTimeoutTest());
+        addTestCase("HTTP/3: disconnect() ends at the close timeout when the server does not answer",
+            \h3DisconnectTimeoutTest());
         set_return_value(main());
     }
 
@@ -544,5 +550,66 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
 
     h3ClientCloseTimeoutTest() {
         clientCloseTimeoutImpl("h3");
+    }
+
+    #! disconnect() sends the client's close frame and returns once the server's answer has arrived
+    private disconnectImpl(string protocol) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        TestWsHandler handler({"logger": logger});
+        int port = startTlsServer(server, handler);
+        Queue queue();
+        WebSocketClient wsc = tlsConnect(protocol, port, queue);
+        on_exit try { wsc.disconnect(); } catch () {}
+        handler.registered_queue.get(HangGuard);
+        object op = wsc.getPollOperation();
+
+        wsc.disconnect(WSCC_GoingAway);
+        assertTrue(op.goalReached(), "the close handshake has ended when disconnect() returns");
+        assertEq(WSCC_GoingAway, op.getCloseCode(), sprintf("the server's answer echoes the client's code (reason: %y)",
+            op.getCloseReason()));
+        assertFalse(wsc.isOpen(), "the connection is closed");
+        assertEq(True, handler.closed_queue.get(HangGuard), "the server's connection ends");
+    }
+
+    h2DisconnectTest() {
+        disconnectImpl("h2");
+    }
+
+    h3DisconnectTest() {
+        disconnectImpl("h3");
+    }
+
+    #! disconnect() ends the connection with code 1006 when the server does not answer within the close timeout
+    /** The server's connection is blocked in gotMessage(), so it processes no frame and does not answer
+    */
+    private disconnectTimeoutImpl(string protocol) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        TestWsHandler handler({"logger": logger});
+        on_exit handler.release.dec();
+        int port = startTlsServer(server, handler);
+        Queue queue();
+        WebSocketClient wsc = tlsConnect(protocol, port, queue, {"timeout": 500ms});
+        on_exit try { wsc.disconnect(); } catch () {}
+        handler.registered_queue.get(HangGuard);
+        object op = wsc.getPollOperation();
+
+        wsc.send("BLOCK");
+        handler.blocked.waitForZero(HangGuard);
+        date start = now_us();
+        wsc.disconnect(WSCC_NormalClosure);
+        assertGe(500ms, now_us() - start, "disconnect() waits for the server's close frame for the close timeout");
+        assertTrue(op.goalReached(), "the close has ended when disconnect() returns");
+        assertEq(1006, op.getCloseCode(), "no close frame was received from the server");
+        assertEq("close handshake timed out", op.getCloseReason(), "the close handshake timed out");
+    }
+
+    h2DisconnectTimeoutTest() {
+        disconnectTimeoutImpl("h2");
+    }
+
+    h3DisconnectTimeoutTest() {
+        disconnectTimeoutImpl("h3");
     }
 }
