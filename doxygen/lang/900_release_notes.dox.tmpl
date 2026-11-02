@@ -3700,6 +3700,8 @@ while (*binary chunk = input.read(65536)) {
       - fixed a step stopping twice at the first statement of a block or a function; it stops once at each statement
       - fixed stepping out of a function stopping at its first line; it stops at the closing brace of the function
       - fixed a pause not stopping a thread in a loop whose body is empty
+      - fixed a thread that stopped while the last client disconnected waiting for a client that no longer existed;
+        the debug adapter of an IDE that ended its session while a thread of its program stopped never ended
     - @ref debugutilintro "DebugUtil" module
       - added functions that describe values, list their elements, keys and members, also private ones, and read and
         set values by their paths

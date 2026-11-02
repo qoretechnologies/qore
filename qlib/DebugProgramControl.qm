@@ -127,6 +127,9 @@ module DebugProgramControl {
     - fixed the \c file/source and \c label/source commands for command hashes whose values all have the same type,
       such as a literal <tt>{"cmd": "program/1/file/source", "file": "..."}</tt>; setting the start line raised
       \c RUNTIME-TYPE-ERROR
+    - fixed a thread that stopped while the last client disconnected: it waited for a client that no longer existed,
+      and the code waiting for the program to end, such as the debug adapter of an IDE ending its session, waited for
+      that thread forever
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -2412,17 +2415,28 @@ public namespace DebugProgramControl {
             # a thread is not registered as stopped once the debugger ends its program, as terminateProgram()
             # resumes only the threads that are registered when it starts; a thread that ends stops as usual
             bool terminating;
+            # the connections are checked again with the thread lock held: the last client can disconnect after the
+            # check at the start of this method, and the threads that it resumes when it disconnects are those that are
+            # registered then (see unregisterConnection(), which removes the connection before shutdown() takes the
+            # thread lock); a thread that registered after that would wait for a client that no longer exists
+            bool unattended;
             {
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
                 @assert(!exists ctxThread{tid});
                 terminating = !ends && isTerminating(ctx.pgmId);
-                if (!terminating) {
+                unattended = !terminating && !program_start && !hasConnection();
+                if (!terminating && !unattended) {
                     ctxThread{tid} = ctx;
                 }
             }
             if (terminating) {
                 throw "THREAD-CANCELLED", TerminateReason;
+            }
+            if (unattended) {
+                # the thread continues as it ran before, as without a client at the start of this method
+                runToStatementId = runToStatementIdBefore;
+                return;
             }
 
             # debugger client cannot ask for stack when procession message as it dead lock thread handler so we add it to original message

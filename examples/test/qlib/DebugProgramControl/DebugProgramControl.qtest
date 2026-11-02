@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 %allow-debugger
@@ -34,6 +35,74 @@ class TestDebugProgramControl inherits DebugProgramControl {
     }
 }
 
+#! Holds a thread that stops right after it has found a connected client, before it registers as stopped
+/** A thread that stops checks for a client at the start of handleInterrupt() and registers as stopped later; the
+    test disconnects the last client in between, as an IDE that ends its session while a thread of the program stops.
+*/
+class HeldStopDebugProgramControl inherits DebugProgramControl {
+    public {
+        #! the stops broadcast to the clients
+        list<auto> broadcastMessages = ();
+    }
+
+    private {
+        #! the thread whose first connection check is held
+        int hold_tid;
+        #! decremented when the held thread has found a connected client
+        Counter checked;
+        #! the held thread continues when this reaches zero
+        Counter release;
+        #! decremented when a stop is broadcast
+        Counter stopped;
+        Mutex m();
+    }
+
+    constructor() : DebugProgramControl("test-server") {
+    }
+
+    #! Holds the next connection check of the given thread
+    hold(int tid, Counter n_checked, Counter n_release, Counter n_stopped) {
+        AutoLock al(m);
+        hold_tid = tid;
+        checked = n_checked;
+        release = n_release;
+        stopped = n_stopped;
+    }
+
+    private bool hasConnection() {
+        bool rv = DebugProgramControl::hasConnection();
+        *Counter c;
+        *Counter r;
+        {
+            AutoLock al(m);
+            if (hold_tid == gettid() && checked) {
+                c = remove checked;
+                r = release;
+            }
+        }
+        if (c) {
+            c.dec();
+            r.waitForZero();
+        }
+        return rv;
+    }
+
+    public sendDataImpl(hash<auto> cx, auto data) {
+    }
+
+    public broadcastDataImpl(auto data) {
+        *Counter s;
+        {
+            AutoLock al(m);
+            push broadcastMessages, data;
+            s = stopped;
+        }
+        if (s && s.getCount()) {
+            s.dec();
+        }
+    }
+}
+
 public class DebugProgramControlTest inherits QUnit::Test {
     private {
         TestDebugProgramControl dpc;
@@ -50,6 +119,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("error handling", \errorHandlingTests());
         addTestCase("connection management", \connectionTests());
         addTestCase("shutdown", \shutdownTests());
+        addTestCase("a thread stops with a client: it waits until it is resumed", \stopWithClientTest());
+        addTestCase("a thread stops as the last client disconnects: it continues", \stopAsClientDisconnectsTest());
         addTestCase("integration", \integrationTests());
         set_return_value(main());
     }
@@ -332,6 +403,85 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq(DebugResponseType::Response,ret.type);
         assertEq("ok", ret.result);
         dpc2.unregisterConnection(CX);
+    }
+
+    #! Runs the detach stop of a thread of a program in the background, with its first connection check held
+    /** @return a hash: \c dpc: the debug control, \c pc: the program, \c done: reaches zero when the stop has returned,
+        \c release: lets the thread go on, \c stopped: reaches zero when the stop is broadcast
+    */
+    private hash<auto> startHeldStop() {
+        HeldStopDebugProgramControl d();
+        d.registerConnection(CX);
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse("int sub held_stop() { return 1; }", "held-stop.q");
+        ProgramControl pc = pgm.getProgram();
+        d.addProgram(pc);
+        Counter checked(1);
+        Counter release(1);
+        Counter stopped(1);
+        Counter done(1);
+        Counter tid_set(1);
+        int tid;
+        background sub () {
+            on_exit done.dec();
+            tid = gettid();
+            d.hold(tid, checked, release, stopped);
+            tid_set.dec();
+            int rs = DebugDetach;
+            int rts = 0;
+            d.onDetach(pc, \rs, \rts);
+        }();
+        tid_set.waitForZero();
+        # the thread has found a connected client and has not yet registered as stopped
+        checked.waitForZero();
+        return {"dpc": d, "pc": pc, "pgm": pgm, "done": done, "release": release, "stopped": stopped};
+    }
+
+    #! A thread that stops while a client is connected waits until it is resumed
+    stopWithClientTest() {
+        hash<auto> h = startHeldStop();
+        HeldStopDebugProgramControl d = h.dpc;
+        on_exit {
+            # a failed assertion must not leave the thread stopped
+            d.shutdown();
+            h.done.waitForZero();
+            d.removeProgram(h.pc);
+        }
+        h.release.dec();
+        h.stopped.waitForZero();
+        assertEq(1, d.broadcastMessages.size(), "the stop is broadcast to the client");
+        assertEq("detach", d.broadcastMessages[0].func, "the stop is the detach of the thread");
+        assertEq(1, h.done.getCount(), "the stopped thread waits for the client");
+        # the client resumes the thread when it disconnects
+        d.unregisterConnection(CX);
+        h.done.waitForZero();
+        assertEq(0, h.done.getCount(), "the thread continues when the client disconnects");
+    }
+
+    #! A thread that stops while the last client disconnects continues instead of waiting for a client
+    /** The client disconnects after the thread has found it connected and before the thread registers as stopped;
+        the disconnect resumes only the threads that are registered then.  The thread used to register and wait
+        forever, so that the debug adapter of an IDE, waiting for the program to end, never ended.
+    */
+    stopAsClientDisconnectsTest() {
+        hash<auto> h = startHeldStop();
+        HeldStopDebugProgramControl d = h.dpc;
+        bool ended;
+        on_exit {
+            if (!ended) {
+                # the thread waits as a stopped thread: it is resumed, so that the test ends
+                d.shutdown();
+                h.done.waitForZero();
+            }
+            d.removeProgram(h.pc);
+        }
+        d.unregisterConnection(CX);
+        assertEq((), d.getConnectionIds(), "no client is connected");
+        h.release.dec();
+        # the thread returns at once; the limit only ends the test if it waits for a client that will never come
+        ended = !h.done.waitForZero(30s);
+        assertTrue(ended, "the thread continues without a client to resume it");
+        assertEq((), d.broadcastMessages, "the thread does not stop");
     }
 
     integrationTests() {
