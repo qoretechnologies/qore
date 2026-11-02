@@ -1,0 +1,405 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# AstTree::getHighlights() highlights Qore source with the highlight query of the grammar (queries/highlights.scm),
+# and AstTree::getErrorRanges() returns the ranges that could not be parsed.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires Util
+%requires QUnit
+%requires astparser
+
+%exec-class AstHighlightsTest
+
+class AstHighlightsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser highlights", "1.0", \ARGV) {
+        addTestCase("comments and directives", \testCommentsAndDirectives());
+        addTestCase("types", \testTypes());
+        addTestCase("literals", \testLiterals());
+        addTestCase("regular expressions", \testRegex());
+        addTestCase("keywords", \testKeywords());
+        addTestCase("context-dependent tokens", \testContextTokens());
+        addTestCase("variables and names", \testNames());
+        addTestCase("range invariants", \testRangeInvariants());
+        addTestCase("character offsets", \testCharOffsets());
+        addTestCase("multi-line ranges", \testMultiLine());
+        addTestCase("empty and missing trees", \testEmpty());
+        addTestCase("error ranges", \testErrorRanges());
+        addTestCase("source with errors", \testHighlightWithErrors());
+        addTestCase("concurrent highlighting", \testConcurrent());
+        addTestCase("installed query file", \testQueryFile());
+        set_return_value(main());
+    }
+
+    #! returns the highlighted ranges of the source as a list of [text, capture] pairs
+    static list<list<string>> getRanges(string src) {
+        AstParser parser();
+        AstTree tree = parser.parseString(src);
+        return map (src.substr($1.start, $1.end - $1.start), $1.capture), tree.getHighlights();
+    }
+
+    #! asserts that the given text is highlighted with the capture
+    assertCapture(string src, string text, string capture) {
+        list<list<string>> ranges = getRanges(src);
+        *list<string> range = first ($1[0] == text), ranges;
+        assertEq(capture, range[1], sprintf("%y in %y; ranges: %y", text, src, ranges));
+    }
+
+    #! asserts that the given text is not part of any highlighted range
+    assertNotHighlighted(string src, string text) {
+        int pos = src.find(text);
+        assertTrue(pos >= 0, sprintf("%y in %y", text, src));
+        AstParser parser();
+        AstTree tree = parser.parseString(src);
+        *hash<AstHighlight> h = first ($1.start < pos + text.length() && $1.end > pos), tree.getHighlights();
+        assertEq(NOTHING, h, sprintf("%y in %y", text, src));
+    }
+
+    testCommentsAndDirectives() {
+        string src = "%modern\n%requires QUnit\n# a comment\n#! a doc comment\n/* block */\n/** doc block */\n"
+            "int i = 1;\n";
+        # adjacent ranges with the same capture are one range
+        assertCapture(src, "%modern\n%requires QUnit\n", "keyword.directive");
+        assertCapture(src, "# a comment", "comment");
+        assertCapture(src, "#! a doc comment", "comment.documentation");
+        assertCapture(src, "/* block */", "comment");
+        assertCapture(src, "/** doc block */", "comment.documentation");
+
+        # a string in a directive is highlighted as a string
+        src = "%include \"file.q\"\n";
+        assertCapture(src, "\"file.q\"", "string");
+
+        # conditional directives and inactive code are not highlighted
+        src = "%ifdef UNDEFINED_SYMBOL\nint i = 1;\n%endif\nstring s;\n";
+        assertEq((("string", "type.builtin"),), getRanges(src));
+    }
+
+    testTypes() {
+        string src = "hash<string, list<int>> h; *string s; softint si; code<int(string)> c;";
+        assertCapture(src, "hash", "type.builtin");
+        assertCapture(src, "list", "type.builtin");
+        assertCapture(src, "int", "type.builtin");
+        assertCapture(src, "*string", "type.builtin");
+        assertCapture(src, "softint", "type.builtin");
+        assertCapture(src, "code", "type.builtin");
+
+        # user types are "type"
+        src = "MyClass m(); Ns::Other o = new Ns::Other();";
+        assertCapture(src, "MyClass", "type");
+        assertCapture(src, "Ns::Other", "type");
+
+        # declarations
+        src = "class Foo inherits Bar {}";
+        assertCapture(src, "Foo", "type");
+        assertCapture(src, "Bar", "type");
+        src = "hashdecl MyHash { int a = 1; }";
+        assertCapture(src, "hashdecl", "keyword.type");
+        assertCapture(src, "MyHash", "type");
+        assertCapture(src, "a", "property");
+
+        # a type name called as a function
+        src = "x = string(1);";
+        assertCapture(src, "string", "type.builtin");
+        # an ordinary function call
+        src = "x = foo(1);";
+        assertCapture(src, "foo", "function.call");
+    }
+
+    testLiterals() {
+        string src = "x = (1, 1.5, 2n, 0x1f, <0a1b>, @inf@, True, False, NULL, NOTHING, c'a');";
+        assertCapture(src, "1", "number");
+        assertCapture(src, "1.5", "number");
+        assertCapture(src, "2n", "number");
+        assertCapture(src, "0x1f", "number");
+        assertCapture(src, "<0a1b>", "number");
+        assertCapture(src, "@inf@", "number.float");
+        assertCapture(src, "True", "constant.builtin");
+        assertCapture(src, "False", "constant.builtin");
+        assertCapture(src, "NULL", "constant.builtin");
+        assertCapture(src, "NOTHING", "constant.builtin");
+        assertCapture(src, "c'a'", "character");
+
+        src = "x = (2024-01-31, 2024-01-31T10:20:30Z, 10:20:30, 5ms, 2D, P1DT2H);";
+        assertCapture(src, "2024-01-31", "number.date");
+        assertCapture(src, "2024-01-31T10:20:30Z", "number.date");
+        assertCapture(src, "10:20:30", "number.date");
+        assertCapture(src, "5ms", "number.date");
+        assertCapture(src, "2D", "number.date");
+        assertCapture(src, "P1DT2H", "number.date");
+
+        src = "x = \"a\\tb\" + 'c' + `ls`;";
+        assertCapture(src, "\"a", "string");
+        assertCapture(src, "\\t", "string.escape");
+        assertCapture(src, "'c'", "string");
+        assertCapture(src, "`ls`", "string.special");
+    }
+
+    testRegex() {
+        string src = "x =~ /a+/i; x =~ s/a/b/g; x =~ tr/a-z/A-Z/; x =~ x/(\\w+)/; x !~ /b/; x =~ s{a}{b}g;";
+        assertCapture(src, "/a+/i", "string.regexp");
+        assertCapture(src, "s/a/b/g", "string.regexp");
+        assertCapture(src, "tr/a-z/A-Z/", "string.regexp");
+        assertCapture(src, "x/(\\w+)/", "string.regexp");
+        assertCapture(src, "/b/", "string.regexp");
+        assertCapture(src, "s{a}{b}g", "string.regexp");
+        assertCapture(src, "=~", "operator");
+        assertCapture(src, "!~", "operator");
+
+        src = "switch (x) { case /^a/: break; }";
+        assertCapture(src, "/^a/", "string.regexp");
+    }
+
+    testKeywords() {
+        string src = "if (a) {} else {} while (b) {} for (;;) {} foreach int i in (l) { continue; } do {} while (c);"
+            " switch (x) { case 1: break; default: break; }";
+        assertCapture(src, "if", "keyword.conditional");
+        assertCapture(src, "else", "keyword.conditional");
+        assertCapture(src, "switch", "keyword.conditional");
+        assertCapture(src, "case", "keyword.conditional");
+        assertCapture(src, "default", "keyword.conditional");
+        assertCapture(src, "while", "keyword.repeat");
+        assertCapture(src, "for", "keyword.repeat");
+        assertCapture(src, "foreach", "keyword.repeat");
+        assertCapture(src, "do", "keyword.repeat");
+        assertCapture(src, "continue", "keyword.repeat");
+        assertCapture(src, "break", "keyword.repeat");
+        assertCapture(src, "in", "keyword.operator");
+
+        src = "sub f() { try { throw \"X\"; } catch (hash<ExceptionInfo> ex) { rethrow; } return 1; }";
+        assertCapture(src, "sub", "keyword.function");
+        assertCapture(src, "try", "keyword.exception");
+        assertCapture(src, "throw", "keyword.exception");
+        assertCapture(src, "catch", "keyword.exception");
+        assertCapture(src, "rethrow", "keyword.exception");
+        assertCapture(src, "return", "keyword.return");
+        assertCapture(src, "f", "function");
+
+        src = "class C { private { int i; } public { const X = 1; } constructor() { on_exit {} } static m() {} }";
+        assertCapture(src, "class", "keyword.type");
+        assertCapture(src, "private", "keyword.modifier");
+        assertCapture(src, "public", "keyword.modifier");
+        assertCapture(src, "const", "keyword.modifier");
+        assertCapture(src, "static", "keyword.modifier");
+        assertCapture(src, "constructor", "keyword");
+        assertCapture(src, "on_exit", "keyword.exception");
+        assertCapture(src, "m", "function.method");
+
+        src = "x = new Mutex(); delete x; y = cast<C>(z); background f(); push l, 1; x = map $1, l; x = exists y;";
+        assertCapture(src, "new", "keyword.operator");
+        assertCapture(src, "delete", "keyword.operator");
+        assertCapture(src, "cast", "keyword.operator");
+        assertCapture(src, "background", "keyword.operator");
+        assertCapture(src, "push", "keyword.operator");
+        assertCapture(src, "map", "keyword.operator");
+        assertCapture(src, "exists", "keyword.operator");
+    }
+
+    testContextTokens() {
+        # "any" is a type in a declaration and a streaming operator in an expression
+        string src = "any a = any $1 > 0, l;";
+        list<list<string>> ranges = getRanges(src);
+        list<string> anys = map $1[1], ranges, $1[0] == "any";
+        assertEq(("type.builtin", "keyword.operator"), anys);
+
+        # "first" is an operator, but a member name after "."
+        src = "x = first $1, l; y = x.first;";
+        ranges = getRanges(src);
+        list<string> firsts = map $1[1], ranges, $1[0] == "first";
+        assertEq(("keyword.operator", "property"), firsts);
+
+        # "enum" is a declaration keyword, and a type in enum<T>
+        src = "enum Color { Red, Green } enum<Color> c;";
+        ranges = getRanges(src);
+        list<string> enums = map $1[1], ranges, $1[0] == "enum";
+        assertEq(("keyword.type", "type.builtin"), enums);
+        assertCapture(src, "Red", "constant");
+    }
+
+    testNames() {
+        string src = "sub f(int arg) { printf(\"%y\\n\", $1); x = self.y; z = l[$#]; g(name: arg); }";
+        assertCapture(src, "$1", "variable.builtin");
+        assertCapture(src, "self", "variable.builtin");
+        assertCapture(src, "$#", "variable.builtin");
+        assertCapture(src, "arg", "variable.parameter");
+        assertCapture(src, "name", "variable.parameter");
+        assertCapture(src, "y", "property");
+        assertCapture(src, "printf", "function.call");
+        # local variables are not highlighted
+        assertNotHighlighted(src, "z");
+
+        # constants by naming convention
+        src = "x = MY_CONSTANT + Ns::OTHER_ONE;";
+        assertCapture(src, "MY_CONSTANT", "constant");
+
+        # strings are not interpolated
+        src = "x = \"a $name b\";";
+        assertCapture(src, "\"a $name b\"", "string");
+    }
+
+    testRangeInvariants() {
+        string src = "%modern\n# comment\nclass Foo inherits Bar {\n    private { hash<string, int> h; }\n"
+            "    int m(*string s) { if (s =~ /x/) { return 1; } return h.size() + 2s.seconds(); }\n}\n";
+        AstParser parser();
+        AstTree tree = parser.parseString(src);
+        list<hash<AstHighlight>> l = tree.getHighlights();
+        assertTrue(l.size() > 10);
+        int last_end = 0;
+        *string last_capture;
+        foreach hash<AstHighlight> h in (l) {
+            assertTrue(h.start < h.end, sprintf("%y", h));
+            assertTrue(h.start >= last_end, sprintf("%y after %d", h, last_end));
+            assertTrue(h.end <= src.length(), sprintf("%y", h));
+            # adjacent ranges have different captures
+            if (h.start == last_end && exists last_capture) {
+                assertNeq(last_capture, h.capture, sprintf("%y", h));
+            }
+            last_end = h.end;
+            last_capture = h.capture;
+        }
+        # the same tree gives the same highlights
+        assertEq(l, tree.getHighlights());
+    }
+
+    testCharOffsets() {
+        # offsets are character offsets, not byte offsets, in UTF-8 source
+        string src = "# äöü €\nstring s = \"€uro\"; int i = 1;";
+        AstParser parser();
+        AstTree tree = parser.parseString(src);
+        list<hash<AstHighlight>> l = tree.getHighlights();
+        hash<string, string> texts = map {src.substr($1.start, $1.end - $1.start): $1.capture}, l;
+        assertEq("comment", texts."# äöü €");
+        assertEq("string", texts."\"€uro\"");
+        assertEq("number", texts."1");
+        assertEq("type.builtin", texts."int");
+
+        # inactive code with characters that are not ASCII keeps the character offsets of the following code
+        src = "%ifdef UNDEFINED_SYMBOL\n# äöü €€€\n%endif\nint i = 1;";
+        tree = parser.parseString(src);
+        texts = map {src.substr($1.start, $1.end - $1.start): $1.capture}, tree.getHighlights();
+        assertEq({"int": "type.builtin", "=": "operator", "1": "number"}, texts);
+
+        # error ranges also have character offsets
+        src = "€€ x = ;";
+        tree = parser.parseString(src);
+        list<hash<AstErrorRange>> errs = tree.getErrorRanges();
+        assertTrue(errs.size() > 0);
+        foreach hash<AstErrorRange> e in (errs) {
+            assertTrue(e.end <= src.length(), sprintf("%y", e));
+        }
+    }
+
+    testMultiLine() {
+        string src = "/* line 1\n   line 2 */\nx = 1;";
+        list<list<string>> ranges = getRanges(src);
+        assertEq(("/* line 1\n   line 2 */", "comment"), ranges[0]);
+    }
+
+    testEmpty() {
+        AstParser parser();
+        AstTree tree = parser.parseString("");
+        assertEq((), tree.getHighlights());
+        assertEq((), tree.getErrorRanges());
+
+        # whitespace and identifiers only
+        tree = parser.parseString("  \n ");
+        assertEq((), tree.getHighlights());
+
+        # an object without a tree
+        AstTree empty();
+        assertEq((), empty.getHighlights());
+        assertEq((), empty.getErrorRanges());
+        # the lists are typed
+        assertEq("list<hash<AstHighlight>>", empty.getHighlights().fullType());
+        assertEq("list<hash<AstErrorRange>>", empty.getErrorRanges().fullType());
+    }
+
+    testErrorRanges() {
+        AstParser parser();
+        AstTree tree = parser.parseString("int i = 1;\nstring s = \"x\";\n");
+        assertEq((), tree.getErrorRanges());
+
+        # unparsable text
+        string src = "int i = 1;\n} ) ]\nint j = 2;\n";
+        tree = parser.parseString(src);
+        list<hash<AstErrorRange>> errs = tree.getErrorRanges();
+        assertTrue(errs.size() > 0);
+        int last_end = 0;
+        foreach hash<AstErrorRange> e in (errs) {
+            assertTrue(e.start >= last_end, sprintf("%y", errs));
+            assertTrue(e.start <= e.end);
+            last_end = e.end;
+        }
+        # the errors are in the second line
+        int line2 = src.find("}");
+        int line3 = src.find("int j");
+        assertTrue(errs[0].start >= line2 && errs.last().end <= line3, sprintf("%y", errs));
+
+        # a missing token is an empty range
+        src = "x = f(1;";
+        tree = parser.parseString(src);
+        errs = tree.getErrorRanges();
+        *hash<AstErrorRange> missing = first ($1.missing), errs;
+        assertTrue(exists missing, sprintf("%y", errs));
+        assertEq(missing.start, missing.end);
+    }
+
+    testHighlightWithErrors() {
+        # the parts of the source that the parser recovers are highlighted
+        string src = "int i = 1;\n} ) ]\nstring s = \"x\";\n";
+        assertCapture(src, "int", "type.builtin");
+        assertCapture(src, "\"x\"", "string");
+    }
+
+    testConcurrent() {
+        # the query is compiled once and shared by all threads
+        string src = "%modern\nclass Foo { int m() { return 1; } }\n# end\n";
+        list<list<string>> expected = getRanges(src);
+        Counter c();
+        list<auto> results = ();
+        Mutex m();
+        for (int i = 0; i < 8; ++i) {
+            c.inc();
+            background sub () {
+                on_exit c.dec();
+                list<list<string>> r;
+                for (int j = 0; j < 20; ++j) {
+                    r = getRanges(src);
+                }
+                m.lock();
+                on_exit m.unlock();
+                results += (r,);
+            }();
+        }
+        c.waitForZero();
+        assertEq(8, results.size());
+        foreach list<list<string>> r in (results) {
+            assertEq(expected, r);
+        }
+    }
+
+    testQueryFile() {
+        # the query file of the grammar is valid for tree-sitter and each capture that it defines is found
+        string path = get_script_dir() + "../grammars/tree-sitter-qore/queries/highlights.scm";
+        if (!is_file(path)) {
+            testSkip("the grammar source is not available");
+        }
+        string query = File::readTextFile(path);
+        # captures in the query
+        list<string> captures = regex_extract(query, "@([a-z][a-z.]*)", RE_Global) ?? ();
+        hash<string, bool> defined = map {$1: True}, captures;
+        assertTrue(defined.size() > 20, sprintf("%y", keys defined));
+
+        # captures returned for code that uses most constructs
+        string src = "%modern\n# c\n#! d\nclass C inherits B { private { int i; } int m(int a) { if (a) { return 1; }"
+            " while (True) { break; } try { throw 1; } catch () {} x = new C(); y = self.i; z = first $1, l;"
+            " w = x =~ /a/; v = \"s\\n$q\"; u = c'a'; t = 1s; s = string(1); r = f(n: 1); p = MY_CONST;"
+            " o = `ls`; return @inf@; } }\nsub f() {}\nhashdecl H { int a; }\nnamespace N {}\n";
+        foreach list<string> r in (getRanges(src)) {
+            assertTrue(defined{r[1]}, sprintf("capture %y for %y is in the query", r[1], r[0]));
+        }
+    }
+}

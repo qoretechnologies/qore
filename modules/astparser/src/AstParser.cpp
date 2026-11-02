@@ -418,9 +418,12 @@ std::string AstParser::preprocessConditionals(const std::string& source, CSTCanc
 
         if (isDirective || !isActive()) {
             // Replace the line content with spaces (preserve column positions for error messages)
-            // but keep the newline
+            // but keep the newline; one space for each UTF-8 character keeps the character offsets of the source,
+            // as returned by AstTree::getHighlights() and AstTree::getErrorRanges()
             for (size_t i = pos; i < lineEnd && i < source.size(); ++i) {
-                result.push_back(' ');
+                if ((static_cast<unsigned char>(source[i]) & 0xC0) != 0x80) {
+                    result.push_back(' ');
+                }
             }
         } else {
             result.append(source, pos, lineEnd - pos);

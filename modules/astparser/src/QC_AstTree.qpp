@@ -30,8 +30,45 @@
 #include "qore/Qore.h"
 #include "qore/QoreSandboxManager.h"
 
+#include "AstHighlighter.h"
+#include "AstParser.h"
 #include "AstTreeHolder.h"
+#include "CSTWalk.h"
 #include "IdentifierFilter.h"
+#include "QC_AstTree.h"
+
+//! A highlighted range of the source, as returned by @ref astparser::AstTree::getHighlights()
+/** @since astparser 3.0
+*/
+hashdecl AstHighlight {
+    //! the character offset of the first character of the range (0-based)
+    int start;
+
+    //! the character offset after the last character of the range
+    int end;
+
+    //! the name of the capture of the highlight query, such as \c "keyword", \c "type.builtin" or \c "comment"
+    /** The names follow the common tree-sitter conventions; see @ref astparser::AstTree::getHighlights()
+    */
+    string capture;
+}
+
+//! A range of the source that could not be parsed, as returned by @ref astparser::AstTree::getErrorRanges()
+/** @since astparser 3.0
+*/
+hashdecl AstErrorRange {
+    //! the character offset of the first character of the range (0-based)
+    int start;
+
+    //! the character offset after the last character of the range; equal to \c start for a missing token
+    int end;
+
+    //! @ref True for a missing token
+    /** A missing token, such as a \c ";" at the end of a statement, is inserted by the parser to recover from the
+        error
+    */
+    bool missing = False;
+}
 
 //! AstTree class
 /** AST tree structure.
@@ -169,4 +206,169 @@ static bool AstTree::identifierFilterContains(binary filter, string name) [flags
         return QoreValue();
     }
     return rv;
+}
+
+//! Returns the syntax highlighting of the source
+/** The source is highlighted with the highlight query of the tree-sitter grammar of %Qore
+    (\c queries/highlights.scm in the grammar, also installed in
+    <tt>share/qore/treesitter/tree-sitter-qore/queries</tt>), which is compiled into the module.
+
+    The ranges do not overlap and are returned in the order of the source; text that no pattern captures has no
+    range.  When several patterns capture the same text, the first pattern of the query wins, and a capture of a node
+    inside another captured node takes precedence over the outer capture.
+
+    The capture names follow the common tree-sitter conventions, for example:
+    - \c "comment", \c "comment.documentation"
+    - \c "keyword", \c "keyword.conditional", \c "keyword.repeat", \c "keyword.return",
+      \c "keyword.exception", \c "keyword.function", \c "keyword.type", \c "keyword.modifier",
+      \c "keyword.operator", \c "keyword.directive" (parse directives)
+    - \c "type", \c "type.builtin"
+    - \c "string", \c "string.escape", \c "string.regexp", \c "string.special", \c "character"
+    - \c "number", \c "number.float", \c "number.date" (date/time literals), \c "constant",
+      \c "constant.builtin"
+    - \c "variable", \c "variable.builtin" (implicit arguments and \c self), \c "variable.parameter",
+      \c "property"
+    - \c "function", \c "function.method", \c "function.call", \c "function.method.call"
+    - \c "operator", \c "module", \c "attribute"
+
+    Source with syntax errors is highlighted as far as the parser recovered from the errors; see
+    @ref astparser::AstTree::getErrorRanges() "AstTree::getErrorRanges()".
+
+    @return the highlighted ranges; offsets are character offsets in the source of the tree, which is UTF-8; an
+    object without a tree returns an empty list
+
+    @par Example
+    @code{.py}
+string src = "int i = 1; # one";
+AstParser parser();
+AstTree tree = parser.parseString(src);
+foreach hash<AstHighlight> h in (tree.getHighlights()) {
+    printf("%s: %y\n", h.capture, src.substr(h.start, h.end - h.start));
+}
+    @endcode
+
+    @throw ASTPARSER-HIGHLIGHT-ERROR the highlight query cannot be compiled
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
+    @since astparser 3.0
+ */
+list<hash<AstHighlight>> AstTree::getHighlights() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> lst(new QoreListNode(hashdeclAstHighlight->getTypeInfo()), xsink);
+    AstParseResult* result = ath->get();
+    if (!result) {
+        return lst.release();
+    }
+    try {
+        std::string err;
+        const AstHighlighter* highlighter = AstHighlighter::get(err);
+        if (!highlighter) {
+            xsink->raiseException("ASTPARSER-HIGHLIGHT-ERROR", "%s", err.c_str());
+            return QoreValue();
+        }
+        CSTCancelCheck cancel(xsink, "highlighting an astparser syntax tree");
+        std::vector<AstHighlightSpan> spans;
+        if (!highlighter->highlight(*result, cancel, spans) || *xsink) {
+            return QoreValue();
+        }
+        std::vector<uint32_t*> offsets;
+        offsets.reserve(spans.size() * 2);
+        for (AstHighlightSpan& span : spans) {
+            offsets.push_back(&span.start);
+            offsets.push_back(&span.end);
+        }
+        if (!AstHighlighter::toCharOffsets(result->getSource(), offsets, cancel)) {
+            return QoreValue();
+        }
+        for (const AstHighlightSpan& span : spans) {
+            if (cancel()) {
+                return QoreValue();
+            }
+            ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclAstHighlight, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            h->setKeyValue("start", static_cast<int64>(span.start), xsink);
+            h->setKeyValue("end", static_cast<int64>(span.end), xsink);
+            h->setKeyValue("capture", new QoreStringNode(highlighter->getCaptureName(span.capture)), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            lst->push(h.release(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+    } catch (const std::exception& e) {
+        xsink->raiseException("ASTPARSER-HIGHLIGHT-ERROR", "cannot highlight the syntax tree: %s", e.what());
+        return QoreValue();
+    }
+    return lst.release();
+}
+
+//! Returns the ranges of the source that could not be parsed
+/** The parser recovers from syntax errors by skipping text, which is returned as an error range, or by inserting a
+    missing token, which is returned as an empty range with \c missing set to @ref True.  An error inside another
+    error range is not returned separately.
+
+    @return the error ranges in the order of the source; offsets are character offsets in the source of the tree,
+    which is UTF-8; the list is empty if the source has no syntax errors or the object has no tree
+
+    @par Example
+    @code{.py}
+AstParser parser();
+AstTree tree = parser.parseString("int i = ;");
+bool ok = tree.getErrorRanges().empty();
+    @endcode
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
+    @since astparser 3.0
+ */
+list<hash<AstErrorRange>> AstTree::getErrorRanges() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> lst(new QoreListNode(hashdeclAstErrorRange->getTypeInfo()), xsink);
+    AstParseResult* result = ath->get();
+    if (!result) {
+        return lst.release();
+    }
+    try {
+        CSTCancelCheck cancel(xsink, "getting the errors of an astparser syntax tree");
+        std::vector<AstErrorSpan> spans;
+        if (!AstHighlighter::getErrors(*result, cancel, spans) || *xsink) {
+            return QoreValue();
+        }
+        std::vector<uint32_t*> offsets;
+        offsets.reserve(spans.size() * 2);
+        for (AstErrorSpan& span : spans) {
+            offsets.push_back(&span.start);
+            offsets.push_back(&span.end);
+        }
+        if (!AstHighlighter::toCharOffsets(result->getSource(), offsets, cancel)) {
+            return QoreValue();
+        }
+        for (const AstErrorSpan& span : spans) {
+            if (cancel()) {
+                return QoreValue();
+            }
+            ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclAstErrorRange, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            h->setKeyValue("start", static_cast<int64>(span.start), xsink);
+            h->setKeyValue("end", static_cast<int64>(span.end), xsink);
+            h->setKeyValue("missing", span.missing, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            lst->push(h.release(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+    } catch (const std::exception& e) {
+        xsink->raiseException("ASTPARSER-PARSE-ERROR", "cannot get the errors of the syntax tree: %s", e.what());
+        return QoreValue();
+    }
+    return lst.release();
 }

@@ -21,6 +21,26 @@
     - @ref astparser::AstTree "AstTree"
     - @ref astparser::AstTreeSearcher "AstTreeSearcher"
 
+    @section astparserhighlighting Syntax Highlighting
+
+    The tree-sitter grammar of %Qore has a highlight query (\c queries/highlights.scm), which is compiled into the
+    module and installed in <tt>share/qore/treesitter/tree-sitter-qore/queries</tt> for editors that use
+    tree-sitter.  @ref astparser::AstTree::getHighlights() "AstTree::getHighlights()" returns the highlighted ranges
+    of a syntax tree with the capture names of the query, and the @ref qdxintro "Qdx" module uses them to highlight
+    the %Qore code in the HTML documentation that doxygen generates.
+
+    @par Example
+    @code{.py}
+%requires astparser
+
+string src = "int i = 1; # one";
+AstParser parser();
+AstTree tree = parser.parseString(src);
+foreach hash<AstHighlight> h in (tree.getHighlights()) {
+    printf("%s: %y\n", h.capture, src.substr(h.start, h.end - h.start));
+}
+    @endcode
+
     @section astparserqlibmodules Qore User Modules
 
     - @ref qoreapimetadataintro "QoreApiMetadata" — structured API metadata extraction for Qore

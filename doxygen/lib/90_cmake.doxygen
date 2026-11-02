@@ -188,6 +188,11 @@
     A module configured against a %Qore build tree, without installing %Qore, uses the build tree's documentation
     template and language index.
 
+    The %Qore code fragments of the generated HTML documentation are highlighted as %Qore when it is post-processed
+    with <tt>qdx --post</tt>; set \c QORE_DOCS_NO_CODE_HIGHLIGHT before calling the documentation macros (or
+    \c QORE_DOC_NO_CODE_HIGHLIGHT in the environment of the build) to keep doxygen's highlighting for documentation
+    whose code fragments are in another language.
+
 
     @subsection QORE_DIST QORE_DIST
     

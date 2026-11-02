@@ -11,6 +11,13 @@
       instead of a bison/flex parser; the generated parser is part of the source distribution, so building the
       module needs neither a Rust toolchain nor the tree-sitter CLI, which are only needed to change the grammar
       (see the \c BUILDING file)
+    - added @ref astparser::AstTree::getHighlights() "AstTree::getHighlights()" and the
+      @ref astparser::AstHighlight "AstHighlight" hashdecl to highlight source with the highlight query of the
+      tree-sitter grammar (\c queries/highlights.scm, installed in <tt>share/qore/treesitter/tree-sitter-qore/queries</tt>
+      for editors that use tree-sitter)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5573">issue 5573</a>)
+    - added @ref astparser::AstTree::getErrorRanges() "AstTree::getErrorRanges()" and the
+      @ref astparser::AstErrorRange "AstErrorRange" hashdecl to get the ranges of the source that cannot be parsed
     - added @ref astparser::AstTree::getIdentifierFilter() "AstTree::getIdentifierFilter()" and
       @ref astparser::AstTree::identifierFilterContains() "AstTree::identifierFilterContains()" to test whether an
       identifier can occur in a file without keeping its syntax tree or reading it again

@@ -13,6 +13,7 @@
 - Optional integrations live in `modules/` (versioned separately).
 - Parser/AST tooling lives in `modules/astparser/`; `qlib/Qdx.qm` and `doxygen/qdx` use it for docs.
 - The `astparser` parser is a **tree-sitter grammar**: edit `modules/astparser/grammars/tree-sitter-qore/grammar.js`, then regenerate the committed `src/parser.c`/`src/grammar.json`/`src/node-types.json` with `npx tree-sitter-cli@0.26.13 generate` (version pinned in `package.json`; needs node, `nvm use v24`). CMake compiles the committed `parser.c` directly and never runs tree-sitter, so changes to language syntax accepted by the core parser (`lib/parser.ypp`, `lib/scanner.lpp`) must be reflected in `grammar.js` too, or `qdx`/docs builds will fail to parse them.
+- The grammar's highlight query `modules/astparser/grammars/tree-sitter-qore/queries/highlights.scm` is compiled into astparser (`AstTree::getHighlights()`) and used by `qdx --post` to highlight Qore code in the HTML docs (`Qdx::QoreCodeFragmentHighlighter`); a grammar change that renames or removes node types, fields or tokens must update it, or the query fails to compile (`modules/astparser/test/highlights.qtest`). See `design/doc-code-highlighting.md`.
 
 ## Build, Test, and Development Commands
 - `cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/usr` configures the recommended CMake build.
