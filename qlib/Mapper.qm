@@ -60,7 +60,17 @@ module Mapper {
     - @ref Mapper::AbstractMapperIterator "AbstractMapperIterator": an abstract base class for iterator mapper classes
     - @ref Mapper::MapperIterator "MapperIterator": a class that automatically applies a data mapper to iterated data
 
-    @section mapperexamples Mapper Examples
+    @section mapperdocs Mapper Documentation
+
+    - @subpage mapperexamples "Mapper Examples": a complete example mapping with its input and output
+    - @subpage mapperkeys "Mapper Specification Format": the field specifications of a mapper hash
+    - @subpage mapperoptions "Mapper Options": the constructor options, including the deprecated ones, and runtime
+      options
+    - @subpage mapperrelnotes "Release Notes": the changes in each version
+*/
+/** @page mapperexamples Mapper Examples
+
+    @tableofcontents
 
     The following is an example map hash with comments:
     @code{.py}
@@ -71,7 +81,7 @@ const DataMap = (
     "name": True,
     # output field: "explicit_count": maps from the input "Count" field, if any value is present then it is converted to an integer
     "explicit_count": ("type": "int", "name": "Count"),
-    # output field: "implicit_count": runs the given code on the input record and retuns the result, the code returns the number of "Products" sub-records
+    # output field: "implicit_count": runs the given code on the input record and returns the result, the code returns the number of "Products" sub-records
     "implicit_count": int sub (auto ignored, hash rec) { return rec.Products.size(); },
     # output field: "order_date": converts the "OrderDate" string input field to a date in the specified format
     "order_date": ("name": "OrderDate", "date_format": "DD.MM.YYYY HH:mm:SS.us"),
@@ -123,15 +133,17 @@ list: (2 elements)
     name : "Steve Austin"
     explicit_count : 2
     implicit_count : 2
-    order_date : 2014-01-04 19:21:08.882634 Sat +01:00 (CET))
+    order_date : 2014-01-04 19:21:08.882634 Sat +01:00 (CET)
     @endverbatim
+*/
+/** @page mapperkeys Mapper Specification Format
 
-    @section mapperkeys Mapper Specification Format
+    @tableofcontents
 
     The mapper hash is made up of target (ie output) field names (note that dotted output field names result in a nested hash output unless the \a allow_output_dot option is set) as the key values assigned to field specifications as follows:
     - @ref True "True": this is a shortcut meaning map from an input field with the same name
     - a @ref string_type "string": giving the input field name directly (equivalent to a hash with the \c "name" key)
-    - a @ref closure "closure" or @ref call_reference "call reference": meaning map from a field of the same name an apply the given code to give the value for the mapping (equivalent to a hash with the \c "code" key); the @ref closure "closure" or @ref call_reference "call reference" must accept the following arguments:
+    - a @ref closure "closure" or @ref call_reference "call reference": meaning map from a field of the same name and apply the given code to give the value for the mapping (equivalent to a hash with the \c "code" key); the @ref closure "closure" or @ref call_reference "call reference" must accept the following arguments:
       - @ref any_type "any" <i>value</i>: the input field value (with the same name as the output field; to use a different name, see the \a code hash option below)
       - @ref hash_type "hash" <i>rec</i>: the current input record
     - a @ref hash_type "hash" describing the mapping; the following keys are all optional (an empty hash means map from an input field with the same name with no translations):
@@ -142,11 +154,11 @@ list: (2 elements)
       - \c "default": gives a default value for the field in case no input or translated value is provided
       - \c "mand": assign to boolean @ref True "True" if the field is mandatory and an exception should be thrown if no input data is supplied
       - \c "maxlen": an integer giving the maximum output string field length in bytes
-      - \c "name": the value of this key gives the name of the input field; only use this if the input record name is different than the output field name; note that if this value contains \c "." characters and the \a allow_dot option is not set (see @ref mapperoptions), then the value will be treated like \c "struct" (the \c "struct" key value will be created automatically); cannot be used with the \c "constant" ior \c "index" keys
+      - \c "name": the value of this key gives the name of the input field; only use this if the input record name is different than the output field name; note that if this value contains <tt>&quot;.&quot;</tt> characters and the \a allow_dot option is not set (see @ref mapperoptions), then the value will be treated like \c "struct" (the \c "struct" key value will be created automatically); cannot be used with the \c "constant" or \c "index" keys
       - \c "number_format": gives the format for converting an input string to a number; see @ref Qore::parse_number() for the format of this string; note that this also implies \c "type" = \c "number"
       - \c "output_key_path": gives the output path for hash output values; each element in the list is a string key name
       - \c "runtime": a reference to @ref mapper_runtime_handling current status. The value is key in the current runtime structure.
-      - \c "struct": the value of this key gives the location of the input field in an input hash in dot notation, ex: \c "element.name" would look for the field's value in the \c "name" key of the \c "element" hash in the input record; cannot be used with the \c "constant" or \c "index" keys; this option is only necessary in place of the "name" option if the \a allow_dot option is set, otherwise use \c "name" instead
+      - \c "struct": the value of this key gives the location of the input field in an input hash in dot notation, ex: <tt>&quot;element.name&quot;</tt> would look for the field's value in the \c "name" key of the \c "element" hash in the input record; cannot be used with the \c "constant" or \c "index" keys; this option is only necessary in place of the \c "name" option if the \a allow_dot option is set, otherwise use \c "name" instead
       - \c "trunc": assign to boolean @ref True "True" if the field should be truncated if over the maximum field length; this key can only be set to @ref True "True" if the \c "maxlen" key is also given
       - \c "type": this gives the output field type, can be:
         - \c "date": date/time field
@@ -156,8 +168,10 @@ list: (2 elements)
         - \c "hash": field accepts hash values
         - \c "any": field accepts any value
       - \c "type_options": a hash of type options to set or override type options for the output field
+*/
+/** @page mapperoptions Mapper Options
 
-    @section mapperoptions Mapper Options
+    @tableofcontents
 
     Mapper objects accept the following options in the option hash:
     - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-style
@@ -227,7 +241,7 @@ list: (2 elements)
       used with the output provider, and the @ref Mapper::Mapper::flushOutput() "Mapper::flushOutput()" method must be
       called after all mapping is done to flush the output buffer to the output provider at the end, or
       @ref Mapper::Mapper::discardOutput() "Mapper::discardOutput()" must be called to discard any data left in the
-      bulk output buffer if the results should be discarded (ex: the output provide requires transaction management
+      bulk output buffer if the results should be discarded (ex: the output provider requires transaction management
       and an error occurs causing the transaction to be rolled back)
     - \c "output_provider_passive": if this option is set and a record-based or request-reply output provider is set,
       then nothing will be written to the output provider when mapping; the output provider will only be used to
@@ -241,14 +255,39 @@ list: (2 elements)
       any field without a \c "trunc" key (see @ref mapperkeys \c "trunc" description) will automatically be truncated
       if a \c "maxlen" attribute is set for the field
 
+    The following options are also accepted:
+    - \c "disable_bulk": if @ref True "True", a hash of lists given as input to
+      @ref Mapper::Mapper::mapAuto() "mapAuto()" is not processed as a bulk operation
+    - \c "global_type_options": a hash of type options used by every applicable field that does not set the option
+      itself
+    - \c "ignore_missing_input": if @ref True "True", an output field with an input mapping whose value is missing in
+      the input, and which does not require a value, is left out of the output record entirely; useful for delta
+      updates with variable input; cannot be used with bulk input
+    - \c "input_suppress_data_provider": if @ref True "True", any input data provider is used for type information only
+    - \c "output_suppress_data_provider": if @ref True "True", any output data provider is used for type information
+      only
+    - \c "output_create_ignore_duplicates": if @ref True "True", duplicate records are ignored when records are created
+      with an output data provider
+    - \c "output_request_options": options for output providers that use the request/response API
+    - \c "mapper_handler_context": a hash passed to field handlers as their context argument
+    - \c "mapper_thread_context": an optional thread context hash
+    - \c "submappers": a hash of global submappers, where each key is the name of a submapper and each value a hash of
+      its options; requires the \c "submapper_get" option
+    - \c "submapper_get": a call reference or closure that returns a submapper:
+      <tt>sub (string name, *hash&lt;auto&gt; opts) {}</tt>
+    - \c "runtime_keys": field keys provided as a Mapper option, as a <tt>hash&lt;string, hash&lt;MapperRuntimeKeyInfo&gt;&gt;</tt>
+    - \c "template_subst": a call reference or closure for template substitution; required by the
+      \c "submapper_options" mapper key
+
     The following deprecated options are also accepted:
+    - \c "empty_strings_to_nothing": converts the empty strings of output records to @ref nothing
     - \c "allow_dot": if @ref True "True" (as evaluated by @ref Qore::parse_boolean() "parse_boolean()") then
-      field names with \c "." characters do not imply a structured internal element lookup; in this case input field
-      names may have \c "." characters in them, use the \c "struct" key to use structured internal element loopups
+      field names with <tt>&quot;.&quot;</tt> characters do not imply a structured internal element lookup; in this case input field
+      names may have <tt>&quot;.&quot;</tt> characters in them, use the \c "struct" key to use structured internal element lookups
       (see @ref mapperkeys \c "struct" docs for more info)
     - \c "allow_output_dot": if @ref True "True" (as evaluated by @ref Qore::parse_boolean() "parse_boolean()")
-      then output field names with \c "." characters do not imply a structured/hash output element; in this case
-      output field names may have \c "." characters in them
+      then output field names with <tt>&quot;.&quot;</tt> characters do not imply a structured/hash output element; in this case
+      output field names may have <tt>&quot;.&quot;</tt> characters in them
     - \c "date_format": gives the global format for converting a string to a date; see @ref date_formatting for the
       format of this string; this is applied to all fields of type \c "date" unless the field has a \c "date_format"
       value that overrides this global setting
@@ -305,10 +344,12 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     @ref Mapper::Mapper::replaceRuntime() "Mapper::replaceRuntime()" methods are deprecated - please use
     @ref Mapper::Mapper "Mapper" construction options to set runtime values instead. The methods are deprecated since
     runtime options duplicate existing functionality and are confusing and error-prone to use.
+*/
+/** @page mapperrelnotes Release Notes
 
-    @section mapperrelnotes Release Notes
 
-    @subsection mapperv1_8 Mapper v1.8
+    @section mapperv1_8 Mapper v1.8
+    - fixed the documented \c trunc_all option (see @ref mapperoptions), which the mapper rejected with \c MAP-ERROR
     - fixed @ref Mapper::Mapper::mapBulk() "Mapper::mapBulk()" to accept a record set whose values all have the same
       type, such as a literal <tt>{"a": ("x", "y")}</tt>; adding a constant value from the second argument raised
       \c RUNTIME-TYPE-ERROR
@@ -327,50 +368,50 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       \c getShapedValue(); \c mapAutoInput() now accumulates all bulk blocks before returning
     - added @ref Mapper::Mapper::getMapHash() "Mapper::getMapHash()" to return the original field mapping hash
 
-    @subsection mapperv1_6_2 Mapper v1.6.2
+    @section mapperv1_6_2 Mapper v1.6.2
     - fixed a bug handling default values for output fields with required (not-null) types
       (<a href="https://github.com/qoretechnologies/qore/issues/4847">issue 4847</a>)
     - fixed a bug handling the \c trunc option in mappers when bulk processing
       (<a href="https://github.com/qoretechnologies/qore/issues/4845">issue 4845</a>)
 
-    @subsection mapperv1_6_1 Mapper v1.6.1
+    @section mapperv1_6_1 Mapper v1.6.1
     - fixed @ref Mapper::Mapper::mapAuto() "Mapper::mapAuto()" to accept an iterator argument
       (<a href="https://github.com/qoretechnologies/qore/issues/4629">issue 4629</a>)
 
-    @subsection mapperv1_6 Mapper v1.6
+    @section mapperv1_6 Mapper v1.6
     - implemented options supporting suppressing data provider calls on input and output
       (<a href="https://github.com/qoretechnologies/qore/issues/4462">issue 4462</a>)
 
-    @subsection mapperv1_5_9 Mapper v1.5.9
+    @section mapperv1_5_9 Mapper v1.5.9
     - fixed an error mapping bulk data with custom output field handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4460">issue 4460</a>)
 
-    @subsection mapperv1_5_8 Mapper v1.5.8
+    @section mapperv1_5_8 Mapper v1.5.8
     - fixed an error mapping bulk data with custom output field handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4460">issue 4460</a>)
 
-    @subsection mapperv1_5_7 Mapper v1.5.7
+    @section mapperv1_5_7 Mapper v1.5.7
     - fixed a bug where it was not possible to use a Mapper with an output provider only for the output data type
       (<a href="https://github.com/qoretechnologies/qore/issues/4369">issue 4369</a>)
 
-    @subsection mapperv1_5_6 Mapper v1.5.6
+    @section mapperv1_5_6 Mapper v1.5.6
     - respect escaped dots in field names (\.) when separating field names
       (<a href="https://github.com/qoretechnologies/qore/issues/4315">issue 4315</a>)
 
-    @subsection mapperv1_5_5 Mapper v1.5.5
+    @section mapperv1_5_5 Mapper v1.5.5
     - fixed handling automatically-acquired input and output data structions with dots in field names; un-deprecated
       the \c allow_dot and \c allow_output_dot options
       (<a href="https://github.com/qoretechnologies/qore/issues/4309">issue 4309</a>)
 
-    @subsection mapperv1_5_4 Mapper v1.5.4
+    @section mapperv1_5_4 Mapper v1.5.4
     - fixed a bug handling the \c struct key in mappers
       (<a href="https://github.com/qoretechnologies/qore/issues/4189">issue 4189</a>)
 
-    @subsection mapperv1_5_3 Mapper v1.5.3
+    @section mapperv1_5_3 Mapper v1.5.3
     - fixed a bug handling external runtime keys with bulk input for keys that do not require the current input value
       (<a href="https://github.com/qoretechnologies/qore/issues/3931">issue 3931</a>)
 
-    @subsection mapperv1_5_2 Mapper v1.5.2
+    @section mapperv1_5_2 Mapper v1.5.2
     - added the @ref Mapper::Mapper::mapAutoInput() "Mapper::mapAutoInput()" method
     - added the following \c output_create_ignore_duplicates option
     - fixed a bug where mapper output data was not logged in case of an error in an output provider
@@ -382,7 +423,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     - implemented support for nested mappers including the \c submappers option
       (<a href="https://github.com/qoretechnologies/qore/issues/3414">issue 3414</a>)
 
-    @subsection mapperv1_5_1 Mapper v1.5.1
+    @section mapperv1_5_1 Mapper v1.5.1
     - added the \c ignore_missing_input mapper option
       (<a href="https://github.com/qoretechnologies/qore/issues/3837">issue 3837</a>)
     - added support for the \c use_input_record output field mapping key
@@ -391,11 +432,11 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
       \c output_nullable option
       (<a href="https://github.com/qoretechnologies/qore/issues/3788">issue 3788</a>)
 
-    @subsection mapperv1_5 Mapper v1.5
+    @section mapperv1_5 Mapper v1.5
     - added support for the DataProvider module to describe input and output records
       (<a href="https://github.com/qoretechnologies/qore/issues/3545">issue 3545</a>)
 
-    @subsection mapperv1_4_1 Mapper v1.4.1
+    @section mapperv1_4_1 Mapper v1.4.1
     - fixed a bug where list values could not be passed as a value in non-bulk mode
       (<a href="https://github.com/qoretechnologies/qore/issues/3611">issue 3611</a>)
     - added support for types "any" and "hash"
@@ -403,20 +444,20 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     - added support for dot notation in output fields for the "hash" output type
       (<a href="https://github.com/qoretechnologies/qore/issues/3413">issue 3413</a>)
 
-    @subsection mapperv1_4 Mapper v1.4
+    @section mapperv1_4 Mapper v1.4
     - added support for complex types
     - fixed a bug in the \c STRING-TOO-LONG exception (<a href="https://github.com/qoretechnologies/qore/issues/2495">issue 2405</a>)
 
-    @subsection mapperv1_3_1 Mapper v1.3.1
+    @section mapperv1_3_1 Mapper v1.3.1
     - fixed bugs handling mapper fields with no input records in list mode as passed from the \c TableMapper module (<a href="https://github.com/qoretechnologies/qore/issues/1736">issue 1736</a>)
 
-    @subsection mapperv1_3 Mapper v1.3
+    @section mapperv1_3 Mapper v1.3
     - internal updates to allow for TableMapper insert performance improvements (<a href="https://github.com/qoretechnologies/qore/issues/1626">issue 1626</a>)
 
-    @subsection mapperv1_2 Mapper v1.2
+    @section mapperv1_2 Mapper v1.2
     - significantly improved mapper performance with identity (i.e. 1:1) and constant mappings (<a href="https://github.com/qoretechnologies/qore/issues/1620">issue 1620</a>)
 
-    @subsection mapperv1_1 Mapper v1.1
+    @section mapperv1_1 Mapper v1.1
     - implemented \c "constant" field tag giving a constant value for the output of a field
     - implemented structured output for dotted output field names and the \c "allow_output_dot" option to suppress this behavior
     - implemented \c "default" field tag giving a default value if no input value is specified
@@ -437,7 +478,7 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
     - implemented \c "index" field tag for current row index
     - improved the @ref Mapper::Mapper::mapAll() method by adding support for hashes of lists to better support input from bulk DML (@ref Qore::SQL::SQLStatement::fetchColumns() "SQLStatement::fetchColumns()")
 
-    @subsection mapperv1_0 Mapper v1.0
+    @section mapperv1_0 Mapper v1.0
     - initial release
 */
 
@@ -483,6 +524,8 @@ public class Mapper inherits DataProvider::AbstractDataProcessor {
             "template_subst": "a call reference / closure for template substitution; used and required for the "
                 "\"submapper_options\" mapper key",
             "timezone": "DEPRECATED: the default output timezone for date/time values",
+            "trunc_all": "truncates every field with a \"maxlen\" and no \"trunc\" key to its maximum length "
+                "(evaluated with parse_boolean())",
         };
 
         #! User options
@@ -831,7 +874,7 @@ const DataMap = (
 "name": True,
 # output field: "explicit_count": maps from the input "Count" field, if any value is present then it is converted to an integer
 "explicit_count": ("type": "int", "name": "Count"),
-# output field: "implicit_count": runs the given code on the input record and retuns the result, the code returns the number of "Products" sub-records
+# output field: "implicit_count": runs the given code on the input record and returns the result, the code returns the number of "Products" sub-records
 "implicit_count": int sub (auto ignored, hash rec) { return rec.Products.size(); },
 # output field: "order_date": converts the "OrderDate" string input field to a date in the specified format
 "order_date": ("name": "OrderDate", "date_format": "DD.MM.YYYY HH:mm:SS.us"),
