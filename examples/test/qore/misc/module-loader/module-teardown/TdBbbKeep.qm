@@ -1,0 +1,13 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+
+module TdBbbKeep {
+    version = "1.0";
+    desc = "module teardown late-load fixture";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+class TdBbbKeepTracker {
+    destructor() { printf("keep destroyed\n"); }
+}
+public const TdBbbKeepValue = new TdBbbKeepTracker();

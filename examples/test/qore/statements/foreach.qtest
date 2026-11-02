@@ -13,13 +13,52 @@
 
 %exec-class ForEachTest
 
+class ForEachTracker {
+    public {
+        string name;
+        reference<list<string>> events;
+    }
+    constructor(string name, reference<list<string>> events) {
+        self.name = name;
+        self.events = \events;
+    }
+    destructor() {
+        events += name;
+    }
+}
+
 class ForEachTest inherits QUnit::Test {
     constructor() : QUnit::Test("ForEachTest", "1.0", \ARGV) {
         addTestCase("weak reference tests", \weakReferenceTests());
         addTestCase("basic operator tests", \basicTests());
         addTestCase("implicit element tests", \implicitElementTests());
         addTestCase("reference write-back when leaving early", \referenceEarlyExitTests());
+        addTestCase("range slice of a variable assigned in the body", \rangeSliceVariableTests());
         set_return_value(main());
+    }
+
+    rangeSliceVariableTests() {
+        # the loop iterates the list that the variable held when the loop started, which it holds until the loop ends
+        list<string> events = ();
+        list<auto> l = (new ForEachTracker("r0", \events), new ForEachTracker("r1", \events),
+            new ForEachTracker("r2", \events));
+        foreach ForEachTracker t in (l[0..1]) {
+            l = ();
+            events += "body " + t.name;
+        }
+        events += "after";
+        assertEq(("body r0", "body r1", "r0", "r2", "r1", "after"), events);
+        # the same with an open range and a reassignment to another list
+        events = ();
+        l = (new ForEachTracker("o0", \events), new ForEachTracker("o1", \events));
+        list<string> names = ();
+        foreach ForEachTracker t in (l[1..]) {
+            l = (1, 2, 3);
+            names += t.name;
+        }
+        assertEq(("o1",), names);
+        assertEq(("o0", "o1"), events);
+        assertEq((1, 2, 3), l);
     }
 
     weakReferenceTests() {

@@ -14,6 +14,7 @@
 #include <qore/QoreObject.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/QoreIRVerifier.h>
@@ -72,6 +73,20 @@ static bool checkAOTOpcodeCompatibility() {
         {QoreIROpcode::CommonTypeFold, 21, 416, 414},
         {QoreIROpcode::HashSetCommonType, 21, 416, 415},
         {QoreIROpcode::ListSetScannedType, 21, 416, 416},
+        {QoreIROpcode::CheckReturnValue, 21, 417, 409},
+        {QoreIROpcode::IteratorRelease, 21, 417, 410},
+        {QoreIROpcode::ReleaseOwnedTemp, 21, 417, 411},
+        {QoreIROpcode::DebugStatement, 21, 417, 412},
+        {QoreIROpcode::ListSetCommonType, 21, 417, 413},
+        {QoreIROpcode::CommonTypeFold, 21, 417, 414},
+        {QoreIROpcode::HashSetKeyValueFold, 21, 417, 414},
+        {QoreIROpcode::HashSetCommonType, 21, 417, 415},
+        {QoreIROpcode::ListSetScannedType, 21, 417, 416},
+        {QoreIROpcode::LegacyListAppendElement, 21, 417, 417},
+        {QoreIROpcode::ListAppendElement, 21, 417, 417},
+        {QoreIROpcode::HashSetKeyValueFold, 22, 421, 0},
+        {QoreIROpcode::ListAppendElement, 22, 421, 0},
+        {QoreIROpcode::LegacyListAppendElement, 22, 421, 0},
         {QoreIROpcode::DebugStatement, 22, 418, 0},
         {QoreIROpcode::ListSetCommonType, 22, 418, 0},
         {QoreIROpcode::CommonTypeFold, 22, 418, 0},
@@ -112,6 +127,12 @@ static bool checkAOTOpcodeCompatibility() {
             builder.createListSetCommonType(result, result, bigIntTypeInfo, nullptr);
         } else if (test.opcode == QoreIROpcode::CommonTypeFold) {
             result = builder.createCommonTypeFold(result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::HashSetKeyValueFold) {
+            result = builder.createHashSetKeyValueFold(result, result, result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::ListAppendElement) {
+            result = builder.createListAppendElement(result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::LegacyListAppendElement) {
+            builder.createBinaryOp(test.opcode, result, result);
         } else if (test.opcode == QoreIROpcode::HashSetCommonType) {
             builder.createHashSetCommonType(result, result, nullptr);
         } else if (test.opcode == QoreIROpcode::ListSetScannedType) {
@@ -192,6 +213,61 @@ static bool checkAOTOpcodeCompatibility() {
                     && restored->blocks[0]->instructions[1]->element_type != bigIntTypeInfo)) {
             std::cerr << "opcode compatibility round trip failed: " << error << "\n";
             return false;
+        }
+    }
+    return true;
+}
+
+// The compatibility-only opcode must still execute and propagate conversion errors; new writers use the
+// state-carrying append. Check both against the same list values without relying only on numeric opcode IDs.
+static bool checkMapOpcodeExecution() {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm(xsink);
+    if (xsink) {
+        return false;
+    }
+    QoreExternalProgramContextHelper context(&xsink, *pgm);
+    if (xsink) {
+        return false;
+    }
+    for (bool legacy : {true, false}) {
+        for (bool reject : {false, true}) {
+            QoreIRFunction func("map-opcode-execution");
+            QoreIRBuilder builder(&func);
+            builder.setBlock(func.createBlock("entry"));
+            auto list = builder.createEmptyList(nullptr, bigIntTypeInfo)->result;
+            QoreIRValue value;
+            if (reject) {
+                value = builder.createConstString("not an integer")->result;
+            } else {
+                value = builder.createConstInt(7)->result;
+            }
+            auto state = builder.createConstInt(0)->result;
+            if (legacy) {
+                auto* inst = builder.append<QoreIRInstruction>(QoreIROpcode::LegacyListAppendElement);
+                inst->operands = {list, value};
+                auto folded = builder.createCommonTypeFold(state, value, QoreIRValue())->result;
+                builder.createListSetCommonType(list, folded, bigIntTypeInfo);
+            } else {
+                auto folded = builder.createListAppendElement(list, value, state)->result;
+                builder.createListSetCommonType(list, folded, bigIntTypeInfo);
+            }
+            builder.createReturn(list);
+            QoreValue result;
+            bool ok = QoreIRInterpreter::execute(func, result, &xsink);
+            ValueHolder result_holder(result, &xsink);
+            if (reject) {
+                if (ok || !xsink) {
+                    std::cerr << "map opcode failed to reject incompatible element\n";
+                    return false;
+                }
+                xsink.clear();
+            } else if (!ok || xsink || result.getType() != NT_LIST
+                    || result.get<const QoreListNode>()->size() != 1
+                    || result.get<const QoreListNode>()->retrieveEntry(0).getAsBigInt() != 7) {
+                std::cerr << "map opcode returned an incorrect list\n";
+                return false;
+            }
         }
     }
     return true;
@@ -346,6 +422,7 @@ int main() {
     qore_init(QL_GPL);
     bool ok = checkOpcodeRegistry()
         && checkAOTOpcodeCompatibility()
+        && checkMapOpcodeExecution()
         && checkQoreValueTagReservations()
         && checkTypeProfileBuiltins()
         && checkTypeProfileClassPayload()

@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+# The unused local below is deliberately accessed only by its reflected name.
+%disable-warning unreferenced-variable
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "LOCAL-REFLECTION", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub visible(int first, int unused) {
+    int value = first;
+    hash<auto> locals = get_local_vars(0);
+    expect(first, locals.first.value);
+    expect(17, locals.unused.value);
+    expect(first, locals.value.value);
+    expect(True, exists locals.argv);
+    set_local_var_value(0, "value", 29);
+    expect(29, value);
+    return value;
+}
+int sub unusedParameter(int unused) {
+    return get_local_vars(0).unused.value;
+}
+class ReflectionReceiver {
+    public int unusedParameter(int unused) {
+        return get_local_vars(0).unused.value;
+    }
+    public static int staticParameter(int unused) {
+        return get_local_vars(0).unused.value;
+    }
+    public int check() {
+        expect(self, get_local_vars(0).self.value);
+        return visible(5, 17);
+    }
+}
+sub blockReentry() {
+    for (int i = 0; i < 4; ++i) {
+        {
+            int unset;
+            auto value = float(i);
+            hash<auto> locals = get_local_vars(0);
+            expect(True, exists locals.unset);
+            expect(float(i), locals.value.value);
+        }
+        expect(False, exists get_local_vars(0).value);
+        expect(False, exists get_local_vars(0).unset);
+    }
+}
+sub replaceSameList(int kind) {
+    if (kind == 0) {
+        set_local_var_value(1, "values", NOTHING);
+    } else if (kind == 1) {
+        list<int> other = (45,);
+        set_local_var_value(1, "values", other);
+    } else {
+        set_local_var_value(1, "values", "invalid");
+    }
+}
+
+string sub sameListReflected(int kind) {
+    list<int> values = (7,);
+    call_function("replaceSameList", kind);
+    try {
+        push values, 3;
+        return sprintf("%y:%s", values, values.fullType());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+expect(29, visible(5, 17));
+code<int(int,int)> ref = \visible();
+expect(29, ref(5, 17));
+expect(17, unusedParameter(17));
+code<int(int)> unused_ref = \unusedParameter();
+expect(17, unused_ref(17));
+ReflectionReceiver receiver();
+expect(29, receiver.check());
+expect(17, receiver.unusedParameter(17));
+expect(17, ReflectionReceiver::staticParameter(17));
+code<int(int)> closure = int sub (int unused) { return get_local_vars(0).unused.value; };
+expect(17, closure(17));
+expect("[3]:list<int>", call_function("sameListReflected", 0));
+expect("[45, 3]:list", call_function("sameListReflected", 1));
+expect("PUSH-ERROR", call_function("sameListReflected", 2));
+blockReentry();
+printf("local-reflection: ok\n");

@@ -24,6 +24,11 @@
     on_error rethrow in a nested block under a function-level on_error handler, because a throw that no
     local variable cleanup anchors fires the handlers of every enclosing scope in one pass.
 
+    The IR tiers also lost the handlers of a block whose exception cleanup is anchored (inside a try, or
+    holding a local that can hold an object) when the exception came from a nested block holding only
+    handlers: that block had no anchor of its own, so the enclosing cleanup closed the nested scope in place of
+    its own, and its own handlers ran only at frame exit, after its locals were released.
+
     The worker runs each case and prints one line per case; the line holds the outcome and the handlers
     that ran, in order.  It is run in every execution mode and as a qcc-compiled executable, and every line
     must match the expected (interpreter) result exactly.
@@ -58,6 +63,8 @@ class OnErrorRethrowTest inherits QUnit::Test {
             "catch_in_body": "returned 14 [catch:in-try]",
             "rethrow_from_catch": "caught E:from-catch [oe:from-catch]",
             "rethrow_args_throw": "caught E:d -> ARG:rethrow argument failed [oe:E]",
+            "try_inner_handler": "caught E:d+inner [release]",
+            "try_nested_handlers": "caught E:d+inner [mid:d+inner,release]",
             "post_ok": "returned 16 []",
             "post_err": "caught EVENT-ERROR:object (key \"obj\") (key \"info\") (event) [release,oe]",
         };

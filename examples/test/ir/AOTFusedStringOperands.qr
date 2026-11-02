@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Fused string producer/consumer calls with integer offsets, starts and lengths held in locals, in a function that is
+# lowered again without its local unwind anchors (an object local, try blocks, an unassigned and a removed local) in a
+# Program that can be debugged.  The fused consumers must take each integer once: an operand that the consumer appends
+# is already unboxed (AOTFusedStringOperands.qtest compares the output with the AST interpreter).
+
+string sub concatPair(string left, string right) {
+    return left + right;
+}
+string sub convertInt(int value) {
+    return string(value);
+}
+final class Factory {
+    static string joinStatic(string left, string right) {
+        return left + right;
+    }
+    string joinInstance(string left, string right) {
+        return left + right;
+    }
+}
+
+int sub kernel(int base) {
+    string left = "Dvorak-Smetana-";
+    string right = "Janacek-Martinu";
+    int offset = base + 2;
+    int start = base + 1;
+    int length = base + 7;
+    Factory factory();
+    printf("%d|%d|%s|%s|%s|%d|%d\n",
+        concatPair(left, right).find(right, offset),
+        Factory::joinStatic(left, right).rfind(right, offset),
+        concatPair(left, right).substr(start, length),
+        concatPair(left, right).substr(start),
+        Factory::joinStatic(left, right).substr(start, length),
+        convertInt(start * 1000).length(),
+        convertInt(length).size());
+    printf("method:%s\n", factory.joinInstance(left, right).substr(start, length));
+    int unassigned;
+    bool unassigned_rejected = False;
+    try {
+        concatPair(left, right).find(right, unassigned);
+    } catch (hash<auto> ex) {
+        unassigned_rejected = True;
+    }
+    int removed = 3;
+    remove removed;
+    bool removed_rejected = False;
+    try {
+        concatPair(left, right).substr(start, removed);
+    } catch (hash<auto> ex) {
+        removed_rejected = True;
+    }
+    printf("guards:%d:%d\n", unassigned_rejected, removed_rejected);
+    int total = 0;
+    for (int i = 0; i < 6; ++i) {
+        total += concatPair(left, right).substr(i, length).size() + convertInt(i).length()
+            + concatPair(left, right).find(right, i);
+    }
+    return total;
+}
+
+for (int i = 0; i < 3; ++i) {
+    printf("total:%d\n", kernel(i));
+}

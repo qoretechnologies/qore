@@ -151,14 +151,17 @@ public:
     DLLLOCAL void addOptions(int opts) { options |= opts; }
 
     //! Returns the original pattern string (preserved for AOT serialization)
+    /** @return the pattern, which is an empty string for an empty pattern (as in <tt>//</tt>), or nullptr if the
+        pattern was not saved
+    */
     DLLLOCAL const char* getPatternCStr() const {
-        return pattern_cache.empty() ? nullptr : pattern_cache.c_str();
+        return pattern_saved ? pattern_cache.c_str() : nullptr;
     }
 
     //! Saves the pattern string before it's deleted during compilation
     DLLLOCAL void savePattern() {
-        if (str && pattern_cache.empty()) {
-            pattern_cache = str->c_str();
+        if (str && !pattern_saved) {
+            setPatternCache(str->c_str());
         }
     }
 
@@ -184,6 +187,14 @@ protected:
     QoreString* str = nullptr;
     int options = PCRE2_UTF;
     std::string pattern_cache;  //!< preserved for AOT serialization
+    //! true if pattern_cache holds the pattern; an empty pattern is a valid pattern
+    bool pattern_saved = false;
+
+    //! Saves the pattern for AOT serialization
+    DLLLOCAL void setPatternCache(const char* pattern) {
+        pattern_cache = pattern;
+        pattern_saved = true;
+    }
 };
 
 #endif

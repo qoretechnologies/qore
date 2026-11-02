@@ -16,6 +16,7 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
     }
     constructor() : Test("native callback continuations", "1.0", \ARGV) {
         addTestCase("native values, ownership, and checked fallbacks", \check());
+        addTestCase("debugger attachment after native cache hits", \checkDebugger());
         set_return_value(main());
     }
     private static string quote(string value) {
@@ -28,6 +29,20 @@ class NativeFunctionRefContinuationTest inherits QUnit::Test {
             + (map quote($1), args).join(" ") + " 2>&1", \rc);
         assertEq(0, rc, output);
         return output;
+    }
+    #! the debugger cases run in their own program, which allows the debugger
+    private checkDebugger() {
+        string source = get_script_dir() + "/IRNativeFunctionRefContinuationDebugger.qr";
+        string expected = "native-funcref-continuation-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-continuation-debugger-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "--strip-source", "-o", executable, source));
+            assertEq(expected, run((executable,)), "AOT " + level);
+        }
     }
     private check() {
         string source = get_script_dir() + "/IRNativeFunctionRefContinuation.qr";

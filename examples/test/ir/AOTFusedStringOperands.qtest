@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FusedStringOperandsTest
+
+#! Fused string consumers take their integer operands once
+/** A fused string producer/consumer call converts its integer arguments for the summary, except an operand that the
+    consumer appends, which is converted already: converting it again unboxed a native integer (a start of 1 became
+    0).  It showed in a function of a Program that can be debugged that is lowered again without its local unwind
+    anchors.  The output of every mode and AOT build is compared with the AST interpreter, with and without
+    \c %allow-debugger (whose functions keep their locals on the runtime stack).
+*/
+class FusedStringOperandsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("fused string consumer operands", "1.0", \ARGV) {
+        addTestCase("operands in every mode", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        TmpDir dir("qore-fused-string-operands-");
+        string fixture = get_script_dir() + "/AOTFusedStringOperands.qr";
+        string debuggable = dir.path + "/debuggable.qr";
+        File file();
+        file.open2(debuggable, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write(replace(ReadOnlyFile::readTextFile(fixture), "%modern\n", "%modern\n%allow-debugger\n"));
+        file.close();
+        foreach string source in ((fixture, debuggable)) {
+            string label = basename(source);
+            string expected = run((qore, "--exec-mode=ast", source));
+            assertRegex("(?m)^15\\|-1\\|vorak-S\\|vorak-Smetana-Janacek-Martinu\\|vorak-S\\|4\\|1$", expected,
+                label + " AST");
+            foreach string mode in (("ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source)), label + " " + mode);
+            }
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    string compile = run((qcc, level, "--strip-source", "-o", executable, source),
+                        prefix + "QORE_IR_OPT_STATS=1 ");
+                    # the consumers are fused
+                    assertRegex("AOT-EFFECTS: kernel_[^\n]*string-consumers=[1-9]", compile,
+                        label + " fusion " + prefix + level);
+                    assertEq(expected, run((executable,)), label + " " + prefix + level);
+                }
+            }
+        }
+    }
+}

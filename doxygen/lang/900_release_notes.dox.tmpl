@@ -22,6 +22,18 @@
     constructing its exception; diagnostics and normal %Program entry semantics are preserved. This reduces
     setup for existing guarded native companions, including calls from IR/JIT hosts.
 
+    Compound assignments (\c +=, \c -=, \c *=, \c /=, \c %=, \c |=, \c &=, \c ^=, \c <<= and \c >>=)
+    now give the result of the AST interpreter in every execution mode and in compiled code.  The operation follows
+    the type of the lvalue's current value: an int value converts the operand to an int (ex: \c 10 \c += \c 1.5
+    gives 11), a string value appends the operand, a hash value merges a hash or removes keys, a list value appends
+    the operand, and the integer operators convert both sides to ints.  The IR, JIT and tiered execution modes and
+    compiled code computed some of these as the binary operator would, giving other values or types (ex: 11.5 for
+    an untyped variable, \c "103" for \c 10 \c += \c "3", a list for \c 10 \c += \c (1, 2)) or raising
+    \c RUNTIME-TYPE-ERROR for an or-nothing variable such as \c *int; \c %= and the bitwise operators left a float
+    or number lvalue unchanged when changed through an lvalue path.  \c *= and \c /= with a number operand on a
+    class member holding a value of another type now multiply and divide the value, as for a local
+    variable; they used the number 1 in place of the value.
+
     A compound assignment to an lvalue declared with an or-nothing type (ex: \c *string, \c *bool, \c *date,
     \c *list<auto>) is now refused at parse time wherever the same statement is refused for the plain type, with the
     same \c PARSE-TYPE-ERROR naming the declared type of the lvalue (ex: <tt>*string s; s -= 1;</tt> or
@@ -29,7 +41,11 @@
     operation either assigns a value that the lvalue does not accept or operates on a value of the plain type.  This
     applies to locals, globals, class and hashdecl members, hash members and list elements.  Statements that the
     plain type accepts are unchanged and run as before; \c *= and \c /= with a float operand on a \c *number
-    lvalue, which the parser refused although a \c number lvalue accepts them, are now accepted.
+    lvalue, which the parser refused although a \c number lvalue accepts them, are now accepted.  The
+    \c PARSE-TYPE-ERROR raised for a compound assignment, \c ++ or \c -- on an lvalue that cannot take the result
+    has the same form for every operator (ex: <tt>lvalue has type '*string', but the -= operator will assign it an
+    integer value</tt>); it named the type as <tt>type 'string'</tt> after "has type" and named \c *= and the other
+    operators as "operator expression".
 
     Objects and runtime call references retain the sandbox under which they were created. Their methods and
     callbacks remain restricted when trusted code invokes them later, including inherited module methods and
@@ -55,7 +71,15 @@
     JIT and tiered execution modes and compiled (AOT) code kept the type of the expression (ex:
     \c hash<string, list>), so \c fullType() and the writes that the container accepts could differ between modes.
     Compiled code also no longer removes the element type of an empty list stored in such a container or in a hash
-    literal such as <tt>{"a": (), "b": ()}</tt>.
+    literal such as <tt>{"a": (), "b": ()}</tt>.  The elements of these containers are now also the same in every
+    mode: each value is converted to the element type of the operator's container as it is stored, as with the AST
+    interpreter, also when operators are chained, as in <tt>select (map ((),), l), $1</tt> (ex: an element
+    <tt>((),)</tt> is stored as a \c list<list>; the IR, JIT and tiered modes and compiled code stored it as a
+    \c list<list<auto>> in a \c map over an untyped source, in the map/select form and in chained operators), and
+    a value read from a hash key is now the value stored in every mode, as with the AST interpreter: the IR, JIT
+    and tiered modes and compiled code converted it to the value type of the hash, so that, for example, reading a
+    weak reference stored with \c ":=" in a \c hash<string, object> raised \c RUNTIME-TYPE-ERROR (and could crash
+    native code).
 
     @ref Qore::HTTPClient::sendHttp2Connect() "HTTPClient::sendHttp2Connect()" and
     @ref Qore::HTTPClient::sendHttp3Connect() "HTTPClient::sendHttp3Connect()" now send their headers as every other
@@ -69,10 +93,12 @@
     The compound assignment operators now enforce the value type of the hash or list holding their target as an
     assignment with \c = does: the float result of \c *= or \c /= is no longer stored in a hash member or list
     element of an integer value type, such as a key of a \c hash<string, int>, but raises \c RUNTIME-TYPE-ERROR, as
-    for an \c int variable.  A compound assignment that fails, for example with \c RUNTIME-TYPE-ERROR or
-    \c DIVISION-BY-ZERO, no longer leaves behind the hash key or list elements it created to reach its target,
-    holding no value or the default value of the value type; neither does an assignment that fails while reaching its
-    target, such as <tt>h.new.x = 1</tt> where \c h is a \c hash<string, string>.
+    for an \c int variable.  A compound assignment whose result the value type rejects with
+    \c RUNTIME-TYPE-ERROR no longer leaves behind the hash key or list elements it created to reach its target,
+    holding no value or the default value of the value type; neither does an operation that fails while reaching its
+    target, such as <tt>h.new.x = 1</tt> where \c h is a \c hash<string, string>.  An operation that reaches a new
+    entry and fails for another reason keeps it as before, such as a division by zero, or \c extract, \c splice,
+    \c push or \c unshift with a target that is not a list.
 
     A global variable declared as \c hash<auto!> or \c list<auto!> now drops the narrowed type of a hash or list
     assigned to it, as a local variable, a class member or a parameter does, so that values of any type can then be
@@ -3111,6 +3137,7 @@ int echoed = child.echo(value);
     The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
 
     <b>Bug Fixes:</b>
+    - splitting a string containing an embedded NUL character with an empty separator no longer loops indefinitely
     - \c $0 backreference in substitution replacement strings now correctly references the full match text
       (previously \c $0 was silently ignored)
     - regex substitution preserves embedded NUL characters in patterns, subjects and replacement templates;
@@ -5508,9 +5535,25 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a \c foreach loop over a range slice of a variable (<tt>foreach auto v in (l[0..2])</tt>) did not hold the list:
+      when the loop body assigned the variable another value, the loop read the released list, which could raise
+      unexpected errors or crash.  The loop now holds the list until it ends
     - \c qcc could hang forever at full CPU while compiling a module, when the JIT compiler started on a background
       thread at the same time: both registered LLVM's targets, which is not thread-safe, and the registry was left
       corrupted.  LLVM's targets are now registered once for the process, before any thread uses LLVM
+    - at process exit, user modules were deleted in the alphabetical order of their names instead of after the
+      modules that require them, and objects held through opaque references (\c \@=) were released only when the
+      module owning them was deleted, which could be after the modules owning the classes of the objects they
+      referred to.  Destructors then failed with unhandled \c PROGRAM-ERROR exceptions (<em>the Program accessed has
+      already been deleted</em>) on stderr, for example those of the schemas that the Stripe data provider caches
+      when it is loaded with other provider modules.  A module is now deleted only after every module that requires
+      it, including AOT-compiled modules (.qmod) and source modules that AOT-compiled modules require, and objects
+      held through opaque references by the Programs of source and AOT-compiled modules are released while all module
+      Programs still exist
+    - an unhandled exception raised when a program ends, by a destructor run as the Program's data or the loaded
+      modules are deleted, was printed on stderr but the exit status stayed 0; \c qore and programs compiled with
+      \c qcc now exit with status 3 in this case, as for an unhandled exception in the main thread, unless the program
+      set a non-zero exit status (see @ref exception_handling)
     - a debugged program could get a deleted @ref Qore::ProgramControl "ProgramControl" object in a debugger callback,
       such as \c onAttach() or \c onStep(), when another thread released the last reference to the object at the
       same time: the object was cached and returned again until its destructor ran.  The callback failed, so the
@@ -6872,6 +6915,11 @@ while (*binary chunk = input.read(65536)) {
       raises the "missing return statement" error unless a later \c return statement returns a value.  Before, the
       value was returned, also when the declared return type rejected it, and when the \c catch block returned
       another value, the interrupted value was never released, and an object held by it was never destroyed
+    - @ref push "push", @ref unshift "unshift" and the compound assignment operators use the value that their operand
+      had when it was evaluated: <tt>push l, l</tt> and <tt>unshift l, l</tt> with a local list variable \c l added
+      the list to itself, creating a recursive reference that was never released, instead of adding a copy of the
+      original list (for example <tt>(1, 2)</tt> became <tt>(1, 2, (1, 2))</tt> as expected only in the other
+      execution modes)
 
     @section qore_2_2_1 Qore 2.2.1
 

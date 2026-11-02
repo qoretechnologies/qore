@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[424] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -416,7 +416,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
     { "LValuePathUnary"               , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathUnary", true , true , "ParseNode", true , true , false, false, false }, // 355
     { "LValuePathBinaryMut"           , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false, false }, // 356
     { "LValuePathTernary"             , false, false, false, OPCODE_MIN_OPERANDS(3), "LValuePathTernary", true , true , "ParseNode", true , false, false, false, false }, // 357
-    { "DiscardTemps"                  , false, false, false,  0, "Drain cleanup back to nearest PushTempMark", false, false, "ParseNode", false, false, false, false, false }, // 358
+    { "DiscardTemps"                  , false, false, false,  0, "Drain cleanup back to nearest PushTempMark", true , true , "ParseNode", false, false, false, false, false }, // 358
     { "PushTempMark"                  , false, false, false,  0, "Push sentinel marking start of statement-scoped cleanup region", false, false, "ParseNode", false, false, false, false, false }, // 359
     { "CallAOTHelper"                 , false, false, false,  0, "Call AOT-emitted helper function by LLVM symbol name", true , true , "ParseNode", true , false, false, false, false }, // 360
     { "ContextMaxPos"                 , false, true , false,  1, "Get max_pos (iteration count) from Context state handle", false, false, "ParseNode", true , false, false, false, false }, // 361
@@ -477,12 +477,17 @@ constexpr OpcodeInfo OPCODE_REGISTRY[419] = {
     { "CommonTypeFold"                 , false, true , false,  3, "Fold a map value type into the common value type", false, false, "QoreMapOperatorNode", true , false, false, false, false }, // 416
     { "HashSetCommonType"              , false, false, false,  2, "Set the type of a hash map result from the common value type", false, false, "QoreHashMapOperatorNode", false, false, false, false, false }, // 417
     { "ListSetScannedType"             , false, false, false, -1, "Set the type of a select result list from its values", false, true , "QoreSelectOperatorNode", false, false, false, false, false }, // 418
+    { "HashSetKeyValueFold"            , false, true , false,  5, "Set a hash map key and fold the value type into the common value type", false, true , "QoreHashMapOperatorNode", true , false, false, false, false }, // 419
+    { "ListAppendElement"              , false, true , false,  3, "Append a value to a map result list as the AST interpreter pushes it and fold its type", false, true , "QoreMapOperatorNode", true , false, false, false, false }, // 420
+    { "LegacyListAppendElement"        , false, false, false,  2, "Append a value to a map result list as the AST interpreter pushes it", false, true , "QoreMapOperatorNode", false, false, false, false, false }, // 421
+    { "CatchUnwind"                    , false, false, false,  1, "End the catch scopes of the frame beyond a number", true , true , "ParseNode", false, false, false, false, false }, // 422
+    { "KeysIteratorSource"             , true , false, false,  1, "The value that the functional keys iterator holds", false, true , "QoreKeysOperatorNode", true , false, true , true , false }, // 423
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 419,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 419"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 424,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 424"
 );
 
 //! ============================================================================

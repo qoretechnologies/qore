@@ -75,7 +75,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ListSetLength: return "list.set.length";
         case QoreIROpcode::ListSetCommonType: return "list.set.common.type";
         case QoreIROpcode::CommonTypeFold: return "common.type.fold";
+        case QoreIROpcode::LegacyListAppendElement: return "list.append.element.legacy";
+        case QoreIROpcode::HashSetKeyValueFold: return "hash.set.key.value.fold";
         case QoreIROpcode::ListSetScannedType: return "list.set.scanned.type";
+        case QoreIROpcode::ListAppendElement: return "list.append.element";
         case QoreIROpcode::HashSetCommonType: return "hash.set.common.type";
         case QoreIROpcode::AddInt: return "add.int";
         case QoreIROpcode::AddFloat: return "add.float";
@@ -408,6 +411,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::LandingPad: return "landingpad";
         case QoreIROpcode::CatchException: return "catch.exception";
         case QoreIROpcode::CatchCleanup: return "catch.cleanup";
+        case QoreIROpcode::CatchUnwind: return "catch.unwind";
+        case QoreIROpcode::KeysIteratorSource: return "keys.iterator.source";
         case QoreIROpcode::Rethrow: return "rethrow";
         case QoreIROpcode::Throw: return "throw";
         case QoreIROpcode::InvokeSimError: return "invoke.sim.error";

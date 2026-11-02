@@ -69,16 +69,11 @@ class AutoLocalSlotTest inherits QUnit::Test {
                     assertFalse(regex(body[0] ?? "", "qore_rt_get_auto_local_slot_aot_v[12]"),
                         name + " keeps ordinary storage " + prefix + level);
                 }
-                *list<*string> fast_body = regex_extract(ir,
-                    "(?s)define [^\n]*@autoSlotRecursive_[^\n]*_fast_[^\n]*\n(.*?)\n\\}");
-                assertTrue(!!fast_body, "recursive direct fast entry LLVM definition");
-                assertTrue(regex(fast_body[0] ?? "", "call void @qore_rt_pop_body_local_aot_v1"),
-                    "recursive direct entry pops its own body slots");
-                if (enabled) {
-                    assertTrue(regex(fast_body[0] ?? "",
-                        "(?s)call void @qore_rt_instantiate_local_aot.*call ptr @qore_rt_get_auto_local_slot_aot_" + version),
-                        "recursive direct entry prepares storage after instantiation");
-                }
+                # the program allows the debugger and the function can reach reflection, which counts the frames on
+                # the runtime stack, so it has no direct entry that would skip its frame
+                # (design/aot-reflection-visible-locals.md); its runtime-visible slots are covered above
+                assertFalse(regex(ir, "(?s)define [^\n]*@autoSlotRecursive_[^\n]*_fast_"),
+                    "recursive function has no direct fast entry " + prefix + level);
                 foreach string runtime in (("", "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ",
                         "QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1 ",
                         "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ",

@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ThreadExitUnwindTest
+
+#! Tests that a thread_exit unwinds its function's blocks as the interpreter does
+/** A thread_exit is raised on the exception sink: it leaves the blocks of the function through the same cleanups as
+    an exception - block locals, catch variables and caught exceptions are released, on_exit and on_success handlers
+    run - but on_error handlers do not run for it and a try block does not catch it.  The cases raise it at the top
+    of a function with handlers, in an inner block, a foreach body, a try block, catch blocks nested in each other and
+    in a try block, a loop and a called function; every mode and compiled executable must match the interpreter.
+*/
+class ThreadExitUnwindTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("thread_exit unwind", "1.0", \ARGV) {
+        addTestCase("thread_exit unwinds the blocks in interpreter order", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/IRThreadExitUnwind.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("ir-thread-exit-unwind: ok\n$", expected);
+        assertRegex('4: \["inner_exit", "b", "flf0", "flf1", "f0", "f1", "try", "catch", "argC", "on_success", '
+            '"on_exit", "a"\]', expected);
+        assertRegex('8: \[.*"catchE", "argE", "on_success", "on_exit", "a"\]', expected);
+        assertFalse(expected =~ /on_error|caught/, expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-thread-exit-unwind-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

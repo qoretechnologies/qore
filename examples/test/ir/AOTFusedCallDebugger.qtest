@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FusedCallDebuggerTest
+
+#! Fused and inlined native calls honor an attached debugger
+/** Native code that fuses a call with the expression consuming its result (string, collection, aggregate and
+    measurement consumers), replaces a call by its known result (an object scalar projection) or runs a callee's body
+    inline (getters, setters, known call references) takes the ordinary call while a debugger is attached, and then
+    the unfused consumers; the fixture prints the values and the callees' function events, which must be those of the
+    AST interpreter in every mode.  The fusions stay selected, and a Program that cannot be debugged has no gate.
+*/
+class FusedCallDebuggerTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/AOTFusedCallDebugger.qr";
+        *string expected;
+    }
+    constructor() : Test("fused AOT calls honor debuggers", "1.0", \ARGV) {
+        addTestCase("interpreted and JIT modes", \checkModes());
+        addTestCase("AOT compilations", \checkAot());
+        addTestCase("a Program that cannot be debugged", \checkNoDebugging());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", source));
+            # the debugger saw each callee during each phase with a debugger
+            foreach string phase in (("before", "during", "batch")) {
+                assertRegex(phase + " entry counts: \\{[^\n]*concatPair: [1-9]", expected, phase);
+            }
+            assertRegex("kernel entry counts: \\{Projected::getInt: 2\\}", expected);
+            assertRegex("detached entry counts: null", expected);
+            assertRegex("after entry counts: null", expected);
+        }
+        return expected;
+    }
+    #! the fusions of the fixture's functions, from QORE_IR_OPT_STATS
+    private checkFusions(string stats, string label) {
+        *list<*string> loop = regex_extract(stats, "(AOT-EFFECTS: fusedLoop_[^\n]*)");
+        assertTrue(!!loop, label + " loop statistics");
+        string line = loop[0] ?? "";
+        foreach string kind in (("string-consumers", "collection-consumers", "aggregate-projections",
+                "object-int-string-measure-consumers")) {
+            assertRegex(kind + "=[1-9]", line, label + " " + kind);
+        }
+        assertRegex("AOT-EFFECTS: projectedKernel_[^\n]*object-scalar-projections=1", stats,
+            label + " object scalar projection");
+    }
+
+    private checkModes() {
+        string expected = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+    }
+
+    private checkAot() {
+        string expected = getExpected();
+        TmpDir dir("qore-fused-call-debugger-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string executable = dir.path + "/fixture";
+                string output = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1 ");
+                checkFusions(output, label);
+                # the fused native code stays, and the debugger blocks make the ordinary calls
+                string fn = body(output, "fusedLoop");
+                assertRegex("call i64 @qore_rt_int_to_string_measure", fn, label + " fused measurement");
+                assertRegex("\naot_call_debugger[0-9]*:", fn, label + " debugger blocks");
+                assertRegex("call i64 @qore_rt_call_direct_aot\\(", fn, label + " ordinary function calls");
+                assertRegex("call i64 @qore_rt_dot_eval_method_direct_aot", fn, label + " ordinary method calls");
+                string finite = body(output, "finiteChoice");
+                assertRegex("finite_callref_result", finite, label + " finite call reference");
+                assertRegex("call ptr @qore_rt_get_aot_context_debugger_gate_v1", finite,
+                    label + " call reference gate");
+                string kernel = body(output, "projectedKernel");
+                assertRegex("\naot_call_debugger[0-9]*:", kernel, label + " projection debugger block");
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
+                    assertEq(expected, run((executable,), runtime), label + " " + runtime);
+                }
+            }
+        }
+    }
+
+    private checkNoDebugging() {
+        TmpDir dir("qore-fused-call-no-debugging-");
+        string nodebug = dir.path + "/fixture.qr";
+        File file();
+        file.open2(nodebug, O_CREAT | O_WRONLY | O_TRUNC);
+        # the fixture's own debugger cannot attach: it reports no events
+        file.write(replace(ReadOnlyFile::readTextFile(source), "%allow-debugger\n",
+            "%allow-debugger\n%no-debugging\n"));
+        file.close();
+        string ast = run((qore, "--exec-mode=ast", nodebug));
+        assertRegex("before values: ", ast);
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string output = run((qcc, level, "--strip-source", "-o", executable, nodebug),
+                "QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1 ");
+            checkFusions(output, "no debugging " + level);
+            assertFalse(regex(output, "qore_rt_get_aot_method_debugger_gate_v1|qore_rt_get_aot_context_debugger_gate_v1"),
+                "no gate " + level);
+            assertFalse(regex(output, "aot_call_debugger|method_debugger_detached|jit_call_debugger"),
+                "no debugger blocks " + level);
+            assertEq(ast, run((executable,)), level);
+        }
+    }
+}

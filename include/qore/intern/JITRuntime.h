@@ -375,6 +375,16 @@ void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xsink);
 //! Rethrow the current catch exception: copies exception into xsink and cleans up catch scope.
 void qore_rt_rethrow(ExceptionSink* xsink);
 
+//! Rethrow the current catch exception without ending its catch scope, which the CatchUnwind of the catch blocks
+//! that the exception leaves ends.
+void qore_rt_rethrow_keep_v1(ExceptionSink* xsink);
+
+//! Rethrow the current catch exception with replaced err/desc/arg and end its catch scope.
+void qore_rt_rethrow_with_args(uint64_t args_bits, ExceptionSink* xsink);
+
+//! Rethrow the current catch exception with replaced err/desc/arg without ending its catch scope.
+void qore_rt_rethrow_with_args_keep_v1(uint64_t args_bits, ExceptionSink* xsink);
+
 // --- Deopt helpers ---
 
 //! Atomically increment the deopt counter for a variant.
@@ -448,6 +458,11 @@ class TypedHashDecl;
 //! Instantiate a local variable on the Qore thread-local variable stack.
 //! Must be called once per local at JIT function entry before any loads/stores.
 void qore_rt_instantiate_local(LocalVar* var);
+//! Makes an existing ordinary local visible again when its lexical block is re-entered.
+/** @param var a non-captured local with an instantiated slot in the current invocation
+    @note This changes reflection visibility only; it neither assigns nor owns a value.
+*/
+void qore_rt_activate_local(LocalVar* var);
 
 //! Assign a NaN-boxed QoreValue to a local variable on the Qore thread-local
 //! variable stack.  The JIT should call this on every StoreLocal so the Qore
@@ -1880,6 +1895,9 @@ uint64_t qore_rt_map_hash_key_offset_any_prehashed(uint64_t list_val, const char
         uint64_t hash64, uint32_t hash32, int64_t offset, ExceptionSink* xsink);
 
 //! Build a hash from two constant keys projected from each input hash.
+//! map {$1.k1: $1.k2}, l as the AST interpreter evaluates it; see QoreIROpcode::HashMapTwoKeys
+uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const char* key1, const char* key2, ExceptionSink* xsink);
+
 uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val, const char* key1,
         uint64_t key1_hash64, uint32_t key1_hash32, const char* key2,
         uint64_t key2_hash64, uint32_t key2_hash32, ExceptionSink* xsink);
@@ -1982,11 +2000,16 @@ uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
 //! Finalize the logical length of a fresh list after direct scalar stores.
 void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length);
 
-//! Fold the type of a map or hash map value into the common value type state; returns the new state.
-/** The state is 0 before the first value; \a index is the index of the source element of a hash map operator, or
-    -1 for a list.  See QoreIROpcode::CommonTypeFold.
+//! Set a key of the result hash of a hash map operator and fold the type of the value into the common value type
+/** Sets the key as qore_rt_hash_set_key_value() sets it; the state is 0 before the first value; \a index is the
+    index of the source element; returns the new state.  See QoreIROpcode::HashSetKeyValueFold.
 */
-int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index);
+int64_t qore_rt_hash_set_key_value_fold(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits, int64_t state,
+        int64_t index, ExceptionSink* xsink);
+
+//! Throwing form of qore_rt_hash_set_key_value_fold() for native code that unwinds with QoreJITException
+int64_t qore_rt_hash_set_key_value_fold_throwing(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits,
+        int64_t state, int64_t index, ExceptionSink* xsink);
 
 //! Set the type of the result list of a map or map/select operator from the common value type state.
 /** When the values had a common type, the list gets list<common type>; otherwise it gets the type of a list
@@ -2009,6 +2032,22 @@ void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* elemen
 //! AOT form of qore_rt_list_set_scanned_type(); \a has_element_type = 0 for no element type
 void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* element_type_path,
         int32_t has_element_type, ExceptionSink* xsink);
+
+// Compatibility helpers for previously serialized map IR.
+int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index);
+void qore_rt_list_append_element_legacy(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
+void qore_rt_list_append_element_legacy_throwing(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
+
+//! Append a value to the result list of a map or map/select operator as QoreListNode::push() appends it, and fold
+//! its type into the common value type state
+/** The value is converted to the element type of the list, which can raise an exception; \a value_val is not
+    consumed; the state is 0 before the first value; returns the new state.  See QoreIROpcode::ListAppendElement.
+*/
+int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64_t state, ExceptionSink* xsink);
+
+//! Throwing form of qore_rt_list_append_element() for native code that unwinds with QoreJITException
+int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_val, int64_t state,
+        ExceptionSink* xsink);
 
 //! Set the type of the result list of a select operator from its values or else the value type of its source.
 void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val, ExceptionSink* xsink);
@@ -2392,6 +2431,11 @@ void qore_rt_assign_local_no_coerce_aot_throwing(QoreAOTContext* ctx, int32_t id
 
 //! Instantiate a local variable via AOT context slot
 void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
+//! AOT slot form of qore_rt_activate_local().
+/** @param ctx the current invocation's initialized AOT context
+    @param idx a valid local slot index in @a ctx, identifying an instantiated ordinary local
+*/
+void qore_rt_activate_local_aot(QoreAOTContext* ctx, int32_t idx);
 
 //! Clear a local variable's value via AOT context slot (block scope exit)
 void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
@@ -2639,6 +2683,36 @@ const QoreClass* qore_rt_get_aot_override_class_v1(QoreAOTContext* ctx,
     against a nonnull class admitted by qore_rt_get_aot_override_class_v1().
 */
 const QoreClass* qore_rt_get_live_aot_override_receiver_class_v1(QoreAOTContext* ctx, uint64_t value);
+
+//! Get the debugger gate of an AOT call target that AOT code calls natively.
+/** AOT code that calls a user function, static method or method natively or runs its body inline (a fast entry, a
+    body summary or a scalar override) loads the returned pointer-sized word with a relaxed atomic load before each
+    such call and takes the ordinary call path when it is not null, as that path does not run a callee natively
+    while a debugger is attached to the callee's execution Program or to its body owner
+    (qore_rt_debugger_attached()).  The compiler emits no gate for a callee whose Program cannot be debugged
+    (\c PO_NO_DEBUGGING).
+
+    @param ctx active AOT context owning the call-target slot
+    @param slot the function or method call target
+    @return the attached-debugger word of the method's Program, which stays valid while ctx is live; a word that is
+    never null if the call cannot be checked with one Program; a word that is always null for a target without a
+    user variant (never inlined)
+    @note The result can be hoisted within an invocation; the word must be loaded at every call.
+*/
+const void* qore_rt_get_aot_method_debugger_gate_v1(QoreAOTContext* ctx, int32_t slot);
+
+//! Get the debugger gate of the Program of an AOT context, for a call without a call-target slot
+/** As qore_rt_get_aot_method_debugger_gate_v1(), for a callee compiled with the code of \a ctx (a known call
+    reference), which belongs to the context's Program.
+    @return a word that is never null without a Program
+*/
+const void* qore_rt_get_aot_context_debugger_gate_v1(QoreAOTContext* ctx);
+
+//! The ordinary call of a known call reference that AOT code makes while a debugger is attached
+/** @param arg_cleanups the caller's temporary argument cleanups, consumed by the call, or nullptr
+*/
+uint64_t qore_rt_call_reference_debugger_v1(uint64_t ref_bits, uint64_t* args, uint64_t** arg_cleanups,
+    int nargs, ExceptionSink* xsink);
 
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,

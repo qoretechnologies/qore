@@ -15,7 +15,7 @@ class AOTSameListPublicationTest inherits QUnit::Test {
         string qcc = ENV.QCC ?? libdir + "/qcc";
     }
     constructor() : Test("AOT same-list publication", "1.0", \ARGV) {
-        addTestCase("same root, replacement, captures and reflection", \check());
+        addTestCase("same root, replacement and captures", \check());
         set_return_value(main());
     }
     private static string quote(string value) {

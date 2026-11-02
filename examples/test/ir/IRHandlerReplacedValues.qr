@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%disable-warning unreferenced-variable
+# A value that an on_exit, on_error or on_success handler replaces is destroyed at the assignment, as in the
+# interpreter, also when the handler runs as an exception or a thread_exit leaves the function; every mode must match
+# the interpreter
+
+our list<string> events = ();
+our hash<string, int> released = {};
+our int created = 0;
+
+class Tracker {
+    public {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+        ++created;
+    }
+    destructor() {
+        events += name;
+        released{name} = (released{name} ?? 0) + 1;
+    }
+}
+
+#! signals the main thread when the thread's frame is unwound
+class Signal {
+    public {
+        Queue queue;
+    }
+    constructor(Queue queue) {
+        self.queue = queue;
+    }
+    destructor() {
+        queue.push(1);
+    }
+}
+
+sub touch() {
+}
+
+sub raise(string err) {
+    throw err;
+}
+
+# locals replaced by function-level handlers, in an order unrelated to their declarations
+string sub replaced(int which) {
+    Tracker a("a1");
+    Tracker b("b1");
+    auto c = new Tracker("c1");
+    on_exit {
+        events += "exit";
+        b = new Tracker("b2");
+        c = new Tracker("c2");
+        a = new Tracker("a2");
+        events += "replaced";
+    }
+    touch();
+    events += a.name + b.name + c.name;
+    if (which == 0) { raise("X"); }
+    if (which == 1) { return "early"; }
+    if (which == 2) { thread_exit; }
+    return "end";
+}
+
+# on_error and on_success handlers, a value replaced twice, and a value cleared
+string sub conditional(int which) {
+    Tracker a("ca1");
+    *Tracker b = new Tracker("cb1");
+    on_error {
+        events += "error";
+        a = new Tracker("ca2");
+        a = new Tracker("ca3");
+        b = NOTHING;
+        events += "error done";
+    }
+    on_success {
+        events += "success";
+        a = new Tracker("cs2");
+        events += "success done";
+    }
+    if (which == 0) { raise("Y"); }
+    return "end";
+}
+
+# handlers of an inner block replacing locals of the enclosing block and of their own block
+string sub nested(int which) {
+    Tracker outer("o1");
+    {
+        Tracker inner("i1");
+        on_exit {
+            events += "inner exit";
+            outer = new Tracker("o2");
+            inner = new Tracker("i2");
+            events += "inner replaced";
+        }
+        if (which == 0) { raise("Z"); }
+        if (which == 1) { thread_exit; }
+    }
+    events += "after block " + outer.name;
+    if (which == 2) { raise("W"); }
+    return "end";
+}
+
+# a handler in a loop body and a handler replacing a container that holds an object
+string sub loop(int which) {
+    hash<auto> h = {"t": new Tracker("h1")};
+    on_exit {
+        events += "loop exit";
+        h = {"t": new Tracker("h2")};
+        events += "container replaced";
+    }
+    for (int i = 0; i < 2; ++i) {
+        Tracker li("l" + i);
+        on_exit {
+            events += "iteration exit";
+            li = new Tracker("l" + i + "x");
+        }
+        if (which == 0 && i == 1) { raise("L"); }
+    }
+    return "end";
+}
+
+sub check(string label, code test) {
+    events = ();
+    released = {};
+    int start = created;
+    Queue queue();
+    # every case runs in a thread of its own, so that a thread_exit leaves only the case
+    background sub () {
+        Signal signal(queue);
+        try {
+            events += "result " + test();
+        } catch (hash<ExceptionInfo> ex) {
+            events += "caught " + ex.err;
+        }
+    }();
+    queue.get();
+    int total = 0;
+    foreach int n in (released.values()) {
+        total += n;
+    }
+    if (created - start != total) {
+        throw "COUNT-ERROR", sprintf("%s: created %d, released %d: %y", label, created - start, total, events);
+    }
+    foreach hash<auto> i in (released.pairIterator()) {
+        if (i.value != 1) {
+            throw "DOUBLE-RELEASE", sprintf("%s: %s released %d times", label, i.key, i.value);
+        }
+    }
+    printf("%s: %y\n", label, events);
+}
+
+for (int i = 0; i <= 3; ++i) {
+    check("replaced " + i, string sub () { return replaced(i); });
+}
+for (int i = 0; i <= 1; ++i) {
+    check("conditional " + i, string sub () { return conditional(i); });
+}
+for (int i = 0; i <= 3; ++i) {
+    check("nested " + i, string sub () { return nested(i); });
+}
+for (int i = 0; i <= 1; ++i) {
+    check("loop " + i, string sub () { return loop(i); });
+}
+printf("ir-handler-replaced-values: ok\n");

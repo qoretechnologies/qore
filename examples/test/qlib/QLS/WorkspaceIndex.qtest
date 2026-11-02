@@ -50,6 +50,7 @@ class WorkspaceIndexTest inherits QUnit::Test {
         addTestCase("find_qore_files: symbolic link loop and duplicate", \testFindSymlinks());
         addTestCase("is_excluded_path", \testIsExcludedPath());
         addTestCase("find_std_modules with options", \testFindStdModulesOptions());
+        addTestCase("find_std_modules: a later module directory is not searched", \testFindStdModulesSkippedDir());
 
         # index and cache classes
         addTestCase("Document: file path round trip", \testDocumentFilePath());
@@ -347,6 +348,44 @@ class WorkspaceIndexTest inherits QUnit::Test {
         assertGt(0, all.size(), "standard modules are found");
         list<string> limited = QLS::Files::find_std_modules(<QLS::Files::FileScanOptions>{"maxFileSize": 1});
         assertEq((), limited, "the size limit applies to standard modules");
+    }
+
+    #! a module directory after the standard one is not searched when the size limit skips the standard modules
+    /** The directories of QORE_MODULE_DIR are read by the QLS module when it is loaded, so the check runs in a new
+        process with a module directory holding an empty source file, which no size limit skips.
+    */
+    testFindStdModulesSkippedDir() {
+        string root = makeTmpDir();
+        string extraDir = root + "/extra";
+        WorkspaceIndexTest::writeFile(extraDir + "/Empty.qc", "");
+        string script = root + "/find.q";
+        WorkspaceIndexTest::writeFile(script, sprintf("%%modern\n"
+            "%%prepend-module-path %s\n"
+            "%%requires QLS\n"
+            "list<string> limited = QLS::Files::find_std_modules(<QLS::Files::FileScanOptions>{\"maxFileSize\": 1});\n"
+            "list<string> all = QLS::Files::find_std_modules();\n"
+            "printf(\"limited=%%y\\n\", limited);\n"
+            "printf(\"extra=%%y\\n\", (select all, $1.equalPartial(%y)));\n"
+            "printf(\"all=%%d\\n\", all.size());\n", normalize_dir(get_script_dir() + "/../../../../qlib"),
+            extraDir));
+
+        string qoreExe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        string moduleDir = (ENV.QORE_MODULE_DIR ? ENV.QORE_MODULE_DIR + ":" : "") + extraDir;
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s %s 2>&1", WorkspaceIndexTest::shellQuote(moduleDir),
+            WorkspaceIndexTest::shellQuote(qoreExe), WorkspaceIndexTest::shellQuote(script)), \status);
+        assertEq(0, status, out);
+        # the standard modules are found in the standard directory, not in the later one
+        assertRegex("(?m)^extra=\\[\\]$", out, "no file of the later directory without a limit: " + out);
+        *list<*string> all = (out =~ x/(?m)^all=([0-9]+)$/);
+        assertTrue(all && all[0].toInt() > 0, "standard modules are found: " + out);
+        # the size limit skips the standard modules; the empty file of the later directory is not returned
+        assertRegex("(?m)^limited=\\[\\]$", out, "the later directory is not searched: " + out);
+    }
+
+    #! quotes a string for the shell
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\"'\"'") + "'";
     }
 
     #

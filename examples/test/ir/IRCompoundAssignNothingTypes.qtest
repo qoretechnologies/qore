@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRCompoundAssignNothingTypesTest
+
+#! Compound assignments into auto locals with no value keep the declared type of the value they assign
+/** A compound assignment that the IR computes from the value of an auto local and then stores applied the operator
+    to an untyped temporary lvalue, so that a local with no value received the right-hand side value as an untyped
+    lvalue does, without its hashdecl or the element type of a typed list or hash, which an auto lvalue keeps.  Every
+    execution mode and compiled program must give the results of AST execution.
+*/
+class IRCompoundAssignNothingTypesTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/IRCompoundAssignNothingTypes.qr";
+        *string expected;
+    }
+
+    constructor() : Test("compound assignments into auto locals with no value", "1.0", \ARGV) {
+        addTestCase("AST results", \astResults());
+        addTestCase("execution modes", \execModes());
+        addTestCase("compiled programs", \compiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! runs a command and returns its output; the command must succeed
+    private string run(list<string> args, string label) {
+        int status;
+        string output = backquote("TZ=UTC QORE_LIBDIR=" + quote(libdir) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map IRCompoundAssignNothingTypesTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, label + ": " + output);
+        return output;
+    }
+
+    #! returns the output of AST execution, which the other modes are compared with
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", fixture), "ast");
+        }
+        return expected;
+    }
+
+    #! returns the result of the case with the given label from the output
+    private static string getResult(string output, string label) {
+        foreach string line in (output.split("\n")) {
+            if (line.equalPartial(label + " => ")) {
+                return line.substr(label.length() + 4);
+            }
+        }
+        throw "TEST-ERROR", sprintf("no result for %y in the output", label);
+    }
+
+    #! checks AST results that the other modes are compared with
+    astResults() {
+        string out = getExpected();
+        # an auto lvalue keeps the type of the value it is assigned
+        assertEq("hash<CaPoint>:{x: 5, y: 2}[integer:5,integer:2]",
+            getResult(out, "+= hash<CaPoint>:{x: 5, y: 2}[integer:5,integer:2]"), "hashdecl");
+        assertEq("list<int>:[1, 2][integer:1,integer:2]",
+            getResult(out, "+= list<int>:[1, 2][integer:1,integer:2]"), "typed list");
+        assertEq("hash<string, int>:{a: 1, b: 2}[integer:1,integer:2]",
+            getResult(out, "+= hash<string, int>:{a: 1, b: 2}[integer:1,integer:2]"), "typed hash");
+        assertEq("hash<CaPoint>:{x: 1, y: 2}[integer:1,integer:2]", getResult(out, "cond present"),
+            "a value from an expression that can be NOTHING");
+        assertEq("nothing:null", getResult(out, "cond missing"), "no value");
+        assertEq("hash<CaPoint>:{x: 1, y: 2}[integer:1,integer:2]", getResult(out, "cond try present"),
+            "a value from an expression that can be NOTHING in a try block");
+        assertEq("hash<CaPoint>:{x: 5, y: 2}[integer:5,integer:2]",
+            getResult(out, "+= try hash<CaPoint>:{x: 5, y: 2}[integer:5,integer:2]"), "hashdecl in a try block");
+        assertEq("object<CaObj>:CaObj{a:1,b:2}", getResult(out, "+= object<CaObj>:CaObj{a:1,b:2}"), "object");
+        assertEq("string:\"abc\"", getResult(out, "+= string:\"abc\""), "string");
+        # the declared type of a local of another type is applied; "any" and "*hash" do not keep a hashdecl
+        assertEq("hash:{x: 5, y: 2}[integer:5,integer:2]",
+            getResult(out, "+= any hash<CaPoint>:{x: 5, y: 2}[integer:5,integer:2]"), "any lvalue");
+        assertEq("hash:{x: 5, y: 2}[integer:5,integer:2]",
+            getResult(out, "+= *hash hash<CaPoint>:{x: 5, y: 2}[integer:5,integer:2]"), "*hash lvalue");
+        assertEq("exception:RUNTIME-TYPE-ERROR",
+            getResult(out, "+= *hash list<int>:[1, 2][integer:1,integer:2]"), "a list for a *hash lvalue");
+        # the other operators assign a number, as the lvalue has no value
+        assertEq("integer:0", getResult(out, "*= integer:5"), "*= of no value");
+        assertEq("exception:DIVISION-BY-ZERO", getResult(out, "/= integer:0"), "/= by zero");
+        assertEq("integer:0", getResult(out, "%= integer:0"), "%= by zero assigns 0");
+        assertEq("integer:-5", getResult(out, "-= integer:5"), "-= of no value");
+        # merging into a hashdecl value keeps the hashdecl
+        assertEq("hash<CaPoint>:{x: 9, y: 2}[integer:9,integer:2]", getResult(out, "hashdecl merge"),
+            "hashdecl merge");
+        assertEq("list<int>:[1, 2][integer:1,integer:2]", getResult(out, "typed list push"), "typed list push");
+    }
+
+    execModes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture), mode), mode);
+        }
+    }
+
+    compiled() {
+        string ast = getExpected();
+        TmpDir dir("qore-ir-compound-nothing-types-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture" + level;
+            run((qcc, level, "-o", executable, fixture), "compile " + level);
+            assertEq(ast, run((executable,), "run " + level), "AOT " + level);
+        }
+    }
+}

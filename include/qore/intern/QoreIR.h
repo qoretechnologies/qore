@@ -892,7 +892,55 @@ enum class QoreIROpcode : uint16_t {
     //! the AST interpreter folds.
     ListSetScannedType = 418,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (419, 420, ...)
+    //! Set a key of the result hash of a hash map operator and fold the type of the value into the common value type.
+    //!
+    //! operands[0] = the result hash; operands[1] = the key; operands[2] = the value; operands[3] = the state from
+    //! the previous value (0 before the first value); operands[4] = the index of the source element (native int);
+    //! result = the new state (native int).  The key and value are set as HashSetKeyValue sets them.  The state
+    //! encodes what the AST interpreter tracks in QoreHashMapOperatorNode::evalImpl() and
+    //! QoreHashMapSelectOperatorNode::evalImpl(): no value yet, no common type, or the common type so far
+    //! (QoreTypeInfo::matchCommonType() over the value types in order).  The value of the first source element starts
+    //! the common type, so with a select expression that rejects the first element the values have no common type;
+    //! values that replace the value of a key that is already set are folded as well.  The value type is taken once
+    //! for the fold and the store.
+    HashSetKeyValueFold = 419,
+
+    //! Append a value to the result list of a map or map/select operator as the AST interpreter pushes it, and fold
+    //! the type of the value into the common value type.
+    //!
+    //! operands[0] = the result list; operands[1] = the value; operands[2] = the state from the previous value (0
+    //! before the first value); result = the new state (native int).  The value is converted to the element type of
+    //! the list as QoreListNode::push() converts it (qore_list_private::checkVal()), which can raise
+    //! RUNTIME-TYPE-ERROR, and the type of the list is not changed: the AST interpreter creates the list with the
+    //! element type of the operator and keeps that type while it fills the list, and ListSetCommonType sets the
+    //! final type after the loop.  The type of the value before it is converted is folded as the AST interpreter
+    //! folds it (QoreMapOperatorNode::evalImpl(), QoreMapSelectOperatorNode::evalImpl()): the first value starts the
+    //! common type.  The value type is taken once for the fold and the store.
+    ListAppendElement = 420,
+
+    //! Compatibility-only two-operand ListAppendElement from upstream v21 before the type fold was fused.
+    //! operands[0] = list; operands[1] = value; no result. New lowering uses ListAppendElement.
+    LegacyListAppendElement = 421,
+
+    //! End the catch scopes of the frame beyond the given number, as the catch blocks that an exception leaves end
+    //!
+    //! operands[0] = the number of catch scopes of the frame that stay (a native int constant); no result.  Each
+    //! scope ended restores the previous td->catchException and deletes its caught exception, as CatchCleanup does;
+    //! the instruction does nothing when the frame has no more scopes than that, so it can follow a Throw or
+    //! Rethrow that already ended its scope.  The lowering emits it where an exception leaves a catch block for a
+    //! handler in the same frame, after releasing the catch variable, so that the caught exception is deleted when
+    //! the catch block is left, as in the AST interpreter, and not when the frame exits.
+    CatchUnwind = 422,
+
+    //! The value that the AST's functional keys iterator holds while a foreach loop iterates the keys of a value
+    //!
+    //! operands[0] = the operand of the keys operator; result = a new reference to the hash, the runtime member hash of
+    //! an object, or NOTHING for any other value (QoreKeysOperatorNode::getFunctionalIteratorImpl()).  A foreach loop
+    //! over `keys` holds the result until the statement ends, and takes the keys from it, so that what the iterator
+    //! refers to is destroyed when the loop ends, as in the AST interpreter.
+    KeysIteratorSource = 423,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (424, 425, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -901,8 +949,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListSetScannedType);
-static_assert(QORE_IR_MAX_OPCODE == 418, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::KeysIteratorSource);
+static_assert(QORE_IR_MAX_OPCODE == 423, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1086,6 +1134,53 @@ struct QoreIRConstant {
 
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
+class QoreIRInstruction;
+
+//! The unfused form of an AOT call whose result an optimization computes without the call
+/** An optimization that fuses a call of a user function or method with the instructions consuming its result (a
+    string, collection or aggregate consumer) or that replaces the call by its known result records the call's
+    unfused form here when the callee's Program can be debugged: the native code takes it while a debugger is
+    attached, so the callee runs as an ordinary call, with its debugger events, and the consumers are lowered as
+    without the fusion (QoreIRToLLVM::emitAotDebuggerAlternative()).  Transient: only native lowering uses it; it is
+    not serialized.
+*/
+struct QoreIRDebuggerAlternative {
+    //! the form of the native code that the alternative replaces while a debugger is attached
+    enum class Kind : uint8_t {
+        //! the instruction fuses the call with its consumers: the ordinary call, then the consumers
+        Consumers,
+        //! the instruction is the call, whose result native code takes from \a native_value (a fold): the ordinary
+        //! call gives the result instead
+        Fold,
+        //! the instruction is the call, which native code does not make (its result is not used): the ordinary call
+        //! is made for its debugger events
+        EventsOnly,
+    };
+
+    Kind kind = Kind::Consumers;
+    //! the result of the ordinary call, which the first consumer uses
+    QoreIRValue call_result{};
+    //! the number of the call's own argument operands, which follow the operands that precede the arguments
+    uint32_t call_nargs = 0;
+    //! the call's consumers in their order, with fresh results; the last one gives \a result (empty: the call's
+    //! result is the instruction's result)
+    std::vector<std::unique_ptr<QoreIRInstruction>> consumers;
+    //! the value that the instruction's own result takes when the call is made (\a call_result without consumers)
+    QoreIRValue result{};
+    //! instructions that the optimization removed and that the ordinary call's arguments need, in their order
+    std::vector<std::unique_ptr<QoreIRInstruction>> prefix;
+    //! Fold: the value that native code gives the call's result
+    QoreIRValue native_value{};
+    //! the call site whose ordinary call several fused instructions share (0: none)
+    /** The first instruction (\a site_store) makes the call while a debugger is attached and keeps its result for
+        the others (\a site_keyed), which take their unfused form exactly when it did, from the kept result.
+    */
+    uint32_t site = 0;
+    bool site_store = false;
+    bool site_keyed = false;
+
+    DLLLOCAL ~QoreIRDebuggerAlternative();
+};
 
 class QoreIRInstruction {
 public:
@@ -1142,7 +1237,13 @@ public:
     // releases the slots registered from this scope's mark up to that scope's mark.  Transient, like
     // temp_scope_id; see design/ir-loop-jump-temp-scope.md.
     uint32_t unwind_inner_temp_scope_id = 0;
+    //! The unfused form of a fused call, for the ordinary call taken while a debugger is attached; transient
+    /** Shared by a copy of the instruction, which lowers the same immutable unfused form.
+    */
+    std::shared_ptr<const QoreIRDebuggerAlternative> debugger_alternative;
 };
+
+inline QoreIRDebuggerAlternative::~QoreIRDebuggerAlternative() = default;
 
 struct QoreIRPluginOperationRef {
     //! Process-global operation id assigned when the registering module commits.
@@ -3565,6 +3666,25 @@ public:
     // True when delegate-to-AST statements or an unknown AST node prevent an
     // exact local-reference inventory.
     bool has_opaque_ast_local_access = false;
+
+    // True when the function belongs to a program that allows the debugger: reflection can then read and
+    // replace every parameter and local of its frame by name, including the ones that no instruction accesses,
+    // so each must exist on the runtime stack of a real frame.  Set where the IR is published; unlike
+    // has_opaque_ast_local_access, it leaves the exact local inventory, and the optimizations based on it, intact.
+    bool reflective_frame = false;
+
+    // True when the function's activation is proven unable to run a reflection builtin on its thread (see
+    // qore_ir_function_may_reflect_locally()), so its locals need no reflection-specific lowering even in a program
+    // that allows the debugger.  Set before lowering; a handler body lowered for the function inherits it.
+    bool reflection_free = false;
+
+    // True when the function's locals are proven to be released in reverse declaration order by the frame cleanup
+    // alone (see qore_ir_local_unwind_order_is_exact()), so lowering anchors no unwind cleanup for them.  Set before
+    // lowering again; a handler body lowered for the function inherits it.
+    bool unwind_order_proven = false;
+
+    // True when lowering anchored an exception cleanup in a block only to keep its locals' unwind order
+    bool has_local_unwind_anchor = false;
 
     // True when lowered IR reads or writes the synthetic method `self` local
     // as a value rather than only accessing members through self helpers.

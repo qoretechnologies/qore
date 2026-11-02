@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+# the order in which an exception leaving a function releases its object locals; see IRLocalUnwindOrder.qtest
+list<string> log;
+
+class V {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+        push log, n + "+";
+    }
+
+    destructor() {
+        push log, n + "-";
+    }
+}
+
+sub thrower() {
+    throw "E";
+}
+
+# runtime-owned (class-typed) locals only
+sub typedTyped() {
+    V a = new V("a");
+    V b = new V("b");
+    push log, "body";
+    thrower();
+}
+
+# two locals that can be private
+sub autoAuto() {
+    auto a = new V("a");
+    auto b = new V("b");
+    push log, "body";
+    thrower();
+}
+
+# three locals that can be private
+sub autoAutoAuto() {
+    auto a = new V("a");
+    hash<auto> b = {"v": new V("b")};
+    list<auto> c = (new V("c"),);
+    push log, "body";
+    thrower();
+}
+
+# a single private local after a runtime-owned one
+sub typedAuto() {
+    V a = new V("a");
+    auto b = new V("b");
+    push log, "body";
+    thrower();
+}
+
+# a private local followed by a runtime-owned one
+sub autoTyped() {
+    auto a = new V("a");
+    V b = new V("b");
+    push log, "body";
+    thrower();
+}
+
+# runtime-owned, private, runtime-owned
+sub mixed() {
+    V first = new V("first");
+    auto middle = new V("middle");
+    V last = new V("last");
+    push log, "body";
+    thrower();
+}
+
+# a single private local
+sub single() {
+    auto a = new V("a");
+    push log, "body";
+    thrower();
+}
+
+# a private local in an inner block after a runtime-owned outer one
+sub outerInner() {
+    V o = new V("o");
+    {
+        auto i = new V("i");
+        push log, "body";
+        thrower();
+    }
+}
+
+# a private outer local and a runtime-owned local in the inner block
+sub innerTyped() {
+    auto o = new V("o");
+    {
+        V i = new V("i");
+        push log, "body";
+        thrower();
+    }
+}
+
+# a private local after an object parameter
+sub paramAuto(V p) {
+    auto a = new V("a");
+    push log, "body";
+    thrower();
+}
+
+# a foreach variable and a private local in its body
+sub foreachLocal() {
+    foreach V v in ((new V("v"),)) {
+        auto a = new V("a");
+        push log, "body";
+        thrower();
+    }
+}
+
+# a catch variable, then private locals in the catch block
+sub catchLocal() {
+    try {
+        thrower();
+    } catch (hash<ExceptionInfo> ex) {
+        auto a = new V("a");
+        auto b = new V("b");
+        push log, "body";
+        rethrow;
+    }
+}
+
+# a private local in a switch case after a runtime-owned local
+sub switchLocal(int x) {
+    V o = new V("o");
+    switch (x) {
+        case 1:
+            auto a = new V("a");
+            auto b = new V("b");
+            push log, "body";
+            thrower();
+    }
+}
+
+# a captured object local
+sub captured() {
+    auto a = new V("a");
+    auto b = new V("b");
+    code c = sub () { push log, "captured " + (a ? "a" : "") + (b ? "b" : ""); };
+    c();
+    thrower();
+}
+
+# a private local in one scope and a runtime-owned one in a later sibling scope: the scopes do not overlap
+sub siblingScopes() {
+    {
+        auto a = new V("a");
+        push log, "first";
+    }
+    {
+        V b = new V("b");
+        push log, "body";
+        thrower();
+    }
+}
+
+# two sequential catch blocks whose exception variables can hold objects
+sub sequentialCatches() {
+    try {
+        throw "X", "first", new V("x1");
+    } catch (hash<auto> ex) {
+        push log, "catch1";
+    }
+    try {
+        throw "X", "second", new V("x2");
+    } catch (hash<auto> ex) {
+        auto a = new V("a");
+        push log, "body";
+        thrower();
+    }
+}
+
+# a runtime-owned local in a nested scope declared after an outer private one
+sub nestedRuntimeAfterPrivate() {
+    auto a = new V("a");
+    {
+        V b = new V("b");
+        push log, "body";
+        thrower();
+    }
+}
+
+foreach string f in (("typedTyped", "autoAuto", "autoAutoAuto", "typedAuto", "autoTyped", "mixed", "single",
+        "outerInner", "innerTyped", "foreachLocal", "catchLocal", "captured", "siblingScopes", "sequentialCatches",
+        "nestedRuntimeAfterPrivate")) {
+    log = ();
+    try {
+        call_function(f);
+    } catch (hash<ExceptionInfo> ex) {
+        push log, "caught " + ex.err;
+    }
+    printf("%s: %y\n", f, log);
+}
+log = ();
+try {
+    paramAuto(new V("p"));
+} catch (hash<ExceptionInfo> ex) {
+    push log, "caught " + ex.err;
+}
+printf("paramAuto: %y\n", log);
+log = ();
+try {
+    switchLocal(1);
+} catch (hash<ExceptionInfo> ex) {
+    push log, "caught " + ex.err;
+}
+printf("switchLocal: %y\n", log);

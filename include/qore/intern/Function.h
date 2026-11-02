@@ -1066,7 +1066,8 @@ protected:
     DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
-            bool mark_failure, bool raise_on_failure) const;
+            bool mark_failure, bool raise_on_failure, bool reflection_free = false,
+            bool unwind_order_proven = false) const;
     DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,

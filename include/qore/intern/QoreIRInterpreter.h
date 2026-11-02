@@ -125,6 +125,31 @@ DLLLOCAL int64 q_get_ir_innermost_instantiated_local_entries();
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
+//! Applies a compound assignment to an lvalue as the AST interpreter does
+/** The value holds a reference in \a rhs_holder, which += takes when it stores the value (see
+    doPlusEqualsOnLValue()); the holder must be declared before the LValueHelper.
+
+    @return the new value of the lvalue, holding a reference, or no value
+*/
+DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp compound_op,
+        ValueHolder& rhs_holder, ExceptionSink* xsink);
+
+//! Returns the value that a compound assignment gives an untyped lvalue holding the value given
+/** The result is the one the AST interpreter gives: the operation follows the type of the current value (ex: an
+    int value converts the operand to an int, so 10 += 1.5 gives 11).  It serves the opcodes that load a variable,
+    compute its new value and store it; a variable whose declared type changes the operation (ex: \c timeout) is
+    changed through its lvalue instead.
+
+    @param op the compound operation
+    @param left the current value of the lvalue
+    @param right the operand
+    @param xsink for exceptions raised by the operation
+
+    @return the new value of the lvalue, holding a reference, or no value if an exception was raised
+*/
+DLLLOCAL QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink);
+
 //! Execute a previously resolved direct-call descriptor when its cached IR is
 //! a supported native scalar leaf. Returns false without side effects when the
 //! body or runtime argument types require normal call semantics.

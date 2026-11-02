@@ -72,9 +72,9 @@ class ObjectParamCacheTest inherits QUnit::Test {
                     *list<*string> fast = regex_extract(ir,
                         "(?s)define internal [^\n]*@" + name + "_[^\n]*_fast_[^\n]*\\([^\n]*"
                         "ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
-                    assertTrue(!!fast, name + " private entry exists " + prefix + level);
-                    assertFalse(regex(fast[0] ?? "", "qore_rt_get_class_param_epoch_aot_v1"),
-                        name + " private argument must not alias an outer runtime slot " + prefix + level);
+                    # the program allows the debugger, and the dynamic receiver call can reach reflection on this
+                    # frame, which a private entry does not push (design/aot-reflection-visible-locals.md)
+                    assertFalse(!!fast, name + " keeps its real frame " + prefix + level);
                 }
                 foreach string runtime in (("", "QORE_DISABLE_IR_CONTEXT_ELISION=1 ",
                         "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",

@@ -1,0 +1,212 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FusedShapesDebuggerTest
+
+#! Fused and folded native calls without a single unfused form honor a debugger attached while they run
+/** The shapes: a string producer whose local is read by several consumers (each consumer takes a clone of the call)
+    or that reaches its consumer through a phi, virtualized and phi aggregate projections, a call whose result is
+    discarded, fresh list-size and hash-key folds and boxed return-parameter folds.  While a debugger is attached,
+    the native code makes the ordinary call, and the fixtures print the values and the callees' function events,
+    which must be those of the AST interpreter in every mode.  AOTFusedShapesDebugger.qr runs the shapes in a Program
+    that allows a debugger; fused-shapes-debugger/FusedShapesHost.qr debugs the Program of a module without
+    %allow-debugger, whose functions keep their locals private, so the string fusions that clone a producer apply
+    there.  The fusions stay selected, and a Program that cannot be debugged has no gate.
+*/
+class FusedShapesDebuggerTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/AOTFusedShapesDebugger.qr";
+        string module_dir = get_script_dir() + "/fused-shapes-debugger";
+        string module_source = module_dir + "/FusedShapesTarget.qm";
+        string host = module_dir + "/FusedShapesHost.qr";
+        string module_path = ENV.QORE_MODULE_DIR ?? "";
+        *string expected;
+        *string host_expected;
+
+        #! the build prefixes: plain, exception handling by unwinding and split modules
+        const Prefixes = ("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ");
+    }
+
+    constructor() : Test("fused AOT shapes honor debuggers", "1.0", \ARGV) {
+        addTestCase("interpreted and JIT modes", \checkModes());
+        addTestCase("AOT compilations", \checkAot());
+        addTestCase("a debugged module's Program", \checkModule());
+        addTestCase("a Program that cannot be debugged", \checkNoDebugging());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    #! runs the host with the module from a directory
+    private string runHost(string dir, string mode = "") {
+        return run(mode ? (qore, "--exec-mode=" + mode, host) : (qore, host),
+            "QORE_MODULE_DIR=" + quote(dir + (module_path ? ":" + module_path : "")) + " ");
+    }
+
+    #! the body of a function's normal LLVM entry
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+
+    #! a function's QORE_IR_OPT_STATS fusion counts
+    private string stats(string output, string name, string label) {
+        *list<*string> found = regex_extract(output, "(IR-OPT-AOT-EFFECTS: " + name + "_[^\n]*)");
+        assertTrue(!!found, label + " " + name + " statistics");
+        return found[0] ?? "";
+    }
+
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", source));
+            # each callee reports its events while the debugger is attached during the loops
+            foreach string callee in (("pair", "triple", "StringFactory::makeStatic", "makeRow", "makeValues",
+                    "readListSize", "readMiddle", "identityHash", "identityList", "identityString")) {
+                assertRegex("during entry counts: \\{[^\n]*" + callee + ": [1-9]", expected, callee);
+                assertRegex("before entry counts: \\{[^\n]*" + callee + ": [1-9]", expected, callee);
+            }
+            assertRegex("detached entry counts: null", expected);
+            assertRegex("after entry counts: null", expected);
+        }
+        return expected;
+    }
+
+    private string getHostExpected() {
+        if (!host_expected) {
+            host_expected = runHost(module_dir, "ast");
+            assertRegex("during entry counts: \\{StringFactory::makeStatic: 13, [^\n]*pair: 11, ", host_expected);
+            for (int i = 0; i < 4; ++i) {
+                assertRegex("call " + i + " entry counts: \\{StringFactory::makeStatic: 1, pair: 1\\}",
+                    host_expected);
+            }
+            assertRegex("detached entry counts: null", host_expected);
+        }
+        return host_expected;
+    }
+
+    #! the fusions of the fixture's loop
+    private checkFusions(string output, string label) {
+        string line = stats(output, "shapesLoop", label);
+        foreach string kind in (("fresh-list-size-calls", "fresh-hash-key-calls", "aggregate-projections",
+                "boxed-return-calls", "string-consumers")) {
+            assertRegex(kind + "=[1-9]", line, label + " " + kind);
+        }
+    }
+
+    #! the fusions of the module's functions
+    private checkModuleFusions(string output, string label) {
+        assertRegex("string-consumers=4", stats(output, "_qaot_FusedShapesTarget_FusedShapesTarget__Shapes__"
+            "multiConsumers", label), label + " cloned producers");
+        string line = stats(output, "_qaot_FusedShapesTarget_FusedShapesTarget__Shapes__shapesLoop", label);
+        assertRegex("string-consumers=[1-9]", line, label + " loop string consumers");
+        assertRegex("boxed-return-calls=[1-9]", line, label + " loop boxed returns");
+    }
+
+    private checkModes() {
+        string expected = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        string host_expected = getHostExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(host_expected, runHost(module_dir, mode), "module " + mode);
+        }
+    }
+
+    private checkAot() {
+        string expected = getExpected();
+        TmpDir dir("qore-fused-shapes-debugger-");
+        foreach string prefix in (Prefixes) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string executable = dir.path + "/fixture";
+                string output = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1 ");
+                checkFusions(output, label);
+                # the native code keeps the folded values, and the debugger blocks make the ordinary calls
+                string fn = body(output, "shapesLoop");
+                assertRegex("\naot_call_debugger[0-9]*:", fn, label + " debugger blocks");
+                assertRegex("call i64 @qore_rt_call_direct_aot\\(", fn, label + " ordinary function calls");
+                assertRegex("call ptr @qore_rt_get_aot_method_debugger_gate_v1", output, label + " gates");
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
+                    assertEq(expected, run((executable,), runtime), label + " " + runtime);
+                }
+            }
+        }
+    }
+
+    private checkModule() {
+        string expected = getHostExpected();
+        foreach string prefix in (Prefixes) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = "module " + prefix + level;
+                TmpDir dir("qore-fused-shapes-module-");
+                string qmod = dir.path + "/FusedShapesTarget.qmod";
+                string output = run((qcc, "-m", level, "--strip-source", "-o", qmod, module_source),
+                    prefix + "QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1 ");
+                assertTrue(is_file(qmod), label + " qmod: " + output);
+                checkModuleFusions(output, label);
+                # the clones of a producer take their unfused form together: the first one makes the call
+                string fn = body(output, "_qaot_FusedShapesTarget_FusedShapesTarget__Shapes__multiConsumers");
+                assertRegex("debugger_site_taken", fn, label + " keyed clones");
+                assertRegex("\naot_call_debugger[0-9]*:", fn, label + " debugger blocks");
+                assertEq(expected, runHost(dir.path), label);
+            }
+        }
+    }
+
+    private checkNoDebugging() {
+        TmpDir dir("qore-fused-shapes-no-debugging-");
+        string nodebug = dir.path + "/fixture.qr";
+        File file();
+        file.open2(nodebug, O_CREAT | O_WRONLY | O_TRUNC);
+        # the fixture's own debugger cannot attach: it reports no events
+        file.write(replace(ReadOnlyFile::readTextFile(source), "%allow-debugger\n",
+            "%allow-debugger\n%no-debugging\n"));
+        file.close();
+        string module = dir.path + "/FusedShapesTarget.qm";
+        file = new File();
+        file.open2(module, O_CREAT | O_WRONLY | O_TRUNC);
+        file.write(replace(ReadOnlyFile::readTextFile(module_source), "%modern\n", "%modern\n%no-debugging\n"));
+        file.close();
+        string ast = run((qore, "--exec-mode=ast", nodebug));
+        assertRegex("before values: ", ast);
+        assertRegex("during entry counts: null", ast);
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string output = run((qcc, level, "--strip-source", "-o", executable, nodebug),
+                "QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1 ");
+            checkFusions(output, "no debugging " + level);
+            string qmod = dir.path + "/FusedShapesTarget.qmod";
+            output += run((qcc, "-m", level, "--strip-source", "-o", qmod, module),
+                "QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1 ");
+            checkModuleFusions(output, "no debugging module " + level);
+            assertFalse(regex(output, "qore_rt_get_aot_method_debugger_gate_v1|"
+                "qore_rt_get_aot_context_debugger_gate_v1"), "no gate " + level);
+            assertFalse(regex(output, "aot_call_debugger|method_debugger_detached|debugger_site_taken"),
+                "no debugger blocks " + level);
+            assertEq(ast, run((executable,)), level);
+        }
+    }
+}

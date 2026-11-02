@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+# push and unshift through lvalue paths: the value of the operator and its errors; see AOTPathPushResult.qtest
+
+class Holder {
+    public {
+        list<int> l = ();
+        hash<auto> h = {"inner": {"l": (1,)}};
+    }
+}
+
+list<int> sub localPush(int v) {
+    list<int> values = ();
+    return push values, v;
+}
+
+list<int> sub localUnshift(int v) {
+    list<int> values = (1,);
+    return unshift values, v;
+}
+
+list<int> sub memberPush(Holder h, int v) {
+    return push h.l, v;
+}
+
+list<int> sub memberUnshift(Holder h, int v) {
+    return unshift h.l, v;
+}
+
+list sub nestedPush(Holder h, int v) {
+    return push h.h.inner.l, v;
+}
+
+int sub statements(Holder h, int count) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        push values, i;
+        unshift values, i;
+        push h.l, i;
+        unshift h.l, i;
+    }
+    return values.size() + h.l.size();
+}
+
+string sub unshiftNonList() {
+    auto h = {"a": 1};
+    try {
+        unshift h.a, 1;
+        return "no error";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub pushNonList() {
+    auto h = {"a": 1};
+    try {
+        push h.a, 1;
+        return sprintf("no error: %y", h.a);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+printf("localPush: %y\n", localPush(3));
+printf("localUnshift: %y\n", localUnshift(2));
+Holder h();
+printf("memberPush: %y\n", memberPush(h, 7));
+printf("memberUnshift: %y\n", memberUnshift(h, 6));
+printf("nestedPush: %y\n", nestedPush(h, 5));
+printf("statements: %d\n", statements(new Holder(), 100));
+printf("unshiftNonList: %s\n", unshiftNonList());
+printf("pushNonList: %s\n", pushNonList());

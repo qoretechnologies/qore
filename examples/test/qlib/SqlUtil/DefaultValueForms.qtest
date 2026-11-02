@@ -119,7 +119,10 @@ class DefaultValueFormsTest inherits QUnit::Test {
         string prefix = "alter table " + table.getSqlName();
         foreach list<*string> pair in (("DF_plain", "DF_plain"), ("order", "[order]"),
                 ("name with spaces", "[name with spaces]"), ("odd]name", "[odd]]name]"),
-                ("é", "[é]"), (NOTHING, "dv_col")) {
+                # a letter of any script starts and continues a regular identifier (mssql_get_sql_identifier()),
+                # so it needs no brackets; a leading digit, a space or a "$" first does
+                ("é", "é"), ("DF_ü1", "DF_ü1"), ("1abc", "[1abc]"), ("é x", "[é x]"), ("$df", "[$df]"),
+                (NOTHING, "dv_col")) {
             MssqlColumn oldcol("col", "varchar", "string", 80, False, "'old'");
             oldcol.default_constraint = pair[0];
             MssqlColumn newcol("col", "varchar", "string", 80, False, "'new'");

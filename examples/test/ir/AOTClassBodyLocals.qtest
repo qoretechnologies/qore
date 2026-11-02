@@ -35,6 +35,10 @@ class ClassBodyLocalsTest inherits QUnit::Test {
         assertTrue(expected.find("mixed-unwind: first+ middle+ last+ body last- middle- first- caught=LOCAL-BODY live=0") >= 0);
         assertTrue(expected.endsWith("handler: outer+ inner+ body handler inner- after outer- live=0\n"));
         assertFalse(expected.find("unexpected-") >= 0);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
         TmpDir dir("qore-aot-class-lifetimes-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {

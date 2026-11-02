@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%allow-debugger
+
+# Each caller below keeps an int local that reflection replaces by name from code that the caller runs; see
+# AOTReflectionReach.qtest and design/aot-reflection-visible-locals.md
+
+#! replaces "secret" in the nearest calling frame that has it; returns the frame, or -1 if no frame has it
+int sub replaceSecret(int value) {
+    for (int frame = 1; frame < 8; ++frame) {
+        try {
+            *hash<auto> vars = get_local_vars(frame);
+            if (vars.secret) {
+                set_local_var_value(frame, "secret", value);
+                return frame;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a frame index beyond the stack
+        }
+    }
+    return -1;
+}
+
+int sub inner() {
+    return replaceSecret(42);
+}
+
+int sub middle() {
+    return inner();
+}
+
+# two user calls between the caller and the reflection
+string sub twoLevels() {
+    int secret = 5;
+    int frame = middle();
+    return sprintf("%d@%d", secret, frame);
+}
+
+int sub byNameTarget() {
+    return replaceSecret(43);
+}
+
+# a call by name
+string sub byName() {
+    int secret = 5;
+    auto frame = call_function("byNameTarget");
+    return sprintf("%d@%y", secret, frame);
+}
+
+int sub compareReflect(int a, int b) {
+    replaceSecret(44);
+    return a <=> b;
+}
+
+# a builtin that calls back into user code
+string sub builtinCallback() {
+    int secret = 5;
+    list<int> sorted = sort((2, 1), \compareReflect());
+    return sprintf("%d:%y", secret, sorted);
+}
+
+class Reflector {
+    destructor() {
+        replaceSecret(45);
+    }
+}
+
+# a destructor run by a release in the caller
+string sub destructorRelease() {
+    int secret = 5;
+    {
+        Reflector r();
+    }
+    return sprintf("%d", secret);
+}
+
+# a closure
+string sub closureCall() {
+    int secret = 5;
+    code c = sub () { replaceSecret(46); };
+    c();
+    return sprintf("%d", secret);
+}
+
+# a loop that cannot reach reflection: it keeps its native entry in this program
+int sub reflectionFree(int count) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += i * 3;
+    }
+    return total;
+}
+
+printf("twoLevels: %s\n", twoLevels());
+printf("byName: %s\n", byName());
+printf("builtinCallback: %s\n", builtinCallback());
+printf("destructorRelease: %s\n", destructorRelease());
+printf("closureCall: %s\n", closureCall());
+printf("reflectionFree: %d\n", reflectionFree(10));

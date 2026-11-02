@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class HandlerReplacedValuesTest
+
+#! Tests that a value that a block handler replaces is destroyed at the assignment
+/** When an exception or a thread_exit leaves a function, its on_exit, on_error and on_success handlers run as
+    functions of their own that read and assign the function's locals.  Every reference that the function holds to
+    a local's value is given to the runtime local before the handlers run, and an interpreted handler writes an
+    assignment through to its parent at once, so that the value replaced is destroyed at the assignment, as in the
+    interpreter, and not when the handler returns.  Every mode and compiled executable must match the interpreter.
+*/
+class HandlerReplacedValuesTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("handler replaced values", "1.0", \ARGV) {
+        addTestCase("values replaced by handlers are destroyed at the assignment", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/IRHandlerReplacedValues.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("ir-handler-replaced-values: ok\n$", expected);
+        assertRegex('replaced 0: \["a1b1c1", "exit", "b1", "c1", "a1", "replaced", "c2", "b2", "a2", "caught X"\]',
+            expected);
+        assertRegex('conditional 0: \["error", "ca1", "ca2", "cb1", "error done", "ca3", "caught Y"\]', expected);
+        assertRegex('nested 0: \["inner exit", "o1", "i1", "inner replaced", "i2", "o2", "caught Z"\]', expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-handler-replaced-values-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

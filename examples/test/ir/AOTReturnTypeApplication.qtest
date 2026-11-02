@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class ReturnTypeApplicationTest
+
+# checks that every execution mode and AOT-compiled code applies the declared return type to a returned value like
+# the AST interpreter: any and no type strip complex types, auto leaves them, and other types convert or reject it
+class ReturnTypeApplicationTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/AOTReturnTypeApplication.qr";
+    }
+
+    constructor() : Test("return type application", "1.0", \ARGV) {
+        addTestCase("AST reference output", \astReference());
+        addTestCase("execution modes match AST", \modes());
+        addTestCase("AOT matches AST", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string astOutput() {
+        return run((qore, "--exec-mode=ast", source));
+    }
+
+    # the reference output itself is checked so that a change in the AST interpreter is noticed
+    private astReference() {
+        hash<string, string> lines = map {$1.split("=")[0]: $1.substr($1.find("=") + 1)}, astOutput().split("\n"),
+            $1.val();
+        assertEq("hash:x", lines."direct-any-hash");
+        assertEq("RUNTIME-TYPE-ERROR", lines."direct-auto-hash");
+        assertEq("hash:store-ok:string", lines."any-hash");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."auto-hash");
+        assertEq("hash:store-ok:string", lines."plain-hash");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."auto-hash-type");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."optional-auto-hash-type");
+        assertEq("list:push-ok:string", lines."any-list");
+        assertEq("list<int>:RUNTIME-TYPE-ERROR", lines."auto-list");
+        assertEq("list:push-ok:string", lines."softlist-list");
+        assertEq("hash:store-ok:string", lines."any-hashdecl");
+        assertEq("hash<ReturnRecord>:INVALID-MEMBER", lines."auto-hashdecl");
+        assertEq("list:hash:store-ok", lines."any-nested");
+        assertEq("object<ReturnTarget>:ReturnTarget:3", lines."any-object");
+        assertEq("integer:42", lines."any-scalar");
+        assertEq("nothing", lines."any-nothing");
+        assertEq("nothing", lines."auto-nothing");
+        assertEq("integer:42", lines."softint");
+        assertEq("string:42", lines."softstring");
+        assertEq("integer:7", lines."optional-softint");
+        assertEq("hash:store-ok:string", lines."any-try");
+        assertEq("hash:store-ok:string", lines."any-loop");
+        assertEq("hash:store-ok:string", lines."any-on-exit");
+        assertEq("hash:store-ok:string", lines."try-any-hash");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."try-auto-hash");
+        assertEq("hash:store-ok:string", lines."try-method-any-hash");
+        assertEq("hash:store-ok:string", lines."try-static-any-hash");
+        assertEq("hash:store-ok:string", lines."method-any-hash");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."method-auto-hash");
+        assertEq("list:push-ok:string", lines."method-any-list");
+        assertEq("integer:42", lines."method-softint");
+        assertEq("hash:store-ok:string", lines."static-any-hash");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."static-auto-hash");
+        assertEq("string:42", lines."static-softstring");
+        assertEq("hash:store-ok:string", lines."closure-any-hash");
+        assertEq("hash<string, int>:RUNTIME-TYPE-ERROR", lines."closure-auto-hash");
+        assertEq("integer:42", lines."closure-softint");
+        assertEq("list:push-ok:string", lines."closure-any-list");
+        assertEq("hash:store-ok:string", lines."ref-any-hash");
+        assertEq("hash:store-ok:string", lines."ref-method-any-hash");
+        assertEq("hash:store-ok:string", lines."call-function-any-hash");
+        assertEq("accepted:integer", lines."present-int");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead",
+            lines."bad-int");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'hash<string, int>', "
+            + "but got type 'hash<string, string>' instead",
+            lines."bad-typed-hash");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'object<ReturnTarget>', "
+            + "but got an object of class 'Mutex' instead",
+            lines."bad-object");
+        assertEq("RUNTIME-TYPE-ERROR: <block return> expects type 'int', "
+            + "but got no value instead: block missing return statement",
+            lines."missing-int");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead",
+            lines."bad-int-try");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead",
+            lines."method-bad-int");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead",
+            lines."static-bad-int");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead",
+            lines."closure-bad-int");
+        assertEq("RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead",
+            lines."direct-bad-int");
+        assertEq("500", lines."hot-loop");
+    }
+
+    private modes() {
+        string expected = astOutput();
+        foreach string mode in (("ir", "tiered", "jit")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+            # with thresholds of 1 and synchronous compilation, checking that JIT and tiered execution ran native code
+            assertEq(expected, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+                "--exec-mode=%s %s", quote(libdir), quote(libdir), quote(qore), mode, quote(source))),
+                mode + " native");
+        }
+    }
+
+    private aot() {
+        string expected = astOutput();
+        TmpDir dir("qore-return-type-application-");
+        foreach string level in (("-O0", "-O3")) {
+            string exe = dir.path + "/fixture" + level;
+            run((qcc, level, "--strip-source", "-o", exe, source));
+            assertEq(expected, run((exe,)), "AOT " + level);
+        }
+    }
+}

@@ -1,0 +1,84 @@
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+module FusedShapesTarget {
+    version = "1.0";
+    desc = "fused native calls of a Program debugged by another Program (AOTFusedShapesDebugger.qtest)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+# The callees' lines are matched by line number (FusedShapesHost.qr); keep them in place.  Without
+# %allow-debugger the module's functions keep their locals private, so the string fusions that clone a producer for
+# several consumers of one local apply here; the host's debugger attaches to the module's Program.
+public namespace FusedShapesTarget {
+    public string sub pair(string left, string right) {
+        return left + right; # line 17
+    }
+    public string sub triple(string first, string second, string third) {
+        return first + second + third; # line 20
+    }
+    public final class StringFactory {
+        static string makeStatic(string left, string right) {
+            return left + right; # line 24
+        }
+    }
+    public hash<string, int> sub makeRow(int left, int middle, int right) {
+        return {"left": left, "middle": middle, "right": right}; # line 28
+    }
+    public list<int> sub makeValues(int left, int middle, int right) {
+        return (left, middle, right); # line 31
+    }
+    public int sub readListSize(list<int> value) {
+        return value.size(); # line 34
+    }
+    public int sub readMiddle(hash<string, int> values) {
+        return values.middle; # line 37
+    }
+    public hash<string, int> sub identityHash(hash<string, int> value) {
+        return value; # line 40
+    }
+    public list<int> sub identityList(list<int> value) {
+        return value; # line 43
+    }
+    public string sub identityString(string value) {
+        return value; # line 46
+    }
+
+    public final class Shapes {
+        # string producers whose local is read by several consumers, in a function without loops
+        int multiConsumers(int i, int attach_at, code attach) {
+            if (i == attach_at) {
+                attach();
+            }
+            string static_value = StringFactory::makeStatic("Dvořák-", "value");
+            string local_value = pair("left-", "value");
+            return static_value.size() * 100 + static_value.length() + local_value.size() * 100
+                + local_value.length();
+        }
+
+        # the shapes in a loop that can attach the debugger before them
+        list<auto> shapesLoop(int n, int attach_at, code attach) {
+            list<auto> results = ();
+            for (int i = 0; i < n; ++i) {
+                if (i == attach_at) {
+                    attach();
+                }
+                string static_value = StringFactory::makeStatic("Dvořák-", "value");
+                int t = static_value.size() * 100 + static_value.length();
+                t += (i % 2 ? pair("left", "right") : triple("one", "two", "three")).size();
+                hash<string, int> row = makeRow(i, i + 1, i + 2);
+                t += row.left + row.right;
+                t += (i % 2 ? makeValues(i, 1, 2) : makeValues(3, i, 4))[1];
+                t += readListSize((1, 2, 3, i)) + readMiddle({"left": 1, "middle": i, "right": 3});
+                hash<string, int> value_row = {"value": i};
+                list<int> values = (3, i);
+                t += identityHash(value_row).value * 100 + identityList(values)[1] * 10
+                    + identityString("abc").size();
+                results += t;
+            }
+            return results;
+        }
+    }
+}

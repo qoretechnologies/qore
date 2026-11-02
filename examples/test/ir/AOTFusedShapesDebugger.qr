@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# The fused or folded calls that have no single unfused form of their own: a string producer whose local is read by
+# several consumers or that reaches its consumer through a phi, virtualized and phi aggregate projections, fresh
+# list-size and hash-key folds and boxed return-parameter folds.  While a debugger is attached, each must report the
+# callee's function events and give the values of the ordinary call (AOTFusedShapesDebugger.qtest compares the output
+# with the AST interpreter).  The callees' lines are matched by line number below (CalleeLines); keep them in place.
+
+string sub pair(string left, string right) {
+    return left + right; # line 14
+}
+string sub triple(string first, string second, string third) {
+    return first + second + third; # line 17
+}
+final class StringFactory {
+    static string makeStatic(string left, string right) {
+        return left + right; # line 21
+    }
+}
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {"left": left, "middle": middle, "right": right}; # line 25
+}
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right); # line 28
+}
+int sub readListSize(list<int> value) {
+    return value.size(); # line 31
+}
+int sub readMiddle(hash<string, int> values) {
+    return values.middle; # line 34
+}
+hash<string, int> sub identityHash(hash<string, int> value) {
+    return value; # line 37
+}
+list<int> sub identityList(list<int> value) {
+    return value; # line 40
+}
+string sub identityString(string value) {
+    return value; # line 43
+}
+
+const CalleeLines = {
+    "14": "pair", "17": "triple", "21": "StringFactory::makeStatic", "25": "makeRow", "28": "makeValues",
+    "31": "readListSize", "34": "readMiddle", "37": "identityHash", "40": "identityList", "43": "identityString",
+};
+
+class CalleeRecorder inherits DebugProgram {
+    public {
+        hash<string, int> entries = {};
+        hash<string, int> exits = {};
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *string key = CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++entries{key};
+        }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *string key = CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++exits{key};
+        }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+CalleeRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+int attach_at = -1;
+
+# a Program that cannot be debugged (see AOTFusedShapesDebugger.qtest) runs the same calls without events
+sub attachRecorder() {
+    try {
+        recorder.addProgram(pc);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "DEBUGGING") {
+            rethrow;
+        }
+    }
+}
+sub detachRecorder() {
+    try {
+        recorder.removeProgram(pc);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "DEBUGGING") {
+            rethrow;
+        }
+    }
+}
+sub maybeAttach(int i) {
+    if (i == attach_at) {
+        attachRecorder();
+    }
+}
+
+# the shapes in a loop that can attach the debugger before them
+list<auto> sub shapesLoop(int n) {
+    list<auto> results = ();
+    for (int i = 0; i < n; ++i) {
+        maybeAttach(i);
+        # a string producer whose local is read by several consumers
+        string static_value = StringFactory::makeStatic("Dvořák-", "value");
+        int t = static_value.size() * 100 + static_value.length();
+        string local_value = pair("left-", "value");
+        t += local_value.size() * 100 + local_value.length();
+        # string producers reaching their consumer through a phi
+        t += (i % 2 ? pair("left", "right") : triple("one", "two", "three")).size();
+        # a virtualized aggregate projection: the local's members replace the call's result
+        hash<string, int> row = makeRow(i, i + 1, i + 2);
+        t += row.left + row.right;
+        # aggregate projections through a phi
+        t += (i % 2 ? makeValues(i, 1, 2) : makeValues(3, i, 4))[1];
+        # a fresh list-size fold and a fresh hash-key fold
+        t += readListSize((1, 2, 3, i)) + readMiddle({"left": 1, "middle": i, "right": 3});
+        # boxed return-parameter folds
+        hash<string, int> value_row = {"value": i};
+        list<int> values = (3, i);
+        t += identityHash(value_row).value * 100 + identityList(values)[1] * 10 + identityString("abc").size();
+        results += t;
+    }
+    return results;
+}
+
+# the same shapes in a try block
+list<auto> sub shapesTryLoop(int n) {
+    list<auto> results = ();
+    try {
+        for (int i = 0; i < n; ++i) {
+            maybeAttach(i);
+            string static_value = StringFactory::makeStatic("Dvořák-", "value");
+            int t = static_value.size() * 100 + static_value.length();
+            t += (i % 2 ? pair("left", "right") : triple("one", "two", "three")).size();
+            hash<string, int> row = makeRow(i, i + 1, i + 2);
+            t += row.left + row.right;
+            t += readListSize((1, 2, 3, i)) + readMiddle({"left": 1, "middle": i, "right": 3});
+            t += identityHash({"value": i}).value * 100 + identityString("abc").size();
+            results += t;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        results += ex.err;
+    }
+    return results;
+}
+
+sub report(string label, list<auto> results) {
+    printf("%s values: %y\n", label, results);
+    hash<string, int> entries;
+    hash<string, int> exits;
+    foreach string key in (sort(keys recorder.entries)) {
+        entries{key} = recorder.entries{key};
+    }
+    foreach string key in (sort(keys recorder.exits)) {
+        exits{key} = recorder.exits{key};
+    }
+    printf("%s entry counts: %y\n", label, entries);
+    printf("%s exit counts: %y\n", label, exits);
+    recorder.entries = {};
+    recorder.exits = {};
+}
+
+for (int i = 0; i < 32; ++i) {
+    shapesLoop(3);
+    shapesTryLoop(3);
+}
+report("warmup", ());
+
+# attached before the calls
+attachRecorder();
+list<auto> results = shapesLoop(4) + shapesTryLoop(4);
+detachRecorder();
+report("before", results);
+
+# detached again
+results = shapesLoop(4) + shapesTryLoop(4);
+report("detached", results);
+
+# attached during loops that already run natively: iterations 3 to 7
+attach_at = 3;
+results = shapesLoop(8);
+detachRecorder();
+results += shapesTryLoop(8);
+detachRecorder();
+report("during", results);
+
+attach_at = -1;
+results = shapesLoop(4) + shapesTryLoop(4);
+report("after", results);
+

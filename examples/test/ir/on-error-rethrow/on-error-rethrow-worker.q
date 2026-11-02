@@ -324,6 +324,47 @@ run("sequential_blocks", \sequential_blocks());
 run("catch_in_body", \catch_in_body());
 run("rethrow_from_catch", \rethrow_from_catch());
 run("rethrow_args_throw", \rethrow_args_throw());
+# the try body anchors an exception target for its local; the inner block holds only a handler
+int sub try_inner_handler() {
+    try {
+        *hash<auto> lease = {"a": 1};
+        bool transferred;
+        on_exit if (lease && !transferred) {
+            push log, "release";
+        }
+        {
+            on_error rethrow $1.err, $1.desc + "+inner";
+            throw "E", "d";
+        }
+        transferred = True;
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+    return 18;
+}
+
+# two nested handler-only scopes inside the anchored try body each close on their own exception path
+int sub try_nested_handlers() {
+    try {
+        *hash<auto> lease = {"a": 1};
+        on_exit if (lease) {
+            push log, "release";
+        }
+        {
+            on_error push log, "mid:" + $1.desc;
+            {
+                on_error rethrow $1.err, $1.desc + "+inner";
+                throw "E", "d";
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+    return 19;
+}
+
+run("try_inner_handler", \try_inner_handler());
+run("try_nested_handlers", \try_nested_handlers());
 Poster p();
 run("post_ok", auto sub () { return p.post({"key": "k", "info": 1, "lease": {}}); });
 run("post_err", auto sub () { return p.post({"key": "k", "info": {"obj": new Mutex()}, "lease": {"a": 1}}); });

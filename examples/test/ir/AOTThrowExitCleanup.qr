@@ -1,0 +1,385 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+# Exception exits with many live locals and temporaries: every object is released exactly once, in the order the
+# interpreter releases it, whether the throw, rethrow or thread_exit has an in-frame handler or leaves the function
+
+our list<string> events = ();
+our hash<string, int> released = {};
+our int created = 0;
+
+class Tracker {
+    public {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+        ++created;
+    }
+    destructor() {
+        events += name;
+        released{name} = (released{name} ?? 0) + 1;
+    }
+    string id() {
+        return name;
+    }
+}
+
+#! signals the main thread when the frame holding it is unwound
+class Signal {
+    public {
+        Queue queue;
+    }
+    constructor(Queue queue) {
+        self.queue = queue;
+    }
+    destructor() {
+        queue.push(1);
+    }
+}
+
+Tracker sub mk(string name) {
+    return new Tracker(name);
+}
+
+# a temporary object released at the end of the statement creating it
+string sub tmp(string name) {
+    return mk(name).id();
+}
+
+# a function-level throw at every position: each throw site leaves with a different set of live locals
+string sub flat(int which) {
+    Tracker l0 = mk("l0");
+    if (which == 0) { throw "FLAT", tmp("d0"), mk("a0"); }
+    Tracker l1 = mk("l1");
+    if (which == 1) { throw "FLAT", tmp("d1") + tmp("e1"), mk("a1"); }
+    string s2 = tmp("s2");
+    Tracker l2 = mk("l2" + s2.size());
+    if (which == 2) { throw "FLAT", tmp("d2"), mk("a2"); }
+    Tracker l3 = mk("l3");
+    Tracker l4 = mk("l4");
+    if (which == 3) { throw "FLAT", tmp("d3"), (mk("a3"), mk("b3")); }
+    Tracker l5 = mk("l5");
+    if (tmp("c5") == "c5" && which == 4) { throw "FLAT", tmp("d4"), mk("a4"); }
+    Tracker l6 = mk("l6");
+    Tracker l7 = mk("l7");
+    if (which == 5) { throw "FLAT", tmp("d5"); }
+    Tracker l8 = mk("l8");
+    Tracker l9 = mk("l9");
+    if (which == 6) { throw "FLAT", mk("d6").id(), mk("a6"); }
+    return l0.id() + l1.id() + l2.id() + l3.id() + l4.id() + l5.id() + l6.id() + l7.id() + l8.id() + l9.id();
+}
+
+# nested blocks and loops: block-scoped locals and loop iterations live at the throw
+string sub nested(int which) {
+    Tracker outer = mk("outer");
+    {
+        Tracker b1 = mk("b1");
+        {
+            Tracker b2 = mk("b2");
+            if (which == 0) { throw "NESTED", tmp("n0"), mk("na0"); }
+        }
+        if (which == 1) { throw "NESTED", tmp("n1"); }
+    }
+    for (int i = 0; i < 3; ++i) {
+        Tracker li = mk("loop" + i);
+        if (which == 2 && i == 1) { throw "NESTED", tmp("n2") + i, mk("na2"); }
+    }
+    list<Tracker> fl = (mk("f0"), mk("f1"), mk("f2"));
+    foreach Tracker t in (fl) {
+        Tracker fi = mk("fi" + t.id());
+        if (which == 3 && t.id() == "f1") { throw "NESTED", tmp("n3"), mk("na3"); }
+    }
+    int k = 0;
+    while (k < 3) {
+        Tracker wi = mk("w" + k);
+        if (which == 4 && k == 2) { throw "NESTED", tmp("n4"); }
+        ++k;
+    }
+    return outer.id();
+}
+
+# on_exit, on_error and on_success handlers run as the throw leaves the function
+string sub handlers(int which) {
+    Tracker h0 = mk("h0");
+    on_exit { events += "on_exit:" + tmp("x0"); }
+    Tracker h1 = mk("h1");
+    on_error { events += "on_error:" + tmp("x1"); }
+    on_success { events += "on_success"; }
+    Tracker h2 = mk("h2");
+    {
+        Tracker h3 = mk("h3");
+        on_exit { events += "inner_on_exit"; }
+        if (which == 0) { throw "HANDLERS", tmp("hd0"), mk("ha0"); }
+    }
+    if (which == 1) { throw "HANDLERS", tmp("hd1"); }
+    return h0.id() + h1.id() + h2.id();
+}
+
+# catch blocks that rethrow or throw out of the function, and an in-frame rethrow to an outer catch
+string sub catches(int which) {
+    Tracker c0 = mk("c0");
+    try {
+        Tracker t0 = mk("t0");
+        try {
+            Tracker t1 = mk("t1");
+            throw "INNER", tmp("id"), mk("ia");
+        } catch (hash<ExceptionInfo> ex) {
+            Tracker k1 = mk("k1");
+            if (which == 0) {
+                # rethrown to the outer catch of this frame
+                rethrow;
+            }
+            if (which == 1) {
+                # a new exception to the outer catch of this frame
+                throw "INNER2", tmp("id2"), mk("ia2");
+            }
+            events += "inner caught " + ex.err;
+        }
+        if (which == 2 || which == 3) { throw "TRY", tmp("td"); }
+    } catch (hash<ExceptionInfo> ex) {
+        Tracker k0 = mk("k0");
+        events += "outer caught " + ex.err;
+        if (which <= 2) {
+            # leaves the function from the catch block
+            rethrow;
+        }
+        if (which == 3) {
+            throw "FROMCATCH", tmp("fd"), mk("fa");
+        }
+    }
+    if (which == 4) {
+        try {
+            Tracker t4 = mk("t4");
+            throw "LAST", tmp("ld");
+        } catch (hash<ExceptionInfo> ex) {
+            Tracker k4 = mk("k4");
+            throw "FROMCATCH2", tmp("fd2") + ex.err, mk("fa2");
+        }
+    }
+    return c0.id();
+}
+
+list<Tracker> sub mkl(string prefix) {
+    return (mk(prefix + "0"), mk(prefix + "1"), mk(prefix + "2"));
+}
+
+# foreach over a temporary list without a handler in the function: the body's locals are released before the list,
+# and the list before the loop variable
+string sub loops(int which) {
+    foreach Tracker t in ((mk("g0"), mk("g1"), mk("g2"))) {
+        Tracker gi = mk("gi" + t.id());
+        if (which == 0 && t.id() == "g1") { throw "LOOPS", tmp("q0"), mk("qa0"); }
+    }
+    foreach Tracker a in (mkl("a")) {
+        Tracker al = mk("al" + a.id());
+        foreach Tracker b in (mkl("b" + a.id())) {
+            Tracker bl = mk("bl" + b.id());
+            {
+                Tracker inner = mk("in" + b.id());
+                if (which == 1 && b.id() == "ba11") { throw "LOOPS", tmp("q1"); }
+            }
+            if (which == 2 && b.id() == "ba02") { throw "LOOPS", tmp("q2"); }
+        }
+    }
+    foreach Tracker t in (map $1, mkl("m")) {
+        Tracker ml = mk("ml" + t.id());
+        if (which == 3 && t.id() == "m1") { throw "LOOPS", tmp("q3"); }
+    }
+    foreach Tracker t in (select mkl("s"), $1.id() != "s0") {
+        Tracker sl = mk("sl" + t.id());
+        if (which == 4 && t.id() == "s2") { throw "LOOPS", tmp("q4"); }
+    }
+    {
+        Tracker lo = mk("lo");
+        on_exit { events += "loop_on_exit"; }
+        foreach Tracker t in (mkl("h")) {
+            Tracker hl = mk("hl" + t.id());
+            on_error { events += "loop_on_error " + t.id(); }
+            if (which == 5 && t.id() == "h1") { throw "LOOPS", tmp("q5"); }
+        }
+    }
+    foreach Tracker t in (mkl("r")) {
+        Tracker rl = mk("rl" + t.id());
+        if (which == 6 && t.id() == "r1") { return "ret" + rl.id(); }
+    }
+    switch (mk("sw").id()) {
+        case "sw": {
+            Tracker cl = mk("case");
+            if (which == 7) { throw "LOOPS", tmp("q7"); }
+        }
+    }
+    return "end";
+}
+
+sub raise(string err) {
+    throw err, err, mk("arg" + err);
+}
+
+sub onErrorRethrow() {
+    on_error { rethrow; }
+    raise("OE");
+}
+
+# exceptions leaving catch blocks for handlers in the same function: each catch block left releases its variable and
+# ends its catch scope, so the caught exception's argument is released then and a later rethrow in an enclosing catch
+# block rethrows that block's exception
+string sub scopes(int which) {
+    try {
+        raise("A");
+    } catch (hash<ExceptionInfo> a) {
+        Tracker ka = mk("ka");
+        try {
+            raise("B");
+        } catch (hash<ExceptionInfo> b) {
+            try {
+                try {
+                    raise("C");
+                } catch (hash<ExceptionInfo> c) {
+                    Tracker kc = mk("kc");
+                    if (which == 0) { raise("D"); }
+                    if (which == 1) { rethrow; }
+                    if (which == 2) { throw "E", tmp("de"), mk("argE"); }
+                    if (which == 3) { onErrorRethrow(); }
+                    if (which == 4) { rethrow "C2", "c2", mk("argC2"); }
+                }
+            } catch (hash<ExceptionInfo> x) {
+                events += "x " + x.err;
+            }
+            if (which == 5) { rethrow; }
+            try { rethrow; } catch (hash<ExceptionInfo> y) { events += "y " + y.err; }
+        }
+        try { rethrow; } catch (hash<ExceptionInfo> z) { events += "z " + z.err; }
+        if (which == 6) { rethrow "A2", "a2"; }
+    }
+    return "done";
+}
+
+# catch blocks in a loop left by continue, break, return and an exception from a nested catch
+string sub catchLoop(int which) {
+    for (int i = 0; i < 5; ++i) {
+        try {
+            raise("L" + i);
+        } catch (hash<ExceptionInfo> l) {
+            if (which == 0 && i == 1) { continue; }
+            if (which == 1 && i == 2) { break; }
+            if (which == 2 && i == 3) { return "ret" + i; }
+            try { raise("M" + i); } catch (hash<ExceptionInfo> m) { if (i == 4 && which == 3) { rethrow; } }
+            try { rethrow; } catch (hash<ExceptionInfo> r) { events += r.err; }
+        }
+    }
+    return "end";
+}
+
+# returns from nested blocks, loops, try and catch blocks and handlers: every return leaves through the function's
+# shared return exit
+string sub returns(int which) {
+    Tracker r0 = mk("r0");
+    on_exit { events += "returns_on_exit"; }
+    if (which == 0) { return "r" + tmp("rt0") + r0.id(); }
+    Tracker r1 = mk("r1");
+    {
+        Tracker rb = mk("rb");
+        on_exit { events += "block_on_exit"; }
+        if (which == 1) { return tmp("rt1") + rb.id(); }
+    }
+    foreach Tracker t in (mkl("rl")) {
+        Tracker rl = mk("rli" + t.id());
+        if (which == 2 && t.id() == "rl1") { return tmp("rt2") + rl.id(); }
+    }
+    try {
+        Tracker rt = mk("rtry");
+        if (which == 3) { return tmp("rt3") + rt.id(); }
+        raise("RETURN");
+    } catch (hash<ExceptionInfo> ex) {
+        Tracker rc = mk("rcatch");
+        if (which == 4) { return tmp("rt4") + rc.id() + ex.err; }
+    }
+    Tracker r2 = mk("r2");
+    on_error { events += "returns_on_error"; }
+    if (which == 5) { return tmp("rt5") + r2.id() + r1.id(); }
+    return "end";
+}
+
+# thread_exit with live locals and temporaries in a function called by a background thread
+sub exitThread(int which) {
+    Tracker e0 = mk("e0");
+    Tracker e1 = mk("e1");
+    {
+        Tracker e2 = mk("e2");
+        if (which == 0) {
+            events += "exit:" + tmp("et0");
+            thread_exit;
+        }
+    }
+    Tracker e3 = mk("e3");
+    events += "exit:" + tmp("et1");
+    thread_exit;
+}
+
+sub runThread(int which) {
+    Queue queue();
+    background sub () {
+        Signal signal(queue);
+        Tracker r0 = mk("r0");
+        exitThread(which);
+        events += "not reached";
+    }();
+    queue.get();
+}
+
+sub check(string label, code<string()> test) {
+    events = ();
+    released = {};
+    int start = created;
+    try {
+        string result = test();
+        events += "result " + result;
+    } catch (hash<ExceptionInfo> ex) {
+        events += sprintf("caught %s: %s", ex.err, ex.desc);
+    }
+    int count = created - start;
+    int total = 0;
+    foreach int n in (released.values()) {
+        total += n;
+    }
+    if (count != total) {
+        throw "COUNT-ERROR", sprintf("%s: created %d, released %d: %y", label, count, total, events);
+    }
+    foreach hash<auto> i in (released.pairIterator()) {
+        if (i.value != 1) {
+            throw "DOUBLE-RELEASE", sprintf("%s: %s released %d times", label, i.key, i.value);
+        }
+    }
+    printf("%s: %y\n", label, events);
+}
+
+for (int i = 0; i <= 7; ++i) {
+    check("flat " + i, string sub () { return flat(i); });
+}
+for (int i = 0; i <= 5; ++i) {
+    check("nested " + i, string sub () { return nested(i); });
+}
+for (int i = 0; i <= 8; ++i) {
+    check("loops " + i, string sub () { return loops(i); });
+}
+for (int i = 0; i <= 2; ++i) {
+    check("handlers " + i, string sub () { return handlers(i); });
+}
+for (int i = 0; i <= 5; ++i) {
+    check("catches " + i, string sub () { return catches(i); });
+}
+for (int i = 0; i <= 6; ++i) {
+    check("returns " + i, string sub () { return returns(i); });
+}
+for (int i = 0; i <= 7; ++i) {
+    check("scopes " + i, string sub () { return scopes(i); });
+}
+for (int i = 0; i <= 4; ++i) {
+    check("catch loop " + i, string sub () { return catchLoop(i); });
+}
+for (int i = 0; i <= 1; ++i) {
+    check("thread_exit " + i, string sub () { runThread(i); return "joined"; });
+}
+printf("aot-throw-exit-cleanup: ok\n");

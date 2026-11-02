@@ -90,8 +90,7 @@ sub blockReuse(bool inspect) {
     }
 }
 
-# Retained calls enter the ordinary visible frame. The baseline's direct
-# constant-argument specialization can expose an empty local-variable map.
+# Both retained and direct constant-argument calls preserve reflected locals.
 code<auto()> cleanup = \objectCleanup();
 code<auto(bool)> reuse = \blockReuse();
 for (int round = 0; round < 8; ++round) {
@@ -126,9 +125,8 @@ for (int round = 0; round < 8; ++round) {
     expect(21, typedValue("21"));
     cleanup();
     weakAndOpaque();
-    # Baseline IR/JIT/AOT lose the reflected block local after its first iteration.
-    # All modes check repeated block values; retain the visibility reproducer
-    # separately and require its full reflection contract in AST.
-    reuse(ARGV[0] == "inspect-block");
+    reuse(True);
+    blockReuse(True);
+    objectCleanup();
 }
 printf("scalar-local-store: ok\n");

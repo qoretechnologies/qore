@@ -97,6 +97,10 @@ call that AOT code runs inline (a summary of the callee's body) pushes the frame
 `qore_rt_push_native_inline_call_frame_aot()`, which makes the location of the callee's body, held by the callee's
 image, the runtime location until the pop; a summary proven not to raise an exception has no frame, as nothing can
 see it.
+The inlined body of a scalar subclass override (the bounded override alternatives of a method call site) keeps its
+frame even then: the ordinary call of the override publishes its frame (a compact native-method frame), and readers on
+other threads see it (`AOTOverrideFrameReaders.qr`). An inlined exact-class method body without exceptions still has no
+frame.
 
 AOT code keeps its runtime location as JIT code does: it stores the address of a constant `QoreProgramLocation` of its
 image when the line changes (and at the start of every block), so every thread's stack, its own current line

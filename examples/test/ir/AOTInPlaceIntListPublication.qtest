@@ -64,8 +64,13 @@ class AOTInPlaceIntListPublicationTest inherits QUnit::Test {
                         "initial runtime publication is retained " + prefix + control + level);
                     assertEq(expected, run((executable,)), prefix + control + level);
                 }
-                int enabled = bodies[0].split("call void @qore_rt_assign_local_no_coerce_eval_weak_aot").size() - 1;
-                int disabled = bodies[1].split("call void @qore_rt_assign_local_no_coerce_eval_weak_aot").size() - 1;
+                # a publication is made by the generic helper or, for the unchanged root, by the same-list one
+                code<int(string)> publications = int sub (string body) {
+                    return body.split("call void @qore_rt_assign_local_no_coerce_eval_weak_aot").size()
+                        + body.split("call void @qore_rt_assign_same_list_local_aot_v1").size() - 2;
+                };
+                int enabled = publications(bodies[0]);
+                int disabled = publications(bodies[1]);
                 assertEq(prefix.startsWith("QORE_DISABLE_") ? 0 : 1,
                     disabled - enabled, "only the unchanged paired body-local publication is removed " + prefix + level);
             }

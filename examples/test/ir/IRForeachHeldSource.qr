@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%disable-warning unreferenced-variable
+# A foreach loop over keys or a range slice holds the operand's value until the loop ends, as the AST's functional
+# iterators do, while the other temporaries of its list expression are released before the body runs; every mode
+# must match the interpreter
+
+our list<string> events = ();
+our hash<string, int> released = {};
+our int created = 0;
+
+class Tracker {
+    public {
+        string name;
+        *Tracker member;
+    }
+    constructor(string name, *Tracker member) {
+        self.name = name;
+        self.member = member;
+        ++created;
+    }
+    destructor() {
+        events += name;
+        released{name} = (released{name} ?? 0) + 1;
+    }
+}
+
+list<auto> sub objs(string prefix) {
+    return (new Tracker(prefix + "0"), new Tracker(prefix + "1"), new Tracker(prefix + "2"));
+}
+
+hash<auto> sub objh(string prefix) {
+    return {"a": new Tracker(prefix + "a"), "b": new Tracker(prefix + "b")};
+}
+
+hash<string, int> sub scalars() {
+    return {"a": 1, "b": 2};
+}
+
+auto sub raise(string err) {
+    throw err;
+}
+
+auto sub text() {
+    return "text";
+}
+
+# keys of a temporary hash: the hash and its values live until the loop ends
+string sub keysCall() { foreach string k in (keys objh("kc")) { Tracker b("b" + k); } events += "after"; return "r"; }
+string sub keysLiteral() { foreach string k in (keys {"a": new Tracker("kl")}) { Tracker b("b" + k); } events += "after"; return "r"; }
+string sub keysBreak() { foreach string k in (keys objh("kb")) { Tracker b("b" + k); if (k == "a") { break; } } events += "after"; return "r"; }
+string sub keysReturn() { foreach string k in (keys objh("kr")) { Tracker b("b" + k); if (k == "b") { return "ret"; } } return "end"; }
+string sub keysThrow() { foreach string k in (keys objh("kt")) { Tracker b("b" + k); if (k == "b") { raise("KT"); } } return "end"; }
+string sub keysCatch() { try { foreach string k in (keys objh("kx")) { Tracker b("b" + k); if (k == "b") { throw "KX"; } } } catch (hash<ExceptionInfo> ex) { events += "caught"; } return "end"; }
+string sub keysCatchLoop() { for (int i = 0; i < 2; ++i) { try { foreach string k in (keys objh("kl" + i)) { Tracker b("b" + k + i); raise("L"); } } catch (hash<ExceptionInfo> ex) { events += "caught"; } } return "end"; }
+# the hash of a variable is held even if the body assigns the variable another value
+string sub keysVariable() { hash<auto> h = objh("kv"); foreach string k in (keys h) { h = {}; events += "body " + k; } events += "after"; return "r"; }
+# an object is not held: its member hash is, and with it the members' values
+string sub keysObject() { foreach string k in (keys new Tracker("ko", new Tracker("km"))) { events += k; } events += "after"; return "r"; }
+# the temporaries of the operand are released before the body
+string sub keysOperandTemps() { foreach string k in (keys objh(objs("x")[0].name)) { Tracker b("b" + k); } events += "after"; return "r"; }
+# nothing observable is held for these
+string sub keysScalars() { hash<string, int> h = scalars(); foreach string k in (keys h) { h{k} += 1; } events += sprintf("%y", h); return "r"; }
+string sub keysNotHash() { foreach string k in (keys text()) { events += k; } events += "after"; return "r"; }
+string sub keysNothing() { *hash<auto> h; foreach string k in (keys h) { events += k; } events += "after"; return "r"; }
+string sub keysRaise() { foreach string k in (keys (objh("ks") + {"x": raise("SRC")})) { events += k; } return "end"; }
+# range slices of a temporary list hold the list until the loop ends
+string sub slice() { foreach Tracker t in (objs("s")[0..0]) { Tracker b("b" + t.name); } events += "after"; return "r"; }
+string sub sliceOpen() { foreach Tracker t in (objs("so")[1..]) { Tracker b("b" + t.name); } events += "after"; return "r"; }
+string sub sliceReturn() { foreach Tracker t in (objs("sr")[0..1]) { Tracker b("b" + t.name); if (t.name == "sr1") { return "ret"; } } return "end"; }
+string sub sliceThrow() { foreach Tracker t in (objs("st")[1..2]) { Tracker b("b" + t.name); if (t.name == "st1") { raise("ST"); } } return "end"; }
+string sub sliceBreak() { foreach Tracker t in (objs("sb")[0..2]) { Tracker b("b" + t.name); if (t.name == "sb1") { break; } } events += "after"; return "r"; }
+string sub sliceNested() { foreach Tracker t in (objs("n")[0..1]) { foreach string k in (keys objh("i" + t.name)) { Tracker b("b" + k + t.name); } } events += "after"; return "r"; }
+string sub sliceVariable() { list<auto> l = objs("sv"); foreach Tracker t in (l[0..1]) { l = (); events += "body " + t.name; } events += "after"; return "r"; }
+string sub sliceString() { foreach string c in ("abc"[0..1]) { events += c; } events += "after"; return "r"; }
+string sub sliceInts() { list<int> l = (1, 2, 3); foreach int i in (l[0..1]) { l += i; } events += sprintf("%y", l); return "r"; }
+# other list expressions, unchanged: a list index, map, select, a call
+string sub listIndex() { foreach Tracker t in (objs("q")[0]) { Tracker b("b" + t.name); } events += "after"; return "r"; }
+string sub mapped() { foreach string s in (map $1.name, objs("m")) { Tracker b("b" + s); } events += "after"; return "r"; }
+string sub selected() { foreach Tracker t in (select objs("e"), True) { Tracker b("b" + t.name); } events += "after"; return "r"; }
+string sub plainCall() { foreach Tracker t in (objs("p")) { Tracker b("b" + t.name); } events += "after"; return "r"; }
+
+sub check(string label, code test) {
+    events = ();
+    released = {};
+    int start = created;
+    try {
+        events += "result " + test();
+    } catch (hash<ExceptionInfo> ex) {
+        events += "caught " + ex.err;
+    }
+    int total = 0;
+    foreach int n in (released.values()) {
+        total += n;
+    }
+    if (created - start != total) {
+        throw "COUNT-ERROR", sprintf("%s: created %d, released %d: %y", label, created - start, total, events);
+    }
+    foreach hash<auto> i in (released.pairIterator()) {
+        if (i.value != 1) {
+            throw "DOUBLE-RELEASE", sprintf("%s: %s released %d times", label, i.key, i.value);
+        }
+    }
+    printf("%s: %y\n", label, events);
+}
+
+check("keys call", \keysCall());
+check("keys literal", \keysLiteral());
+check("keys break", \keysBreak());
+check("keys return", \keysReturn());
+check("keys throw", \keysThrow());
+check("keys catch", \keysCatch());
+check("keys catch loop", \keysCatchLoop());
+check("keys variable", \keysVariable());
+check("keys object", \keysObject());
+check("keys operand temps", \keysOperandTemps());
+check("keys scalars", \keysScalars());
+check("keys not hash", \keysNotHash());
+check("keys nothing", \keysNothing());
+check("keys raise", \keysRaise());
+check("slice", \slice());
+check("slice open", \sliceOpen());
+check("slice return", \sliceReturn());
+check("slice throw", \sliceThrow());
+check("slice break", \sliceBreak());
+check("slice nested", \sliceNested());
+check("slice variable", \sliceVariable());
+check("slice string", \sliceString());
+check("slice ints", \sliceInts());
+check("list index", \listIndex());
+check("mapped", \mapped());
+check("selected", \selected());
+check("plain call", \plainCall());
+printf("ir-foreach-held-source: ok\n");

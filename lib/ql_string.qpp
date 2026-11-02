@@ -236,6 +236,11 @@ static QoreStringNode* q_replace_string(const QoreStringNode* str, const QoreStr
 // string, used for the alignment check; returns nullptr if there is no such match
 static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len,
         const qore_char_boundary& b = qore_char_boundary(), size_t base = 0) {
+    // An empty separator leaves the subject intact. Searching for its terminator
+    // would match embedded NUL bytes without advancing the split cursor.
+    if (!pl) {
+        return nullptr;
+    }
     if (b.charlen && pl) {
         return qore_string_private::memmem_boundary(str, len, pattern, pl, b.charlen);
     }

@@ -53,13 +53,16 @@ string hot_enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, hot_enabled, hot_source));
 string hot_fusion_disabled_compile = backquote(sprintf(
+    # the resolved-method native continuation would otherwise take the call before the object helper is chosen
     "LD_LIBRARY_PATH=%s"
         + " QORE_DISABLE_AOT_OBJECT_INT_STRING_MEASURE_FUSION=1"
+        + " QORE_DISABLE_AOT_RESOLVED_METHOD_NATIVE_CONTINUATION=1"
         + " %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, hot_fusion_disabled, hot_source));
 string hot_facts_disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s"
         + " QORE_DISABLE_IR_DIRECT_DOT_CALL_FACT_PRESERVATION=1"
+        + " QORE_DISABLE_AOT_RESOLVED_METHOD_NATIVE_CONTINUATION=1"
         + " %s -O3 --strip-source -o %s %s 2>&1",
     libqore_dir, qcc_bin, hot_facts_disabled, hot_source));
 if (!is_file(hot_enabled) || !is_file(hot_fusion_disabled)

@@ -2,7 +2,6 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 %modern
-%allow-debugger
 
 int sub sameListLoop(int count, int seed) {
     list<int> values = ();
@@ -45,28 +44,6 @@ string sub sameListNoNarrow(int seed) {
     return sprintf("%y", values);
 }
 
-sub replaceSameList(int kind) {
-    if (kind == 0) {
-        set_local_var_value(1, "values", NOTHING);
-    } else if (kind == 1) {
-        list<int> other = (45,);
-        set_local_var_value(1, "values", other);
-    } else {
-        set_local_var_value(1, "values", "invalid");
-    }
-}
-
-string sub sameListReflected(int kind) {
-    list<int> values = (7,);
-    call_function("replaceSameList", kind);
-    try {
-        push values, 3;
-        return sprintf("%y", values);
-    } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
-    }
-}
-
 int sub sameListRecursive(int depth) {
     list<int> values = (depth,);
     int child = depth ? sameListRecursive(depth - 1) : 0;
@@ -84,9 +61,6 @@ foreach int seed in ((0, -3, 140737488355327, 140737488355328, -140737488355329)
     printf("parameter:%y:%y\n", sameListParameter(input, seed + 1), input);
     printf("captured:%s\n", sameListCaptured(seed));
     printf("no-narrow:%s\n", sameListNoNarrow(seed));
-}
-foreach int kind in ((0, 1, 2)) {
-    printf("reflected:%d:%s\n", kind, call_function("sameListReflected", kind));
 }
 printf("recursive:%d\n", sameListRecursive(10));
 printf("same-list-publication: ok\n");

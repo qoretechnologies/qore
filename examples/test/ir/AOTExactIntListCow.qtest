@@ -71,7 +71,7 @@ class AOTExactIntListCowTest inherits QUnit::Test {
                     assertEq(expected, run((executable,)), fixture + prefix + level);
                     if (fixture == "AOTExactIntListCow") {
                         assertEq(expected, run((executable, "check-aot-store-type")),
-                            "AOT reflected value is coerced at the paired store");
+                            "AOT keeps the reflected list's runtime type, as the interpreter does");
                     }
                 }
             }

@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-debugging
+
+# A Program that cannot be debugged: AOT code calls its functions, static methods and methods natively without a
+# debugger check (AOTFunctionDebugger.qtest asserts that no gate is emitted).
+
+our int Effects = 0;
+
+int sub fnPure(int v) { return v + 3; }
+int sub fnEffect(int v) { ++Effects; return v + 5; }
+int sub fnRec(int n) { return n <= 0 ? 0 : fnRec(n - 1) + 1; }
+class StaticCallee {
+    static int pure(int v) { return v * 2; }
+    static int effect(int v) { ++Effects; return v * 3; }
+}
+class NdBase { int next(int v) { return v + 17; } }
+class NdDerived inherits NdBase { int next(int v) { return v + 19; } }
+
+int sub ndLoop(NdBase a, NdBase b, int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += fnPure(i) + fnEffect(i) + StaticCallee::pure(i) + StaticCallee::effect(i)
+            + (i % 2 == 0 ? a : b).next(i) + fnRec(2);
+    }
+    return total;
+}
+
+int expected = 0;
+for (int i = 0; i < 16; ++i) {
+    expected += (i + 3) + (i + 5) + i * 2 + i * 3 + i + (i % 2 == 0 ? 17 : 19) + 2;
+}
+NdBase base();
+NdDerived derived();
+for (int i = 0; i < 8; ++i) {
+    if (ndLoop(base, derived, 16) != expected) {
+        throw "NO-DEBUGGING-TEST", sprintf("result %d != %d", ndLoop(base, derived, 16), expected);
+    }
+}
+printf("function-no-debugging: ok\n");

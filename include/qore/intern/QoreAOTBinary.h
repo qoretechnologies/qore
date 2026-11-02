@@ -216,8 +216,11 @@ constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //!      Opcodes 409/410 retain SnapshotInt/SnapshotFloat. CheckReturnValue is 411;
 //!      IteratorRelease/ReleaseOwnedTemp are appended as 412/413, DebugStatement as 414, and
 //!      result-type instructions as 415..418. The reader maps upstream v21 opcodes 409..416
-//!      (header maximum 409 or 411..416) forward by two. Older performance files with maximum
-//!      410 retain snapshots.
+//!      (header maximum 409 or 411..416) forward by two. For upstream maximum 417, operand counts
+//!      distinguish the old CommonTypeFold (414, three operands) from HashSetKeyValueFold (414,
+//!      five operands), and old/current ListAppendElement (417, two/three operands). New map opcodes
+//!      use 419/420 here; compatibility-only two-operand append uses 421. Older performance files
+//!      with maximum 410 retain snapshots. Existing v22 opcode assignments remain unchanged.
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
 constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 22;
 constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 22;

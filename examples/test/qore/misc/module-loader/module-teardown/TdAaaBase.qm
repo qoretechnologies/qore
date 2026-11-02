@@ -1,0 +1,42 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdAaaBase.qm - base module of the module teardown tests; its name sorts before the module that requires it
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TdAaaBase {
+    version = "1.0";
+    desc = "base module for the module teardown tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdAaaBase {
+    #! reports its destruction on stdout; its destructor needs this module's Program
+    public class Tracker {
+        private {
+            string label;
+        }
+
+        constructor(string label) {
+            self.label = label;
+        }
+
+        destructor() {
+            printf("%s destroyed\n", label);
+        }
+    }
+
+    #! holds a value given to it
+    public class Holder {
+        public {
+            auto value;
+        }
+    }
+
+    #! returns a holder created by this module's code, so this module's Program owns it
+    public Holder sub make_holder() {
+        return new Holder();
+    }
+}

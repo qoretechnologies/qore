@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class SharedReturnCleanupTest
+
+#! Tests that the returns of a function share the cleanup of the scopes they leave
+/** Each return of a function with many returns branches to one shared block per cleanup entry that it leaves (block
+    locals, catch blocks, foreach statements, scopes without handlers to run), which continues to the block of the
+    enclosing entry and finally to one Return, so the IR of the function grows linearly with its returns and locals
+    instead of with their product.  The cleanups must run in the order of the interpreter, in every mode and compiled
+    executable, and every object must be released exactly once.
+*/
+class SharedReturnCleanupTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("shared return cleanup", "1.0", \ARGV) {
+        addTestCase("returns release what they leave in interpreter order", \releaseOrder());
+        addTestCase("the IR of returns grows linearly", \codeGrowth());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    #! checks the output of all modes and compiled executables of \a source against the interpreter
+    private string checkModes(string source, string ok, string dir) {
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex(ok + "$", expected, "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+        return expected;
+    }
+
+    private releaseOrder() {
+        TmpDir dir("qore-shared-return-cleanup-");
+        string expected = checkModes(get_script_dir() + "/IRSharedReturnCleanup.qr",
+            "ir-shared-return-cleanup: ok\n", dir.path);
+        assertRegex('nested 4: \["d", "c", "e", "b", "a", "result r4e"\]', expected);
+        assertRegex('loops 1: \[.*"gf10", "gf12", "gf11", "fif1", "f0", "f2", "f1", "la", "result r1"\]', expected);
+        assertRegex('catches 2: \["try", "catch2", "argB", "catch", "argA", "ca", "result r2B"\]', expected);
+        assertRegex('handlers 4: \["inner_exit hc", "hd", "hc", "on_success", "on_exit", "hb", "ha", "result r4hd"\]',
+            expected);
+    }
+
+    #! writes a fixture whose function \c returns<n>() has \a n returns between object locals, in nested blocks and in
+    #! a loop, with an on_exit handler
+    private static string writeFixture(string dir, int n) {
+        string source = sprintf("%s/returns%d.qr", dir, n);
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nour int live = 0;\nour list<int> released = ();\n"
+            "class Obj { public { int id; } constructor(int id) { self.id = id; ++live; } "
+            "destructor() { --live; released += id; } }\n");
+        file.write(sprintf("int sub returns%d(int which) {\non_exit { released += -1; }\n", n));
+        for (int i = 0; i < n; ++i) {
+            file.write(sprintf("Obj o%d(%d);\n{\n    Obj b%d(%d);\n"
+                "    foreach int x in ((1, 2)) {\n        Obj l%d(%d);\n"
+                "        if (which == %d && x == 2) { return o%d.id + b%d.id; }\n    }\n}\n",
+                i, i, i, 100 + i, i, 200 + i, i, i, i));
+        }
+        file.write("return -1;\n}\n");
+        file.write(sprintf("for (int which = 0; which <= %d; ++which) {\n"
+            "    released = ();\n"
+            "    int rv = returns%d(which);\n"
+            "    if (live) { throw \"LEAK\", sprintf(\"%%d: %%d live\", which, live); }\n"
+            "    if (which < %d && rv != 100 + 2 * which) { throw \"VALUE\", sprintf(\"%%d: %%d\", which, rv); }\n"
+            "}\nprintf(\"returns: ok\\n\");\n", n, n, n));
+        file.close();
+        return source;
+    }
+
+    #! returns the number of instructions in the IR dump of the function named \a name that contain \a needle
+    private static int countIR(string dump, string name, string needle = "") {
+        int count = 0;
+        bool in_function = False;
+        foreach string line in (dump.split("\n")) {
+            if (!in_function) {
+                in_function = line.find("=== IR for " + name + "(") == 0;
+                continue;
+            }
+            if (line =~ /^=====/) {
+                break;
+            }
+            if (line =~ /^  / && line.find(needle) >= 0) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    private codeGrowth() {
+        TmpDir dir("qore-shared-return-growth-");
+        hash<string, int> counts;
+        hash<string, int> releases;
+        foreach int n in ((8, 24)) {
+            string source = writeFixture(dir.path, n);
+            if (n == 8) {
+                checkModes(source, "returns: ok\n", dir.path);
+            }
+            string dump = run((qcc, "-O0", "--strip-source", "-o", dir.path + "/returns", source),
+                "QORE_AOT_DUMP_IR=1 ");
+            assertEq("returns: ok\n", run((dir.path + "/returns",)), "returns " + n);
+            counts{n} = countIR(dump, "returns" + n);
+            releases{n} = countIR(dump, "returns" + n, "uninstantiate.local");
+            assertGt(0, counts{n}, "returns " + n);
+            assertGt(0, releases{n}, "returns " + n);
+        }
+        # three times the returns and locals: three times the local releases and about three times the instructions;
+        # the cleanup written at every return needed about six times the releases (136 and 792) and 3.5 times the
+        # instructions (720 and 2512) for these sizes
+        assertLe(releases."8" * 3, releases."24", sprintf("%y", releases));
+        assertLt(counts."8" * 33 / 10, counts."24", sprintf("%y", counts));
+    }
+}

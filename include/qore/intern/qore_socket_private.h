@@ -180,7 +180,7 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     A socket bound to a specific address of a port also receives the clients of that address instead of a socket on
     a wildcard address of the port.  Linux refuses a bind with \c SO_REUSEADDR of a specific address to a given port
     if a socket on a wildcard address that covers it holds the port and listens or does not reuse the address; macOS
-    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table:
+    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table or accessible process descriptors:
     - of a stream socket, if a socket that is not connected holds a wildcard address that covers the address on the
       port, whether it listens or not, because a connection request to a stream socket that is bound but not
       listening is dropped on macOS, while Linux gives it to the socket that listens

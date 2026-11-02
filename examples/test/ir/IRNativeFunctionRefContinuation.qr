@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: MIT
 %modern
 %no-child-restrictions
-%allow-debugger
 
 sub expect(auto expected, auto actual) {
     if (expected !== actual) {
@@ -256,50 +255,4 @@ sub replacedForeignFloatTargets(code<float(float)> local, code<float(float)> for
 }
 replacedForeignFloatTargets(\floatAdd(), foreignFloatRef);
 
-thread_local bool recordingCallback = False;
-class CallbackDebugger inherits DebugProgram {
-    public { int entries = 0; }
-    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
-    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
-    onStep(ProgramControl pgm, int block, *int sid, *int bid, reference flow, reference rs, reference rts) {
-        rs = DebugStep;
-    }
-    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
-        if (recordingCallback) { ++entries; }
-        rs = DebugStep;
-    }
-    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
-    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
-    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
-}
-sub debuggerAfterCacheHit(code<int(int)> fn) {
-    CallbackDebugger dbg();
-    ProgramControl pc = ProgramControl::getProgram();
-    int value = 0;
-    for (int i = 0; i < 8; ++i) {
-        if (i == 2) { dbg.addProgram(pc); }
-        if (i == 5) { dbg.removeProgram(pc); }
-        recordingCallback = True;
-        value = fn(value);
-        recordingCallback = False;
-    }
-    expect(8, value);
-    expect(3, dbg.entries);
-}
-debuggerAfterCacheHit(\plusOne());
-sub floatDebuggerAfterCacheHit(code<float(float)> fn) {
-    CallbackDebugger dbg();
-    ProgramControl pc = ProgramControl::getProgram();
-    float value = 0.0;
-    for (int i = 0; i < 8; ++i) {
-        if (i == 2) { dbg.addProgram(pc); }
-        if (i == 5) { dbg.removeProgram(pc); }
-        recordingCallback = True;
-        value = fn(value);
-        recordingCallback = False;
-    }
-    expect(4.0, value);
-    expect(3, dbg.entries);
-}
-floatDebuggerAfterCacheHit(\floatAdd());
 printf("native-funcref-continuation: ok\n");

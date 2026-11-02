@@ -11751,13 +11751,18 @@ bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreV
         param_name, error, parent_locals);
 }
 
-//! Lower a closure variant to IR for serialization
-/** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
-    @param variant the closure variant to lower
+// defined in QoreAOT.cpp
+extern bool qoreAOTClosureBodyIsUnanchored(UserClosureVariant* variant, bool emit_debug_statements,
+        bool& unanchored, std::string& error);
+
+//! Lowers a closure variant to IR for serialization, with or without local unwind anchors
+/** @param variant the closure variant to lower
+    @param unwind_order_proven true to lower the closure without local unwind anchors
     @param error_out optional detailed error destination
     @return heap-allocated IR function, or nullptr on failure (caller owns)
 */
-QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out) {
+static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVariant* variant,
+        bool unwind_order_proven, std::string* error_out) {
     StatementBlock* sb = const_cast<UserClosureVariant*>(variant)->getStatementBlock();
     if (!sb) {
         if (error_out) {
@@ -11767,6 +11772,7 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     }
 
     auto* ir = new QoreIRFunction("<closure>");
+    ir->unwind_order_proven = unwind_order_proven;
 
     // Record pre-instantiated locals from signature
     const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
@@ -11843,6 +11849,33 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
 
     ir->computeSlotIdsAndEmbed();
     return ir;
+}
+
+//! Lower a closure variant to IR for serialization
+/** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
+
+    The runtime binds the local slots of the closure's native body to the variables of this IR by slot index, so this
+    IR is lowered with or without local unwind anchors as the native body is (see qoreAOTClosureBodyIsUnanchored()):
+    the anchors change the block order and therefore the slot numbering.
+
+    @param variant the closure variant to lower
+    @param error_out optional detailed error destination
+    @return heap-allocated IR function, or nullptr on failure (caller owns)
+*/
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out) {
+    std::unique_ptr<QoreIRFunction> ir(lowerClosureForSerializationIntern(variant, false, error_out));
+    // without an anchor for its locals, the native body is never lowered again without anchors
+    if (!ir || !ir->has_local_unwind_anchor) {
+        return ir.release();
+    }
+    bool unanchored = false;
+    std::string decision_error;
+    // a closure that cannot be lowered for its native body has none, so no slot numbering has to match
+    if (!qoreAOTClosureBodyIsUnanchored(const_cast<UserClosureVariant*>(variant), ir->emit_debug_statements,
+            unanchored, decision_error) || !unanchored) {
+        return ir.release();
+    }
+    return lowerClosureForSerializationIntern(variant, true, error_out);
 }
 
 namespace {

@@ -105,6 +105,23 @@ foreach bool assigned in ((True, False)) {
     catch (hash<ExceptionInfo> ex) { emit("guarded-missing-error", ex.err); }
 }
 emit("embedded-null", selected("a\0b,c", ","));
+foreach string encoding in (("UTF-8", "UTF-16LE", "UTF-16BE", "ISO-2022-JP")) {
+    string value = convert_encoding("a\0b", encoding);
+    foreach bool keep in ((False, True)) {
+        foreach bool separator in ((False, True)) {
+            list<string> result = value.split("", separator, keep);
+            if (result.size() != 1 || result[0] !== value) {
+                throw "EMPTY-SPLIT", "empty separators must preserve embedded NUL characters";
+            }
+        }
+    }
+    if (selected(value, "") !== (value,)) {
+        throw "EMPTY-SPLIT", "native split must preserve embedded NUL characters";
+    }
+}
+if (<610062>.split(binary()) !== (<610062>,)) {
+    throw "EMPTY-SPLIT", "binary split must preserve embedded NUL bytes";
+}
 emit("long-separator", selected("leftabcdefghrightabcdefgh", "abcdefgh"));
 foreach string encoding in (("UTF-8", "UTF-16LE", "UTF-16BE", "ISO-2022-JP")) {
     string value = convert_encoding("日,本語,", encoding);

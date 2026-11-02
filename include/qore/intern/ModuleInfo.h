@@ -628,22 +628,31 @@ public:
     DLLLOCAL void registerUserModuleFromSource(const char* name, const char* src, QoreProgram* pgm,
             ExceptionSink& xsink);
 
-    DLLLOCAL void trySetUserModuleDependency(const QoreAbstractModule* mi) {
-        if (!mi->isUser())
-            return;
+    //! Records that the module in the current module context depends on the given user module
+    /** User modules are deleted in dependency order at shutdown (see delUser()), so a module is deleted only after
+        every user module that loaded it.
 
-        const char* old_name = get_module_context_name();
-        if (old_name) {
-            // Only track dependency if the dependent module is also a user module.
-            // Binary modules (including AOT modules) are not cleaned up via delUser(),
-            // so tracking their dependencies would cause assertion failures.
-            QoreAbstractModule* dep_mi = findModuleUnlocked(old_name);
-            if (dep_mi && dep_mi->isUser()) {
-                setUserModuleDependency(mi->getName(), old_name);
-            }
-        }
-        trySetUserModule(mi->getName());
-    }
+        @param mi the module loaded
+    */
+    DLLLOCAL void trySetUserModuleDependency(const QoreAbstractModule* mi);
+
+    //! Returns true if the module named \a name in the current module context is a user module
+    /** Binary modules (including AOT modules) are not deleted by delUser(), so a dependency on one of them would
+        never be released.  A user module is not in the module map while its source is parsed, which is when it
+        loads the modules it requires; it is then the module of the user module definition context of the thread.
+
+        @param name the name of the module in the current module context
+    */
+    DLLLOCAL bool isUserModuleContext(const char* name);
+
+    //! Records that the user module in the current module context requires the given AOT user module
+    /** An AOT user module is a binary module, deleted in cleanup(); a user module that requires it can hold objects
+        of its classes, so a user module whose deletion is deferred to cleanup() is deleted before the AOT modules it
+        requires (see delUser())
+
+        @param name the name of the AOT user module imported
+    */
+    DLLLOCAL void trySetUserAotModuleDependency(const char* name);
 
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
@@ -805,6 +814,8 @@ protected:
     ModMap md_map;
     // user module dependent map: dependent -> module
     ModMap rmd_map;
+    // AOT user module dependency map: AOT user module -> the user modules that require it
+    ModMap aot_user_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -816,6 +827,15 @@ protected:
     // module hash
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
+
+    //! Returns the user modules that the AOT user modules left require, directly or through other user modules
+    DLLLOCAL strset_t getAotRequiredUserModules();
+
+    //! Returns true if the given user module requires itself through other user modules
+    DLLLOCAL bool isInUserModuleDependencyCycle(const std::string& name);
+
+    //! Deletes the user module at the given position of the module map, with the originals of its reinjections
+    DLLLOCAL void deleteUserModule(module_map_t::iterator i);
 
     // set of user modules with no dependencies
     strset_t umset;
@@ -1072,11 +1092,18 @@ public:
         dup = true;
     }
 
+    //! Returns the name of the user module being defined
+    DLLLOCAL const char* getModuleName() const {
+        return mod_name;
+    }
+
     DLLLOCAL void setNameInit(const char* name);
 
     DLLLOCAL void close();
 
 protected:
+    //! the name of the user module being defined
+    const char* mod_name;
     const char* old_name;
     const char* old_path;
 

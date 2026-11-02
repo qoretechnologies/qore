@@ -6719,16 +6719,6 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
-    // Upstream v21 uses 409..416 for the return check, cleanup, debugger and
-    // result-type instructions. This branch inserts two snapshots before them.
-    // Performance v20/v21 files with maximum 410 retain their snapshot encoding.
-    uint16_t max_opcode = reader.getHeader().max_opcode_id;
-    if (reader.getHeader().version == 21
-            && (max_opcode == 409 || (max_opcode >= 411 && max_opcode <= 416))
-            && opcode_raw >= 409 && opcode_raw <= max_opcode) {
-        opcode_raw += 2;
-    }
-    auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;
     }
@@ -6752,6 +6742,28 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
         num_operands = QoreAOTBinaryReader::readU8(ptr);
     }
+    // Preserve both histories: upstream v21 used 409 onward for return/cleanup and map operations;
+    // performance v20/v21 maximum 410 and all v22 files use the snapshot-prefixed encoding.
+    // Upstream reused 414 and changed 417 without changing the header. Their operand counts disambiguate
+    // the old separate fold/two-operand append from the fused hash store/three-operand append.
+    uint16_t max_opcode = reader.getHeader().max_opcode_id;
+    if (reader.getHeader().version == 21
+            && (max_opcode == 409 || (max_opcode >= 411 && max_opcode <= 417))
+            && opcode_raw >= 409 && opcode_raw <= max_opcode) {
+        if (max_opcode == 417 && opcode_raw == 414 && num_operands == 5) {
+            opcode_raw = static_cast<uint16_t>(QoreIROpcode::HashSetKeyValueFold);
+        } else if (opcode_raw == 417) {
+            if (num_operands != 2 && num_operands != 3) {
+                error = "invalid upstream v21 ListAppendElement operand count";
+                return nullptr;
+            }
+            opcode_raw = static_cast<uint16_t>(num_operands == 2 ? QoreIROpcode::LegacyListAppendElement
+                : QoreIROpcode::ListAppendElement);
+        } else {
+            opcode_raw += 2;
+        }
+    }
+    auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (num_operands > 0 && !need(static_cast<size_t>(num_operands) * 4, "operands")) {
         return nullptr;
     }
@@ -10776,6 +10788,8 @@ extern "C" DLLEXPORT int qore_aot_run(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
+    // the number of unhandled exceptions reported in this thread before the teardown
+    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
     // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
     // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
     // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
@@ -10917,9 +10931,14 @@ extern "C" DLLEXPORT int qore_aot_run(
         }
 
         xsink.handleExceptions();
+        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
+        // run when the Program or the modules are deleted
+        teardown_exception_count = qore_get_thread_unhandled_exception_count();
     } while (false);
 
     qore_cleanup();
+    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+    rc = qore_teardown_exit_status(rc, teardown_exception_count);
     // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
     // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
     qore_fork_child_quick_exit(rc);
@@ -11179,6 +11198,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
+    // the number of unhandled exceptions reported in this thread before the teardown
+    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
     // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
     // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
     // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
@@ -11474,10 +11495,15 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
         }
 
         xsink.handleExceptions();
+        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
+        // run when the Program or the modules are deleted
+        teardown_exception_count = qore_get_thread_unhandled_exception_count();
 
     } while (false);
 
     qore_cleanup();
+    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+    rc = qore_teardown_exit_status(rc, teardown_exception_count);
     // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
     // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
     qore_fork_child_quick_exit(rc);
@@ -11510,6 +11536,8 @@ struct AotModuleState {
         std::make_shared<QoreRecursiveThreadLock>();
     //! Modules that should be reexported (from %requires(reexport) directives)
     std::vector<std::string> reexport_deps;
+    //! Every module that this module requires; this module is deleted before them at shutdown
+    std::vector<std::string> deps;
     //! Serialized metadata retained only when deferred init cannot reuse an open reader.
     std::shared_ptr<const std::vector<uint8_t>> metadata;
     //! Reader opened during module_init and reused by deferred ns_init work.
@@ -11546,6 +11574,27 @@ struct AotModuleState {
     module-manager mutex while running module init code, so this state cannot rely on QoreModuleManager locking.
 */
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
+
+//! Returns the names of the modules that an AOT module requires: its providers and its imports
+static bool aotModuleDependencyNames(std::vector<std::string>& rv, const std::vector<std::string>& providers,
+        const std::vector<std::string>* imports = nullptr) {
+    std::unordered_set<std::string> seen;
+    size_t count = 0;
+    for (const auto* names : {&providers, imports}) {
+        if (!names) {
+            continue;
+        }
+        for (const std::string& dep : *names) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT module dependency collection")) {
+                return false;
+            }
+            if (seen.insert(dep).second) {
+                rv.push_back(dep);
+            }
+        }
+    }
+    return true;
+}
 
 static bool useAOTSharedInitMetadata() {
     static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_SHARED_INIT_METADATA");
@@ -12866,6 +12915,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
 
     int rc = 0;
+    // the number of unhandled exceptions reported in this thread before the teardown
+    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
     // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
     // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
     // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
@@ -13214,10 +13265,15 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         }
 
         xsink.handleExceptions();
+        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
+        // run when the Program or the modules are deleted
+        teardown_exception_count = qore_get_thread_unhandled_exception_count();
 
     } while (false);
 
     qore_cleanup();
+    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
+    rc = qore_teardown_exit_status(rc, teardown_exception_count);
     // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
     // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
     qore_fork_child_quick_exit(rc);
@@ -13411,6 +13467,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
             mod_name, registered, num_functions);
     }
 
+    std::vector<std::string> module_dependencies;
+    if (!aotModuleDependencyNames(module_dependencies, deps)) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return new QoreStringNode("AOT module dependency collection cancelled");
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for modules that call ns_init during their own init
     // before being stored in the map.
@@ -13427,6 +13489,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.deps = std::move(module_dependencies);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
     }
@@ -13787,6 +13850,42 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
     return xsink ? -1 : 0;
 }
 
+DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink) {
+    std::vector<QoreProgram*> programs;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        for (auto& entry : aot_module_map) {
+            if (entry.second.pgm) {
+                programs.push_back(entry.second.pgm);
+            }
+        }
+    }
+    for (QoreProgram* pgm : programs) {
+        qore_program_private::get(*pgm)->clearOpaqueTargets(&xsink);
+    }
+}
+
+DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std::string>& deps) {
+    AutoLocker aot_state_al(get_aot_module_state_lock());
+    auto it = aot_module_map.find(name);
+    if (it == aot_module_map.end()) {
+        return false;
+    }
+    deps = it->second.deps;
+    return true;
+}
+
+DLLLOCAL bool qore_aot_module_has_dependent(const char* name) {
+    AutoLocker aot_state_al(get_aot_module_state_lock());
+    for (auto& entry : aot_module_map) {
+        if (entry.first != name
+                && std::find(entry.second.deps.begin(), entry.second.deps.end(), name) != entry.second.deps.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
     std::vector<QoreProgram*> programs;
     {
@@ -14004,6 +14103,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         }
     }
 
+    std::vector<std::string> module_dependencies;
+    if (!aotModuleDependencyNames(module_dependencies, deps, &import_deps)) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return new QoreStringNode("AOT module dependency collection cancelled");
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for early ns_init entry.
     {
@@ -14019,6 +14124,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.deps = std::move(module_dependencies);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
     }
@@ -15906,6 +16012,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             deserializer.getEmbeddedSourceLen());
     }
 
+    std::vector<std::string> module_dependencies;
+    if (!aotModuleDependencyNames(module_dependencies, deps, &import_deps)) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return new QoreStringNode("AOT module dependency collection cancelled");
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for early ns_init entry.
     {
@@ -15921,6 +16033,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
+        state.deps = std::move(module_dependencies);
         if (!init_descriptors.empty()) {
             state.init_descriptors = std::make_shared<const std::vector<AOTInitFuncDescriptor>>(
                 std::move(init_descriptors));

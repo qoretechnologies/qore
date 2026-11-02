@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Inlined scalar override bodies publish the frame of the ordinary method call,
+# so other threads' call stack readers see them; also in loops whose override
+# class admission is hoisted to the function entry.
+
+hashdecl OverrideFrameReadResult {
+    hash<string, int> seen;
+    list<string> errors;
+}
+
+class OvReaderBase {
+    int next(int value) { return (value + 17) & 65535; }
+    float nextf(float value) { return value * 0.5 + 17.0; }
+}
+class OvReaderFirst inherits OvReaderBase {
+    int next(int value) { return (value + 19) & 65535; }
+    float nextf(float value) { return value * 0.5 + 19.0; }
+}
+class OvReaderSecond inherits OvReaderBase {
+    int next(int value) { return (value + 23) & 65535; }
+    float nextf(float value) { return value * 0.5 + 23.0; }
+}
+
+const Frames = ("OvReaderFirst::next", "OvReaderSecond::next", "OvReaderFirst::nextf", "OvReaderSecond::nextf");
+
+int sub overrideIntBatch(OvReaderBase a, OvReaderBase b) {
+    int value = 0;
+    for (int i = 0; i < 4096; ++i) {
+        value = (i % 2 == 0 ? a : b).next(value);
+    }
+    return value;
+}
+float sub overrideFloatBatch(OvReaderBase a, OvReaderBase b) {
+    float value = 0.0;
+    for (int i = 0; i < 4096; ++i) {
+        value = (i % 2 == 0 ? a : b).nextf(value);
+    }
+    return value;
+}
+
+sub overrideReaderCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    OvReaderFirst first();
+    OvReaderSecond second();
+    int int_expected = overrideIntBatch(first, second);
+    float float_expected = overrideFloatBatch(first, second);
+    if (int_expected != ((2048 * (19 + 23)) & 65535)) {
+        failures.push(sprintf("incorrect int warmup result %d", int_expected));
+    }
+    started.dec();
+    while (readers.getCount()) {
+        if (overrideIntBatch(first, second) != int_expected
+                || overrideFloatBatch(first, second) != float_expected) {
+            failures.push("incorrect batch result");
+            return;
+        }
+    }
+}
+
+sub overrideReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<OverrideFrameReadResult> result();
+    result.seen = {};
+    result.errors = ();
+    for (int i = 0; i < 1000; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            list<hash<CallStackInfo>> stack = tid_stack.value;
+            if (!(select stack, $1.function == "overrideReaderCaller")) {
+                continue;
+            }
+            foreach hash<CallStackInfo> frame in (stack) {
+                if (Frames.contains(frame.function)) {
+                    ++result.seen{frame.function};
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid override frame: %y", frame);
+                    }
+                }
+            }
+            # the leaf override frame is called by the batch function
+            for (int j = 0; j + 1 < stack.size(); ++j) {
+                if (Frames.contains(stack[j].function) && stack[j + 1].function != "overrideIntBatch"
+                        && stack[j + 1].function != "overrideFloatBatch") {
+                    result.errors += sprintf("unexpected override caller: %y", stack[j + 1]);
+                }
+            }
+        }
+    }
+    results.push(result);
+}
+
+Counter started(4);
+Counter readers(2);
+Counter callers_done(4);
+Counter readers_done(2);
+Queue failures();
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background overrideReaderCaller(started, readers, callers_done, failures);
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background overrideReader(readers, readers_done, results);
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+hash<string, int> seen = {};
+for (int i = 0; i < 2; ++i) {
+    hash<OverrideFrameReadResult> result = results.get(10000);
+    map seen{$1.key} += $1.value, result.seen.pairIterator();
+    if (result.errors) {
+        throw "OVERRIDE-FRAME-TEST", result.errors.join("\n");
+    }
+}
+if (failures.size()) {
+    throw "OVERRIDE-FRAME-TEST", sprintf("%d caller failures: %y", failures.size(), failures.get());
+}
+if (ENV.QORE_TEST_OVERRIDE_FRAME_COUNTS) {
+    printf("%y\n", seen);
+}
+# int and float override frames must both be visible
+if (!(seen."OvReaderFirst::next" + seen."OvReaderSecond::next")
+        || !(seen."OvReaderFirst::nextf" + seen."OvReaderSecond::nextf")) {
+    throw "OVERRIDE-FRAME-TEST", sprintf("override frames not observed: %y", seen);
+}
+printf("override-frame-readers: ok\n");

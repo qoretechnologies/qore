@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ReflectionReachTest
+
+#! Tests that reflection reaches a caller's private locals through every path a compiled function can run
+/** In a program that allows the debugger, a function keeps its locals private and its native entry only if its
+    activation cannot run a reflection builtin (design/aot-reflection-visible-locals.md).  Each caller in the fixture
+    holds only an int local, which reflection replaces through a different path: two user calls down, a call by name,
+    a builtin's callback, a destructor run by a release, and a closure.  Compiled code must match the interpreter;
+    a function that cannot reach reflection keeps its native entry.
+*/
+class ReflectionReachTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    public {
+        #! the interpreter's output for the fixture
+        const Expected = "twoLevels: 42@3\nbyName: 43@2\nbuiltinCallback: 44:[1, 2]\ndestructorRelease: 45\n"
+            "closureCall: 46\nreflectionFree: 135\n";
+    }
+
+    constructor() : Test("Reflection reach in compiled debugger programs", "1.0", \ARGV) {
+        addTestCase("reflection through calls, names, callbacks, destructors and closures", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/AOTReflectionReach.qr";
+        assertEq(Expected, run((qore, "--exec-mode=ast", source)), "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-aot-reflection-reach-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertEq(Expected, run((executable,)), prefix + level);
+                assertTrue(regex(ir, "(?s)define [^\n]*@reflectionFree_[^\n]*_fast_"),
+                    "a function that cannot reach reflection keeps its native entry " + prefix + level);
+                assertFalse(regex(ir, "(?s)define [^\n]*@twoLevels_[^\n]*_fast_"),
+                    "a function that can reach reflection keeps its real frame " + prefix + level);
+            }
+        }
+    }
+}

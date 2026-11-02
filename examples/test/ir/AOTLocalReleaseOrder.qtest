@@ -1,0 +1,65 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class LocalReleaseOrderTest
+
+#! Tests that object locals held in the compiled code's reload storage are destroyed in reverse declaration order
+/** The JIT and AOT tiers keep a reference to a local's value in reload storage that is created when code first
+    needs it, which follows the block layout rather than the declarations.  The storage is released in reverse
+    declaration order (the order of the locals' slots), so the order in which the values are destroyed does not
+    depend on the order in which the code first used the locals.  The cases use the locals in orders unrelated to
+    their declarations, with handlers that publish them to the runtime and reload them, inner blocks and loops, and
+    exits by return, exception and falling off the end; every mode and compiled executable must match the
+    interpreter.
+*/
+class LocalReleaseOrderTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("local release order", "1.0", \ARGV) {
+        addTestCase("reload storage is released in reverse declaration order", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/AOTLocalReleaseOrder.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("aot-local-release-order: ok\n$", expected);
+        assertRegex('handlers 1: \["inner_on_exit", "h3", "on_error", "on_exit", "h2", "h1", "h0", "caught OUTER"\]',
+            expected);
+        assertRegex('reverse use 0: \["cba", "on_exit", "c", "b", "a", "caught X"\]', expected);
+        assertRegex('loops 2: \[.*"exit c2", "c2", "c1", "c0", "caught Y"\]', expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-local-release-order-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

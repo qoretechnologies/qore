@@ -5136,7 +5136,9 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     assert(ir);
     IRContextFlags flags;
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
-    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if ((pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER))
+            || q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        // argv and self are visible to reflection even without an explicit IR load.
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -5172,7 +5174,8 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
     if (ir) {
         ir->computeIROnlyLocals();
 
-        if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER) && !ir->reflection_free) {
+            ir->reflective_frame = true;
             if (!ir->ir_only_locals.empty()) {
                 ir->ir_only_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
@@ -5601,7 +5604,7 @@ void UserVariantBase::buildCallName() const {
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
         const QoreTypeInfo* specialization_receiver_type_info,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation,
-        bool mark_failure, bool raise_on_failure) const {
+        bool mark_failure, bool raise_on_failure, bool reflection_free, bool unwind_order_proven) const {
     assert(pgm);
     assert(statements);
 
@@ -5615,6 +5618,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->source_variant = variant;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
+    func->reflection_free = reflection_free;
+    func->unwind_order_proven = unwind_order_proven;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).
@@ -5786,8 +5791,17 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->computeIROnlyLocals();
 
     // When debugger is enabled, all locals must be on the TLS stack so
-    // get_local_vars() and set_local_var_value() can access them
-    if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+    // get_local_vars() and set_local_var_value() can access them, unless the function cannot reflect: then it is
+    // lowered again without the reflection-specific rules (see design/aot-reflection-visible-locals.md).  The IR
+    // tiers lower one function at a time, so a function calling another user function keeps the rules.
+    if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER) && !func->reflection_free) {
+        std::vector<const AbstractQoreFunctionVariant*> callees;
+        if (!qore_ir_function_may_reflect_locally(*func, callees) && callees.empty()) {
+            delete func;
+            return lowerIRFunction(name, unique_name, specialization_receiver_type_info,
+                specialization_type_param_instantiation, mark_failure, raise_on_failure, true, unwind_order_proven);
+        }
+        func->reflective_frame = true;
         if (!func->ir_only_locals.empty()) {
             func->ir_only_locals.clear();
             func->ast_visible_body_locals = func->all_body_locals;
@@ -5950,6 +5964,19 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         && all_params_direct_safe && !signature.argvid;
 
     printd(3, "UserVariantBase::lowerIRFunction() '%s' lowered to IR (%d guards)\n", name, func->num_guards);
+    // A frame whose cleanup alone releases its locals in reverse declaration order needs no unwind anchor for them:
+    // lower it again without, and keep the result if its own classification still proves the order
+    if (func->has_local_unwind_anchor && !func->unwind_order_proven
+            && qore_ir_local_unwind_order_is_exact(statements, *func)) {
+        std::unique_ptr<QoreIRFunction> anchored(func);
+        std::unique_ptr<QoreIRFunction> unanchored(lowerIRFunction(name, unique_name,
+            specialization_receiver_type_info, specialization_type_param_instantiation, false, false,
+            anchored->reflection_free, true));
+        if (unanchored && qore_ir_local_unwind_order_is_exact(statements, *unanchored)) {
+            return unanchored.release();
+        }
+        return anchored.release();
+    }
     return func;
 }
 
@@ -6035,6 +6062,14 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
                 " (body_locals=%d, ir_only=%d)\n",
                 callee_ir->name.c_str(), (int)callee_ir->all_body_locals.size(),
                 (int)callee_ir->ir_only_locals.size());
+        }
+        return false;
+    }
+
+    // A function that reflection can reach runs in a real frame, which a direct entry does not push
+    if (callee_ir->reflective_frame) {
+        if (batch_debug) {
+            printd(5, "  APPROACH_B: '%s' ineligible: reflective frame\n", callee_ir->name.c_str());
         }
         return false;
     }
@@ -6498,6 +6533,28 @@ const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name
     return it->second.get();
 }
 
+//! Applies the declared return type to the value returned by IR- or native-executed code
+/** The AST interpreter applies the return type in ReturnStatement::execImpl() with
+    QoreTypeInfo::acceptAssignment(), which converts the value for a declared type, strips complex types from a
+    hash or list for no type or \c any, and leaves the value as it is for \c auto; a value is applied the same way
+    here.  No value is checked only for a declared type, as UserVariantBase::evalIntern() checks it for code that
+    ends without a return statement.
+*/
+static void apply_tiered_return_type(const UserSignature& signature, const QoreTypeInfo* rt, QoreValue& val,
+        ExceptionSink* xsink) {
+    if (val.isNothing()) {
+        if (QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*signature.getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        }
+        return;
+    }
+    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+}
+
 QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
         ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
         bool caller_has_frame_boundary) const {
@@ -6583,17 +6640,7 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
         const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
             ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
             : signature.getReturnTypeInfo();
-        if (rt && QoreTypeInfo::hasType(rt)) {
-            if (val.isNothing()) {
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    xsink->overrideLocation(*signature.getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
-        }
+        apply_tiered_return_type(signature, rt, val, xsink);
     }
     return val;
 }
@@ -6849,17 +6896,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
                 ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
                 : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
+            apply_tiered_return_type(signature, rt, val, xsink);
         }
         return val;
     }
@@ -7001,17 +7038,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
                 ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
                 : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
+            apply_tiered_return_type(signature, rt, val, xsink);
         }
         return val;
     }

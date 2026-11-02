@@ -148,6 +148,54 @@ const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
 //! Create a dynamic call_function() fallback for an unresolved serialized function call.
 QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args);
 
+//! Returns true while the code of a per-file object (\c qcc \c -c) is generated in this thread
+/** The object is linked into a module by a metadata-only compile (\c qcc \c -m \c --from-objects), which writes
+    the slot tables of its code from the slot map walk alone, so its code can use only the slots that the walk
+    assigns (see AOTSlotMap::beginCodegen())
+*/
+DLLLOCAL bool qore_aot_compiling_per_file_object();
+
+//! Marks the generation of the code of a per-file object in this thread for its lifetime; see
+//! qore_aot_compiling_per_file_object()
+class QoreAOTPerFileObjectGuard {
+public:
+    //! Marks the code generated in this thread as that of a per-file object if \a per_file is true
+    DLLLOCAL explicit QoreAOTPerFileObjectGuard(bool per_file);
+
+    //! Restores the previous state
+    DLLLOCAL ~QoreAOTPerFileObjectGuard();
+
+    QoreAOTPerFileObjectGuard(const QoreAOTPerFileObjectGuard&) = delete;
+    QoreAOTPerFileObjectGuard& operator=(const QoreAOTPerFileObjectGuard&) = delete;
+
+private:
+    bool prev;
+};
+
+class QoreRegex;
+class QoreCastOperatorNode;
+
+//! Returns the regex of a regex operator expression that AOT code lowers from its pattern string
+/** The slot map walk and the code generator must agree on whether the expression needs an expression slot (see
+    AOTSlotMap::beginCodegen()), so both use this function
+
+    @param expr the expression of a regex match, nonmatch or extract instruction
+
+    @return the regex if the code is generated from its pattern string, or nullptr if the code uses the expression's
+    slot (ex: the expression is no regex operator, or the pattern string is not available)
+*/
+DLLLOCAL const QoreRegex* qore_aot_get_pattern_regex(const QoreValue& expr);
+
+//! Returns the cast expression of a cast instruction that AOT code lowers from its type path
+/** As for qore_aot_get_pattern_regex(), the slot map walk and the code generator both use this function
+
+    @param expr the expression of a cast instruction
+
+    @return the cast expression if the code is generated from its type path, or nullptr if the code uses the
+    expression's slot
+*/
+DLLLOCAL const QoreCastOperatorNode* qore_aot_get_type_path_cast(const QoreValue& expr);
+
 //! Key for source-stripped AOT hashdecl path resolution.
 /** A serialized hashdecl path can contain generic receiver type variables; the same
     path must therefore be cached separately for each active receiver type context. */
@@ -526,6 +574,63 @@ struct AOTSlotMap {
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
     std::unordered_map<uint64_t, QoreAOTCallRelocationTargetKind> call_relocation_kinds; //!< expr bits -> direct call relocation target kind
 
+    //! Kinds of the slots of the map, for the diagnostic of a slot assigned while native code is generated
+    enum class SlotKind {
+        Local,
+        Global,
+        Expression,
+        AdditionalMethod,
+        LValuePath,
+        RegexCase,
+    };
+
+    //! A slot assigned while native code is generated from the map (see beginCodegen())
+    struct CodegenAllocation {
+        SlotKind kind;
+        //! the key of the slot: the expression's NaN-boxed bits, or the pointer for the other kinds
+        uint64_t key;
+        //! the IR opcode diagnostic given for an expression slot, if any
+        std::string source;
+        //! the line of the call in the code generator
+        int line;
+    };
+
+    //! Starts native code generation from the map; calls nest
+    /** Every slot that native code uses must be assigned by the slot map walk (buildAOTSlotMap() and the walks
+        that run in every compile mode), as a metadata-only compile (ex: \c qcc \c -m \c --from-objects) writes
+        the slot tables of the code of separately compiled objects from the walk alone, without generating the code
+        again.  A slot assigned while code is generated would be missing there, and the code of the object would
+        use an index that the table of the linked module does not have, so each one is recorded and the compile
+        fails (see endCodegen()).
+    */
+    void beginCodegen() {
+        ++codegen_depth;
+    }
+
+    //! Ends native code generation started with beginCodegen()
+    /** @return the slots assigned by code generation since the outermost beginCodegen(), if this ends it; the
+        list is cleared
+    */
+    std::vector<CodegenAllocation> endCodegen() {
+        assert(codegen_depth > 0);
+        std::vector<CodegenAllocation> rv;
+        if (!--codegen_depth) {
+            rv.swap(codegen_allocations);
+        }
+        return rv;
+    }
+
+    //! Returns true while native code is generated from the map
+    bool inCodegen() const {
+        return codegen_depth > 0;
+    }
+
+    //! Returns a description of a slot assigned while native code was generated, for a compile error
+    DLLLOCAL static std::string describeCodegenAllocation(const CodegenAllocation& alloc);
+
+    //! Returns a description of the slots assigned while native code was generated, for a compile error
+    DLLLOCAL static std::string describeCodegenAllocations(const std::vector<CodegenAllocation>& allocations);
+
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {
         return local_slots.find(local) != local_slots.end();
@@ -533,11 +638,12 @@ struct AOTSlotMap {
 
     //! Get or assign a slot for a LocalVar*
     //! @throw std::length_error if another slot cannot fit in the signed context size
-    int32_t getLocalSlot(const void* local) {
+    int32_t getLocalSlot(const void* local, int line = __builtin_LINE()) {
         auto it = local_slots.find(local);
         if (it != local_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::Local, reinterpret_cast<uintptr_t>(local), std::string(), line);
         if (next_local_slot == INT32_MAX) {
             throw std::length_error("AOT local slot table exceeds the context size limit");
         }
@@ -566,11 +672,12 @@ struct AOTSlotMap {
     }
 
     //! Get or assign a slot for a Var* (global or thread-local)
-    int32_t getGlobalSlot(const void* var) {
+    int32_t getGlobalSlot(const void* var, int line = __builtin_LINE()) {
         auto it = global_slots.find(var);
         if (it != global_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::Global, reinterpret_cast<uintptr_t>(var), std::string(), line);
         int32_t slot = static_cast<int32_t>(global_slots.size());
         global_slots[var] = slot;
         return slot;
@@ -578,7 +685,7 @@ struct AOTSlotMap {
 
     //! Get or assign a slot for an expression (NaN-boxed QoreValue bits)
     //! @throw std::length_error if another slot cannot fit in the signed context size
-    int32_t getExprSlot(uint64_t expr_bits, const std::string& source = std::string()) {
+    int32_t getExprSlot(uint64_t expr_bits, const std::string& source = std::string(), int line = __builtin_LINE()) {
         if (!source.empty() && expr_slot_sources.find(expr_bits) == expr_slot_sources.end()) {
             expr_slot_sources[expr_bits] = source;
         }
@@ -586,6 +693,7 @@ struct AOTSlotMap {
         if (it != expr_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::Expression, expr_bits, source, line);
         int32_t slot = allocateExprSlot();
         expr_slots[expr_bits] = slot;
         return slot;
@@ -595,12 +703,14 @@ struct AOTSlotMap {
     //! @param target complete class/method/variant identity, owned by the compilation
     //! @return its index in the expression and call-target tables
     //! @throw std::length_error if another slot cannot fit in the signed context size
-    int32_t getAdditionalMethodSlot(const DotEvalDirectTarget& target) {
+    int32_t getAdditionalMethodSlot(const DotEvalDirectTarget& target, int line = __builtin_LINE()) {
         assert(target.qc && target.method && target.variant && !target.pseudo);
         auto it = additional_method_slots.find(target.variant);
         if (it != additional_method_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::AdditionalMethod, reinterpret_cast<uintptr_t>(target.method),
+            std::string(), line);
         int32_t slot = allocateExprSlot();
         additional_method_targets.emplace(slot, target);
         additional_method_slots.emplace(target.variant, slot);
@@ -614,22 +724,24 @@ struct AOTSlotMap {
     }
 
     //! Get or assign a slot for a QoreIRLValuePathInstruction*
-    int32_t getLVPathSlot(const void* inst) {
+    int32_t getLVPathSlot(const void* inst, int line = __builtin_LINE()) {
         auto it = lv_path_slots.find(inst);
         if (it != lv_path_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::LValuePath, reinterpret_cast<uintptr_t>(inst), std::string(), line);
         int32_t slot = static_cast<int32_t>(lv_path_slots.size());
         lv_path_slots[inst] = slot;
         return slot;
     }
 
     //! Get or assign a slot for a CaseNodeRegex* (SwitchRegexMatch)
-    int32_t getRegexCaseSlot(const void* regex_case) {
+    int32_t getRegexCaseSlot(const void* regex_case, int line = __builtin_LINE()) {
         auto it = regex_case_slots.find(regex_case);
         if (it != regex_case_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::RegexCase, reinterpret_cast<uintptr_t>(regex_case), std::string(), line);
         int32_t slot = static_cast<int32_t>(regex_case_slots.size());
         regex_case_slots[regex_case] = slot;
         return slot;
@@ -638,6 +750,17 @@ struct AOTSlotMap {
 private:
     int32_t next_local_slot = 0;
     int32_t next_expr_slot = 0;
+    //! the nesting depth of beginCodegen()
+    int codegen_depth = 0;
+    //! the slots assigned while native code was generated
+    std::vector<CodegenAllocation> codegen_allocations;
+
+    //! Records a slot assigned while native code is generated
+    void noteCodegenAllocation(SlotKind kind, uint64_t key, const std::string& source, int line) {
+        if (codegen_depth) {
+            codegen_allocations.push_back(CodegenAllocation{kind, key, source, line});
+        }
+    }
 
     int32_t allocateExprSlot() {
         if (next_expr_slot == INT32_MAX) {
@@ -942,6 +1065,20 @@ DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
  */
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
 
+//! Breaks the cycles held up by opaque references that the Programs of all registered AOT user modules own
+/** Called at shutdown while the Programs of all modules still exist, so that the destructors of the objects
+    released run while the Programs of their classes exist; see QoreModuleManager::delUser()
+ */
+DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink);
+
+//! Gets the modules that the registered AOT user module \a name requires; returns false if it is not one
+DLLLOCAL bool qore_aot_get_module_dependencies(const char* name, std::vector<std::string>& deps);
+
+//! Returns true if a registered AOT user module other than \a name requires the module \a name
+/** Used at shutdown to delete an AOT user module only after the AOT user modules that require it
+ */
+DLLLOCAL bool qore_aot_module_has_dependent(const char* name);
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:
@@ -974,6 +1111,16 @@ public:
         @return the flags, without surrounding spaces, or an empty string
     */
     static std::string getLinkTargetFlags();
+
+    //! Return the target triple AOT code is compiled for when no target is given
+    /** This is LLVM's default (host) triple, except on macOS, where the OS version is the version the native links
+        target (see getLinkTargetFlags()): an explicit \c MACOSX_DEPLOYMENT_TARGET, or else the version libqore was
+        built for.  The host's own version can be newer than that, and an object file built for a newer macOS than
+        its link makes the linker warn on every link.
+
+        @return the target triple, e.g. \c "arm64-apple-macosx26.6"
+    */
+    static std::string getDefaultTargetTriple();
 
     //! Return the configured runtime-library search-path policy for native AOT links
     /** @return true unless the CMake-generated link configuration disables RPATH

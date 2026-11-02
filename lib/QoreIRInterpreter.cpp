@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <optional>
 #include <string>
 #include <typeinfo>
@@ -80,7 +81,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 418,
+static_assert(QORE_IR_MAX_OPCODE == 423,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2404,14 +2405,15 @@ static void acceptInterpreterIRReturnType(const UserSignature* sig, const QoreTy
         rt = qore_substitute_type_params_if_needed(rt);
     }
 
-    if (!rt || rt == autoTypeInfo) {
+    // as in ReturnStatement::execImpl(), auto leaves the value as it is, while no type strips complex types like any
+    if (rt == autoTypeInfo) {
         return;
     }
     if (exactPrimitiveTypeAcceptsValue(rt, value)) {
         return;
     }
 
-    if (value.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+    if (value.isNothing() && QoreTypeInfo::hasType(rt)) {
         QoreTypeInfo::acceptAssignment(rt, "<block return>", value, xsink, nullptr);
         if (xsink && *xsink && sig) {
             xsink->overrideLocation(*sig->getParseLocation());
@@ -2583,6 +2585,9 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     const UserSignature* sig = uvb->getUserSignature();
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
+            || callee_ir->has_opaque_ast_local_access
+            // an inlined callee has no frame for reflection to read
+            || callee_ir->reflective_frame
             || !callee_ir->ast_visible_body_locals.empty()
             || callee_ir->hasTypeSpecialization()
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
@@ -2726,6 +2731,9 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     const UserSignature* sig = uvb->getUserSignature();
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
+            || callee_ir->has_opaque_ast_local_access
+            // an inlined callee has no frame for reflection to read
+            || callee_ir->reflective_frame
             || !callee_ir->ast_visible_body_locals.empty()
             || callee_ir->hasTypeSpecialization()
             || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
@@ -4570,6 +4578,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         sig = uvb->getUserSignature();
         if (!callee_ir || !sig
                 || sig->needsTypeParameterSubstitution()
+                || callee_ir->has_opaque_ast_local_access
+                // an inlined callee has no frame for reflection to read
+                || callee_ir->reflective_frame
                 || !callee_ir->ast_visible_body_locals.empty()
                 || callee_ir->hasTypeSpecialization()
                 || ((!callee_ir->direct_params_eligible || nargs < static_cast<int>(sig->numParams()))
@@ -4791,6 +4802,20 @@ static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
 // return NOTHING when evaluated as full AST statements, but the IR expects the
 // computed value as the result.  Using evalBinary with the operand values returns
 // the correct computed value.
+//! Returns what the AST's functional keys iterator holds for \a value (see QoreIROpcode::KeysIteratorSource)
+static QoreValue qore_ir_keys_iterator_source(const QoreValue& value, ExceptionSink* xsink) {
+    qore_type_t t = value.getType();
+    if (t == NT_HASH) {
+        return value.refSelf();
+    }
+    if (t == NT_OBJECT) {
+        QoreObject* o = const_cast<QoreObject*>(value.get<const QoreObject>());
+        AutoVLock vl(xsink);
+        return qore_object_private::get(*o)->getRuntimeMemberHash(xsink);
+    }
+    return QoreValue();
+}
+
 static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         const IRValueSlots& values, ExceptionSink* xsink,
         const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip,
@@ -5732,6 +5757,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
+        case QoreIROpcode::KeysIteratorSource: {
+            if (!inv->operands.empty()) {
+                return qore_ir_keys_iterator_source(getIRValue(values, inv->operands[0]), xsink);
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
         // Keys: native hash/object key retrieval with pre-evaluated operand
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
@@ -6021,6 +6052,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             parent_slot_dirty[slot_id] = true;
         }
     };
+    // a store that replaces the value of a parent local is written through to the parent right away (see
+    // ParentSlotWriteback::writeBack()), so that the value that it replaces is released at the assignment, as in the
+    // AST interpreter, and not when the handler returns
+    std::function<void(uint32_t)> writeParentSlotThrough;
     auto markParentLocalStoreDirty = [&](const QoreIRLocalInstruction* local_inst) {
         if (!local_inst || local_inst->slot_id == UINT32_MAX) {
             return;
@@ -6029,6 +6064,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return;
         }
         markParentSlotDirty(local_inst->slot_id);
+        if (writeParentSlotThrough && local_inst->slot_id < parent_slot_dirty.size()) {
+            writeParentSlotThrough(local_inst->slot_id);
+        }
     };
 
     // Phase B2: Copy parent's local values into handler frame (parent slot inheritance)
@@ -6124,34 +6162,30 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return value.needsRef() ? value.refSelf() : value;
         }
 
+        //! Writes the value of parent slot \a i back to the parent: its slot cache or, for a compiled parent, the
+        //! runtime local
+        void writeBack(uint32_t i) {
+            if (parent_slot_cache) {
+                assert(parent_slot_cache->size() >= parent_slot_count);
+                QoreValue value = getWritebackValue(i);
+                (*parent_slot_cache)[i].discard(xsink);
+                (*parent_slot_cache)[i] = value;
+                if (parent_slot_cache_dirty) {
+                    (*parent_slot_cache_dirty)[i] = true;
+                }
+            } else if (i < slot_to_lvar.size() && slot_to_lvar[i]) {
+                // TLS write-back for LLVM-compiled parents
+                QoreValue value = getWritebackValue(i);
+                assignLocalVarValue(slot_to_lvar[i], value, xsink);
+                value.discard(xsink);
+            }
+        }
+
         ~ParentSlotWriteback() {
             // Copy modified parent slot values back to parent's locals_slot_cache
-            if (parent_slot_count > 0 && parent_slot_cache) {
-                assert(parent_slot_cache->size() >= parent_slot_count);
-                for (uint32_t i = 0; i < parent_slot_count; ++i) {
-                    if (!parent_slot_dirty[i]) {
-                        continue;
-                    }
-                    QoreValue value = getWritebackValue(i);
-                    (*parent_slot_cache)[i].discard(xsink);
-                    (*parent_slot_cache)[i] = value;
-                    if (parent_slot_cache_dirty) {
-                        (*parent_slot_cache_dirty)[i] = true;
-                    }
-                }
-            } else if (parent_slot_count > 0 && !slot_to_lvar.empty()) {
-                // TLS write-back for LLVM-compiled parents
-                // Write modified parent slot values back to TLS using assignLocalVarValue
-                for (uint32_t i = 0; i < parent_slot_count; ++i) {
-                    if (!parent_slot_dirty[i]) {
-                        continue;
-                    }
-                    LocalVar* lvar = slot_to_lvar[i];
-                    if (lvar) {
-                        QoreValue value = getWritebackValue(i);
-                        assignLocalVarValue(lvar, value, xsink);
-                        value.discard(xsink);
-                    }
+            for (uint32_t i = 0; i < parent_slot_count; ++i) {
+                if (parent_slot_dirty[i]) {
+                    writeBack(i);
                 }
             }
         }
@@ -6394,8 +6428,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             locally_uninstantiated.clear();
         }
         // Clear local slot cache, preserving IR-only locals (loop counters etc.)
-        // that only exist in the cache and have no variable-stack backing.
-        for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+        // that only exist in the cache and have no variable-stack backing.  Slots
+        // follow declaration order, so the last one is released first, as the
+        // interpreter destroys a frame's locals.
+        for (size_t i = locals_slot_cache.size(); i-- > 0;) {
             if (preserveParentSlotForWriteback(i)) {
                 continue;
             }
@@ -6552,6 +6588,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // this frame releases its cached local references.
     ParentSlotWriteback parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
         parent_slot_to_lvar, parent_slot_dirty, parent_slot_cache_dirty, xsink);
+    if (func.parent_slot_count) {
+        writeParentSlotThrough = [&parent_slot_writeback](uint32_t slot_id) {
+            parent_slot_writeback.writeBack(slot_id);
+        };
+    }
 
     // RAII guard: delete active iterators on any function exit path.
     // IteratorNext deletes iterators on the normal done path, but return/exception
@@ -7972,9 +8013,68 @@ next_instruction:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::LegacyListAppendElement: {
+                qore_rt_list_append_element_legacy(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])), xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::HashSetKeyValueFold: {
+                int64_t new_state = qore_rt_hash_set_key_value_fold(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])), toBits(getIRValue(values, inst->operands[2])),
+                    getIRValue(values, inst->operands[3]).getAsBigInt(),
+                    getIRValue(values, inst->operands[4]).getAsBigInt(), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::HashSetCommonType: {
                 qore_rt_hash_set_common_type(toBits(getIRValue(values, inst->operands[0])),
                     getIRValue(values, inst->operands[1]).getAsBigInt());
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListAppendElement: {
+                int64_t new_state = qore_rt_list_append_element(toBits(getIRValue(values, inst->operands[0])),
+                    toBits(getIRValue(values, inst->operands[1])),
+                    getIRValue(values, inst->operands[2]).getAsBigInt(), xsink);
+                setValueSlotDirect(values, inst->result.id, QoreValue(new_state));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -8489,6 +8589,20 @@ next_instruction:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::CatchUnwind: {
+                int64_t depth = getIRValue(values, inst->operands[0]).getAsBigInt();
+                assert(depth >= 0);
+                while (catch_exception_stack.size() > static_cast<size_t>(depth)) {
+                    auto entry = catch_exception_stack.back();
+                    catch_exception_stack.pop_back();
+                    if (entry.caught) {
+                        catch_swap_exception(entry.saved);
+                        entry.caught->del(xsink);
+                    }
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::CatchCleanup: {
                 if (!catch_exception_stack.empty()) {
                     auto entry = catch_exception_stack.back();
@@ -8993,21 +9107,8 @@ load_local_done:
                             cleanupLocalCaches();
                             return false;
                         }
+                        // the value is returned as it is stored, as the AST interpreter returns it
                         out.refSelf();
-                        if (!h->getHashDecl() && !out.isNothing()) {
-                            const QoreTypeInfo* vti = h->getValueTypeInfo();
-                            if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
-                                    && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
-                                ValueHolder holder(out, xsink);
-                                QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
-                                if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                    cleanupLocalCaches();
-                                    return false;
-                                }
-                                out = holder.release();
-                            }
-                        }
                     }
                 } else if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -9017,21 +9118,8 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                    // the value is returned as it is stored, as the AST interpreter returns it
                     out.refSelf();
-                    if (!h->getHashDecl() && !out.isNothing()) {
-                        const QoreTypeInfo* vti = h->getValueTypeInfo();
-                        if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
-                                && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
-                            ValueHolder holder(out, xsink);
-                            QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
-                            if (xsink && *xsink) {
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
-                            }
-                            out = holder.release();
-                        }
-                    }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
@@ -10094,50 +10182,20 @@ load_local_done:
             }
             case QoreIROpcode::HashMapTwoKeys: {
                 const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
-                QoreValue list_val = getIRValue(values, mhk->operands[0]);
-                QoreValue out;
-                if (list_val.getType() == NT_LIST) {
-                    const QoreListNode* l = list_val.get<const QoreListNode>();
-                    size_t sz = l->size();
-                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-                    bool routed_to_handler = false;
-                    for (size_t i = 0; i < sz; ++i) {
-                        QoreValue elem = l->retrieveEntry(i);
-                        if (elem.getType() == NT_HASH) {
-                            const QoreHashNode* h = elem.get<const QoreHashNode>();
-                            // note: the checking accessor is used here so that accessing an
-                            // unknown member of a hashdecl-typed hash raises INVALID-MEMBER, as
-                            // with the reference (AST) implementation
-                            QoreValue k = h->getKeyValue(mhk->key1.c_str(), xsink);
-                            QoreValue val = *xsink
-                                ? QoreValue()
-                                : h->getKeyValue(mhk->key2.c_str(), xsink);
-                            if (!*xsink) {
-                                QoreHashKeyHelper key_str(k, xsink);
-                                if (!*xsink) {
-                                    result->setKeyValue(key_str.c_str(), val.refSelf(), xsink);
-                                }
-                            }
-                            if (*xsink) {
-                                if (inst->exception_target) {
-                                    cleanupToTempScope(inst->temp_scope_id, true, false, true);
-                                    prev_block = block;
-                                    block = inst->exception_target;
-                                    ip = 0;
-                                    routed_to_handler = true;
-                                    break;
-                                }
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
-                            }
-                        }
-                    }
-                    // the partially built result is discarded by the ReferenceHolder
-                    if (routed_to_handler) {
+                QoreValue out = fromBits(qore_rt_hash_map_two_keys(toBits(getIRValue(values, mhk->operands[0])),
+                    mhk->key1.c_str(), mhk->key2.c_str(), xsink));
+                if (xsink && *xsink) {
+                    out.discard(xsink);
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
                         break;
                     }
-                    out = result.release();
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
                 if (out.needsRef()) {
@@ -11189,9 +11247,13 @@ load_local_done:
             }
             case QoreIROpcode::InstantiateLocal: {
                 auto* linst = static_cast<QoreIRLocalInstruction*>(inst);
-                if (linst->local) {
+                if (linst->local && !(linst->slot_id < locals_ir_only.size()
+                        && locals_ir_only[linst->slot_id])) {
                     ensureLocalInstantiated(linst->local, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                         function_own_locals, &locally_uninstantiated);
+                    if (!linst->local->closureUse()) {
+                        thread_find_lvar(linst->local)->block_cleared = false;
+                    }
                 }
                 ++ip;
                 break;
@@ -12567,6 +12629,17 @@ load_local_done:
                 // without tying lifetime to source lines, because a single
                 // expression can span multiple lines.
                 ephemeral_weak_ref_slots.clear();
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -12704,7 +12777,10 @@ load_local_done:
                     // Skip handler execution if inline_lowered=true; just flush the vector
                     if (!scope_inst->inline_lowered) {
                         ExceptionSink obe_xsink;
-                        bool error = scope_inst->is_error || (xsink && xsink->isException());
+                        // a thread_exit is no error: on_error handlers do not run for it, as in the AST
+                        // (StatementBlock::execImpl()), also when it unwinds through an exception cleanup block
+                        bool error = (xsink && xsink->isException())
+                            || (scope_inst->is_error && !(xsink && xsink->isThreadExit()));
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
                             obe_type_e type = on_block_exit_handlers[i - 1].type;
                             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
@@ -12770,6 +12846,14 @@ load_local_done:
             case QoreIROpcode::ThreadExit:
                 if (xsink) {
                     xsink->raiseThreadExit();
+                }
+                if (inst->exception_target) {
+                    // unwinds the blocks of this frame as an exception does (see Throw)
+                    cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                    prev_block = block;
+                    block = inst->exception_target;
+                    ip = 0;
+                    break;
                 }
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
@@ -13675,81 +13759,7 @@ load_local_done:
                     LValueHelper lvh(xsink);
                     navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
                     if (!navigation_failed) {
-                        switch (path_inst->compound_op) {
-                            case LVCompoundOp::AddAssign:
-                                res = doPlusEqualsOnLValue(lvh, rhs_holder, xsink);
-                                break;
-                            case LVCompoundOp::SubAssign:
-                                res = doMinusEqualsOnLValue(lvh, rhs, xsink);
-                                break;
-                            default: {
-                                qore_type_t vtype = lvh.getType();
-                                if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign:
-                                            lvh.multiplyEqualsNumber(rhs);
-                                            if (!*xsink) {
-                                                res = lvh.getReferencedValue();
-                                            }
-                                            break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (rhs.getAsFloat() == 0.0) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in arbitrary-precision numeric expression");
-                                            } else {
-                                                lvh.divideEqualsNumber(rhs);
-                                                if (!*xsink) {
-                                                    res = lvh.getReferencedValue();
-                                                }
-                                            }
-                                            break;
-                                        default: res = QoreValue(); break;
-                                    }
-                                } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
-                                    double rv = rhs.getAsFloat();
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (rv == 0.0) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in floating-point expression");
-                                            } else {
-                                                res = lvh.divideEqualsFloat(rv);
-                                            }
-                                            break;
-                                        default: res = QoreValue(); break;
-                                    }
-                                } else {
-                                    int64 rv = rhs.getAsBigInt();
-                                    switch (path_inst->compound_op) {
-                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                                        case LVCompoundOp::DivAssign:
-                                            if (!rv) {
-                                                xsink->raiseException("DIVISION-BY-ZERO",
-                                                    "division by zero in integer expression");
-                                            } else {
-                                                res = lvh.divideEqualsBigInt(rv);
-                                            }
-                                            break;
-                                        case LVCompoundOp::ModAssign:
-                                            if (!rv) {
-                                                lvh.assign(0ll, "<%= operator>");
-                                                res = 0ll;
-                                            } else {
-                                                res = lvh.modulaEqualsBigInt(rv);
-                                            }
-                                            break;
-                                        case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                                        case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                                        case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                                        case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                                        case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
-                                        default: break;
-                                    }
-                                }
-                                break;
-                            }
-                        }
+                        res = qore_rt_apply_lvalue_compound(lvh, path_inst->compound_op, rhs_holder, xsink);
                     }
                 }
                 // lvh is now destructed — object lock released
@@ -14779,7 +14789,9 @@ load_local_done:
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
-                    if (v && v.getType() == NT_INT) {
+                    // only an int operand gives an int lvalue an integer addition in every case; a date operand of a
+                    // timeout lvalue is added as milliseconds (see doPlusEqualsOnLValue())
+                    if (v && v.getType() == NT_INT && right.getType() == NT_INT) {
                         v.plusEqualsBigInt(right.getAsBigInt());
                         if (!*xsink) {
                             res = v.getReferencedValue();
@@ -14832,7 +14844,12 @@ load_local_done:
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
-                    if (v && v.getType() == NT_INT) {
+                    // the AST interpreter gives an int lvalue and an int operand an integer operation; a zero
+                    // divisor is left to evalLValueBinary(), which handles it as the AST interpreter does
+                    if (v && v.getType() == NT_INT && right.getType() == NT_INT
+                            && (right.getAsBigInt()
+                                || (inst->opcode != QoreIROpcode::DivAssignLValue
+                                    && inst->opcode != QoreIROpcode::ModAssignLValue))) {
                         int64 rhs = right.getAsBigInt();
                         switch (inst->opcode) {
                             case QoreIROpcode::SubAssignLValue:
@@ -16146,6 +16163,23 @@ load_local_done:
                 ++ip;
                 break;
             }
+        case QoreIROpcode::KeysIteratorSource: {
+                auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                // the operand is always lowered (see QoreIRLowering::lowerForeachList())
+                assert(!expr_inst->operands.empty());
+                QoreValue res = qore_ir_keys_iterator_source(getIRValue(values, expr_inst->operands[0]), xsink);
+                if (xsink && *xsink) {
+                    res.discard(xsink);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.needsRef()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+        }
         // Keys: native hash/object key retrieval with pre-evaluated operand
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
@@ -16666,6 +16700,8 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             qore_type_t t = value.getType();
             return QoreValue(t == NT_LIST || t == NT_OBJECT);
         }
+        case QoreIROpcode::KeysIteratorSource:
+            return qore_ir_keys_iterator_source(value, xsink);
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash: {
@@ -16908,45 +16944,21 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() + right.getAsBigInt());
         case QoreIROpcode::AddAssignFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
-        case QoreIROpcode::AddAssignAny: {
-            // If the left operand is NOTHING, return the right operand directly
-            // to avoid NOTHING being treated as a list element in concatenation
-            if (left.isNothing()) {
-                return right.refSelf();
-            }
-            // issue #3157: timeout (int ms) += date → integer ms arithmetic
-            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
-                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return QoreValue(left.getAsBigInt() + ms);
-            }
-            bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::AddAssignAny:
+            // the value the AST interpreter gives the lvalue (see qore_compound_assign_value())
+            return qore_compound_assign_value(LVCompoundOp::AddAssign, left, right, xsink);
         case QoreIROpcode::SubAssignInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
         case QoreIROpcode::SubAssignFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
-        case QoreIROpcode::SubAssignAny: {
-            // Special handling for timeout type: stored as int (milliseconds), RHS may be date
-            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
-                // Treat as timeout arithmetic: int (ms) - date
-                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return QoreValue(left.getAsBigInt() - ms);
-            }
-            bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::SubAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::SubAssign, left, right, xsink);
         case QoreIROpcode::MulAssignInt:
             return QoreValue(left.getAsBigInt() * right.getAsBigInt());
         case QoreIROpcode::MulAssignFloat:
             return QoreValue(left.getAsFloat() * right.getAsFloat());
-        case QoreIROpcode::MulAssignAny: {
-            bool needs_deref = true;
-            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
-            return evalAndRef(&node, xsink);
-        }
+        case QoreIROpcode::MulAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::MulAssign, left, right, xsink);
         case QoreIROpcode::DivAssignInt: {
             int64_t divisor = right.getAsBigInt();
             if (!divisor) {
@@ -16968,9 +16980,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() / divisor);
         }
         case QoreIROpcode::DivAssignAny:
-            return QoreDivisionOperatorNode::doDivision(left, right, xsink);
-        case QoreIROpcode::ModAssignInt:
-        case QoreIROpcode::ModAssignAny: {
+            return qore_compound_assign_value(LVCompoundOp::DivAssign, left, right, xsink);
+        case QoreIROpcode::ModAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ModAssign, left, right, xsink);
+        case QoreIROpcode::ModAssignInt: {
             // the modulo-equals operator assigns 0 for a divisor of 0, as AST execution does
             // (QoreModuloEqualsOperatorNode); only the modulo operator raises an exception
             int64_t divisor = right.getAsBigInt();
@@ -16978,25 +16991,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::AndAssignInt:
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
-        case QoreIROpcode::AndAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::AndAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::AndAssign, left, right, xsink);
         case QoreIROpcode::OrAssignInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
-        case QoreIROpcode::OrAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::OrAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::OrAssign, left, right, xsink);
         case QoreIROpcode::XorAssignInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
-        case QoreIROpcode::XorAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::XorAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::XorAssign, left, right, xsink);
         case QoreIROpcode::ShlInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
@@ -17013,18 +17017,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::ShlAssignInt:
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
-        case QoreIROpcode::ShlAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftLeftEqualsOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::ShlAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ShlAssign, left, right, xsink);
         case QoreIROpcode::ShrAssignInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
-        case QoreIROpcode::ShrAssignAny: {
-            bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftRightEqualsOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
-            return evalAndRef(*node, xsink);
-        }
+        case QoreIROpcode::ShrAssignAny:
+            return qore_compound_assign_value(LVCompoundOp::ShrAssign, left, right, xsink);
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
@@ -18467,16 +18465,11 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else if (vtype == NT_NUMBER) {
         v.minusEqualsNumber(right, "<-= operator>");
     } else if (vtype == NT_DATE) {
-        // Check if this is a timeout type, which uses integer arithmetic
-        if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            // if the right side is also a date/timeout, convert to milliseconds
-            if (right.getType() == NT_DATE) {
-                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-                return v.minusEqualsBigInt(ms);
-            } else {
-                // Regular integer minus for timeout
-                return v.minusEqualsBigInt(right.getAsBigInt());
-            }
+        // the operation follows QoreMinusEqualsOperatorNode::evalImpl()
+        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
+        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+            return v.minusEqualsBigInt(ms);
         }
         // Regular date arithmetic
         if (right.getType() == NT_DATE) {
@@ -18529,10 +18522,14 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             }
         }
     } else {
-        // if the lvalue is a timeout, convert date/time value as timeout
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
-            return v.minusEqualsBigInt(ms);
+        if (right.getType() == NT_DATE) {
+            // if the lvalue is a timeout, convert date/time value as timeout
+            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+                return v.minusEqualsBigInt(ms);
+            }
+            // any other lvalue subtracts the date's relative seconds, as the AST interpreter does
+            return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());
         }
         // do integer minus-equals
         return v.minusEqualsBigInt(right.getAsBigInt());

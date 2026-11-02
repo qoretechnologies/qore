@@ -17,11 +17,9 @@ class FloatLocalAddTest inherits QUnit::Test {
         string behavior = get_script_dir() + "/IRFloatLocalAdd.qr";
         string direct_behavior = get_script_dir() + "/IRFloatDirectCallAdd.qr";
         string paths = get_script_dir() + "/IRFloatLocalAddPaths.qr";
-        const string AstExpected = "float-local-add: ok\nreflection:10.0\n";
-        # The baseline IR/native tiers cannot reflect this local by name, even
-        # with an explicit reference. Preserve that result separately; the
-        # private-float optimization does not fix reflection visibility.
-        const string CompiledExpected = "float-local-add: ok\nreflection:\"UNKNOWN-VARIABLE\"\n";
+        # Every tier reflects the local by name, as the interpreter does: a program that allows the debugger
+        # keeps the locals of a frame that reflection can reach on the runtime stack.
+        const string Expected = "float-local-add: ok\nreflection:10.0\n";
     }
     constructor() : Test("IR native private float addition", "1.0", \ARGV) {
         addTestCase("float arithmetic, ownership, aliases and concurrent mutation", \source());
@@ -43,7 +41,7 @@ class FloatLocalAddTest inherits QUnit::Test {
         foreach string prefix in (("", "QORE_DISABLE_IR_FLOAT_LOCAL_ADD=1 ",
                 "QORE_DISABLE_IR_FLOAT_DIRECT_CALL_ADD=1 ")) {
             foreach string mode in (("ast", "ir", "jit", "tiered")) {
-                assertEq(mode == "ast" ? AstExpected : CompiledExpected,
+                assertEq(Expected,
                     run((qore, "--exec-mode=" + mode, behavior), prefix), prefix + mode);
                 assertEq("float-direct-add: ok\n",
                     run((qore, "--exec-mode=" + mode, direct_behavior), prefix), prefix + mode);
@@ -85,7 +83,7 @@ class FloatLocalAddTest inherits QUnit::Test {
                 assertEq(expected, run((executable, "check")), prefix + level);
                 executable = dir.path + "/behavior";
                 run((qcc, level, "--strip-source", "-o", executable, behavior), prefix);
-                assertEq(CompiledExpected, run((executable,)), prefix + level);
+                assertEq(Expected, run((executable,)), prefix + level);
                 executable = dir.path + "/direct-behavior";
                 generated = run((qcc, level, "--strip-source", "-o", executable, direct_behavior),
                     prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");

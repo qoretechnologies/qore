@@ -444,6 +444,15 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     @subsection aot_builds Incremental and Parallel Object Builds
 
+    A module linked from per-file objects (<tt>qcc -m --from-objects</tt>) is written by a link that does not
+    generate the code of its functions again: their native code is in the objects, and the link builds the tables
+    of the values that the code reaches through its context (expressions, variables, call targets and lvalue
+    paths) from the IR alone.  Code that needs an entry of these tables is therefore generated only when the IR
+    determines the entry, so that every compile of the module agrees on them; for example, the code of a per-file
+    object does not call the entries of the overrides of a method directly, which only a compile of the whole
+    module selects.  If generated code would need an entry that the IR does not determine, \c qcc fails with an
+    <tt>internal AOT error</tt> that names the expression, and no object is written.
+
     A <tt>.qo</tt> fragment carries declarations rather than executable bodies.  Preloading sibling
     fragments with \c -L therefore has to publish exactly the declarations a whole-group parse would,
     including the values of compile-time constants: a constant's initializer is what narrows its

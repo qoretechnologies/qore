@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTEmptyRegexTest
+
+#! Empty regex patterns in every execution mode and in AOT executables
+/** An empty pattern (as in <tt>s =~ //</tt>) is a pattern like any other: the AOT code lowers the operation from the
+    pattern string, so a function with an empty regex match, extraction, substitution or regex switch case compiles
+    and gives the interpreter's results.  The case of a module linked from per-file objects is covered by
+    AOTModuleObjectsSlotKinds.qtest.
+*/
+class AOTEmptyRegexTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/AOTEmptyRegex.qr";
+        *string expected;
+    }
+
+    constructor() : Test("AOT empty regex patterns", "1.0", \ARGV) {
+        addTestCase("interpreter results", \interpreter());
+        addTestCase("execution modes match the interpreter", \modes());
+        addTestCase("AOT executables match the interpreter", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string runStatus(list<string> args, reference<int> status, string prefix = "") {
+        return backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map AOTEmptyRegexTest::quote($1), args).join(" ") + " 2>&1", \status);
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = runStatus(args, \status, prefix);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+    }
+
+    private assertLine(string out, string line) {
+        assertTrue(inlist(line, out.split("\n")), line);
+    }
+
+    interpreter() {
+        string out = getExpected();
+        # checked by hand: an empty pattern matches every subject, including an empty one, at every position
+        assertLine(out, "match \"\": True");
+        assertLine(out, "match \"ab\": True");
+        assertLine(out, "nmatch \"ab\": False");
+        assertLine(out, "match_options \"xyz\": True");
+        assertLine(out, "subst_once \"ab\": \"-ab\"");
+        assertLine(out, "subst_all \"\": \"\"");
+        assertLine(out, "subst_element \"ab\": \"-ab\"");
+        # negative: a global substitution with an empty pattern raises an exception for a subject that is not empty
+        assertRegex("(?m)^subst_all \"ab\": REGEX-SUBST-ERROR: ", out);
+        assertRegex("(?m)^subst_empty \"xyz\": REGEX-SUBST-ERROR: ", out);
+        assertLine(out, "regex_case \"ab\": \"empty pattern\"");
+        assertLine(out, "regex_case \"xyz\": \"starts with x\"");
+        assertLine(out, "negated_case \"ab\": \"matched\"");
+        assertLine(out, "combined \"ab\": True");
+        assertLine(out, "combined \"xyz\": False");
+        assertLine(out, "member: \"-ab\"");
+        assertLine(out, "loop: 1000");
+    }
+
+    modes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture)), mode);
+        }
+    }
+
+    aot() {
+        string ast = getExpected();
+        TmpDir dir("qore-aot-empty-regex-");
+        string executable = dir.path + "/fixture";
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                int status;
+                string out = runStatus((qcc, level, "-o", executable, fixture), \status, prefix);
+                assertEq(0, status, label + ": " + out);
+                # negative: the compile does not refuse any function
+                assertNRegex("cannot serialize function|slot map walk did not assign", out, label);
+                assertEq(ast, run((executable,), prefix), label);
+            }
+        }
+    }
+}
