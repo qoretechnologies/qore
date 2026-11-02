@@ -62,12 +62,18 @@ hash<string, hash<string, int>> sub wrapRow(hash<string, int> row, hash<string, 
 int sub consumeRow(hash<string, int> row) {
     return row.middle; # line 63
 }
+float sub chooseFloatA(float value) {
+    return value * 2.5; # line 66
+}
+float sub chooseFloatB(float value) {
+    return value * 3.5; # line 69
+}
 
 const CalleeLines = {
     "14": "pair", "17": "triple", "21": "StringFactory::makeStatic", "25": "makeRow", "28": "makeValues",
     "31": "readListSize", "34": "readMiddle", "37": "identityHash", "40": "identityList", "43": "identityString",
     "47": "RowFactory::makeRow", "50": "RowFactory::makeValues", "54": "chooseA", "57": "chooseB",
-    "60": "wrapRow", "63": "consumeRow",
+    "60": "wrapRow", "63": "consumeRow", "66": "chooseFloatA", "69": "chooseFloatB",
 };
 
 class CalleeRecorder inherits DebugProgram {
@@ -163,9 +169,16 @@ sub maybeAttach(int i) {
     }
 }
 
-# a finite call-reference target: native code calls one of the two known functions
+# a finite call-reference target: native code calls one of the two known functions; the argument is a parameter that
+# the function's callees could replace reflectively, so native code converts its boxed value to the native argument,
+# and the ordinary call made while a debugger is attached takes the boxed value
 int sub finiteChoice(bool first, int value) {
     code<int(int)> fn = first ? \chooseA() : \chooseB();
+    return fn(value);
+}
+# the same with a float argument
+float sub finiteFloatChoice(bool first, float value) {
+    code<float(float)> fn = first ? \chooseFloatA() : \chooseFloatB();
     return fn(value);
 }
 
@@ -268,6 +281,9 @@ list<auto> sub hookedCalls(int n) {
         results += finiteChoice(i % 2 == 0, i);
         checkAttached("finiteChoice()");
         armAttach();
+        results += finiteFloatChoice(i % 2 == 0, i + 0.5);
+        checkAttached("finiteFloatChoice()");
+        armAttach();
         results += privateRow(i, 1);
         checkAttached("privateRow()");
     }
@@ -294,6 +310,7 @@ for (int i = 0; i < 32; ++i) {
     shapesLoop(3);
     shapesTryLoop(3);
     finiteChoice(i % 2 == 0, i);
+    finiteFloatChoice(i % 2 == 0, i + 0.5);
     privateRow(i, 1);
 }
 report("warmup", ());

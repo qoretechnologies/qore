@@ -97,8 +97,8 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
             *list<*string> during = regex_extract(expected, "\nduring values: ([^\n]*)");
             *list<*string> replaced = regex_extract(expected, "\nreplaced values: ([^\n]*)");
             assertTrue(during && replaced && during[0] != replaced[0], "replaced values");
-            assertRegex("hooked entry counts: \\{chooseA: 2, chooseB: 2, consumeRow: 4, makeRow: 4, makeValues: 4\\}",
-                expected);
+            assertRegex("hooked entry counts: \\{chooseA: 2, chooseB: 2, chooseFloatA: 2, chooseFloatB: 2, "
+                "consumeRow: 4, makeRow: 4, makeValues: 4\\}", expected);
             assertRegex("hooked replaced values: \\[1000, ", expected);
         }
         return expected;
@@ -127,7 +127,26 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
         }
         # the virtualized projections: native code takes the members from the arguments, also through a call
         assertRegex("aggregate-projections=2", stats(output, "privateRow", label), label + " virtualized calls");
-        assertRegex("finite_callref_result", body(output, "finiteChoice"), label + " finite call reference");
+        foreach string name in (("finiteChoice", "finiteFloatChoice")) {
+            assertRegex("finite_callref_result", body(output, name), label + " " + name + " finite call reference");
+        }
+    }
+
+    #! the argument of the ordinary call that a finite call reference makes while a debugger is attached
+    /** The argument is a parameter that the function's callees could replace reflectively: native code takes it from
+        its boxed runtime slot and converts it for the native call, and the ordinary call must take the boxed value,
+        not the native one.  Debug builds also run the call with a debugger attached at the gate (see armAttach() in
+        AOTFusedShapesDebugger.qr); a finite call-reference target is selected only in a function that makes no
+        other call, so nothing else can attach a debugger between the function's entry and the call.
+    */
+    private checkFiniteDebuggerArgument(string fn, string label) {
+        *list<*string> stored = regex_extract(fn, "\n  store i64 (%[^ ,]+), ptr %[^\n]*\n"
+            "  %[^ ]+ = call i64 @qore_rt_call_reference_debugger_v1\\(");
+        assertTrue(!!stored, label + " debugger call argument");
+        if (stored) {
+            *list<*string> def = regex_extract(fn, "\n  " + replace(stored[0], ".", "\\.") + " = ([^\n]*)");
+            assertRegex("^load i64, ptr %local", def[0] ?? "", label + " boxed debugger call argument");
+        }
     }
 
     #! the fusions of the module's functions
@@ -167,8 +186,12 @@ class FusedShapesDebuggerTest inherits QUnit::Test {
                 assertRegex("call ptr @qore_rt_get_aot_method_debugger_gate_v1", output, label + " gates");
                 # the consumers of a virtualized call take the call's result when it made the ordinary call
                 assertRegex("debugger_site_taken", body(output, "privateRow"), label + " keyed consumers");
-                assertRegex("call ptr @qore_rt_get_aot_context_debugger_gate_v1", body(output, "finiteChoice"),
-                    label + " call reference gate");
+                foreach string name in (("finiteChoice", "finiteFloatChoice")) {
+                    fn = body(output, name);
+                    assertRegex("call ptr @qore_rt_get_aot_context_debugger_gate_v1", fn,
+                        label + " " + name + " call reference gate");
+                    checkFiniteDebuggerArgument(fn, label + " " + name);
+                }
                 foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
                     assertEq(expected, run((executable,), runtime), label + " " + runtime);
                 }
