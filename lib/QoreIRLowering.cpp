@@ -4499,16 +4499,19 @@ QoreIRLowering::HandlerVariableCapture QoreIRLowering::analyzeHandlerVariables(
     return capture;
 }
 
-// Each on_block_exit handler body is compiled to its own QoreIRFunction.  The
-// JIT resolves a handler's compiled LLVM function by name (module.getFunction),
-// so every handler MUST have a unique name — otherwise multiple handlers in one
-// function (e.g. on_exit + on_error + on_success) all collide to a single LLVM
-// function and run the same body (the IR interpreter is unaffected: it uses the
-// handler_ir pointer directly).  A process-global counter assigned at
-// construction gives each handler_ir a stable, unique name for its lifetime.
-static std::string qore_ir_next_handler_name() {
-    static std::atomic<uint64_t> handler_counter{0};
-    return "handler_" + std::to_string(handler_counter.fetch_add(1, std::memory_order_relaxed));
+// Each on_block_exit handler body is compiled to its own QoreIRFunction, whose name must be unique among the
+// functions it can meet (its LLVM function is named after the parent function's, see QoreIRToLLVM).  The name is
+// "handler_<n>@<parent>": n counts the handlers of the parent function in lowering order, so the name depends only on
+// the code.  It was taken from a process-wide counter, so the IR serialized into a compiled object named a handler
+// after how many handlers the process had lowered before it: a batch compile's objects then differed with the
+// number of codegen workers and between two parallel runs.  The part before '@' is the display name.
+static std::string qore_ir_next_handler_name(QoreIRFunction* parent) {
+    if (!parent) {
+        // a handler outside of any function: there is nothing to number it in, and no compiled object names it
+        static std::atomic<uint64_t> handler_counter{0};
+        return "handler_" + std::to_string(handler_counter.fetch_add(1, std::memory_order_relaxed));
+    }
+    return "handler_" + std::to_string(parent->handler_name_seq++) + "@" + parent->name;
 }
 
 QoreIRFunction* QoreIRLowering::compileHandlerToIR(
@@ -4522,7 +4525,7 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 
     // Phase 3b: Compile handler to IR function with captured variables as parameters
     // Create a new IR function for the handler
-    auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
+    auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name(builder.getFunction()));
     // the statements of the handler are debugged as those of the function that it belongs to
     handler_func->source_statement_block = builder.getFunction()->source_statement_block;
     handler_func->source_dpgm_addr = builder.getFunction()->source_dpgm_addr;
@@ -4742,7 +4745,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         }
 
         // Create handler IR function
-        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
+        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name(parent_func));
         // the statements of the handler are debugged as those of the function that it belongs to
         handler_func->source_statement_block = parent_func->source_statement_block;
         handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
@@ -4862,7 +4865,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         }
 
         // Create handler IR function
-        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
+        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name(parent_func));
         // the statements of the handler are debugged as those of the function that it belongs to
         handler_func->source_statement_block = parent_func->source_statement_block;
         handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;

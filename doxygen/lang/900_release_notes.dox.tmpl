@@ -5626,6 +5626,11 @@ while (*binary chunk = input.read(65536)) {
       printed as an unhandled exception outside the structured diagnostics and so broke the output of
       <tt>qore --diag-format=json</tt> for tools that also read stderr.  Only the parse error for the undefined
       reference is now reported
+    - the objects of a \c qcc batch compile (\c qcc \c -c with several sources) differed with the number of codegen
+      threads and between two parallel compiles of the same sources, so that a build was not reproducible: the
+      compiled form of each @ref on_exit "on_exit", @ref on_error "on_error" and @ref on_success "on_success" handler
+      was named after the count of handlers the compiler had compiled before it, in any source.  A handler is now
+      named after the function it belongs to, and the objects are the same with any number of threads
     - compiling constant initializers with \c qcc took memory for each initializer in proportion to all constant
       values of the program: each initializer kept its own copy of the map from the program's constant values to
       their constants until its object was written, so a Qorus unit with about 70 initializers held over 300 MiB of

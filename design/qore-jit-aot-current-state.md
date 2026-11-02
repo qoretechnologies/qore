@@ -171,6 +171,14 @@ symbol-equivalent to the single-object build.
   the largest qlib module: 4 parts compile in 27.4 s on free cores against 39.3 s for a
   single object (16 and 32 parts: 25.5 s and 25.8 s), and 4 parts compiled one after
   another on one core take 43.3 s.
+- The fixed partition count made split modules independent of the threads; it did not
+  cover the objects of a batch compile (`qcc -c` with several sources), which still
+  differed with the number of batch workers and between two parallel runs (7 of 262
+  objects of a Qorus batch): the IR of each `on_block_exit` handler was named from a
+  process-wide counter, and the IR serialized into the object carries that name.  A
+  handler is now named `handler_<n>@<function>`, numbered within the function it belongs
+  to (`qore_ir_next_handler_name()` in `lib/QoreIRLowering.cpp`), and
+  `examples/test/ir/AOTBatchDeterminism.qtest` compares serial and parallel batch objects.
 - `--jobs=N` selects the maximum number of codegen threads (default: CPU count, capped
   at 32; `1` compiles the parts one after another). `qcc` propagates it to the backend
   via the `QCC_JOBS` environment variable. It never changes the output.

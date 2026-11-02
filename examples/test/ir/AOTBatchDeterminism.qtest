@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTBatchDeterminismTest
+
+# A batch compile ("qcc -c" with several sources) gives the same objects whatever the number of codegen workers.
+#
+# The IR function of each on_block_exit handler was named from a process-wide counter, and the IR serialized into an
+# object carries that name: a handler was numbered after the count of handlers the process had lowered before it, so
+# the objects of a batch differed between a serial compile and a parallel one, and between two parallel compiles (7 of
+# 262 objects of a Qorus batch).  A handler is now numbered within the function it belongs to.
+#
+# The test compiles units with many on_exit, on_error and on_success handlers serially, with 4 workers, and with 4
+# workers again, and requires every object to be byte-identical across the three compiles.
+class AOTBatchDeterminismTest inherits QUnit::Test {
+    public {
+        const Units = 8;
+        const Functions = 40;
+    }
+
+    private {
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTBatchDeterminismTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("batch objects do not depend on the worker count", \testWorkerCount());
+
+        set_return_value(main());
+    }
+
+    private static string unitSource(int unit) {
+        list<string> l = ("%new-style", "%require-types", "%strict-args", "", sprintf("public class Unit%d {", unit));
+        for (int f = 0; f < Functions; ++f) {
+            l += sprintf("    public static int f%d(int x) {", f);
+            l += "        int rv = x;";
+            l += "        on_exit { rv += 1; }";
+            l += "        on_error { rv += 2; }";
+            l += "        on_success { rv += 3; }";
+            l += "        if (x > 10) {";
+            l += "            on_exit { rv *= 2; }";
+            l += "            return rv;";
+            l += "        }";
+            l += "        return rv - 1;";
+            l += "    }";
+        }
+        l += "}";
+        return (foldl $1 + "\n" + $2, l) + "\n";
+    }
+
+    private static string q(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! compiles the units into a new directory and returns the objects by file name
+    private hash<string, binary> compile(string root, string label, int jobs, list<string> sources) {
+        string out_dir = join_paths(root, label);
+        mkdir(out_dir);
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_AOT_BATCH_JOBS=%d %s -O1 -c "
+            "--output-dir=%s %s 2>&1", q(libqore_dir), q(libqore_dir), jobs, q(qcc_bin), q(out_dir),
+            (foldl $1 + " " + $2, (map q($1), sources))), \rc);
+        assertEq(0, rc, sprintf("%s compile: %s", label, out));
+        hash<string, binary> rv = {};
+        foreach string obj in (glob(join_paths(out_dir, "*.qo"))) {
+            rv{basename(obj)} = ReadOnlyFile::readBinaryFile(obj);
+        }
+        assertEq(Units, rv.size(), label + ": an object per unit");
+        return rv;
+    }
+
+    testWorkerCount() {
+        TmpDir tmp("qore-aot-batch-determinism-");
+        list<string> sources;
+        for (int u = 0; u < Units; ++u) {
+            string path = join_paths(tmp.path, sprintf("unit%d.qc", u));
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(unitSource(u));
+            sources += path;
+        }
+        hash<string, binary> serial = compile(tmp.path, "serial", 1, sources);
+        hash<string, binary> parallel1 = compile(tmp.path, "parallel1", 4, sources);
+        hash<string, binary> parallel2 = compile(tmp.path, "parallel2", 4, sources);
+        foreach string name in (keys serial) {
+            assertTrue(serial{name} == parallel1{name}, "serial and 4 workers give the same object: " + name);
+            assertTrue(parallel1{name} == parallel2{name}, "two runs with 4 workers give the same object: " + name);
+        }
+    }
+}

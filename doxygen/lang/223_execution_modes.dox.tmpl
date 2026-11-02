@@ -473,7 +473,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       new thread is started when the memory is free again; the waits have no timer and end at once when the compile
       is cancelled
 
-    The objects do not depend on how many are compiled at once.  With \c QORE_AOT_VERBOSE or
+    The objects do not depend on how many are compiled at once: a serial compile and a compile with any number of
+    threads give byte-identical objects.  With \c QORE_AOT_VERBOSE or
     \c QORE_AOT_BATCH_TIMING set, \c qcc prints how many threads ran at once and how many objects were admitted,
     admitted alone and deferred for memory.
 
