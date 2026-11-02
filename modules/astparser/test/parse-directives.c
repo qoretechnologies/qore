@@ -78,6 +78,13 @@ int main(void) {
     check(parser, "%include ../x/inc.q \t\nint x;", true, "directive_argument", "../x/inc.q");
     check(parser, "%include \"inc.q\"\n", true, "directive_argument", "");
     check(parser, "%append-module-path /opt/a:$DIR/b\n", true, "directive_argument", "/opt/a:$DIR/b");
+    // an unquoted module path, also with dots in its names
+    check(parser, "%prepend-module-path /home/x/.claude/a.b/qlib\n%requires qore >= 2.0\n", true,
+        "directive_argument", "/home/x/.claude/a.b/qlib");
+    check(parser, "%prepend-module-path ${SCRIPT_DIR}/../qlib\nint x;", true, "directive_argument",
+        "${SCRIPT_DIR}/../qlib");
+    check(parser, "%prepend-module-path \"${SCRIPT_DIR}/../qlib\"\n%requires qore >= 2.0\n", true,
+        "string", "\"${SCRIPT_DIR}/../qlib\"");
     check(parser, "%append-include-path ../include\r\nint x;", true, "directive_argument", "../include");
     check(parser, "%set-time-zone   Europe/Prague\nint x;", true, "directive_argument", "Europe/Prague");
     check(parser, "%set-time-zone +01:00", true, "directive_argument", "+01:00");

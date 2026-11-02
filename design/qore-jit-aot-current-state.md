@@ -2056,13 +2056,22 @@ Code that only inspects an lvalue must not read it through `getValue()`, which
 creates a new heap node for a large int stored natively;
 `LValueHelper::getInternalNode()` returns the stored node without creating one.
 `IRFusedIntLocalOwnership.qtest` checks values across the immediate boundary and
-bounds resident set growth over repeated updates in every tier and in AOT.
-Both this test and `NanBoxDoubleTagCollision.qtest` read Linux's
-`/proc/self/smaps_rollup` for these measurements. `VmRSS` in `/proc/self/status`
-uses asynchronous accounting, so delayed updates can look like allocation growth.
-Platforms without readable `smaps_rollup` skip memory measurements while retaining
-value checks. The 2 MiB leak threshold is unchanged; a negative control retains
-200,000 boxed doubles and verifies that the measurement exceeds that threshold.
+checks that repeated updates leave no heap int behind in every tier and in AOT.
+Both this test and `NanBoxDoubleTagCollision.qtest` count the heap nodes
+themselves: debug builds count the live `QoreBigIntNode` and `QoreBigFloatNode`
+objects (`dbg_get_live_bigint_count()`, `dbg_get_live_bigfloat_count()`), and a
+promoted call must leave the counts unchanged.  The leak checks need library
+debugging and are skipped without it; the value checks always run.  A negative
+control retains 200,000 boxed doubles and verifies that the float count rises by
+exactly that many.
+
+The checks used to compare the resident set size (`/proc/self/smaps_rollup`)
+with a 2 MiB limit.  That is not a measure of leaked nodes: where transparent
+huge pages back the heap, the first touch of one new page makes a whole 2 MiB
+page resident, so a leak-free run that touched 4 kB of new memory reported
+2052 kB (CI pipeline 62463, job 218748, arm64; job 206719 of pipeline 58541
+reported exactly 2048 kB).  The resident set size also depends on the page size,
+the allocator and what other threads allocate.
 
 ## Large Function Bodies and Cleanup Scaling
 

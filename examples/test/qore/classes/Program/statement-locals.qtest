@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StatementLocalsTest
+
+#! ProgramControl::getStatementIdInfo() gives the local variables that a statement can refer to
+class StatementLocalsTest inherits QUnit::Test {
+    private {
+        #! the comments are the line numbers
+        const Source = "%modern\n"                                          # 1
+            "int sub f(int x, string s) {\n"                                 # 2
+            "    int a = x;\n"                                               # 3
+            "    if (a) {\n"                                                 # 4
+            "        int b = a + 1;\n"                                       # 5
+            "        a = b;\n"                                               # 6
+            "    }\n"                                                        # 7
+            "    for (int i = 0; i < 2; ++i) {\n"                            # 8
+            "        string a = s;\n"                                        # 9
+            "        a += i;\n"                                              # 10
+            "    }\n"                                                        # 11
+            "    code c = int sub (int y) {\n"                               # 12
+            "        return a + y;\n"                                        # 13
+            "    };\n"                                                       # 14
+            "    return c(a);\n"                                             # 15
+            "}\n"                                                            # 16
+            "int top = 1;\n"                                                 # 17
+            "top = f(top, \"t\");\n"                                         # 18
+            "class C {\n"                                                    # 19
+            "    m(int p) {\n"                                               # 20
+            "        p = 2;\n"                                               # 21
+            "    }\n"                                                        # 22
+            "}\n";                                                           # 23
+    }
+
+    constructor() : QUnit::Test("StatementLocalsTest", "1.0") {
+        addTestCase("the local variables of statements", \localsTest());
+        set_return_value(main());
+    }
+
+    #! returns the local variables of the statement of a line, sorted
+    private list<string> getLocals(ProgramControl pc, int line) {
+        int id = pc.findStatementId("src", line);
+        *list<string> l = pc.getStatementIdInfo(id).locals;
+        assertTrue(exists l, sprintf("line %d", line));
+        return sort(l ?? ());
+    }
+
+    localsTest() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        pgm.parse(Source, "src");
+        ProgramControl pc = pgm.getProgram();
+        # a statement declares its variable
+        assertEq(("a", "argv", "s", "top", "x"), getLocals(pc, 3));
+        # a block of a statement: its variables, and those of the blocks around it, but not those after it
+        assertEq(("a", "argv", "b", "s", "top", "x"), getLocals(pc, 6));
+        # a variable of a block is not visible after it
+        assertFalse(inlist("b", getLocals(pc, 8)));
+        # the variable of a for statement, and an inner variable that hides an outer one, which is given once
+        assertEq(("a", "argv", "i", "s", "top", "x"), getLocals(pc, 10));
+        int id = pc.findStatementId("src", 10);
+        assertEq(1, (select pc.getStatementIdInfo(id).locals, $1 == "a").size());
+        # a closure: its parameters and the variables of the function that it can capture
+        list<string> cl = getLocals(pc, 13);
+        assertTrue(inlist("y", cl), sprintf("%y", cl));
+        assertTrue(inlist("a", cl), sprintf("%y", cl));
+        assertTrue(inlist("x", cl), sprintf("%y", cl));
+        # the top-level variables, which have global scope, also in functions and closures
+        assertEq(("top",), getLocals(pc, 18));
+        assertTrue(inlist("top", getLocals(pc, 3)));
+        assertTrue(inlist("top", cl));
+        assertEq("top", pc.getStatementIdInfo(pc.findStatementId("src", 3)).locals.last());
+        # a method: its parameters, and the top-level variables
+        assertEq(("argv", "p", "top"), getLocals(pc, 21));
+        # the innermost variable is first
+        assertEq("b", pc.getStatementIdInfo(pc.findStatementId("src", 5)).locals[0]);
+        # the statement of a function, as of a breakpoint on the function: its parameters, but not the variables
+        # that its body declares
+        *list<string> fl = pc.getStatementIdInfo(pc.findFunctionStatementId("f", ("int", "string"))).locals;
+        assertEq(("argv", "s", "top", "x"), sort(fl ?? ()));
+    }
+}

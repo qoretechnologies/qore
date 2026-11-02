@@ -217,6 +217,7 @@ class WebSocketClientTest inherits QUnit::Test {
         addTestCase("cookie option", \testCookieOption());
         addTestCase("cookie option multiple", \testCookieOptionMultiple());
         addTestCase("cookie option absent", \testCookieOptionAbsent());
+        addTestCase("connection options of any type", \connectOptionTypesTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -1609,6 +1610,43 @@ class WebSocketClientTest inherits QUnit::Test {
         }
         wsHandler.waitForNewConnection(gen);
         assertFalse(wsHandler.last_hdr.cookie.val(), "no cookie header without cookie option");
+    }
+
+    # the Accept header is added to the headers of the connection options whatever the type of their hash is
+    connectOptionTypesTest() {
+        code cb = sub (*data msg) {};
+        WebSocketClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        # the value type of a hash literal whose only value is NOTHING is "nothing"
+        *hash<auto> no_hdr;
+        hash<auto> opts = {"hdr": no_hdr};
+        assertEq("hash<string, nothing>", opts.fullType());
+        int gen = wsHandler.getHdrGen();
+        wsc.connect(opts);
+        wsHandler.waitForNewConnection(gen);
+        assertTrue(wsHandler.last_hdr.accept.val(), "the Accept header is sent");
+        # the caller's options are not changed
+        assertEq({"hdr": NOTHING}, opts);
+        wsc.disconnect();
+
+        # headers whose value type is not "auto" are kept
+        hash<string, int> int_hdr = {"X-Test-Int": 1};
+        gen = wsHandler.getHdrGen();
+        wsc.connect({"hdr": int_hdr});
+        wsHandler.waitForNewConnection(gen);
+        assertTrue(wsHandler.last_hdr.accept.val(), "the Accept header is sent");
+        assertEq("1", wsHandler.last_hdr."x-test-int");
+        wsc.disconnect();
+
+        # an Accept header given by the caller is sent
+        gen = wsHandler.getHdrGen();
+        wsc.connect({"hdr": {"Accept": "application/x-test"}});
+        wsHandler.waitForNewConnection(gen);
+        assertEq("application/x-test", wsHandler.last_hdr.accept);
     }
 }
 

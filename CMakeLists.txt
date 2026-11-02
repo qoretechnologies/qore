@@ -427,6 +427,7 @@ set(QORE_BIN_FILES
     bin/qdbg-server
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
+    bin/qdbg-mcp
     bin/qore-i18n
     bin/qore-data-provider-i18n
     bin/qore-openapi3-gen
@@ -479,6 +480,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/226_ai_model_deployment.dox.tmpl
     doxygen/lang/227_http_client_migration.dox.tmpl
     doxygen/lang/228_interruptible_io_module_guide.dox.tmpl
+    doxygen/lang/229_debugging.dox.tmpl
     doxygen/lang/230_signal_handling.dox.tmpl
     doxygen/lang/235_event_handling.dox.tmpl
     doxygen/lang/240_command_line_processing.dox.tmpl
@@ -4146,6 +4148,8 @@ qore_user_module("qlib/JsonRpcHandler.qm")
 qore_user_module("qlib/McpClient")
 qore_user_module("qlib/McpClientDataProvider")
 qore_user_module("qlib/McpServerHandler")
+set(QORE_DOC_EXTRA_MODULES_DebugMcpServer DebugCmdLine DebugProgramControl McpServerHandler HttpServer)
+qore_user_module("qlib/DebugMcpServer")
 qore_user_module("qlib/NdjsonDataProvider")
 qore_user_module("qlib/OneRecordClient")
 qore_user_module("qlib/OneRecordServerHandler")
@@ -4303,6 +4307,7 @@ endif()
     # docs-lang-final: rebuilds lang docs after all modules are built, with module tagfiles
     # This enables @ref links from lang docs to module symbols
     add_custom_target(docs-lang-final
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js
@@ -4314,6 +4319,7 @@ endif()
     # docs-lang-final-fast: same as docs-lang-final but without module dependencies
     # Use this for quick testing when module docs are already built manually
     add_custom_target(docs-lang-final-fast
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/lang/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lang.final
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/*.js
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.html ${CMAKE_BINARY_DIR}/docs/lang/html/search/*.js

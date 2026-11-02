@@ -1,0 +1,60 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdOwnedGuard.qm - module of the program owner teardown tests whose objects a Program of tdpgmowner holds
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TdOwnedGuard {
+    version = "1.0";
+    desc = "module whose objects a Program owned by a binary module holds, for the module teardown tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdOwnedGuard {
+    #! reports its destruction on stdout; its destructor needs this module's Program, and a thread pool if requested
+    /** With a thread pool, the name of the module that it prints is returned by a task of a thread pool: the
+        destructor then needs the threads that the library's services start (such as those of thread pools and of the
+        asynchronous I/O controller, stopped at teardown after the user modules are deleted), as the destructor of an
+        object that makes a REST call does
+    */
+    public class Guard {
+        private {
+            string label;
+            bool pool;
+            #! a guard held in a class static variable, which the Programs that import this class share
+            static *Guard held;
+        }
+
+        constructor(string label, bool pool = False) {
+            self.label = label;
+            self.pool = pool;
+        }
+
+        #! keeps a new guard in the class static variable
+        static hold(string label, bool pool = False) {
+            held = new Guard(label, pool);
+        }
+
+        destructor() {
+            string name;
+            if (pool) {
+                ThreadPool tp(1);
+                Queue result();
+                tp.submit(sub () { result.push(TdOwnedGuard::module_name()); });
+                # a timeout makes a task that never runs fail the test instead of blocking it
+                name = result.get(30000);
+                tp.stopWait();
+            } else {
+                name = TdOwnedGuard::module_name();
+            }
+            printf("%s destroyed by %s\n", label, name);
+        }
+    }
+
+    #! returns the name of this module; it is called from this module's Program
+    public string sub module_name() {
+        return "TdOwnedGuard";
+    }
+}

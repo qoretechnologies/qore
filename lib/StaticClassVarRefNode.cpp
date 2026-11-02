@@ -133,9 +133,31 @@ int StaticClassVarRefNode::getLValue(LValueHelper& lvh) const {
     return vi.getLValue(lvh, str.c_str());
 }
 
+void QoreVarInfo::remove(LValueRemoveHelper& lvrh) {
+    if (get_cb) {
+        ExceptionSink* xsink = lvrh.getExceptionSink();
+        if (checkFinalized(xsink)) {
+            return;
+        }
+        // the value lives in external storage: the value read through the accessor is removed, and no value is
+        // written back through the accessor, without holding the variable's lock, as the module stores the value
+        // with its own code (see LValueHelper::setStaticVarAccessorLValue())
+        QoreLValueGeneric tmp;
+        tmp.assignInitial(getAccessorValue(xsink));
+        if (*xsink) {
+            tmp.removeValue(true).discard(xsink);
+            return;
+        }
+        lvrh.doRemove(tmp, getTypeInfo());
+        setAccessorValue(QoreValue(), xsink);
+        return;
+    }
+    QoreAutoVarRWWriteLocker sl(rwl);
+    lvrh.doRemove((QoreLValueGeneric&)val, getTypeInfo());
+}
+
 void StaticClassVarRefNode::remove(LValueRemoveHelper& lvrh) {
-    QoreAutoVarRWWriteLocker sl(vi.rwl);
-    lvrh.doRemove((QoreLValueGeneric&)vi.val, vi.getTypeInfo());
+    vi.remove(lvrh);
 }
 
 const QoreTypeInfo *StaticClassVarRefNode::getTypeInfo() const {
@@ -320,8 +342,7 @@ void DeferredStaticClassMemberRefNode::remove(LValueRemoveHelper& lvrh) {
 
     const QoreClass* owner_qc = qc;
     if (QoreVarInfo* vi = qore_resolve_static_class_var(qc, member_name.c_str(), owner_qc)) {
-        QoreAutoVarRWWriteLocker sl(vi->rwl);
-        lvrh.doRemove((QoreLValueGeneric&)vi->val, vi->getTypeInfo());
+        vi->remove(lvrh);
         return;
     }
 

@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires OracleSqlUtilBase
+%requires OracleSqlUtil
+%requires QUnit
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./OracleCatalogDatasource.qm
+
+%exec-class OracleListTablesTest
+
+#! Tests that OracleSqlUtil lists and opens only tables as tables, without an Oracle server
+/** The catalog queries are answered by CatalogDatasource; nothing here is run against a live Oracle database.
+*/
+class OracleListTablesTest inherits QUnit::Test {
+    constructor() : Test("OracleListTables", "1.0") {
+        addTestCase("listTables() lists only tables", \listTablesTest());
+        addTestCase("getTable() opens only tables", \getTableTest());
+        addTestCase("a synonym opens only a table", \synonymTest());
+        addTestCase("a table object reads a view or a materialized view", \tableObjectTest());
+        addTestCase("dropped tables in the recycle bin are not tables", \recycleBinTest());
+        set_return_value(main());
+    }
+
+    #! returns a catalog with a table, a view, a materialized view and a dropped table of the user, and synonyms of
+    #! each kind
+    private CatalogDatasource getCatalog() {
+        return new CatalogDatasource(("T1",), ("V1",), ("MV1",), ("BIN$TBL1$0",), {
+            "SYN_T": {"owner": "OTHER", "name": "T2", "type": "TABLE"},
+            "SYN_V": {"owner": "OTHER", "name": "V2", "type": "VIEW"},
+            "SYN_MV": {"owner": "OTHER", "name": "MV2", "type": "MATERIALIZED VIEW"},
+            "SYN_DROPPED": {"owner": "OTHER", "name": "BIN$TBL2$0", "type": "DROPPED TABLE"},
+        }, {
+            "OTHER.T2": "TABLE",
+            "OTHER.V2": "VIEW",
+            "OTHER.MV2": "MATERIALIZED VIEW",
+            "OTHER.BIN$TBL2$0": "DROPPED TABLE",
+        });
+    }
+
+    private checkDriver() {
+%ifdef NoOracle
+        testSkip("the oracle driver is not available");
+%endif
+    }
+
+    listTablesTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        OracleDatabase db(ds);
+        # the materialized view's container table, the dropped table and the synonyms of the other schema's
+        # materialized view and dropped table are not listed; the synonym of the view was never listed
+        assertEq(("syn_t", "t1"), db.listTables());
+        assertEq(2, ds.queries.size(), "a query each for the user's tables and the tables of the user's synonyms");
+    }
+
+    getTableTest() {
+        checkDriver();
+        OracleDatabase db(getCatalog());
+        assertEq("t1", db.getTable("t1").getName());
+        assertNothing(db.getTable("v1"), "a view is not opened as a table");
+        assertNothing(db.getTable("mv1"), "a materialized view is not opened as a table");
+        assertNothing(db.getTable("no_such_table"));
+        # every name listed opens as a table
+        foreach string name in (db.listTables()) {
+            assertTrue(exists db.getTable(name), name);
+        }
+    }
+
+    synonymTest() {
+        checkDriver();
+        OracleDatabase db(getCatalog());
+        assertEq("t2", db.getTable("syn_t").getName(), "a synonym of a table opens the table");
+        assertNothing(db.getTable("syn_v"), "a synonym of a view does not open as a table");
+        assertNothing(db.getTable("syn_mv"), "a synonym of a materialized view does not open as a table");
+    }
+
+    tableObjectTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        # a table object made for a view knows that it is a view, and does not exist as a table
+        OracleTable v = AbstractTable::getTable(ds, "v1");
+        assertFalse(v.checkExistence());
+        assertTrue(v.isView());
+        assertFalse(v.inDb());
+        OracleTable mv = AbstractTable::getTable(ds, "mv1");
+        assertFalse(mv.checkExistence());
+        assertTrue(mv.isMaterializedView());
+        assertFalse(mv.isView());
+        OracleTable t = AbstractTable::getTable(ds, "t1");
+        assertTrue(t.checkExistence());
+        assertFalse(t.isView());
+        assertFalse(t.isMaterializedView());
+        assertTrue(t.inDb());
+    }
+
+    recycleBinTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        OracleDatabase db(ds);
+        assertFalse(inlist("bin$tbl1$0", db.listTables()), "a dropped table is not listed");
+        assertFalse(inlist("syn_dropped", db.listTables()), "a synonym of a dropped table is not listed");
+        assertNothing(db.getTable("bin$tbl1$0"), "a dropped table is not opened as a table");
+        assertNothing(db.getTable("syn_dropped"), "a synonym of a dropped table does not open as a table");
+        OracleTable t = AbstractTable::getTable(ds, "bin$tbl1$0");
+        assertFalse(t.checkExistence());
+        assertTrue(t.isDropped());
+        OracleTable t1 = AbstractTable::getTable(ds, "t1");
+        assertTrue(t1.checkExistence());
+        assertFalse(t1.isDropped());
+        # the recycle bin has no views, materialized views or sequences, so their listings are unchanged
+        assertEq(("v1",), db.listViews());
+        assertEq(("mv1",), db.listMaterializedViews());
+        assertEq((), db.listSequences());
+    }
+}

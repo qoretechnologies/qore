@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/ConstantList.h"
@@ -413,11 +414,11 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         assert(method);
         if (!o->isValid()) {
             if (variant) {
-                xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s(%s) on an object that has " \
+                qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
                     "already been deleted", qc->getName(), method->getName(),
                     variant->getSignature()->getSignatureText());
             } else {
-                xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has " \
+                qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
                     "already been deleted", qc->getName(), method->getName());
             }
             return QoreValue();

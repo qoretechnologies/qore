@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires NothingVariantChecks
+%requires ../../ExecModeHarness.qm
+
+%exec-class NothingVariantTest
+
+#! Checks that an argument with no value selects the same variant at parse time and at run time
+/** A literal NOTHING, an omitted argument, and a variable holding no value whose type is not known at parse time
+    select the same variant: the first variant declared among those that accept no value equally well, in each
+    execution mode and from a compiled module.  An argument with no value counts toward the number of arguments,
+    whether it is a literal or a variable, also when the call is made with call_function(), call_function_args() or
+    a call reference (issue #1897); a lone literal NOTHING is parsed as no argument (see make_args()).  Before the fix, with three or more such variants the parse-time
+    resolution selected the last one, while the run-time resolution selected the first one.
+*/
+class NothingVariantTest inherits QUnit::Test {
+    public {
+        #! the variant each call selects: for the variants that accept no value equally well, the first one
+        #! declared, whether the call passes a literal NOTHING, omits the argument, or passes a variable holding no
+        #! value; an argument with no value counts toward the number of arguments (issue #1897)
+        const Expected = {
+            "sfl-literal": "*string", "sfl-omitted": "*string", "sfl-variable": "*string",
+            "sl-literal": "*string", "sl-omitted": "*string", "sl-variable": "*string",
+            "lsf-literal": "*softlist", "lsf-omitted": "*softlist", "lsf-variable": "*softlist",
+            "fls-literal": "*Foo", "fls-omitted": "*Foo", "fls-variable": "*Foo",
+            "isl-literal": "*int", "isl-omitted": "*int", "isl-variable": "*int",
+            "nsl-literal": "*Foo", "nsl-omitted": "*Foo", "nsl-variable": "*Foo",
+            "two-literal": "*string", "two-omitted": "*string", "two-variable": "*string",
+            "static-literal": "*string", "static-omitted": "*string", "static-variable": "*string",
+            "method-literal": "*string", "method-omitted": "*string", "method-variable": "*string",
+            "method-object-literal": "*string", "method-object-variable": "*string",
+            "builtin-literal": "*string", "builtin-omitted": "*string", "builtin-variable": "*string",
+            # an argument with no value counts toward the number of arguments (issue #1897)
+            "fi-literal": "f(int, *string)", "fi-omitted": "f(int)", "fi-variable": "f(int, *string)",
+            "fi-value": "f(int, *string)",
+            # a lone literal NOTHING is parsed as no argument (see make_args())
+            "va-literal": "varargs", "va-omitted": "varargs", "va-variable": "*string", "va-value": "*string",
+            # the arguments are those of the call
+            "vcount-literal": "0", "vcount-omitted": "0", "vcount-variable": "1", "vcount-literal2": "2",
+            "vcount-value": "2",
+            "pos-literal": "1:none:2", "pos-variable": "1:none:2",
+            "mi-literal": "f(int, *string)", "mi-omitted": "f(int)", "mi-variable": "f(int, *string)",
+            "mi-object-variable": "f(int, *string)",
+            "call-function-args-variable": "f(int, *string)", "call-function-args-omitted": "f(int)",
+            "call-function-variable": "f(int, *string)", "call-function-va": "*string",
+            "call-ref-variable": "f(int, *string)", "call-ref-args-variable": "f(int, *string)",
+            "builtin-call-function-args": "*string",
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("NothingVariantTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("calls in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program", NothingVariantChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker(get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-nothing-variants-");
+        string qmod_path = tmp.path + DirSep + "NothingVariantChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "NothingVariantChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker(tmp.path));
+    }
+
+    #! runs the worker with the module loaded from the given directory and returns its output
+    private string runWorker(string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + "nothing-variants-worker.q";
+        module_dir += ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "";
+        return ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s",
+            libqore_dir, module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=variant" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z0-9]+)=(.+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(Expected, results, label);
+    }
+}

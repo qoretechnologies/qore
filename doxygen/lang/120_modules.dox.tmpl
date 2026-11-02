@@ -229,6 +229,8 @@ ModuleName/
     |user|@ref debugcmdlineintro "DebugCmdLine"|Provides an API to develop command \
         line debugger clients
     |user|@ref debughandlerintro "DebugHandler"|Provides a websocket for debug server
+    |user|@ref debugmcpserverintro "DebugMcpServer"|Provides an \
+        <a href="https://modelcontextprotocol.io">MCP</a> server that lets coding agents debug %Qore programs
     |user|@ref debuglinenoisecmdlineintro "DebugLinenoiseCmdLine"|Provides an API \
         for command line debugger clients based on the \
         @ref linenoiseintro "linenoise" module
@@ -1604,6 +1606,50 @@ public class Lookup {
     @ref Qore::Program "Program's" options for them, and its network and filesystem access is governed by the
     @ref Qore::SandboxManager "SandboxManager" of the @ref Qore::Program "Program" that it runs for (see
     @ref sandbox_po_limitations).
+
+    @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
+
+    A user module inherits the restrictions (the @ref parse_options "parse options" that restrict functionality) of
+    the @ref Qore::Program "Program" that loads it first, and a module whose code uses functionality that its loader
+    may not use cannot be loaded by it.  Source modules (<tt>.qm</tt>) and @ref aot_compilation "AOT modules"
+    (<tt>.qmod</tt>) are treated the same way: an AOT module records the restrictions that its code would conflict
+    with, which are checked when it is loaded.  A module that another @ref Qore::Program "Program" has loaded already
+    is not checked against the restrictions of a @ref Qore::Program "Program" that imports it: it is a capability that
+    the host gave the @ref Qore::Program "Program", and its code runs with the restrictions of its callers as well as
+    its own (see @ref user_module_runtime_context).
+
+    A @ref thread_local "thread_local" variable declared in a user module does not count as thread control:
+    a module that keeps per-thread state can be loaded by code with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL".
+
+    A process can let code with fewer privileges load trusted modules that use more functionality with a
+    <b>module parse option mask</b>: the restrictions that a mask strips are not inherited by a module, and the
+    restrictions that it adds are added to the module.  For example, a
+    process that runs sandboxed code without threads strips @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL"
+    and @ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES", so that the sandboxed code can use modules that use
+    threads internally:
+    - set_module_parse_option_mask() sets the mask that applies to every module loaded from then on; call it before
+      the modules are loaded
+    - load_module_masked() loads a module with a mask of its own, which applies also to the modules it loads
+    - add_module_parse_option_mask() adds a mask to a module that is loaded already; restrictions stripped earlier
+      are not restored
+    - get_module_parse_option_mask() returns the mask of the process or of a loaded module
+
+    Only restrictions can be masked: a mask cannot grant explicitly-allowed options such as
+    @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" to modules.  The functions change what modules may do in the
+    whole process, so code with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" cannot call them, and
+    sandboxed code (code governed by a @ref Qore::SandboxManager "SandboxManager") cannot call them either.  The
+    C++ API (\c ModuleManager::setModuleParseOptionMask() and related functions) has no such restriction.
+
+    @par Example:
+    @code{.py}
+%new-style
+# before the sandboxed Programs are created and before any module is loaded
+set_module_parse_option_mask(PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+
+Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+# the module uses thread-local variables and locks internally, which the mask allows it to use
+p.loadModule("SoapClient");
+    @endcode
 
     @subsection user_module_children Child Modules
 

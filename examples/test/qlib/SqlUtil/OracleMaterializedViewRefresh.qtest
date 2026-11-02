@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires OracleSqlUtilBase
+%requires OracleSqlUtil
+%requires QUnit
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./OracleCatalogDatasource.qm
+
+%exec-class OracleMaterializedViewRefreshTest
+
+#! Tests the DBMS_MVIEW.REFRESH calls of AbstractDatabase::refreshMaterializedView() on Oracle, without an Oracle server
+/** The catalog queries are answered and the calls recorded by CatalogDatasource; nothing here is run against a live
+    Oracle database.
+*/
+class OracleMaterializedViewRefreshTest inherits QUnit::Test {
+    constructor() : Test("OracleMaterializedViewRefresh", "1.0") {
+        addTestCase("the refresh call and its methods", \refreshCallTest());
+        addTestCase("the refresh releases the transaction lock", \transactionTest());
+        addTestCase("invalid refreshes are refused", \negativeTest());
+        set_return_value(main());
+    }
+
+    private checkDriver() {
+%ifdef NoOracle
+        testSkip("the oracle driver is not available");
+%endif
+    }
+
+    private CatalogDatasource getCatalog() {
+        return new CatalogDatasource(("T1",), ("V1",), ("MV1", "MV ODD"), (), {}, {});
+    }
+
+    refreshCallTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        OracleDatabase db(ds);
+        assertTrue(db.supportsMaterializedViews());
+        assertEq({"method": Type::String, "atomic_refresh": Type::Boolean}, db.getMaterializedViewRefreshOptions());
+        assertEq(("mv odd", "mv1"), db.listMaterializedViews());
+
+        db.refreshMaterializedView("mv1");
+        db.refreshMaterializedView("mv1", {"method": "complete"});
+        db.refreshMaterializedView("mv1", {"method": "FAST", "atomic_refresh": False});
+        db.refreshMaterializedView("mv1", {"method": "force", "atomic_refresh": True});
+        # a name that is not an ordinary name is quoted
+        db.refreshMaterializedView("mv odd");
+
+        string call = "begin dbms_mview.refresh(list => %v, method => %v, atomic_refresh => %s); end;";
+        # each call as its SQL and bind arguments; an ordinary name is given as listed, which Oracle reads in upper
+        # case, and any other name in double quotes in upper case
+        assertEq((
+            sprintf(call, "true") + " " + sprintf("%y", ("mv1", "?")),
+            sprintf(call, "true") + " " + sprintf("%y", ("mv1", "C")),
+            sprintf(call, "false") + " " + sprintf("%y", ("mv1", "F")),
+            sprintf(call, "true") + " " + sprintf("%y", ("mv1", "?")),
+            sprintf(call, "true") + " " + sprintf("%y", ("\"MV ODD\"", "?")),
+        ), map $1.sql + " " + sprintf("%y", $1.args), ds.execs);
+    }
+
+    transactionTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        OracleDatabase db(ds);
+        db.refreshMaterializedView("mv1");
+        # DBMS_MVIEW.REFRESH commits; the lock that the call takes is released with a commit
+        assertEq(1, ds.commits);
+        assertEq(0, ds.rollbacks);
+        # it would commit the caller's work, so it is refused in a transaction
+        ds.in_trans = True;
+        assertThrows("MATERIALIZED-VIEW-ERROR", "cannot be refreshed in a transaction",
+            \db.refreshMaterializedView(), "mv1");
+        assertEq(1, ds.execs.size(), "nothing was executed in the transaction");
+        assertEq(1, ds.commits, "the caller's transaction was not committed");
+    }
+
+    negativeTest() {
+        checkDriver();
+        CatalogDatasource ds = getCatalog();
+        OracleDatabase db(ds);
+        assertThrows("MATERIALIZED-VIEW-ERROR", "invalid refresh method \"incremental\"",
+            \db.refreshMaterializedView(), ("mv1", {"method": "incremental"}));
+        assertThrows("MATERIALIZED-VIEW-ERROR", "unknown key \"concurrent\"", \db.refreshMaterializedView(),
+            ("mv1", {"concurrent": True}));
+        foreach string name in ("no_such_mview", "t1", "v1", "mv1, t1", "mv1); execute immediate 'drop table t1'; --") {
+            assertThrows("MATERIALIZED-VIEW-ERROR", "does not exist", \db.refreshMaterializedView(), name, name);
+        }
+        assertEq((), ds.execs, "nothing was executed");
+        assertEq(0, ds.commits);
+    }
+}

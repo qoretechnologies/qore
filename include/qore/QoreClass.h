@@ -1369,7 +1369,8 @@ cls->addBuiltinMemberWithAccessors("count", Public, bigIntOrNothingTypeInfo, jav
     /** Use this instead of addBuiltinStaticVar() when the variable mirrors a value owned by the module (such as a
         field of a foreign runtime) that can change independently of %Qore code; a variable holding a copy of such a
         value silently diverges from it.  Every read calls \a get, and every assignment calls \a set once the
-        assignment is complete.
+        assignment is complete; the \c remove and \c delete operators read the value with \a get and call \a set
+        with no value.
 
         @param name the name of the variable
         @param access the access permission for the variable

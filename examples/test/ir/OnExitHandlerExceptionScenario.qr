@@ -1,0 +1,355 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fixture for OnExitHandlerException.qtest: when an on_exit, on_success or on_error handler raises an exception, the
+# handlers registered before it in the same block still run, in reverse order of registration, and see the error;
+# the exceptions are chained in the order they were raised.  Every case records the handlers that ran and the
+# exception (with its chained exceptions) that leaves the function.  The AST interpreter defines the expected
+# output; every compiled tier must print the same lines.  Each case runs three times, so that with tiered execution
+# it runs on the AST tier, the IR tier and as native code.
+
+thread_local list<string> trace;
+
+string sub fail(string err) {
+    trace += "fail " + err;
+    throw err, err + " failed";
+}
+
+class Resource {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+        trace += name + "+";
+    }
+
+    destructor() {
+        trace += name + "-";
+    }
+
+    close() {
+        trace += name + " closed";
+    }
+}
+
+# the reported reproduction: a handler that checks results throws, and the cleanup handlers registered before it
+# must still run
+class Driver {
+    int run() {
+        on_exit trace += "close";
+        on_exit { trace += "export"; }
+        on_exit trace += "receipt " + check();
+        trace += "body";
+        return 0;
+    }
+
+    private string check() {
+        return fail("CHECK");
+    }
+}
+
+int sub reproducer() {
+    Driver d();
+    return d.run();
+}
+
+# a handler throws on the fall-through exit of the function's block
+sub fall_through() {
+    on_exit trace += "a";
+    on_exit { trace += "b"; fail("B"); }
+    trace += "body";
+}
+
+# a handler throws on the return path; the return value is not used
+int sub return_value() {
+    on_exit trace += "a";
+    on_exit { trace += "b"; fail("B"); }
+    trace += "body";
+    return 1;
+}
+
+# the return expression is evaluated before the handlers run, and its value is discarded when one throws
+int sub return_expression() {
+    int i = 1;
+    on_exit trace += "a " + i;
+    on_exit { trace += "b " + i; fail("B"); }
+    return ++i;
+}
+
+# every handler throws: all of them run and the exceptions are chained in the order they were raised
+sub all_throw() {
+    on_exit { trace += "a"; fail("A"); }
+    on_exit { trace += "b"; fail("B"); }
+    on_exit { trace += "c"; fail("C"); }
+    trace += "body";
+}
+
+# the handlers between throwing handlers run too
+sub alternating() {
+    on_exit trace += "a";
+    on_exit fail("B");
+    on_exit trace += "c";
+    on_exit fail("D");
+    on_exit trace += "e";
+}
+
+# on_exit throws: the on_error handlers registered before it run, the on_success handlers do not
+sub mixed() {
+    on_exit trace += "exit1";
+    on_success trace += "success1";
+    on_error trace += "error1 " + $1.err;
+    on_exit trace += "exit2";
+    on_success trace += "success2";
+    on_error trace += "error2 " + $1.err;
+    on_exit { trace += "exit3"; fail("E3"); }
+    on_success trace += "success3";
+    trace += "body";
+}
+
+# on_success throws: the earlier on_error handlers run and see its exception
+sub success_throws() {
+    on_error trace += "error1 " + $1.err;
+    on_exit trace += "exit1";
+    on_success { trace += "success2"; fail("S2"); }
+    trace += "body";
+}
+
+# a handler throws while the block is left by an exception: every handler runs and the exceptions are chained
+sub exception_path() {
+    on_exit trace += "a";
+    on_error trace += "error " + $1.err;
+    on_exit { trace += "b"; fail("B"); }
+    on_exit trace += "c";
+    fail("BODY");
+}
+
+# a handler of a nested block throws on its fall-through exit: the inner handlers before it run, then the outer
+# handlers see the error
+sub nested_fall_through() {
+    on_exit trace += "outer";
+    on_error trace += "outer-error " + $1.err;
+    on_success trace += "outer-success";
+    {
+        on_exit trace += "inner-a";
+        on_error trace += "inner-error " + $1.err;
+        on_exit { trace += "inner-b"; fail("B"); }
+        trace += "body";
+    }
+    trace += "after";
+}
+
+# a handler of a nested block throws when a return leaves it
+sub nested_return() {
+    on_exit trace += "outer";
+    {
+        on_exit trace += "inner-a";
+        {
+            on_exit trace += "innermost-a";
+            on_exit { trace += "innermost-b"; fail("B"); }
+            return;
+        }
+    }
+}
+
+# a return in a try block leaves the handlers' block after the try block: its catch block does not catch a handler's
+# exception
+sub return_in_try() {
+    on_exit trace += "a";
+    on_exit { trace += "b"; fail("B"); }
+    try {
+        trace += "try";
+        return;
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "wrongly caught " + ex.err;
+    }
+}
+
+# a try block in the function catches the exception of a handler of a block nested in it, after all of the block's
+# handlers ran
+sub caught_in_function() {
+    try {
+        on_exit trace += "a";
+        on_exit { trace += "b"; fail("B"); }
+        trace += "body";
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "caught " + ex.err + (ex.next ? " next " + ex.next.err : "");
+    }
+    trace += "after";
+}
+
+# break and continue leave a loop body whose handler throws
+sub loop_exits() {
+    on_exit trace += "outer";
+    for (int i = 0; i < 4; ++i) {
+        on_exit trace += "a" + i;
+        on_exit {
+            trace += "b" + i;
+            if (i == 2) {
+                fail("B" + i);
+            }
+        }
+        if (i == 0) {
+            continue;
+        }
+        if (i == 3) {
+            break;
+        }
+        trace += "end" + i;
+    }
+}
+
+# the exception of a handler in a loop body is caught in the loop, which goes on
+sub loop_caught() {
+    for (int i = 0; i < 3; ++i) {
+        try {
+            on_exit trace += "a" + i;
+            on_exit {
+                if (i == 1) {
+                    fail("B" + i);
+                }
+            }
+            if (i == 2) {
+                break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            trace += "caught " + ex.err;
+        }
+    }
+    trace += "after";
+}
+
+# handlers that release resources still run, and the locals of the block are destroyed, when a later handler throws
+sub resources() {
+    Resource r1("r1");
+    on_exit r1.close();
+    {
+        Resource r2("r2");
+        on_exit r2.close();
+        on_exit fail("R");
+        trace += "body";
+    }
+}
+
+# a return in a handler: the handlers registered before it still run, and the function returns its value
+int sub handler_return() {
+    on_exit trace += "a";
+    on_exit {
+        trace += "b";
+        return 2;
+    }
+    trace += "body";
+    return 1;
+}
+
+# a handler with nested handlers that throw
+sub nested_handler() {
+    on_exit trace += "a";
+    on_exit {
+        on_exit trace += "b-inner";
+        on_exit { trace += "b-throw"; fail("BI"); }
+        trace += "b";
+    }
+    trace += "body";
+}
+
+# handlers that assign a local of the function, run on the exception path of a block in a try block; the value
+# they assign is not lost when the try block's landing pad runs
+string sub handler_assigns_local() {
+    string result = "none";
+    try {
+        {
+            int x = 1;
+            on_error result += " error" + x;
+            on_exit result += " exit";
+            fail("L");
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        result += " caught " + ex.err;
+    }
+    return result;
+}
+
+# an on_error handler that assigns a local of the function, as the only handler of a block in a try block, which
+# a throw statement leaves
+string sub handler_assigns_local_only() {
+    string result = "none";
+    try {
+        {
+            int x = 1;
+            on_error result = "error" + x;
+            throw "L", "L failed";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    return result;
+}
+
+# the handlers of a closure, which use a local of the closure and one it captures
+code sub make_closure() {
+    string captured = "captured";
+    return int sub () {
+        string local = "local";
+        on_exit trace += "a " + captured;
+        on_exit trace += "b " + local;
+        on_exit { trace += "c"; fail("C"); }
+        trace += "body";
+        return 1;
+    };
+}
+
+#! runs a case and records the exception chain that leaves it, if any
+sub run_case(string name, code c) {
+    for (int i = 0; i < 3; ++i) {
+        trace = ();
+        try {
+            auto rv = c();
+            if (exists rv) {
+                trace += sprintf("returned %y", rv);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            list<string> errs;
+            for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+                errs += e.err;
+            }
+            trace += "exception " + errs.join(" ");
+        }
+        printf("%s[%d]: %s\n", name, i, trace.join(", "));
+    }
+}
+
+run_case("reproducer", \reproducer());
+run_case("fall-through", \fall_through());
+run_case("return-value", \return_value());
+run_case("return-expression", \return_expression());
+run_case("all-throw", \all_throw());
+run_case("alternating", \alternating());
+run_case("mixed", \mixed());
+run_case("success-throws", \success_throws());
+run_case("exception-path", \exception_path());
+run_case("nested-fall-through", \nested_fall_through());
+run_case("nested-return", \nested_return());
+run_case("return-in-try", \return_in_try());
+run_case("caught-in-function", \caught_in_function());
+run_case("loop-exits", \loop_exits());
+run_case("loop-caught", \loop_caught());
+run_case("resources", \resources());
+run_case("handler-return", \handler_return());
+run_case("nested-handler", \nested_handler());
+run_case("handler-assigns-local", \handler_assigns_local());
+run_case("handler-assigns-local-only", \handler_assigns_local_only());
+run_case("closure", make_closure());
+
+# top-level code, which runs once: a handler of a block in a try block throws
+trace = ();
+try {
+    on_exit trace += "a";
+    on_exit { trace += "b"; fail("B"); }
+    trace += "body";
+} catch (hash<ExceptionInfo> ex) {
+    trace += "caught " + ex.err;
+}
+printf("top-level: %s\n", trace.join(", "));

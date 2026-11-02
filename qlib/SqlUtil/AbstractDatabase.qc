@@ -1410,6 +1410,96 @@ string sql = t.getSqlFromList(list);
         return supportsPackagesImpl();
     }
 
+    #! returns @ref True "True" if the database supports materialized views
+    /** A database that supports materialized views lists them with listMaterializedViews()
+
+        @par Example:
+        @code{.py}
+if (db.supportsMaterializedViews()) {
+    printf("materialized views: %y\n", db.listMaterializedViews());
+}
+        @endcode
+
+        @return @ref True "True" if the database supports materialized views; the base implementation returns
+        @ref False "False", PostgreSQL and Oracle return @ref True "True"
+
+        @since SqlUtil 3.11.0
+    */
+    bool supportsMaterializedViews() {
+        return supportsMaterializedViewsImpl();
+    }
+
+    #! returns a list of string materialized view names in the database
+    /** @return a sorted list of the names of the materialized views visible to the connection, named as for
+        listTables(); the base implementation returns an empty list, as a database that does not support
+        materialized views (see supportsMaterializedViews()) has none
+
+        @since SqlUtil 3.11.0 this method is available for every database; before, only the PostgreSQL and Oracle
+        modules provided it
+    */
+    list<string> listMaterializedViews() {
+        return ();
+    }
+
+    #! refreshes the stored data of a materialized view
+    /** @par Example:
+        @code{.py}
+db.refreshMaterializedView("mv_sales_by_region", {"concurrent": True});
+        @endcode
+
+        The options a database supports are given by getMaterializedViewRefreshOptions():
+        - PostgreSQL:
+          - \c concurrent: (bool) refreshes with <tt>REFRESH MATERIALIZED VIEW CONCURRENTLY</tt>, which does not block
+            readers of the materialized view; the materialized view must have a unique index that uses only column
+            names and has no \c WHERE clause, and it must already be populated.  Without it, the refresh locks the
+            materialized view against reads until the transaction ends
+        - Oracle:
+          - \c method: (string) the refresh method: \c "complete", \c "fast" (incremental, with materialized view
+            logs) or \c "force" (fast if possible, otherwise complete); the default is \c "force"
+          - \c atomic_refresh: (bool) if @ref True "True" (the default), the materialized view is refreshed in one
+            transaction; if @ref False "False", a complete refresh may truncate the materialized view first, which is
+            faster, but readers see it empty until the refresh completes
+
+        Transactions:
+        - PostgreSQL: the refresh is transactional: when the calling thread is in a transaction, the refresh is
+          part of it and is committed or rolled back with it; otherwise it is committed when it succeeds and rolled
+          back when it fails
+        - Oracle: \c DBMS_MVIEW.REFRESH commits implicitly, before and after the refresh, so a refresh is refused
+          when the calling thread is in a transaction, as it would commit the caller's work; otherwise the
+          transaction lock is released when the refresh ends
+
+        @param name the name of the materialized view, as listMaterializedViews() lists it
+        @param opts refresh options; see above and getMaterializedViewRefreshOptions()
+
+        @throw MATERIALIZED-VIEW-ERROR the database does not support materialized views, the materialized view does
+        not exist, an option is invalid, or the refresh cannot be made (for example a concurrent refresh of a
+        materialized view without a suitable unique index on PostgreSQL, or a refresh in a transaction on Oracle)
+
+        @since SqlUtil 3.11.0
+    */
+    refreshMaterializedView(string name, *hash<auto> opts) {
+        if (!supportsMaterializedViews()) {
+            throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: database driver %y does not support materialized views; "
+                "cannot refresh %y", getDatasourceDesc(), ds.getDriverName(), name);
+        }
+        validateOptionsIntern("MATERIALIZED-VIEW-ERROR", getMaterializedViewRefreshOptions(), \opts);
+        if (!inlist(name, listMaterializedViews())) {
+            throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y does not exist; known materialized "
+                "views: %y", getDatasourceDesc(), name, listMaterializedViews());
+        }
+        refreshMaterializedViewImpl(name, opts);
+    }
+
+    #! returns the options of refreshMaterializedView() that the database supports
+    /** @return a hash of option names and their @ref Qore::Type "type" codes; empty for a database without
+        materialized views
+
+        @since SqlUtil 3.11.0
+    */
+    hash<auto> getMaterializedViewRefreshOptions() {
+        return {};
+    }
+
     #! returns a list of string table names in the database
     /** @return a sorted list of the names of the tables visible to the connection; a name is qualified with a
         schema only where the connection would otherwise resolve it in another schema
@@ -1859,6 +1949,25 @@ string sql = t.getSqlFromList(list);
     private abstract bool supportsSequencesImpl();
     private abstract bool supportsPackagesImpl();
     private abstract bool supportsTypesImpl();
+
+    #! returns @ref True "True" if the database supports materialized views; this base implementation returns @ref False "False"
+    /** @since SqlUtil 3.11.0
+    */
+    private bool supportsMaterializedViewsImpl() {
+        return False;
+    }
+
+    #! refreshes a materialized view; called by refreshMaterializedView() after validation
+    /** This base implementation throws an exception; databases that support materialized views override it
+
+        @throw MATERIALIZED-VIEW-ERROR the database does not support refreshing materialized views
+
+        @since SqlUtil 3.11.0
+    */
+    private refreshMaterializedViewImpl(string name, *hash<auto> opts) {
+        throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: database driver %y does not support refreshing materialized "
+            "views", getDatasourceDesc(), ds.getDriverName());
+    }
 
     private abstract bool rebuildIndexImpl(string name, *hash<auto> options);
     private abstract computeStatisticsImpl(*hash<auto> options);

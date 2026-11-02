@@ -6,6 +6,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires Util
 %requires QUnit
+# the tests that need a connection run against every database connection that is configured
+%requires ../../../DbTestConnections.qm
 
 %exec-class DatasourceTest
 
@@ -23,9 +25,12 @@ public class DatasourceTest inherits QUnit::Test {
         addTestCase("invalid option test", \invalidOptionTest());
         addTestCase("Datasource string test", \datasourceStringTest());
         addTestCase("oracle test", \oracleTest());
-        addTestCase("serialization test", \serializationTest());
-        addTestCase("typed select test", \typedSelectTest());
-        addTestCase("columnar select test", \columnarSelectTest());
+        foreach hash<DbTestConnection> conn in (getConnections()) {
+            string label = sprintf("%s (%s)", conn.label, conn.driver ?? "unknown driver");
+            addTestCase(label + ": serialization test", \serializationTest(), conn.connstr);
+            addTestCase(label + ": typed select test", \typedSelectTest(), conn.connstr);
+            addTestCase(label + ": columnar select test", \columnarSelectTest(), conn.connstr);
+        }
 
         set_return_value(main());
     }
@@ -96,8 +101,8 @@ public class DatasourceTest inherits QUnit::Test {
         assertThrows("DBI-OPTION-ERROR", \ds.getOption(), "xxx");
     }
 
-    serializationTest() {
-        Datasource ds = getAnyDatasource();
+    serializationTest(string connstr) {
+        Datasource ds = getAnyDatasource(connstr);
 
         hash<SerializationInfo> h = ds.serializeToData();
         #printf("h: %N\n", h);
@@ -122,8 +127,8 @@ public class DatasourceTest inherits QUnit::Test {
         assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), h1);
     }
 
-    typedSelectTest() {
-        Datasource ds = getAnyDatasource();
+    typedSelectTest(string connstr) {
+        Datasource ds = getAnyDatasource(connstr);
         string driver = ds.getDriverName();
         string sql = getTypedSelectSql(driver);
         list<auto> expected_ids = getTypedSelectExpectedIds(driver);
@@ -145,8 +150,8 @@ public class DatasourceTest inherits QUnit::Test {
         assertSqlNullish(rows[1].name);
     }
 
-    columnarSelectTest() {
-        Datasource ds = getAnyDatasource();
+    columnarSelectTest(string connstr) {
+        Datasource ds = getAnyDatasource(connstr);
         string driver = ds.getDriverName();
         string sql = getTypedSelectSql(driver);
         list<auto> expected_ids = getTypedSelectExpectedIds(driver);
@@ -232,14 +237,13 @@ public class DatasourceTest inherits QUnit::Test {
         }
     }
 
-    Datasource getAnyDatasource() {
-        string connstr = m_options.connstr
-            ?? ENV.QORE_DB_CONNSTR
-            ?? ENV.QORE_DB_CONNSTR_PGSQL
-            ?? ENV.QORE_DB_CONNSTR_ORACLE
-            ?? ENV.QORE_DB_CONNSTR_MYSQL
-            ?? "oracle:omquser/omquser@xbox";
+    #! the connections of the tests that need one: the configured connections, or a default one if none is
+    private list<hash<DbTestConnection>> getConnections() {
+        return DbTestConnections::get(m_options.connstr)
+            ?: (<DbTestConnection>{"label": "default", "connstr": "oracle:omquser/omquser@xbox", "driver": "oracle"},);
+    }
 
+    Datasource getAnyDatasource(string connstr) {
         try {
             Datasource ds(connstr);
             # Verify the connection actually works before returning — the

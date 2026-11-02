@@ -7,10 +7,12 @@
 # locals whose values cross the 48-bit immediate range in both directions, so compiled code
 # must hand each heap-boxed result to the local's owner and release the value it replaces.
 #
-# Without arguments it prints the computed values.  With "rss" it repeats each update pattern
-# and prints the smallest resident set growth of three promoted calls in kB: every leaked large int
-# is a separate heap node, so a leak grows by megabytes in every call while correct code reuses freed
-# nodes.
+# Without arguments it prints the computed values.  With "live" it repeats each update pattern
+# and prints how many heap ints a promoted call left behind, as counted by the library
+# (dbg_get_live_bigint_count(), which needs library debugging): every large int is a separate heap
+# node, and a leak-free call leaves none.  The count does not depend on the page size, the
+# allocator or the kernel's huge page policy, or on what other threads allocate meanwhile, which
+# all change the resident set size of the process with no leak.
 
 const Big = 1 << 50;
 const Edge = (1 << 47) - 2;
@@ -95,82 +97,62 @@ sub touch(reference<*int> r) {
     return c();
 }
 
-const RssIterations = 200000;
+const LeakIterations = 200000;
 
-int sub rssKb() {
-    # VmRSS uses asynchronous accounting; smaps_rollup walks the page tables
-    # so delayed accounting updates cannot be mistaken for leaked nodes.
-    *list<*string> m = (ReadOnlyFile::readTextFile("/proc/self/smaps_rollup") =~ x/^Rss:\s+([0-9]+) kB$/m);
-    if (!m) {
-        throw "RSS-MEASUREMENT-ERROR", "smaps_rollup did not report resident memory";
-    }
-    return m[0].toInt();
-}
-
-*int sub rssBody() {
+*int sub leakBody() {
     *int x = Big;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         x += 1;
         ++x;
     }
     return x;
 }
 
-*int sub rssParameter(*int x) {
-    for (int i = 0; i < RssIterations; ++i) {
+*int sub leakParameter(*int x) {
+    for (int i = 0; i < LeakIterations; ++i) {
         x += 1;
         ++x;
     }
     return x;
 }
 
-int sub rssDirect() {
-    return rssParameter(Big) - Big;
+int sub leakDirect() {
+    return leakParameter(Big) - Big;
 }
 
-*int sub rssRuntimeStack() {
+*int sub leakRuntimeStack() {
     *int x = Big;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         ++x;
         touch(\x);
     }
     return x;
 }
 
-*int sub rssClosureCaptured() {
+*int sub leakClosureCaptured() {
     *int x = Big;
     code c = *int sub () { return x; };
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         x += 1;
         ++x;
     }
     return c();
 }
 
-if (ARGV[0] == "rss") {
+if (ARGV[0] == "live") {
     hash<string, code> cases = {
-        "body": \rssBody(),
-        "direct": \rssDirect(),
-        "runtime-stack": \rssRuntimeStack(),
-        "closure": \rssClosureCaptured(),
+        "body": \leakBody(),
+        "direct": \leakDirect(),
+        "runtime-stack": \leakRuntimeStack(),
+        "closure": \leakClosureCaptured(),
     };
     foreach hash<auto> c in (cases.pairIterator()) {
         code f = c.value;
-        # the first call promotes and compiles the function; measure later calls
+        # the first call promotes and compiles the function; measure a later call
         f();
-        # the resident set is that of the process, so it also grows when another thread (such as a background
-        # compiler or cleanup worker) allocates during a call; a leak grows it in every call, so the smallest
-        # growth of several calls is reported
-        *int growth;
-        for (int i = 0; i < 3; ++i) {
-            int before = rssKb();
-            f();
-            int g = rssKb() - before;
-            if (!exists growth || g < growth) {
-                growth = g;
-            }
-        }
-        printf("%s: %d\n", c.key, growth);
+        int before = call_function("dbg_get_live_bigint_count");
+        f();
+        printf("%s: %d\n", c.key, call_function("dbg_get_live_bigint_count") - before);
     }
     return;
 }

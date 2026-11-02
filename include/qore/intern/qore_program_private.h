@@ -63,6 +63,7 @@ class QoreSandboxManager;
 #include <cerrno>
 #include <cstdarg>
 #include <map>
+#include <tuple>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -247,6 +248,12 @@ public:
         Executed from any thread when terminated to detach program
     */
     DLLLOCAL void dbgDetach(ExceptionSink* xsink);
+    //! Removes the THREAD-CANCELLED exception that ends a thread of a Program that a debugger ends
+    /** Executed when the thread has left the Program, before its unhandled exceptions are reported; the debugger
+        cancels the threads to end the Program, so that their end is not an error (see
+        QoreDebugProgram::setProgramTerminating())
+    */
+    DLLLOCAL void dbgClearTermination(ExceptionSink& xsink);
     /**
         Executed every step in BlockStatement.
         @param statement is step being processed
@@ -335,6 +342,15 @@ private:
         printd(5, "ThreadLocalProgramData::setRunState(), this: %p, rs: %d->%d, rts: %p\n", this, runState, rs, rts);
         runState = rs;
         runToStatement = rts;
+    }
+
+    //! Returns true if a statement is the statement to run to
+    /** While stepping over, only a statement of the stepped code itself is, not one in the code that it calls, so that
+        stepping over with the entry of a function as the statement to run to stops when the stepped code calls the
+        function, not when a function that it calls does
+    */
+    DLLLOCAL inline bool isRunToStatement(const AbstractStatement* st) const {
+        return st == runToStatement && (runState != DBG_RS_STEP_OVER || !functionCallLevel);
     }
     // set to true by any process do break running program asap
     std::atomic<bool> breakFlag{false};
@@ -441,6 +457,11 @@ public:
     /** This state belongs to the target Program so teardown cannot leave stale
         raw Program pointers in process-wide AOT module state. */
     std::unordered_set<std::string> initialized_aot_modules;
+
+    //! true if a debugger ends the Program: its threads that end with THREAD-CANCELLED end without reporting it
+    /** see QoreDebugProgram::setProgramTerminating() and ThreadLocalProgramData::dbgClearTermination()
+    */
+    std::atomic<bool> debugger_terminating{false};
 
     // for the thread counter, used only with plock
     QoreCondition pcond;
@@ -1134,11 +1155,20 @@ protected:
     */
     DLLLOCAL void setCreatorChain(const QoreProgram& creator);
 
+    //! Adds the Program whose code created this child Program, and the Programs that created it, after its parent
+    /** For a child Program that the code of another Program than its parent creates
+        (ProgramControl::createEvalProgram(), which a debugger calls for the Program that it debugs): both the parent
+        and the creating code control it.  The chain must have been set by setParent(); IDs that it has are not added
+        again
+    */
+    DLLLOCAL void addCreatorChain(const QoreProgram& creator);
+
     //! The IDs of the Programs that created this Program: its creator first, then the creator's creator, and so on
     /** Set once, by setParent() or, for an independent Program created by %Qore code (the \c Program constructor), by
-        qore_program_private::setCreator(), and never changed; empty for a module Program or a Program created by C++
-        code without a parent.  Reflection allows a Program that created another Program to navigate it; see
-        design/reflection-caller-privilege.md.
+        qore_program_private::setCreator(), and never changed afterwards, except that the chain of the Program that
+        created a child Program for another Program is added by qore_program_private::addCreator() when the child is
+        created; empty for a module Program or a Program created by C++ code without a parent.  Reflection allows a
+        Program that created another Program to navigate it; see design/reflection-caller-privilege.md.
     */
     std::vector<qore_program_id_t> creator_ids;
 
@@ -2250,6 +2280,25 @@ public:
         return 0;
     }
 
+    //! Returns the top-level local variables of the Program in the current thread, as get_local_vars() returns them
+    /** Top-level local variables have global scope, and each thread has its own values of them; those inherited from
+        a parent Program are not variables of the code of this one
+    */
+    DLLLOCAL QoreHashNode* getTopLevelLocalVars(ExceptionSink* xsink);
+
+    //! Adds the names of the top-level local variables of the Program, which its code can refer to, to a list
+    DLLLOCAL void addTopLevelLocalVarNames(QoreListNode& l, std::set<std::string>& names, ExceptionSink* xsink) {
+        const LVList* lvl = sb.getLVList();
+        if (!lvl) {
+            return;
+        }
+        for (unsigned i = sb.getInheritedLocalVarCount(); i < lvl->size(); ++i) {
+            if (names.insert(lvl->lv[i]->getName()).second) {
+                l.push(new QoreStringNode(lvl->lv[i]->getName()), xsink);
+            }
+        }
+    }
+
     DLLLOCAL void doTopLevelInstantiation(ThreadLocalProgramData& tlpd) {
         // instantiate top-level vars for this thread
         const LVList* lvl = sb.getLVList();
@@ -2396,6 +2445,22 @@ public:
 
         setParseOptionsIntern(po);
         return 0;
+    }
+
+    //! Applies the parse options that the interpreter gives a source file by its name
+    /** @return 1 if %modern was enabled, 0 if the file keeps the parse options, -1 if an exception was raised
+
+        @see should_auto_enable_modern()
+    */
+    DLLLOCAL int applySourceDefaults(const char* filename, ExceptionSink* xsink) {
+        if (!should_auto_enable_modern(filename)) {
+            return 0;
+        }
+        if (setParseOptions(PO_MODERN, xsink)) {
+            return -1;
+        }
+        pgm->setWarningMask(QP_WARN_ALL);
+        return 1;
     }
 
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
@@ -2837,6 +2902,27 @@ public:
         }
         ThreadFrameBoundaryHelper tfbh(true);
 
+        // the expression runs in this Program with no object or class context, with its parse options and no
+        // statement, as top-level code does (see QoreProgram::runTopLevel())
+        ProgramCallContextHelper pcch(pgm);
+        ObjectSubstitutionHelper osh(nullptr, nullptr);
+        class RuntimeLocationGuard {
+        public:
+            RuntimeLocationGuard(ExceptionSink* xsink, const QoreParseOptions& po) {
+                swap_runtime_statement_location(xsink, nullptr, get_runtime_location(), po, stmt, loc, saved_po);
+            }
+            ~RuntimeLocationGuard() {
+                update_runtime_statement_location(stmt, loc, saved_po);
+            }
+        private:
+            const AbstractStatement* stmt = nullptr;
+            const QoreProgramLocation* loc = nullptr;
+            QoreParseOptions saved_po;
+        } rlg(xsink, pwo.parse_options);
+        if (*xsink) {
+            return QoreValue();
+        }
+
         ValueHolder rv(exp->exec(xsink), xsink);
         if (*xsink) {
             return QoreValue();
@@ -3142,6 +3228,14 @@ public:
     */
     DLLLOCAL static void setCreator(QoreProgram& pgm, const QoreProgram& creator) {
         pgm.priv->setCreatorChain(creator);
+    }
+
+    //! Records the Program whose code created the child Program \a pgm of another Program
+    /** The parent of the child, which setParent() recorded, controls it, and so does the code that created it; see
+        qore_program_private_base::addCreatorChain()
+    */
+    DLLLOCAL static void addCreator(QoreProgram& pgm, const QoreProgram& creator) {
+        pgm.priv->addCreatorChain(creator);
     }
 
     // called when thread startup fails after preregistration
@@ -3594,12 +3688,26 @@ public:
     DLLLOCAL void onException(const AbstractStatement* statement, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
     DLLLOCAL void onExit(const StatementBlock* statement, QoreValue& returnValue, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink);
 
+    //! Returns the threads that run the code of the Program, also those that run other code that its code called, as
+    //! the code of a module or of a debugger callback
+    DLLLOCAL std::set<int> getThreadsInProgram() const {
+        std::set<int> rv;
+        AutoLocker al(plock);
+        for (auto& i : tidmap) {
+            rv.insert(i.first);
+        }
+        return rv;
+    }
+
     DLLLOCAL int breakProgramThread(int tid) {
         printd(5, "qore_program_private::breakProgramThread(), this: %p, tid: %d\n", this, q_gettid());
+        // a thread that runs other code that the Program's code called, as a debugger callback or a module, stops at
+        // the next statement of the Program, as it is a thread of the Program
+        std::set<int> in_program = getThreadsInProgram();
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
-                if (!i.first->canRunDebugCallbacks() || !i.first->isActiveProgram(pgm)) {
+                if (!i.first->canRunDebugCallbacks() || !in_program.count(tid)) {
                     return -1;
                 }
                 i.second->dbgBreak();
@@ -3611,10 +3719,12 @@ public:
 
     DLLLOCAL bool breakProgram() {
         printd(5, "qore_program_private::breakProgram(), this: %p\n", this);
+        // see breakProgramThread()
+        std::set<int> in_program = getThreadsInProgram();
         AutoLocker al(tlock);
         bool rv = false;
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks() || !i.first->isActiveProgram(pgm)) {
+            if (!i.first->canRunDebugCallbacks() || !in_program.count(i.first->gettid())) {
                 continue;
             }
             i.second->dbgBreak();
@@ -3941,6 +4051,45 @@ public:
         return st;
     }
 
+    //! Returns the IDs of the statements of a line in the order of their columns
+    /** The line is resolved as with getStatementFromIndex(); if a statement starts on it, all statements that start
+        on it are returned, otherwise the statement that contains it
+
+        @param name the name or label of the source
+        @param line the line to find the statements of
+        @param xsink if an error occurs, the Qore-language exception info is added here
+
+        @return the statement IDs, or nullptr if the operation was cancelled
+    */
+    DLLLOCAL QoreListNode* findStatementIds(const char* name, int line, ExceptionSink* xsink);
+
+    //! Returns the block that starts at a line of a file, for the step event of the start of a block whose block is
+    //! not known, as in the debug IR of AOT code
+    /** The line index has the first statement of each line, which is not the block on a line such as
+        <tt>while (x) {}</tt>; the blocks are found from the registered statements and cached
+
+        @param file the file of the location
+        @param line the absolute line
+        @param end_line the absolute end line of the block, if known; then the block with these lines is returned,
+        as more than one block can start at a line
+
+        @return the registered block that starts at the line and ends at \a end_line, or the innermost registered
+        block that starts at the line if there is none or \a end_line is negative, as in the statement index of an
+        AOT program, which has one entry for each line that a statement starts at; nullptr if no block starts at the
+        line
+    */
+    DLLLOCAL const StatementBlock* getBlockFromIndex(const char* file, int line, int end_line = -1);
+
+    //! Returns the calls of a statement that a debugger can step into
+    /** @param statement_id the ID of the statement
+        @param xsink if an error occurs, the Qore-language exception info is added here
+
+        @return a list of StepInTargetInfo hashes, or nullptr if an exception was raised
+
+        @see ProgramControl::getStepInTargets()
+    */
+    DLLLOCAL QoreListNode* getStepInTargets(int64 statement_id, ExceptionSink* xsink);
+
     DLLLOCAL int serialize(ExceptionSink* xsink, StreamWriter& sw);
     DLLLOCAL int deserialize(ExceptionSink* xsink, StreamReader& sr);
 
@@ -4010,6 +4159,8 @@ private:
     // statementId to AbstractStatement resolving
     typedef std::vector<AbstractStatement*> StatementVector_t;
     StatementVector_t statementIds;
+    //! the blocks found by getBlockFromIndex(), by file and line; cleared when a statement is registered
+    std::map<std::tuple<std::string, int, int>, const StatementBlock*> blockIndexCache;
 
     // to get statementId
     typedef std::map<AbstractStatement*, unsigned long> ReverseStatementIdMap_t;
@@ -4065,6 +4216,17 @@ public:
 
     //! calls fixupAfterFork() for every Program; the Program registry lock is held (see QoreForkHandlers.h)
     DLLLOCAL static void fixupAllAfterFork(int tid, ThreadProgramData* tpd);
+
+    //! Adds the user modules (source and AOT) imported into every Program whose namespace data is not cleared
+    /** Called at teardown by QoreModuleManager::delUser() after the namespace data of every user and AOT module
+        Program has been cleared, when no other thread runs Qore code: a Program that still holds data then is owned
+        by code outside the module Programs, such as a Program that a binary module creates (the jni module's global
+        context Program) and deletes when the module is deleted; its data can hold objects of the classes of the
+        modules imported into it
+
+        @param features the names of the modules imported are added to this set
+    */
+    DLLLOCAL static void getUserFeaturesOfProgramsWithData(strset_t& features);
 
     //! the Program registry lock (lck_programMap), for the fork handlers
     DLLLOCAL static QoreRWLock& getProgramMapLock() {
@@ -4256,6 +4418,19 @@ public:
         return 0;
     }
 
+    DLLLOCAL int setProgramTerminating(QoreProgram* pgm) {
+        // a Program that does not support debugging is not ended by a debugger
+        if (pgm->priv->pwo.parse_options & PO_NO_DEBUGGING) {
+            return -1;
+        }
+        QoreAutoRWReadLocker al(&tlock);
+        if (qore_program_map.find(pgm) == qore_program_map.end()) {
+            return -2;
+        }
+        pgm->priv->debugger_terminating = true;
+        return 0;
+    }
+
     DLLLOCAL int breakProgram(QoreProgram* pgm) {
         //printd(5, "breakProgram pgm: %p po: %lld\n", pgm, pgm->priv->pwo.parse_options);
         // do not allow breaking if the Program does not support debugging
@@ -4296,6 +4471,7 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticRelatedLocationInfo(QoreNam
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticEditInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticFixInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RuntimeDiagnosticInfo(QoreNamespace& ns);
 
 //! Builds precise structured metadata for assignment and append type errors
 DLLLOCAL QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,

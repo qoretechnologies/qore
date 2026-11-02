@@ -530,6 +530,11 @@ public:
     */
     DLLLOCAL void dropCancelRequest(int tid, qore_program_id_t scope_pgm_id);
 
+    //! Gets the name of the active thread with the given ID; returns -1 if there is no such thread; acquires lck
+    /** Only defined on platforms with thread names (QORE_HAVE_THREAD_NAME)
+    */
+    DLLLOCAL int getThreadName(int tid, QoreString& str);
+
 protected:
     //! Clears all cancellation state for the given thread; lck must be held
     DLLLOCAL void clearCancelIntern(int tid) {

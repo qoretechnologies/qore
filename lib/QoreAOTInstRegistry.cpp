@@ -1764,7 +1764,12 @@ static bool writeScopeExit(AOTInstWriteCtx& ctx) {
     auto* si = static_cast<const QoreIRScopeExitInstruction*>(ctx.inst);
     ctx.writer.writeU32(si->scope_id);
     ctx.writer.writeU8(si->is_error ? 1 : 0);
-    ctx.writer.writeU8(si->inline_lowered ? 1 : 0);
+    // bit 0: inline_lowered; bit 1: trim, followed by the number of handlers kept.  A ScopeExit that is not a trim
+    // keeps the encoding of the binaries written before trims existed (0 or 1)
+    ctx.writer.writeU8((si->inline_lowered ? 1 : 0) | (si->trim ? 2 : 0));
+    if (si->trim) {
+        ctx.writer.writeU32(si->keep_handlers);
+    }
     return true;
 }
 
@@ -1774,8 +1779,12 @@ static std::unique_ptr<QoreIRInstruction> readScopeExit(
         AOTInstReadCtx& ctx) {
     uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     bool is_error = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    bool inline_lowered = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    auto inst = std::make_unique<QoreIRScopeExitInstruction>(scope_id, is_error, inline_lowered);
+    uint8_t flags = QoreAOTBinaryReader::readU8(ctx.ptr);
+    auto inst = std::make_unique<QoreIRScopeExitInstruction>(scope_id, is_error, (flags & 1) != 0);
+    if (flags & 2) {
+        inst->trim = true;
+        inst->keep_handlers = QoreAOTBinaryReader::readU32(ctx.ptr);
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
@@ -2558,7 +2567,7 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 }
 
 // ============================================================================
-// Group 67: DebugStatement - debugger step event for a statement
+// Group 67: DebugStatement - debugger step event for a statement, or for the start of a block (DebugBlock)
 // ============================================================================
 //
 // QoreIRDebugStatementInstruction carries a raw AbstractStatement* that points into the parse tree the function
@@ -2582,8 +2591,15 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
     // Reconstruct with a null statement pointer: the parse tree is not available under AOT.  The source location
-    // is restored by the base-instruction reader, and the runtime resolves the statement from it on demand.
-    auto inst = std::make_unique<QoreIRDebugStatementInstruction>(nullptr);
+    // is restored by the base-instruction reader, and the runtime resolves the statement from it on demand.  The
+    // group also has the DebugBlock instructions of blocks that the lowering knew (QoreIRBuilder::createDebugBlock()),
+    // so the opcode is kept; the runtime resolves their blocks from the location as well.
+    QoreIROpcode opcode = static_cast<QoreIROpcode>(opcode_raw);
+    if (opcode != QoreIROpcode::DebugStatement && opcode != QoreIROpcode::DebugBlock) {
+        ctx.error = "invalid opcode " + std::to_string(opcode_raw) + " of a debugger step instruction";
+        return nullptr;
+    }
+    auto inst = std::make_unique<QoreIRDebugStatementInstruction>(opcode, nullptr);
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;

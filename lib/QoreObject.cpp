@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/QoreTypeSafeReferenceHelper.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -1241,7 +1242,7 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     qore_object_lock_handoff_helper qolhh(const_cast<qore_object_private*>(this), lvh.vl);
 
     if (status == OS_DELETED) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "write attempted to member \"%s\" in an already-deleted object", key);
+        qore_raise_deleted_object(xsink, "write attempted to member \"%s\" in an already-deleted object", key);
         return -1;
     }
 
@@ -1289,7 +1290,7 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
 
     qore_object_lock_handoff_helper qolhh(this, lvh.vl);
     if (status == OS_DELETED) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED",
+        qore_raise_deleted_object(xsink, 
             "write attempted to member \"%s\" in an already-deleted object",
             key);
         return -1;
@@ -1333,7 +1334,7 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
 
     QoreSafeVarRWWriteLocker sl(rml);
     if (status == OS_DELETED) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED",
+        qore_raise_deleted_object(xsink, 
             "write attempted to member \"%s\" in an already-deleted object",
             key);
         return -1;
@@ -2100,7 +2101,7 @@ int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
     // customRefIntern()); rlck never ordered this test against deletion anyway, since the status is changed
     // under the object's rml write lock
     if (status == OS_DELETED) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call method '%s()' on an object that has already "
+        qore_raise_deleted_object(xsink, "cannot call method '%s()' on an object that has already "
                 "been deleted", mname);
         return -1;
     }
@@ -2112,7 +2113,7 @@ int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
 int qore_object_private::checkClosureSelfValid(ExceptionSink* xsink) {
     AutoLocker al(rlck);
     if (status == OS_DELETED) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "closure invocation failed because captured 'self' "
+        qore_raise_deleted_object(xsink, "closure invocation failed because captured 'self' "
             "(class '%s') has already been destroyed", getClassName());
         return -1;
     }

@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include compound-assignment-ast-parity.qc
+
+%exec-class CompoundAssignmentAstParityAndXorTest
+
+#! Checks \c &= and \c ^= in every execution mode against the AST interpreter; see CompoundAssignmentAstParityBase
+class CompoundAssignmentAstParityAndXorTest inherits CompoundAssignmentAstParityBase {
+    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityAndXor", ("&=", "^=")) {
+    }
+}

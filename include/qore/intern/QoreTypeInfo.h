@@ -932,6 +932,13 @@ public:
     DLLLOCAL int doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
             ExceptionSink* xsink, q_lvalue_vts_e vts = QLVTS_None) const;
 
+    //! Returns the RuntimeDiagnosticInfo hash for a value rejected by this type; see QoreRuntimeDiagnostic.h
+    /** @param n the rejected value
+        @param container "hash" or "list" if this type is the value type of the container holding the target, or
+        nullptr
+    */
+    DLLLOCAL QoreHashNode* makeRuntimeDiagnostic(const QoreValue& n, const char* container) const;
+
     //! Returns true if this type can be the value type of a complex hash or list
     /** Used to decide whether a rejected container element assignment is worth explaining in
         terms of the container's value type.  Only hard scalar types are considered, because
@@ -1013,15 +1020,8 @@ protected:
         return -1;
     }
 
-    DLLLOCAL int doObjectHashDeclTypeException(const char* arg_type, const char* param_name, const QoreValue& n, ExceptionSink* xsink) const {
-        assert(xsink);
-        QoreStringNode* desc = new QoreStringNode;
-        desc->sprintf("%s '%s' expects type '%s', but got ", arg_type, param_name, tname.c_str());
-        QoreTypeInfo::getNodeType(*desc, n);
-        desc->concat(" instead");
-        xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
-        return -1;
-    }
+    DLLLOCAL int doObjectHashDeclTypeException(const char* arg_type, const char* param_name, const QoreValue& n,
+            ExceptionSink* xsink) const;
 
     // returns true if "this" is a superset of the argument with a strict interpretation that the order of accept and return declarations must also be the same
     DLLLOCAL bool superSetOf(const QoreTypeInfo* t) const;

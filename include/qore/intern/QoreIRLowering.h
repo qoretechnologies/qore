@@ -571,6 +571,8 @@ private:
      */
     bool shouldRunHandler(const InlineHandler& handler, bool is_error);
 
+    struct BlockCleanupEntry;
+
     //! Lower all applicable handlers for the current block at an exit point
     /** Lowers handler code inline into the IR in LIFO order.
      *  @param is_error true if this is an error/exception exit
@@ -585,10 +587,35 @@ private:
      *    no barrier. Implemented via a
      *    HandlerBarrier entry pushed on cleanup_stack for the duration of the
      *    handler body lowering.
+     *  @param scope the Scope entry of the statement block that owns the
+     *    handlers, if any; the scope is left at runtime once the handlers have
+     *    been lowered (an inline ScopeExit).  Before each handler, a trim drops
+     *    it and the handlers registered after it from the runtime scope, and the
+     *    handler is lowered with the scope's handler_exception_target, so the
+     *    handlers that have not run yet still run, with the exception, if it
+     *    raises one, as in the AST interpreter (StatementBlock::execIntern()).
      *  @return false if lowering failed
      */
     bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0,
-            size_t end_index = SIZE_MAX, size_t barrier_depth = SIZE_MAX);
+            size_t end_index = SIZE_MAX, size_t barrier_depth = SIZE_MAX, const BlockCleanupEntry* scope = nullptr);
+
+    //! Lowers one handler inline for lowerHandlersAtExit()
+    /** @param handler the handler
+        @param keep_handlers the number of handlers registered in the scope before this one, which stay registered
+        @param error receives the error message if lowering fails
+        @param barrier_depth see lowerHandlersAtExit()
+        @param scope_id the ID of the runtime scope that owns the handler, or 0 if none
+        @param scope_loc the location of the scope
+        @param set_exception_target true if the handler is lowered with @p handler_exception_target as its exception
+        target
+        @param handler_exception_target the exception target for the handler, or nullptr for none (the exception
+        leaves the frame)
+
+        @return false if lowering failed
+    */
+    bool lowerHandlerAtExit(const InlineHandler& handler, size_t keep_handlers, std::string& error,
+            size_t barrier_depth, uint32_t scope_id, const QoreProgramLocation* scope_loc, bool set_exception_target,
+            QoreIRBasicBlock* handler_exception_target);
 
     //! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
     bool constantContainerLoadsByReference(const QoreValue& expr) const;
@@ -644,6 +671,15 @@ private:
         QoreIRValue foreach_held_source;           //!< operand of a keys or range slice list held by the loop, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
         uint32_t uid = 0;                          //!< identifies the entry within the function (pushBlockCleanup())
+        //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
+        bool block_scope = false;
+        //! the exception target of the body of the block of a Scope entry with handlers (block_scope)
+        /** An exception raised by one of the scope's handlers lowered inline goes here, while the scope is still
+            open at runtime with the handlers that have not run yet: the block's own exception cleanup block (which
+            runs them with the exception, then releases the block's locals), or nullptr when nothing in the frame
+            encloses the block, and the exception leaves the frame, running them on the way.
+        */
+        QoreIRBasicBlock* handler_exception_target = nullptr;
     };
     //! Unified cleanup stack tracking scope exits, block-scoped locals, and ref foreach state
     /** Entries are pushed in nesting order. Reverse iteration gives correct cleanup ordering.

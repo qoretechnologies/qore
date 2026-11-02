@@ -640,6 +640,13 @@ DLLLOCAL QoreParseOptions runtime_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
+//! Records that the code being parsed uses functionality that the given restriction forbids, and returns true if the
+//! restriction is set
+/** The use is recorded in the functional domain of the Program (see qore_program_private::parseAddDomain()), as for
+    a call of a builtin function, so that an AOT image of the code records it as well, and a module that uses the
+    functionality is refused when it is imported into a Program that restricts it
+*/
+DLLLOCAL bool parse_check_restriction(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
 //! Sets the runtime parse options to those of AOT-compiled code while the code is loaded
@@ -1955,6 +1962,8 @@ DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);
 DLLLOCAL void q_get_thread_name(QoreString& str);
+//! Gets the name of the active thread with the given ID; returns -1 if there is no such thread
+DLLLOCAL int q_get_thread_name(int tid, QoreString& str);
 #endif
 
 //! checkpoints stack usage for debugging purposes

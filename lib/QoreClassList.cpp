@@ -43,7 +43,8 @@ QoreClassList::QoreClassList(const QoreClassList& old, const QoreParseOptions& p
             //printd(5, "QoreClassList::QoreClassList() this: %p c: %p '%s' po & PO_NO_INHERIT_USER_CLASSES: %s
             //    pub: %s\n", this, i->second.cls, i->second.cls->getName(), po & PO_NO_INHERIT_USER_CLASSES ? "true": "false",
             //    qore_class_private::isPublic(*i->second.cls) ? "true": "false");
-            if (po & PO_NO_INHERIT_USER_CLASSES || !qore_class_private::isPublic(*i->second.cls)) {
+            if (po & PO_NO_INHERIT_USER_CLASSES
+                || (!qore_class_private::isPublic(*i->second.cls) && !q_inherit_all_user_code)) {
                 continue;
             }
         } else {

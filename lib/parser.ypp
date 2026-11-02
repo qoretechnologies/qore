@@ -871,7 +871,7 @@ public:
         }
         variant = 0;
         // make sure definition was legal
-        if (parse_check_parse_option(PO_NO_SUBROUTINE_DEFS)) {
+        if (parse_check_restriction(PO_NO_SUBROUTINE_DEFS)) {
             const char* nsn = ns.name.c_str();
             parse_error(*loc, "function '%s%s%s()' cannot be defined (conflicts with parse option PO_NO_SUBROUTINE_DEFS)", nsn[0] ? nsn : "", nsn[0] ? "::" : "", name);
         }
@@ -895,7 +895,7 @@ public:
         qore_root_ns_private::addPendingVariant(ns, name, variant);
         variant = 0;
         // make sure definition was legal
-        if (parse_check_parse_option(PO_NO_SUBROUTINE_DEFS))
+        if (parse_check_restriction(PO_NO_SUBROUTINE_DEFS))
             parse_error(*loc, "function '%s()' cannot be defined (conflicts with parse option PO_NO_SUBROUTINE_DEFS)", name.ostr);
 
         delete this;
@@ -1418,7 +1418,7 @@ struct NSNode {
         switch (type) {
             case NSN_OCD:
                 //printd(5, "ocd: %s %d-%d c: %d-%d\n", n.ocd->oc->getName(), n.ocd->loc.start_line, n.ocd->loc.end_line, qore_class_private::get(*n.ocd->oc)->loc.start_line, qore_class_private::get(*n.ocd->oc)->loc.end_line);
-                if (parse_check_parse_option(QoreParseOptions::NO_CLASS_DEFS)) {
+                if (parse_check_restriction(QoreParseOptions::NO_CLASS_DEFS)) {
                     parse_error(*n.ocd->loc, "class '%s' cannot be defined with parse option NO_CLASS_DEFS set",
                         n.ocd->name->ostr);
                 }
@@ -1436,7 +1436,7 @@ struct NSNode {
                 delete n.enumdef;
                 break;
             case NSN_CONST:
-                if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+                if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
                     parse_error(*n.cn->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                         n.cn->name.ostr);
                 }
@@ -1449,7 +1449,7 @@ struct NSNode {
                 delete n.td;
                 break;
             case NSN_NS:
-                if (parse_check_parse_option(QoreParseOptions::NO_NAMESPACE_DEFS)) {
+                if (parse_check_restriction(QoreParseOptions::NO_NAMESPACE_DEFS)) {
                     parse_error(*qore_ns_private::get(*n.ns)->loc,
                         "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
                 }
@@ -2978,7 +2978,7 @@ top_level_command:
         $1->add(*(qore_ns_private::get(*(getRootNS()))));
     }
     | class_def {
-        if (parse_check_parse_option(QoreParseOptions::NO_CLASS_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_CLASS_DEFS)) {
             parse_error(*$1->loc, "class '%s' cannot be defined with parse option NO_CLASS_DEFS set",
                 $1->name->ostr);
         }
@@ -3008,7 +3008,7 @@ top_level_command:
         delete $1;
     }
     | scoped_const_decl {
-        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
         }
@@ -3019,7 +3019,7 @@ top_level_command:
         delete $1;
     }
     | unscoped_const_decl {
-        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
         }
@@ -3046,7 +3046,7 @@ top_level_command:
         qore_program_private::addStatement(*(getProgram()), $2);
     }
     | top_namespace_decl {
-        if (parse_check_parse_option(QoreParseOptions::NO_NAMESPACE_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_NAMESPACE_DEFS)) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
             parse_error(*loc, "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
         }
@@ -3417,10 +3417,15 @@ scoped_typedef_decl:
 
 block:
     '{' statements '}'
-    { $$ = $2; }
+    {
+        $$ = $2;
+        // the block ends with its closing brace, where a function returns; it starts with its first statement, so
+        // that the statements of a line are found as before
+        $$->finalizeBlock($$->loc->start_line, @3.last_line);
+    }
     |
     '{' /* NOTHING */ '}'
-    { $$ = new StatementBlock(@1.first_line, @1.last_line); }
+    { $$ = new StatementBlock(@1.first_line, @2.last_line); }
     ;
 
 statement_or_block:
@@ -3493,12 +3498,15 @@ statement:
     { $$ = $1; }
     | TOK_RETHROW ';' {
         $$ = new RethrowStatement(@1.first_line, @1.last_line);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | TOK_RETHROW exp ';' {
         $$ = new RethrowStatement(@1.first_line, @1.last_line, $2);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | TOK_THROW exp ';' {
         $$ = new ThrowStatement(@1.first_line, @2.last_line, $2);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_DISCARD '(' exp ')' ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
@@ -3510,51 +3518,65 @@ statement:
         // exp could be: single condition, or list (condition, msg, args...)
         // AssertStatement handles both cases
         $$ = new AssertStatement(@1.first_line, @4.last_line, $3);
+        $$->setColumns(@1.first_col, @4.last_col);
     }
     | TOK_DEBUG '(' exp ')' ';' {
         $$ = new DebugStatement(@1.first_line, @4.last_line, $3);
+        $$->setColumns(@1.first_col, @4.last_col);
     }
     | TOK_DEBUG_BLOCK statement_or_block {
         $$ = new DebugStatement(@1.first_line, @2.last_line, $2);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_ON_EXIT statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Unconditional);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_ON_SUCCESS statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Success);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_ON_ERROR statement_or_block {
         $$ = new OnBlockExitStatement(@1.first_line, @2.last_line, $2, OBE_Error);
+        $$->setColumns(@1.first_col, @2.last_col);
     }
     | TOK_SUB_CONTEXT context_mods statement_or_block {
         $$ = new ContextStatement(@1.first_line, @3.last_line, 0, 0, $2, $3);
+        $$->setColumns(@1.first_col, @3.last_col);
     }
     | TOK_SUMMARIZE optname '(' exp ')' TOK_BY '(' exp ')' context_mods statement_or_block {
-        if (parse_check_parse_option(QoreParseOptions::NO_SUMMARIZE)) {
+        if (parse_check_restriction(QoreParseOptions::NO_SUMMARIZE)) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())
                 ->getLocation(@1.first_line, @11.last_line, @1.first_col, @11.last_col);
             parse_error(*loc, "the 'summarize' statement is not allowed when '%%no-summarize' is "
                 "set (implied by '%%modern'); rewrite as a 'context' loop with manual grouping");
         }
         $$ = new SummarizeStatement(@1.first_line, @11.last_line, $2, $4, $10, $11, $8);
+        $$->setColumns(@1.first_col, @11.last_col);
     }
     | TOK_CONTEXT optname '(' exp ')' context_mods statement_or_block {
         $$ = new ContextStatement(@1.first_line, @7.last_line, $2, $4, $6, $7);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     | TOK_IF '(' exp ')' statement_or_block %prec IFX {
         $$ = new IfStatement(@1.first_line, @5.last_line, $3, $5);
+        $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_IF '(' exp ')' statement_or_block TOK_ELSE statement_or_block {
         $$ = new IfStatement(@1.first_line, @7.last_line, $3, $5, $7);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     | TOK_WHILE '(' exp ')' statement_or_block {
         $$ = new WhileStatement(@1.first_line, @5.last_line, $3, $5);
+        $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_DO statement_or_block TOK_WHILE '(' exp ')' ';' {
         $$ = new DoWhileStatement(@1.first_line, @5.last_line, $5, $2);
+        $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_FOR '(' myexp ';' myexp ';' myexp ')' statement_or_block {
         $$ = new ForStatement(@1.first_line, @9.last_line, $3, $5, $7, $9);
+        $$->setColumns(@1.first_col, @9.last_col);
     }
     | TOK_FOREACH exp TOK_IN '(' exp ')' statement_or_block {
         QoreValue v2($2);
@@ -3565,21 +3587,25 @@ statement:
                 "read-only foreach variables are not supported; declare a mutable foreach variable");
         }
         $$ = new ForEachStatement(@1.first_line, @7.last_line, $2, $5, $7);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     | return_statement ';' { $$ = $1; }
     | TOK_THREAD_EXIT ';' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
-        // see if thread exit is allowed
-        if (parse_check_parse_option(PO_NO_THREAD_CONTROL)) {
+        // see if thread exit is allowed; the use is recorded as thread control in the Program's functional domain,
+        // as a call of a thread control function is, so that an AOT image of the code records it as well
+        if (parse_check_restriction(PO_NO_THREAD_CONTROL)) {
             parse_error(*loc, "illegal use of \"thread_exit\" (conflicts with parse option PO_NO_THREAD_CONTROL)");
         }
         $$ = new ThreadExitStatement(loc);
     }
     | TOK_BREAK ';' {
         $$ = new BreakStatement(@1.first_line, @1.last_line);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | TOK_CONTINUE ';' {
         $$ = new ContinueStatement(@1.first_line, @1.last_line);
+        $$->setColumns(@1.first_col, @1.last_col);
     }
     | switch_statement { $$ = $1; }
     | error ';'        { $$ = 0; }
@@ -3609,9 +3635,9 @@ context_mod:
     ;
 
 return_statement:
-    TOK_RETURN     { $$ = new ReturnStatement(@1.first_line, @1.last_line); }
+    TOK_RETURN     { $$ = new ReturnStatement(@1.first_line, @1.last_line); $$->setColumns(@1.first_col, @1.last_col); }
     |
-    TOK_RETURN exp { $$ = new ReturnStatement(@1.first_line, @2.last_line, $2); }
+    TOK_RETURN exp { $$ = new ReturnStatement(@1.first_line, @2.last_line, $2); $$->setColumns(@1.first_col, @2.last_col); }
     ;
 
 switch_statement:
@@ -3620,6 +3646,7 @@ switch_statement:
         $6->setSwitch($3);
         $$ = $6;
         $$->finalizeBlock(@1.first_line, @7.last_line);
+        $$->setColumns(@1.first_col, @7.last_col);
     }
     ;
 
@@ -4299,7 +4326,7 @@ class_attributes:
     }
     | unscoped_const_decl {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->getName());
         }
@@ -4334,7 +4361,7 @@ class_attributes:
     | class_attributes unscoped_const_decl {
         @$.depth = QORE_LIST_DEPTH(@1, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line, @2.last_line, @2.first_col, @2.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $2->getName());
         }
@@ -4615,7 +4642,7 @@ member2:
     }
     | unscoped_const_decl {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
+        if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->getName());
         }
@@ -5804,7 +5831,7 @@ exp_c:
     }
     | TOK_NEW identifier '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+        if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
@@ -5813,21 +5840,21 @@ exp_c:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
             @4.last_line, @1.first_col,
             @4.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+        if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $3));
     }
     | TOK_NEW SCOPED_REF '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+        if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
     }
     | TOK_NEW ANGLE_IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
-        if (parse_check_parse_option(QoreParseOptions::NO_NEW)) {
+        if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), $4));
@@ -5837,7 +5864,7 @@ exp_c:
         $$ = (new QoreBackgroundOperatorNode(loc, $2));
         // check to see if the expression is legal
         QoreValue v2bg($2);  // Convert to QoreValue for method calls
-        if (parse_check_parse_option(PO_NO_THREAD_CONTROL))
+        if (parse_check_restriction(PO_NO_THREAD_CONTROL))
             parse_error(*loc, "illegal use of 'background' operator (conflicts with parse option PO_NO_THREAD_CONTROL)");
         else if (!value_has_effect_as_root(v2bg)) {
             if (!parse_check_parse_option(PO_ALLOW_STATEMENT_NO_EFFECT)) {
@@ -5850,7 +5877,7 @@ exp_c:
     | BACKQUOTE {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new BackquoteNode(loc, $1));
-        if (parse_check_parse_option(PO_NO_EXTERNAL_PROCESS))
+        if (parse_check_restriction(PO_NO_EXTERNAL_PROCESS))
             parse_error(*loc, "illegal use of backquote operator (conflicts with parse option PO_NO_EXTERNAL_PROCESS)");
     }
     | '(' exp ')' {

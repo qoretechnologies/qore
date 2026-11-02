@@ -1,0 +1,571 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/DbDataProvider
+
+%prepend-module-path "${SCRIPT_DIR}/../SqlUtil"
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+
+%exec-class DbViewDataProviderTest
+
+#! Tests the views and materialized-views children of DbDataProvider and their read-only view providers
+/** Every database whose connection is configured is tested with the same objects: a table, a view of some of its
+    rows, a view with a computed column, and a materialized view where the database supports them.  SQLite is
+    tested in memory whenever the sqlite3 driver is available; PostgreSQL, MySQL/MariaDB and Oracle are tested with
+    the connections in \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_ORACLE, and their
+    test cases are skipped when the variable is not set.
+*/
+class DbViewDataProviderTest inherits QUnit::Test {
+    private {
+        #! the connections that the test cases run with, keyed by driver label; set when the objects are created
+        hash<string, Datasource> dsh;
+
+        #! the reasons that test cases are skipped for a driver label
+        hash<string, string> skip_reasons;
+
+        #! the prefix of the names of every object that the test creates
+        string prefix;
+
+        #! True once the PostgreSQL run schema has been set up
+        bool pgsql_isolated = False;
+
+        #! the driver labels tested, with the environment variable that gives their connection
+        const Drivers = {
+            "sqlite3": NOTHING,
+            "pgsql": "QORE_DB_CONNSTR_PGSQL",
+            "mysql": "QORE_DB_CONNSTR_MYSQL",
+            "oracle": "QORE_DB_CONNSTR_ORACLE",
+        };
+
+        #! the rows of the test table
+        const Rows = (
+            {"id": 1, "name": "alpha", "amount": 1.5},
+            {"id": 2, "name": "beta", "amount": 2.5},
+            {"id": 3, "name": "gamma", "amount": 3.75},
+        );
+    }
+
+    constructor() : Test("DbViewDataProvider", "1.0") {
+        prefix = "qdpv_" + get_random_string(6).lwr() + "_";
+
+        on_exit {
+            dropAll();
+        }
+
+        foreach string label in (keys Drivers) {
+            try {
+                connect(label);
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reasons{label} = sprintf("cannot set up %s: %s: %s", label, ex.err, ex.desc);
+                remove dsh{label};
+            }
+        }
+
+        foreach string label in (keys Drivers) {
+            addTestCase(label + ": children list exactly listViews() and listMaterializedViews()",
+                \childListTest(), label);
+            addTestCase(label + ": the tables child does not list or open views", \tablesExcludeViewsTest(), label);
+            addTestCase(label + ": view records, record type and search", \viewReadTest(), label);
+            addTestCase(label + ": view search options and expressions", \viewSearchOptionsTest(), label);
+            addTestCase(label + ": view providers are read-only", \readOnlyTest(), label);
+            addTestCase(label + ": materialized views where supported", \materializedViewTest(), label);
+            addTestCase(label + ": view providers from constructor options", \constructorOptionsTest(), label);
+        }
+        addTestCase("view actions are registered as read actions", \actionCatalogTest());
+
+        set_return_value(main());
+    }
+
+    #! connects the given driver and creates the test's objects, or records why its test cases are skipped
+    private connect(string label) {
+        *string connstr;
+        if (label == "sqlite3") {
+            try {
+                load_module("sqlite3");
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reasons{label} = "the sqlite3 driver is not available";
+                return;
+            }
+            connstr = "sqlite3:@:memory:";
+        } else {
+            connstr = ENV{Drivers{label}};
+            if (!connstr) {
+                skip_reasons{label} = sprintf("%s is not set", Drivers{label});
+                return;
+            }
+            if (label == "pgsql") {
+                # each run uses its own schema, so the listings of the search_path have only the run's objects
+                PgsqlRunSchema::setup(connstr, "DbViewDataProvider");
+                pgsql_isolated = True;
+            }
+        }
+        Datasource ds(connstr);
+        if (ds.getDriverName() != label) {
+            skip_reasons{label} = sprintf("%s uses driver %y, not %y", Drivers{label}, ds.getDriverName(), label);
+            return;
+        }
+        ds.open();
+        dsh{label} = ds;
+        createObjects(label, ds);
+    }
+
+    #! creates the table, the views and any materialized view
+    private createObjects(string label, Datasource ds) {
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.execRaw(sprintf("create table %st (id integer not null primary key, name varchar(20) not null, "
+            "amount numeric(10,2))", prefix));
+        foreach hash<auto> row in (Rows) {
+            ds.exec(sprintf("insert into %st (id, name, amount) values (%%v, %%v, %%v)", prefix), row.id, row.name,
+                row.amount);
+        }
+        ds.execRaw(sprintf("create view %sv as select id, name, amount from %st where id < 3", prefix, prefix));
+        ds.execRaw(sprintf("create view %svx as select id, amount * 2 as dbl from %st", prefix, prefix));
+        if (AbstractDatabase::getDatabase(ds).supportsMaterializedViews()) {
+            if (label == "pgsql") {
+                # PostgreSQL DDL is transactional; commit the tables and views first
+                ds.commit();
+            }
+            ds.execRaw(sprintf("create materialized view %smv as select id, name from %st", prefix, prefix));
+        }
+    }
+
+    #! drops the test's objects; never throws, so it can run on exit
+    private dropAll() {
+        foreach hash<auto> i in (dsh.pairIterator()) {
+            Datasource ds = i.value;
+            list<string> sqll = (
+                sprintf("drop materialized view %smv", prefix),
+                sprintf("drop view %svx", prefix),
+                sprintf("drop view %sv", prefix),
+                sprintf("drop table %st", prefix),
+            );
+            foreach string sql in (sqll) {
+                try {
+                    ds.rollback();
+                    ds.execRaw(sql);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the materialized view exists only where the database supports them
+                    try {
+                        ds.rollback();
+                    } catch (hash<ExceptionInfo> ex1) {
+                    }
+                }
+            }
+        }
+        if (pgsql_isolated) {
+            try {
+                PgsqlRunSchema::teardown();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop the PostgreSQL run schema: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! returns the datasource for the given driver label or skips the test case
+    private Datasource getDs(string label) {
+        if (*Datasource ds = dsh{label}) {
+            return ds;
+        }
+        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+    }
+
+    #! returns the name of a test object as the database lists it
+    private string objName(string label, string suffix) {
+        string name = prefix + suffix;
+        # Oracle lists unquoted names in upper case
+        return label == "oracle" ? name.upr() : name;
+    }
+
+    #! returns the names in the given list as a set
+    private static hash<string, bool> toSet(*list<string> l) {
+        return map {$1: True}, l;
+    }
+
+    #! the views and materialized-views children list exactly what the database lists
+    childListTest(string label) {
+        Datasource ds = getDs(label);
+        AbstractDatabase db = AbstractDatabase::getDatabase(ds);
+        DbDataProvider dp(ds);
+
+        list<string> expected_children = ("exec-sql", "tables", "views");
+        if (db.supportsMaterializedViews()) {
+            expected_children += "materialized-views";
+        }
+        assertEq(expected_children, dp.getChildProviderNames());
+        assertEq(expected_children, map $1.name, dp.getChildProviderSummaryInfo());
+
+        AbstractDataProvider views = dp.getChildProvider("views");
+        assertEq("DbViewsDataProvider", views.getInfo().type);
+        assertEq(db.listViews(), views.getChildProviderNames());
+        hash<string, bool> view_set = toSet(views.getChildProviderNames());
+        assertTrue(view_set.hasKey(objName(label, "v")));
+        assertTrue(view_set.hasKey(objName(label, "vx")));
+        assertFalse(view_set.hasKey(objName(label, "t")));
+        assertFalse(view_set.hasKey(objName(label, "mv")));
+        if (label == "pgsql" || label == "sqlite3") {
+            # the run's own schema or database has only the test's views
+            assertEq((objName(label, "v"), objName(label, "vx")), views.getChildProviderNames());
+        }
+
+        # every child of the views provider is summarized as a read-only view provider
+        list<hash<DataProviderSummaryInfo>> summary = views.getChildProviderSummaryInfo();
+        assertEq(views.getChildProviderNames(), map $1.name, summary);
+        foreach hash<DataProviderSummaryInfo> info in (summary) {
+            assertEq("DbViewDataProvider", info.type);
+            assertTrue(info.supports_read);
+            assertFalse(info.supports_create);
+            assertFalse(info.supports_update);
+            assertFalse(info.supports_upsert);
+            assertFalse(info.supports_delete);
+            assertFalse(info.supports_children);
+        }
+    }
+
+    #! the tables child lists only tables, and views are not opened as tables
+    tablesExcludeViewsTest(string label) {
+        Datasource ds = getDs(label);
+        AbstractDatabase db = AbstractDatabase::getDatabase(ds);
+        DbDataProvider dp(ds);
+
+        AbstractDataProvider tables = dp.getChildProvider("tables");
+        assertEq(db.listTables(), tables.getChildProviderNames());
+        hash<string, bool> table_set = toSet(tables.getChildProviderNames());
+        assertTrue(table_set.hasKey(objName(label, "t")));
+        assertFalse(table_set.hasKey(objName(label, "v")));
+        assertFalse(table_set.hasKey(objName(label, "vx")));
+        assertFalse(table_set.hasKey(objName(label, "mv")));
+
+        # the views child does not open a table
+        assertNothing(dp.getChildProvider("views").getChildProvider(objName(label, "t")));
+        assertNothing(dp.getChildProvider("views").getChildProvider(objName(label, "no_such_view")));
+
+        # Oracle's getTable() opens a view as a table, as it always has, so only the other databases are checked
+        if (label != "oracle") {
+            # a view is not opened as a table, neither by the tables child nor by the top-level table fallback
+            assertNothing(tables.getChildProvider(objName(label, "v")));
+            assertNothing(dp.getChildProvider(objName(label, "v")));
+        }
+        # the top-level table fallback still opens tables
+        assertEq("DbTableDataProvider", dp.getChildProvider(objName(label, "t")).getInfo().type);
+    }
+
+    #! a view's provider returns the view's records, record type and search results
+    viewReadTest(string label) {
+        Datasource ds = getDs(label);
+        DbDataProvider dp(ds);
+        AbstractDataProvider view = dp.getChildProviderPath("views/" + objName(label, "v"));
+        assertEq("DbViewDataProvider", view.getInfo().type);
+        assertEq(objName(label, "v"), view.getName());
+        assertRegex("^Read-only record-based data provider for db view", view.getDesc());
+
+        # the record type is the view's columns, with the types of the table's columns that they select
+        hash<string, AbstractDataField> rec_type = view.getRecordType();
+        assertEq(("id", "name", "amount"), keys rec_type);
+        assertEq(NT_INT, rec_type.id.getType().getBaseTypeCode());
+        hash<string, AbstractDataField> table_type = dp.getChildProviderPath("tables/" + objName(label, "t"))
+            .getRecordType();
+        foreach string field in (keys rec_type) {
+            assertEq(table_type{field}.getType().getBaseTypeCode(), rec_type{field}.getType().getBaseTypeCode(),
+                field);
+        }
+
+        # all records of the view: the view has the rows with id < 3 only
+        list<hash<auto>> recs = getRecords(view, NOTHING, {"orderby": "id"});
+        assertEq((1, 2), map $1.id, recs);
+        assertEq(("alpha", "beta"), map $1.name, recs);
+        assertEq((1.5, 2.5), map $1.amount.toFloat(), recs);
+
+        # a search with a where hash
+        recs = getRecords(view, {"id": 2});
+        assertEq(1, recs.size());
+        assertEq("beta", recs[0].name);
+        # a row of the table that is not in the view is not found
+        assertEq((), getRecords(view, {"id": 3}));
+
+        # single record searches
+        assertEq("alpha", view.searchSingleRecord({"id": 1}).name);
+        assertNothing(view.searchSingleRecord({"id": 3}));
+        assertThrows("MULTIPLE-RECORDS-ERROR", \view.searchSingleRecord(), NOTHING);
+
+        # bulk read
+        AbstractDataProviderBulkRecordInterface bulk = view.searchRecordsBulk(10, NOTHING, {"orderby": "id"});
+        hash<auto> block = bulk.getValue();
+        assertEq((1, 2), block.id);
+        assertEq(("alpha", "beta"), block.name);
+        assertNothing(bulk.getValue());
+
+        # the reads leave no transaction open
+        assertFalse(ds.currentThreadInTransaction());
+
+        # a view with a computed column
+        AbstractDataProvider viewx = dp.getChildProviderPath("views/" + objName(label, "vx"));
+        assertEq(("id", "dbl"), keys viewx.getRecordType());
+        recs = getRecords(viewx, NOTHING, {"orderby": "id"});
+        assertEq((1, 2, 3), map $1.id, recs);
+        assertEq((3.0, 5.0, 7.5), map $1.dbl.toFloat(), recs);
+    }
+
+    #! a view's provider supports the search options and expressions of the table provider that apply to views
+    viewSearchOptionsTest(string label) {
+        Datasource ds = getDs(label);
+        DbDataProvider dp(ds);
+        AbstractDataProvider view = dp.getChildProviderPath("views/" + objName(label, "vx"));
+
+        # the published search options are the table provider's options without forupdate and partition
+        hash<auto> info = view.getInfo();
+        assertEq(keys (DbTableDataProvider::SearchOptions - ("forupdate", "partition")), keys info.search_options);
+        assertTrue(info.supports_search_expressions);
+        assertTrue(info.expressions.hasKey(DP_SEARCH_OP_EQ));
+        assertTrue(info.expressions{DP_SEARCH_OP_EQ}.supports_pushdown);
+        assertEq(view.getExpressionsWithOptions(), info.expressions);
+
+        # paging
+        list<hash<auto>> recs = getRecords(view, NOTHING, {"orderby": "id", "limit": 1, "offset": 1});
+        assertEq((2,), map $1.id, recs);
+
+        # projection
+        recs = getRecords(view, {"id": 3}, {"columns": "dbl"});
+        assertEq(({"dbl": recs[0].dbl},), recs);
+        assertEq(7.5, recs[0].dbl.toFloat());
+
+        # a search operator
+        recs = getRecords(view, {"id": dp_op_gt(1)}, {"orderby": "id"});
+        assertEq((2, 3), map $1.id, recs);
+
+        # a DPQL expression, evaluated in the database
+        recs = getRecords(view, DataProvider::parseDpqlExpression("@id >= 2 && @id <= 3"), {"orderby": "id"});
+        assertEq((2, 3), map $1.id, recs);
+
+        # max_records
+        assertThrows("MAX-RECORDS-EXCEEDED", sub () { getRecords(view, NOTHING, {"max_records": 1}); });
+
+        # requires_result
+        assertThrows("NO-DATA", sub () { getRecords(view, {"id": 99}, {"requires_result": True}); });
+
+        # options that do not apply to a view are refused
+        assertThrows("SEARCH-OPTION-ERROR", sub () { view.searchRecords(NOTHING, {"forupdate": True}); });
+        assertThrows("SEARCH-OPTION-ERROR", sub () { view.searchRecords(NOTHING, {"partition": "p1"}); });
+
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    #! a view's provider advertises only reading and refuses every write
+    readOnlyTest(string label) {
+        Datasource ds = getDs(label);
+        DbDataProvider dp(ds);
+        list<string> paths = ("views/" + objName(label, "v"),);
+        if (AbstractDatabase::getDatabase(ds).supportsMaterializedViews()) {
+            paths += "materialized-views/" + objName(label, "mv");
+        }
+        foreach string path in (paths) {
+            AbstractDataProvider view = dp.getChildProviderPath(path);
+            hash<DataProviderInfo> info = view.getInfo();
+            assertTrue(info.supports_read, path);
+            assertTrue(info.supports_bulk_read, path);
+            assertTrue(info.has_record, path);
+            foreach string flag in ("supports_create", "supports_update", "supports_upsert", "supports_delete",
+                    "supports_bulk_create", "supports_bulk_upsert", "supports_add_field", "supports_update_field",
+                    "supports_delete_field", "supports_children", "supports_child_create", "supports_child_delete",
+                    "transaction_management") {
+                assertFalse(info{flag}, path + ": " + flag);
+            }
+            # a view has no request; a request of a materialized view refreshes it, which is not a record write
+            assertEq(path =~ /^materialized-views\//, info.supports_request, path + ": supports_request");
+            assertNothing(info.create_options, path);
+            assertNothing(info.upsert_options, path);
+            assertFalse(view.requiresTransactionManagement(), path);
+
+            assertThrows("INVALID-OPERATION", \view.createRecord(), ({"id": 10, "name": "x"},));
+            assertThrows("INVALID-OPERATION", \view.upsertRecord(), ({"id": 1, "name": "x"},));
+            assertThrows("INVALID-OPERATION", \view.updateRecords(), ({"name": "x"}, {"id": 1}));
+            assertThrows("INVALID-OPERATION", \view.updateSingleRecord(), ({"name": "x"}, {"id": 1}));
+            assertThrows("INVALID-OPERATION", \view.deleteRecords(), ({"id": 1},));
+            assertThrows("INVALID-OPERATION", \view.getBulkInserter());
+            assertThrows("INVALID-OPERATION", \view.getBulkUpserter());
+            assertThrows("INVALID-OPERATION", \view.deleteField(), "name");
+        }
+        # nothing was changed
+        assertEq(3, ds.selectRow(sprintf("select count(1) as c from %st", prefix)).c.toInt());
+        assertEq("alpha", ds.selectRow(sprintf("select name from %st where id = 1", prefix)).name);
+        assertFalse(ds.currentThreadInTransaction());
+
+        # the views container cannot create or delete children
+        AbstractDataProvider views = dp.getChildProvider("views");
+        hash<DataProviderInfo> vinfo = views.getInfo();
+        assertFalse(vinfo.supports_child_create);
+        assertFalse(vinfo.supports_child_delete);
+        assertTrue(vinfo.children_can_support_records);
+        assertFalse(vinfo.children_can_support_transactions);
+    }
+
+    #! materialized views are a separate child where the database supports them, and the child is absent elsewhere
+    materializedViewTest(string label) {
+        Datasource ds = getDs(label);
+        AbstractDatabase db = AbstractDatabase::getDatabase(ds);
+        DbDataProvider dp(ds);
+
+        if (!db.supportsMaterializedViews()) {
+            assertEq((), db.listMaterializedViews());
+            assertFalse(inlist("materialized-views", dp.getChildProviderNames()));
+            assertNothing(dp.getChildProvider("materialized-views"));
+            assertThrows("INVALID-CHILD-PROVIDER", \dp.getChildProviderPath(), "materialized-views/x");
+            assertThrows("INVALID-CHILD-PROVIDER", \dp.getChildProviderPath(), "materialized-views");
+            return;
+        }
+
+        AbstractDataProvider mviews = dp.getChildProvider("materialized-views");
+        assertEq("DbMaterializedViewsDataProvider", mviews.getInfo().type);
+        assertEq(db.listMaterializedViews(), mviews.getChildProviderNames());
+        assertTrue(inlist(objName(label, "mv"), mviews.getChildProviderNames()));
+        if (label == "pgsql") {
+            assertEq((objName(label, "mv"),), mviews.getChildProviderNames());
+        }
+        # a view is not a materialized view, and a materialized view is not a view
+        assertNothing(mviews.getChildProvider(objName(label, "v")));
+        assertNothing(mviews.getChildProvider(objName(label, "t")));
+        assertNothing(dp.getChildProvider("views").getChildProvider(objName(label, "mv")));
+
+        list<hash<DataProviderSummaryInfo>> summary = mviews.getChildProviderSummaryInfo();
+        assertEq(mviews.getChildProviderNames(), map $1.name, summary);
+        assertEq("DbMaterializedViewDataProvider", summary[0].type);
+        assertTrue(summary[0].supports_read);
+        assertFalse(summary[0].supports_create);
+
+        AbstractDataProvider mview = mviews.getChildProvider(objName(label, "mv"));
+        assertEq("DbMaterializedViewDataProvider", mview.getInfo().type);
+        assertRegex("^Record-based data provider for db materialized view .*; supports read/search .*read-only, "
+            "and refreshing it with a request$", mview.getDesc());
+        assertEq(("id", "name"), keys mview.getRecordType());
+        list<hash<auto>> recs = getRecords(mview, NOTHING, {"orderby": "id"});
+        assertEq((1, 2, 3), map $1.id, recs);
+        assertEq(("alpha", "beta", "gamma"), map $1.name, recs);
+        assertEq("gamma", mview.searchSingleRecord(DataProvider::parseDpqlExpression("@id == 3")).name);
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    #! view providers can be created from constructor options, and only for an existing relation of their kind
+    constructorOptionsTest(string label) {
+        Datasource ds = getDs(label);
+        AbstractDatabase db = AbstractDatabase::getDatabase(ds);
+
+        DbViewDataProvider view({"datasource": ds, "view": objName(label, "v")});
+        assertEq((1, 2), map $1.id, getRecords(view, NOTHING, {"orderby": "id"}));
+
+        assertThrows("VIEW-ERROR", sub () { DbViewDataProvider p({"datasource": ds,
+            "view": objName(label, "t")}); });
+        assertThrows("VIEW-ERROR", sub () { DbViewDataProvider p({"datasource": ds,
+            "view": objName(label, "no_such_view")}); });
+        assertThrows("CONSTRUCTOR-ERROR", sub () { DbViewDataProvider p({"datasource": ds}); });
+
+        # a view is not a materialized view
+        assertThrows("VIEW-ERROR", sub () { DbMaterializedViewDataProvider p({"datasource": ds,
+            "view": objName(label, "v")}); });
+        if (db.supportsMaterializedViews()) {
+            DbMaterializedViewDataProvider mview({"datasource": ds, "view": objName(label, "mv")});
+            assertEq((1, 2, 3), map $1.id, getRecords(mview, NOTHING, {"orderby": "id"}));
+            # a materialized view is not a view
+            assertThrows("VIEW-ERROR", sub () { DbViewDataProvider p({"datasource": ds,
+                "view": objName(label, "mv")}); });
+        }
+    }
+
+    #! the actions of views and materialized views are registered as read actions with the view provider info
+    actionCatalogTest() {
+        hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHashEx(
+            DbDataProvider::AppName);
+        hash<string, hash<auto>> expected = {
+            "find-view": {"path": "/views/{view}", "code": DPAT_FIND, "type": "DbViewDataProvider"},
+            "find-single-view": {"path": "/views/{view}", "code": DPAT_FIND_SINGLE, "type": "DbViewDataProvider"},
+            "find-materialized-view": {"path": "/materialized-views/{view}", "code": DPAT_FIND,
+                "type": "DbMaterializedViewDataProvider"},
+            "find-single-materialized-view": {"path": "/materialized-views/{view}", "code": DPAT_FIND_SINGLE,
+                "type": "DbMaterializedViewDataProvider"},
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            *hash<DataProviderActionInfo> action = actions{i.key};
+            assertEq(i.value.path, action.path, i.key);
+            assertEq(i.value.code, action.action_code, i.key);
+            assertEq(i.value.type, action.data_provider_info.type, i.key);
+            assertTrue(action.data_provider_info.supports_read, i.key);
+            assertFalse(action.data_provider_info.supports_create, i.key);
+            assertFalse(boolean(action.mutates_state), i.key);
+            assertEq(("view",), keys action.path_vars, i.key);
+        }
+        # the presentation of the actions of views and materialized views
+        foreach hash<DataProviderActionInfo> action in (actions.iterator()) {
+            *string group = action.path =~ /^\/views\// ? "Views"
+                : (action.path =~ /^\/materialized-views\// ? "Materialized Views" : NOTHING);
+            if (!group) {
+                continue;
+            }
+            assertRegex("^[a-z]+(-[a-z]+)+$", action.action, "verb-noun action name");
+            assertEq((group,), action.groups, action.action);
+            assertTrue(action.display_name.val(), action.action);
+            assertTrue(action.short_desc.size() < 80, action.action + ": short_desc under 80 characters");
+            assertNRegex("[`*]", action.short_desc, action.action + ": short_desc is plain text");
+            assertRegex("\\.\n\n", action.desc, action.action + ": desc has paragraphs");
+            assertTrue(action.path_vars.view.display_name.val(), action.action);
+            assertTrue(action.path_vars.view.short_desc.val(), action.action);
+        }
+        # the refresh options: the most used ones are preselected
+        hash<string, hash<ActionOptionInfo>> refresh_opts = actions."refresh-materialized-view".options;
+        assertTrue(refresh_opts.concurrent.preselected);
+        assertTrue(refresh_opts.method.preselected);
+        assertFalse(boolean(refresh_opts.atomic_refresh.preselected));
+        assertEq(("Force", "Complete", "Fast"), map $1.display_name, refresh_opts.method.allowed_values);
+
+        # no record write action is registered for views; the only other action of a materialized view refreshes it
+        foreach hash<DataProviderActionInfo> action in (actions.iterator()) {
+            if (action.path =~ /^\/views\//) {
+                assertTrue(inlist(action.action_code, (DPAT_FIND, DPAT_FIND_SINGLE)), action.action);
+            } else if (action.path =~ /^\/materialized-views\//) {
+                assertTrue(inlist(action.action_code, (DPAT_FIND, DPAT_FIND_SINGLE))
+                    || (action.action_code == DPAT_API && action.action == "refresh-materialized-view"),
+                    action.action);
+            }
+        }
+    }
+
+    #! returns all records of a search
+    private static list<hash<auto>> getRecords(AbstractDataProvider provider, *hash<auto> where_cond,
+            *hash<auto> search_options) {
+        AbstractDataProviderRecordIterator i = provider.searchRecords(where_cond, search_options);
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
+    }
+}

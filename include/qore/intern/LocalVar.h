@@ -90,6 +90,12 @@ public:
     }
 };
 
+//! Adds the declared type of a variable to its hash from get_local_vars(), for debuggers
+/** sets \c "declaredType" to the name of the type if the variable has one, and \c "unassigned" to @ref True if the
+    variable has no value but its type requires one, as for a variable that was declared but not assigned
+*/
+DLLLOCAL void qore_set_local_var_debug_type(QoreHashNode& v, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
+
 class VarValueBase {
 protected:
     DLLLOCAL int checkFinalized(ExceptionSink* xsink) const {
@@ -1042,6 +1048,25 @@ public:
         exception was raised or, with @a for_remove, if the variable holds a reference whose target does not exist
         (nothing to remove; no exception is raised)
     */
+    //! Binds a value of the variable on a thread's local variable stack, as of a frame that a debugger selects, to
+    //! @a lvh, with the type and the read-only state of the variable, as an assignment in the code
+    /** @return 0 if the value is bound, -1 if an exception was raised, as for a read-only variable
+    */
+    DLLLOCAL int getLValueForValue(const LocalVarValue& val, LValueHelper& lvh) const {
+        if (read_only) {
+            lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",
+                "cannot modify read-only local variable '%s'", name.c_str());
+            return -1;
+        }
+        // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        const QoreTypeInfo* rti = refTypeInfo;
+        if (type_info_needs_substitution || ref_type_info_needs_substitution) {
+            val.resolveLValueTypeInfo(ti, rti, type_info_needs_substitution, ref_type_info_needs_substitution);
+        }
+        return val.getLValue(lvh, false, ti, rti);
+    }
+
     DLLLOCAL LocalVarLValueLookup tryGetLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
         //printd(5, "LocalVar::tryGetLValue() this: %p '%s' for_remove: %d closure_use: %d ti: '%s' rti: '%s'\n", this,
         //  getName(), for_remove, closure_use, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
@@ -1449,8 +1474,44 @@ public:
         return decl_seq;
     }
 
+    //! Sets the private data of the Program that created the variable; see setParseScopePrev()
+    DLLLOCAL void setOwner(const void* o) {
+        owner = o;
+    }
+
+    //! Returns the private data of the Program that created the variable, if any
+    DLLLOCAL const void* getOwner() const {
+        return owner;
+    }
+
+    //! Records the variable that was below this one in its frame when it was first pushed on the parse stack
+    /** The variables of a Program form chains of the variables of the frame of each point of its code, which
+        statements keep for debuggers (see AbstractStatement::getScopeLocalVars()); the chain of a function ends with
+        its first variable, as the top-level variables of the program, which have global scope, are visible to all of
+        its code.  A variable of another Program, or of none, is not linked, so that a chain stays in one Program,
+        which owns all of its variables.  A variable that is pushed again, as a parameter for each parse of its
+        function, keeps its first link, which is the same each time
+    */
+    DLLLOCAL void setParseScopePrev(const LocalVar* prev) {
+        if (!parse_scope_set) {
+            parse_scope_set = true;
+            parse_scope_prev = (prev && owner && prev->owner == owner) ? prev : nullptr;
+        }
+    }
+
+    //! Returns the variable that was visible below this one at parse time; see setParseScopePrev()
+    DLLLOCAL const LocalVar* getParseScopePrev() const {
+        return parse_scope_prev;
+    }
+
 private:
     std::string name;
+    //! the private data of the Program that created the variable; see setParseScopePrev()
+    const void* owner = nullptr;
+    //! the variable that was visible below this one at parse time; see setParseScopePrev()
+    const LocalVar* parse_scope_prev = nullptr;
+    //! true when parse_scope_prev has been set
+    bool parse_scope_set = false;
     //! the order of the variable's creation at parse time
     uint64_t decl_seq;
     bool closure_use = false,

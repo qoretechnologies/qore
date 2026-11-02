@@ -1,0 +1,233 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlSequenceFunctionTest
+
+#! a datasource that records the SQL that it is given and refuses the statements it is told to refuse
+class MysqlRefusingDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given
+        list<string> log = ();
+
+        #! the error code that the server gives for a statement that starts with a key, as MySQL's driver gives it
+        hash<string, int> refuse = {};
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "mtest"; }
+    *string getUserName() { return "muser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "mysql"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return "mysql:muser@mtest"; }
+    # MysqlDatabase makes a datasource of its own for sequences from this configuration; it is never opened
+    hash<auto> getConfigHash() { return {"type": "mysql", "user": "muser", "db": "mtest"}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { return run(sql); }
+    auto vexec(string sql, *softlist<auto> vargs) { return run(sql); }
+    auto execRaw(string sql) { return run(sql); }
+    auto select(string sql, ...) { log += sql; }
+    auto vselect(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRow(string sql, ...) { log += sql; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRows(string sql, ...) { log += sql; }
+    auto vselectRows(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+
+    #! records the statement, and raises the error that the server gives for it, if any
+    private int run(string sql) {
+        log += sql;
+        foreach hash<auto> i in (refuse.pairIterator()) {
+            if (sql.substr(0, i.key.size()) == i.key) {
+                throw "DBI:MYSQL:ERROR", sprintf("refused %d", i.value), {
+                    "alterr": "HY000",
+                    "alterr_code": i.value,
+                    "alterr_diag": sprintf("refused %d", i.value),
+                };
+            }
+        }
+        return 0;
+    }
+}
+
+#! Tests the error raised when a MySQL server with binary logging refuses the function that emulates sequences
+class MysqlSequenceFunctionTest inherits QUnit::Test {
+    private {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+    }
+
+    constructor() : Test("MysqlSequenceFunctionTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("a refusal to create the sequence function names its requirement", \refusal());
+        addTestCase("other errors and other functions are not changed", \otherErrors());
+        addTestCase("live: the sequence function on the server", \live());
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(22);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"mysql:user/pass@db\")", 22);
+    }
+
+    #! returns the statement that creates the sequence function, as schema alignment gives it
+    private static string getCreateFunctionSql(MysqlDatabase db, MysqlRefusingDatasource rds) {
+        rds.log = ();
+        list<auto> sql = db.getAlignSql({"sequences": {"s1": {}}});
+        list<auto> create = select sql, $1 =~ /^create function /;
+        if (create.size() != 1) {
+            throw "TEST-ERROR", sprintf("expected one create function statement; got: %y", sql);
+        }
+        return create[0];
+    }
+
+    refusal() {
+%ifdef NoMysql
+        testSkip("the mysql module is not available");
+%else
+        foreach *hash<auto> opts in ((NOTHING, {"sequence_function": "my_nextval"})) {
+            string fname = opts.sequence_function ?? "sqlutil_nextval";
+            MysqlRefusingDatasource rds();
+            MysqlDatabase db(rds, opts);
+            string sql = getCreateFunctionSql(db, rds);
+            assertEq(0, sql.find("create function " + fname + "("), "the statement creates the sequence function");
+
+            foreach int code in ((1418, 1419)) {
+                rds.refuse = {"create function": code};
+                # both ways of executing a statement are covered
+                foreach code exec in ((sub () { db.tryExecRaw(sql); }, sub () { db.tryExecArgs(sql); })) {
+                    # only the call is in the try block, as a failed assertion raises an exception too
+                    *hash<ExceptionInfo> ex;
+                    try {
+                        exec();
+                    } catch (hash<ExceptionInfo> ex0) {
+                        ex = ex0;
+                    }
+                    assertEq("MYSQL-SEQUENCE-ERROR", ex.err, sprintf("error %d: the error", code));
+                    assertRegex("cannot create function \"" + fname + "\", which emulates sequences",
+                        ex.desc ?? "", sprintf("error %d: the function is named", code));
+                    assertRegex("only when the global system variable log_bin_trust_function_creators is 1",
+                        ex.desc ?? "",
+                        sprintf("error %d: the requirement is named", code));
+                    assertRegex("whatever the user's privileges \\(SUPER does not lift this\\)", ex.desc ?? "",
+                        sprintf("error %d: SUPER is not enough", code));
+                    assertRegex("the server said: DBI:MYSQL:ERROR: refused " + code, ex.desc ?? "",
+                        sprintf("error %d: the server's message is given", code));
+                    assertEq(code, ex.arg.arg.alterr_code,
+                        sprintf("error %d: the server's exception is the argument", code));
+                }
+            }
+        }
+%endif
+    }
+
+    otherErrors() {
+%ifdef NoMysql
+        testSkip("the mysql module is not available");
+%else
+        MysqlRefusingDatasource rds();
+        MysqlDatabase db(rds);
+        string sql = getCreateFunctionSql(db, rds);
+
+        # another error creating the sequence function is the server's error
+        rds.refuse = {"create function": 1064};
+        assertThrows("DBI:MYSQL:ERROR", "refused 1064", \db.tryExecRaw(), sql);
+        # the same refusal of another function is the server's error
+        rds.refuse = {"create function": 1418};
+        assertThrows("DBI:MYSQL:ERROR", "refused 1418", \db.tryExecRaw(),
+            "create function other_function(a int) returns int return a");
+        # another statement is the server's error
+        rds.refuse = {"create table": 1418};
+        assertThrows("DBI:MYSQL:ERROR", "refused 1418", \db.tryExecRaw(), "create table t (id int)");
+        # a statement that succeeds gives its result
+        rds.refuse = {};
+        assertEq(0, db.tryExecRaw(sql), "a statement that succeeds gives its result");
+%endif
+    }
+
+    live() {
+        *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL;
+        if (!connstr) {
+            testSkip("no MySQL connection configured (use -c or QORE_DB_CONNSTR_MYSQL)");
+        }
+        Datasource ds(connstr);
+        if (ds.getDriverName() != "mysql") {
+            testSkip(sprintf("connection uses driver %y, not mysql", ds.getDriverName()));
+        }
+        # a configured server that cannot be reached (ex: the CI service on a host without it) is a skip, as in the
+        # other MySQL tests; every other error fails the test
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "DBI:MYSQL:CONNECT-ERROR") {
+                rethrow;
+            }
+            testSkip(sprintf("cannot connect to MySQL: %s: %s", ex.err, ex.desc));
+        }
+        hash<auto> vars = ds.selectRow("select @@log_bin as log_bin, "
+            "@@log_bin_trust_function_creators as trust");
+        bool refused = vars.log_bin.toBool() && !vars.trust.toBool();
+
+        # a sequence table and function of the test's own, so that the database's are not changed
+        string prefix = "qore_msf_" + get_random_string(8).lwr() + "_";
+        MysqlDatabase db(ds, {"sequence_table": prefix + "seq", "sequence_function": prefix + "nextval"});
+        on_exit {
+            try {
+                ds.rollback();
+                ds.exec(sprintf("drop function if exists %snextval", prefix));
+                ds.exec(sprintf("drop table if exists %sseq", prefix));
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop the test's sequence objects: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        list<auto> sql = db.getAlignSql({"sequences": {prefix + "s1": {}}});
+        # only the statements are in the try block, as a failed assertion raises an exception too
+        *hash<ExceptionInfo> ex;
+        try {
+            map db.tryExecRaw($1), sql;
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex0) {
+            ds.rollback();
+            ex = ex0;
+        }
+        if (!refused) {
+            assertNothing(ex, sprintf("the function is created (log_bin: %y, log_bin_trust_function_creators: %y)",
+                vars.log_bin, vars.trust));
+            assertEq(1, db.getNextSequenceValue(prefix + "s1"), "the emulated sequence gives its first value");
+            return;
+        }
+        assertEq("MYSQL-SEQUENCE-ERROR", ex.err, "the server refuses the function with binary logging and without "
+            "log_bin_trust_function_creators");
+        assertRegex("only when the global system variable log_bin_trust_function_creators is 1", ex.desc ?? "",
+            "the requirement is named");
+        assertRegex("the server said: .*binary logging is enabled", ex.desc ?? "", "the server's message is given");
+        assertTrue(inlist(ex.arg.arg.alterr_code, (1418, 1419)), "the server's error is the argument");
+    }
+}

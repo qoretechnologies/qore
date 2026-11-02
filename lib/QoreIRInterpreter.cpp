@@ -7,6 +7,7 @@
     Copyright (C) 2026 Qore Technologies, s.r.o.
 */
 
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
@@ -4313,7 +4314,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     } else if (base.getType() == NT_WEAKREF) {
         self = base.get<const WeakReferenceNode>()->get();
         if (!self || !self->isValid()) {
-            xsink->raiseException("OBJECT-ALREADY-DELETED",
+            qore_raise_deleted_object(xsink, 
                 "cannot call '%s()' on a deleted weak reference", method_name);
             result = QoreValue();
             return true;
@@ -4323,7 +4324,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (!self->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED",
+        qore_raise_deleted_object(xsink, 
             "cannot call '%s()' on an object that has already been deleted", method_name);
         result = QoreValue();
         return true;
@@ -6899,6 +6900,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return qore_program_private::get(*pgm)->getStatementFromIndex(
             dbg_inst->loc->getFile(), dbg_inst->cached_start_line + dbg_inst->loc->offset);
     };
+    // the statement of an exception event for the debugger: the current statement of the frame, which the
+    // DebugStatement instructions set while a debugger is attached, if its location contains the instruction; the
+    // statement found by the instruction's location otherwise, which on a line with several statements is the first
+    // of them
+    auto get_exception_statement = [&](const QoreIRInstruction* inst) -> const AbstractStatement* {
+        const AbstractStatement* stmt = *rl_cache.stmt_ptr;
+        if (stmt && inst->loc && stmt->loc && stmt->loc->getFile() == inst->loc->getFile()
+            && stmt->loc->start_line <= inst->loc->start_line && stmt->loc->end_line >= inst->loc->start_line) {
+            return stmt;
+        }
+        return getDebugStatement(inst);
+    };
 
     auto findDismissTarget = [](QoreIRBasicBlock* start, QoreIRBasicBlock*& target_block,
             size_t& target_ip) -> bool {
@@ -6962,6 +6975,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             tlpd->dbgFunctionExit(statements, return_value, xsink);
             return false;  // local_cleanup RAII handles cleanup
         }
+        // the debugger can set the local variables of the frame while the thread is stopped, through the runtime
+        // stack, as a callee can
+        invalidateExternalCaches();
     }
 
     if (func.blocks.empty()) {
@@ -7410,8 +7426,12 @@ next_instruction:
             goto next_instruction;
         }
         if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
-            // Update runtime_loc for exception/callstack reporting via cached pointers
-            *rl_cache.stmt_ptr = nullptr;
+            // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
+            // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
+            // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
+            if (!debug_active) {
+                *rl_cache.stmt_ptr = nullptr;
+            }
             *rl_cache.loc_ptr = inst->loc;
             last_ephemeral_line = inst->cached_start_line;
             if (!debug_active) {
@@ -8434,7 +8454,9 @@ next_instruction:
                         fflush(stderr);
                     }
                     if (debug_active) {
-                        tlpd->dbgException(getDebugStatement(inst), xsink);
+                        tlpd->dbgException(get_exception_statement(inst), xsink);
+                        // the debugger can set the local variables of the frame at the stop of the exception
+                        invalidateExternalCaches();
                         if (trace_ir_exceptions) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
@@ -9160,10 +9182,10 @@ load_local_done:
                     const QoreHashNode* h = base.get<const QoreHashNode>();
                     bool exists = false;
                     QoreValue v = h->getKeyValueExistence(hka_inst->key_name.c_str(), exists);
-                    if (exists) {
+                    // a key with no value gives no value, as a missing key does and as the AST interpreter reads it
+                    if (exists && !v.isNothing()) {
                         out = v.getAsBigInt();
                     }
-                    // else: key missing → NOTHING
                 }
                 setValueSlot(values, hka_inst->result.id, out, xsink);
                 ++ip;
@@ -12443,9 +12465,15 @@ load_local_done:
             }
             case QoreIROpcode::DebugBlock: {
                 if (debug_active && !(xsink && *xsink)) {
+                    // the block of the instruction, or the block that starts at its location, as for the debug IR of
+                    // AOT code; the block of the function otherwise
                     const StatementBlock* dbg_block = nullptr;
-                    if (AbstractStatement* dbg_stmt = getDebugStatement(inst)) {
-                        dbg_block = dynamic_cast<const StatementBlock*>(dbg_stmt);
+                    if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+                        dbg_block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
+                    }
+                    if (!dbg_block && pgm && inst->loc && inst->cached_start_line >= 0) {
+                        dbg_block = qore_program_private::get(*pgm)->getBlockFromIndex(inst->loc->getFile(),
+                            inst->cached_start_line + inst->loc->offset, inst->loc->end_line + inst->loc->offset);
                     }
                     if (!dbg_block) {
                         dbg_block = statements;
@@ -12490,7 +12518,12 @@ load_local_done:
                         dbg_stmt = getDebugStatement(inst);
                     }
                     if (dbg_stmt) {
+                        // the current statement of the frame, which the frames of its calls record
+                        *rl_cache.stmt_ptr = dbg_stmt;
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
+                        // the debugger can set the local variables of the frame while the thread is stopped,
+                        // through the runtime stack, as a callee can: they are read from it again
+                        invalidateExternalCaches();
                         if (ir_trace_debug_env.get()) {
                             fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p dbg_rc=%d xsink=%d\n",
                                 func.name.c_str(), dbg_stmt->loc->start_line + dbg_stmt->loc->offset,
@@ -12766,6 +12799,19 @@ load_local_done:
             }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
+                if (scope_inst->trim) {
+                    // The scope stays open: only the handlers registered after its first keep_handlers ones are
+                    // dropped, without running them, because they are lowered inline; the handlers kept run on the
+                    // exception path of the scope if an inlined handler raises an exception
+                    if (!scope_stack.empty()) {
+                        size_t keep = scope_stack.back() + scope_inst->keep_handlers;
+                        if (on_block_exit_handlers.size() > keep) {
+                            on_block_exit_handlers.resize(keep);
+                        }
+                    }
+                    ++ip;
+                    break;
+                }
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
                 if (!scope_stack.empty()) {
                     size_t scope_start = scope_stack.back();
@@ -15639,7 +15685,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (!o || !o->isValid()) {
-                        xsink->raiseException("OBJECT-ALREADY-DELETED",
+                        qore_raise_deleted_object(xsink, 
                             "cannot call method on a deleted weak reference");
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -16416,7 +16462,9 @@ load_local_done:
                     }
                 }
                 if (debug_active && xsink && *xsink) {
-                    tlpd->dbgException(getDebugStatement(inst), xsink);
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
+                    // the debugger can set the local variables of the frame at the stop of the exception
+                    invalidateExternalCaches();
                 }
                 if (throw_inst->exception_target) {
                     // The landing pad is in this frame, so only the throwing statement's own
@@ -16476,7 +16524,9 @@ load_local_done:
                     }
                 }
                 if (debug_active && *xsink) {
-                    tlpd->dbgException(getDebugStatement(inst), xsink);
+                    tlpd->dbgException(get_exception_statement(inst), xsink);
+                    // the debugger can set the local variables of the frame at the stop of the exception
+                    invalidateExternalCaches();
                 }
                 // Clean up ALL active catch scopes (catch_depth levels)
                 for (int i = 0; i < rethrow_inst->catch_depth; ++i) {
@@ -18308,6 +18358,36 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
     return QoreValue();
 }
 
+//! returns the type whose default value += and -= give an lvalue of the given type with no value
+/** an or-nothing type (*T) gives T, so that the lvalue gives the result of T for an operand with a value
+*/
+static const QoreTypeInfo* get_compound_default_type(const QoreTypeInfo* ti) {
+    if (QoreTypeInfo::hasDefaultValue(ti)) {
+        return ti;
+    }
+    const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
+    return plain != ti && QoreTypeInfo::hasDefaultValue(plain) ? plain : ti;
+}
+
+bool qore_is_int_lvalue_type(const QoreTypeInfo* ti) {
+    const QoreTypeInfo* plain = get_or_nothing_base_type(ti);
+    return QoreTypeInfo::isType(plain, NT_INT) && !QoreTypeInfo::equal(plain, timeoutTypeInfo);
+}
+
+QoreValue qore_int_lvalue_minus_date(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
+    ValueHolder current(v.getReferencedValue(), xsink);
+    ValueHolder result(QoreIRInterpreter::evalBinary(QoreIROpcode::SubAny, *current, right, xsink), xsink);
+    if (*xsink || v.assign(result.release(), "<-= operator>")) {
+        return QoreValue();
+    }
+    return v.getReferencedValue();
+}
+
+//! returns true if the lvalue type is timeout or *timeout, which take a date operand as milliseconds
+static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo);
+}
+
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
@@ -18321,6 +18401,8 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        // an or-nothing lvalue (*T) with no value takes the default value of T for an operand with a value
+        const QoreTypeInfo* plain_default_ti = get_compound_default_type(typeInfo);
         if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
             if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {
                 return QoreValue();
@@ -18334,6 +18416,11 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
             vtype = v.getType();
         } else if (right.isNothing()) {
             return QoreValue();
+        } else if (plain_default_ti != typeInfo) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(plain_default_ti), "<lvalue for += operator>")) {
+                return QoreValue();
+            }
+            vtype = v.getType();
         } else if (QoreTypeInfo::isHashType(typeInfo)) {
             if (v.assign(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)),
                     "<lvalue for += operator>")) {
@@ -18404,7 +18491,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         }
     } else {
         // if the lvalue is a timeout, then convert any date/time value as if it were a timeout
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+        if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.plusEqualsBigInt(ms);
         }
@@ -18437,10 +18524,12 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
 
     if (vtype == NT_NOTHING) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
+        // an or-nothing lvalue (*T) takes the default value of T
+        const QoreTypeInfo* default_ti = get_compound_default_type(typeInfo);
         if (QoreTypeInfo::isHashType(typeInfo)) {
             return QoreValue();
-        } else if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
-            if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo))) {
+        } else if (QoreTypeInfo::hasDefaultValue(default_ti)) {
+            if (v.assign(QoreTypeInfo::getDefaultQoreValue(default_ti))) {
                 return QoreValue();
             }
             vtype = v.getType();
@@ -18467,7 +18556,7 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else if (vtype == NT_DATE) {
         // the operation follows QoreMinusEqualsOperatorNode::evalImpl()
         // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
-        if (right.getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+        if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.minusEqualsBigInt(ms);
         }
@@ -18524,11 +18613,16 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
     } else {
         if (right.getType() == NT_DATE) {
             // if the lvalue is a timeout, convert date/time value as timeout
-            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            if (is_timeout_lvalue_type(v.getTypeInfo())) {
                 int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
                 return v.minusEqualsBigInt(ms);
             }
-            // any other lvalue subtracts the date's relative seconds, as the AST interpreter does
+            // an lvalue of an int type (int, *int, softint) is assigned the result of the binary operator, as
+            // x = x - d assigns it; see qore_int_lvalue_minus_date()
+            if (qore_is_int_lvalue_type(v.getTypeInfo())) {
+                return qore_int_lvalue_minus_date(v, right, xsink);
+            }
+            // any other lvalue subtracts the date's relative seconds
             return v.minusEqualsBigInt(right.get<const DateTimeNode>()->getRelativeSeconds());
         }
         // do integer minus-equals
@@ -18709,7 +18803,7 @@ QoreValue QoreIRInterpreter::evalLValueBinary(QoreIROpcode op, const QoreValue& 
             if (!v) {
                 return QoreValue();
             }
-            return v.shiftRightEqualsBigInt(val, ">>= operator>");
+            return v.shiftRightEqualsBigInt(val, "<>>= operator>");
         }
         case QoreIROpcode::UnshiftLValue:
             return evalUnshift(lvalue, right, xsink);

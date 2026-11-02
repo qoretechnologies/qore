@@ -1,9 +1,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The compound assignment AST parity test, included by the qtest files of this directory; each one sets
-# ParityPart to the part of the matrix that it runs (see CompoundAssignmentAstParityTest::writeProgram()), so that
-# the native compilation of each part, in every execution mode and with qcc, takes a part of the test time limit
+# the compound-assignment parity matrix shared by the compound-assignment-ast-parity-*.qtest tests; each checks one
+# family of operators
 
 #! Tests that every compound assignment gives the AST interpreter's result in every execution mode
 /** The AST interpreter is the reference: a compound assignment operates on the lvalue's current value by its type,
@@ -11,8 +10,10 @@
     operand as a string, a hash lvalue merges a hash or removes keys, and so on.  The other execution modes and
     compiled code must give the same value or raise the same exception.
 
-    The test generates a program that applies each compound operator to lvalues of many declared types and values,
-    in three parts, each run by a qtest file of its own (see writeProgram()):
+    The matrix is split by operator family (see OperatorFamilies), and each family is checked by its own test, so
+    that each runs in a short time; together they cover every operator.
+
+    The test generates a program that applies each compound operator to lvalues of many declared types and values:
     - with operands of many types whose type is not known at parse time, looping over the values at runtime, in
       locals, globals, class members, hash members and list elements
     - with literal operands, whose types the parser and the compilers use
@@ -20,22 +21,31 @@
     expected result, then with every other execution mode and as a qcc-compiled executable, whose output must be
     identical.
 */
-class CompoundAssignmentAstParityTest inherits QUnit::Test {
+class CompoundAssignmentAstParityBase inherits QUnit::Test {
     public {
-        #! the compound assignment operators
-        const Operators = ("+=", "-=", "*=", "/=", "%=", "|=", "&=", "^=", "<<=", ">>=");
+        #! the compound assignment operators, in the families that each test checks
+        const OperatorFamilies = (
+            ("+=",),
+            ("-=",),
+            ("*=", "/="),
+            ("%=", "|="),
+            ("&=", "^="),
+            ("<<=", ">>="),
+        );
 
         #! the lvalue types and the initial values (as Qore source) of their lvalues
-        /** Types that convert the values assigned to them (\c softint, \c softstring, \c softbool and their
-            or-nothing types) are left out: the AST interpreter stores the unconverted result of a compound
-            assignment in such an lvalue (ex: <tt>softint v = 10; v *= 1.5</tt> leaves the float 15.0 in \c v),
-            which the other execution modes do not do
-        */
         const Types = (
             ("auto", ("10", "2.5", "2.5n", "\"s\"", "True", "2024-01-02T03:04:05Z", "1h", "(1, 2)",
                 "{\"a\": 1, \"b\": 2}", "<0102>", "NOTHING", "NULL", "new C()")),
             ("int", ("10",)),
             ("*int", ("10", "NOTHING")),
+            ("softint", ("10",)),
+            ("*softint", ("10", "NOTHING")),
+            ("softfloat", ("2.5",)),
+            ("softnumber", ("2.5n",)),
+            ("softstring", ("\"s\"",)),
+            ("softbool", ("True",)),
+            ("softdate", ("2024-01-02T03:04:05Z",)),
             ("float", ("2.5",)),
             ("*float", ("2.5", "NOTHING")),
             ("number", ("2.5n",)),
@@ -75,25 +85,20 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
 
         #! the number of literal-operand statements in each generated function
         const StatementsPerFunction = 40;
-
-        #! the parts of the matrix: the runtime matrix, and the literal matrix for the first and the other types
-        const Parts = ("runtime", "literal-1", "literal-2");
-
-        #! the number of types of the literal matrix whose statements the \c "literal-1" part has
-        /** the first type, \c auto, has the most initial values, so that the two literal parts take similar times */
-        const LiteralFirstTypes = 1;
     }
 
     private {
+        #! the operators that this test checks
+        list<string> Operators;
+
         string qore_bin;
         string libqore_dir;
         string qcc_bin;
     }
 
-    constructor() : QUnit::Test("CompoundAssignmentAstParity " + ParityPart, "1.0", \ARGV) {
-        if (!inlist(ParityPart, Parts)) {
-            throw "TEST-ERROR", sprintf("unknown part %y; expecting one of %y", ParityPart, Parts);
-        }
+    #! checks the operators given; the matrix is split into families so that each test runs in a short time
+    constructor(string name, list<string> operators) : QUnit::Test(name, "1.0", \ARGV) {
+        Operators = operators;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -109,18 +114,10 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
         int combinations = writeProgram(file);
 
         list<string> expected = runMode("ast", file);
-        int runtime_lines = (select expected, $1 =~ /^rt /).size();
-        int literal_lines = (select expected, $1 =~ /^lit /).size();
-        if (ParityPart == "runtime") {
-            # the runtime matrix gives a result for every combination
-            assertTrue(combinations > 5000, sprintf("runtime combinations: %d", combinations));
-            assertEq(combinations, runtime_lines, "runtime combinations");
-            assertEq(0, literal_lines, "no literal statements in the runtime part");
-        } else {
-            # each part of the literal matrix has the statements of its types
-            assertTrue(literal_lines > 200, sprintf("literal statements: %d", literal_lines));
-            assertEq(0, runtime_lines, "no runtime combinations in a literal part");
-        }
+        # the runtime matrix gives a result for every combination
+        assertTrue(combinations > 1000, sprintf("runtime combinations: %d", combinations));
+        assertEq(combinations, (select expected, $1 =~ /^rt /).size(), "runtime combinations");
+        assertTrue((select expected, $1 =~ /^lit /).size() > 50, "literal statements");
 
         foreach string mode in (ExecModeHarness::ExecModes) {
             if (mode == "ast") {
@@ -128,6 +125,10 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
             }
             compare(mode, expected, runMode(mode, file));
         }
+
+        # the default execution mode
+        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
 
         string exe = tmp.path + DirSep + "parity";
         string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
@@ -219,8 +220,7 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
         decls += valueFunction("operand", Operands);
         decls += sprintf("const operand_src = %s;", sourceList(Operands));
 
-        # the runtime matrix: one function for each type and lvalue kind; the value functions and declarations are
-        # in every part, as the literal statements use the class
+        # the runtime matrix: one function for each type and lvalue kind
         foreach list<auto> t in (Types) {
             string type = t[0];
             string values = sprintf("init%d", $#);
@@ -242,9 +242,6 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
                 kinds += (("hash member", "hash<auto> h = {\"v\": x};", "h.v", ""),);
                 kinds += (("list element", "list<auto> l = (x,);", "l[0]", ""),);
             }
-            if (ParityPart != "runtime") {
-                continue;
-            }
             foreach list<string> k in (kinds) {
                 string loop = runtimeLoop(k[0], type, values, n, k[1], k[2], k[3], \combinations);
                 if (loop) {
@@ -254,12 +251,9 @@ class CompoundAssignmentAstParityTest inherits QUnit::Test {
             }
         }
 
-        # the literal matrix: statements that the parser accepts, for the types of the part
+        # the literal matrix: statements that the parser accepts
         list<string> body = ();
         foreach list<auto> t in (Types) {
-            if (ParityPart == "runtime" || (ParityPart == "literal-1") != ($# < LiteralFirstTypes)) {
-                continue;
-            }
             string type = t[0];
             foreach string op in (Operators) {
                 foreach string init in (t[1]) {

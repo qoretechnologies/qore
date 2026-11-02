@@ -52,9 +52,11 @@
 #define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
+#define PF_IN_TRY                (1 << 12) //!< parsing the body of a try statement of the function being parsed
 
 // all definitions in this file are private to the library and subject to change
 // forward references
+class LocalVar;
 class LVList;
 class StatementBlock;
 class QoreBreakpoint;
@@ -79,6 +81,36 @@ public:
     DLLLOCAL int parseInit(QoreParseContext& parse_context);
 
     DLLLOCAL void finalizeBlock(int sline, int eline);
+
+    //! Sets the columns of the location of the statement, which the parser knows only after creating it
+    /** @param scol the 0-based column of the first character of the statement
+        @param ecol the 0-based column after the last character of the statement
+
+        Debuggers use the columns to find a statement of a line with more than one statement
+    */
+    DLLLOCAL void setColumns(int scol, int ecol);
+
+    //! Returns true if the statement is in the body of a try statement of its function, method or top-level code
+    /** An exception that the statement raises can then be caught in its function; set at parse time, for debuggers
+    */
+    DLLLOCAL bool isInTry() const {
+        return in_try;
+    }
+
+    //! Returns true if the local variables that the statement can refer to are known; see getScopeLocalVars()
+    /** They are known for a statement that was parsed, and not for one of AOT-compiled code
+    */
+    DLLLOCAL bool isScopeKnown() const {
+        return scope_known;
+    }
+
+    //! Returns the innermost local variable that the statement can refer to, if any
+    /** The other variables follow with LocalVar::getParseScopePrev(); set at parse time, for debuggers, which check
+        the expressions of breakpoints with them
+    */
+    DLLLOCAL const LocalVar* getScopeLocalVars() const {
+        return scope_top;
+    }
 
     DLLLOCAL bool getBreakpointFlag() const {
         return breakpointFlag;
@@ -127,12 +159,21 @@ public:
 protected:
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
+    bool in_try = false;  // in the body of a try statement of its function; see isInTry()
+    bool scope_known = false;  // see isScopeKnown()
+    const LocalVar* scope_top = nullptr;  // see getScopeLocalVars()
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink) = 0;
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
     //! Returns -1 = parse error raised, 0 = OK
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context) = 0;
+
+    //! Records the local variables of the current parse scope as those that the statement can refer to
+    /** Called after the statement is initialized, when the variables that it declares are in scope; see
+        getScopeLocalVars()
+    */
+    DLLLOCAL void setParseScope();
 
     friend class qore_program_private;
     // executed when qore_program_private::lck_breakpoint lock is acquired

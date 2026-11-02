@@ -35,6 +35,7 @@
 
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreString.h>
+#include <qore/QoreParseOptions.h>
 
 #include <vector>
 
@@ -313,6 +314,93 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT static QoreProgram* findUserModuleProgram(const char* name);
+
+    //! Sets the parse option mask applied to every user module loaded from now on
+    /** A user module (source or AOT) inherits the restrictions of the Program that loads it.  The mask strips the
+        restrictions in \a strip from what the module inherits and adds the restrictions in \a add.  For example, stripping
+        @ref PO_NO_THREAD_CONTROL and @ref PO_NO_THREAD_CLASSES lets code that may not use threads load trusted
+        modules that do.  Call it before loading the modules it should apply to; it replaces the previous mask.  Use
+        addModuleParseOptionMask() for modules that are loaded already.
+
+        @param strip the restrictions that modules do not inherit
+        @param add the restrictions added to the parse options of modules
+        @param xsink raises \c MODULE-PARSE-OPTION-MASK-ERROR if a mask contains an option that is not a
+        restriction (an explicitly-allowed, language, style or module option), or an option in both masks
+
+        @return 0 for OK, -1 if an exception was raised
+
+        @note this C++ API is not restricted; the %Qore API (set_module_parse_option_mask()) requires a Program that
+        may control the process and has no sandbox manager
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static int setModuleParseOptionMask(const QoreParseOptions& strip, const QoreParseOptions& add,
+            ExceptionSink* xsink);
+
+    //! Returns every restriction that a module parse option mask may strip or add
+    /** Explicitly-allowed (positive), language, style and module options cannot be masked.  A host that grants its
+        trusted modules all functionality loads them with runTimeLoadModuleMasked() and this mask as \a strip
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static QoreParseOptions getMaskableParseOptions();
+
+    //! Returns the parse option mask applied to every user module loaded from now on
+    /** @param strip set to the restrictions that modules do not inherit
+        @param add set to the restrictions added to the parse options of modules
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static void getModuleParseOptionMask(QoreParseOptions& strip, QoreParseOptions& add);
+
+    //! Loads a module with a parse option mask, in addition to the mask that applies to every module
+    /** The mask applies to the module and to the modules it loads while it is loaded; a module that is loaded
+        already gets the mask with addModuleParseOptionMask()
+
+        @param xsink for exceptions loading the module and for \c MODULE-PARSE-OPTION-MASK-ERROR (see
+        setModuleParseOptionMask())
+        @param name the name or path of the module
+        @param pgm the Program to load the module into, or nullptr for the current Program
+        @param strip the restrictions that the module does not inherit
+        @param add the restrictions added to the module's parse options
+
+        @return 0 for OK, -1 if an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static int runTimeLoadModuleMasked(ExceptionSink* xsink, const char* name, QoreProgram* pgm,
+            const QoreParseOptions& strip, const QoreParseOptions& add);
+
+    //! Adds a parse option mask to a loaded module
+    /** The restrictions in \a strip are removed from the parse options of the module's Program, with which its code
+        runs, and those in \a add are added to them.  Restrictions stripped earlier are not restored.  A binary module
+        has no Program; its mask is only recorded.
+
+        @param name the name of the loaded module
+        @param strip the restrictions to strip
+        @param add the restrictions to add
+        @param xsink raises \c MODULE-PARSE-OPTION-MASK-ERROR for an invalid mask (see setModuleParseOptionMask())
+        or a module that is not loaded
+
+        @return 0 for OK, -1 if an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static int addModuleParseOptionMask(const char* name, const QoreParseOptions& strip,
+            const QoreParseOptions& add, ExceptionSink* xsink);
+
+    //! Returns the parse option mask of a loaded module
+    /** @param name the name of the loaded module
+        @param strip set to the restrictions the module does not inherit
+        @param add set to the restrictions added to the module's parse options
+        @param xsink raises \c MODULE-PARSE-OPTION-MASK-ERROR if the module is not loaded
+
+        @return 0 for OK, -1 if an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static int getModuleParseOptionMask(const char* name, QoreParseOptions& strip, QoreParseOptions& add,
+            ExceptionSink* xsink);
 
     // not exported in the public API
     DLLLOCAL ModuleManager();

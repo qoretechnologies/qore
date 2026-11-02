@@ -9290,9 +9290,12 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         store_location(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
         store_location(getAotLocationConstant(inst->loc, module), loc_cache_ptr);
     } else {
-        // JIT mode: inline store of statement + location pointers
-        store_location(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
-            stmt_cache_ptr);
+        // JIT mode: inline store of statement + location pointers; in a function of a debuggable program, the
+        // statement is set by the step hook of each statement instead (see emitDebugStepHook())
+        if (!current_ir_func || !current_ir_func->source_dpgm_addr) {
+            store_location(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
+                stmt_cache_ptr);
+        }
         llvm::Value* loc_val = builder->CreateIntToPtr(
             llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
             llvm::PointerType::getUnqual(ctx));
@@ -14640,11 +14643,20 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
 
     builder->SetInsertPoint(fire);
     if (synthetic) {
-        // the entered block is resolved from the marker's file and line
+        // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
+        // from the marker's file and line
+        const StatementBlock* block = nullptr;
+        if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+            block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
+        }
+        if (block) {
+            sb_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(block)),
+                ptr_type);
+        }
         const int64_t abs_line = static_cast<int64_t>(inst->cached_start_line) + inst->loc->offset;
-        // the file name is interned and stable
+        // the file name is interned and stable; no file means that the block is given
         llvm::Value* file_ptr = builder->CreateIntToPtr(
-                llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc->getFile())),
+                llvm::ConstantInt::get(i64_type, block ? 0 : reinterpret_cast<uint64_t>(inst->loc->getFile())),
                 ptr_type);
         llvm::Value* line_val = llvm::ConstantInt::get(i64_type, static_cast<uint64_t>(abs_line));
         auto fn = module.getOrInsertFunction("qore_rt_dbg_synthetic_block_step",
@@ -14656,6 +14668,11 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         const AbstractStatement* statement = static_cast<const QoreIRDebugStatementInstruction*>(inst)->statement;
         llvm::Value* stmt_ptr = builder->CreateIntToPtr(
                 llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(statement)), ptr_type);
+        // while a debugger is attached, the statement is the current statement of the frame, which the frames of
+        // its calls record (QoreThreadList::getCallStackHash())
+        if (stmt_cache_ptr && statement) {
+            builder->CreateStore(stmt_ptr, stmt_cache_ptr);
+        }
         auto fn = module.getOrInsertFunction("qore_rt_dbg_step",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
         builder->CreateCall(fn, {stmt_ptr, sb_ptr, xsink_arg});
@@ -15722,7 +15739,9 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
     const bool disable_obe_free_fast_path = q_env_is_set(aot_mode
         ? "QORE_DISABLE_AOT_OBE_FREE_FAST_PATH"
         : "QORE_DISABLE_JIT_OBE_FREE_FAST_PATH");
-    if (!disable_obe_free_fast_path) {
+    // the scan also tells whether the local reload epoch is needed from the function's entry (see below), so it
+    // runs whether or not the fast path is disabled
+    {
         size_t scanned = 0;
         for (const auto& block : func.blocks) {
             for (const auto& inst : block->instructions) {
@@ -15741,7 +15760,9 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
                 break;
             }
         }
-        track_on_block_exit_scope = has_on_block_exit_handlers;
+        if (!disable_obe_free_fast_path) {
+            track_on_block_exit_scope = has_on_block_exit_handlers;
+        }
     }
     catch_depth_saved = nullptr;
     catch_scope_count = nullptr;
@@ -15845,6 +15866,17 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
                     "qore_rt_get_on_block_exit_count",
                     llvm::FunctionType::get(i64_type, {}, false));
             obe_saved_count = builder->CreateCall(obe_count_fn, {});
+        }
+        // A function with handlers runs them through runtime helpers that can assign its locals, after which the
+        // local caches are reloaded lazily through the reload epoch.  The epoch must exist before any block is
+        // lowered: ensureLocalCacheFresh() emits no freshness check while it does not exist, and blocks are lowered
+        // in layout order, which is not the order of execution.  Otherwise a block laid out before the first
+        // reload but run after it, such as a try block's landing pad reached from a block's exception cleanup
+        // block (laid out at the end of the function) after that block's handlers ran, published the stale cached
+        // value of a local to the runtime stack before running its own handlers, losing the value the handlers had
+        // assigned.
+        if (has_on_block_exit_handlers) {
+            getOrCreateLocalReloadEpoch(llvm_func);
         }
 
         // Save the catch-scope stack depth at entry for functions containing
@@ -15961,6 +15993,12 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
             native_call_thread_data = load_slot(0, "thread_data");
             loc_cache_ptr = load_slot(1, "loc_ptr");
             stmt_cache_ptr = load_slot(2, "stmt_ptr");
+        }
+        // in a function of a debuggable program, the current statement is set by the step hook of each statement
+        // while a debugger is attached (emitDebugStepHook()), and it is not cleared at each line, so that the frames
+        // of the calls of the statement record it; it is cleared once here
+        if (!aot_mode && current_ir_func && current_ir_func->source_dpgm_addr) {
+            builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
         }
         native_entry_slots_anchor = &builder->GetInsertBlock()->back();
     }
@@ -38411,7 +38449,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* sinst = static_cast<const QoreIRScopeExitInstruction*>(inst);
             // Execute on_block_exit handlers registered since the matching ScopeEnter
             auto it = scope_obe_counts.find(sinst->scope_id);
-            if (it != scope_obe_counts.end()) {
+            if (it != scope_obe_counts.end() && sinst->trim) {
+                // The scope stays open: drop the handlers registered after its first keep_handlers ones without
+                // running them (they are lowered inline); see QoreIRScopeExitInstruction::trim
+                auto discard_fn = module.getOrInsertFunction("qore_rt_discard_on_block_exit",
+                        llvm::FunctionType::get(void_type, {i64_type}, false));
+                llvm::Value* keep = builder->CreateAdd(it->second,
+                        llvm::ConstantInt::get(i64_type, sinst->keep_handlers));
+                builder->CreateCall(discard_fn, {keep});
+            } else if (it != scope_obe_counts.end()) {
                 llvm::Value* saved_count = it->second;
                 // Call the implementation function with inline_lowered flag
                 // If inline_lowered=true, skip handler execution (handlers were already inlined)

@@ -65,6 +65,12 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
     next = update_get_vstack(this);
+    // the variable below this one in its frame, for the chains of the local variables that statements can refer to;
+    // the chain of a function ends with its first variable, as the top-level variables, which have global scope, are
+    // visible to all code (see ProgramControl::getStatementIdInfo()); see LocalVar::setParseScopePrev()
+    if (lvar) {
+        lvar->setParseScopePrev(next ? next->lvar : nullptr);
+    }
 
     //printd(5, "VNode::VNode() this: %p '%s' %p top_level: %d\n", this, lvar ? lvar->getName() : "n/a", lvar, top_level);
 
@@ -558,6 +564,11 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     // this call will pop all local vars off the stack
     setupLVList(parse_context);
 
+    // the body of a function, method or closure is not initialized with AbstractStatement::parseInit(): its scope is
+    // recorded here, with the parameters, which are still in scope, so that the statement of a breakpoint on the
+    // function has the local variables that its condition and log message are checked with
+    setParseScope();
+
     //printd(5, "StatementBlock::parseInitImpl(this=%p): done (lvars=%p, %d vars, vstack = %p)\n", this, lvars, lvids,
     //    getVStack());
     return err;
@@ -681,8 +692,9 @@ int TopLevelStatementBlock::parseInit() {
     bool repl_mode = (current_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE);
 
     if (!first && lvars) {
-        // push already-registered local variables on the stack
-        for (unsigned i = 0; i < lvars->size(); ++i)
+        // push the already-registered local variables of this program on the stack; the inherited ones are not visible
+        // to its code
+        for (unsigned i = inherited_lvars; i < lvars->size(); ++i)
             push_top_level_local_var(lvars->lv[i], loc);
     }
 
@@ -712,8 +724,8 @@ int TopLevelStatementBlock::parseInit() {
         setupLVList(parse_context);
         first = false;
     } else {
-        // Save count of existing local vars before adding new ones
-        unsigned existing_lvars = lvars ? lvars->size() : 0;
+        // Save count of existing local vars that were pushed before adding new ones
+        unsigned existing_lvars = lvars ? lvars->size() - inherited_lvars : 0;
 
         if (repl_mode) {
             // In REPL mode, save new local variables to lvars instead of discarding

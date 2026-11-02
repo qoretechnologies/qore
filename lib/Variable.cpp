@@ -2364,9 +2364,60 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
     return 0;
 }
 
+//! returns true if an operation's result is stored converted to the lvalue's declared type
+/** a typed lvalue holds only its declared type: the result is stored as an assignment of the result would store it
+    (ex: a float result converted to a number for a number lvalue, an int result to a float for a float lvalue)
+*/
+static bool is_typed_lvalue_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::hasType(ti);
+}
+
+bool LValueHelper::intResultNeedsConversion() const {
+    return typeInfo && is_typed_lvalue_type(typeInfo)
+        && QoreTypeInfo::parseReturns(typeInfo, NT_INT) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo);
+}
+
+int64 LValueHelper::storeIntResult(int64 newVal, const char* desc) {
+    // the assignment converts the value to the lvalue's type
+    assign(QoreValue(newVal), desc);
+    return newVal;
+}
+
+bool LValueHelper::floatResultNeedsConversion() const {
+    return typeInfo && is_typed_lvalue_type(typeInfo)
+        && QoreTypeInfo::parseReturns(typeInfo, NT_FLOAT) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo);
+}
+
+double LValueHelper::storeFloatResult(double newVal, const char* desc) {
+    // the assignment converts the value to the lvalue's type
+    assign(QoreValue(newVal), desc);
+    return newVal;
+}
+
+bool LValueHelper::numberResultNeedsConversion() const {
+    return typeInfo && is_typed_lvalue_type(typeInfo)
+        && QoreTypeInfo::parseReturns(typeInfo, NT_NUMBER) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseAccepts(typeInfo, numberTypeInfo);
+}
+
+void LValueHelper::storeNumberResult(QoreNumberNode* n, const char* desc) {
+    // the assignment converts the value to the lvalue's type and takes the reference
+    assign(QoreValue(n), desc);
+}
+
 int LValueHelper::makeIntVal(const char* desc) {
     member_lvalue_modified = true;
     assert(val);
+    // the type is checked first: isInt() gives an lvalue with no value the int 0, which its type may not accept
+    if (val->getType() != NT_INT && typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo)) {
+        // the 4th arg to doTypeException() is needed only for the type
+        typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1), vl.xsink);
+        write_rejected = true;
+        return -1;
+    }
+
     if (val->isInt()) {
         return 0;
     }
@@ -2404,6 +2455,15 @@ int LValueHelper::makeFloat(const char* desc) {
     member_lvalue_modified = true;
     assert(val || qv);
     if (val) {
+        // the type is checked first: isFloat() gives an lvalue with no value the float 0.0, which its type may not
+        // accept (ex: int, timeout)
+        if (val->getType() != NT_FLOAT && typeInfo && !QoreTypeInfo::parseAccepts(typeInfo, floatTypeInfo)) {
+            // the 4th arg to doTypeException() is needed only for the type
+            typeInfo->doTypeException("lvalue", 0, desc, QoreValue(1.0), vl.xsink);
+            write_rejected = true;
+            return -1;
+        }
+
         if (val->isFloat()) {
             return 0;
         }
@@ -2459,6 +2519,9 @@ int LValueHelper::makeNumber(const char* desc) {
 }
 
 int64 LValueHelper::plusEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() + va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2475,6 +2538,9 @@ int64 LValueHelper::plusEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::minusEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() - va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2491,6 +2557,9 @@ int64 LValueHelper::minusEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::multiplyEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() * va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2507,6 +2576,9 @@ int64 LValueHelper::multiplyEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(qore_int_div(getAsBigInt(), va), desc);
+    }
     assert(va);
     if (val) {
         if (makeIntVal(desc)) {
@@ -2524,6 +2596,9 @@ int64 LValueHelper::divideEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::orEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() | va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2540,6 +2615,9 @@ int64 LValueHelper::orEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::xorEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() ^ va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2556,6 +2634,9 @@ int64 LValueHelper::xorEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(qore_int_mod(getAsBigInt(), va), desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2572,6 +2653,9 @@ int64 LValueHelper::modulaEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::andEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() & va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2588,6 +2672,9 @@ int64 LValueHelper::andEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::shiftLeftEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() << va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2604,6 +2691,9 @@ int64 LValueHelper::shiftLeftEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() >> va, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2620,6 +2710,9 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::preIncrementBigInt(const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() + 1, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2636,6 +2729,9 @@ int64 LValueHelper::preIncrementBigInt(const char* desc) {
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
+    if (intResultNeedsConversion()) {
+        return storeIntResult(getAsBigInt() - 1, desc);
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2652,6 +2748,11 @@ int64 LValueHelper::preDecrementBigInt(const char* desc) {
 }
 
 int64 LValueHelper::postIncrementBigInt(const char* desc) {
+    if (intResultNeedsConversion()) {
+        int64 oldVal = getAsBigInt();
+        storeIntResult(oldVal + 1, desc);
+        return oldVal;
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2669,6 +2770,11 @@ int64 LValueHelper::postIncrementBigInt(const char* desc) {
 }
 
 int64 LValueHelper::postDecrementBigInt(const char* desc) {
+    if (intResultNeedsConversion()) {
+        int64 oldVal = getAsBigInt();
+        storeIntResult(oldVal - 1, desc);
+        return oldVal;
+    }
     if (val) {
         if (makeIntVal(desc)) {
             return 0;
@@ -2685,6 +2791,9 @@ int64 LValueHelper::postDecrementBigInt(const char* desc) {
 }
 
 double LValueHelper::preIncrementFloat(const char* desc) {
+    if (floatResultNeedsConversion()) {
+        return storeFloatResult(getAsFloat() + 1.0, desc);
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2699,6 +2808,9 @@ double LValueHelper::preIncrementFloat(const char* desc) {
 }
 
 double LValueHelper::preDecrementFloat(const char* desc) {
+    if (floatResultNeedsConversion()) {
+        return storeFloatResult(getAsFloat() - 1.0, desc);
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2713,6 +2825,11 @@ double LValueHelper::preDecrementFloat(const char* desc) {
 }
 
 double LValueHelper::postIncrementFloat(const char* desc) {
+    if (floatResultNeedsConversion()) {
+        double oldVal = getAsFloat();
+        storeFloatResult(oldVal + 1.0, desc);
+        return oldVal;
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2727,6 +2844,11 @@ double LValueHelper::postIncrementFloat(const char* desc) {
 }
 
 double LValueHelper::postDecrementFloat(const char* desc) {
+    if (floatResultNeedsConversion()) {
+        double oldVal = getAsFloat();
+        storeFloatResult(oldVal - 1.0, desc);
+        return oldVal;
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2741,6 +2863,9 @@ double LValueHelper::postDecrementFloat(const char* desc) {
 }
 
 double LValueHelper::plusEqualsFloat(double va, const char* desc) {
+    if (floatResultNeedsConversion()) {
+        return storeFloatResult(getAsFloat() + va, desc);
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2755,6 +2880,9 @@ double LValueHelper::plusEqualsFloat(double va, const char* desc) {
 }
 
 double LValueHelper::minusEqualsFloat(double va, const char* desc) {
+    if (floatResultNeedsConversion()) {
+        return storeFloatResult(getAsFloat() - va, desc);
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2769,6 +2897,9 @@ double LValueHelper::minusEqualsFloat(double va, const char* desc) {
 }
 
 double LValueHelper::multiplyEqualsFloat(double va, const char* desc) {
+    if (floatResultNeedsConversion()) {
+        return storeFloatResult(getAsFloat() * va, desc);
+    }
     if (val) {
         if (makeFloat(desc))
             return 0.0;
@@ -2783,6 +2914,9 @@ double LValueHelper::multiplyEqualsFloat(double va, const char* desc) {
 }
 
 double LValueHelper::divideEqualsFloat(double va, const char* desc) {
+    if (floatResultNeedsConversion()) {
+        return storeFloatResult(getAsFloat() / va, desc);
+    }
     assert(va);
     if (val) {
         if (makeFloat(desc))
@@ -2798,18 +2932,40 @@ double LValueHelper::divideEqualsFloat(double va, const char* desc) {
 }
 
 void LValueHelper::preIncrementNumber(const char* desc) {
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        qore_number_private::inc(*nn);
+        storeNumberResult(n.release(), desc);
+        return;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (n)
         qore_number_private::inc(*n);
 }
 
 void LValueHelper::preDecrementNumber(const char* desc) {
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        qore_number_private::dec(*nn);
+        storeNumberResult(n.release(), desc);
+        return;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (n)
         qore_number_private::dec(*n);
 }
 
 QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc) {
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        qore_number_private::inc(*nn);
+        storeNumberResult(n.release(), desc);
+        return rv;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
         return nullptr;
@@ -2819,6 +2975,14 @@ QoreNumberNode* LValueHelper::postIncrementNumber(bool ref_rv, const char* desc)
 }
 
 QoreNumberNode* LValueHelper::postDecrementNumber(bool ref_rv, const char* desc) {
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        QoreNumberNode* rv = ref_rv ? new QoreNumberNode(*nn) : nullptr;
+        qore_number_private::dec(*nn);
+        storeNumberResult(n.release(), desc);
+        return rv;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (!n)
         return nullptr;
@@ -2835,6 +2999,13 @@ void LValueHelper::plusEqualsNumber(QoreValue r, const char* desc) {
     else
         rn_holder = (rn = new QoreNumberNode(r));
 
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        qore_number_private::plusEquals(*nn, *rn);
+        storeNumberResult(n.release(), desc);
+        return;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (n)
         qore_number_private::plusEquals(*n, *rn);
@@ -2848,6 +3019,13 @@ void LValueHelper::minusEqualsNumber(QoreValue r, const char* desc) {
     else
         rn_holder = (rn = new QoreNumberNode(r));
 
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        qore_number_private::minusEquals(*nn, *rn);
+        storeNumberResult(n.release(), desc);
+        return;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (n)
         qore_number_private::minusEquals(*n, *rn);
@@ -2861,6 +3039,13 @@ void LValueHelper::multiplyEqualsNumber(QoreValue r, const char* desc) {
     else
         rn_holder = (rn = new QoreNumberNode(r));
 
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        qore_number_private::multiplyEquals(*nn, *rn);
+        storeNumberResult(n.release(), desc);
+        return;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (n)
         qore_number_private::multiplyEquals(*n, *rn);
@@ -2874,6 +3059,13 @@ void LValueHelper::divideEqualsNumber(QoreValue r, const char* desc) {
     else
         rn_holder = (rn = new QoreNumberNode(r));
 
+    if (numberResultNeedsConversion()) {
+        QoreNumberNode* nn = new QoreNumberNode(getValue());
+        SimpleRefHolder<QoreNumberNode> n(nn);
+        qore_number_private::divideEquals(*nn, *rn);
+        storeNumberResult(n.release(), desc);
+        return;
+    }
     QoreNumberNode* n = ensureUniqueNumber(desc);
     if (n)
         qore_number_private::divideEquals(*n, *rn);

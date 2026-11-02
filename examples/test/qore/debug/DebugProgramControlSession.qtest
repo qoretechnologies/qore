@@ -30,6 +30,88 @@ printf(\"%d %y\\n\", total, h);
 
 const TargetLabel = "dpc-target.q";
 
+#! a program whose line 7 calls g() twice, a method that a subclass overrides and a closure
+const StepIntoScript = "%modern
+class A { int m(int x) { return x + 1; } }
+class B inherits A { int m(int x) { return x + 2; } }
+int sub g(int x) { return x * 10; }
+A a = new B();
+code cl = int sub (int y) { return y - 1; };
+int r = g(g(1)) + a.m(1) + cl(5);
+r = r > 0 ? r : g(3);
+printf(\"%d\\n\", r);
+";
+
+#! a program whose thread waits forever while the initial thread stops at line 6
+const BlockedThreadScript = "%modern
+Counter forever(1);
+Counter started(1);
+background sub () { started.dec(); forever.waitForZero(); }();
+started.waitForZero();
+int x = 1;
+forever.waitForZero();
+";
+
+#! a program that starts a thread and waits for it
+const ThreadStartScript = "%modern
+our int x;
+Counter c(1);
+background sub () { on_exit c.dec(); x = 1; }();
+c.waitForZero();
+";
+
+#! a program with a function and a loop with an empty block
+const StepStopScript = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+int x = add(1, 2);
+our bool done;
+while (!done) {}
+";
+
+#! a program whose line 4 runs five times, with i from 0 to 4
+const LoopScript = "%modern
+int total = 0;
+for (int i = 0; i < 5; ++i) {
+    total += i;
+}
+printf(\"%d\\n\", total);
+";
+
+#! a program whose line 4 calls g() twice: in h(), which is called first, and with the value of h()
+const StepInScript = "%modern
+int sub g(int x) { return x + 1; }
+int sub h(int x) { return g(x) * 2; }
+int r = g(h(1));
+printf(\"%d\\n\", r);
+";
+
+#! a program with a line of two statements; the second statement of line 3 starts at column 19
+const ColumnScript = "%modern
+int sub add(int a, int b) { return a + b; }
+int x = add(1, 2); int y = add(x, 4);
+printf(\"%d\\n\", y);
+";
+
+#! a program with exceptions that are caught in different ways, and one that is not caught
+const UncaughtScript = "%modern
+sub fail(string err) {
+    throw err, \"test\";
+}
+try {
+    fail(\"CAUGHT-1\");
+} catch (hash<ExceptionInfo> ex) {
+    try {
+        fail(\"CAUGHT-2\");
+    } catch () {
+    }
+}
+code c = sub () { fail(\"CAUGHT-3\"); };
+try { c(); } catch () {}
+fail(\"UNCAUGHT\");
+";
+
 #! a program with an overloaded function
 const OverloadScript = "%modern
 int sub f(int i) {
@@ -58,6 +140,11 @@ const EventTimeout = 30s;
 
 #! a debug server that queues what it sends to its client so that a test can act on it deterministically
 class TestDebugProgramControl inherits DebugProgramControl {
+    #! returns True if the expressions of a debugged Program have a Program
+    bool hasEvalProgram(int pgmId) {
+        return exists evalPrograms{pgmId};
+    }
+
     public {
         const CX = {"id": 1};
 
@@ -66,6 +153,9 @@ class TestDebugProgramControl inherits DebugProgramControl {
 
         #! events broadcast to all clients
         Queue events();
+
+        #! the console output of the debugger broadcast to all clients, such as the messages of logpoints
+        Queue console();
 
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uids();
@@ -80,7 +170,25 @@ class TestDebugProgramControl inherits DebugProgramControl {
     }
 
     public nothing broadcastDataImpl(auto data) {
+        if (data.cmd == DebugEventCmd::Output && data.category == "console") {
+            console.push(data.output);
+            return;
+        }
         events.push(data);
+    }
+
+    #! returns True if a breakpoint has a condition, hit condition or log message
+    bool hasBreakpointOptions(int id) {
+        return exists getBreakpointOptions(id);
+    }
+
+    #! returns the console output that was broadcast so far
+    list<string> getConsoleOutput() {
+        list<string> rv = ();
+        while (console.size()) {
+            push rv, console.get();
+        }
+        return rv;
     }
 
     #! sends a command that is processed in the server thread and returns its result
@@ -158,6 +266,9 @@ class DebuggedProgram {
         #! TID of the thread running the program, which the debugger stopped at its start
         int tid;
 
+        #! the event of the stop at the start of the program
+        hash<auto> startEvent;
+
         #! receives the result of the program run when it ends
         Queue done();
 
@@ -170,11 +281,12 @@ class DebuggedProgram {
         pgm = dpc.createProgram(label, NOTHING, (), script);
         pgmId = pgm.getProgram().getProgramId();
         background run();
-        hash<auto> e = dpc.getInterrupt(pgmId);
-        if (e.func != "attach") {
-            throw "TEST-ERROR", sprintf("expecting the attach event at the start of the program; got: %y", e);
+        startEvent = dpc.getInterrupt(pgmId);
+        if (startEvent.func != "attach") {
+            throw "TEST-ERROR", sprintf("expecting the attach event at the start of the program; got: %y",
+                startEvent);
         }
-        tid = e.tid;
+        tid = startEvent.tid;
     }
 
     private run() {
@@ -236,6 +348,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("thread stack frame", \threadStackFrameTest());
         addTestCase("breakpoint on top-level statement", \topLevelBreakpointTest());
         addTestCase("local variables of the frames of a stopped thread", \localVariableTest());
+        addTestCase("the program uses the values that the debugger sets", \setValueUsedTest());
         addTestCase("local variables of the frames of a thread stopped in a function", \functionFrameVariableTest());
         addTestCase("every command of a stopped thread is answered", \threadAnswerTest());
         addTestCase("breakpoint on statement without temporaries", \noTempBreakpointTest());
@@ -244,6 +357,24 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("breakpoint on overloaded function", \overloadedFunctionBreakpointTest());
         addTestCase("statement identification of the command line", \commandLineStatementTest());
         addTestCase("breakpoint errors", \breakpointErrorTest());
+        addTestCase("structured variables of a stopped thread", \variableCommandTest());
+        addTestCase("declared types of local variables and unassigned variables", \declaredTypeTest());
+        addTestCase("expressions evaluated with the variables of a stopped thread", \evaluateCommandTest());
+        addTestCase("exceptions that no try statement catches", \uncaughtTest());
+        addTestCase("statements of a line with more than one statement", \columnTest());
+        addTestCase("stepping into a chosen call", \stepInTargetTest());
+        addTestCase("stepping into calls known only at runtime and repeated calls", \stepIntoTest());
+        addTestCase("conditions, hit conditions and log messages of breakpoints", \breakpointConditionTest());
+        addTestCase("the commands of the options of breakpoints", \breakpointOptionCommandTest());
+        addTestCase("the stop at the start of a program", \attachStopTest());
+        addTestCase("the exceptions that stop threads", \exceptionFilterTest());
+        addTestCase("the threads continue when the last client disconnects", \lastClientTest());
+        addTestCase("steps stop at statements, and a pause also in an empty loop", \stepStopTest());
+        addTestCase("a thread that starts in a program that has started", \threadStartEventTest());
+        addTestCase("a thread that starts without a client", \threadStartWithoutClientTest());
+        addTestCase("the debugger ends a stopped program", \terminateStoppedTest());
+        addTestCase("the debugger ends a program with a thread that waits", \terminateBlockedTest());
+        addTestCase("the debugger ends a program whose thread runs", \terminateRunningTest());
         set_return_value(main());
     }
 
@@ -376,6 +507,34 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertEq({"rc": NOTHING}, p.finish());
     }
 
+    # a local variable that the debugger sets has the value for the code that runs after the stop, also in the
+    # top-level code, whose variables the interpreters keep in their own slots, and at the stop of an exception
+    setValueUsedTest() {
+        DebuggedProgram p(dpc, "%modern
+our int seen1;
+our int seen2;
+int total = int(\"5\");
+seen1 = total;
+try {
+    throw \"TEST-ERROR\";
+} catch (hash<ExceptionInfo> ex) {
+    seen2 = total;
+}
+");
+        on_exit p.cleanup();
+        p.breakAt(5);
+        hash<auto> e = p.runToStop();
+        assertEq(5, e.line);
+        dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(10)});
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        dpc.threadSend(p.tid, "thread/local/total/set", {"value": AbstractDebugControl::serialize(20)});
+        assertEq({"rc": NOTHING}, p.finish());
+        assertEq(10, p.pgm.getGlobalVariable("seen1"));
+        assertEq(20, p.pgm.getGlobalVariable("seen2"));
+    }
+
     # each frame of a thread stopped in a function has the local variables of its code: the callee of a call that
     # the interpreter would inline or make through a fast path has a frame of its own while a debugger is attached,
     # and the temporaries of the debugger's callbacks are not variables of the stopped code
@@ -409,6 +568,172 @@ public class DebugProgramControlTest inherits QUnit::Test {
 
         # the program prints the value returned by add()
         assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # the values of variables are described, and their elements, keys and members are read and set by their paths
+    # a local variable is given with its declared type, and a variable that was declared but not assigned is marked
+    declaredTypeTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        # before "int sum = a + b;" runs
+        p.breakAt(3);
+        p.runToStop();
+
+        hash<auto> sum = dpc.threadCommand(p.tid, "thread/local/sum/get");
+        assertEq("int", sum.declaredType);
+        assertTrue(sum.unassigned);
+        assertNothing(AbstractDebugControl::unserialize(sum.value));
+        hash<auto> a = dpc.threadCommand(p.tid, "thread/local/a/get");
+        assertEq("int", a.declaredType);
+        assertFalse(a.hasKey("unassigned"));
+
+        hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "sum"}});
+        assertEq({"type": "nothing", "value": "NOTHING", "declaredType": "int", "unassigned": True}, d);
+        # an element of a value is not a variable: it has no declared type
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "frameid": 1,
+            "path": ("lines",)});
+        assertFalse(d.hasKey("declaredType"));
+
+        # a variable set by the debugger is no longer unassigned
+        d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "sum"},
+            "value": AbstractDebugControl::serialize(7)});
+        assertEq({"type": "integer", "value": "7", "declaredType": "int"}, d);
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    variableCommandTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        p.runToStop();
+
+        hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}});
+        assertEq({"type": "hash<auto>", "value": "hash<auto> (2)", "named": 2, "declaredType": "hash<auto>"}, d);
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "children": True});
+        assertEq(("name", "lines"), map $1.name, d.children);
+        assertEq(3, d.children[1].indexed);
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "path": ("lines", 2)});
+        assertEq("3", d.value);
+        # the elements of a list are paged
+        d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"local": "h"}, "path": ("lines",),
+            "children": True, "start": 1, "count": 1});
+        assertEq(("1",), map $1.name, d.children);
+
+        # an element of a list in a local variable, given as a serialized value
+        d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "h"}, "path": ("lines", 0),
+            "value": AbstractDebugControl::serialize(10)});
+        assertEq("10", d.value);
+        hash<auto> h = dpc.threadCommand(p.tid, "thread/local/h/get");
+        assertEq((10, 2, 3), AbstractDebugControl::unserialize(h.value).lines);
+        # a local variable, given as an expression with the variables of the frame
+        d = dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"local": "total"},
+            "expression": "total * 2 + h.lines[0]"});
+        assertEq("20", d.value);
+
+        # negative: a value that the type of a variable or of the container of an element does not accept is refused,
+        # as an assignment in the code is, and the variable keeps its value
+        assertThrows("RUNTIME-TYPE-ERROR", "expects type 'int'", \dpc.threadCommand(), (p.tid, "thread/variable/set",
+            {"root": {"local": "total"}, "value": AbstractDebugControl::serialize("s t")}));
+        assertThrows("RUNTIME-TYPE-ERROR", "expects type 'int'", \dpc.threadSend(), (p.tid, "thread/local/total/set",
+            {"value": AbstractDebugControl::serialize("5")}));
+        assertEq(20, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/total/get").value));
+        assertThrows("RUNTIME-TYPE-ERROR", \dpc.threadCommand(), (p.tid, "thread/variable/set",
+            {"root": {"local": "h"}, "path": ("lines", 0), "value": AbstractDebugControl::serialize("x")}));
+        assertEq((10, 2, 3), AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/h/get").value)
+            .lines);
+
+        # negative: a path and a variable that do not exist, and an invalid root
+        assertThrows("DEBUG-ERROR", "no key \"nope\"", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"local": "h"}, "path": ("nope",)}));
+        assertThrows("DEBUG-ERROR", "no local variable", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"local": "nope"}}));
+        assertThrows("DEBUG-ERROR", "invalid variable root", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"other": 1}}));
+        assertThrows("DEBUG-ERROR", "has no elements", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"local": "total"}, "children": True}));
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # the interrupts of exceptions tell if a try statement in the call stack catches them
+    uncaughtTest() {
+        DebuggedProgram p(dpc, UncaughtScript);
+        on_exit p.cleanup();
+        hash<string, bool> uncaught = {};
+        p.dpc.go(p.tid);
+        while (True) {
+            hash<auto> e = dpc.getInterrupt(p.pgmId);
+            if (e.func == "detach") {
+                break;
+            }
+            if (e.func == "exception") {
+                uncaught{e.exception.err} = e.uncaught;
+            }
+            dpc.go(e.tid);
+        }
+        dpc.go(p.tid);
+        assertEq({"CAUGHT-1": False, "CAUGHT-2": False, "CAUGHT-3": False, "UNCAUGHT": True}, uncaught);
+    }
+
+    # expressions are evaluated with the local variables of a frame, and their values are kept while the thread is
+    # stopped
+    evaluateCommandTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(4);
+        p.runToStop();
+
+        # the frame of add()
+        hash<auto> r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "a + b * 10"});
+        assertEq({"type": "integer", "value": "32", "id": 0, "bool": True, "text": "32"}, r);
+        # the frame of the top-level code that called add()
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "h.name", "frameid": 1});
+        assertEq("invoice", r.text);
+        assertEq("\"invoice\"", r.value);
+        assertEq(1, r.id);
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "h.lines.size() > 5", "frameid": 1});
+        assertFalse(r.bool);
+
+        # a structured value is read by the ID of its expression
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "h.lines", "frameid": 1});
+        assertEq(3, r.indexed);
+        hash<auto> d = dpc.threadCommand(p.tid, "thread/variable/get", {"root": {"eval": r.id}, "children": True});
+        assertEq(("1", "2", "3"), map $1.value, d.children);
+
+        # the functions of the program can be called; the function of an expression is kept for the next evaluation
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "add(a, b) * 2"});
+        assertEq("10", r.text);
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "add(a, b) * 2"});
+        assertEq("10", r.text);
+        # an expression with a syntax error does not prevent the evaluation of others
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "add(a,"}));
+        r = dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "add(1, 1)"});
+        assertEq("2", r.text);
+
+        # an assignment in an expression does not change the variable
+        dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "a = 100"});
+        assertEq(2, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/a/get").value));
+
+        # a top-level local variable has global scope: it is seen with the value of the thread, which has not assigned
+        # it yet in add()
+        assertEq("NOTHING", dpc.threadCommand(p.tid, "thread/evaluate", {"expression": "total"}).text);
+
+        # negative: a syntax error, an unknown variable, code that expressions may not run, and an unknown ID
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "a +"}));
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "nosuchvar"}));
+        assertThrows("DEBUG-EVALUATE-ERROR", "system", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "system(\"true\")"}));
+        assertThrows("DEBUG-ERROR", "ID 99", \dpc.threadCommand(), (p.tid, "thread/variable/get",
+            {"root": {"eval": 99}}));
+
+        assertEq({"rc": NOTHING}, p.finish());
+        # the Program of the expressions, which keeps the code of the debugged Program, is removed with it
+        assertTrue(dpc.hasEvalProgram(p.pgmId));
+        dpc.removeProgram(p.pgm.getProgram());
+        assertFalse(dpc.hasEvalProgram(p.pgmId));
     }
 
     # a stopped thread answers every command of a client, so that the client can wait for the answer without a
@@ -535,6 +860,17 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertThrows("VARIANT-MATCH-ERROR", \dpc.command(), (cmd, {"value": {"function": "add", "args": ()}}));
         # a function that does not exist
         assertThrows("PROGRAM-ERROR", \dpc.command(), (cmd, {"value": {"function": "no_such_function"}}));
+        # the condition and log message of a breakpoint on a function are checked with its parameters when they are
+        # set: an invalid one is refused, and a valid one is accepted
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"a \\+\"", \dpc.command(),
+            (cmd, {"value": {"function": "add", "condition": "a +"}}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "bareword 'nope'", \dpc.command(),
+            (cmd, {"value": {"function": "add", "logMessage": "a={a} n={nope}"}}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"sum > 0\"", \dpc.command(),
+            (sprintf("program//breakpoint/%d/condition/set", bp.bkptid), {"value": "sum > 0"}));
+        assertEq("ok", dpc.command(sprintf("program//breakpoint/%d/condition/set", bp_args.bkptid),
+            {"value": "a + b == 5"}));
+        assertEq(2, dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId)).size());
 
         hash<auto> e = p.runToStop();
         assertEq("step", e.func);
@@ -576,6 +912,536 @@ public class DebugProgramControlTest inherits QUnit::Test {
         assertThrows("DEBUG-PROGRAM-HELPER", "Statement description is missing", \cl.getStatementValue(), ((),));
         assertThrows("DEBUG-PROGRAM-HELPER", "expecting", \cl.getStatementValue(), (("x.q",),));
         assertThrows("DEBUG-PROGRAM-HELPER", "expecting", \cl.getStatementValue(), (("x.q", "y"),));
+    }
+
+    columnTest() {
+        DebuggedProgram p(dpc, ColumnScript);
+        on_exit p.cleanup();
+        string cmd = sprintf("program/%d/", p.pgmId);
+        # the statements of line 3 in the order of their columns
+        list<hash<auto>> stmts = dpc.command(cmd + "statement/list", {"value": {"file": TargetLabel, "lineno": 3}});
+        assertEq(((3, 0, 17), (3, 19, 36)), (map ($1.start_line, $1.start_column, $1.end_column), stmts));
+        # the statement of a line without columns is the line's first statement
+        assertEq(stmts[0].id, dpc.command(cmd + "statement/get", {"value": {"file": TargetLabel, "lineno": 3}}).id);
+        # a column breakpoint is on the last statement that starts at or before the column, or on the first one
+        foreach list<int> i in (((0, 0), (5, 0), (19, 1), (25, 1), (200, 1))) {
+            hash<auto> bp = dpc.command(cmd + "breakpoint//create", {
+                "value": {"file": TargetLabel, "lineno": 3, "column": i[0]},
+            });
+            assertEq(stmts[i[1]].id, bp.stmtid, "column " + i[0]);
+            dpc.command(sprintf("program/%d/breakpoint/%d/delete", p.pgmId, bp.bkptid));
+        }
+        # negative: the line is missing, and a line without a statement
+        assertThrows("DEBUG-HANDLER-ERROR", "lineno", \dpc.command(), (cmd + "statement/list",
+            {"value": {"file": TargetLabel}}));
+        assertEq((), dpc.command(cmd + "statement/list", {"value": {"file": TargetLabel, "lineno": 100}}));
+        assertThrows("PROGRAM-STATEMENT-ERROR", \dpc.command(), (cmd + "breakpoint//create",
+            {"value": {"file": TargetLabel, "lineno": 100, "column": 0}}));
+
+        # the thread stops at the second statement of the line, which the interrupt and the stack give with its columns
+        hash<auto> bp = dpc.command(cmd + "breakpoint//create", {
+            "value": {"file": TargetLabel, "lineno": 3, "column": 19},
+        });
+        hash<auto> e = p.runToStop();
+        assertEq(bp.bkptid, e.bkptid);
+        assertEq((3, 19, 36), (e.line, e.column, e.endcolumn));
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        assertEq((3, 19, 36), (stack[0].line, stack[0].column, stack[0].endcolumn));
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    stepInTargetTest() {
+        DebuggedProgram p(dpc, StepInScript);
+        on_exit p.cleanup();
+        string cmd = sprintf("program/%d/", p.pgmId);
+        hash<auto> bp = p.breakAt(4);
+        hash<auto> e = p.runToStop();
+        assertEq(bp.bkptid, e.bkptid);
+        # the calls of the statement in the order in which they are made; g() is given once
+        list<hash<auto>> targets = dpc.command(cmd + "statement/stepintargets", {"value": {"id": e.statementid}});
+        assertEq(("h", "g"), (map $1.name, targets));
+        int g_entry = dpc.command(cmd + "statement/get", {"value": {"function": "g"}}).id;
+        assertEq(g_entry, targets[1].statement_id);
+
+        # stepping into g() stops at its first statement when the statement calls it, not when h(), which it calls
+        # first, calls it
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": 1}});
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", 2), (e.func, e.line));
+        # g(h(1)) is g(4)
+        assertEq(4, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/x/get").value));
+
+        # negative: a statement ID that does not exist
+        assertThrows("PROGRAM-STATEMENT-ERROR", \dpc.command(), (cmd + "statement/stepintargets",
+            {"value": {"id": 999999}}));
+        # negative: a call that the statement does not have
+        assertThrows("DEBUG-HANDLER-ERROR", "no call 5", \dpc.threadSend(), (p.tid, "thread/go/stepinto",
+            {"value": {"target": 5}}));
+
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! creates a breakpoint on line 4 of LoopScript with the given options and returns the result
+    private hash<auto> breakAtLoop(DebuggedProgram p, hash<auto> opts) {
+        return dpc.command(sprintf("program/%d/breakpoint//create", p.pgmId), {
+            "value": {"file": TargetLabel, "lineno": 4} + opts,
+        });
+    }
+
+    #! returns the value of the local variable i of a stopped thread
+    private int getI(DebuggedProgram p) {
+        return AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/local/i/get").value);
+    }
+
+    breakpointConditionTest() {
+        # a condition: the thread stops only when it is true
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            hash<auto> bp = breakAtLoop(p, {"condition": "i == 3"});
+            hash<auto> e = p.runToStop();
+            assertEq(bp.bkptid, e.bkptid);
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a hit condition: every second hit
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            breakAtLoop(p, {"hitCondition": "% 2"});
+            p.runToStop();
+            assertEq(1, getI(p));
+            p.runToStop();
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a condition and a hit condition: the hits are counted when the condition is true
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            breakAtLoop(p, {"condition": "i > 1", "hitCondition": "2"});
+            p.runToStop();
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a logpoint writes its message and does not stop the thread; an expression that raises an error when it is
+        # evaluated is replaced with its error
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            dpc.getConsoleOutput();
+            breakAtLoop(p, {"logMessage": "i={i} total={total} bad={i.nosuchmethod()}"});
+            assertEq({"rc": NOTHING}, p.finish());
+            list<string> log = dpc.getConsoleOutput();
+            assertEq(5, log.size(), sprintf("%y", log));
+            assertRegex("^i=0 total=0 bad=<[A-Z-]+: .*nosuchmethod", log[0]);
+            assertRegex("^i=4 total=6 ", log[4]);
+        }
+        # all breakpoints of a statement are checked: a logpoint writes its message also when the condition of
+        # another breakpoint on the statement is false, and at the stop of the other breakpoint
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            dpc.getConsoleOutput();
+            hash<auto> cond = breakAtLoop(p, {"condition": "i == 3"});
+            breakAtLoop(p, {"logMessage": "i={i}"});
+            hash<auto> e = p.runToStop();
+            assertEq(cond.bkptid, e.bkptid);
+            assertEq((cond.bkptid,), e.bkptids);
+            assertEq(3, getI(p));
+            assertEq({"rc": NOTHING}, p.finish());
+            assertEq(("i=0\n", "i=1\n", "i=2\n", "i=3\n", "i=4\n"), dpc.getConsoleOutput());
+        }
+        # negative: a condition that raises an error when it is evaluated stops the thread with the error
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            dpc.getConsoleOutput();
+            hash<auto> bp = breakAtLoop(p, {"condition": "i.nosuchmethod()"});
+            hash<auto> e = p.runToStop();
+            assertEq(bp.bkptid, e.bkptid);
+            assertRegex("^[A-Z-]+: .*nosuchmethod", e.bkpterror);
+            assertRegex(sprintf("^breakpoint %d: [A-Z-]+: .*nosuchmethod", bp.bkptid),
+                dpc.getConsoleOutput().join(""));
+            assertEq(0, getI(p));
+            dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # a thread that stopped at the statement of breakpoints for another reason checks them
+        {
+            DebuggedProgram p(dpc, LoopScript);
+            on_exit p.cleanup();
+            # the thread stops at line 2, where the breakpoints of line 4 are checked
+            hash<auto> start = p.breakAt(2);
+            hash<auto> e = p.runToStop();
+            assertEq(start.bkptid, e.bkptid);
+            hash<auto> stops = breakAtLoop(p, {"condition": "1 == 1"});
+            hash<auto> skips = breakAtLoop(p, {"condition": "1 == 2"});
+            hash<auto> plain = breakAtLoop(p, {});
+            hash<auto> fails = breakAtLoop(p, {"condition": "i.nosuchmethod()"});
+            hash<auto> r = dpc.threadCommand(p.tid, "thread/breakpoint/check", {"value": {"ids": (stops.bkptid,
+                skips.bkptid, plain.bkptid, fails.bkptid)}});
+            assertEq((stops.bkptid, plain.bkptid, fails.bkptid), r.stop);
+            assertEq((fails.bkptid,), (map int($1), keys r.errors));
+            map dpc.command(sprintf("program//breakpoint/%d/delete", $1)), (stops.bkptid, skips.bkptid,
+                plain.bkptid, fails.bkptid);
+            # the logpoint of a checked breakpoint writes its message
+            hash<auto> logs = breakAtLoop(p, {"logMessage": "checked"});
+            dpc.getConsoleOutput();
+            r = dpc.threadCommand(p.tid, "thread/breakpoint/check", {"value": {"ids": (logs.bkptid,)}});
+            assertEq((), r.stop);
+            assertEq(("checked\n",), dpc.getConsoleOutput());
+            dpc.command(sprintf("program//breakpoint/%d/delete", logs.bkptid));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+    }
+
+    breakpointOptionCommandTest() {
+        DebuggedProgram p(dpc, LoopScript);
+        on_exit p.cleanup();
+        hash<auto> bp = breakAtLoop(p, {});
+        string cmd = sprintf("program//breakpoint/%d/", bp.bkptid);
+        # set, get and list
+        assertEq("ok", dpc.command(cmd + "condition/set", {"value": "i == 2"}));
+        assertEq("ok", dpc.command(cmd + "hitcondition/set", {"value": ">= 1"}));
+        assertEq("ok", dpc.command(cmd + "log/set", {"value": "i={i}"}));
+        assertEq("i == 2", dpc.command(cmd + "condition/get"));
+        assertEq(">= 1", dpc.command(cmd + "hitcondition/get"));
+        assertEq("i={i}", dpc.command(cmd + "log/get"));
+        hash<auto> info = dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId))[0];
+        assertEq({"condition": "i == 2", "hitCondition": ">= 1", "logMessage": "i={i}"},
+            info{"condition", "hitCondition", "logMessage"});
+        # an empty value removes an option, and a breakpoint without options has none
+        dpc.command(cmd + "log/set", {"value": ""});
+        dpc.command(cmd + "hitcondition/set");
+        # an option that is not set is empty
+        assertEq("", dpc.command(cmd + "log/get"));
+        dpc.command(cmd + "condition/set");
+        assertFalse(dpc.hasBreakpointOptions(bp.bkptid));
+        # a deleted breakpoint has no options
+        dpc.command(cmd + "condition/set", {"value": "i == 2"});
+        assertTrue(dpc.hasBreakpointOptions(bp.bkptid));
+        dpc.command(cmd + "delete");
+        assertFalse(dpc.hasBreakpointOptions(bp.bkptid));
+
+        # negative: an invalid hit condition and a value that is not a string are refused, and no breakpoint is created
+        # with them
+        assertThrows("BREAKPOINT-HIT-CONDITION-ERROR", \breakAtLoop(), (p, {"hitCondition": "often"}));
+        assertThrows("DEBUG-HANDLER-ERROR", "string", \breakAtLoop(), (p, {"condition": 1}));
+        assertEq((), dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId)));
+        bp = breakAtLoop(p, {});
+        assertThrows("BREAKPOINT-HIT-CONDITION-ERROR", \dpc.command(), (sprintf("program//breakpoint/%d/hitcondition/set",
+            bp.bkptid), {"value": "x"}));
+        assertThrows("DEBUG-HANDLER-ERROR", "get or set", \dpc.command(), (sprintf("program//breakpoint/%d/condition/x",
+            bp.bkptid)));
+
+        # negative: a condition or an expression of a log message that cannot be parsed, or that refers to a variable
+        # that the statement cannot refer to, is refused when it is set, and the option is not changed
+        cmd = sprintf("program//breakpoint/%d/", bp.bkptid);
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"i ===\"", \dpc.command(),
+            (cmd + "condition/set", {"value": "i ==="}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid condition \"count > 1\".*bareword 'count'", \dpc.command(),
+            (cmd + "condition/set", {"value": "count > 1"}));
+        assertThrows("BREAKPOINT-CONDITION-ERROR", "invalid expression of the log message \"nope\"", \dpc.command(),
+            (cmd + "log/set", {"value": "i={i} n={nope}"}));
+        assertEq("", dpc.command(cmd + "condition/get"));
+        assertEq("", dpc.command(cmd + "log/get"));
+        # the local variables of the statement, the global variables and the code of the program can be used
+        assertEq("ok", dpc.command(cmd + "condition/set", {"value": "i > total && i.toString().size() == 1"}));
+        assertEq("ok", dpc.command(cmd + "log/set", {"value": "i={i} total={total}"}));
+        # a breakpoint is not created with an invalid condition
+        assertThrows("BREAKPOINT-CONDITION-ERROR", \breakAtLoop(), (p, {"condition": "i ==="}));
+        dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+        assertEq((), dpc.command(sprintf("program/%d/breakpoint//list", p.pgmId)));
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    # at the start of a program, the thread has not entered its code: the local variables of the code that started the
+    # program are not read, and expressions are evaluated with the code and the global variables of the program
+    attachStopTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        assertEq(2, AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, "thread/evaluate",
+            {"expression": "add(1, 1)", "serialize": True}).serialized));
+        assertEq((), dpc.threadCommand(p.tid, "thread/local//list"));
+        assertEq((), dpc.threadCommand(p.tid, "thread/local//list", {"frameid": 1}));
+        assertEq({}, dpc.threadCommand(p.tid, "thread/local/p/get"));
+        # negative: there is no local variable to read or set
+        assertThrows("DEBUG-ERROR", \dpc.threadCommand(), (p.tid, "thread/variable/get", {"root": {"local": "p"}}));
+        assertThrows("DEBUG-HANDLER-ERROR", "no local variables", \dpc.threadCommand(), (p.tid,
+            "thread/local/x/set", {"value": AbstractDebugControl::serialize(1)}));
+        assertThrows("DEBUG-EVALUATE-ERROR", \dpc.threadCommand(), (p.tid, "thread/evaluate",
+            {"expression": "p"}));
+        # a breakpoint is checked without local variables
+        hash<auto> bp = dpc.command(sprintf("program/%d/breakpoint//create", p.pgmId), {
+            "value": {"file": TargetLabel, "lineno": 7, "condition": "add(1, 1) == 2"},
+        });
+        assertEq((bp.bkptid,), dpc.threadCommand(p.tid, "thread/breakpoint/check",
+            {"value": {"ids": (bp.bkptid,)}}).stop);
+        dpc.command(sprintf("program//breakpoint/%d/delete", bp.bkptid));
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! steps into a call of line 7 of StepIntoScript and returns the interrupt and the given local variable
+    private hash<auto> stepIntoLine7(int target, string var) {
+        DebuggedProgram p(dpc, StepIntoScript);
+        on_exit p.cleanup();
+        p.breakAt(7);
+        p.runToStop();
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": target}});
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        list<auto> stack = dpc.threadCommand(p.tid, "thread/stack");
+        hash<auto> rv = {
+            "func": e.func,
+            "function": stack[1].function,
+            "value": AbstractDebugControl::unserialize(dpc.threadCommand(p.tid, sprintf("thread/local/%s/get", var))
+                .value),
+        };
+        assertEq({"rc": NOTHING}, p.finish());
+        return rv;
+    }
+
+    stepIntoTest() {
+        {
+            DebuggedProgram p(dpc, StepIntoScript);
+            on_exit p.cleanup();
+            p.breakAt(7);
+            hash<auto> e = p.runToStop();
+            # "g(g(1)) + a.m(1) + cl(5)": the inner g() is evaluated first
+            assertEq(("g", "g", "A::m", "cl"), (map $1.name, dpc.command(sprintf("program/%d/statement/stepintargets",
+                p.pgmId), {"value": {"id": e.statementid}})));
+            assertEq({"rc": NOTHING}, p.finish());
+        }
+        # the inner and the outer call of g()
+        assertEq({"func": "step", "function": "g", "value": 1}, stepIntoLine7(0, "x"));
+        assertEq({"func": "step", "function": "g", "value": 10}, stepIntoLine7(1, "x"));
+        # the method of the subclass of the object
+        assertEq({"func": "step", "function": "B::m", "value": 1}, stepIntoLine7(2, "x"));
+        # the closure of a call reference
+        assertEq({"func": "step", "function": "<anonymous closure>", "value": 5}, stepIntoLine7(3, "y"));
+
+        # a call that the statement does not make: the thread stops at the next statement
+        DebuggedProgram p(dpc, StepIntoScript);
+        on_exit p.cleanup();
+        p.breakAt(8);
+        p.runToStop();
+        dpc.threadSend(p.tid, "thread/go/stepinto", {"value": {"target": 0}});
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(9, e.line);
+        assertEq({"rc": NOTHING}, p.finish());
+    }
+
+    #! runs UncaughtScript with the given exception filters of the client and returns the exceptions that stop it
+    /** @param filters the exception filters of the client, if any
+        @param second if another client without exception filters is connected
+    */
+    private list<string> getStoppingExceptions(*list<string> filters, bool second = False) {
+        if (exists filters) {
+            dpc.command("exception/filter/set", {"value": filters});
+        }
+        on_exit dpc.command("exception/filter/set", {"value": ("user", "system", "uncaught")});
+        if (second) {
+            dpc.registerConnection({"id": 2});
+        }
+        on_exit if (second) {
+            dpc.unregisterConnection({"id": 2});
+        }
+        DebuggedProgram p(dpc, UncaughtScript);
+        on_exit p.cleanup();
+        list<string> rv = ();
+        dpc.go(p.tid);
+        while (True) {
+            hash<auto> e = dpc.getInterrupt(p.pgmId);
+            if (e.func == "detach") {
+                break;
+            }
+            # an exception stops the thread in each frame that it leaves
+            if (e.func == "exception" && !inlist(e.exception.err, rv)) {
+                push rv, e.exception.err;
+            }
+            dpc.go(e.tid);
+        }
+        dpc.go(p.tid);
+        return rv;
+    }
+
+    exceptionFilterTest() {
+        list<string> all = ("CAUGHT-1", "CAUGHT-2", "CAUGHT-3", "UNCAUGHT");
+        # a client without exception filters stops at all exceptions
+        assertEq(("user", "system", "uncaught"), dpc.command("exception/filter/get"));
+        assertEq(all, getStoppingExceptions());
+        # exceptions that no try statement catches
+        assertEq(("UNCAUGHT",), getStoppingExceptions(("uncaught",)));
+        assertEq(("uncaught",), (dpc.command("exception/filter/set", {"value": ("UNCAUGHT",)}),
+            dpc.command("exception/filter/get"))[1]);
+        # the exceptions are user exceptions
+        assertEq(all, getStoppingExceptions(("user",)));
+        assertEq((), getStoppingExceptions(("system",)));
+        assertEq((), getStoppingExceptions(()));
+        # a thread stops if any client stops at the exception
+        assertEq(all, getStoppingExceptions((), True));
+        # exception codes, also with the other filters
+        assertEq(("CAUGHT-2", "UNCAUGHT"), getStoppingExceptions(("CAUGHT-2", "UNCAUGHT")));
+        assertEq(("CAUGHT-3", "UNCAUGHT"), getStoppingExceptions(("CAUGHT-3", "uncaught")));
+        assertEq((), getStoppingExceptions(("NO-SUCH-ERROR",)));
+        # negative: invalid filters and a value that is not a list
+        assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
+            {"value": ("",)}));
+        assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
+            {"value": ("A B",)}));
+        assertThrows("DEBUG-HANDLER-ERROR", "invalid exception filter", \dpc.command(), ("exception/filter/set",
+            {"value": (1,)}));
+        assertThrows("DEBUG-HANDLER-ERROR", "must be a list", \dpc.command(), ("exception/filter/set",
+            {"value": "user"}));
+        assertThrows("DEBUG-HANDLER-ERROR", "exception/filter", \dpc.command(), ("exception/x"));
+    }
+
+    # nobody can resume a thread without a client: when the last client disconnects, the stopped threads continue, and
+    # they do not stop again
+    lastClientTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(7);
+        p.breakAt(8);
+        hash<auto> e = p.runToStop();
+        assertEq(7, e.line);
+        dpc.unregisterConnection(TestDebugProgramControl::CX);
+        on_exit dpc.registerConnection(TestDebugProgramControl::CX);
+        # the program runs to its end without stopping at the breakpoint of line 8 or at its end
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
+    }
+
+    # the attach of the first thread of a program is the start of the program; another thread that starts attaches as
+    # a thread that starts
+    threadStartEventTest() {
+        DebuggedProgram p(dpc, ThreadStartScript);
+        on_exit p.cleanup();
+        assertTrue(p.startEvent.programstart);
+        dpc.go(p.tid);
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("attach", False), (e.func, e.programstart));
+        int tid = e.tid;
+        assertNeq(p.tid, tid);
+        # the thread ends its code and leaves the program; the initial thread continues when the other one has
+        # decremented the counter, so the events of the threads come in any order
+        dpc.go(tid);
+        hash<string, list<string>> funcs = {};
+        for (int i = 0; i < 3; ++i) {
+            e = dpc.getInterrupt(p.pgmId);
+            funcs{e.tid} += (e.func,);
+            if (e.func == "exit") {
+                assertFalse(exists e.programstart);
+            }
+            dpc.go(e.tid);
+        }
+        assertEq({string(tid): ("exit", "detach"), string(p.tid): ("detach",)}, funcs);
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
+        assertEq(1, p.pgm.getGlobalVariable("x"));
+    }
+
+    # a stopped thread continues and ends with THREAD-CANCELLED, and its detach is reported
+    terminateStoppedTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        assertEq("ok", dpc.command(sprintf("program/%d/terminate", p.pgmId)));
+        assertTrue(dpc.isTerminating(p.pgmId));
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq(("THREAD-CANCELLED", "the debugger ended the program"), (rv.ex.err, rv.ex.desc));
+        # negative: a program that does not exist
+        assertThrows("PROGRAM-ERROR", \dpc.command(), ("program/99999/terminate",));
+    }
+
+    # a thread that waits is cancelled, and the stopped initial thread ends
+    terminateBlockedTest() {
+        DebuggedProgram p(dpc, BlockedThreadScript);
+        on_exit p.cleanup();
+        p.breakAt(6);
+        dpc.go(p.tid);
+        # the thread that the program starts attaches before the initial thread reaches the breakpoint
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("attach", False), (e.func, e.programstart));
+        int tid = e.tid;
+        dpc.go(tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", p.tid, 6), (e.func, e.tid, e.line));
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        # the end of the code of the waiting thread and the detach of both threads, in any order
+        hash<string, list<string>> funcs = {};
+        for (int i = 0; i < 3; ++i) {
+            e = dpc.getInterrupt(p.pgmId);
+            funcs{e.tid} += (e.func,);
+            dpc.go(e.tid);
+        }
+        assertEq({string(tid): ("exit", "detach"), string(p.tid): ("detach",)}, funcs);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+    }
+
+    # the thread that runs a program ends when the debugger ends the program while it runs, as while it waits: it is
+    # cancelled, and its detach is reported without a second exception of the debugger
+    terminateRunningTest() {
+        DebuggedProgram p(dpc, "%modern\nCounter forever(1);\nforever.waitForZero();\n");
+        on_exit p.cleanup();
+        dpc.go(p.tid);
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        hash<auto> e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(e.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertRegex("the debugger ended the program$", rv.ex.desc);
+        assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
+    }
+
+    # without a client, a thread that starts does not stop, as nobody could resume it
+    threadStartWithoutClientTest() {
+        DebuggedProgram p(dpc, ThreadStartScript);
+        on_exit p.cleanup();
+        # the initial thread continues when the last client disconnects
+        dpc.unregisterConnection(TestDebugProgramControl::CX);
+        on_exit dpc.registerConnection(TestDebugProgramControl::CX);
+        assertEq({"rc": NOTHING}, p.done.get(EventTimeout));
+        p.finished = True;
+        assertEq(1, p.pgm.getGlobalVariable("x"));
+    }
+
+    # a step stops once at each statement: not also at the start of a function or of a block; a pause stops a thread
+    # also in a loop with an empty block, and a thread that runs until its function returns stops in the caller
+    stepStopTest() {
+        DebuggedProgram p(dpc, StepStopScript);
+        on_exit p.cleanup();
+        # the loop of the program ends also when the test fails
+        on_exit p.pgm.setGlobalVarValue("done", True);
+        string cmd = sprintf("program/%d/", p.pgmId);
+        p.breakAt(5);
+        hash<auto> e = p.runToStop();
+        assertEq(5, e.line);
+        # into add(): its first statement, then out of it to the next statement of the caller, which is the loop, as
+        # the declaration of line 6 is not executed; the stop gives the value that add() returned
+        dpc.go(p.tid, "step");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", 3), (e.func, e.line));
+        dpc.go(p.tid, "untilreturn");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", 7), (e.func, e.line));
+        assertEq("add", e.returned.function);
+        assertEq(3, AbstractDebugControl::unserialize(e.returned.value));
+        # a step in the loop with an empty block does not stop until the thread is paused
+        dpc.go(p.tid, "step");
+        dpc.command(cmd + "thread/" + p.tid + "/stop");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("step", 7), (e.func, e.line));
+        dpc.threadCommand(p.tid, "thread/variable/set", {"root": {"global": "done"}, "expression": "True"});
+        assertEq({"rc": NOTHING}, p.finish());
     }
 
     breakpointErrorTest() {

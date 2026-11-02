@@ -54,9 +54,82 @@ module DebugProgramControl {
       without a timeout
     - a statement can be given as a function name without the types of its parameters when the function has one
       variant (<a href="https://github.com/qoretechnologies/qore/issues/5558">issue 5558</a>)
+    - new commands of stopped threads: \c thread/variable/get and \c thread/variable/set read and set the values of
+      variables and their elements, keys and members, also private ones, by their paths, and \c thread/evaluate
+      (with \c serialize, also the whole value in \c serialized); expressions can refer to all code of the program
+      (see @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()")
+      evaluates expressions with the variables of a frame (see
+      @ref DebugProgramControl::DebugProgramControl::evaluateExpression() "evaluateExpression()")
+    - added @ref DebugProgramControl::DebugProgramControl::captureOutput() "captureOutput()", which sends the output of
+      the process to the clients as \c "output" events, and
+      @ref DebugProgramControl::DebugProgramControl::setOutputCapture() "setOutputCapture()"; the output that a thread
+      writes before an interrupt is sent before the interrupt
+    - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
+      stack catches the exception
+    - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
+      a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
+      \c program//breakpoint/&lt;id&gt; set and get them, \c breakpoint//create takes them in its value (\c condition,
+      \c hitCondition and \c logMessage), and breakpoint lists give them with the number of \c hits; a logpoint and
+      an error evaluating a condition are sent to the clients as \c "console" output events, and an interrupt of a
+      breakpoint whose condition could not be evaluated gives the error in \c bkpterror; all breakpoints of the
+      statement that apply to the thread are checked, and the interrupt gives those that stop it in \c bkptids; the
+      \c thread/breakpoint/check command checks breakpoints for a thread that stopped at their statement for another
+      reason (see @ref DebugProgramControl::DebugProgramControl::checkBreakpoint() "checkBreakpoint()")
+    - each client selects the exceptions that stop threads with the \c exception/filter/set command: all user
+      exceptions, all system exceptions, exceptions that no try statement of debuggable code catches, and exceptions
+      with given codes; an exception that no client stops at does not stop the thread
+    - when the last client disconnects, the stopped threads continue, and without a client a thread stops only at the
+      start of a program (the \c attach interrupt); they stayed stopped with nobody to resume them
+    - at the stop at the start of a program (the \c attach interrupt), the thread has not entered the code of the
+      program: expressions are evaluated with the code and the global variables of the program, and no local variables
+      are read, as the frames are those of the code that started the program; reading them failed
+    - the \c program/&lt;id&gt;/statement/stepintargets command gives the calls of a statement that can be stepped into
+      (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"), and
+      \c thread/go/stepinto with the index of a call in them as \c target in its value steps into the call: the
+      thread matches the functions that its statement calls with the call, also a method of a subclass and the code
+      of a call reference, and runs the others to their return
+    - a statement can be given by its line and its 0-based byte \c column, for a breakpoint on a statement of a line
+      with more than one statement; the \c program/&lt;id&gt;/statement/list command gives the statements of a line with
+      their columns, and interrupt events and the frames of call stacks give the columns of their statements in
+      \c column and \c endcolumn where they are known
+    - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
+      threads of programs in \c threadNames
+    - the interrupt event of a thread that attaches gives \c programstart: @ref True for the first thread of a
+      program, which starts it, and @ref False for another thread that starts; without a client, a thread that starts
+      does not stop
+    - added the \c program/&lt;id&gt;/terminate command,
+      @ref DebugProgramControl::DebugProgramControl::terminateProgram() "terminateProgram()" and
+      @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
+      threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+    - the condition and the expressions of the log message of a breakpoint are parsed with the variables of its
+      statements when they are set, and refused with \c BREAKPOINT-CONDITION-ERROR if they cannot be parsed; expressions
+      are evaluated also with the top-level local variables of the program, which have global scope
+    - the \c thread/variable/get command gives the whole value in \c serialized with \c serialize, for a value with at
+      most \c serializeMax elements, keys or members
+    - the \c "console" output event of a logpoint, or of a condition that cannot be evaluated, gives the \c tid of the
+      thread and the \c breakpoint
+    - a thread that runs until its function returns (\c untilreturn) continues to the next statement of the caller,
+      stepping over the calls of the rest of the caller's statement, and its interrupt event there gives the function
+      and the serialized value that it returned in \c returned
+    - a pause stops at the first statement of a block, not at the block, unless the thread reaches the block again
+      without a statement, as an empty block of a loop; a step after the pause stopped at the same line
+    - the interrupt event of a thread that stops for a pause that a client requested, and not at a breakpoint, gives
+      \c pause as @ref True, so that clients can tell the pause from the end of a step
+    - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
+      variable in \c declaredType, and \c unassigned is @ref True for a variable that was declared but not assigned;
+      exception events give the hint of an exception that matches a common pitfall of %Qore in its \c arg (see
+      @ref DebugUtil::AbstractDebugControl::formatRuntimeDiagnostic() "AbstractDebugControl::formatRuntimeDiagnostic()")
+    - a program created with the \c program//create command is removed from debugging also when it ends with an
+      exception
+    - @ref DebugProgramControl::DebugProgramControl::createProgram() "createProgram()" parses a script in the mode
+      that the interpreter gives its file: in @ref modern "%modern" mode unless its name ends in \c .q (see
+      @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()")
     - fixed the \c file/source and \c label/source commands for command hashes whose values all have the same type,
       such as a literal <tt>{"cmd": "program/1/file/source", "file": "..."}</tt>; setting the start line raised
       \c RUNTIME-TYPE-ERROR
+    - fixed a thread that stopped while the last client disconnected: it waited for a client that no longer existed,
+      and the code waiting for the program to end, such as the debug adapter of an IDE ending its session, waited for
+      that thread forever
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -91,9 +164,82 @@ public namespace DebugProgramControl {
             #! source file search path
             string sourceSearchPath = "";
 
+            #! the capture of the output of the process, which is flushed before an interrupt is sent; see
+            #! captureOutput() and setOutputCapture()
+            *DebugOutputCapture outputCapture;
+            #! True if this object created outputCapture and sends the output to the clients
+            bool ownOutputCapture;
+
             #! number of frames related to DebugProgramControl library when handleInterrupt() is invoked
             const frameOffset = 2;
+
+            #! the prefix of the names of the functions that expressions are evaluated in; see evaluateExpression()
+            const EvalFunction = "qore_debug_evaluate";
+            #! the maximum number of expressions that are kept compiled for a Program; see evaluateExpression()
+            const MaxEvalFunctions = 256;
+
+            #! the Programs that expressions are evaluated in, by the ID of the debugged Program
+            /** each with the \c program, the names of the compiled \c functions by expression and variable names,
+                the number \c n of functions, and the number of evaluations that are running in the program
+                (\c calls); see evaluateExpression()
+            */
+            hash<string, hash<auto>> evalPrograms = {};
+            #! serializes the access to evalPrograms and the parsing of expressions
+            Mutex evalLock();
+            #! the name of the parameter of the function that an expression is evaluated in
+            const EvalVars = "qore_debug_vars";
+
+            #! the conditions, hit conditions and log messages of breakpoints, which all clients share, by breakpoint ID
+            /** each with the optional \c condition, \c hitCondition and \c logMessage, and the number of \c hits of
+                the breakpoint with its condition true; see checkBreakpoint()
+            */
+            hash<string, hash<auto>> bkptOptions = {};
+            #! serializes the access to bkptOptions
+            Mutex bkptLock();
+
+            #! the threads that a client requested to stop (pause), by TID; see onStep()
+            hash<string, bool> pauseRequests = {};
+            #! the block that a thread to pause passed to stop at its first statement, by TID; see onStep()
+            hash<string, int> pauseSkippedBlocks = {};
+            #! serializes the access to pauseRequests and pauseSkippedBlocks
+            Mutex pauseLock();
+
+            #! the function that returned, and its value, of a thread that ran until its function returned, by TID,
+            #! which the next stop of the thread gives; see onFunctionExit()
+            hash<string, hash<auto>> returnedValues = {};
+            #! serializes the access to returnedValues
+            Mutex returnLock();
+
+            #! the programs whose first thread has attached, by program ID; see isProgramStart()
+            hash<string, bool> startedPrograms = {};
+            #! the programs that the debugger ends, by program ID; see terminateProgram()
+            hash<string, bool> terminatingPrograms = {};
+            #! serializes the access to startedPrograms and terminatingPrograms
+            Mutex startedLock();
+
+            #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
+            hash<string, hash<auto>> stepIntos = {};
+            #! serializes the access to stepIntos
+            Mutex stepIntoLock();
+
+            #! the options of breakpoints that are kept in bkptOptions
+            const BreakpointOptions = ("condition", "hitCondition", "logMessage");
+            #! the exception filters of the exception/filter/set command; a client without filters has all of them
+            const ExceptionFilters = ("user", "system", "uncaught");
+
+            #! the options of breakpoints by the names of their commands
+            const BreakpointCommandOptions = {
+                "condition": "condition",
+                "hitcondition": "hitCondition",
+                "log": "logMessage",
+            };
         }
+        public {
+            #! the description of the \c THREAD-CANCELLED exception that ends the threads of a program that the debugger
+            #! ends; see terminateProgram()
+            const TerminateReason = "the debugger ended the program";
+        }
+
         public {
             #! default number of lines listed before current code position
             const DEFAULT_LINES_BEFORE = 3;
@@ -104,6 +250,77 @@ public namespace DebugProgramControl {
         #! creates the object
         constructor(string serverName, *LoggerInterface logger) : AbstractDebugControl(logger) {
             self.serverName = serverName;
+        }
+
+        #! Captures the output of the process and sends it to all clients as output events
+        /** The standard output and standard error of the process, which debugged programs write to, are sent to the
+            clients as \c "output" events (@ref DebugUtil::DebugEventCmd "DebugEventCmd::Output") with the \c category (\c "stdout"
+            or \c "stderr") and the \c output; the output written before an interrupt is sent before it.
+
+            @param tee if @ref True, the output is also written to the original stdout and stderr
+
+            @return @ref True if the output is captured, @ref False if it is already captured or cannot be captured
+            on this platform
+
+            @see stopOutputCapture()
+        */
+        public bool captureOutput(bool tee = True) {
+            if (outputCapture) {
+                return False;
+            }
+            DebugOutputCapture capture(\broadcastOutput(), NOTHING, tee);
+            if (!capture.start()) {
+                return False;
+            }
+            outputCapture = capture;
+            ownOutputCapture = True;
+            return True;
+        }
+
+        #! Returns the capture of the output, if the output is captured
+        public *DebugOutputCapture getOutputCapture() {
+            return outputCapture;
+        }
+
+        #! Sets the capture of the output of the process, which is flushed before an interrupt is sent
+        /** For a client in this process, such as a debug adapter, that captures the output itself; the output written
+            by a thread before it is interrupted reaches the client before the interrupt
+        */
+        public setOutputCapture(*DebugOutputCapture capture) {
+            if (ownOutputCapture) {
+                throw "DEBUG-ERROR", "the output is already captured by captureOutput()";
+            }
+            outputCapture = capture;
+        }
+
+        #! Restores stdout and stderr after captureOutput(), after the output written before has been sent
+        public stopOutputCapture() {
+            if (!ownOutputCapture) {
+                return;
+            }
+            outputCapture.stop();
+            remove outputCapture;
+            ownOutputCapture = False;
+        }
+
+        #! Sends output of the process to all clients
+        /** @param category the category of the output: \c "stdout" or \c "stderr" of the process, or \c "console" for
+            the output of the debugger, as the message of a logpoint
+            @param output the output
+            @param info for \c "console" output, the \c tid of the thread and the \c breakpoint that it is for
+        */
+        private broadcastOutput(string category, string output, *hash<auto> info) {
+            try {
+                broadcastDataImpl({
+                    "type": DebugResponseType::Event,
+                    "cmd": DebugEventCmd::Output,
+                    "stamp": now_us(),
+                    "category": category,
+                    "output": output,
+                } + info);
+            } catch (hash<ExceptionInfo> ex) {
+                # the output is not sent to a client that cannot be reached
+            }
         }
 
         #! resumes any blocked threads and destroys the object
@@ -134,7 +351,8 @@ public namespace DebugProgramControl {
         public registerConnection(hash<auto> cx) {
             rwlConnection.writeLock();
             on_exit rwlConnection.writeUnlock();
-            ctxConnection{cx.id} = {"program": {}};
+            # also keeps the exception filters of the client, which are a list
+            ctxConnection{cx.id} = hash<auto>{"program": {}};
             # Note: we cannot sendDataImpl/broadcaseDataImpl as cx.id not registered in WebSocketHandler
         }
 
@@ -152,25 +370,45 @@ public namespace DebugProgramControl {
         }
 
         #! unregister a connection context
+        /** When the last client disconnects, the stopped threads continue, as nobody can resume them; see
+            handleInterrupt()
+        */
         public unregisterConnection(hash<auto> cx) {
-            rwlConnection.writeLock();
-            on_exit rwlConnection.writeUnlock();
+            bool last;
+            {
+                rwlConnection.writeLock();
+                on_exit rwlConnection.writeUnlock();
 
-            # remove attached programs
-            map removeProgram($1), ctxConnection{cx.id}.program.iterator();
+                # remove attached programs
+                map removeProgram($1), ctxConnection{cx.id}.program.iterator();
 
-            delete ctxConnection{cx.id};
-            # if (!ctxConnection)  run stopped programs ?
+                delete ctxConnection{cx.id};
+                last = !ctxConnection;
+            }
+            # the threads are resumed without the lock of the connections
+            if (last) {
+                shutdown();
+            }
         }
 
-        #! unregister all connections
+        #! Returns True if a client is connected
+        private bool hasConnection() {
+            rwlConnection.readLock();
+            on_exit rwlConnection.readUnlock();
+            return boolean(ctxConnection);
+        }
+
+        #! unregister all connections; the stopped threads continue
         public unregisterAllConnections() {
-            rwlConnection.writeLock();
-            on_exit rwlConnection.writeUnlock();
-            foreach string id in (keys ctxConnection) {
-                map removeProgram($1), ctxConnection{id}.program.iterator();
-                delete ctxConnection{id};
+            {
+                rwlConnection.writeLock();
+                on_exit rwlConnection.writeUnlock();
+                foreach string id in (keys ctxConnection) {
+                    map removeProgram($1), ctxConnection{id}.program.iterator();
+                    delete ctxConnection{id};
+                }
             }
+            shutdown();
         }
 
         #! get list of connection ids
@@ -197,6 +435,28 @@ public namespace DebugProgramControl {
                 'stamp': now_us(),
             };
             broadcastDataImpl(sd);
+        }
+
+        #! Sets the time zone of a program from a region name or a UTC offset
+        /** @param pgm the program
+            @param zone a region name, such as \c "Europe/Prague", or a UTC offset in the format
+            <tt>S[HH[:MM[:SS]]]</tt>, where \c S is \c + or \c -, such as \c "+01:00", as for the \c -z option of
+            \c qore
+
+            @throw TIME-ZONE-ERROR the UTC offset is not valid
+        */
+        static setTimeZone(Program pgm, string zone) {
+            if (zone !~ /^[-+]/) {
+                pgm.setTimeZoneRegion(zone);
+                return;
+            }
+            *list<*string> m = (zone =~ x/^([-+])([0-9]{2})?(?::([0-9]{2}))?(?::([0-9]{2}))?$/);
+            if (!m || (!exists m[1] && (exists m[2] || exists m[3])) || (!exists m[2] && exists m[3])) {
+                throw "TIME-ZONE-ERROR", sprintf("%y is not a valid UTC offset; expecting +HH, +HH:MM or +HH:MM:SS "
+                    "with + or -, such as \"+01:00\"", zone);
+            }
+            int seconds = int(m[1] ?? 0) * 3600 + int(m[2] ?? 0) * 60 + int(m[3] ?? 0);
+            pgm.setTimeZoneUTCOffset(m[0] == "-" ? -seconds : seconds);
         }
 
         #! Create new program
@@ -229,12 +489,13 @@ public namespace DebugProgramControl {
                 }
             }
             if (exists opts.time_zone) {
-                # TODO: parse exact shifts
-                pgm.setTimeZoneRegion(opts.time_zone);
+                setTimeZone(pgm, opts.time_zone);
             }
             # update arguments without debug options
             pgm.setGlobalVarValue('ARGV', args);
-            pgm.define('QoreDebugging', True);   # TODO: vs. QoreDebug define, better name ?
+            # a program that is debugged can tell it with %ifdef QoreDebugging; QoreDebug tells a debug build of the
+            # Qore library
+            pgm.define('QoreDebugging', True);
             debug("add program");
             addProgram(pgm.getProgram());
 
@@ -249,6 +510,8 @@ public namespace DebugProgramControl {
                 }
             }
             pgm.setScriptPath(fileName);
+            # the source is parsed as the interpreter would parse the file, in %modern mode unless it is a .q file
+            pgm.applySourceDefaults(fileName);
             debug("parse code");
             *hash<auto> wh = pgm.parse(script, fileName, WARN_DEFAULT, NOTHING, NOTHING, False);
             if (wh) {
@@ -259,9 +522,86 @@ public namespace DebugProgramControl {
 
         #! run and remove program from debugging
         private *int runAndDetach(Program pgm) {
-            *int res = pgm.run();
-            removeProgram(pgm.getProgram()); # I would be called in Program::destructor() but this is more transparent
-            return res;
+            ProgramControl pc = pgm.getProgram();
+            # I would be called in Program::destructor() but this is more transparent
+            on_exit removeProgram(pc);
+            try {
+                return pgm.run();
+            } catch (hash<ExceptionInfo> ex) {
+                # a program that the debugger ended; the thread is no longer cancelled
+                if (DebugProgramControl::isTerminateException(ex)) {
+                    clear_thread_cancel();
+                    return;
+                }
+                rethrow;
+            }
+        }
+
+        #! Ends a debugged program
+        /** The threads of the program end with a \c THREAD-CANCELLED exception: a thread that is stopped continues
+            and ends, a thread that runs ends at its next statement, and a thread that waits, as for a lock or for I/O,
+            is cancelled.  The thread that runs the program ends the run with the exception, which the code that
+            started the program can recognize with isTerminateException().
+
+            @param pgm the program to end
+
+            @since DebugProgramControl 0.1.3
+        */
+        public terminateProgram(ProgramControl pgm) {
+            int pgm_id = pgm.getProgramId();
+            list<int> stopped = ();
+            {
+                # no thread is registered as stopped while the program is marked, so each thread that is stopped is
+                # resumed here and no other one stops (see handleInterrupt())
+                rwlThread.writeLock();
+                on_exit rwlThread.writeUnlock();
+                {
+                    AutoLock al(startedLock);
+                    terminatingPrograms{pgm_id} = True;
+                }
+                foreach hash<auto> i in (ctxThread.pairIterator()) {
+                    if (i.value.pgmId == pgm_id) {
+                        push stopped, int(i.key);
+                        # it runs, so that it leaves the program as a thread that is debugged (the detach is
+                        # reported), also from the stop at the start of the program, where it was not yet debugged
+                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}});
+                    }
+                }
+            }
+            # the threads that end with the cancellation end without an error
+            setProgramTerminating(pgm);
+            # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
+            # debugger; it ends when it continues (see handleInterrupt())
+            foreach int tid in (pgm.getThreadList()) {
+                if (tid == gettid() || inlist(tid, stopped)) {
+                    continue;
+                }
+                try {
+                    cancel_thread(tid, TerminateReason);
+                } catch (hash<ExceptionInfo> ex) {
+                    # a thread that has ended
+                }
+            }
+            breakProgram(pgm);
+        }
+
+        #! Returns True for the exception that ends the threads of a program that the debugger ends
+        /** The code that started the program recognizes the end of the program with it; see terminateProgram()
+
+            @since DebugProgramControl 0.1.3
+        */
+        static bool isTerminateException(hash<ExceptionInfo> ex) {
+            # the description of a cancelled wait ends with the reason of the cancellation
+            return ex.err == "THREAD-CANCELLED" && exists ex.desc
+                && ex.desc.substr(-TerminateReason.size()) == TerminateReason;
+        }
+
+        #! Returns True if the debugger ends the program; see terminateProgram()
+        /** @since DebugProgramControl 0.1.3
+        */
+        public bool isTerminating(int pgm_id) {
+            AutoLock al(startedLock);
+            return boolean(terminatingPrograms{pgm_id});
         }
 
         #! process message in debugging thread, if message is related to debugged thread then put it in particular queue
@@ -412,7 +752,14 @@ public namespace DebugProgramControl {
                                 pgmb = ProgramControl::resolveProgramId(int(pgmName));
                         }
                         switch (shift cmd) {
+                            case 'terminate':
+                                terminateProgram(pgmb);
+                                result = 'ok';
+                                break;
+
                             case 'stop':
+                                # the threads of the program stop where they are; see onStep()
+                                notePauseRequests(pgmb.getThreadList());
                                 # no locking
                                 switch (breakProgram(pgmb)) {
                                     case 0:
@@ -431,6 +778,7 @@ public namespace DebugProgramControl {
                                 softint tid = shift cmd;
                                 switch (shift cmd) {
                                     case 'stop':
+                                        notePauseRequests((tid,));
                                         switch (breakProgramThread(pgmb, tid)) {
                                             case 0:
                                                 result = 'ok';
@@ -586,6 +934,17 @@ public namespace DebugProgramControl {
 
                             case 'statement':
                                 switch (shift cmd) {
+                                    case 'list':
+                                        if (!exists receiveData.value.lineno) {
+                                            throw "DEBUG-HANDLER-ERROR", "the line of the statements is missing "
+                                                "(value.lineno)";
+                                        }
+                                        result = getLineStatements(pgmb, receiveData.value.file ?? '',
+                                            receiveData.value.lineno);
+                                        break;
+                                    case 'stepintargets':
+                                        result = pgmb.getStepInTargets(resolveStatement(pgmb, receiveData.value));
+                                        break;
                                     case 'get':
                                         int sid = resolveStatement(pgmb, receiveData.value);
                                         result = hash(pgmb.getStatementIdInfo(sid, True));
@@ -612,6 +971,11 @@ public namespace DebugProgramControl {
                                         int stmt;
                                         if (receiveData.value) {
                                             stmt = resolveStatement(pgmb, receiveData.value);
+                                            # the options are checked before the breakpoint is created
+                                            foreach string opt in (BreakpointOptions) {
+                                                checkBreakpointOption(pgmb, stmt ? (stmt,) : (), opt,
+                                                    receiveData.value{opt});
+                                            }
                                         }
                                         b = new Breakpoint();
                                         b.setEnabled(True);
@@ -621,6 +985,14 @@ public namespace DebugProgramControl {
                                             b.assignStatement(stmt);
                                             result.stmtid = stmt;
                                         }
+                                        # the condition, hit condition and log message of the breakpoint
+                                        if (receiveData.value) {
+                                            foreach string opt in (BreakpointOptions) {
+                                                if (receiveData.value{opt}.val()) {
+                                                    setBreakpointOption(b, opt, receiveData.value{opt});
+                                                }
+                                            }
+                                        }
                                         break;
                                     default:
                                         b = Breakpoint::resolveBreakpointId(int(bkptName));
@@ -629,7 +1001,8 @@ public namespace DebugProgramControl {
                                         }
                                         break;
                                 }
-                                switch (shift cmd) {
+                                string bkptCmd = shift cmd ?? "";
+                                switch (bkptCmd) {
                                     case 'list':
                                         if (pgmb) {
                                             list<auto> bkpts =pgmb.getBreakpoints();
@@ -667,6 +1040,10 @@ public namespace DebugProgramControl {
                                             b.unassignStatement(s);
                                         }
                                         # delete b;   ??
+                                        {
+                                            AutoLock al(bkptLock);
+                                            remove bkptOptions{b.getBreakpointId()};
+                                        }
                                         result = 'ok';
                                         break;
 
@@ -736,6 +1113,27 @@ public namespace DebugProgramControl {
                                         }
                                         break;
 
+                                    case 'condition':
+                                    case 'hitcondition':
+                                    case 'log': {
+                                        string opt = BreakpointCommandOptions{bkptCmd};
+                                        switch (shift cmd) {
+                                            case 'get':
+                                                # an option that is not set is empty, as for set
+                                                result = getBreakpointOptions(b.getBreakpointId()){opt} ?? "";
+                                                break;
+                                            case 'set':
+                                                setBreakpointOption(b, opt, receiveData.value);
+                                                broadcastBreakpoint(cx, b, bkptCmd);
+                                                result = 'ok';
+                                                break;
+                                            default:
+                                                throw "DEBUG-HANDLER-ERROR", sprintf("expecting get or set after %y",
+                                                    bkptCmd);
+                                        }
+                                        break;
+                                    }
+
                                     case 'policy':
                                         switch (shift cmd) {
                                             case 'get':
@@ -754,6 +1152,34 @@ public namespace DebugProgramControl {
                                 }
 
                                 break;
+                        }
+                        break;
+
+                    case 'exception':
+                        # the exceptions that stop threads for the client
+                        if (shift cmd != "filter") {
+                            throw "DEBUG-HANDLER-ERROR", "expecting exception/filter/get or exception/filter/set";
+                        }
+                        switch (shift cmd) {
+                            case 'get': {
+                                rwlConnection.readLock();
+                                on_exit rwlConnection.readUnlock();
+                                result = ctxConnection{cx.id}.exceptionFilters ?? ExceptionFilters;
+                                break;
+                            }
+                            case 'set': {
+                                list<string> filters = DebugProgramControl::checkExceptionFilters(receiveData.value);
+                                rwlConnection.writeLock();
+                                on_exit rwlConnection.writeUnlock();
+                                if (!ctxConnection{cx.id}) {
+                                    throw "DEBUG-HANDLER-ERROR", "the connection is not registered";
+                                }
+                                ctxConnection{cx.id}.exceptionFilters = filters;
+                                result = 'ok';
+                                break;
+                            }
+                            default:
+                                throw "DEBUG-HANDLER-ERROR", "expecting exception/filter/get or exception/filter/set";
                         }
                         break;
 
@@ -863,9 +1289,52 @@ public namespace DebugProgramControl {
                 return pgm.findFunctionStatementId(value.function, value.args);
             }
             if (exists value.lineno) {
+                if (exists value.column) {
+                    return findColumnStatement(pgm, value.file ?? '', value.lineno, value.column);
+                }
                 return pgm.findStatementId(value.file ?? '', value.lineno);
             }
             throw "DEBUG-HANDLER-ERROR", sprintf("Cannot resolve statement from %y", value);
+        }
+
+        #! Returns the ID of the statement of a column of a line
+        /** @param pgm the Program
+            @param file the file or the label of the source
+            @param line the line
+            @param column the 0-based column, counted in bytes
+
+            @return the last statement of the line that starts at or before the column, the first statement of the
+            line if none does
+
+            @throw PROGRAM-STATEMENT-ERROR no statement is found for the line, as for a line breakpoint
+        */
+        private static int findColumnStatement(ProgramControl pgm, string file, int line, int column) {
+            list<int> ids = pgm.findStatementIds(file, line);
+            if (!ids) {
+                throw "PROGRAM-STATEMENT-ERROR", file.val()
+                    ? sprintf("there is no statement on line %d of %y where the program can pause", line, file)
+                    : sprintf("there is no statement on line %d where the program can pause", line);
+            }
+            int rv = ids[0];
+            foreach int id in (ids) {
+                int start_column = pgm.getStatementIdInfo(id).start_column;
+                if (start_column >= 0 && start_column <= column) {
+                    rv = id;
+                }
+            }
+            return rv;
+        }
+
+        #! Returns the statements of a line with their locations
+        /** @param pgm the Program
+            @param file the file or the label of the source
+            @param line the line
+
+            @return a list of the statements of the line in the order of their columns, each a hash of the
+            @ref Qore::StatementInfo "StatementInfo" keys and \c id, the ID of the statement
+        */
+        private static list<hash<auto>> getLineStatements(ProgramControl pgm, string file, int line) {
+            return map hash(pgm.getStatementIdInfo($1)) + {"id": $1}, pgm.findStatementIds(file, line);
         }
 
         private hash<auto> getProgramInfo(ProgramControl p, bool listFiles = False, *list<auto> threads) {
@@ -873,6 +1342,8 @@ public namespace DebugProgramControl {
             result.scriptName = p.getScriptName();
             result.scriptPath = p.getScriptPath();
             result.threads = threads ?? p.getThreadList();
+            # the current names of the threads
+            result.threadNames = map {$1: get_thread_name($1)}, result.threads;
             result.debugging = (p.getParseOptions() & PO_NO_DEBUGGING) == 0;
             if (result.debugging && listFiles) {
                 hash<auto> h;
@@ -886,6 +1357,444 @@ public namespace DebugProgramControl {
                 }
             }
             return result;
+        }
+
+        #! Returns the key with which a step into a call matches the called code
+        /** The key of a constructor has its class, as the constructors of base classes are called in the constructor
+            of a class; the key of another method has no class, as a method of a subclass can be called; the key of a
+            call of a call reference is empty
+        */
+        private static string getStepIntoTargetKey(hash<auto> target) {
+            return target.function == "constructor" ? target.name : target.function;
+        }
+
+        #! Returns the key of the called code of a call stack frame, as one of the keys of the targets, or empty
+        private static string getStepIntoFrameKey(string name, hash<string, bool> targetKeys) {
+            if (targetKeys{name}) {
+                return name;
+            }
+            *string short = (name =~ x/([^:]+)$/)[0];
+            return short && targetKeys{short} ? short : "";
+        }
+
+        #! Starts a step into a call of the statement of a stopped thread; runs in the thread
+        /** @param tid the thread
+            @param pgm the Program of the thread
+            @param statementId the statement that the thread is stopped at
+            @param target the index of the call in the step-in targets of the statement (see
+            @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()")
+
+            @throw DEBUG-HANDLER-ERROR the thread is not stopped at a statement or the statement has no such call
+
+            @note must be called directly by handleInterrupt(), as checkStepInto() is, as both count the frames of the
+            call stack
+        */
+        private startStepInto(int tid, ProgramControl pgm, *int statementId, auto target) {
+            if (!statementId) {
+                throw "DEBUG-HANDLER-ERROR", "the thread is not stopped at a statement";
+            }
+            list<hash<auto>> targets = pgm.getStepInTargets(statementId);
+            if (!exists target || target.typeCode() != NT_INT || target < 0 || target >= targets.size()) {
+                throw "DEBUG-HANDLER-ERROR", sprintf("the statement has no call %y to step into; it has %d", target,
+                    targets.size());
+            }
+            list<string> targetKeys = map DebugProgramControl::getStepIntoTargetKey($1), targets;
+            string key = targetKeys[target];
+            # the call is the nth call of the statement with its key
+            int ordinal = (select targetKeys[0..target], $1 == key).size();
+            int depth = (select get_thread_call_stack(), $1.type == "user").size();
+            AutoLock al(stepIntoLock);
+            stepIntos{tid} = {
+                "key": key,
+                "ordinal": ordinal,
+                "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
+                "depth": depth,
+                "counts": {},
+            };
+        }
+
+        #! Checks an interrupt of a thread that steps into a call of its statement; runs in the thread
+        /** A function that the statement calls (one level deeper than the statement) is the call that the thread steps
+            into if it is the nth function with the key of the call; another one runs until it returns, and then the
+            thread steps again.  Any other interrupt, such as the next statement, a breakpoint or an exception, ends
+            the step into the call, and the thread stops there.
+
+            @return @ref True if the thread continues with the given run state, @ref False if it stops
+
+            @note must be called directly by handleInterrupt(), as startStepInto() is, as both count the frames of the
+            call stack
+        */
+        private bool checkStepInto(int tid, string func, reference runState) {
+            *hash<auto> si;
+            {
+                AutoLock al(stepIntoLock);
+                si = stepIntos{tid};
+            }
+            if (!si) {
+                return False;
+            }
+            list<hash<auto>> stack = get_thread_call_stack();
+            if ((select stack, $1.type == "user").size() == si.depth + 1) {
+                if (func == "funcEnter") {
+                    # the frame of the called code, after this method, handleInterrupt() and the debugger's callback
+                    string key = DebugProgramControl::getStepIntoFrameKey(stack[2 + frameOffset].function, si.keys);
+                    int n;
+                    {
+                        AutoLock al(stepIntoLock);
+                        n = ++stepIntos{tid}.counts{key};
+                    }
+                    if (key != si.key || n != si.ordinal) {
+                        runState = DebugUntilReturn;
+                        return True;
+                    }
+                    # the call: the thread stops at its first statement, as a step into a function does
+                    {
+                        AutoLock al(stepIntoLock);
+                        remove stepIntos{tid};
+                    }
+                    runState = DebugStep;
+                    return True;
+                } else if (func == "funcExit") {
+                    # a call that is not the target has returned
+                    runState = DebugStep;
+                    return True;
+                }
+            }
+            AutoLock al(stepIntoLock);
+            remove stepIntos{tid};
+            return False;
+        }
+
+        #! Returns the exception filters given to the exception/filter/set command
+        /** @param value a list of the filters: \c "user" for all user exceptions, \c "system" for all system
+            exceptions, \c "uncaught" for exceptions that no try statement of debuggable code catches (in any case),
+            and exception codes, such as \c "FILE-OPEN-ERROR", for the exceptions with the code; an empty list for none
+
+            @throw DEBUG-HANDLER-ERROR the value is not a list of filters
+        */
+        static list<string> checkExceptionFilters(auto value) {
+            if (exists value && value.typeCode() != NT_LIST) {
+                throw "DEBUG-HANDLER-ERROR", sprintf("the exception filters must be a list; got type %y",
+                    value.type());
+            }
+            list<string> rv = ();
+            foreach auto f in (value) {
+                if (f.typeCode() != NT_STRING || !f.val() || f =~ /\s/) {
+                    throw "DEBUG-HANDLER-ERROR", sprintf("invalid exception filter %y; expecting %y or an exception "
+                        "code", f, ExceptionFilters);
+                }
+                # a keyword in any case, or an exception code as given
+                string filter = inlist(f.lwr(), ExceptionFilters) ? f.lwr() : f;
+                if (!inlist(filter, rv)) {
+                    push rv, filter;
+                }
+            }
+            return rv;
+        }
+
+        #! Returns True if a client stops threads at an exception
+        /** A client without exception filters stops at all exceptions; see the exception/filter/set command
+
+            @param ex the exception
+            @param uncaught @ref True if no try statement of debuggable code in the call stack catches it
+        */
+        private bool stopsAtException(hash<auto> ex, bool uncaught) {
+            rwlConnection.readLock();
+            on_exit rwlConnection.readUnlock();
+            if (!ctxConnection) {
+                return True;
+            }
+            *string type = ex.type.lwr();
+            foreach hash<auto> c in (ctxConnection.iterator()) {
+                if (!exists c.exceptionFilters
+                    || inlist(type, c.exceptionFilters)
+                    || (uncaught && inlist("uncaught", c.exceptionFilters))
+                    || inlist(ex.err, c.exceptionFilters)) {
+                    return True;
+                }
+            }
+            return False;
+        }
+
+        #! Returns True if the thread steps into a call of its statement; see checkStepInto()
+        private bool hasStepInto(int tid) {
+            AutoLock al(stepIntoLock);
+            return exists stepIntos{tid};
+        }
+
+        #! Notes that a client requested threads to stop (pause); see onStep()
+        private notePauseRequests(*softlist<softint> tids) {
+            AutoLock al(pauseLock);
+            map pauseRequests{$1} = True, tids;
+        }
+
+        #! Returns True if a thread to pause stops at a block, as it reached the block again without a statement
+        /** The first time, the block is noted, and the thread stops at its first statement; see onStep()
+        */
+        private bool stopsAtBlockForPause(int tid, int block_id) {
+            AutoLock al(pauseLock);
+            if (pauseSkippedBlocks{tid} === block_id) {
+                return True;
+            }
+            pauseSkippedBlocks{tid} = block_id;
+            return False;
+        }
+
+        #! Returns True if a client requested the thread to stop (pause) and it has not stopped since
+        private bool isPauseRequested(int tid) {
+            AutoLock al(pauseLock);
+            return exists pauseRequests{tid};
+        }
+
+        #! Returns True if any breakpoint has a condition, hit condition or log message
+        private bool hasBreakpointOptions() {
+            AutoLock al(bkptLock);
+            return boolean(bkptOptions);
+        }
+
+        #! Returns the IDs of the breakpoints of a statement that apply to the current thread, in their order
+        /** A breakpoint applies if it is enabled and its policy accepts the thread, as the debugger checks it
+        */
+        private static list<int> getApplicableBreakpoints(ProgramControl pgm, int statementId) {
+            int tid = gettid();
+            list<int> rv = ();
+            foreach Breakpoint b in (pgm.getStatementIdInfo(statementId, True).breakpoints ?? ()) {
+                if (!b.getEnabled()) {
+                    continue;
+                }
+                int policy = b.getPolicy();
+                # a thread that is assigned to the breakpoint is accepted or rejected by the policy
+                if (policy != BreakpointPolicyNone
+                    && (policy == BreakpointPolicyAccept) != inlist(tid, b.getThreadIds())) {
+                    continue;
+                }
+                push rv, b.getBreakpointId();
+            }
+            return rv;
+        }
+
+        #! Returns the condition, hit condition, log message and number of hits of a breakpoint, if any is set
+        private *hash<auto> getBreakpointOptions(int id) {
+            AutoLock al(bkptLock);
+            return bkptOptions{id};
+        }
+
+        #! Sets or removes the condition, hit condition or log message of a breakpoint
+        /** @param b the breakpoint
+            @param opt \c condition, \c hitCondition or \c logMessage
+            @param value the value; an empty value removes the option
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw BREAKPOINT-CONDITION-ERROR the condition or an expression of the log message cannot be parsed
+            with the variables of a statement of the breakpoint; see checkBreakpointOption()
+            @throw DEBUG-HANDLER-ERROR the value is not a string
+        */
+        private setBreakpointOption(Breakpoint b, string opt, auto value) {
+            *string v = checkBreakpointOption(b.getProgram(), b.getStatementIds(), opt, value);
+            int id = b.getBreakpointId();
+            AutoLock al(bkptLock);
+            if (v) {
+                bkptOptions{id}{opt} = v;
+            } else {
+                remove bkptOptions{id}{opt};
+            }
+            # a breakpoint without options is not kept; its number of hits is kept as long as it has options
+            if (!(bkptOptions{id} - "hits")) {
+                remove bkptOptions{id};
+            }
+        }
+
+        #! Returns the value of a condition, hit condition or log message of a breakpoint, or @ref nothing for none,
+        #! after checking it with the variables of the statements of the breakpoint
+        /** The condition and the expressions in braces of a log message are parsed with the global variables of the
+            Program and the local variables of each statement (see
+            @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"), as they are
+            evaluated when a thread hits the breakpoint, so that an invalid expression, or one with a variable that a
+            statement cannot refer to, is refused when it is set.  An expression of a breakpoint without statements,
+            or of a statement whose local variables are not known, as of AOT-compiled code, is checked when it is
+            evaluated
+
+            @param pgm the Program of the breakpoint
+            @param sids the IDs of the statements of the breakpoint
+            @param opt \c condition, \c hitCondition or \c logMessage
+            @param value the value; an empty value removes the option
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw BREAKPOINT-CONDITION-ERROR the condition or an expression of the log message cannot be parsed
+            @throw DEBUG-HANDLER-ERROR the value is not a string
+        */
+        private *string checkBreakpointOption(ProgramControl pgm, *softlist<softint> sids, string opt, auto value) {
+            *string v = DebugProgramControl::validateBreakpointOption(opt, value);
+            if (!v || opt == "hitCondition") {
+                return v;
+            }
+            list<string> exprs = opt == "condition" ? (v,) : DebugProgramControl::getLogMessageExpressions(v);
+            foreach softint sid in (sids) {
+                *list<string> locals = pgm.getStatementIdInfo(sid).locals;
+                if (!exists locals) {
+                    continue;
+                }
+                list<string> names = getEvalVariableNames(pgm, locals);
+                foreach string expr in (exprs) {
+                    try {
+                        prepareEvalFunction(pgm, expr, names, False);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "BREAKPOINT-CONDITION-ERROR", sprintf("invalid %s %y: %s",
+                            opt == "condition" ? "condition" : "expression of the log message", expr, ex.desc);
+                    }
+                }
+            }
+            return v;
+        }
+
+        #! Returns the expressions in braces of the message of a logpoint; see formatLogMessage()
+        static list<string> getLogMessageExpressions(string msg) {
+            list<string> rv = ();
+            int pos = 0;
+            while (True) {
+                int open = index(msg, "{", pos);
+                int close = open >= 0 ? index(msg, "}", open) : -1;
+                if (close < 0) {
+                    break;
+                }
+                push rv, msg.substr(open + 1, close - open - 1);
+                pos = close + 1;
+            }
+            return rv;
+        }
+
+        #! Returns the value of a condition, hit condition or log message of a breakpoint, or @ref nothing for none
+        /** @param opt \c condition, \c hitCondition or \c logMessage
+            @param value the value; an empty value removes the option
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+            @throw DEBUG-HANDLER-ERROR the value is not a string
+        */
+        static *string validateBreakpointOption(string opt, auto value) {
+            if (exists value && value.typeCode() != NT_STRING) {
+                throw "DEBUG-HANDLER-ERROR", sprintf("the %s of a breakpoint must be a string; got type %y", opt,
+                    value.type());
+            }
+            if (!value.val()) {
+                return;
+            }
+            # an invalid hit condition is refused when it is set
+            if (opt == "hitCondition") {
+                DebugProgramControl::checkHitCondition(value, 0);
+            }
+            return value;
+        }
+
+        #! Returns True if the given number of hits meets the hit condition of a breakpoint
+        /** @param cond the hit condition: a number, which the number of hits must equal, or a number after \c "==",
+            \c ">", \c ">=", \c "<", \c "<=" or \c "%", the last for every given number of hits; blanks are allowed
+            before and after the number and the operator and between the characters of the operator
+            @param count the number of hits, with the current one
+
+            @throw BREAKPOINT-HIT-CONDITION-ERROR the hit condition is invalid
+        */
+        static bool checkHitCondition(string cond, int count) {
+            # blanks are allowed also between the characters of an operator, as in "> = 4"
+            *list<*string> m = (cond =~ x/^\s*(=\s*=|>\s*=|<\s*=|>|<|%)?\s*([0-9]+)\s*$/);
+            if (!m) {
+                throw "BREAKPOINT-HIT-CONDITION-ERROR", sprintf("invalid hit condition %y; give a number, optionally "
+                    "after ==, >, >=, <, <= or %%", cond);
+            }
+            int n = int(m[1]);
+            string op = m[0] ?? "";
+            op =~ s/\s+//g;
+            switch (op) {
+                case ">": return count > n;
+                case ">=": return count >= n;
+                case "<": return count < n;
+                case "<=": return count <= n;
+                case "%": return n > 0 && !(count % n);
+            }
+            return count == n;
+        }
+
+        #! Checks the condition, hit condition and log message of a breakpoint that a thread has hit
+        /** Runs in the thread that hit the breakpoint.  A breakpoint with a condition stops the thread only if the
+            condition is true, and one with a hit condition only if the number of times that it was hit with its
+            condition true meets the hit condition; a logpoint sends its message to all clients as a \c "console"
+            output event and does not stop the thread.  A breakpoint whose condition or hit condition cannot be
+            evaluated stops the thread, and the error is sent to all clients as a \c "console" output event.
+
+            @param id the ID of the breakpoint
+            @param pgm the Program of the thread
+            @param lv the local variables of the frame that hit the breakpoint
+
+            @return a hash with \c stop: @ref True if the breakpoint stops the thread, and \c error: the error of the
+            evaluation, if any
+        */
+        private hash<auto> checkBreakpoint(int id, ProgramControl pgm, *hash<auto> lv) {
+            *hash<auto> opts = getBreakpointOptions(id);
+            if (!opts) {
+                return {"stop": True};
+            }
+            try {
+                if (opts.condition && !evaluateExpression(pgm, opts.condition, lv)) {
+                    return {"stop": False};
+                }
+                int count;
+                {
+                    AutoLock al(bkptLock);
+                    # the options may have been removed meanwhile
+                    if (bkptOptions{id}) {
+                        count = ++bkptOptions{id}.hits;
+                    }
+                }
+                if (opts.hitCondition && !DebugProgramControl::checkHitCondition(opts.hitCondition, count)) {
+                    return {"stop": False};
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                string error = sprintf("%s: %s", ex.err, ex.desc);
+                sendConsoleOutput(sprintf("breakpoint %d: %s\n", id, error), {"tid": gettid(), "breakpoint": id});
+                return {"stop": True, "error": error};
+            }
+            if (opts.logMessage) {
+                sendConsoleOutput(formatLogMessage(pgm, opts.logMessage, lv) + "\n", {"tid": gettid(),
+                    "breakpoint": id});
+                return {"stop": False};
+            }
+            return {"stop": True};
+        }
+
+        #! Sends output of the debugger to all clients, after the output that the program wrote before it
+        /** @param output the output
+            @param info the \c tid of the thread and the \c breakpoint that the output is for
+        */
+        private sendConsoleOutput(string output, hash<auto> info) {
+            if (outputCapture) {
+                outputCapture.flushAndWait();
+            }
+            broadcastOutput("console", output, info);
+        }
+
+        #! Returns the message of a logpoint with the values of the expressions in braces
+        /** An expression that cannot be evaluated is replaced with its error in angle brackets
+        */
+        private string formatLogMessage(ProgramControl pgm, string msg, *hash<auto> lv) {
+            string rv = "";
+            int pos = 0;
+            while (True) {
+                int open = index(msg, "{", pos);
+                int close = open >= 0 ? index(msg, "}", open) : -1;
+                if (close < 0) {
+                    rv += msg.substr(pos);
+                    break;
+                }
+                rv += msg.substr(pos, open - pos);
+                string expr = msg.substr(open + 1, close - open - 1);
+                try {
+                    auto v = evaluateExpression(pgm, expr, lv);
+                    rv += v.typeCode() == NT_STRING ? v : AbstractDebugControl::describe(v).value;
+                } catch (hash<ExceptionInfo> ex) {
+                    rv += sprintf("<%s: %s>", ex.err, ex.desc);
+                }
+                pos = close + 1;
+            }
+            return rv;
         }
 
         private hash<auto> getBreakpointInfo(Breakpoint b, bool listStatements = True) {
@@ -906,6 +1815,8 @@ public namespace DebugProgramControl {
             if (!binfo.threads) {
                 remove binfo.threads;
             }
+            # the condition, hit condition, log message and number of hits
+            binfo += getBreakpointOptions(binfo.id);
             return binfo;
         }
 
@@ -1004,6 +1915,27 @@ public namespace DebugProgramControl {
             };
         }
 
+        #! Returns the declared type of a local variable and whether it is unassigned, for a thread/variable command
+        /** @param rd the command, whose \c root and \c path give the value
+            @param lv the local variables of the frame, from get_local_vars()
+
+            @return \c declaredType and \c unassigned as given by get_local_vars() for a local variable itself, and an
+            empty hash for other values
+        */
+        private static hash<auto> getLocalTypeInfo(hash<auto> rd, *hash<auto> lv) {
+            hash<auto> rv = {};
+            if (exists rd.root.local && !rd.path) {
+                *hash<auto> var = lv{rd.root.local};
+                if (exists var.declaredType) {
+                    rv.declaredType = var.declaredType;
+                }
+                if (var.unassigned) {
+                    rv.unassigned = True;
+                }
+            }
+            return rv;
+        }
+
         private *hash<auto> serializeLocal(string name, hash<auto> val) {
             val.value = AbstractDebugControl::serialize(val.value);
             return ('name': name) + val;
@@ -1048,12 +1980,304 @@ public namespace DebugProgramControl {
                     stack[0].statementid = ctx.intrInfo.statementid;
                 }
             }
+            # the columns of the statement of each frame, where they are known
+            foreach hash<auto> frame in (\stack) {
+                if (!frame.statementid || !frame.programid) {
+                    continue;
+                }
+                try {
+                    hash<StatementInfo> info = ProgramControl::resolveProgramId(frame.programid)
+                        .getStatementIdInfo(frame.statementid);
+                    if (info.start_column >= 0) {
+                        frame.column = info.start_column;
+                        frame.endcolumn = info.end_column;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # the Program of the frame cannot be debugged or no longer exists: no columns
+                }
+            }
             return stack;
+        }
+
+        #! Returns the value of the root of a variable path of a stopped thread
+        /** @param pgm the Program of the thread
+            @param root a hash with one of the following keys: \c local: the name of a local variable, \c global: the
+            name of a global variable, \c debug: the name of the debug variable of the interrupt (as \c result), or
+            \c eval: the ID of the value of an expression that was evaluated since the thread stopped
+            @param lv the local variables of the frame, for a \c local root
+            @param ctxCT the data of the interrupt
+            @param refName the name of the debug variable of the interrupt, if any
+
+            @throw DEBUG-ERROR the root does not exist
+        */
+        private auto getDebugRootValue(ProgramControl pgm, *hash<auto> root, *hash<auto> lv, hash<auto> ctxCT,
+                *string refName) {
+            if (exists root.local) {
+                if (!lv.hasKey(root.local)) {
+                    throw "DEBUG-ERROR", sprintf("the frame has no local variable %y", root.local);
+                }
+                return lv{root.local}.value;
+            }
+            if (exists root.global) {
+                bool found;
+                auto v = pgm.getGlobalVariable(root.global, \found);
+                if (!found) {
+                    throw "DEBUG-ERROR", sprintf("the program has no global variable %y", root.global);
+                }
+                return v;
+            }
+            if (exists root.debug) {
+                if (root.debug != refName) {
+                    throw "DEBUG-ERROR", sprintf("the interrupt has no debug variable %y", root.debug);
+                }
+                return ctxCT{refName};
+            }
+            if (exists root.eval) {
+                int id = root.eval;
+                if (id < 0 || id >= ctxCT.evals.size()) {
+                    throw "DEBUG-ERROR", sprintf("no expression with ID %d was evaluated since the thread stopped", id);
+                }
+                return ctxCT.evals[id];
+            }
+            throw "DEBUG-ERROR", sprintf("invalid variable root: %y", root);
+        }
+
+        #! Sets the value of the root of a variable path of a stopped thread that is not a local variable
+        /** @see getDebugRootValue()
+        */
+        private setDebugRootValue(ProgramControl pgm, hash<auto> root, reference<hash<auto>> ctxCT, *string refName,
+                auto val) {
+            if (exists root.global) {
+                pgm.setGlobalVarValue(root.global, val);
+            } else if (exists root.debug) {
+                if (root.debug != refName) {
+                    throw "DEBUG-ERROR", sprintf("the interrupt has no debug variable %y", root.debug);
+                }
+                ctxCT{refName} = val;
+            } else if (exists root.eval) {
+                ctxCT.evals[root.eval] = val;
+            } else {
+                throw "DEBUG-ERROR", sprintf("invalid variable root: %y", root);
+            }
+        }
+
+        #! Evaluates an expression with the given local variables and the global variables of a Program
+        /** The expression is evaluated in a Program with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access
+            the file system, the network or processes, and which inherits all code of the debugged Program (see
+            @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), so the expression can
+            refer to its functions, classes, constants and other code; functions and methods run in the debugged
+            Program.  The expression is the body of a function whose local variables are the global variables of the
+            Program, its top-level local variables, which have global scope, with the values of the current thread (see
+            @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"), and the given
+            local variables, which hide the others with the same names.  Values are
+            copied into the variables, so assigning a variable in the expression does not change the program's
+            variable; the members of objects are changed in the objects.
+
+            The Program and the function of an expression are kept, so an expression that is evaluated again, such as
+            the condition of a breakpoint, is not parsed again; code that the debugged Program parses later is not
+            available.
+
+            @param pgm the Program whose code and global variables can be used in the expression
+            @param expr the expression
+            @param lv the local variables, as returned by @ref Qore::get_local_vars() "get_local_vars()"
+
+            @return the value of the expression
+
+            @throw DEBUG-EVALUATE-ERROR the expression cannot be parsed, or the Program is being parsed
+        */
+        private auto evaluateExpression(ProgramControl pgm, string expr, *hash<auto> lv) {
+            hash<auto> vars = {};
+            foreach hash<auto> i in (pgm.getGlobalVars().pairIterator()) {
+                if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                    vars{i.key} = i.value;
+                }
+            }
+            # the top-level local variables have global scope, with the values of the thread; local variables of the
+            # frame hide them
+            foreach hash<auto> i in (pgm.getTopLevelLocalVars().pairIterator()) {
+                if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                    vars{i.key} = i.value.value;
+                }
+            }
+            foreach hash<auto> i in (lv.pairIterator()) {
+                if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                    vars{i.key} = i.value.value;
+                }
+            }
+            hash<auto> f = prepareEvalFunction(pgm, expr, sort(keys vars), True);
+            Counter calls = f.calls;
+            on_exit calls.dec();
+            return f.program.callFunction(f.function, vars);
+        }
+
+        #! Returns the names of the variables of an expression: the global variables of a Program and local variables
+        /** @param pgm the Program
+            @param locals the names of the local variables; \c self, which is not a variable of an expression, is left
+            out
+        */
+        private list<string> getEvalVariableNames(ProgramControl pgm, list<string> locals) {
+            hash<string, bool> names = map {$1: True}, keys pgm.getGlobalVars(), $1 =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
+            names += map {$1: True}, locals, $1 != "self" && $1 =~ /^[A-Za-z_][A-Za-z0-9_]*$/;
+            return sort(keys names);
+        }
+
+        #! Parses the function of an expression with the given variables, unless it is parsed already, and returns it
+        /** @param pgm the Program whose code the expression can use
+            @param expr the expression
+            @param names the sorted names of the variables of the expression
+            @param call @ref True if the function is called: its \c calls counter is incremented, and the caller must
+            decrement it after the call
+
+            @return a hash with the \c program and the name of the \c function, and \c calls, the counter of the
+            calls of the Program
+
+            @throw DEBUG-EVALUATE-ERROR the expression cannot be parsed, or the Program is being parsed
+        */
+        private hash<auto> prepareEvalFunction(ProgramControl pgm, string expr, list<string> names, bool call) {
+            # the function of an expression depends on the names of the variables, which are identifiers, so the first
+            # ":" ends them
+            string key = names.join(",") + ":" + expr;
+            Program epgm;
+            string fname;
+            Counter calls;
+            {
+                evalLock.lock();
+                on_exit evalLock.unlock();
+                string id = string(pgm.getProgramId());
+                *string f = evalPrograms{id}.functions{key};
+                # a Program is parsed only when no evaluation runs in it; another thread can evaluate an expression,
+                # which can wait for a thread that is stopped
+                if (!evalPrograms{id} || (!f && (evalPrograms{id}.n >= MaxEvalFunctions
+                    || evalPrograms{id}.calls.getCount()))) {
+                    pruneEvalPrograms();
+                    try {
+                        evalPrograms{id} = {
+                            "program": pgm.createEvalProgram(PO_NEW_STYLE | PO_LOCKDOWN | PO_ALLOW_REPARSE),
+                            "functions": {},
+                            "n": 0,
+                            "calls": new Counter(),
+                        };
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "DEBUG-EVALUATE-ERROR", ex.desc;
+                    }
+                    f = NOTHING;
+                }
+                epgm = evalPrograms{id}.program;
+                calls = evalPrograms{id}.calls;
+                if (f) {
+                    fname = f;
+                } else {
+                    fname = sprintf("%s_%d", EvalFunction, evalPrograms{id}.n + 1);
+                    string code = sprintf("auto sub %s(hash<auto> %s) {\n", fname, EvalVars);
+                    foreach string name in (names) {
+                        code += sprintf("auto %s = %s{%y};\n", name, EvalVars, name);
+                    }
+                    code += sprintf("return (\n%s\n);\n}\n", expr);
+                    try {
+                        epgm.parse(code, "<expression>", WARN_NONE);
+                    } catch (hash<ExceptionInfo> ex) {
+                        throw "DEBUG-EVALUATE-ERROR", ex.desc;
+                    }
+                    evalPrograms{id}.functions{key} = fname;
+                    ++evalPrograms{id}.n;
+                }
+                # the evaluation runs; no expression is parsed in the Program until it has ended
+                if (call) {
+                    calls.inc();
+                }
+            }
+            return {"program": epgm, "function": fname, "calls": calls};
+        }
+
+        #! Returns True if no statement in the call stack is in the body of a try statement
+        /** The current statement of each frame with a statement of a debugged Program is checked: an exception that
+            is raised there is caught by a try statement around it in its function; the frames of builtin code and of
+            Programs that cannot be debugged are not, so an exception that such code catches is regarded as uncaught
+
+            @param stack the call stack of the thread, with the statement that raised the exception in its first frame
+        */
+        static bool isUncaught(list<auto> stack) {
+            foreach hash<auto> frame in (stack) {
+                if (!frame.statementid || !frame.programid) {
+                    continue;
+                }
+                try {
+                    if (ProgramControl::resolveProgramId(frame.programid).getStatementIdInfo(frame.statementid).in_try) {
+                        return False;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # a Program that cannot be debugged or that has ended
+                }
+            }
+            return True;
+        }
+
+        #! Removes a Program from debugging, with the Program of its expressions, which keeps its code
+        /** @param program the Program to remove
+        */
+        nothing removeProgram(ProgramControl program) {
+            DebugProgram::removeProgram(program);
+            {
+                AutoLock al(startedLock);
+                remove startedPrograms{program.getProgramId()};
+                remove terminatingPrograms{program.getProgramId()};
+            }
+            # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
+            # while it takes that lock
+            AutoLock al(evalLock);
+            remove evalPrograms{program.getProgramId()};
+        }
+
+        #! Removes the Programs of expressions whose debugged Programs are no longer debugged; evalLock must be held
+        /** A Program of expressions keeps the code of the debugged Program
+        */
+        private:internal pruneEvalPrograms() {
+            hash<string, bool> debugged = map {$1.getProgramId(): True}, getAllPrograms();
+            foreach string id in (keys evalPrograms) {
+                if (!debugged{id}) {
+                    remove evalPrograms{id};
+                }
+            }
         }
 
         private *hash<auto> handleInterrupt(string func, ProgramControl pgm, reference runState, reference runToStatementId, *int statementId, *string refName, *reference refValue, *int breakpointId, *hash<auto> except) {
             # serialize data, send to all websockets, break/suspend thread
             int tid = gettid();
+            # a thread of a program that the debugger ends does not stop; it ends, and the end of its code and its
+            # detach are reported as for any thread that ends, so that the clients know when the program has ended
+            # (see terminateProgram())
+            bool ends = func == "exit" || func == "detach";
+            # a thread that ends its code is still cancelled if the debugger ended it while it waited, as for a lock, so
+            # the flag is read without startedLock, whose lock is a cancellation point; reading a member is atomic
+            if (ends ? boolean(terminatingPrograms{pgm.getProgramId()}) : isTerminating(pgm.getProgramId())) {
+                if (!ends) {
+                    # a thread that raises an exception, as the THREAD-CANCELLED exception that ends it, ends with it
+                    if (func == "exception") {
+                        return;
+                    }
+                    throw "THREAD-CANCELLED", TerminateReason;
+                }
+                # a thread that the debugger cancelled has ended its code; it is no longer cancelled, so that it can
+                # wait for the debugger
+                clear_thread_cancel();
+            }
+            # a thread that leaves the program has no more stops to give a returned value or to pause at a block; the
+            # locks are cancellation points, so they are taken when the thread is no longer cancelled
+            if (func == "detach") {
+                {
+                    AutoLock al(returnLock);
+                    remove returnedValues{tid};
+                }
+                AutoLock al(pauseLock);
+                remove pauseSkippedBlocks{tid};
+            }
+            # the attach of the first thread of a program is its start; other threads attach when they start
+            bool program_start = func == "attach" && isProgramStart(pgm.getProgramId());
+            # without a client, nobody could resume the thread; the stop at the start of a program is kept, as a debug
+            # server holds its program there until a client connects
+            if (!program_start && !hasConnection()) {
+                return;
+            }
             hash<auto> ctx = {
                 "queue": new Queue(),
                 "pgmId": pgm.getProgramId(),
@@ -1063,13 +2287,48 @@ public namespace DebugProgramControl {
                     'cmd': DebugEventCmd::Interrupt,
                     'pgmid': pgm.getProgramId(),
                     'tid': tid,
+                    # the name of the thread, which only the thread itself can get
+                    'threadname': get_thread_name(),
                     'stamp': now_us(),
                     'func': func,
+                    # for an attach: True for the start of the program, False for another thread that starts
+                    'programstart': func == "attach" ? program_start : NOTHING,
                     'runstate': encodeValue('runState', runState, runStateStrings),
                     'runtostatementid': runToStatementId,
                     'frame': 0,
                 },
             };
+            # breakpoints that are the only reason of the stop (a step or a run to a statement gives no breakpoint) are
+            # checked with their options: all breakpoints of the statement that apply to the thread, as the debugger
+            # gives the first one only; if none stops the thread, it continues as it ran before
+            if (breakpointId && hasBreakpointOptions()) {
+                list<int> ids = statementId ? getApplicableBreakpoints(pgm, statementId) : ();
+                if (!inlist(breakpointId, ids)) {
+                    unshift ids, breakpointId;
+                }
+                *hash<auto> lv = get_local_vars(frameOffset);
+                list<int> stopping = ();
+                foreach int id in (ids) {
+                    hash<auto> check = checkBreakpoint(id, pgm, lv);
+                    if (check.stop) {
+                        push stopping, id;
+                    }
+                    if (check.error && !ctx.intrInfo.bkpterror) {
+                        ctx.intrInfo.bkpterror = check.error;
+                    }
+                }
+                if (!stopping) {
+                    return;
+                }
+                breakpointId = stopping[0];
+                ctx.intrInfo.bkptids = stopping;
+            }
+            # a step into a call of a statement continues until the thread enters the call
+            if (checkStepInto(tid, func, \runState)) {
+                return;
+            }
+            # kept for a thread that continues without stopping
+            auto runToStatementIdBefore = runToStatementId;
             runToStatementId = 0; # reset RunToStatement
             ctx.intrInfo.framecnt = ctx.stackSize - frameOffset;
             if (exists statementId) {
@@ -1080,9 +2339,18 @@ public namespace DebugProgramControl {
             }
             if (exists statementId && statementId > 0) {
                 hash<auto> location = pgm.getStatementIdInfo(statementId);
+                # a function returns at the end of its block, which is the statement of the event
+                if (func == "funcExit") {
+                    location.start_line = location.end_line;
+                    location.start_column = -1;
+                }
                 ctx.intrInfo.file = location.file;
                 ctx.intrInfo.line = location.start_line;
                 ctx.intrInfo.endline = location.end_line;
+                if (location.start_column >= 0) {
+                    ctx.intrInfo.column = location.start_column;
+                    ctx.intrInfo.endcolumn = location.end_column;
+                }
                 if (location.source != "") {
                     ctx.intrInfo.source = location.source;
                 }
@@ -1121,16 +2389,62 @@ public namespace DebugProgramControl {
                 ctx.intrInfo.debugvar = refName;
                 ctx.intrInfo{refName} = refValue;
             }
+            # an exception that no client stops at: the thread continues as it ran before; decided before the thread is
+            # registered as stopped
+            if (exists except && !stopsAtException(except, isUncaught(adjustStack(get_thread_call_stack(), ctx)))) {
+                runToStatementId = runToStatementIdBefore;
+                return;
+            }
+            # the thread stops: a pause that a client requested is done; a stop of a step that is not at a breakpoint is
+            # given as the pause, so that the clients can tell it from the end of a step
+            {
+                AutoLock al(pauseLock);
+                if ((remove pauseRequests{tid}) && func == "step" && !exists breakpointId) {
+                    ctx.intrInfo.pause = True;
+                }
+                remove pauseSkippedBlocks{tid};
+            }
+            # the stop after a function returned to a thread that ran until it returned gives the returned value
+            {
+                AutoLock al(returnLock);
+                if (*hash<auto> ret = remove returnedValues{tid}) {
+                    ctx.intrInfo.returned = ret;
+                }
+            }
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
+            # a thread is not registered as stopped once the debugger ends its program, as terminateProgram()
+            # resumes only the threads that are registered when it starts; a thread that ends stops as usual
+            bool terminating;
+            # the connections are checked again with the thread lock held: the last client can disconnect after the
+            # check at the start of this method, and the threads that it resumes when it disconnects are those that are
+            # registered then (see unregisterConnection(), which removes the connection before shutdown() takes the
+            # thread lock); a thread that registered after that would wait for a client that no longer exists
+            bool unattended;
             {
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
                 @assert(!exists ctxThread{tid});
-                ctxThread{tid} = ctx;
+                terminating = !ends && isTerminating(ctx.pgmId);
+                unattended = !terminating && !program_start && !hasConnection();
+                if (!terminating && !unattended) {
+                    ctxThread{tid} = ctx;
+                }
+            }
+            if (terminating) {
+                throw "THREAD-CANCELLED", TerminateReason;
+            }
+            if (unattended) {
+                # the thread continues as it ran before, as without a client at the start of this method
+                runToStatementId = runToStatementIdBefore;
+                return;
             }
 
             # debugger client cannot ask for stack when procession message as it dead lock thread handler so we add it to original message
             ctx.intrInfo.stack = adjustStack(get_thread_call_stack(), ctx);
+            # an exception that no debuggable code in the call stack catches
+            if (exists except) {
+                ctx.intrInfo.uncaught = isUncaught(ctx.intrInfo.stack);
+            }
 
 %ifdef DEBUG_ADD_LOCAL_VARS
             for (int i=0; i < 8; i++) {
@@ -1156,6 +2470,10 @@ public namespace DebugProgramControl {
             }
 %endif
 
+            # the output that the thread wrote before the interrupt reaches the clients before it
+            if (outputCapture) {
+                outputCapture.flushAndWait();
+            }
             try {
                 broadcastDataImpl(ctx.intrInfo);
             } catch (hash<ExceptionInfo> ex) {
@@ -1163,6 +2481,9 @@ public namespace DebugProgramControl {
             }
 
             hash<auto> ctxCT;
+            # at the start of the program, the thread has not entered its code: the frames are those of the code that
+            # started the program, whose local variables are not read
+            bool noLocals = func == "attach";
             if (exists refName) {
                 ctxCT{refName} = refValue;
             }
@@ -1182,32 +2503,45 @@ public namespace DebugProgramControl {
                         list<auto> cmd = rd.cmd.split('/');
                         shift cmd;  # remove thread
                         switch (shift cmd) {
-                            case 'go':
-                                runState = resolveValue('runState', shift cmd, runStateStrings, runState);
+                            case 'go': {
+                                # without a run state, as from shutdown(), the thread continues as it ran before
+                                *string rsName = shift cmd;
+                                if (rsName == "stepinto") {
+                                    # a step into a call of the statement, given by its index in its step-in targets
+                                    startStepInto(tid, pgm, statementId, rd.value.target);
+                                    runState = DebugStep;
+                                } else {
+                                    runState = resolveValue('runState', rsName, runStateStrings, runState);
+                                }
                                 if (exists refName) {
                                     refValue = ctxCT{refName};
                                 }
-                                if (rd.value) {
+                                if (rd.value && rsName != "stepinto") {
                                     runToStatementId = resolveStatement(pgm, rd.value);
                                 }
                                 ret = True;
                                 break;
+                            }
 
                             case 'local':
                                 string varName = shift cmd;
                                 int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
                                 switch (shift cmd) {
                                     case 'get':
-                                        *hash<auto> lv = get_local_vars(frameId2);
+                                        *hash<auto> lv = noLocals ? NOTHING : get_local_vars(frameId2);
                                         if (exists lv{varName}) {
                                             result = serializeLocal(varName, lv{varName});
                                         }
                                         break;
                                     case 'set':
+                                        if (noLocals) {
+                                            throw "DEBUG-HANDLER-ERROR", "the thread has not started the code of the "
+                                                "program, so it has no local variables";
+                                        }
                                         set_local_var_value(frameId2, varName, AbstractDebugControl::unserialize(rd.value));
                                         break;
                                     case 'list':
-                                        softlist l  = keys get_local_vars(frameId2);
+                                        softlist l = noLocals ? () : keys get_local_vars(frameId2);
                                         result = AbstractDebugControl::enumFilter(l, varName);
                                         break;
                                 }
@@ -1261,13 +2595,17 @@ public namespace DebugProgramControl {
                                         } else {
                                             auto v = AbstractDebugControl::unserialize(rd.value);
                                             switch (varName) {
-                                                case 'frame':
-                                                    if (v <= 0) {
-                                                        ctxCT.frameId = 0;
-                                                    } else {
-                                                        ctxCT.frameId = int(v);
+                                                case 'frame': {
+                                                    # a frame of the call stack of the thread
+                                                    int frames = adjustStack(get_thread_call_stack(), ctx).size();
+                                                    if (v > 0 && int(v) >= frames) {
+                                                        throw "DEBUG-HANDLER-ERROR", sprintf("the thread has %d "
+                                                            "stack frames, numbered from 0 to %d", frames,
+                                                            frames - 1);
                                                     }
+                                                    ctxCT.frameId = v <= 0 ? 0 : int(v);
                                                     break;
+                                                }
                                             }
                                         }
                                         break;
@@ -1281,15 +2619,98 @@ public namespace DebugProgramControl {
                                 }
                                 break;
 
+                            case 'variable': {
+                                # the local variables are read here, as the frame numbers count from this frame
+                                int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
+                                *hash<auto> lv = !noLocals && (exists rd.root.local || exists rd.expression)
+                                    ? get_local_vars(frameId2)
+                                    : NOTHING;
+                                auto val = getDebugRootValue(pgm, rd.root, lv, ctxCT, refName);
+                                switch (shift cmd) {
+                                    case 'get': {
+                                        auto v = AbstractDebugControl::getPath(val, rd.path);
+                                        result = AbstractDebugControl::describe(v)
+                                            + DebugProgramControl::getLocalTypeInfo(rd, lv);
+                                        # the whole value, for clients that show it; one with more elements, keys or
+                                        # members than serializeMax is not serialized
+                                        if (rd.serialize && (result.indexed ?? result.named ?? 0)
+                                                <= (rd.serializeMax ?? MAXINT)) {
+                                            result.serialized = AbstractDebugControl::serialize(v);
+                                        }
+                                        if (rd.children) {
+                                            result.children = AbstractDebugControl::describeChildren(v, rd.start ?? 0,
+                                                rd.count);
+                                        }
+                                        break;
+                                    }
+                                    case 'set': {
+                                        # the new value is given as a serialized value or as an expression, which is
+                                        # evaluated with the variables of the frame
+                                        auto new_val = AbstractDebugControl::setPath(val, rd.path, exists rd.expression
+                                            ? evaluateExpression(pgm, rd.expression, lv)
+                                            : AbstractDebugControl::unserialize(rd.value));
+                                        if (exists rd.root.local) {
+                                            set_local_var_value(frameId2, rd.root.local, new_val);
+                                        } else {
+                                            setDebugRootValue(pgm, rd.root, \ctxCT, refName, new_val);
+                                        }
+                                        # the value as it is stored, which a variable with a type can convert, as an
+                                        # int local variable converts a string
+                                        *hash<auto> lv2 = exists rd.root.local ? get_local_vars(frameId2) : lv;
+                                        result = AbstractDebugControl::describe(AbstractDebugControl::getPath(
+                                            getDebugRootValue(pgm, rd.root, lv2, ctxCT, refName), rd.path))
+                                            + DebugProgramControl::getLocalTypeInfo(rd, lv2);
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+
+                            case 'breakpoint': {
+                                # the breakpoints of the given IDs that stop the thread with their options, as when it
+                                # hits them; for a thread that stopped at their statement for another reason
+                                if (shift cmd != "check") {
+                                    throw "DEBUG-HANDLER-ERROR", "expecting thread/breakpoint/check";
+                                }
+                                *hash<auto> lv = noLocals ? NOTHING : get_local_vars(frameOffset);
+                                result = {"stop": (), "errors": {}};
+                                foreach softint id in (rd.value.ids) {
+                                    hash<auto> check = checkBreakpoint(id, pgm, lv);
+                                    if (check.stop) {
+                                        push result.stop, id;
+                                    }
+                                    if (check.error) {
+                                        result.errors{id} = check.error;
+                                    }
+                                }
+                                break;
+                            }
+
+                            case 'evaluate': {
+                                # the local variables are read here, as the frame numbers count from this frame
+                                int frameId2 = (rd.frameid ?? ctxCT.frameId) + frameOffset;
+                                auto v = evaluateExpression(pgm, rd.expression,
+                                    noLocals ? NOTHING : get_local_vars(frameId2));
+                                # the value is kept while the thread is stopped, so that its elements can be read
+                                push ctxCT.evals, v;
+                                result = AbstractDebugControl::describe(v) + {
+                                    "id": ctxCT.evals.size() - 1,
+                                    "bool": boolean(v),
+                                    "text": v.typeCode() == NT_STRING ? v : AbstractDebugControl::describe(v).value,
+                                };
+                                # the whole value, for clients that show it
+                                if (rd.serialize) {
+                                    result.serialized = AbstractDebugControl::serialize(v);
+                                }
+                                break;
+                            }
+
                             case 'stack':
                                 list<auto> stack = adjustStack(get_thread_call_stack(), ctx);
                                 if ((rd.frameid ?? ctxCT.frameId) < stack.size()) {
                                     stack[rd.frameid ?? ctxCT.frameId].current = True;
                                 }
                                 result = stack;
-                                break;
-
-                            case 'breakpoint':
                                 break;
 
                             case 'source':
@@ -1379,6 +2800,20 @@ public namespace DebugProgramControl {
             } catch (hash<ExceptionInfo> ex) {
                 # suppress exceptions
             }
+            # a thread of a program that the debugger ends ends, unless it ends anyway
+            if (!ends && isTerminating(ctx.pgmId)) {
+                throw "THREAD-CANCELLED", TerminateReason;
+            }
+        }
+
+        #! Returns True for the first thread of a program that attaches, which starts the program
+        private:internal bool isProgramStart(int pgm_id) {
+            AutoLock al(startedLock);
+            if (startedPrograms{pgm_id}) {
+                return False;
+            }
+            startedPrograms{pgm_id} = True;
+            return True;
         }
 
         onAttach(ProgramControl pgm, reference rs, reference runToStatementId) {
@@ -1390,6 +2825,18 @@ public namespace DebugProgramControl {
         }
 
         onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, reference flow, reference rs, reference runToStatementId) {
+            # a step to a block, which the debugger gives before the first statement of the block (so that an empty
+            # block can stop, as in "while (True);"), stops at the first statement instead; it stops at the block for
+            # a breakpoint of the block (as of a function), and a block to run to
+            if (!exists statementId && !breakpointId && (rs == DebugStep || rs == DebugStepOver)
+                && runToStatementId != blockStatementId) {
+                # a pause stops at the first statement of the block too, as a step would stop there next on the same
+                # line; it stops at the block when the thread reaches it again without a statement, as an empty block
+                # of a loop
+                if (!isPauseRequested(gettid()) || !stopsAtBlockForPause(gettid(), blockStatementId)) {
+                    return;
+                }
+            }
             statementId = statementId ?? blockStatementId;
             /*
                 when a statement is parsed in non-pgm context then it is not registered in pgm and no statementId can be resolved
@@ -1411,15 +2858,46 @@ public namespace DebugProgramControl {
         }
 
         onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference runToStatementId) {
+            # a step into a function stops at its first statement, not also at its entry; it stops at the entry for a
+            # pause and a function to run to, and a step into a call of a statement checks the function
+            if (rs == DebugStep && runToStatementId != statementId && !isPauseRequested(gettid())
+                && !hasStepInto(gettid())) {
+                return;
+            }
             if (statementId) {
                 handleInterrupt('funcEnter', pgm, \rs, \runToStatementId, statementId);
             }
         }
 
         onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, reference runToStatementId) {
-            if (statementId) {
-                handleInterrupt('funcExit', pgm, \rs, \runToStatementId, statementId, "result", \result);
+            if (!statementId) {
+                return;
             }
+            # a thread that runs until its function returns continues to the next statement of the caller, as in other
+            # debuggers, and stepping over the calls of the rest of the caller's statement; its stop there gives the
+            # function and the value that it returned (see handleInterrupt()); a step into a call of a statement runs
+            # until the calls before it return, which it checks (see checkStepInto())
+            if (rs == DebugUntilReturn && !hasStepInto(gettid()) && !isTerminating(pgm.getProgramId())) {
+                # the frame of the function that returns follows the frame of this callback
+                list<auto> stack = get_thread_call_stack();
+                *string name;
+                foreach hash<auto> frame in (stack) {
+                    if (frame.function == "DebugProgramControl::onFunctionExit") {
+                        name = stack[$# + 1].function;
+                        break;
+                    }
+                }
+                {
+                    AutoLock al(returnLock);
+                    returnedValues{gettid()} = {
+                        "function": name ?? "<unknown>",
+                        "value": AbstractDebugControl::serialize(result),
+                    };
+                }
+                rs = DebugStepOver;
+                return;
+            }
+            handleInterrupt('funcExit', pgm, \rs, \runToStatementId, statementId, "result", \result);
         }
 
         onException(ProgramControl pgm, int statementId, hash<auto> ex, reference dismiss, reference rs, reference runToStatementId) {

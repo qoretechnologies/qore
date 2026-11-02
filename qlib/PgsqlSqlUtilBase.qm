@@ -94,10 +94,13 @@ module PgsqlSqlUtilBase {
 
     An object in <tt>current_schema()</tt> is listed by its name alone, and an object in any other
     \c search_path schema as \c "schema.name", so that every name listed resolves to the object listed, and an
-    object name present in more than one \c search_path schema is listed once per schema.  Partition child
-    tables are not listed as tables, views are listed by
-    @ref SqlUtil::AbstractDatabase::listTables() "listTables()" as well, as \c information_schema.tables
-    reports them, and session temporary tables are listed only if \c pg_temp is named
+    object name present in more than one \c search_path schema is listed once per schema.
+    @ref SqlUtil::AbstractDatabase::listTables() "listTables()" lists only the relations that
+    @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens as tables: ordinary, partitioned, and foreign
+    tables.  Partition child tables are not listed as tables, views are listed only by
+    @ref SqlUtil::AbstractDatabase::listViews() "listViews()", materialized views only by
+    @ref PgsqlSqlUtilBase::PgsqlDatabase::listMaterializedViews() "PgsqlDatabase::listMaterializedViews()",
+    and session temporary tables are listed only if \c pg_temp is named
     explicitly in the \c search_path.  If the \c search_path names no existing schema, these methods return an
     empty list.
 
@@ -229,6 +232,25 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" for
+      <tt>REFRESH MATERIALIZED VIEW</tt>, with the \c concurrent option for <tt>REFRESH MATERIALIZED VIEW
+      CONCURRENTLY</tt>
+    - fixed @ref SqlUtil::AbstractDatabase::getTable() "getTable()", which opened a materialized view as a table,
+      although @ref SqlUtil::AbstractDatabase::listTables() "listTables()" does not list it, so a writable table
+      object was returned for a materialized view; getTable() now opens only the relations that listTables() lists:
+      ordinary, partitioned and foreign tables
+    - a table object for a view or a materialized view, as from
+      @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()", now describes its columns, so the view can
+      be read with the table object's select APIs; the columns of a materialized view are read from \c pg_catalog,
+      as \c information_schema.columns does not list them, and a view's columns were not read at all;
+      @ref SqlUtil::AbstractDatabase::getTable() "AbstractDatabase::getTable()" still does not open a view
+    - @ref SqlUtil::AbstractDatabase::supportsMaterializedViews() "AbstractDatabase::supportsMaterializedViews()"
+      returns @ref True
+    - fixed @ref SqlUtil::AbstractDatabase::listTables() "listTables()" and
+      @ref SqlUtil::AbstractDatabase::tableIterator() "tableIterator()" listing views as well as tables, although
+      @ref SqlUtil::AbstractDatabase::getTable() "getTable()" returns nothing for a view; they now list only ordinary,
+      partitioned, and foreign tables, and views are listed by
+      @ref SqlUtil::AbstractDatabase::listViews() "listViews()" only
     - Security: a name of a table, column, index, constraint, sequence, schema, tablespace, trigger, view or alias
       that is not an ordinary PostgreSQL identifier is given in double quotes, each double quote doubled, wherever
       SQL is generated, so that a name from untrusted data can never change the SQL; an ordinary name is given as
@@ -1861,6 +1883,13 @@ public class PgsqlTriggerFunction inherits PgsqlFunction {
 #! provides the PostgreSQL-specific implementation of the AbstractDatabase interface
 public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     public {
+        #! options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
+        /** @since PgsqlSqlUtilBase 1.19
+        */
+        const PgsqlMaterializedViewRefreshOptions = {
+            "concurrent": Type::Boolean,
+        };
+
         #! PostgreSQL-specific schema description keys
         const PgsqlSchemaDescriptionOptions = AbstractDatabase::SchemaDescriptionOptions + (
             "types": Type::Hash,
@@ -2400,10 +2429,19 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         listed, as Oracle and MySQL list only the tables of the connection's own schema.  A table in
         <tt>current_schema()</tt> is listed unqualified, a table in any other \c search_path schema is listed
         as \c "schema.table", so that every name returned resolves in the schema of the table listed.
-        Partition child relations are not listed; views are listed as \c information_schema.tables reports them.
+        Only the relations that @ref SqlUtil::AbstractDatabase::getTable() "getTable()" opens as tables are listed:
+        ordinary, partitioned, and foreign tables.  Partition child relations are not listed, views are listed only
+        by @ref SqlUtil::AbstractDatabase::listViews() "listViews()", and materialized views only by
+        @ref PgsqlSqlUtilBase::PgsqlDatabase::listMaterializedViews() "listMaterializedViews()".
         An empty list is returned if the \c search_path names no existing schema.
     */
     private list<string> listTablesImpl() {
+        # NOTE: information_schema.tables also has every view (table_type 'VIEW', and 'LOCAL TEMPORARY' for a
+        # temporary view), which getTable() does not open, so the relation's kind is read from pg_class: 'r' is an
+        # ordinary table, 'p' a partitioned table and 'f' a foreign table, as PgsqlTable::checkExistenceImpl()
+        # accepts them.  information_schema.tables is still read, as it lists only the relations that the user
+        # has a privilege on.  Materialized views, relkind 'm', are not in information_schema.tables, and are
+        # listed by listMaterializedViews()
         # NOTE: exclude partition child relations. PostgreSQL exposes each declarative partition as its own
         # relation, but a partition is not a standalone logical table and must not appear in the table list
         # (Oracle and MySQL already behave this way). A partition child is a pg_inherits child whose parent is a
@@ -2413,7 +2451,10 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # NOTE: listing every schema of the database exposed other schemas' tables and, in a database with
         # one schema per tenant, repeated the same table names once per schema
         string sql = sprintf("select %s as name from information_schema.tables t "
+            "join pg_catalog.pg_namespace n on n.nspname = t.table_schema "
+            "join pg_catalog.pg_class c on c.relnamespace = n.oid and c.relname = t.table_name "
             "where t.table_schema = any (current_schemas(false)) "
+            "and c.relkind in ('r', 'p', 'f') "
             "and not exists (select 1 from pg_catalog.pg_inherits inh "
             "join pg_catalog.pg_class child on child.oid = inh.inhrelid "
             "join pg_catalog.pg_namespace cn on cn.oid = child.relnamespace "
@@ -2586,6 +2627,71 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     #! returns @ref True "True" if the database supports packages
     private bool supportsPackagesImpl() {
         return False;
+    }
+
+    #! returns @ref True "True", as PostgreSQL supports materialized views; see listMaterializedViews()
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private bool supportsMaterializedViewsImpl() {
+        return True;
+    }
+
+    #! returns the options of @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()"
+    /** - \c concurrent: (bool) refresh with <tt>REFRESH MATERIALIZED VIEW CONCURRENTLY</tt>
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    hash<auto> getMaterializedViewRefreshOptions() {
+        return PgsqlMaterializedViewRefreshOptions;
+    }
+
+    #! refreshes a materialized view with <tt>REFRESH MATERIALIZED VIEW [CONCURRENTLY]</tt>
+    /** The refresh is transactional: in a transaction of the calling thread, it is part of that transaction;
+        otherwise it is committed when it succeeds and rolled back when it fails.
+
+        A concurrent refresh does not block readers; it needs a unique index on the materialized view that uses only
+        column names and has no \c WHERE clause, and a populated materialized view, which is checked before the
+        refresh.  A refresh that is not concurrent locks the materialized view against reads until the transaction
+        ends.
+
+        @throw MATERIALIZED-VIEW-ERROR a concurrent refresh of a materialized view without a suitable unique index or
+        that is not populated
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    private refreshMaterializedViewImpl(string name, *hash<auto> opts) {
+        # the name is quoted where needed for SQL; it is a listed materialized view, see refreshMaterializedView()
+        string sql_name = pgsql_get_sql_object_name(name);
+        bool in_trans = ds.currentThreadInTransaction();
+        on_error {
+            if (!in_trans) {
+                ds.rollback();
+            }
+        }
+        on_success {
+            if (!in_trans) {
+                ds.commit();
+            }
+        }
+        if (opts.concurrent) {
+            # to_regclass() reads the name as SQL names the relation; the name is bound, never substituted
+            *hash<auto> row = ds.selectRow("select c.relispopulated as populated, exists (select 1 "
+                "from pg_catalog.pg_index i where i.indrelid = c.oid and i.indisunique and i.indpred is null "
+                "and i.indexprs is null) as has_unique from pg_catalog.pg_class c "
+                "where c.oid = pg_catalog.to_regclass(%v)", sql_name);
+            if (!row.has_unique) {
+                throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y cannot be refreshed concurrently: "
+                    "a concurrent refresh needs a unique index on the materialized view that uses only column names "
+                    "and has no WHERE clause; create one, or refresh without the \"concurrent\" option, which locks "
+                    "the materialized view against reads during the refresh", getDatasourceDesc(), name);
+            }
+            if (!row.populated) {
+                throw "MATERIALIZED-VIEW-ERROR", sprintf("%s: materialized view %y cannot be refreshed concurrently "
+                    "because it is not populated; refresh it without the \"concurrent\" option first",
+                    getDatasourceDesc(), name);
+            }
+        }
+        ds.execRaw("refresh materialized view " + (opts.concurrent ? "concurrently " : "") + sql_name);
     }
 
     #! rebuild index implementation. See @ref SqlUtil::AbstractDatabase::rebuildIndex()
@@ -4425,16 +4531,19 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # note: cannot use pg_catalog.pg_statio_all_tables here, as it lists only relations with
         # physical storage and therefore excludes partitioned parent tables (relkind 'p'); query
         # pg_class directly so that partitioned tables are recognized as well
+        # note: only the relations that listTablesImpl() lists are tables: ordinary ('r'), partitioned ('p') and
+        # foreign ('f') tables; a materialized view ('m') was opened as a table as well, so a writable table object
+        # was returned for it; materialized views are listed by PgsqlDatabase::listMaterializedViews()
         *hash<auto> qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
             "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
-            "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, getRelationName());
+            "c.relname = %v and c.relkind in ('r', 'p', 'f')", schema, getRelationName());
         if (qh) {
             return inDb = True;
         }
         if (resolveTemporaryTableSchema(True)) {
             qh = ds.selectRow("select 1 as v from pg_catalog.pg_class c "
                 "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) where n.nspname = %v and "
-                "c.relname = %v and c.relkind in ('r', 'p', 'm', 'f')", schema, getRelationName());
+                "c.relname = %v and c.relkind in ('r', 'p', 'f')", schema, getRelationName());
             if (qh) {
                 return inDb = True;
             }
@@ -4463,10 +4572,52 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return True;
     }
 
+    #! returns the column descriptions of a materialized view, with the columns of information_schema.columns
+    /** information_schema.columns does not list the columns of materialized views, so they are read from pg_catalog
+        with the expressions of information_schema.columns
+    */
+    private *hash<auto> describeMaterializedViewIntern() {
+        return ds.select("select a.attname as column_name, "
+            "case when t.typtype = 'd' then "
+            "case when bt.typelem <> 0 and bt.typlen = -1 then 'ARRAY' "
+            "when nbt.nspname = 'pg_catalog' then pg_catalog.format_type(t.typbasetype, null) "
+            "else 'USER-DEFINED' end "
+            "else case when t.typelem <> 0 and t.typlen = -1 then 'ARRAY' "
+            "when nt.nspname = 'pg_catalog' then pg_catalog.format_type(a.atttypid, null) "
+            "else 'USER-DEFINED' end end as data_type, "
+            "coalesce(bt.typname, t.typname) as udt_name, "
+            "information_schema._pg_char_max_length(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as character_maximum_length, "
+            "information_schema._pg_char_octet_length(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as character_octet_length, "
+            "information_schema._pg_numeric_precision(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as numeric_precision, "
+            "information_schema._pg_numeric_scale(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as numeric_scale, "
+            "information_schema._pg_datetime_precision(information_schema._pg_truetypid(a.*, t.*), "
+            "information_schema._pg_truetypmod(a.*, t.*)) as datetime_precision, "
+            "a.atttypmod, "
+            "case when a.attnotnull or (t.typtype = 'd' and t.typnotnull) then 'NO' else 'YES' end as is_nullable, "
+            "pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) as column_default, pgd.description "
+            "from pg_catalog.pg_attribute a "
+            "join pg_catalog.pg_class c on (c.oid = a.attrelid) "
+            "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) "
+            "join pg_catalog.pg_type t on (t.oid = a.atttypid) "
+            "join pg_catalog.pg_namespace nt on (nt.oid = t.typnamespace) "
+            "left join (pg_catalog.pg_type bt join pg_catalog.pg_namespace nbt on (nbt.oid = bt.typnamespace)) "
+            "on (t.typtype = 'd' and t.typbasetype = bt.oid) "
+            "left join pg_catalog.pg_attrdef ad on (ad.adrelid = a.attrelid and ad.adnum = a.attnum) "
+            "left join pg_catalog.pg_description pgd on (pgd.objoid = c.oid and pgd.objsubid = a.attnum) "
+            "where c.relkind = 'm' and n.nspname = %v and c.relname = %v and a.attnum > 0 "
+            "and not a.attisdropped order by a.attnum", schema, getRelationName());
+    }
+
     private Columns describeImpl() {
         # get column descriptions; the relation join uses pg_class/pg_namespace (not
         # pg_statio_all_tables, which omits partitioned parent tables - relkind 'p' - because
-        # they have no physical storage) so that partitioned tables can be described too
+        # they have no physical storage) so that partitioned tables can be described too; a view (relkind 'v') is
+        # described as well, so that a table object for a view can read it, as the DbDataProvider module's view
+        # data providers do; a view is still not opened as a table by getTable(), see checkExistenceImpl()
         *hash<auto> qh = ds.select("select column_name, data_type, c.udt_name, "
             "character_maximum_length, "
             "character_octet_length, numeric_precision, numeric_scale, datetime_precision, "
@@ -4474,12 +4625,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "column_default, description from information_schema.columns c "
             "join (select rc.oid as relid, rn.nspname as schemaname, rc.relname as relname "
             "from pg_catalog.pg_class rc join pg_catalog.pg_namespace rn on (rn.oid = rc.relnamespace) "
-            "where rc.relkind in ('r', 'p', 'm', 'f')) st on (c.table_schema = st.schemaname and "
+            "where rc.relkind in ('r', 'p', 'v', 'f')) st on (c.table_schema = st.schemaname and "
             "c.table_name = st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid "
             "and pgd.objsubid = c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
             "pa.attnum = c.ordinal_position and not pa.attisdropped) "
             "where table_schema = %v and table_name = %v order by ordinal_position", schema,
             getRelationName());
+        if (!qh.column_name) {
+            # information_schema.columns has no columns of a materialized view (relkind 'm'), so they are read from
+            # pg_catalog with the expressions that information_schema.columns uses for the other relations
+            qh = describeMaterializedViewIntern();
+        }
         if (!qh.column_name)
             throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
 

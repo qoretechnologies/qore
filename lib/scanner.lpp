@@ -436,8 +436,10 @@ static void set_include_path(const char* path) {
     getProgram()->parseSetIncludePath(npath.c_str());
 }
 
+// the parse directives that access the filesystem record it in the functional domain of the Program (see
+// parse_check_restriction()), so that an AOT image of the code records it as well
 static bool parse_check_no_filesystem_path_directive(YYLTYPE* yylloc, const char* directive) {
-    if (getProgram()->getParseOptions() & PO_NO_FILESYSTEM) {
+    if (parse_check_restriction(PO_NO_FILESYSTEM)) {
         parse_error(*get_loc(yylloc), "cannot use the %%%s parse directive when PO_NO_FILESYSTEM is in force",
             directive);
         return true;
@@ -455,7 +457,7 @@ static bool module_arg_is_path(const char* arg) {
 }
 
 static bool parse_check_no_filesystem_module_path(YYLTYPE* yylloc, const char* directive, const char* arg) {
-    if ((getProgram()->getParseOptions() & PO_NO_FILESYSTEM) && module_arg_is_path(arg)) {
+    if (module_arg_is_path(arg) && parse_check_restriction(PO_NO_FILESYSTEM)) {
         parse_error(*get_loc(yylloc), "cannot use a path argument in the %%%s parse directive when "
             "PO_NO_FILESYSTEM is in force", directive);
         return true;
@@ -1284,8 +1286,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <append_module_state>[^\n\r]+           {
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "append-module-path")) {
-                                              if (getProgram()->getParseOptions()
-                                                    & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
+                                              if (parse_check_restriction(
+                                                    QoreParseOptions::NO_MODULE_PATH_DIRECTIVES)) {
                                                  parse_error(*get_loc(yylloc),
                                                     "%%append-module-path is not allowed when "
                                                     "'%%no-module-path-directives' "
@@ -1317,8 +1319,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 <prepend_module_state>[^\n\r]+          {
                                            if (!parse_check_no_filesystem_path_directive(yylloc,
                                                    "prepend-module-path")) {
-                                              if (getProgram()->getParseOptions()
-                                                    & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
+                                              if (parse_check_restriction(
+                                                    QoreParseOptions::NO_MODULE_PATH_DIRECTIVES)) {
                                                  parse_error(*get_loc(yylloc),
                                                     "%%prepend-module-path is not allowed when "
                                                     "'%%no-module-path-directives' "
@@ -1963,7 +1965,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 
                                            QoreProgram* pgm = getProgram();
 
-                                           if (pgm->getParseOptions() & PO_NO_FILESYSTEM) {
+                                           if (parse_check_restriction(PO_NO_FILESYSTEM)) {
                                               parse_error(*get_loc(yylloc), "cannot use the %%include parse directive when PO_NO_FILESYSTEM is in force");
                                               BEGIN(INITIAL);
                                            } else if (fname->empty()) {
@@ -2688,7 +2690,7 @@ c\'                                     {
       last/{WSNL}+                       BEGIN(INITIAL); return TOK_LAST;
       one/{WSNL}+                        BEGIN(INITIAL); return TOK_ONE;
       <<EOF>>                            QORE_FLEX_DO_EOF
-      .                                  yyless(0); BEGIN(INITIAL);
+      .                                  yylloc->revertUpdate(); yyless(0); BEGIN(INITIAL);
 }
 where                                   return TOK_WHERE;
 private                                 return TOK_PRIVATE;
@@ -2743,8 +2745,8 @@ case                                    BEGIN(case_state); return TOK_CASE;
    m\{                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
    \/                                   yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
    {WS}+                                /* ignore */
-   [^\/m]                               yyless(0); BEGIN(INITIAL);
-   m                                    yyless(0); BEGIN(INITIAL);
+   [^\/m]                               yylloc->revertUpdate(); yyless(0); BEGIN(INITIAL);
+   m                                    yylloc->revertUpdate(); yyless(0); BEGIN(INITIAL);
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }

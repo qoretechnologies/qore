@@ -9,10 +9,13 @@
 #
 # Without arguments it checks every raw top-16-bit prefix from 0xFFB0 to 0xFFEF (with the first
 # and last low mantissa payloads) through locals, arguments, returns, containers, conversions,
-# handlers, closures and fused AOT aggregate projections, and prints a summary.  With "rss" it
+# handlers, closures and fused AOT aggregate projections, and prints a summary.  With "live" it
 # repeats the patterns that box such a double (or an int outside the 48-bit immediate range) and
-# prints the resident set growth of a promoted call in kB: every leaked node is a separate heap
-# allocation, so a leak grows by megabytes while correct code reuses freed nodes.
+# prints how many heap floats and heap ints a promoted call left behind, as counted by the library
+# (dbg_get_live_bigfloat_count() and dbg_get_live_bigint_count(), which need library debugging):
+# a leak-free call leaves none.  The count does not depend on the page size, the allocator or the
+# kernel's huge page policy, which change the resident set size by up to a huge page (2 MiB) with
+# no leak.
 
 %disable-warning unreferenced-variable
 
@@ -175,21 +178,19 @@ code sub makeNegate() {
     return float sub (float x) { return -x; };
 }
 
-const RssIterations = 200000;
+const LeakIterations = 200000;
 
-int sub rssKb() {
-    # VmRSS in /proc/self/status uses asynchronous accounting and can jump by
-    # megabytes without new allocations. smaps_rollup walks the page tables.
-    *list<*string> m = (ReadOnlyFile::readTextFile("/proc/self/smaps_rollup") =~ x/^Rss:\s+([0-9]+) kB$/m);
-    if (!m) {
-        throw "RSS-MEASUREMENT-ERROR", "smaps_rollup did not report resident memory";
-    }
-    return m[0].toInt();
+#! the heap floats and heap ints that exist in the process
+hash<string, int> sub liveNodes() {
+    return {
+        "floats": call_function("dbg_get_live_bigfloat_count"),
+        "ints": call_function("dbg_get_live_bigint_count"),
+    };
 }
 
-float sub rssLocals() {
+float sub boxLocals() {
     float sum = 0.0;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         float v = Big * 1.0;
         auto a = identityAuto(v);
         hash<auto> h = {"a": a};
@@ -198,17 +199,17 @@ float sub rssLocals() {
     return sum;
 }
 
-float sub rssHandler() {
+float sub boxHandler() {
     float sum = 0.0;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         sum += handlerLocal(-Big) == Big ? 1.0 : 0.0;
     }
     return sum;
 }
 
-int sub rssProjections() {
+int sub boxProjections() {
     int n = 0;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         bool reverse = (i % 2) == 0;
         n += exists guardedFloatListIndex(Big, i % 3) ? 1 : 0;
         n += exists guardedListIndex(BigInt, i % 4) ? 1 : 0;
@@ -221,43 +222,44 @@ int sub rssProjections() {
     return n;
 }
 
-float sub rssClosures() {
+float sub boxClosures() {
     code neg = makeNegate();
     float sum = 0.0;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         sum += neg(-Big) == -Big ? 1.0 : 0.0;
     }
     return sum;
 }
 
-if (ARGV[0] == "rss-retained") {
+if (ARGV[0] == "live-retained") {
     # Negative control: keep every boxed value alive, as a missing dereference
-    # would. The leak threshold must still reject this allocation growth.
-    rssKb();
-    int before = rssKb();
+    # would; the count must show each of them
+    hash<string, int> before = liveNodes();
     list<auto> retained;
-    for (int i = 0; i < RssIterations; ++i) {
+    for (int i = 0; i < LeakIterations; ++i) {
         retained += identityAuto(Big * 1.0);
     }
-    printf("retained: %d\n", rssKb() - before);
+    hash<string, int> after = liveNodes();
+    printf("retained: floats %d ints %d\n", after.floats - before.floats, after.ints - before.ints);
     printf("values: %d\n", retained.size());
     return;
 }
 
-if (ARGV[0] == "rss") {
+if (ARGV[0] == "live") {
     hash<string, code> cases = {
-        "locals": \rssLocals(),
-        "handler": \rssHandler(),
-        "projections": \rssProjections(),
-        "closures": \rssClosures(),
+        "locals": \boxLocals(),
+        "handler": \boxHandler(),
+        "projections": \boxProjections(),
+        "closures": \boxClosures(),
     };
     foreach hash<auto> c in (cases.pairIterator()) {
         code f = c.value;
         # the first call promotes and compiles the function; measure a later call
         f();
-        int before = rssKb();
+        hash<string, int> before = liveNodes();
         f();
-        printf("%s: %d\n", c.key, rssKb() - before);
+        hash<string, int> after = liveNodes();
+        printf("%s: floats %d ints %d\n", c.key, after.floats - before.floats, after.ints - before.ints);
     }
     return;
 }

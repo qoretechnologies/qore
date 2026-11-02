@@ -959,6 +959,11 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     if (sx->is_error) {
                         out << " error";
                     }
+                    if (sx->trim) {
+                        out << " trim keep=" << sx->keep_handlers;
+                    } else if (sx->inline_lowered) {
+                        out << " inline";
+                    }
                 }
             }
             out << "\n";

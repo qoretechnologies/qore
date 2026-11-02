@@ -1,0 +1,368 @@
+/** @page debugging Debugging
+
+    @tableofcontents
+
+    @section debugging_intro Introduction
+
+    %Qore programs can be debugged at the source level: a debugger sets breakpoints on statements, stops threads at
+    them, at exceptions or on request, steps through the code, and shows and changes the values of variables and
+    evaluates expressions with them.  Debugging works the same in every @ref execution_modes "execution mode": the
+    AST and IR interpreters and JIT-compiled code report each statement to an attached debugger, and an AOT-compiled
+    function runs its debug IR in the IR interpreter while a debugger is attached.
+
+    The debugger is a part of the %Qore library, with the @ref Qore::DebugProgram "DebugProgram",
+    @ref Qore::ProgramControl "ProgramControl" and @ref Qore::Breakpoint "Breakpoint" classes, and the following tools
+    are built on it:
+
+    |!Tool|!Description
+    |\c qdbg|A command-line debugger for a program that it runs; see @ref debugging_qdbg
+    |\c qdbg-server|A debug server: runs a program and lets debugger clients connect to it over a websocket; see @ref debugging_remote
+    |\c qdbg-remote|A command-line debugger for the programs of a debug server, such as \c qdbg-server or a Qorus server; see @ref debugging_remote
+    |\c qdbg-vsc-adapter|The debug adapter of Visual Studio Code, which implements the Debug Adapter Protocol; see @ref debugging_vscode
+
+    @section debugging_programs Programs That Can Be Debugged
+
+    All code can be debugged unless it is parsed with @ref no-debugging "%no-debugging"
+    (@ref Qore::PO_NO_DEBUGGING "PO_NO_DEBUGGING"); the debug hooks remain dormant until a debugger attaches to a
+    program, so they cost nothing in normal execution.  Code that controls a debugger, with the
+    @ref Qore::DebugProgram "DebugProgram" and @ref Qore::ProgramControl "ProgramControl" classes, must be parsed with
+    @ref allow-debugger "%allow-debugger" (@ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER"), as a debugger can read
+    and change the data of the debugged code.
+
+    The debuggers parse a script in the mode that the interpreter gives its file (see
+    @ref Qore::Program::applySourceDefaults() "Program::applySourceDefaults()"): a file whose name ends in \c .q is
+    parsed in the default mode, other files in @ref modern "%modern" mode, as \c qore runs them.
+
+    @section debugging_features Debugging Features
+
+    @subsection debugging_breakpoints Breakpoints
+
+    A breakpoint is set on a statement, which is given by:
+    - its line in a file or source label; a line in a statement of more than one line is the statement that contains
+      it
+    - its line and column, for a statement of a line with more than one statement, as in
+      <tt>int x = f(1); int y = g(2);</tt>; the breakpoint is on the last statement of the line that starts at or
+      before the column
+    - a function, possibly with the types of its parameters to select one variant of an overloaded function; the
+      breakpoint is on the start of the function
+
+    A breakpoint can have:
+    - a condition: an expression that is evaluated with the variables of the thread that hits the breakpoint; the
+      thread stops only if it is true
+    - a hit condition: the thread stops only if the number of hits of the breakpoint with its condition true meets
+      it: \c N (the Nth hit), \c ==N, \c >N, \c >=N, \c <N, \c <=N or \c %N (every Nth hit)
+    - a log message: the breakpoint is a logpoint, which writes its message with the values of the expressions in
+      braces, as in <tt>i={i} total={total}</tt>, and does not stop the thread
+
+    The thread that hits a breakpoint checks its condition, hit condition and log message itself before it stops, so
+    it does not wait for a debugger client at each hit; all breakpoints of the statement that apply to the thread are
+    checked.  A condition or an expression of a log message that cannot be parsed with the variables of the statement
+    of the breakpoint, as with a syntax error or a variable that the statement cannot refer to, is refused when it is
+    set (see @ref Qore::ProgramControl::getStatementIdInfo() "ProgramControl::getStatementIdInfo()"); a condition that
+    raises an error when it is evaluated stops the thread, and the error is shown.  The breakpoints, with their
+    conditions, are shared by all clients of a debugger.
+
+    @subsection debugging_exceptions Exceptions
+
+    A thread stops at an exception according to the exception filters of the debugger clients: all user exceptions,
+    all system exceptions, exceptions that no try statement of debuggable code in the call stack catches (uncaught
+    exceptions), and exceptions with given codes, such as \c FILE-OPEN-ERROR.  A client without filters stops at all exceptions; an exception that no client stops at
+    does not stop the thread.
+
+    An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
+    but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg
+    and \c qdbg-remote when the thread stops at it, and by the debug adapter in the details of the exception (see
+    @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo").
+
+    @subsection debugging_stepping Stepping
+
+    A stopped thread continues:
+    - to the next statement (step), also into the functions that the statement calls
+    - to the next statement of its function (step over)
+    - until its function returns (step out); it stops at the closing brace of the function before it returns
+    - until a given statement (run to)
+    - into a chosen call of its statement (step into a target), as \c g() in <tt>f(g(1), h(2))</tt>; the calls are
+      given by @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()", also calls of
+      methods that a subclass can override, of call references and of closures, and each call of a function that the
+      statement calls more than once; the thread stops at the start of the called code, and at the next statement if
+      the statement does not make the call
+    - until its next breakpoint or exception (run)
+
+    Each step stops once at the next statement.
+
+    A running thread can be stopped (paused), and all threads of a program can stop together when one of them stops,
+    and continue together.
+
+    @subsection debugging_variables Variables and Expressions
+
+    The local variables of each frame of the call stack of a stopped thread and the global variables of its program
+    are shown with their values; lists, hashes and objects are shown as trees of their elements, keys and members,
+    also private ones, which are read when they are shown.  A variable, or an element, key or member of it, can be
+    set to the value of an expression; the value is assigned as an assignment in the code assigns it, so a variable
+    with a type converts it or refuses it, and a read-only variable cannot be set.  A variable that was declared but not assigned, whose type requires a value, is
+    shown as such with its declared type, as <tt>int count = NOTHING (declared but not assigned)</tt>.
+
+    Expressions are evaluated with the variables of a frame and the top-level local variables of the program, which
+    have global scope, with the values of the thread (see
+    @ref Qore::ProgramControl::getTopLevelLocalVars() "ProgramControl::getTopLevelLocalVars()"), for watches, hovers and
+    debug consoles of IDEs and the
+    \c eval command of the command-line debuggers.  An expression can refer to all code of the program, its functions,
+    classes, constants and other declarations, also those that are not public (see
+    @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()").  It is evaluated in a
+    separate @ref Qore::Program "Program" with @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN", which cannot access the file
+    system, the network or processes; the functions and methods that it calls run in the debugged program with its
+    permissions.  The local and global variables are copied into variables of the expression, so an assignment in an
+    expression does not change a variable of the program, while the members of objects are changed in the objects.
+
+    At the stop at the start of a program, before its first statement, the thread has not entered the code of the
+    program: expressions are evaluated with its code and global variables, and there are no local variables.
+
+    @section debugging_vscode Debugging in Visual Studio Code
+
+    The Qore extension of Visual Studio Code debugs %Qore programs with \c qdbg-vsc-adapter, which the extension finds
+    next to the \c qore executable of the \c qore.executable setting, unless the \c qore.debugAdapter setting gives
+    its path.
+
+    A \c launch configuration runs a program in the debugger:
+    @code{.json}
+{
+    "type": "qore",
+    "request": "launch",
+    "name": "Debug the current file",
+    "program": "${file}",
+    "args": ["-v", "input.csv"],
+    "stopOnEntry": false
+}
+    @endcode
+
+    An \c attach configuration connects to a program of a debug server, such as \c qdbg-server or a Qorus server:
+    @code{.json}
+{
+    "type": "qore",
+    "request": "attach",
+    "name": "Attach to the debug server",
+    "connection": "ws://localhost:8001",
+    "program": "myfile.q"
+}
+    @endcode
+
+    |!Attribute|!Request|!Description
+    |\c program|both|the program to run, or the name of the program of the debug server to attach to
+    |\c args|launch|the arguments of the program
+    |\c stopOnEntry|launch|stop at the first statement of the program; default \c false
+    |\c stopAllThreads|both|all threads stop when one of them stops, and continue together; default \c true
+    |\c define, \c parseOptions, \c timeZone|launch|parse defines, parse options and the time zone of the program
+    |\c connection, \c headers, \c proxy, \c timeout, \c connTimeout, \c respTimeout, \c maxRedir|attach|the connection to the debug server; a token of the server is given in \c headers as <tt>[{"name": "Authorization", "value": "Bearer &lt;token&gt;"}]</tt>
+    |\c logFilename, \c appendToLog, \c verbosity, \c fullException|both|the log of the adapter and the exception information that it gives
+
+    The exception breakpoints of the adapter stop at user, system or uncaught exceptions, and with the
+    "Exceptions by code" filter at the exceptions with the codes of its condition, as in
+    <tt>FILE-OPEN-ERROR, SOCKET-CONNECT-ERROR</tt>.
+
+    The adapter supports source, function and exception breakpoints with conditions, hit conditions and log messages,
+    breakpoints on any statement of a line (column breakpoints), stepping, also into a chosen call of a statement
+    (step-in targets), pausing, all threads stopping together, call stacks, variables as trees whose values can be set,
+    and expressions for watches, hovers and the debug console, where a line whose first word is a \c qdbg command is
+    processed as the command; the shortcuts and aliases of \c qdbg, such as \c n and \c backtrace, are not commands
+    there, as they can be the names of variables, and a line that starts with \c $ is always an expression.
+
+    Stopping a launched program ends it, also its threads that wait, as for a lock or for input: they end with a
+    \c THREAD-CANCELLED exception; disconnecting from an attached program leaves it running.  Restarting ends a
+    launched program and launches it again with the same breakpoints, and attaches an attached program again.  Integers
+    can be shown in hexadecimal where the IDE offers it.  See @ref vscdebugadapterintro for details and limitations.
+
+    @section debugging_qdbg Command-Line Debugging with qdbg
+
+    \c qdbg runs a program in the debugger and stops it at its start:
+    @code{.sh}
+qdbg myfile.q -my -program params
+    @endcode
+
+    \c qdbg reads commands from its input; \c TAB completes commands, \c help lists them with what they do and a quick
+    start, and <tt>help command</tt> shows the details of a command.  Commands can be shortened while they stay unique,
+    as <tt>br cr 10</tt> for <tt>break create 10</tt>.  The time zone of the program is given with \c -z as a region
+    name, such as \c Europe/Prague, or as a UTC offset, such as \c +01:00.  With input that is not
+    a terminal, each command that resumes a thread returns when a thread pauses again or the thread ends, so a file of
+    commands is processed at the stops that it is written for:
+    @code{.sh}
+qdbg myfile.q < commands.txt
+    @endcode
+
+    Files of commands have one command on each line; lines that start with \c # are comments.  \c qdbg and
+    \c qdbg-remote run the commands of the init file, \c .qdbginit in the home folder, at their start, unless \c -n is
+    given, or of the file of \c -i instead, and then the files of \c -x, and continue with the commands of their input;
+    the \c script command runs a file of commands at the prompt.  A command of a file that resumes a thread waits until
+    a thread pauses, and the first command that fails ends the file.  A file of commands in the current folder is not
+    run unless it is given with \c -i or \c -x:
+    @code{.sh}
+# ~/.qdbginit
+options stopall set 1
+exception filter uncaught
+    @endcode
+
+    \c SIGINT or \c SIGTERM ends \c qdbg and the program that it debugs, with the exit code 128 plus the number of the
+    signal; it ends \c qdbg-remote, and the programs of its debug server continue.
+
+    \c qdbg tells what happens in plain words, such as <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, followed
+    by the line of code.  A thread that the program starts runs until it reaches a breakpoint, as without the debugger,
+    and a thread that pauses while the current thread runs becomes the current thread; the end of a thread is shown,
+    but it does not pause the thread.  The call stacks show the frames of the program, each named after its function,
+    without the frames of the debugger.
+
+    |!Command|!Description
+    |<tt>continue</tt> (<tt>c</tt>), <tt>step</tt> (<tt>s</tt>), <tt>next</tt> (<tt>n</tt>), <tt>finish</tt>|shortcuts of <tt>go run</tt>, <tt>go step</tt>, <tt>go stepover</tt> and <tt>go untilreturn</tt>, as in other debuggers; \c finish pauses at the next statement of the caller and shows the value that the function returned
+    |<tt>print expression</tt>, <tt>locals</tt>|shows the value of an expression, as \c eval, and the local variables of the current frame with their values
+    |<tt>b location</tt>|adds a breakpoint, as <tt>break create</tt>
+    |<tt>up [n]</tt>, <tt>down [n]</tt>|selects the frame that called the current frame, or the one that it called, and shows its line
+    |<tt>kill</tt>|ends the current program: its threads end with a \c THREAD-CANCELLED exception, also those that wait
+    |<tt>script file</tt>|runs the commands of a file
+    |<tt>session save\|load file</tt>|saves the breakpoints, the display expressions, the exception filters and the \c stopall option to a file, or loads them, as with \c -s
+    |<tt>break create [file] line[:column]</tt>|creates a breakpoint on a statement of a line; the column is counted in characters from 1
+    |<tt>break create function[(types)]</tt>|creates a breakpoint on the start of a function
+    |<tt>break list</tt>|lists the breakpoints of the current program with their conditions, hit conditions, log messages and number of hits
+    |<tt>break condition\|hitcondition\|log id [value]</tt>|sets or removes the condition, hit condition or log message of a breakpoint
+    |<tt>break enable\|disable\|delete id</tt>|enables, disables or deletes a breakpoint
+    |<tt>exception filter [user] [system] [uncaught] [code ...] \| all \| none</tt>|shows or sets the exceptions that stop threads; a code, such as \c FILE-OPEN-ERROR, selects the exceptions with the code
+    |<tt>stmt line [file] line</tt>|lists the statements of a line with their columns
+    |<tt>go [run\|step\|stepover\|untilreturn] [statement]</tt>|resumes the current thread, optionally until a statement; \c go alone runs it until its next breakpoint or exception
+    |<tt>thread targets</tt>, <tt>go stepinto [n]</tt>|lists the calls of the current statement, and steps into one of them; without \c n, it steps into the only call of the statement
+    |<tt>bt</tt>, <tt>frame n</tt>|shows the call stack of the current thread with the lines and columns of its statements, and selects a frame
+    |<tt>thread local [name [value]]</tt>|lists the local variables of the current frame, or shows or sets one
+    |<tt>thread var path [from index \| = expression]</tt>|shows a variable or an element, key or member of it, as in <tt>h.lines[1]</tt> or <tt>h{key}</tt>, with its elements, keys and members, also from an index, or sets it to the value of an expression
+    |<tt>display [expression]</tt>, <tt>undisplay [n]</tt>|adds an expression that is shown at each stop, or lists them, and removes one or all of them
+    |<tt>eval expression</tt>|evaluates an expression with the variables of the current frame
+    |<tt>thread list</tt>, <tt>bt all</tt>|lists the threads of the current program, whether they are paused, and where they are, and shows their call stacks
+    |<tt>program stop [tid]</tt>|stops the threads of the program, or one of them
+    |<tt>options stopall set 0\|1</tt>|all threads of a program stop together when one of them stops, and continue together
+    |<tt>options waittimeout set ms</tt>|the time that a command that resumes a thread waits for a thread to pause, as with \c --wait-timeout
+
+    See @ref debugcmdlineintro for all commands.
+
+    @subsection debugging_qdbg_json JSON Output for Programs and Coding Agents
+
+    With \c --json, \c qdbg and \c qdbg-remote write JSON Lines: one JSON object on each line, which a program, such
+    as a coding agent, reads as it writes commands to their input.  Commands are read without a prompt, and an empty
+    line is not a command.  The objects are:
+    - \c result: the result of each command, with the \c command, \c ok, the text that the command printed in
+      \c output, the \c error of a command that failed, \c timedOut if no thread paused in time (see below), and
+      \c quit for a command that ends the debugger
+    - \c event: an event of the debugger, with its name in \c event, its text, such as
+      <tt>Paused at breakpoint 1 at main.q:3 (thread 2)</tt>, in \c text, and its \c data, such as the file, line and
+      exception of a stop; the stop at an exception that matches a common pitfall gives its hint in \c hint
+    - \c output: the output of the program, with its \c category (\c stdout or \c stderr) and \c text; the output
+      of a program of \c qdbg is not written to the output of \c qdbg
+    - \c end (\c qdbg): the end of the program, with the \c exception that ended it, or \c terminated for a program
+      that the \c kill command ended
+    - \c connected (\c qdbg-remote): the connection to the debug server
+    - \c message and \c error: text that is printed outside of a command, and an error of the debug server
+
+    With \c --wait-timeout, a command that resumes a thread waits for a thread to pause as many milliseconds at most;
+    then the program is paused, and the command waits as long again for the pause.  A thread that waits, as for a lock
+    or I/O, pauses only when it continues; \c kill ends the program also then.
+    @code{.sh}
+printf 'break create 3\ngo\nlocals\ngo\nquit\n' | qdbg --json --wait-timeout=5000 myfile.q
+    @endcode
+
+    @section debugging_mcp Debugging with Coding Agents
+
+    \c qdbg-mcp runs an <a href="https://modelcontextprotocol.io">MCP</a> server that lets coding agents, such as
+    Claude Code, debug %Qore programs (see @ref debugmcpserverintro).  It listens on \c 127.0.0.1 and prints its URL;
+    the agent connects to it with the HTTP transport of MCP:
+    @code{.sh}
+qdbg-mcp -l 127.0.0.1:8100
+claude mcp add --transport http qore-debug http://127.0.0.1:8100/mcp
+    @endcode
+
+    The agent launches a script with \c qore_debug_launch, which runs in the process of the server and pauses at its
+    start, or attaches to a debug server, such as \c qdbg-server or Qorus, with \c qore_debug_attach.  It sets
+    breakpoints with conditions with \c qore_debug_set_breakpoint, and resumes threads with \c qore_debug_continue,
+    which returns when a thread pauses, the program ends, or its timeout passes; then the program is paused, so that
+    a loop that does not end can be inspected.  At a pause, \c qore_debug_stack, \c qore_debug_variables and
+    \c qore_debug_evaluate read the program; \c qore_debug_command runs any command of \c qdbg.  Each tool reports
+    the pauses with their locations and exceptions, the output of the program and its end since the last tool; an
+    exception that matches a @ref common_pitfalls "common pitfall" is reported with a hint, and a variable that was
+    declared but not assigned is marked as such.  A stop is given with its reason, such as \c breakpoint, \c step or
+    \c exception; a small list, hash or object is given with its whole value, and a string as it is; the messages of
+    logpoints are reported apart from the output of the program; and the end of a program reports the end of each of
+    its threads.  A tool rejects an argument that it does not have, so that a misspelled option is not ignored.
+
+    The tools can run code with the permissions of the server: a launched script, and expressions with the code of
+    the debugged programs.  With \c -k, or the \c QDBG_MCP_TOKEN environment variable, the server requires a token,
+    which the agent sends as a bearer token; it does not listen on an address that other hosts can reach without one,
+    and \c --no-launch allows attaching to debug servers only.
+
+    @section debugging_remote Remote Debugging
+
+    \c qdbg-server runs a program and lets debugger clients connect to it over a websocket; it holds the program at
+    its start until a client attaches, and it writes the output of the program to its terminal and sends it to the
+    clients:
+    @code{.sh}
+qdbg-server -l 127.0.0.1:8001 myfile.q -my -program params
+    @endcode
+
+    Without \c -l, the server listens on a free port of \c 127.0.0.1, which it writes to its terminal, so that only
+    local clients can connect; a listener given with \c -l and a port only listens on all interfaces.  As a client
+    can evaluate expressions and change the program, a server that other hosts can reach should require a token: the
+    server reads it from the file given with \c -k or from the \c QDBG_SERVER_TOKEN environment variable, and the
+    clients send it as a bearer token in the \c Authorization header:
+    @code{.sh}
+QDBG_SERVER_TOKEN=s3cret qdbg-server -l 0.0.0.0:8001 myfile.q
+qdbg-remote -H "Authorization=Bearer s3cret" myhost:8001
+    @endcode
+
+    \c qdbg-remote is the command-line client, with the commands of \c qdbg; it starts with the debugged program and
+    its stopped thread as the current ones, and with input that is not a terminal it processes a file of commands at
+    the stops that they are written for, as \c qdbg does:
+    @code{.sh}
+qdbg-remote -v localhost:8001
+qdbg-remote localhost:8001 < commands.txt
+    @endcode
+
+    When the last client of a debug server disconnects, the stopped threads continue, and without a client a thread
+    stops only at the start of a program, where the server holds it until a client connects.
+
+    Visual Studio Code connects to a debug server with an \c attach configuration (see @ref debugging_vscode).  A
+    Qorus server is a debug server for its interfaces, which run as programs of the server; \c qdbg-remote connects
+    to it with a Qorus connection name, as in <tt>qdbg-remote qorus</tt>.
+
+    The clients of a debug server share its breakpoints with their conditions, while each client selects the
+    exceptions that stop threads for it.  The protocol is implemented by the
+    @ref debugprogramcontrolintro "DebugProgramControl" and @ref debughandlerintro "DebugHandler" modules.
+
+    @section debugging_api Writing a Debugger
+
+    A debugger is a @ref Qore::DebugProgram "DebugProgram" subclass whose methods are called at the events of the
+    threads of the programs that it debugs: at statements, function entries and exits, exceptions, and the start and
+    end of threads; a method stops a thread by not returning until the thread continues.
+    @ref Qore::ProgramControl "ProgramControl" gives the information of a debugged program: its statements, given by
+    their location (@ref Qore::ProgramControl::findStatementId() "findStatementId()",
+    @ref Qore::ProgramControl::findStatementIds() "findStatementIds()") and described with their columns
+    (@ref Qore::ProgramControl::getStatementIdInfo() "getStatementIdInfo()"), the calls of a statement
+    (@ref Qore::ProgramControl::getStepInTargets() "getStepInTargets()"), and a Program for evaluating expressions
+    (@ref Qore::ProgramControl::createEvalProgram() "createEvalProgram()").  @ref Qore::Breakpoint "Breakpoint"
+    objects are assigned to statements and stop the threads that reach them.
+
+    The @ref debugprogramcontrolintro "DebugProgramControl" module implements a debugger with a protocol of commands
+    and events for its clients, which @ref debugcmdlineintro "DebugCmdLine" and
+    @ref vscdebugadapterintro "VscDebugAdapter" implement clients of.
+
+    @section debugging_limitations Limitations
+
+    - A breakpoint is on a statement, so an expression with more than one call, such as <tt>f(g(x))</tt>, has one
+      breakpoint location.
+    - Data breakpoints, which stop when a value changes
+      (<a href="https://github.com/qoretechnologies/qore/issues/5565">issue 5565</a>), jumping to a line and restarting
+      a frame (<a href="https://github.com/qoretechnologies/qore/issues/5566">issue 5566</a>) are not supported.
+    - Stepping into a call matches the functions that the statement calls with the name of the call and the number
+      of its calls before it; when an operand of a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or
+      <tt>||</tt>, is not evaluated, a later call with the same name can be stepped into instead
+      (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>).
+    - When a thread stops, the other threads stop at their next statement, so a thread that waits, as for input,
+      stops when it runs again.
+    - The columns of the debugger count bytes; the clients convert them to characters with the text of the line, and
+      count a character as a byte for a source whose text is not available.
+    - A function of AOT-compiled code that is already running when a debugger attaches, and a closure created in it,
+      does not stop at breakpoints or steps, as it continues in its native code; functions that are called after the
+      debugger attached are debugged
+      (<a href="https://github.com/qoretechnologies/qore/issues/5567">issue 5567</a>).
+*/

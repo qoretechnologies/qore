@@ -19,6 +19,34 @@
 %requires TableMapper
 # a run on PostgreSQL has its own schema
 %requires ../SqlUtil/PgsqlTestIsolation.qm
+# the test runs against every database connection that is configured
+%requires ../../DbTestConnections.qm
+
+#! a connection of the test, and its schema and table
+class TableMapperPerformanceContext {
+    public {
+        #! the connection
+        hash<DbTestConnection> conn;
+
+        #! the reason the connection's test case is skipped if its schema could not be created
+        string skip_reason = "the connection is not open";
+
+        #! the test schema, or @ref nothing if it could not be created
+        *AbstractSchema schema;
+
+        #! the test table
+        *AbstractTable table;
+    }
+
+    constructor(hash<DbTestConnection> conn) {
+        self.conn = conn;
+    }
+
+    #! returns the name of the connection's test case
+    string name(string test) {
+        return sprintf("%s (%s): %s", conn.label, conn.driver ?? "unknown driver", test);
+    }
+}
 
 public class TableMapperPerformanceTestSchema inherits AbstractSchema {
     public {
@@ -160,8 +188,8 @@ public class TableMapperPerformanceTestSchema inherits AbstractSchema {
 
 public class TableMapperPerformanceTest inherits QUnit::Test {
     private {
-        AbstractSchema schema;
-        AbstractTable table;
+        #! the test's connections (see DbTestConnections)
+        list<TableMapperPerformanceContext> contexts = ();
 
         const Map1 = (
             "id": ("sequence": "seq_table_mapper_test"),
@@ -184,20 +212,19 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
     }
 
     constructor(any args, *hash mopts) : Test("TableMapperPerformanceTest", "1.0", \args, mopts ?? MyOpts) {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-            # create the test schema
-            schema = new TableMapperPerformanceTestSchema(ds);
-            schema.align(False, m_options.verbose);
-            # get table object
-            table = (new Table(schema.getDatasource(), "table_mapper_test")).getTable();
-        } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose)
-                printf("%s: %s\n", ex.err, ex.desc);
-        }
+        contexts = map new TableMapperPerformanceContext($1), DbTestConnections::get(m_options.connstr);
+        # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
+        # connection is opened
+        map PgsqlRunSchema::setup($1.conn.connstr, "TableMapperPerf"), contexts;
+        map setUpContext($1), contexts;
+
         # add test cases
-        addTestCase("InboundTableMapper", \inboundTableMapperPerformanceTest());
+        if (!contexts) {
+            addTestCase("InboundTableMapper", sub () { testSkip("no DB connection"); });
+        }
+        foreach TableMapperPerformanceContext ctx in (contexts) {
+            addTestCase(ctx.name("InboundTableMapper"), \inboundTableMapperPerformanceTest(), ctx);
+        }
 
         rows = m_options.rows ?? ENV.TABLEMAPPERPERFORMANCETEST_ROWS ?? DefaultRows;
         if (rows < 1)
@@ -210,12 +237,38 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! opens the connection and creates its schema; the connection's test case is skipped if it fails
+    private setUpContext(TableMapperPerformanceContext ctx) {
+        try {
+            Datasource ds(ctx.conn.connstr);
+            ds.open();
+            # create the test schema; it is kept before it is aligned, so that what the alignment created is
+            # dropped if it fails
+            ctx.schema = new TableMapperPerformanceTestSchema(ds);
+            ctx.schema.align(False, m_options.verbose);
+            # get table object
+            ctx.table = (new Table(ds, "table_mapper_test")).getTable();
+        } catch (hash<ExceptionInfo> ex) {
+            ctx.skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            if (m_options.verbose) {
+                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+            }
+        }
+    }
+
     globalTearDown() {
-        # drop the test schema
-        if (schema) {
-            schema.drop(False, m_options.verbose);
-            # end the transaction of the test's connection before the run's schema is dropped
-            schema.getDatasource().rollback();
+        # drop the test schemas
+        foreach TableMapperPerformanceContext ctx in (contexts) {
+            if (!ctx.schema) {
+                continue;
+            }
+            try {
+                ctx.schema.drop(False, m_options.verbose);
+                # end the transaction of the test's connection before the run's schema is dropped
+                ctx.schema.getDatasource().rollback();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: %s: cannot drop the test schema: %s: %s\n", ctx.conn.label, ex.err, ex.desc);
+            }
         }
         # drop the run's schema on PostgreSQL
         PgsqlRunSchema::teardown();
@@ -228,9 +281,11 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         printOption("-r,--rows=ARG", sprintf("the number of rows to insert (default: %d)", ENV.TABLEMAPPERPERFORMANCETEST_ROWS ?? DefaultRows), OptionColumn);
     }
 
-    inboundTableMapperPerformanceTest() {
-        if (!table)
-            testSkip("no DB connection");
+    inboundTableMapperPerformanceTest(TableMapperPerformanceContext ctx) {
+        if (!ctx.table) {
+            testSkip(ctx.skip_reason);
+        }
+        AbstractTable table = ctx.table;
 
         hash cmap = map {
             "ncol_" + $1: ("constant": rand() % 10000),
@@ -280,19 +335,9 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         float dt = delta.durationSecondsFloat();
         float rps = dt ? rows / dt : 0;
         printf("elapsed time: %y rows/s: %s\n", delta, rps);
-    }
 
-    Datasource getDatasource() {
-        if (!m_options.connstr) {
-            m_options.connstr = ENV.QORE_DB_CONNSTR_PGSQL ?* ENV.QORE_DB_CONNSTR_ORACLE ?* ENV.QORE_DB_CONNSTR_MYSQL ?* ENV.QORE_DB_CONNSTR_FREETDS ?* ENV.QORE_DB_CONNSTR_SYBASE;
-            if (m_options.verbose > 2) {
-                printf("using connection string %y\n", m_options.connstr);
-            }
-        }
-        # on PostgreSQL, every connection of the run uses the run's own schema
-        PgsqlRunSchema::setup(m_options.connstr, "TableMapperPerf");
-        Datasource ds(m_options.connstr);
-        ds.open();
-        return ds;
+        # the rate is reported, not asserted; every row is inserted
+        assertEq(rows, table.selectRow({"columns": cop_as(cop_count(), "cnt")}).cnt.toInt(),
+            "every row is inserted");
     }
 }

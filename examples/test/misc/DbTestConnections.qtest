@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../DbTestConnections.qm
+
+%exec-class DbTestConnectionsTest
+
+#! tests the connections that DbTestConnections gives a database-generic test
+class DbTestConnectionsTest inherits QUnit::Test {
+    constructor() : Test("DbTestConnectionsTest", "1.0", \ARGV) {
+        addTestCase("every configured connection, in order", \everyConnection());
+        addTestCase("a datasource string is given once", \dedup());
+        addTestCase("the -c option is the only connection", \option());
+        addTestCase("no connection is configured", \none());
+        addTestCase("an unparsable datasource string is given without a driver", \unparsable());
+        set_return_value(main());
+    }
+
+    #! returns the labels and drivers of the connections, as "label:driver"
+    private static list<string> describe(list<hash<DbTestConnection>> l) {
+        return map sprintf("%s:%s", $1.label, $1.driver ?? "-"), l;
+    }
+
+    everyConnection() {
+        hash<auto> env = {
+            "QORE_DB_CONNSTR_MYSQL": "mysql:u/p@db%mysql",
+            "QORE_DB_CONNSTR_FREETDS": "freetds:u/p@db%mssql",
+            "QORE_DB_CONNSTR_SYBASE": "sybase:u/p@db%sybase",
+            "QORE_DB_CONNSTR_PGSQL": "pgsql:u/p@db%pgsql",
+            "QORE_DB_CONNSTR_ORACLE": "oracle:u/p@db",
+            "QORE_DB_CONNSTR": "sqlite3:@/tmp/x.db",
+            # not a connection variable
+            "QORE_DB_CONNSTR_OTHER": "pgsql:u/p@other",
+        };
+        list<hash<DbTestConnection>> l = DbTestConnections::get(NOTHING, env);
+        assertEq(("QORE_DB_CONNSTR:sqlite3", "QORE_DB_CONNSTR_PGSQL:pgsql", "QORE_DB_CONNSTR_ORACLE:oracle",
+            "QORE_DB_CONNSTR_MYSQL:mysql", "QORE_DB_CONNSTR_FREETDS:freetds", "QORE_DB_CONNSTR_SYBASE:sybase"),
+            describe(l),
+            "every connection variable gives a connection, in the order of DbTestConnections::EnvVars");
+        assertEq("mysql:u/p@db%mysql", l[3].connstr, "the connection has its datasource string");
+    }
+
+    dedup() {
+        # as in CI, where QORE_DB_CONNSTR and QORE_DB_CONNSTR_PGSQL are the same PostgreSQL database
+        hash<auto> env = {
+            "QORE_DB_CONNSTR": "pgsql:u/p@db%pgsql",
+            "QORE_DB_CONNSTR_PGSQL": "pgsql:u/p@db%pgsql",
+            "QORE_DB_CONNSTR_MYSQL": "mysql:u/p@db%mysql",
+        };
+        assertEq(("QORE_DB_CONNSTR:pgsql", "QORE_DB_CONNSTR_MYSQL:mysql"),
+            describe(DbTestConnections::get(NOTHING, env)),
+            "a datasource string is used once, under the first variable that gives it");
+        # an empty variable gives no connection
+        env.QORE_DB_CONNSTR = "";
+        assertEq(("QORE_DB_CONNSTR_PGSQL:pgsql", "QORE_DB_CONNSTR_MYSQL:mysql"),
+            describe(DbTestConnections::get(NOTHING, env)), "an empty variable gives no connection");
+    }
+
+    option() {
+        hash<auto> env = {
+            "QORE_DB_CONNSTR_PGSQL": "pgsql:u/p@db%pgsql",
+            "QORE_DB_CONNSTR_MYSQL": "mysql:u/p@db%mysql",
+        };
+        list<hash<DbTestConnection>> l = DbTestConnections::get("oracle:u/p@db", env);
+        assertEq(("conn:oracle",), describe(l), "the -c option is the only connection");
+        assertEq("oracle:u/p@db", l[0].connstr, "the -c option's datasource string");
+        # an empty option is not given
+        assertEq(("QORE_DB_CONNSTR_PGSQL:pgsql", "QORE_DB_CONNSTR_MYSQL:mysql"),
+            describe(DbTestConnections::get("", env)), "an empty -c option gives the configured connections");
+    }
+
+    none() {
+        assertEq((), DbTestConnections::get(NOTHING, {}), "no connection is configured");
+        assertEq((), DbTestConnections::get(NOTHING, {"PATH": "/bin"}), "other variables give no connection");
+    }
+
+    unparsable() {
+        list<hash<DbTestConnection>> l = DbTestConnections::get(NOTHING, {"QORE_DB_CONNSTR_MYSQL": "not a datasource"});
+        assertEq(("QORE_DB_CONNSTR_MYSQL:-",), describe(l),
+            "an unparsable datasource string is given, so the test reports the error when it opens it");
+    }
+}

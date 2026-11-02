@@ -45,6 +45,7 @@ extern "C" {
 #include <map>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 // parse options set while parsing the module's header (init & del)
@@ -52,6 +53,46 @@ extern "C" {
 
 // initial user module parse options
 #define USER_MOD_PO (PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR | PO_IN_MODULE)
+
+//! A user module's parse option mask: restrictions stripped from and added to those it inherits
+/** A user module (source or AOT) inherits the restrictions of the Program that loads it (see
+    QoreModuleManager::loadSeparatedModule()).  A mask strips restrictions from what the module inherits, so that a
+    trusted module may use functionality that its loader may not (for example a module that uses threads loaded by
+    code with PO_NO_THREAD_CONTROL), and adds restrictions to it.  Only restricting options can be
+    masked (see check()); an option that is both stripped and added is added.  See design/module-parse-option-masks.md.
+*/
+struct QoreModuleParseOptionMask {
+    //! the restrictions the module does not inherit
+    QoreParseOptions strip;
+    //! the restrictions added to the module's parse options
+    QoreParseOptions add;
+
+    //! the options that a mask may contain: restrictions only, not explicitly-allowed (positive), language
+    //! (free) or style options, nor the options that every user module has
+    DLLLOCAL static QoreParseOptions maskable();
+
+    //! Raises an exception and returns -1 if a mask contains an option that cannot be masked, or an option both
+    //! to strip and to add
+    DLLLOCAL static int check(const QoreParseOptions& strip, const QoreParseOptions& add, ExceptionSink* xsink);
+
+    //! returns true if the mask is empty
+    DLLLOCAL bool empty() const {
+        return !strip && !add;
+    }
+
+    //! returns the given inherited options with the mask applied: stripped restrictions removed, added ones added
+    DLLLOCAL QoreParseOptions apply(const QoreParseOptions& inherited) const {
+        return (inherited & ~strip) | add;
+    }
+
+    //! adds another mask to this one; an option added by either is not stripped
+    DLLLOCAL QoreModuleParseOptionMask& operator|=(const QoreModuleParseOptionMask& other) {
+        strip |= other.strip;
+        add |= other.add;
+        strip &= ~add;
+        return *this;
+    }
+};
 
 // module load options
 #define QMLO_NONE            0
@@ -285,6 +326,23 @@ public:
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink)
         = 0;
 
+    //! returns the module's parse option mask
+    DLLLOCAL QoreModuleParseOptionMask getParseOptionMask() const {
+        std::lock_guard<std::mutex> lck(po_mask_lock);
+        return po_mask;
+    }
+
+    //! adds a mask to the module's parse option mask
+    DLLLOCAL void addParseOptionMask(const QoreModuleParseOptionMask& mask) {
+        std::lock_guard<std::mutex> lck(po_mask_lock);
+        po_mask |= mask;
+    }
+
+    //! returns the Program of a user module (source or AOT), or nullptr for a binary module
+    DLLLOCAL virtual QoreProgram* getModuleProgram() const {
+        return nullptr;
+    }
+
 protected:
     QoreString filename,
         name,
@@ -315,6 +373,11 @@ protected:
         injected : 1,
         reinjected : 1,
         init_failed : 1;
+
+    // guards po_mask, which a privileged Program can change while other threads import the module
+    mutable std::mutex po_mask_lock;
+    // the module's parse option mask; see QoreModuleParseOptionMask
+    QoreModuleParseOptionMask po_mask;
 
     DLLLOCAL QoreHashNode* getHashIntern(bool with_filename = true) const;
 
@@ -542,6 +605,36 @@ public:
         return findModuleUnlocked(name);
     }
 
+    //! Sets the parse option mask applied to every user module loaded from now on; see QoreModuleParseOptionMask
+    /** @return 0 for OK, -1 if an exception was raised for an invalid mask
+    */
+    DLLLOCAL int setParseOptionMask(const QoreModuleParseOptionMask& mask, ExceptionSink* xsink);
+
+    //! Returns the parse option mask applied to every user module loaded from now on
+    DLLLOCAL QoreModuleParseOptionMask getParseOptionMask() const;
+
+    //! Returns the mask that applies to a user module loaded now in this thread: the global mask and the mask of
+    //! the masked load in progress in this thread, if any (see runTimeLoadModuleMasked())
+    DLLLOCAL QoreModuleParseOptionMask getLoadParseOptionMask() const;
+
+    //! Loads a module with a parse option mask, which the module gets also when it has been loaded already
+    /** The mask applies to the module and to the modules it loads while it is loaded; see
+        QoreModuleParseOptionMask
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int runTimeLoadModuleMasked(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
+            QoreProgram* pgm, const QoreModuleParseOptionMask& mask, int warning_mask = QP_WARN_MODULES);
+
+    //! Adds a parse option mask to a loaded module and applies it to the module's Program
+    /** The stripped restrictions are removed from the parse options of the module's Program and the added ones are
+        added to it; restrictions stripped earlier are not restored
+
+        @return 0 for OK, -1 if an exception was raised: an invalid mask or a module that is not loaded
+    */
+    DLLLOCAL int addModuleParseOptionMask(const char* name, const QoreModuleParseOptionMask& mask,
+            ExceptionSink* xsink);
+
     //! Load a reexported module into a program using the current module-load locking context.
     DLLLOCAL void loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm);
 
@@ -645,14 +738,14 @@ public:
     */
     DLLLOCAL bool isUserModuleContext(const char* name);
 
-    //! Records that the user module in the current module context requires the given AOT user module
-    /** An AOT user module is a binary module, deleted in cleanup(); a user module that requires it can hold objects
-        of its classes, so a user module whose deletion is deferred to cleanup() is deleted before the AOT modules it
-        requires (see delUser())
+    //! Records that the user module in the current module context requires the given binary module
+    /** A binary module (an AOT user module or a native binary module) is deleted in cleanup(); a user module that
+        requires it can hold objects of its classes, so a user module whose deletion is deferred to cleanup() is
+        deleted before the binary modules it requires (see delUser() and cleanup())
 
-        @param name the name of the AOT user module imported
+        @param name the name of the binary module imported
     */
-    DLLLOCAL void trySetUserAotModuleDependency(const char* name);
+    DLLLOCAL void trySetUserBinaryModuleDependency(const char* name);
 
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
@@ -814,8 +907,8 @@ protected:
     ModMap md_map;
     // user module dependent map: dependent -> module
     ModMap rmd_map;
-    // AOT user module dependency map: AOT user module -> the user modules that require it
-    ModMap aot_user_dep_map;
+    // binary module dependency map: binary module (AOT or native) -> the user modules that require it
+    ModMap binary_user_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -828,8 +921,25 @@ protected:
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
 
-    //! Returns the user modules that the AOT user modules left require, directly or through other user modules
-    DLLLOCAL strset_t getAotRequiredUserModules();
+    //! Returns the user modules that delUser() cannot delete yet, with the user modules that they require
+    /** These are the user modules that AOT user modules require, which are left to cleanup(), and the given user
+        modules imported into Programs that still hold data: Programs that binary modules own and delete only when they
+        are deleted, which can hold objects of the classes of the modules imported into them (see delUser())
+
+        @param held the modules imported into the Programs that still hold data
+    */
+    DLLLOCAL strset_t getUserModulesLeftForCleanup(const strset_t& held);
+
+    //! Gets the modules that the given binary module requires; returns true if it is a native binary module
+    /** A native binary module is a binary module that is not an AOT user module; its dependencies are those declared
+        with qore_module_dependencies, while those of an AOT user module are recorded by the AOT runtime
+    */
+    DLLLOCAL bool getBinaryModuleDependencies(module_map_t::const_iterator i, std::vector<std::string>& deps);
+
+    //! Deletes a native binary module that no module left requires; returns true if one was deleted
+    /** See the teardown order in delUser()
+    */
+    DLLLOCAL bool deleteUnrequiredNativeModule();
 
     //! Returns true if the given user module requires itself through other user modules
     DLLLOCAL bool isInUserModuleDependencyCycle(const std::string& name);
@@ -922,6 +1032,11 @@ protected:
     DLLLOCAL void getUniqueName(QoreString& nname, const char* name, const char* prefix);
 
     DLLLOCAL int checkBlacklist(ExceptionSink& xsink, const char* name);
+
+    // guards po_mask
+    mutable std::mutex po_mask_lock;
+    // the parse option mask applied to every user module loaded from now on
+    QoreModuleParseOptionMask po_mask;
 };
 
 DLLLOCAL extern QoreModuleManager QMM;
@@ -937,8 +1052,12 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
-              info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name) {
+              info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
+              dependencies(mod_info.dependencies), aot(mod_info.is_aot) {
     }
+
+    //! returns the Program of an AOT user module, or nullptr for a binary module
+    DLLLOCAL virtual QoreProgram* getModuleProgram() const;
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
         printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s' (feature '%s'): %s calling module_delete: %p\n",
@@ -976,6 +1095,19 @@ public:
         return dlptr;
     }
 
+    //! Returns the modules that this module requires (qore_module_dependencies), which are loaded before it
+    DLLLOCAL const std::vector<std::string>& getDependencies() const {
+        return dependencies;
+    }
+
+    //! Returns true if this module is a user module compiled to a binary module with qcc (an AOT module)
+    /** A binary module that is not an AOT module is a native binary module: its code can own Programs, which it
+        deletes when it is deleted (see QoreModuleManager::cleanup())
+    */
+    DLLLOCAL bool isAot() const {
+        return aot;
+    }
+
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink)
         override;
 
@@ -991,6 +1123,10 @@ protected:
     const void* dlptr;
     //! the feature name the module was initialized with; unlike QoreAbstractModule::name, it is never renamed
     const QoreString feature;
+    //! the modules that this module requires
+    const std::vector<std::string> dependencies;
+    //! true for an AOT module
+    const bool aot;
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };
@@ -1006,6 +1142,10 @@ public:
     DLLLOCAL virtual ~QoreUserModule();
 
     DLLLOCAL QoreProgram* getProgram() const {
+        return pgm;
+    }
+
+    DLLLOCAL virtual QoreProgram* getModuleProgram() const {
         return pgm;
     }
 

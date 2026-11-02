@@ -2215,6 +2215,11 @@ int64 q_epoch_ns(int &ns) {
 }
 
 QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {
+    // a lone literal NOTHING argument is parsed as no argument, so f(NOTHING) is the same call as f(); this is the only
+    // case where an argument with no value does not count toward the number of arguments of a call: a literal NOTHING
+    // among other arguments, and a variable holding no value, are arguments for variant matching at parse time and at
+    // run time (issue #1897, see QoreFunction::runtimeFindVariant() and the "Arguments With No Value And Overloading"
+    // section of the language reference); it matters only for variants taking variable arguments or no parameters
     if (!arg) {
         return nullptr;
     }

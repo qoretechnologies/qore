@@ -627,8 +627,17 @@
                   "name": "_same_line"
                 },
                 {
-                  "type": "SYMBOL",
-                  "name": "string"
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "string"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "directive_argument"
+                    }
+                  ]
                 }
               ]
             },

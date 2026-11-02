@@ -87,6 +87,10 @@ void ThreadLocalVariableData::getLocalVars(QoreHashNode& h, int frame, Exception
             ReferenceHolder<QoreHashNode> v(new QoreHashNode(autoTypeInfo), xsink);
             v->setKeyValue("type", new QoreStringNode("local"), xsink);
             v->setKeyValue("value", var.eval(xsink), xsink);
+            if (var.local_var) {
+                qore_set_local_var_debug_type(**v, static_cast<const LocalVar*>(var.local_var)->getTypeInfo(),
+                    xsink);
+            }
             h.setKeyValue(var.id, v.release(), xsink);
         }
         w = w->prev;
@@ -120,8 +124,13 @@ int ThreadLocalVariableData::setVarValue(int frame, const char* name, const Qore
                     ++reflective_mutation_epoch;
                 }
                 LValueHelper lvh(xsink);
-                if (var.getLValue(lvh, false, nullptr, nullptr))
+                // the value is assigned as an assignment in the code assigns it: converted to the type of the
+                // variable, or refused, as is a read-only variable
+                if (var.local_var
+                    ? static_cast<const LocalVar*>(var.local_var)->getLValueForValue(var, lvh)
+                    : var.getLValue(lvh, false, nullptr, nullptr)) {
                     return -1;
+                }
 
                 return lvh.assign(val.refSelf(), "<API assignment>");
             }

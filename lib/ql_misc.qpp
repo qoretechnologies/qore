@@ -36,6 +36,8 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/QC_QoreParseOptions.h"
+#include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -75,6 +77,43 @@ static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
 
 // Single definition; declared DLLLOCAL in qore_program_private.h and also called from
 // ql_object.cpp.
+// raises an exception and returns -1 if code governed by a sandbox manager calls a module parse option mask API;
+// the APIs change what modules may do in the whole process: they carry the PROCESS functional domain, so code with
+// PO_NO_PROCESS_CONTROL cannot call them, and sandboxed code cannot call them either
+static int q_check_module_parse_option_mask_caller(const char* func, ExceptionSink* xsink) {
+    QoreSandboxManager* sm = qore_find_thread_sandbox_manager_ref();
+    if (sm) {
+        sm->deref();
+        xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "%s() cannot be called by code that has a sandbox "
+            "manager", func);
+        return -1;
+    }
+    return 0;
+}
+
+// returns the names of the options in a parse option set
+static QoreListNode* q_parse_option_names(const QoreParseOptions& po, ExceptionSink* xsink) {
+    QoreParseOptionsData data(po);
+    return data.toStringList(xsink);
+}
+
+// returns a ModuleParseOptionMaskInfo hash for a module parse option mask
+static QoreHashNode* q_module_parse_option_mask_info(const QoreModuleParseOptionMask& mask, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclModuleParseOptionMaskInfo, xsink), xsink);
+    ReferenceHolder<QoreListNode> strip(q_parse_option_names(mask.strip, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> add(q_parse_option_names(mask.add, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    qore_hash_private* ph = qore_hash_private::get(**h);
+    ph->setKeyValueIntern("strip", strip.release());
+    ph->setKeyValueIntern("add", add.release());
+    return h.release();
+}
+
 QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
     // The authoritative thread-current Program is the correct target for builtins
     // that operate on "the Program this call is running in" (set_return_value(),
@@ -368,6 +407,17 @@ const RESOLVE_URL_ENCODE = QRU_ENCODE;
 */
 const RESOLVE_URL_ASCII = QRU_ASCII;
 ///@}
+
+//! a module parse option mask: the restrictions that user modules do not inherit and those added to them
+/** see @ref module_parse_option_masks
+    @since %Qore 3.0
+*/
+hashdecl ModuleParseOptionMaskInfo {
+    //! the names of the restrictions that modules do not inherit from the Program loading them (see @ref parse_options)
+    list<string> strip;
+    //! the names of the restrictions added to the parse options of modules
+    list<string> add;
+}
 
 //! a hash describing a parsed URL
 /** @since %Qore 0.9.3
@@ -3098,6 +3148,209 @@ load_module("mysql");
 nothing load_module() [flags=RUNTIME_NOOP;dom=MODULES] {
 }
 
+//! Sets the parse option mask applied to every user module loaded from now on
+/** A user module (source or AOT) inherits the restrictions of the Program that loads it.  The mask strips the
+    restrictions in \a strip from what a module inherits and adds the restrictions in \a add.  For example, stripping
+    @ref PO_NO_THREAD_CONTROL and @ref PO_NO_THREAD_CLASSES lets code that may not use threads load trusted modules
+    that do.  Call it before loading the modules it should apply to; it replaces the previous mask.  Use
+    add_module_parse_option_mask() for modules that are loaded already.
+
+    @param strip the restrictions that modules do not inherit
+    @param add the restrictions added to the parse options of modules
+
+    @par Example:
+    @code{.py}
+# a process that runs sandboxed code without threads lets it load modules that use threads
+set_module_parse_option_mask(new ParseOptions(("no-thread-control", "no-thread-classes")));
+    @endcode
+
+    @throw MODULE-PARSE-OPTION-MASK-ERROR a mask contains an option that is not a restriction (an explicitly-allowed,
+    language, style or module option), or an option in both masks; the calling code has a sandbox manager
+
+    @see @ref module_parse_option_masks
+
+    @since %Qore 3.0
+*/
+nothing set_module_parse_option_mask(ParseOptions[QoreParseOptionsData] strip, *ParseOptions[QoreParseOptionsData] add) [dom=PROCESS,MODULES] {
+    if (q_check_module_parse_option_mask_caller("set_module_parse_option_mask", xsink)) {
+        return QoreValue();
+    }
+    QMM.setParseOptionMask(QoreModuleParseOptionMask{strip->get(), add ? add->get() : QoreParseOptions()}, xsink);
+}
+
+//! Sets the parse option mask applied to every user module loaded from now on
+/** This variant takes the restrictions as integer @ref parse_options "parse options"; see
+    set_module_parse_option_mask(ParseOptions, *ParseOptions)
+
+    @param strip the restrictions that modules do not inherit
+    @param add the restrictions added to the parse options of modules
+
+    @par Example:
+    @code{.py}
+set_module_parse_option_mask(PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+    @endcode
+
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+
+    @since %Qore 3.0
+*/
+nothing set_module_parse_option_mask(softint strip, softint add = 0) [dom=PROCESS,MODULES;flags=NAMED_ARGS] {
+    if (q_check_module_parse_option_mask_caller("set_module_parse_option_mask", xsink)) {
+        return QoreValue();
+    }
+    QMM.setParseOptionMask(QoreModuleParseOptionMask{QoreParseOptions(strip), QoreParseOptions(add)}, xsink);
+}
+
+//! Returns the parse option mask applied to every user module loaded from now on
+/** @return the mask, with the names of its restrictions
+
+    @par Example:
+    @code{.py}
+hash<ModuleParseOptionMaskInfo> mask = get_module_parse_option_mask();
+    @endcode
+
+    @see @ref module_parse_option_masks
+
+    @since %Qore 3.0
+*/
+hash<ModuleParseOptionMaskInfo> get_module_parse_option_mask() [dom=MODULES] {
+    return q_module_parse_option_mask_info(QMM.getParseOptionMask(), xsink);
+}
+
+//! Returns the parse option mask of a loaded module
+/** @param module the name of the loaded module
+
+    @return the module's mask, with the names of its restrictions
+
+    @par Example:
+    @code{.py}
+hash<ModuleParseOptionMaskInfo> mask = get_module_parse_option_mask("WSDL");
+    @endcode
+
+    @throw MODULE-PARSE-OPTION-MASK-ERROR the module is not loaded
+
+    @since %Qore 3.0
+*/
+hash<ModuleParseOptionMaskInfo> get_module_parse_option_mask(string module) [dom=MODULES] {
+    QoreAbstractModule* mi = QMM.findModule(module->c_str());
+    if (!mi) {
+        return xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "module '%s' is not loaded", module->c_str());
+    }
+    return q_module_parse_option_mask_info(mi->getParseOptionMask(), xsink);
+}
+
+//! Loads a module at run time with a parse option mask, in addition to the mask that applies to every module
+/** The mask applies to the module and to the modules it loads while it is loaded; a module that is loaded already
+    gets the mask as with add_module_parse_option_mask().  The module is loaded as with load_module().
+
+    @param name either a feature name or a path to a module to load
+    @param strip the restrictions that the module does not inherit
+    @param add the restrictions added to the module's parse options
+    @param warning_mask the warning mask to use when loading the module; warnings are treated as errors
+
+    @par Example:
+    @code{.py}
+# code without threads can load the module, which uses thread-local variables and threads
+load_module_masked("SoapClient", new ParseOptions(("no-thread-control", "no-thread-classes")));
+    @endcode
+
+    @throw LOAD-MODULE-ERROR the module cannot be loaded (see load_module())
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+
+    @see @ref module_parse_option_masks
+
+    @since %Qore 3.0
+*/
+nothing load_module_masked(string name, ParseOptions[QoreParseOptionsData] strip, *ParseOptions[QoreParseOptionsData] add, int warning_mask = WARN_MODULES) [dom=PROCESS,MODULES;flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*name, xsink)
+            || q_check_module_parse_option_mask_caller("load_module_masked", xsink)) {
+        return QoreValue();
+    }
+    QMM.runTimeLoadModuleMasked(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg),
+        QoreModuleParseOptionMask{strip->get(), add ? add->get() : QoreParseOptions()}, warning_mask);
+}
+
+//! Loads a module at run time with a parse option mask given as integer @ref parse_options "parse options"
+/** see load_module_masked(string, ParseOptions, *ParseOptions, int)
+
+    @param name either a feature name or a path to a module to load
+    @param strip the restrictions that the module does not inherit
+    @param add the restrictions added to the module's parse options
+    @param warning_mask the warning mask to use when loading the module; warnings are treated as errors
+
+    @par Example:
+    @code{.py}
+load_module_masked("SoapClient", PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+    @endcode
+
+    @throw LOAD-MODULE-ERROR the module cannot be loaded (see load_module())
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+
+    @since %Qore 3.0
+*/
+nothing load_module_masked(string name, softint strip, softint add = 0, int warning_mask = WARN_MODULES) [dom=PROCESS,MODULES;flags=NAMED_ARGS] {
+    if (QoreModuleManager::checkModuleName(*name, xsink)
+            || q_check_module_parse_option_mask_caller("load_module_masked", xsink)) {
+        return QoreValue();
+    }
+    QMM.runTimeLoadModuleMasked(*xsink, *xsink, name->c_str(), q_get_runtime_call_program(runtime_cfg),
+        QoreModuleParseOptionMask{QoreParseOptions(strip), QoreParseOptions(add)}, warning_mask);
+}
+
+//! Adds a parse option mask to a loaded module
+/** The restrictions in \a strip are removed from the parse options of the module's Program, with which its code runs,
+    and those in \a add are added to them.  Restrictions stripped earlier are not
+    restored.
+
+    @param module the name of the loaded module
+    @param strip the restrictions to strip
+    @param add the restrictions to add
+
+    @par Example:
+    @code{.py}
+# a module loaded before the process's mask was set can be imported by code without threads
+add_module_parse_option_mask("WSDL", new ParseOptions(("no-thread-control", "no-thread-classes")));
+    @endcode
+
+    @throw MODULE-PARSE-OPTION-MASK-ERROR the module is not loaded; see also
+    set_module_parse_option_mask(ParseOptions, *ParseOptions)
+
+    @see @ref module_parse_option_masks
+
+    @since %Qore 3.0
+*/
+nothing add_module_parse_option_mask(string module, ParseOptions[QoreParseOptionsData] strip, *ParseOptions[QoreParseOptionsData] add) [dom=PROCESS,MODULES] {
+    if (q_check_module_parse_option_mask_caller("add_module_parse_option_mask", xsink)) {
+        return QoreValue();
+    }
+    QMM.addModuleParseOptionMask(module->c_str(),
+        QoreModuleParseOptionMask{strip->get(), add ? add->get() : QoreParseOptions()}, xsink);
+}
+
+//! Adds a parse option mask given as integer @ref parse_options "parse options" to a loaded module
+/** see add_module_parse_option_mask(string, ParseOptions, *ParseOptions)
+
+    @param module the name of the loaded module
+    @param strip the restrictions to strip
+    @param add the restrictions to add
+
+    @par Example:
+    @code{.py}
+add_module_parse_option_mask("WSDL", PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+    @endcode
+
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see add_module_parse_option_mask(string, ParseOptions, *ParseOptions)
+
+    @since %Qore 3.0
+*/
+nothing add_module_parse_option_mask(string module, softint strip, softint add = 0) [dom=PROCESS,MODULES;flags=NAMED_ARGS] {
+    if (q_check_module_parse_option_mask_caller("add_module_parse_option_mask", xsink)) {
+        return QoreValue();
+    }
+    QMM.addModuleParseOptionMask(module->c_str(),
+        QoreModuleParseOptionMask{QoreParseOptions(strip), QoreParseOptions(add)}, xsink);
+}
+
 //! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result
 /** This function historically wrapped the call in libqore's process-global module-load lock so that
     a module could order that lock before its own private locks.  That global lock has been
@@ -3583,6 +3836,9 @@ hash<auto> h = get_local_vars(0);
     @return a hash of local variables for the given stack frame; if the stack frame is invalid, an empty hash is returned; hash keys are variable names; hash values are hashes with the following keys:
     - \c "type": can be either "local" or "closure" for closure-bound local variables
     - \c "value": the value of the variable
+    - \c "declaredType": the name of the declared type of the variable, if it has one (since %Qore 3.0)
+    - \c "unassigned": @ref True if the variable has no value but its declared type requires one, as for a variable
+      that was declared but not assigned (see @ref pitfalls_declaration); missing otherwise (since %Qore 3.0)
 
     @throw CIRCULAR-REFERENCE-ERROR circular reference found when retrieving local variable values
 

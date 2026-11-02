@@ -18,7 +18,7 @@ and would have been documented as true if they had not been re-run.
 |`RUNTIME-TYPE-ERROR: <lvalue> expects type 'X', but got no value instead`|[1](#1-a-declaration-does-not-initialize), [9](#9-map-over-nothing-returns-nothing)
 |`PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment`|[2](#2-container-types-are-narrowed-by-their-first-value)
 |`PARSE-TYPE-ERROR: cannot append a value with type 'X' to a list with element type 'Y'`|[2](#2-container-types-are-narrowed-by-their-first-value)
-|`RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash holding the target`|[2](#2-container-types-are-narrowed-by-their-first-value)
+|`RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash (or list) holding the target`|[2](#2-container-types-are-narrowed-by-their-first-value)
 |`PARSE-EXCEPTION: 'C()' names class 'C', not a function`|[11](#11-constructing-an-object-in-an-expression-requires-new)
 |`PARSE-EXCEPTION: read-only local variable 'X' declared without type information`|[12](#12-a-read-only-local-needs-an-explicit-type)
 |`PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'`|[10](#10-identifiers-that-collide-with-keywords)
@@ -54,6 +54,28 @@ exception prose.
 |`READONLY-LOCAL-REQUIRES-TYPE`|error for an untyped read-only local when types are required|write `const auto NAME` or a concrete type
 |`STRING-MULTIPLICATION-IS-NUMERIC`|strict warning when exactly one `*` operand is a parse-time-known string and the other is statically numeric|call `strmul()`
 |`EXISTS-OPTIONAL-REFERENCE-VALUE`|strict warning for `exists` applied directly to an optional local reference|return `{found, value}` or pass a separate supplied flag
+
+### Runtime diagnostics
+
+A runtime error that matches a trap carries a `hash<RuntimeDiagnosticInfo>` as the `arg` of its exception, with
+a stable `id`, a plain-language `hint`, `facts`, `suggestions`, and the `doc` section of the common pitfalls page
+(`lib/QC_Program.qpp`; built by `qore_make_runtime_diagnostic()` in `include/qore/intern/QoreRuntimeDiagnostic.h`).
+The default exception handler and `get_exception_string()` (Util) print it as `hint (ID): ...` followed by the
+suggestions, instead of the raw `arg`. A runtime error cannot tell an inferred container type from an explicit one,
+so the wording names the container and the possibility of narrowing without claiming it.
+
+| Diagnostic ID | Exception and source | Trap |
+|---|---|---|
+| `NO-VALUE-FOR-TYPE` | `RUNTIME-TYPE-ERROR` when a typed target gets `NOTHING` (`QoreTypeInfo::doTypeException()`) | [1](#1-a-declaration-does-not-initialize), [9](#9-map-over-nothing-returns-nothing) |
+| `CONTAINER-VALUE-TYPE` | `RUNTIME-TYPE-ERROR` when the value type of the hash or list holding the target rejects the value, for assignments and list appends | [2](#2-container-types-are-narrowed-by-their-first-value) |
+| `INCOMPATIBLE-RUNTIME-TYPE` | any other `RUNTIME-TYPE-ERROR` from `doTypeException()`; `doc` is not set | none |
+| `DELETED-OBJECT` | `OBJECT-ALREADY-DELETED` for a method call, call reference, or member access on a deleted object (`qore_raise_deleted_object()`); the HTTPClient poll-abort errors are excluded | [16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not) |
+
+The debuggers show the hint when a thread stops at such an exception: qdbg and qdbg-remote in the stop message, and
+the debug adapter in the `exceptionInfo` description (`AbstractDebugControl::formatRuntimeDiagnostic()` in DebugUtil,
+which also accepts the plain hash that a remote debugger receives). For trap 1, `get_local_vars()` gives the
+`declaredType` of each typed variable and `unassigned: True` for a variable without a value whose type requires one;
+qdbg shows it as `int count = NOTHING (declared but not assigned)`, and the debug adapter shows its declared type.
 
 ---
 

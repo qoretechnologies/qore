@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreIRInterpreter.h"
 
 QoreValue QoreIntMinusEqualsOperatorNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
     // the operand is a statement of its own where the other execution modes evaluate it so
@@ -47,6 +48,12 @@ QoreValue QoreIntMinusEqualsOperatorNode::evalImpl(bool &needs_deref, ExceptionS
         int64 ms = rh->get<const DateTimeNode>()->getRelativeMilliseconds();
         // do minus-equals with milliseconds
         return v.minusEqualsBigInt(ms, "<-= operator>");
+    }
+
+    // any other lvalue is assigned the result of the binary operator, as x = x - d assigns it, so that the result
+    // does not depend on whether the operator is specialized; see qore_int_lvalue_minus_date()
+    if (rh->getType() == NT_DATE) {
+        return qore_int_lvalue_minus_date(v, *rh, xsink);
     }
 
     return v.minusEqualsBigInt(rh->getAsBigInt(), "<-= operator>");

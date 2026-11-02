@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
 // for the QCF_NO_DOMAIN_THROW violation reporting mode, checked in ~CodeEvaluationHelper()
 #include "qore/intern/ql_debug.h"
@@ -965,7 +966,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
         assert(n_qc);
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
             "deleted", qc->name.c_str(), func->getName());
         return;
     }
@@ -992,7 +993,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
         assert(n_qc);
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
             "deleted", qc->name.c_str(), func->getName());
         return;
     }
@@ -1163,7 +1164,10 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
                 old_rc_po = rc.getParseOptions();
                 rc.setParseOptions(pgm_po);
-                swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+                // only the parse options change: the thread's current statement and location are kept; the
+                // RuntimeConfig has them only for the AST interpreter, which keeps both current, while the IR
+                // interpreter and native code update only the thread's
+                swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
                     old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
                 restore_runtime_ctx = true;
                 if (*xsink) {
@@ -1260,7 +1264,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
             old_rc_po = rc.getParseOptions();
             rc.setParseOptions(pgm_po);
-            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+            // only the parse options change: the thread's current statement and location are kept (see above)
+            swap_runtime_statement_location(xsink, get_runtime_statement(), get_runtime_location(), pgm_po,
                 old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
             restore_runtime_ctx = true;
             if (*xsink) {
@@ -3108,6 +3113,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
     if (content_dependent) {
         *content_dependent = false;
     }
+    // every argument counts toward the number of arguments, also one with no value (issue #1897: an omitted
+    // argument does not count, but an explicit NOTHING does, whether a literal or a variable); the parse-time
+    // resolution counts the same arguments, except a lone literal NOTHING, which the parser drops (see make_args())
     unsigned nargs = args ? args->size() : 0;
     QoreParseOptions ppo = runtime_get_parse_options();
 
@@ -3922,7 +3930,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 } else {
                     variant = nullptr;
                     pmatch = variant_pmatch;
-                    score_len = -1;
+                    // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
+                    // match, so that a later variant matching no better than the variants seen so far is not
+                    // selected at parse time when the runtime match would select another one
                 }
             }
         }
@@ -4287,7 +4297,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
                     } else {
                         variant = nullptr;
                         pmatch = variant_pmatch;
-                        score_len = -1;
+                        // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
+                        // match, so that a later variant matching no better than the variants seen so far is not
+                        // selected at parse time when the runtime match would select another one
                     }
                 }
             }
@@ -4345,6 +4357,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
     // pointer to the last possible variant matched
     const AbstractQoreFunctionVariant* pvariant = nullptr;
     QoreTypeParamInstantiation best_type_param_inst;
+    // every argument counts, also one whose type is nothing, as at run time (issue #1897; see runtimeFindVariant())
     unsigned num_args = argTypeInfo.size();
 
     printd(5, "QoreFunction::parseFindVariant() this: %p %s() vlist: %d ilist: %d num_args: %d\n", this, getName(),
@@ -4590,7 +4603,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                         // then we have to match at runtime
                         variant = nullptr;
                         pmatch = variant_pmatch;
-                        score_len = -1;
+                        // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
+                        // match, so that a later variant matching no better than the variants seen so far is not
+                        // selected at parse time when the runtime match would select another one
                     }
                 }
             }

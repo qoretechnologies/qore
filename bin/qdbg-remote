@@ -6,6 +6,7 @@
 %requires qore >= 2.0
 %requires WebSocketClient
 %requires yaml >= 0.5
+%requires json
 %requires DebugCmdLine
 %requires DebugLinenoiseCmdLine
 %requires ConnectionProvider
@@ -27,6 +28,9 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
         string serverName;
         string url;
         *hash<auto> headers;
+        #! serializes the commands, as one response is waited for at a time; the commands of stopping all threads
+        #! together are sent in background threads
+        Mutex cmdLock();
     }
 
     constructor(hash<auto> opts) : DebugLinenoiseCommandLine() {
@@ -46,13 +50,36 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
     }
 
     public *hash<auto> doCommandImpl(hash<auto> data) {
-        pendingUid = clock_getmicros();
-        data.uid = pendingUid;
-        string d = make_yaml(data);
-        sync.prepare();
-        debug("send: %y", d);
-        wsc.send(d);
-        return sync.waitForResponse(wscTimeout);
+        # a command that resumes the thread returns when it stops again (see waitsForStops); the wait starts before
+        # the command is sent, as the thread can stop again before the answer to the command is received
+        bool resumes = resumesWithWait(data);
+        if (resumes) {
+            expectStop(data.tid);
+        }
+        on_error if (resumes) {
+            cancelStop();
+        }
+        *hash<auto> ret;
+        {
+            AutoLock al(cmdLock);
+            pendingUid = clock_getmicros();
+            # an untyped hash, as a hash of strings, such as {"cmd": "session"}, also gets the integer ID
+            hash<auto!> cmd = data;
+            cmd.uid = pendingUid;
+            string d = make_yaml(cmd);
+            sync.prepare();
+            debug("send: %y", d);
+            wsc.send(d);
+            ret = sync.waitForResponse(wscTimeout);
+        }
+        if (resumes) {
+            if (!ret || ret.type == DebugResponseType::Error) {
+                cancelStop();
+            } else {
+                waitForStop();
+            }
+        }
+        return ret;
     }
 
     public nothing connect() {
@@ -96,6 +123,9 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
                 }
             }
             printData(d);
+            # the state of the threads is updated before a command that waits for the event continues
+            processEvent(d);
+            eventReceived(d);
         } catch (hash<ExceptionInfo> ex) {
             error("wscEvent: %s", get_exception_string(ex));
         }
@@ -103,6 +133,13 @@ class DebugCommandLineRemote inherits DebugLinenoiseCommandLine {
 }
 
 class DebugWrapper {
+    public {
+        #! serializes the end of qdbg-remote: the end of the commands, or SIGINT or SIGTERM; see ending
+        Mutex shutdown();
+        #! True when qdbg-remote ends, so that only one of them ends it
+        bool ending;
+    }
+
     private {
         hash<auto> opts = (
             'help': 'h,help',
@@ -115,9 +152,14 @@ class DebugWrapper {
             'connect_timeout': 'c,conn-timeout=i',
             'response_timeout': 'w,resp-timeout=i',
             "history": "y,history=s",
+            "init_file": "i,init-file=s",
+            "no_init": "n,no-init",
+            "execute": "x,execute=s@",
             "session": "s,session=s",
             "color": "color",
             "no_color": "no-color",
+            "json": "json",
+            "wait_timeout": "wait-timeout=i",
         );
         DebugCommandLineRemote dcl;
         Logger logger;
@@ -129,22 +171,29 @@ class DebugWrapper {
             GetOpt g(opts);
             list<auto> a = ARGV;
             opt = g.parse2(\a);
+            # the help is shown without a URL
+            if (opt.help) {
+                help();
+            }
             opt.url = shift a;
             if (a) {
                 throw "GETOPT-ERROR", "Only one URL can be specified";
             }
             if (!exists opt.url) {
-                throw "GETOPT-ERROR", "Missing URL";
+                throw "GETOPT-ERROR", "the URL of the debug server is missing";
             }
             *string path_suffix;
             string orig_url = opt.url;
+            # a connection is looked up only for an argument in the form of a connection name, optionally with a path:
+            # a URL, such as localhost:8001, is not one, and the lookup loads the modules of all connections, as a
+            # JVM, whose signal handlers would end the process instead of qdbg-remote
+            *list<auto> l = opt.url =~ x/^([A-Za-z_\-0-9]+)\/([A-Za-z_\-0-9\.]+)$/;
             try {
                 # check if it's in "connection_name/path" format
-                *list<auto> l = opt.url =~ x/^([A-Za-z_\-0-9]+)\/([A-Za-z_\-0-9\.]+)$/;
                 if (l) {
                     opt.url = get_connection_url(l[0]);
                     path_suffix = l[1];
-                } else {
+                } else if (opt.url =~ /^[A-Za-z_\-0-9]+$/) {
                     opt.url = get_connection_url(opt.url);
                 }
             } catch (hash<ExceptionInfo> ex) {
@@ -179,7 +228,7 @@ class DebugWrapper {
             case /^wss?:\/\//:
                 break;
             case /^[a-zA-Z0-9_]+:\/\//:
-                throw "GETOPT-ERROR", "Url protocol is not ws://";
+                throw "GETOPT-ERROR", sprintf("the URL %y must start with ws:// or wss://", opt.url);
             default:
                 opt.url = "ws://"+opt.url;
             }
@@ -208,30 +257,59 @@ class DebugWrapper {
         }
         logger.info("url: %s verbose: %s", opt.url, logger.getLevel().getStr());
         dcl = new DebugCommandLineRemote(opt + {"logger": logger});
-        # signal handler for clean WebSocket shutdown
+        # SIGINT and SIGTERM end qdbg-remote; the programs of the debug server continue
         code sig_handler = sub (int sig) {
+            # qdbg-remote is not already ending
+            {
+                AutoLock al(shutdown);
+                if (ending) {
+                    return;
+                }
+                ending = True;
+            }
             try {
                 dcl.wsc.disconnect();
             } catch () {
                 # suppress exceptions during signal-triggered disconnect
             }
+            exit(128 + sig);
         };
         set_signal_handler(SIGINT, sig_handler);
         set_signal_handler(SIGTERM, sig_handler);
         try {
             dcl.connect();
             # unconditional connection message
-            stdout.printf("connected to debug server %y: %s; \"help\" for help\n", opt.url, dcl.serverName);
-            *hash<auto> sess = dcl.doCommandImpl({'cmd': 'session'});
+            if (opt.json) {
+                stdout.print(make_json({"type": "connected", "url": opt.url, "server": dcl.serverName}) + "\n");
+            } else {
+                stdout.printf("connected to debug server %y: %s; \"help\" for help\n", opt.url, dcl.serverName);
+            }
+            # the debugged programs, and the threads that are stopped, such as the thread of a program that the server
+            # holds at its start
+            *hash<auto> sess = dcl.doCommandImpl({'cmd': 'session/get'});
             if (sess.result) {
                 string pgmId = sess.result.firstKey();
                 dcl.setContextValue('programId', pgmId);
                 if (sess.result{pgmId}.interrupted) {
                     dcl.setContextValue('threadId', sess.result{pgmId}.interrupted[0]);
                 }
+                # the threads that are stopped are paused
+                foreach string pid in (keys sess.result) {
+                    dcl.notePausedThreads(pid, sess.result{pid}.interrupted ?? ());
+                }
             }
             dcl.init(opt);
-            dcl.runCmdLine();
+            # each command of a script is processed when the program is stopped
+            dcl.waitsForStops = !stdin.isTty();
+            # the files of commands of the start; a command of a file can end the debugger
+            if (dcl.runStartupCommandFiles(DebugLinenoiseCommandLine::getStartupCommandFiles(opt))) {
+                dcl.runCmdLine();
+            }
+            # qdbg-remote ends; a signal no longer ends it
+            {
+                AutoLock al(shutdown);
+                ending = True;
+            }
             dcl.wsc.disconnect();
         } catch (hash<ExceptionInfo> e) {
             stderr.printf("%s: %s\n", e.err, e.desc);
@@ -247,41 +325,68 @@ class DebugWrapper {
     private help(int exCode=1) {
         printf(
             "usage: %s [options] <url>\n"
-            "       %s [options] <conn-id>[/<path>]\n"
+            "       %s [options] <connection>[/<path>]\n"
+            "Debugs the programs of a debug server, such as qdbg-server, in the terminal.  Type \"help\" at the prompt\n"
+            "for all commands.\n"
             "\n"
-            "  <url> is the URL of debug server in 'ws://socket=<url_encoded_path>/path' format, ws:// is optional.\n"
-            "  ConnectionProvider <conn-id> name is considered and when is resolved then http(s) protocol is changed to ws(s).\n"
-            "  The '/debug' path is appended unless a path already exists in the URL and the <path> follows\n"
+            "  <url>                        the URL of the debug server, such as localhost:8001 or\n"
+            "                               wss://myhost:8001/debug; ws:// is added when it has no scheme; for a UNIX\n"
+            "                               socket: ws://socket=<URL-encoded path of the socket>/<path>\n"
+            "  <connection>                 the name of a connection (QORE_CONNECTION_PROVIDERS) to the debug server;\n"
+            "                               http and https in its URL are changed to ws and wss, the path /debug is\n"
+            "                               added when the URL has no path, and <path> is added to the URL\n"
             "\n"
-            "  -v                      verbose (use -v -v for debug output)\n"
-            "  -h                      help\n"
-            "  -H,--header=<hdr>=<val> headers for connection request\n"
-            "  -m,--max-redir=<num>    the maximum number of redirects before throwing an exception (the default is 5)\n"
-            "  -P,--proxy=<url>        the proxy URL for connecting through a proxy\n"
-            "  -t,--timeout=<ms>       the timeout\n"
-            "  -c,--conn-timeout=<ms>  the timeout for establishing a new socket connection\n"
-            "  -w,--resp-timeout=<ms>  the timeout to wait for websocket response, default: %d\n"
-            "  -y,--history=file       load command line history from file, default: %s in home directory\n"
-            "                          When \".\" name is provided then history is not loaded/saved\n"
-            "  -s,--session=file       load session from file\n"
-            "  --color                 force color output\n"
-            "  --no-color              disable color output\n"
+            "  -h                           show this help\n"
+            "  -v                           show more details of what the debugger does; repeat for more (-v -v)\n"
+            "  -H, --header=<name>=<value>  add an HTTP header to the connection, such as\n"
+            "                               -H \"Authorization=Bearer <token>\" for a server that requires a token\n"
+            "  -m, --max-redir=<number>     the maximum number of HTTP redirects; the default is 5\n"
+            "  -P, --proxy=<url>            connect through an HTTP proxy\n"
+            "  -t, --timeout=<ms>           how long reading from or writing to the connection may take, in\n"
+            "                               milliseconds\n"
+            "  -c, --conn-timeout=<ms>      how long opening the connection may take, in milliseconds\n"
+            "  -w, --resp-timeout=<ms>      how long to wait for the answer of the debug server to a command, in\n"
+            "                               milliseconds; the default is %d\n"
+            "  -y, --history=file           the file of the commands that the up and down arrow keys recall; the\n"
+            "                               default is %s in the home folder; \".\" keeps no history\n"
+            "  -s, --session=file           load the breakpoints and settings that \"session save\" saved to a file\n"
+            "  -i, --init-file=file         run the commands of the file at the start instead of those of %s in\n"
+            "                               the home folder\n"
+            "  -n, --no-init                do not run the commands of %s in the home folder at the start\n"
+            "  -x, --execute=file           run the commands of the file at the start, after those of the init file;\n"
+            "                               can be given more than once\n"
+            "  --color, --no-color          always or never show colors; by default, colors are shown in a terminal\n"
+            "  --json                       write JSON Lines for programs such as coding agents: one object for each\n"
+            "                               command, event and output of the programs; commands are read without a\n"
+            "                               prompt\n"
+            "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
+            "                               when the input is not a terminal; then the program is paused (default: no\n"
+            "                               limit)\n"
             "\n"
-            "Keyboard shortcuts:\n"
-            "  Ctrl+D                  quit debugger\n"
-            "  Ctrl+G                  show current program/thread context\n"
-            "  TAB                     command completion (cycles through matches)\n"
+            "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
+            "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"
+            "\"script <file>\" command runs a file of commands at the prompt.\n"
             "\n"
-            "Example:\n"
-            "  %s -v localhost:8000/debug\n"
-            "  %s -v qorus\n"
-            "  %s -v qorus/qjob-test_v1.0-1\n"
+            "When the input is not a terminal, it is a script of commands: each command that resumes a thread waits\n"
+            "until a thread pauses or the thread ends.\n"
+            "\n"
+            "Keys:\n"
+            "  Ctrl+D                       end the debugger\n"
+            "  Ctrl+G                       show the current program and thread\n"
+            "  Tab                          complete a command (press again for the next match)\n"
+            "\n"
+            "Examples:\n"
+            "  %s localhost:8001\n"
+            "  %s -H \"Authorization=Bearer s3cret\" myhost:8001\n"
+            "  %s qorus/qjob-test_v1.0-1\n"
             "\n"
             ,
             get_script_name(),
             get_script_name(),
-            DebugCommandLineRemote::WSC_TIMEOUT,
+            DebugCommandLineRemote::WSC_TIMEOUT.durationMilliseconds(),
             DebugLinenoiseCommandLine::defaultHistoryFileName,
+            DebugLinenoiseCommandLine::defaultInitFileName,
+            DebugLinenoiseCommandLine::defaultInitFileName,
             get_script_name(),
             get_script_name(),
             get_script_name(),

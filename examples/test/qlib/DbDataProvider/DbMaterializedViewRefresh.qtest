@@ -1,0 +1,247 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/DbDataProvider
+
+%prepend-module-path "${SCRIPT_DIR}/../SqlUtil"
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+
+%exec-class DbMaterializedViewRefreshTest
+
+#! Tests refreshing a materialized view with a request of its provider and the refresh-materialized-view action
+/** PostgreSQL is tested with the connection in \c QORE_DB_CONNSTR_PGSQL in a schema of its own; SQLite (in memory)
+    and MySQL/MariaDB (\c QORE_DB_CONNSTR_MYSQL), which have no materialized views, are tested for the refusal.  Test
+    cases are skipped for a database that is not configured.
+*/
+class DbMaterializedViewRefreshTest inherits QUnit::Test {
+    private {
+        #! the connections, keyed by driver label
+        hash<string, Datasource> dsh;
+
+        #! the reasons that test cases are skipped for a driver label
+        hash<string, string> skip_reasons;
+
+        bool pgsql_isolated = False;
+    }
+
+    constructor() : Test("DbMaterializedViewRefresh", "1.0") {
+        on_exit {
+            if (pgsql_isolated) {
+                try {
+                    PgsqlRunSchema::teardown();
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("WARNING: cannot drop the PostgreSQL run schema: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        }
+        foreach string label in ("sqlite3", "pgsql", "mysql") {
+            try {
+                connect(label);
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reasons{label} = sprintf("cannot set up %s: %s: %s", label, ex.err, ex.desc);
+                remove dsh{label};
+            }
+        }
+
+        addTestCase("pgsql: a refresh request reads new rows", \refreshTest());
+        addTestCase("pgsql: a concurrent refresh request needs a unique index", \concurrentTest());
+        addTestCase("pgsql: the request type has the options of the database", \requestTypeTest());
+        addTestCase("pgsql: the provider's records stay read-only", \readOnlyTest());
+        addTestCase("the refresh action is registered", \actionTest());
+        addTestCase("sqlite3: a database without materialized views refuses a refresh", \unsupportedTest(), "sqlite3");
+        addTestCase("mysql: a database without materialized views refuses a refresh", \unsupportedTest(), "mysql");
+        set_return_value(main());
+    }
+
+    private connect(string label) {
+        string connstr;
+        if (label == "sqlite3") {
+            try {
+                load_module("sqlite3");
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reasons{label} = "the sqlite3 driver is not available";
+                return;
+            }
+            connstr = "sqlite3:@:memory:";
+        } else {
+            string var = label == "pgsql" ? "QORE_DB_CONNSTR_PGSQL" : "QORE_DB_CONNSTR_MYSQL";
+            if (!ENV{var}) {
+                skip_reasons{label} = var + " is not set";
+                return;
+            }
+            connstr = ENV{var};
+            if (label == "pgsql") {
+                PgsqlRunSchema::setup(connstr, "DbMaterializedViewRefresh");
+                pgsql_isolated = True;
+            }
+        }
+        Datasource ds(connstr);
+        if (ds.getDriverName() != label) {
+            skip_reasons{label} = sprintf("the connection uses driver %y, not %y", ds.getDriverName(), label);
+            return;
+        }
+        ds.open();
+        dsh{label} = ds;
+        if (label == "pgsql") {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.exec("create table sales (id int not null primary key, region varchar(10) not null, amount int "
+                "not null)");
+            ds.exec("insert into sales values (1, 'EU', 10), (2, 'US', 20)");
+            ds.exec("create materialized view mv_sales as select id, region, amount from sales");
+            ds.exec("create unique index mv_sales_id on mv_sales (id)");
+            ds.exec("create materialized view mv_totals as select region, sum(amount) as total from sales "
+                "group by region");
+        }
+    }
+
+    private Datasource getDs(string label) {
+        if (*Datasource ds = dsh{label}) {
+            return ds;
+        }
+        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+    }
+
+    private AbstractDataProvider getMv(string name) {
+        DbDataProvider dp(getDs("pgsql"));
+        return dp.getChildProviderPath("materialized-views/" + name);
+    }
+
+    private addRow(int id) {
+        Datasource ds = getDs("pgsql");
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.exec("insert into sales values (%v, 'EU', %v)", id, id);
+    }
+
+    private int countRecords(AbstractDataProvider mv) {
+        AbstractDataProviderRecordIterator i = mv.searchRecords();
+        int rv = 0;
+        while (i.next()) {
+            ++rv;
+        }
+        return rv;
+    }
+
+    refreshTest() {
+        Datasource ds = getDs("pgsql");
+        AbstractDataProvider mv = getMv("mv_sales");
+        int before = countRecords(mv);
+        addRow(10);
+        assertEq(before, countRecords(mv), "the stored data is not refreshed by a read");
+        hash<auto> rv = mv.doRequest();
+        assertEq({"materialized_view": "mv_sales", "options": {}}, rv);
+        assertEq(before + 1, countRecords(mv));
+        assertFalse(ds.currentThreadInTransaction(), "the refresh is committed");
+        # a refresh without the concurrent option
+        AbstractDataProvider totals = getMv("mv_totals");
+        assertEq({"materialized_view": "mv_totals", "options": {"concurrent": False}},
+            totals.doRequest({"concurrent": False}));
+        assertEq(20, totals.searchSingleRecord({"region": "EU"}).total.toInt());
+    }
+
+    concurrentTest() {
+        Datasource ds = getDs("pgsql");
+        AbstractDataProvider mv = getMv("mv_sales");
+        int before = countRecords(mv);
+        addRow(11);
+        assertEq({"materialized_view": "mv_sales", "options": {"concurrent": True}},
+            mv.doRequest({"concurrent": True}));
+        assertEq(before + 1, countRecords(mv));
+        # without a unique index
+        assertThrows("MATERIALIZED-VIEW-ERROR", "needs a unique index", \getMv("mv_totals").doRequest(),
+            ({"concurrent": True},));
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    requestTypeTest() {
+        AbstractDataProvider mv = getMv("mv_sales");
+        # only the options of the database, in the request type and in the options of the action for this provider
+        assertEq(("concurrent",), keys mv.getRequestType().getFields());
+        assertEq(("concurrent",), keys mv.tryGetActionOptionsWithOptions(
+            DataProviderActionCatalog::getAppActionEx(DbDataProvider::AppName, "refresh-materialized-view"), {}));
+        assertEq(("materialized_view", "options"), keys mv.getResponseType().getFields());
+        # an option of another database is refused
+        assertThrows("RUNTIME-TYPE-ERROR", "unsupported fields in value: \\[\"method\"\\]", \mv.doRequest(),
+            ({"method": "fast"},));
+        assertThrows("RUNTIME-TYPE-ERROR", \mv.doRequest(), ({"concurrent": "sometimes"},));
+    }
+
+    readOnlyTest() {
+        AbstractDataProvider mv = getMv("mv_sales");
+        hash<DataProviderInfo> info = mv.getInfo();
+        assertTrue(info.supports_request);
+        assertTrue(info.supports_read);
+        foreach string flag in ("supports_create", "supports_update", "supports_upsert", "supports_delete",
+                "supports_bulk_create", "supports_bulk_upsert") {
+            assertFalse(info{flag}, flag);
+        }
+        assertThrows("INVALID-OPERATION", \mv.createRecord(), ({"id": 99, "region": "EU", "amount": 1},));
+        assertThrows("INVALID-OPERATION", \mv.deleteRecords(), ({"id": 1},));
+        # views have no request
+        DbDataProvider dp(getDs("pgsql"));
+        assertFalse(dp.getChildProvider("views").getInfo().supports_request);
+    }
+
+    actionTest() {
+        *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getActionHashEx(DbDataProvider::AppName)
+            ."refresh-materialized-view";
+        assertEq("/materialized-views/{view}", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertTrue(action.mutates_state, "the refresh changes the stored data");
+        assertEq(("view",), keys action.path_vars);
+        assertEq(("concurrent", "method", "atomic_refresh"), keys action.options);
+        assertEq(("force", "complete", "fast"), map $1.value, action.options.method.allowed_values);
+        assertEq(("materialized_view", "options"), keys action.output_type.getFields());
+        assertEq("DbMaterializedViewDataProvider", action.data_provider_info.type);
+        assertTrue(action.data_provider_info.supports_request);
+        assertFalse(action.data_provider_info.supports_create);
+        # every text is given
+        foreach string key in ("display_name", "short_desc", "desc") {
+            assertTrue(action{key}.val(), key);
+        }
+        assertTrue(action.short_desc.size() < 80);
+    }
+
+    unsupportedTest(string label) {
+        Datasource ds = getDs(label);
+        AbstractDatabase db = AbstractDatabase::getDatabase(ds);
+        assertFalse(db.supportsMaterializedViews());
+        assertEq({}, db.getMaterializedViewRefreshOptions());
+        assertThrows("MATERIALIZED-VIEW-ERROR", "does not support materialized views", \db.refreshMaterializedView(),
+            "mv_any");
+        DbDataProvider dp(ds);
+        assertThrows("INVALID-CHILD-PROVIDER", \dp.getChildProviderPath(), "materialized-views/mv_any");
+        assertFalse(ds.currentThreadInTransaction());
+    }
+}

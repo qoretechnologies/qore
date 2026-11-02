@@ -258,10 +258,10 @@ public:
         if (!old.from_modules.empty()) {
             from_modules = old.from_modules;
         }
-        // copy public typedefs if not disabled by parse options
+        // copy public typedefs if not disabled by parse options; all typedefs for a debugger
         if (!(po & PO_NO_TYPEDEF)) {
             for (const auto& i : old.typedefMap) {
-                if (i.second->pub) {
+                if (i.second->pub || q_inherit_all_user_code) {
                     typedefMap[i.first] = new TypedefEntry(*i.second);
                 }
             }

@@ -30,6 +30,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -589,7 +590,7 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     // run the reference in the Program where it was originally created
     // NOTE: check this for race conditions
     if (obj && !obj->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
             "deleted");
         return QoreValue();
     }
@@ -627,7 +628,7 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     if (obj && !obj->isValid()) {
-        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
             "deleted");
         return QoreValue();
     }

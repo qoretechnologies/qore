@@ -1,0 +1,390 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/DbDataProvider
+
+%prepend-module-path "${SCRIPT_DIR}/../SqlUtil"
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+
+%exec-class DbSqlUtilWhereOperatorsTest
+
+#! Tests SqlUtil where-clause operators (op_*(), wop_or()) in the searches, updates and deletes of DB providers
+/** A where hash with a SqlUtil operator is a SqlUtil where clause, so the database evaluates it with SqlUtil's
+    semantics, for tables and views alike.  SQLite is tested whenever the sqlite3 driver is available; PostgreSQL
+    and MySQL/MariaDB with the connections in \c QORE_DB_CONNSTR_PGSQL and \c QORE_DB_CONNSTR_MYSQL; their test
+    cases are skipped when the variable is not set.
+*/
+class DbSqlUtilWhereOperatorsTest inherits QUnit::Test {
+    private {
+        #! the connections, keyed by driver label
+        hash<string, Datasource> dsh;
+
+        #! the reasons that test cases are skipped for a driver label
+        hash<string, string> skip_reasons;
+
+        #! the prefix of the names of every object that the test creates
+        string prefix;
+
+        #! True once the PostgreSQL run schema has been set up
+        bool pgsql_isolated = False;
+
+        #! the driver labels tested, with the environment variable that gives their connection
+        const Drivers = {
+            "sqlite3": NOTHING,
+            "pgsql": "QORE_DB_CONNSTR_PGSQL",
+            "mysql": "QORE_DB_CONNSTR_MYSQL",
+        };
+
+        #! the rows of the test table
+        const Rows = (
+            {"id": 1, "name": "alpha", "amount": 1.5, "note": "x", "lo": 1, "hi": 2},
+            {"id": 2, "name": "beta", "amount": 2.5, "note": NULL, "lo": 3, "hi": 3},
+            {"id": 3, "name": "gamma", "amount": 3.75, "note": "y", "lo": 5, "hi": 4},
+        );
+    }
+
+    constructor() : Test("DbSqlUtilWhereOperators", "1.0") {
+        prefix = "qdpo_" + get_random_string(6).lwr() + "_";
+
+        on_exit {
+            dropAll();
+        }
+
+        foreach string label in (keys Drivers) {
+            try {
+                connect(label);
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reasons{label} = sprintf("cannot set up %s: %s: %s", label, ex.err, ex.desc);
+                remove dsh{label};
+            }
+        }
+
+        foreach string label in (keys Drivers) {
+            addTestCase(label + ": SqlUtil comparison operators", \comparisonTest(), label);
+            addTestCase(label + ": SqlUtil null comparisons", \nullTest(), label);
+            addTestCase(label + ": SqlUtil like, between, in and not", \setOperatorTest(), label);
+            addTestCase(label + ": SqlUtil column comparison operators", \columnComparisonTest(), label);
+            addTestCase(label + ": SqlUtil substr and in_select", \substrInSelectTest(), label);
+            addTestCase(label + ": SqlUtil or, unique keys and mixed conditions", \combinationTest(), label);
+            addTestCase(label + ": SqlUtil operators in single and bulk searches", \singleBulkTest(), label);
+            addTestCase(label + ": SqlUtil operators in table updates and deletes", \updateDeleteTest(), label);
+            addTestCase(label + ": invalid SqlUtil where clauses are refused", \negativeTest(), label);
+            addTestCase(label + ": a failed search leaves no transaction", \failedSearchTest(), label);
+        }
+
+        set_return_value(main());
+    }
+
+    #! connects the given driver and creates the test's objects, or records why its test cases are skipped
+    private connect(string label) {
+        *string connstr;
+        if (label == "sqlite3") {
+            try {
+                load_module("sqlite3");
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reasons{label} = "the sqlite3 driver is not available";
+                return;
+            }
+            connstr = "sqlite3:@:memory:";
+        } else {
+            connstr = ENV{Drivers{label}};
+            if (!connstr) {
+                skip_reasons{label} = sprintf("%s is not set", Drivers{label});
+                return;
+            }
+            if (label == "pgsql") {
+                PgsqlRunSchema::setup(connstr, "DbSqlUtilWhereOperators");
+                pgsql_isolated = True;
+            }
+        }
+        Datasource ds(connstr);
+        if (ds.getDriverName() != label) {
+            skip_reasons{label} = sprintf("%s uses driver %y, not %y", Drivers{label}, ds.getDriverName(), label);
+            return;
+        }
+        ds.open();
+        dsh{label} = ds;
+        on_error ds.rollback();
+        on_success ds.commit();
+        ds.execRaw(sprintf("create table %st (id integer not null primary key, name varchar(20) not null, "
+            "amount numeric(10,2), note varchar(20), lo integer, hi integer)", prefix));
+        foreach hash<auto> row in (Rows) {
+            ds.exec(sprintf("insert into %st (id, name, amount, note, lo, hi) values (%%v, %%v, %%v, %%v, %%v, %%v)",
+                prefix), row.id, row.name, row.amount, row.note, row.lo, row.hi);
+        }
+        ds.execRaw(sprintf("create table %ss (id integer not null primary key)", prefix));
+        ds.exec(sprintf("insert into %ss (id) values (1)", prefix));
+        ds.exec(sprintf("insert into %ss (id) values (3)", prefix));
+        ds.execRaw(sprintf("create view %sv as select id, name, amount, note, lo, hi from %st", prefix, prefix));
+    }
+
+    #! drops the test's objects; never throws, so it can run on exit
+    private dropAll() {
+        foreach Datasource ds in (dsh.iterator()) {
+            foreach string sql in (sprintf("drop view %sv", prefix), sprintf("drop table %ss", prefix),
+                    sprintf("drop table %st", prefix)) {
+                try {
+                    ds.rollback();
+                    ds.execRaw(sql);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    printf("WARNING: %s: %s: %s\n", sql, ex.err, ex.desc);
+                    try {
+                        ds.rollback();
+                    } catch (hash<ExceptionInfo> ex1) {
+                    }
+                }
+            }
+        }
+        if (pgsql_isolated) {
+            try {
+                PgsqlRunSchema::teardown();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: cannot drop the PostgreSQL run schema: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! returns the datasource for the given driver label or skips the test case
+    private Datasource getDs(string label) {
+        if (*Datasource ds = dsh{label}) {
+            return ds;
+        }
+        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+    }
+
+    #! returns the table and view providers for the given driver label
+    private hash<string, AbstractDataProvider> getProviders(string label) {
+        DbDataProvider dp(getDs(label));
+        return {
+            "table": dp.getChildProviderPath("tables/" + prefix + "t"),
+            "view": dp.getChildProviderPath("views/" + prefix + "v"),
+        };
+    }
+
+    #! asserts that a search of both the table and the view gives the records with the given ids
+    private assertIds(string label, list<int> ids, hash<auto> where_cond, string msg) {
+        foreach hash<auto> i in (getProviders(label).pairIterator()) {
+            AbstractDataProviderRecordIterator it = i.value.searchRecords(where_cond, {"orderby": "id"});
+            list<int> rv = ();
+            while (it.next()) {
+                rv += it.getValue().id.toInt();
+            }
+            assertEq(ids, rv, sprintf("%s: %s", i.key, msg));
+        }
+        assertFalse(getDs(label).currentThreadInTransaction(), msg);
+    }
+
+    comparisonTest(string label) {
+        assertIds(label, (2, 3), {"id": op_gt(1)}, "op_gt");
+        assertIds(label, (2, 3), {"id": op_ge(2)}, "op_ge");
+        assertIds(label, (1, 2), {"id": op_lt(3)}, "op_lt");
+        assertIds(label, (1, 2), {"id": op_le(2)}, "op_le");
+        assertIds(label, (2,), {"id": op_eq(2)}, "op_eq");
+        assertIds(label, (1, 3), {"id": op_ne(2)}, "op_ne");
+        assertIds(label, (2, 3), {"amount": op_gt(2)}, "op_gt with a numeric column");
+        assertIds(label, (1, 2), {"name": op_lt("c")}, "op_lt with a string column");
+        # make_op() gives the same operator hashes as the op_*() functions
+        assertIds(label, (3,), {"id": make_op(OP_GT, 2)}, "make_op()");
+    }
+
+    nullTest(string label) {
+        assertIds(label, (2,), {"note": op_eq(NULL)}, "op_eq(NULL) is 'is null'");
+        assertIds(label, (1, 3), {"note": op_ne(NULL)}, "op_ne(NULL) is 'is not null'");
+        # SqlUtil's op_ne() includes rows where the column is null
+        assertIds(label, (2, 3), {"note": op_ne("x")}, "op_ne() includes null values");
+    }
+
+    setOperatorTest(string label) {
+        assertIds(label, (1, 2, 3), {"name": op_like("%a")}, "op_like suffix");
+        assertIds(label, (2,), {"name": op_like("b%")}, "op_like prefix");
+        assertIds(label, (2, 3), {"id": op_between(2, 3)}, "op_between");
+        assertIds(label, (2, 3), {"amount": op_between(2, 4)}, "op_between with a numeric column");
+        assertIds(label, (1, 3), {"id": op_in(1, 3)}, "op_in with arguments");
+        assertIds(label, (2,), {"id": op_in((2,))}, "op_in with a list");
+        assertIds(label, (), {"id": op_in(())}, "op_in with an empty list");
+        assertIds(label, (2,), {"id": op_not(op_in(1, 3))}, "op_not(op_in())");
+        assertIds(label, (1, 3), {"name": op_not(op_eq("beta"))}, "op_not(op_eq())");
+    }
+
+    columnComparisonTest(string label) {
+        assertIds(label, (1,), {"lo": op_clt("hi")}, "op_clt");
+        assertIds(label, (1, 2), {"lo": op_cle("hi")}, "op_cle");
+        assertIds(label, (3,), {"lo": op_cgt("hi")}, "op_cgt");
+        assertIds(label, (2, 3), {"lo": op_cge("hi")}, "op_cge");
+        assertIds(label, (2,), {"lo": op_ceq("hi")}, "op_ceq");
+        assertIds(label, (1, 3), {"lo": op_cne("hi")}, "op_cne");
+    }
+
+    substrInSelectTest(string label) {
+        assertIds(label, (1,), {"name": op_substr(1, 2, "al")}, "op_substr with a count");
+        assertIds(label, (2,), {"name": op_substr(2, "eta")}, "op_substr without a count");
+        assertIds(label, (1, 3), {"id": op_in_select(prefix + "s", {"columns": "id"})}, "op_in_select");
+        assertIds(label, (3,), {"id": op_in_select(prefix + "s", {"columns": "id", "where": {"id": op_gt(1)}})},
+            "op_in_select with a where clause");
+    }
+
+    combinationTest(string label) {
+        assertIds(label, (1, 3), wop_or({"id": 1}, {"id": 3}), "wop_or");
+        assertIds(label, (3,), {"name": op_ne("alpha")} + wop_or({"id": 1}, {"id": 3}), "wop_or and another condition");
+        assertIds(label, (3,), {"id": op_gt(1), "name": "gamma"}, "an operator and a plain value");
+        assertIds(label, (2,), {"1:id": op_gt(1), "2:id": op_lt(3)}, "two conditions on one column");
+        # DataProvider search operators still work, alone and with SqlUtil operators
+        assertIds(label, (2, 3), {"id": dp_op_gt(1)}, "dp_op_gt");
+        assertIds(label, (2,), {"id": op_gt(1), "amount": dp_op_lt(3)}, "op_gt and dp_op_lt");
+    }
+
+    singleBulkTest(string label) {
+        foreach hash<auto> i in (getProviders(label).pairIterator()) {
+            assertEq("beta", i.value.searchSingleRecord({"id": op_eq(2)}).name, i.key);
+            assertNothing(i.value.searchSingleRecord({"id": op_gt(10)}), i.key);
+            assertThrows("MULTIPLE-RECORDS-ERROR", \i.value.searchSingleRecord(), ({"id": op_gt(1)},), i.key);
+            hash<auto> block = i.value.searchRecordsBulk(10, {"id": op_in(1, 3)}, {"orderby": "id"}).getValue();
+            assertEq((1, 3), map $1.toInt(), block.id, i.key);
+        }
+    }
+
+    updateDeleteTest(string label) {
+        Datasource ds = getDs(label);
+        AbstractDataProvider table = getProviders(label).table;
+        table.beginTransaction();
+        on_exit table.rollback();
+
+        assertEq(2, table.updateRecords({"note": "z"}, {"id": op_in(1, 3)}));
+        assertEq(("z", "z"), ds.select(sprintf("select note from %st where id in (1, 3) order by id", prefix)).note);
+        assertEq(1, table.updateRecords({"note": "w"}, {"lo": op_clt("hi")}));
+        assertTrue(table.updateSingleRecord({"name": "BETA"}, {"id": op_between(2, 2)}));
+        assertEq("BETA", ds.selectRow(sprintf("select name from %st where id = 2", prefix)).name);
+        assertEq(2, table.deleteRecords({"id": op_gt(1)}));
+        assertEq(1, ds.selectRow(sprintf("select count(1) as c from %st", prefix)).c.toInt());
+    }
+
+    #! a search whose statement fails leaves no implicit transaction, whether it fails when the statement is made
+    #! or when it is executed
+    failedSearchTest(string label) {
+        Datasource ds = getDs(label);
+        DbDataProvider dp(ds);
+        hash<string, code> searches = {
+            "table search with a missing subquery table": sub () {
+                getProviders(label).table.searchRecords({"id": op_in_select(prefix + "no_such_table",
+                    {"columns": "id"})}).next();
+            },
+            "view search with a missing subquery table": sub () {
+                getProviders(label).view.searchRecords({"id": op_in_select(prefix + "no_such_table",
+                    {"columns": "id"})}).next();
+            },
+            "table bulk search with a missing subquery table": sub () {
+                getProviders(label).table.searchRecordsBulk(10, {"id": op_in_select(prefix + "no_such_table",
+                    {"columns": "id"})}).getValue();
+            },
+            "raw SQL search": sub () {
+                dp.searchRecords(NOTHING, {"sql": sprintf("select * from %sno_such_table", prefix)}).next();
+            },
+            "raw SQL bulk search": sub () {
+                dp.searchRecordsBulk(10, NOTHING, {"sql": sprintf("select * from %sno_such_table", prefix)})
+                    .getValue();
+            },
+            "raw SQL search with invalid SQL": sub () {
+                dp.searchRecords(NOTHING, {"sql": "select from where"}).next();
+            },
+        };
+        # statements that fail when they are executed, when the iterator is made: the table of a provider whose
+        # columns are already known is dropped
+        foreach *hash<auto> where_cond in (({"id": op_gt(0)}, {"id": 1}, NOTHING)) {
+            foreach string kind in ("search", "bulk search", "single record search") {
+                searches{sprintf("table %s of a dropped table: %y", kind, where_cond)} =
+                    getDroppedTableSearch(ds, dp, kind, where_cond);
+            }
+        }
+        foreach hash<auto> i in (searches.pairIterator()) {
+            bool thrown = False;
+            try {
+                i.value();
+            } catch (hash<ExceptionInfo> ex) {
+                thrown = True;
+            }
+            assertTrue(thrown, i.key);
+            assertFalse(ds.currentThreadInTransaction(), i.key);
+            # the datasource is still usable
+            assertEq(3, ds.selectRow(sprintf("select count(1) as c from %st", prefix)).c.toInt(), i.key);
+            ds.rollback();
+        }
+    }
+
+    #! returns a search of a table that is dropped after its provider has read its columns
+    private code getDroppedTableSearch(Datasource ds, DbDataProvider dp, string kind, *hash<auto> where_cond) {
+        switch (kind) {
+            case "search":
+                return sub () { getDroppedTableProvider(ds, dp).searchRecords(where_cond).next(); };
+            case "bulk search":
+                return sub () { getDroppedTableProvider(ds, dp).searchRecordsBulk(10, where_cond).getValue(); };
+        }
+        return sub () { getDroppedTableProvider(ds, dp).searchSingleRecord(where_cond); };
+    }
+
+    #! returns the provider of a table whose columns it has read, after the table is dropped
+    private AbstractDataProvider getDroppedTableProvider(Datasource ds, DbDataProvider dp) {
+        string name = prefix + "d";
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.execRaw(sprintf("create table %s (id integer not null primary key)", name));
+            ds.exec(sprintf("insert into %s (id) values (1)", name));
+        }
+        AbstractDataProvider table = dp.getChildProviderPath("tables/" + name);
+        # the columns are read now, so a search makes a statement for the table after it is dropped
+        assertEq(("id",), keys table.getRecordType());
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.execRaw(sprintf("drop table %s", name));
+        }
+        return table;
+    }
+
+    negativeTest(string label) {
+        foreach hash<auto> i in (getProviders(label).pairIterator()) {
+            # an unknown field
+            assertThrows("INVALID-FIELD", sub () { i.value.searchRecords({"no_such_column": op_gt(1)}).next(); },
+                NOTHING, i.key);
+            # an unknown column in a column comparison
+            assertThrows("COLUMN-ERROR",
+                sub () { i.value.searchRecords({"lo": op_clt("no_such_column")}).next(); }, NOTHING, i.key);
+            # an operator that SqlUtil does not have
+            assertThrows("WHERE-ERROR", sub () { i.value.searchRecords({"id": op_gt(1),
+                "name": <OperatorInfo>{"op": "no-such-op", "arg": 1}}).next(); }, NOTHING, i.key);
+        }
+        # nothing was left in a transaction
+        assertFalse(getDs(label).currentThreadInTransaction());
+    }
+}

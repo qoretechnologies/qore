@@ -105,6 +105,8 @@ module Util {
     @section utilrelnotes Release Notes
 
     @subsection util_3_0 Util 3.0
+    - @ref Util::get_exception_string() "get_exception_string()" shows a
+      @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" exception argument as a hint with its suggestions
     - added get_http_endpoint_url() for fixed HTTP endpoints with a fallback path, preserving queries and
       removing fragments without changing the connection authority
     - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
@@ -1732,6 +1734,12 @@ public string sub get_exception_string(hash<auto> ex) {
                         str += sprintf(" (arg: %y)", ex.arg - "ex");
                     }
                     str += sprintf("; source exception: %s", get_exception_string(ex.arg.ex));
+                } else if (ex.arg instanceof hash<RuntimeDiagnosticInfo>) {
+                    # a runtime diagnostic is shown as a hint with its suggestions
+                    str += sprintf("\n  hint (%s): %s", ex.arg.id, ex.arg.hint);
+                    foreach string suggestion in (ex.arg.suggestions) {
+                        str += sprintf("\n    - %s", suggestion);
+                    }
                 } else {
                     str += sprintf(" (arg: %y)", ex.arg);
                 }

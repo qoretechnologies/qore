@@ -404,6 +404,13 @@ DLLLOCAL bool needs_scan(const QoreValue& v);
 */
 DLLLOCAL int64 q_get_live_bigint_count();
 
+//! Returns the number of heap floats (QoreBigFloatNode) that exist in the process
+/** A double whose NaN-boxed encoding would collide with a value tag is allocated on the heap, and code that fails to
+    release one leaks it; tests compare the count before and after the code under test; see
+    dbg_get_live_bigfloat_count().
+*/
+DLLLOCAL int64 q_get_live_bigfloat_count();
+
 //! Returns the number of hashes and lists that QoreHashNode::copy() and QoreListNode::copy() made in the current thread
 /** Copy-on-write in an lvalue operation copies a container that is not unique with these functions, so tests use
     the count to verify that a container that only one variable holds is changed in place and that a shared one is
@@ -2023,5 +2030,26 @@ DLLLOCAL void qore_thread_local_storage_init();
 
 // destroy thread-local storage
 DLLLOCAL void qore_thread_local_storage_destroy();
+
+//! True while the namespace of a Program is copied for a debugger: also the non-public user code is inherited
+/** Set with InheritAllUserCodeHelper; the namespace copy constructors, which copy only public user code otherwise,
+    check it when a Program is created
+*/
+DLLLOCAL extern thread_local bool q_inherit_all_user_code;
+
+//! Makes a Program created in its scope inherit all user code of its parent, also the non-public code
+class InheritAllUserCodeHelper {
+public:
+    DLLLOCAL InheritAllUserCodeHelper() : old(q_inherit_all_user_code) {
+        q_inherit_all_user_code = true;
+    }
+
+    DLLLOCAL ~InheritAllUserCodeHelper() {
+        q_inherit_all_user_code = old;
+    }
+
+private:
+    bool old;
+};
 
 #endif

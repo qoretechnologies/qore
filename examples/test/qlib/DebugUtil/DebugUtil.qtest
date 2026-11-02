@@ -18,6 +18,12 @@ public class DebugUtilTest inherits QUnit::Test {
         addTestCase("WrapperGetOpt.split tests", \wrapperGetOptTests());
         addTestCase("constants tests", \constantsTests());
         addTestCase("ResponseSync tests", \responseSyncTests());
+        addTestCase("value descriptions and paths", \describeTests());
+        addTestCase("values written for debuggers", \formatTests());
+        addTestCase("hints of runtime diagnostics", \runtimeDiagnosticTests());
+        addTestCase("marks in the output of programs", \outputMarkTest());
+        addTestCase("UTF-8 characters in the output of programs", \utf8SizeTest());
+        addTestCase("capture of the output of the process", \outputCaptureTest());
         set_return_value(main());
     }
 
@@ -497,5 +503,218 @@ public class DebugUtilTest inherits QUnit::Test {
             assertFalse(sync.isPending());
             assertFalse(sync.deliver({"uid": "6"}));
         }
+    }
+
+    # the output before a mark, or before an end of the output that can be the beginning of a mark, is queued
+    outputMarkTest() {
+        binary mark = binary("\0mark-123");
+        assertEq(5, DebugOutputCapture::getOutputSize(binary("abcde\0mark-123Frest"), mark));
+        assertEq(0, DebugOutputCapture::getOutputSize(binary("\0mark-123S"), mark));
+        # an end that can be the beginning of a mark
+        assertEq(3, DebugOutputCapture::getOutputSize(binary("abc\0mar"), mark));
+        assertEq(3, DebugOutputCapture::getOutputSize(binary("abc\0"), mark));
+        # no mark
+        assertEq(5, DebugOutputCapture::getOutputSize(binary("abcde"), mark));
+        assertEq(4, DebugOutputCapture::getOutputSize(binary("ab\0x"), mark));
+        assertEq(0, DebugOutputCapture::getOutputSize(binary(), mark));
+    }
+
+    # output that ends inside a UTF-8 character is passed without the incomplete character
+    utf8SizeTest() {
+        assertEq(3, DebugOutputCapture::getCompleteUtf8Size(binary("abc")));
+        # "é" is 2 bytes; "€" is 3 bytes
+        binary e = binary("é");
+        binary euro = binary("€");
+        assertEq(3, DebugOutputCapture::getCompleteUtf8Size(binary("a") + e));
+        assertEq(1, DebugOutputCapture::getCompleteUtf8Size(binary("a") + e.substr(0, 1)));
+        assertEq(1, DebugOutputCapture::getCompleteUtf8Size(binary("a") + euro.substr(0, 2)));
+        assertEq(4, DebugOutputCapture::getCompleteUtf8Size(binary("a") + euro));
+        assertEq(0, DebugOutputCapture::getCompleteUtf8Size(binary()));
+    }
+
+    # the output of the process is passed to the callbacks; flushAndWait() returns after the output before it
+    outputCaptureTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("the output is not captured on Windows");
+        }
+        list<string> out = ();
+        list<string> err = ();
+        Counter flushed(2);
+        list<string> flushed_categories = ();
+        Mutex m();
+        DebugOutputCapture capture(
+            sub (string category, string output) {
+                m.lock();
+                on_exit m.unlock();
+                if (category == "stdout") {
+                    out += output;
+                } else {
+                    err += output;
+                }
+            },
+            sub (string category) {
+                m.lock();
+                flushed_categories += category;
+                m.unlock();
+                flushed.dec();
+            });
+        assertFalse(capture.isCapturing());
+        assertTrue(capture.start());
+        # a second start does nothing
+        assertFalse(capture.start());
+        bool stopped;
+        on_exit if (!stopped) {
+            capture.stop();
+        }
+        assertTrue(capture.isCapturing());
+
+        stdout.print("out-1\n");
+        stderr.print("err-1\n");
+        capture.flushAndWait();
+        list<string> out1 = out;
+        list<string> err1 = err;
+
+        stdout.print("out-2 é\n");
+        capture.flush();
+        flushed.waitForZero();
+
+        stdout.print("out-3\n");
+        capture.stop();
+        stopped = True;
+        assertFalse(capture.isCapturing());
+        # without a capture, flush and flushAndWait do nothing
+        assertFalse(capture.flush());
+        capture.flushAndWait();
+
+        assertEq("out-1\n", out1.join(""));
+        assertEq("err-1\n", err1.join(""));
+        assertEq("out-1\nout-2 é\nout-3\n", out.join(""));
+        assertEq(("stderr", "stdout"), sort(flushed_categories));
+    }
+
+    # NOTHING and NULL are written as in Qore at every level; other values as with "%y" and "%Y"
+    runtimeDiagnosticTests() {
+        hash<ExceptionInfo> ex;
+        try {
+            *int i;
+            int j = i;
+            remove j;
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        *hash<auto> diag = AbstractDebugControl::getRuntimeDiagnostic(ex);
+        assertEq("NO-VALUE-FOR-TYPE", diag.id);
+        *string hint = AbstractDebugControl::formatRuntimeDiagnostic(ex);
+        assertRegex("^hint \\(NO-VALUE-FOR-TYPE\\): a value of this type is required", hint);
+        assertEq(ex.arg.suggestions.size() + 1, hint.split("\n").size());
+        assertRegex("\n  - assign the variable before it is read", hint);
+
+        # a remote debugger receives the diagnostic as a plain hash
+        hash<auto> remote = {
+            "err": "OBJECT-ALREADY-DELETED",
+            "desc": "x",
+            "arg": {"id": "DELETED-OBJECT", "hint": "h", "suggestions": ("s",), "facts": {}},
+        };
+        assertEq("hint (DELETED-OBJECT): h\n  - s", AbstractDebugControl::formatRuntimeDiagnostic(remote));
+        # a plain hash is a diagnostic only for the errors that carry one
+        remote.err = "USER-ERROR";
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic(remote));
+        assertNothing(AbstractDebugControl::formatRuntimeDiagnostic(remote));
+        # and only with a string ID and hint
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR", "arg": {"id": 1,
+            "hint": "h"}}));
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR", "arg": "text"}));
+        # an exception without an argument, and no exception
+        assertNothing(AbstractDebugControl::formatRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR"}));
+        assertNothing(AbstractDebugControl::formatRuntimeDiagnostic());
+        # a typed hash argument of another type is not read
+        assertNothing(AbstractDebugControl::getRuntimeDiagnostic({"err": "RUNTIME-TYPE-ERROR",
+            "arg": new hash<ExceptionInfo>({"err": "E"})}));
+    }
+
+    formatTests() {
+        assertEq("NOTHING", AbstractDebugControl::formatValue(NOTHING));
+        assertEq("NULL", AbstractDebugControl::formatValue(NULL));
+        assertEq("\"null\"", AbstractDebugControl::formatValue("null"));
+        assertEq(sprintf("%y", 1.5), AbstractDebugControl::formatValue(1.5));
+        hash<auto!> h = {"a": NOTHING, "b": NULL, "c": (NOTHING, NULL, 1), "d": {}, "e": (), "s": "x"};
+        assertEq("{a: NOTHING, b: NULL, c: [NOTHING, NULL, 1], d: {}, e: [], s: \"x\"}",
+            AbstractDebugControl::formatValue(h));
+        assertEq(("a: NOTHING", "b: NULL", "c:", "  - NOTHING", "  - NULL", "  - 1", "d: {}", "e: []", "s: \"x\""),
+            AbstractDebugControl::formatTree(h));
+        # a list of hashes and of lists, as with "%Y"
+        assertEq(("- x: 1", "  y: NOTHING", "-", "  - 2", "- 3"),
+            AbstractDebugControl::formatTree(({"x": 1, "y": NOTHING}, (2,), 3)));
+        # without NOTHING and NULL, the lines are those of "%Y"
+        hash<auto> plain = {"h": {"a": 1, "l": (1, {"x": 2})}, "n": 2};
+        assertEq(sprintf("%Y", plain).split("\n"), AbstractDebugControl::formatTree(plain));
+        assertEq(("[]",), AbstractDebugControl::formatTree(()));
+    }
+
+    describeTests() {
+        DescribeTestAccount acct();
+        hash<auto> v = {"acct": acct, "l": (1, "two", {"k": 3}), "s": "str", "n": NOTHING};
+
+        # descriptions
+        assertEq({"type": "hash<auto>", "value": "hash<auto> (4)", "named": 4}, AbstractDebugControl::describe(v));
+        assertEq({"type": "list<auto>", "value": "list (3)", "indexed": 3}, AbstractDebugControl::describe(v.l));
+        assertEq({"type": "DescribeTestAccount", "value": "DescribeTestAccount", "named": 3},
+            AbstractDebugControl::describe(acct));
+        assertEq({"type": "string", "value": "\"str\""}, AbstractDebugControl::describe("str"));
+        # NOTHING and NULL are written as in Qore, not as YAML's null
+        assertEq({"type": "nothing", "value": "NOTHING"}, AbstractDebugControl::describe(NOTHING));
+        assertEq({"type": "NULL", "value": "NULL"}, AbstractDebugControl::describe(NULL));
+        # long text is shortened
+        hash<auto> d = AbstractDebugControl::describe(strmul("x", 1000));
+        assertEq(AbstractDebugControl::MaxValueTextSize + 3, d.value.length());
+
+        # the members of an object, also private ones and those of parent classes
+        assertEq(("id", "balance", "name"), map $1.name, AbstractDebugControl::describeChildren(acct));
+        assertEq(("id", "balance", "name"), AbstractDebugControl::getMemberNames(acct));
+        # the keys of a hash and the elements of a list, also a part of them
+        assertEq(("acct", "l", "s", "n"), map $1.key, AbstractDebugControl::describeChildren(v));
+        assertEq((1, 2), map $1.key, AbstractDebugControl::describeChildren(v.l, 1));
+        assertEq(("\"two\"",), map $1.value, AbstractDebugControl::describeChildren(v.l, 1, 1));
+        assertEq((), AbstractDebugControl::describeChildren(v.l, 5));
+
+        # paths
+        assertEq(3, AbstractDebugControl::getPath(v, ("l", 2, "k")));
+        assertEq(100, AbstractDebugControl::getPath(v, ("acct", "balance")));
+        assertEq(v, AbstractDebugControl::getPath(v, ()));
+        v = AbstractDebugControl::setPath(v, ("l", 2, "k"), 4);
+        assertEq(4, v.l[2].k);
+        # the member of an object is set in the object
+        AbstractDebugControl::setPath(v, ("acct", "balance"), 7);
+        assertEq(7, acct.getBalance());
+        assertEq("new", AbstractDebugControl::setPath(v, (), "new"));
+
+        # negative
+        assertThrows("DEBUG-ERROR", "no element 9", \AbstractDebugControl::getPath(), (v, ("l", 9)));
+        assertThrows("DEBUG-ERROR", "no key \"x\"", \AbstractDebugControl::getPath(), (v, ("x",)));
+        assertThrows("DEBUG-ERROR", "no member \"x\"", \AbstractDebugControl::getPath(), (v, ("acct", "x")));
+        assertThrows("DEBUG-ERROR", "has no elements", \AbstractDebugControl::getPath(), (v, ("s", 0)));
+        assertThrows("DEBUG-ERROR", "has no elements", \AbstractDebugControl::describeChildren(), (1,));
+        assertThrows("DEBUG-ERROR", "no element 9", \AbstractDebugControl::setPath(), (v, ("l", 9), 1));
+    }
+}
+
+#! a class with private members and a parent class, for describeTests()
+class DescribeTestBase {
+    private {
+        int id = 7;
+    }
+}
+
+class DescribeTestAccount inherits DescribeTestBase {
+    private {
+        int balance = 100;
+    }
+
+    public {
+        string name = "acct";
+    }
+
+    int getBalance() {
+        return balance;
     }
 }

@@ -376,6 +376,9 @@ DLLEXPORT extern const TypedHashDecl* hashdeclExceptionInfo;
 //! StatementInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclStatementInfo;
 
+//! StepInTargetInfo hashdecl, information about a call that a debugger can step into
+DLLEXPORT extern const TypedHashDecl* hashdeclStepInTargetInfo;
+
 //! KeyValueInfo hashdecl
 /** @since %Qore 3.0
 */
@@ -443,6 +446,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclListSerializationInfo;
 /** @since %Qore 0.9.3
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclUrlInfo;
+DLLEXPORT extern const TypedHashDecl* hashdeclModuleParseOptionMaskInfo;
 
 //! FtpResponseInfo hashdecl
 /** @since %Qore 0.9.4
