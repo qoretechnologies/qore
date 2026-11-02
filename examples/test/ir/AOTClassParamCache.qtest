@@ -30,7 +30,7 @@ class ClassParamCacheTest inherits QUnit::Test {
     }
     private check() {
         string source = get_script_dir() + "/AOTClassParamCache.qr";
-        string expected = "6:12:1:42:101:110:15\n10:10:1:10\n60\n51\n1\n110:102:101\n"
+        string expected = "6:1022:1:RUNTIME-TYPE-ERROR:1:101:110:15\n10:10:1:10\n60\n51\n1\n110:102:110\n"
             "1:OBJECT-ALREADY-DELETED\nclass-param-cache: ok\n";
         assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
         # IR/JIT caller-frame reflection has a separately recorded baseline

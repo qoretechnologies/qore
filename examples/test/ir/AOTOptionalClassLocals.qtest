@@ -30,8 +30,8 @@ class OptionalClassLocalsTest inherits QUnit::Test {
     }
     private check() {
         string source = get_script_dir() + "/AOTOptionalClassLocals.qr";
-        string expected = "replace:110\nloop:51:51\nnothing:nothing:10:nothing\ninvalid:1:42\n"
-            "reference:12\ndestructor:110\ngeneric:102\ndeleted:1:OBJECT-ALREADY-DELETED\n"
+        string expected = "replace:110\nloop:51:51\nnothing:nothing:10:nothing\ninvalid:1:RUNTIME-TYPE-ERROR:1\n"
+            "reference:1022\ndestructor:110\ngeneric:102\ndeleted:1:OBJECT-ALREADY-DELETED\n"
             "captured:10\nweak:60:10\nnormal:first+ second+ body second- first- after \n"
             "unwind:first+ second+ body second- first- OPTIONAL-LIFETIME\n";
         assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");

@@ -47,19 +47,30 @@ CacheBase sub cachePassthrough(CacheBase receiver) { return receiver; }
 
 int sub cacheReference(CacheBase receiver) {
     int sum = receiver.next(0);
-    cacheInstallReference(receiver);
+    # A reflective write is assigned with the type of the parameter: a reference is refused and the cached
+    # receiver stays valid.
+    try { cacheInstallReference(receiver); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+        sum += 1000;
+    }
     sum += receiver.next(0);
+    cacheReplace(new CacheDerived());
+    sum += receiver.next(0);
+    # No reference was installed: a change of the former referent does not change the receiver.
     cacheMoveReference(new CacheBase());
-    # No second reflective write: a reference introduced by the first write
-    # must continue to be evaluated normally after its referent changes.
     sum += receiver.next(0);
     return sum;
 }
 
 string sub cacheInvalid(CacheBase receiver) {
     int first = receiver.next(0);
-    cacheInstallInvalid(receiver);
-    return sprintf("%d:%y", first, receiver);
+    try {
+        cacheInstallInvalid(receiver);
+        return "unexpected";
+    } catch (hash<auto> ex) {
+        return sprintf("%d:%s:%d", first, ex.err, receiver.next(0));
+    }
 }
 
 int sub cacheFailedWrite(CacheBase receiver) {
@@ -73,7 +84,12 @@ int sub cacheFailedWrite(CacheBase receiver) {
 
 int sub cacheFailedAliasWrite(CacheBase receiver) {
     int first = receiver.next(0);
-    cacheInstallReference(receiver);
+    cacheReplace(new CacheDerived());
+    # Refused writes after a successful one leave the replacement in place.
+    try { cacheInstallReference(receiver); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+    }
     try { cacheInstallInvalid(receiver); }
     catch (hash<auto> ex) {
         if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }

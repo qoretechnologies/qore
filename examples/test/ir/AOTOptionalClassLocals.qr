@@ -64,15 +64,28 @@ string sub optionalNothing(*OptionalBase receiver) {
     optionalWrite(new OptionalBase(), NOTHING);
     return sprintf("%s:%d:%s", first, middle, type(receiver));
 }
+# A reflective write is assigned with the type of the local: a value of another type is refused and the
+# receiver keeps its value.
 string sub optionalInvalid(*OptionalBase receiver) {
     int first = receiver.next(0);
-    optionalWrite(new OptionalBase(), 42);
-    return sprintf("%d:%y", first, receiver);
+    try {
+        optionalWrite(new OptionalBase(), 42);
+        return "unexpected";
+    } catch (hash<auto> ex) {
+        return sprintf("%d:%s:%d", first, ex.err, receiver.next(0));
+    }
 }
 int sub optionalReference(*OptionalBase receiver) {
     int sum = receiver.next(0);
-    optionalInstallReference(new OptionalBase());
+    try { optionalInstallReference(new OptionalBase()); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+        sum += 1000;
+    }
     sum += receiver.next(0);
+    optionalWrite(new OptionalBase(), new OptionalDerived());
+    sum += receiver.next(0);
+    # No reference was installed: a change of the former referent does not change the receiver.
     optionalMoveReference(new OptionalBase());
     sum += receiver.next(0);
     return sum;
