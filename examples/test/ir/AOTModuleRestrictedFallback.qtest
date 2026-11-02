@@ -194,7 +194,7 @@ try {
             "parse options of the Program loading it do not allow \\(restricted options: 0x[0-9a-f]+:0x[0-9a-f]+\\)";
 
         #! the error code of the refusal of the AOT module
-        const RefusalErr = "MODULE-LOAD-ERROR";
+        const RefusalErr = "AOT-MODULE-RESTRICTED";
     }
 
     constructor() : QUnit::Test("AOTModuleRestrictedFallbackTest", "1.0", \ARGV) {
@@ -220,6 +220,7 @@ try {
         addTestCase("a source fallback issues no warning with a warning mask of 0", \testSplitNoWarn());
         addTestCase("a source loaded by a %requires directive gets the warning of the module it requires",
             \testRequiresNestedWarnings());
+        addTestCase("without a source, the refusal is the exception", \testNoSource());
         set_return_value(main());
     }
 
@@ -386,6 +387,18 @@ try {
             assertEq(("42",), lines(r.out, "run"), ctx);
             assertEq((), lines(r.out, "returned"), ctx);
             assertEq((), r.err, ctx + ": stderr");
+        }
+    }
+
+    testNoSource() {
+        foreach string api in (("loadModule", "loadModuleWarn", "loadModule-path", "requires")) {
+            hash<auto> r = run(split_aot_dir, api, WARN_ALL, split_aot_dir);
+            assertEq(0, r.rc, api);
+            list<string> ex = chain(r.out);
+            assertEq(1, ex.size(), api + ": " + r.out.join("\n"));
+            assertEq(RefusalErr, (ex[0] =~ x/^([^:]+): /)[0], api);
+            assertRegex(RefusalRegex, ex[0].substr(RefusalErr.size() + 2), api);
+            assertEq((), r.err, api + ": stderr");
         }
     }
 

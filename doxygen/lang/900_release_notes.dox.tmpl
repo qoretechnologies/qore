@@ -1386,6 +1386,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an AOT module refused by the restrictions of the @ref Qore::Program "Program" loading it now raises
+      \c AOT-MODULE-RESTRICTED instead of the generic \c MODULE-LOAD-ERROR (see @ref module_parse_option_masks)
     - when an AOT module could not be loaded (for example, refused by the restrictions of the
       @ref Qore::Program "Program" loading it) and its source module failed as well, only the source error was
       reported; the AOT module's error now follows it in the exception chain (see @ref aot_module_source_fallback)

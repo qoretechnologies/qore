@@ -41,6 +41,12 @@ An AOT module of a build tree that is out of date with its sources (see `design/
 not tried at all; if its source fails, `AOT-MODULE-STALE` ("... is out of date: its source '...' has changed since
 it was compiled; rebuild the AOT module") follows the source error in the same way.
 
+The refusal has the error code `AOT-MODULE-RESTRICTED`.  `qore_aot_module_init_v3()` returns only the description of
+an error to the init adapter that qcc generates in every module, which raises it with `qore_aot_raise_init_error()`
+in the same thread; the refusal records its description and code in the thread-local `QoreAOTModuleInitError`, so
+that `qore_aot_raise_init_error()` raises it with its code without a change to the generated code (other init errors
+stay `MODULE-LOAD-ERROR`).
+
 The warning path of the loader's own warnings (`BINARY-MODULE-SOURCE-FALLBACK`, also for an out-of-date AOT
 module of a build tree, `BINARY-MODULE-STALE`, and `MODULE-CHILD-FAILED` and `MODULE-CHILD-SKIPPED` for child modules
 declared with `%try-child-module`):

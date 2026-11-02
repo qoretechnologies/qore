@@ -1691,8 +1691,9 @@ public class Lookup {
     the @ref Qore::Program "Program" that loads it first, and a module whose code uses functionality that its loader
     may not use cannot be loaded by it.  Source modules (<tt>.qm</tt>) and @ref aot_compilation "AOT modules"
     (<tt>.qmod</tt>) are treated the same way: an AOT module records the restrictions that its code would conflict
-    with, which are checked when it is loaded; a refused AOT module is reported with the source module that is loaded
-    instead, or that fails to load (see @ref aot_module_source_fallback).  A module that another
+    with, which are checked when it is loaded.  A refused AOT module raises \c AOT-MODULE-RESTRICTED, with the
+    restrictions that refuse it; if the module's source is found, the source module is loaded instead, and the refusal
+    is reported with it (see @ref aot_module_source_fallback).  A module that another
     @ref Qore::Program "Program" has loaded already
     is not checked against the restrictions of a @ref Qore::Program "Program" that imports it: it is a capability that
     the host gave the @ref Qore::Program "Program", and its code runs with the restrictions of its callers as well as
