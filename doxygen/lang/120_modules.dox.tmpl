@@ -1436,8 +1436,8 @@ qcc of this Qore installation
     @endverbatim
 
     If the module's source is installed beside the compiled module, the source module is loaded instead and a
-    warning reports the refused compiled module.  After installing a %Qore library with a different AOT runtime
-    identity, rebuild all AOT-compiled modules that were built outside of the %Qore source tree (for example the
+    warning reports the refused compiled module (see @ref aot_module_source_fallback).  After installing a %Qore
+    library with a different AOT runtime identity, rebuild all AOT-compiled modules that were built outside of the %Qore source tree (for example the
     modules of binary module packages and applications).  Rebuilding the library for changes that do not affect
     generated code keeps the identity, so existing compiled modules keep loading.  Ordinary binary modules written
     in C/C++ are not affected.
@@ -1449,6 +1449,51 @@ qcc of this Qore installation
     configure-time \c LD_LIBRARY_PATH, so a library path that names another %Qore build tree does not make it
     compile for that tree's library, and the build fails before compiling any module when \c qcc reports no AOT
     runtime identity.
+
+    @subsection aot_module_source_fallback Loading the Source of an AOT Module That Cannot Be Loaded
+
+    When an AOT-compiled module (\c "*.qmod") cannot be loaded, because it was compiled for another AOT runtime
+    identity, is out of date with its sources, or uses functionality that the restrictions of the
+    @ref Qore::Program "Program" loading it do not allow (see @ref module_parse_option_masks), and the module's
+    source is found (beside a compiled module loaded by its path, or in the module path for a module loaded by its
+    name), the source module is loaded instead, as if there were no compiled module.  The loader reports why the
+    compiled module was not used:
+    - if the source module fails to load as well, its exception is followed in the exception chain (\c next in the
+      @ref Qore::ExceptionInfo "ExceptionInfo" hash) by the exception of the compiled module, which ends with
+      <tt>(the binary module was not loaded; source module '...' was tried instead)</tt>, so that both reasons are
+      reported;
+    - if the source module loads, a \c BINARY-MODULE-SOURCE-FALLBACK warning gives the reason; with a warning mask
+      of 0, no warning is issued, except for a compiled module that is out of date with its sources
+
+    The warnings of the module loader (\c BINARY-MODULE-SOURCE-FALLBACK, \c BINARY-MODULE-STALE, and
+    \c MODULE-CHILD-FAILED and \c MODULE-CHILD-SKIPPED for @ref user_module_children "child modules") are reported
+    where the warnings of the load go:
+    |!Module load|!Warning
+    |Program::loadModuleWarn(), load_module_warn(), Program::loadApplyToUserModuleWarn() and the other \c *Warn() \
+     methods|returned with the other warnings
+    |\c %%requires and \c %%try-module in code parsed with a warning mask, such as Program::parse() with a warning \
+     mask or a script run by \c qore|a parse warning at the directive, returned by Program::parse() (\c qore \
+     writes it with the other warnings)
+    |\c %%requires and \c %%try-module in the source of a user module|reported for the load of that user module
+    |Program::loadModule(), load_module() and the other methods and functions that cannot return warnings|written \
+     to stderr
+    |any load with a warning mask of 0, including Program::parse() without a warning mask|not issued
+
+    @subsection aot_module_build_tree_staleness AOT Modules of a Build Tree That Are Out of Date
+
+    In a build tree, an AOT-compiled module that is out of date with its sources is not loaded: if one of the sources
+    listed in the dependency file that \c qcc wrote next to the module (<tt>\<module\>.qmod.d</tt>, written with
+    <tt>--depfile</tt> by the %Qore CMake support) has changed since the module was compiled, the source module is
+    loaded instead, with a \c BINARY-MODULE-SOURCE-FALLBACK warning that the module must be rebuilt (see
+    @ref aot_module_source_fallback).  A source whose content is unchanged, as after a checkout or a copy, has not
+    changed.  This applies to a module that is a symbolic link to a built module (as the build links modules into
+    the source \c qlib directory) and to a module that is a regular file with its dependency file next to it (as in
+    the directory of the built modules).
+
+    A module without a dependency file next to it is not checked: an installed module (the install rules do not
+    install dependency files), and a module compiled by hand with <tt>qcc --compile-module</tt> without
+    <tt>--depfile</tt>, which is loaded even if its source has changed since it was compiled.  Rebuild such a module
+    after changing its source, or compile it with <tt>--depfile</tt>.
 
     @subsection aot_module_code_signing AOT Module Metadata, Stripping and Code Signing
 
@@ -1646,7 +1691,10 @@ public class Lookup {
     the @ref Qore::Program "Program" that loads it first, and a module whose code uses functionality that its loader
     may not use cannot be loaded by it.  Source modules (<tt>.qm</tt>) and @ref aot_compilation "AOT modules"
     (<tt>.qmod</tt>) are treated the same way: an AOT module records the restrictions that its code would conflict
-    with, which are checked when it is loaded.  A module that another @ref Qore::Program "Program" has loaded already
+    with, which are checked when it is loaded.  A refused AOT module raises \c AOT-MODULE-RESTRICTED, with the
+    restrictions that refuse it; if the module's source is found, the source module is loaded instead, and the refusal
+    is reported with it (see @ref aot_module_source_fallback).  A module that another
+    @ref Qore::Program "Program" has loaded already
     is not checked against the restrictions of a @ref Qore::Program "Program" that imports it: it is a capability that
     the host gave the @ref Qore::Program "Program", and its code runs with the restrictions of its callers as well as
     its own (see @ref user_module_runtime_context).
@@ -1746,8 +1794,10 @@ module MyBaseExtension {
     installed is silently ignored, and a child that is installed but cannot be loaded (due to a parse error, an error
     in its initialization code, or a version mismatch) is skipped, leaving the declaring module fully usable without
     it.  Because an extension that silently disappears is a deployment problem in its own right, a child that could
-    not be loaded is always reported: as a \c MODULE-CHILD-FAILED warning if the module is loaded with a warning sink
-    (as with Program::loadModuleWarn()), and otherwise on \c stderr.  The child's own error is also recorded in the
+    not be loaded is always reported as a \c MODULE-CHILD-FAILED warning, where the other warnings of the module loader
+    go (see @ref aot_module_source_fallback): returned by Program::loadModuleWarn() and the other \c *Warn() methods,
+    a parse warning of the code with the directive for a module loaded by @ref requires "%requires", and otherwise,
+    as when warnings are disabled, on \c stderr.  The child's own error is also recorded in the
     module hash, as shown below, which is how an incompatible or broken extension is diagnosed after the fact.
 
     A child that could not be loaded is not tried again in the same process: a module load failure is deterministic,

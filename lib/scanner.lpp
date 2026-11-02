@@ -1522,7 +1522,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                         xsink.raiseException("NOPE", "nope");
                                                     } else {
                                                         QMM.parseLoadModule(xsink, xsink, str.c_str(), pgm,
-                                                            parse_get_try_reexport());
+                                                            parse_get_try_reexport(), get_loc(yylloc));
                                                     }
                                                     //printd(5, "'%s': xsink: %d err: %d var: '%s'\n", str.c_str(), (bool)xsink, err, var.c_str());
                                                     if (!xsink) {
@@ -1594,14 +1594,15 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                  if (!parse_check_no_filesystem_module_path(yylloc, "requires", cn)) {
                                                     //printd(5, "scanner requesting feature: '%s'\n", cn);
                                                     ExceptionSink xsink;
-                                                    QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport);
+                                                    // the token includes the whitespace before the module name
+                                                    int start = yylloc->first_col + (int)(cn - yytext);
+                                                    const QoreProgramLocation* loc = qore_program_private::get(*pgm)
+                                                       ->getLocation(yylloc->first_line, yylloc->last_line, start,
+                                                          start + (int)strlen(cn));
+                                                    QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport, loc);
                                                     if (xsink) {
-                                                       // the token includes the whitespace before the module name
-                                                       int start = yylloc->first_col + (int)(cn - yytext);
-                                                       qore_program_private::get(*pgm)->collectModuleLoadErrors(
-                                                          *qore_program_private::get(*pgm)->getLocation(
-                                                             yylloc->first_line, yylloc->last_line, start,
-                                                             start + (int)strlen(cn)), xsink);
+                                                       qore_program_private::get(*pgm)->collectModuleLoadErrors(*loc,
+                                                          xsink);
                                                     }
                                                     pgm->getParseExceptionSink()->assimilate(xsink);
                                                  }

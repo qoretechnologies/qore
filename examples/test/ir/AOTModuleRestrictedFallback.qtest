@@ -1,0 +1,424 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleRestrictedFallbackTest
+
+#! How the module loader reports an AOT module refused by the restrictions of the Program loading it
+/** An AOT module whose code uses functionality that the restrictions of the Program loading it forbid is refused,
+    and the loader loads the module's source instead, as the source would have been loaded without the AOT module.
+    What loads does not change; the test checks what is reported:
+    - when the source module fails as well, the exception of the source module is followed by the refusal of the AOT
+      module (\c next in the exception hash), with every API and warning mask;
+    - when the source module loads, the refusal is reported as a \c BINARY-MODULE-SOURCE-FALLBACK warning through
+      the warning path of the API: returned by the \c *Warn() APIs and by Program::parse() for a module that a
+      \c %%requires directive loads (also when a source module loaded by the directive loads it), and written to
+      stderr only by the APIs that cannot return warnings; with a warning mask of 0, no warning is issued.
+
+    Each case runs a script in a new process, as a module is loaded once per process.  The AOT module is compiled
+    from a source that uses the \c background operator and is loaded by a Program with
+    @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL"; in the "both" layout its source sits beside it and is
+    refused too, in the "split" layout another source of the module, which does not use threads, is found later in
+    the module path.
+*/
+class AOTModuleRestrictedFallbackTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! holds the modules and the driver script
+        TmpDir tmp("qore-aot-module-restricted-fallback-");
+
+        #! the module directory with the AOT module and the source it was compiled from
+        string both_dir;
+        #! the module directory with the AOT module only
+        string split_aot_dir;
+        #! the module directory with a source of the module that does not use threads
+        string split_src_dir;
+        #! the module directory with a source module that loads the module with %requires
+        string wrap_dir;
+        #! the directory with the AOT module and a source of the module that does not use threads, loaded by path
+        string explicit_dir;
+        #! the driver script
+        string driver;
+
+        #! the source that the AOT module is compiled from: it uses thread control
+        const ThreadSource = "%modern
+module RestrictedBg {
+    version = \"1.0\";
+    desc = \"AOT module restriction refusal test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace RestrictedBg {
+    public int sub run() {
+        Counter c(1);
+        int rv;
+        background sub () { rv = 42; c.dec(); }();
+        c.waitForZero();
+        return rv;
+    }
+}
+";
+
+        #! another source of the module, which does not use thread control
+        const PlainSource = "%modern
+module RestrictedBg {
+    version = \"1.0\";
+    desc = \"AOT module restriction refusal test module without threads\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace RestrictedBg {
+    public int sub run() { return 42; }
+}
+";
+
+        #! a source module that loads the module with %requires
+        const WrapSource = "%modern
+%requires RestrictedBg
+module RestrictedWrap {
+    version = \"1.0\";
+    desc = \"AOT module restriction refusal test wrapper module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace RestrictedWrap {
+    public int sub run() { return RestrictedBg::run(); }
+}
+";
+
+        #! the driver script: loads the module with the API given and prints what happened
+        const Driver = "%modern
+%allow-injection
+
+string api = ARGV[0];
+int mask = ARGV[1].toInt();
+const PO = PO_NEW_STYLE | PO_NO_THREAD_CONTROL;
+
+sub print_chain(string label, *hash<ExceptionInfo> ex) {
+    while (ex) {
+        printf(\"%s: %s: %s\\n\", label, ex.err, ex.desc);
+        label = \"next\";
+        ex = ex.next;
+    }
+}
+
+try {
+    *hash<ExceptionInfo> w;
+    Program p(PO);
+    switch (api) {
+        case \"load_module\":
+            p.parse(\"sub f(int m) { load_module(\\\"RestrictedBg\\\", m); }\", \"load_module\");
+            p.callFunction(\"f\", mask);
+            break;
+        case \"load_module_warn\":
+            p.parse(\"*hash<ExceptionInfo> sub f(int m) { return load_module_warn(\\\"RestrictedBg\\\", m); }\",
+                \"load_module_warn\");
+            w = p.callFunction(\"f\", mask);
+            break;
+        case \"loadModule\":
+            p.loadModule(\"RestrictedBg\", mask);
+            break;
+        case \"loadModuleWarn\":
+            w = p.loadModuleWarn(\"RestrictedBg\", mask);
+            break;
+        # the path of the AOT module, given as the third argument
+        case \"loadModule-path\":
+            p.loadModule(ARGV[2], mask);
+            break;
+        case \"loadModuleWarn-path\":
+            w = p.loadModuleWarn(ARGV[2], mask);
+            break;
+        case \"requires\":
+            w = p.parse(\"%requires RestrictedBg\\n\", \"requires\", mask);
+            break;
+        # %try-module ignores the error of a module that cannot be loaded
+        case \"try-module\":
+            w = p.parse(\"%try-module RestrictedBg\\n%endtry\\n\", \"try-module\", mask);
+            break;
+        case \"requires-nested\":
+            w = p.parse(\"%requires RestrictedWrap\\n\", \"requires-nested\", mask);
+            break;
+        case \"loadApplyToUserModule\": {
+            Program ip(PO | PO_ALLOW_INJECTION);
+            ip.loadApplyToUserModule(\"RestrictedWrap\", False, mask);
+            break;
+        }
+        case \"loadApplyToUserModuleWarn\": {
+            Program ip(PO | PO_ALLOW_INJECTION);
+            w = ip.loadApplyToUserModuleWarn(\"RestrictedWrap\", False, mask);
+            break;
+        }
+        default:
+            throw \"DRIVER-ERROR\", sprintf(\"unknown API %y\", api);
+    }
+    print_chain(\"returned\", w);
+    printf(\"loaded: %s\\n\", get_module_hash().RestrictedBg.filename);
+    Program c(PO_NEW_STYLE);
+    c.loadModule(\"RestrictedBg\", 0);
+    c.parse(\"int sub get() { return RestrictedBg::run(); }\", \"call\");
+    printf(\"run: %d\\n\", c.callFunction(\"get\"));
+} catch (hash<ExceptionInfo> ex) {
+    print_chain(\"exception\", ex);
+}
+";
+
+        #! the APIs that load the module, with True for those that can return warnings
+        const Apis = {
+            "load_module": False,
+            "load_module_warn": True,
+            "loadModule": False,
+            "loadModuleWarn": True,
+            "loadModule-path": False,
+            "loadModuleWarn-path": True,
+            "requires": True,
+            "requires-nested": True,
+            "loadApplyToUserModule": False,
+            "loadApplyToUserModuleWarn": True,
+        };
+
+        #! the text of the refusal of the AOT module
+        const RefusalRegex = "^AOT module 'RestrictedBg' \\(.*RestrictedBg\\.qmod.*\\) uses functionality that the "
+            "parse options of the Program loading it do not allow \\(restricted options: 0x[0-9a-f]+:0x[0-9a-f]+\\)";
+
+        #! the error code of the refusal of the AOT module
+        const RefusalErr = "AOT-MODULE-RESTRICTED";
+    }
+
+    constructor() : QUnit::Test("AOTModuleRestrictedFallbackTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        both_dir = tmp.path + "/both";
+        split_aot_dir = tmp.path + "/split-aot";
+        split_src_dir = tmp.path + "/split-src";
+        wrap_dir = tmp.path + "/wrap";
+        explicit_dir = tmp.path + "/explicit";
+        map mkdir($1), (both_dir, split_aot_dir, split_src_dir, wrap_dir, explicit_dir);
+        writeFile(both_dir + "/RestrictedBg.qm", ThreadSource);
+        writeFile(split_src_dir + "/RestrictedBg.qm", PlainSource);
+        writeFile(explicit_dir + "/RestrictedBg.qm", PlainSource);
+        writeFile(wrap_dir + "/RestrictedWrap.qm", WrapSource);
+        driver = writeFile(tmp.path + "/driver.q", Driver);
+
+        addTestCase("the AOT module is loaded by an unrestricted Program", \testUnrestricted());
+        addTestCase("a module loaded by %try-module reports the refusal as a parse warning", \testTryModule());
+        addTestCase("a failed source fallback reports the refusal of the AOT module after the source error",
+            \testBothFail());
+        addTestCase("a source fallback reports the refusal through the warning path of the API", \testSplitWarn());
+        addTestCase("a source fallback issues no warning with a warning mask of 0", \testSplitNoWarn());
+        addTestCase("a source loaded by a %requires directive gets the warning of the module it requires",
+            \testRequiresNestedWarnings());
+        addTestCase("without a source, the refusal is the exception", \testNoSource());
+        set_return_value(main());
+    }
+
+    #! writes \a contents to \a path and returns \a path
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    #! returns the environment prefix for running \c qore with the given module path
+    private string env(string module_path) {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, module_path);
+    }
+
+    #! AOT-compiles the module from the source that uses thread control, once
+    private compileModule() {
+        string qmod = both_dir + "/RestrictedBg.qmod";
+        if (is_file(qmod)) {
+            return;
+        }
+        string out = backquote(sprintf("%s %s -b --compile-module --output %s %s 2>&1", env(both_dir), qore_bin, qmod,
+            both_dir + "/RestrictedBg.qm"));
+        assertTrue(is_file(qmod), sprintf("compiled RestrictedBg: %s", out));
+        copy_file(qmod, split_aot_dir + "/RestrictedBg.qmod");
+        copy_file(qmod, explicit_dir + "/RestrictedBg.qmod");
+    }
+
+    #! runs the driver with the given module path, API and warning mask and returns its stdout and stderr lines
+    /** @param qmod_dir the directory of the AOT module that the APIs loading it by its path load
+    */
+    private hash<auto> run(string module_path, string api, int mask, string qmod_dir) {
+        compileModule();
+        TmpFile err("qore-aot-module-restricted-fallback-", ".err");
+        int rc;
+        string qmod = qmod_dir + "/RestrictedBg.qmod";
+        string out = backquote(sprintf("%s %s -b --enable-debug %s %s %d %s 2>%s", env(module_path), qore_bin,
+            driver, api, mask, qmod, err.path), \rc);
+        string err_text = ReadOnlyFile::readTextFile(err.path) ?? "";
+        return {
+            "rc": rc,
+            "out": (select out.split("\n"), $1.val()),
+            "err": (select err_text.split("\n"), $1.val()),
+        };
+    }
+
+    #! returns the lines of the output with the given label, without the label
+    private static list<string> lines(list<string> out, string label) {
+        string prefix = label + ": ";
+        return map $1.substr(prefix.size()), out, !$1.find(prefix);
+    }
+
+    #! returns the exception chain printed by the driver: the exception and those that follow it
+    private static list<string> chain(list<string> out) {
+        return map $1.substr($1.find(": ") + 2), out, !$1.find("exception: ") || !$1.find("next: ");
+    }
+
+    testUnrestricted() {
+        compileModule();
+        int rc;
+        string out = backquote(sprintf("%s %s -b --enable-debug -e 'Program p(PO_NEW_STYLE); p.loadModule(\"RestrictedBg\", 0); "
+            "printf(\"%%s\\n\", get_module_hash().RestrictedBg.filename);' 2>&1", env(both_dir), qore_bin), \rc);
+        assertEq(0, rc, out);
+        assertEq(both_dir + "/RestrictedBg.qmod\n", out);
+    }
+
+    testTryModule() {
+        string module_path = split_aot_dir + ":" + split_src_dir;
+        # the source loads: the refusal is a parse warning, if warnings are enabled
+        hash<auto> r = run(module_path, "try-module", WARN_ALL, explicit_dir);
+        assertEq(0, r.rc);
+        assertEq((split_src_dir + "/RestrictedBg.qm",), lines(r.out, "loaded"), r.out.join("\n"));
+        list<string> returned = lines(r.out, "returned");
+        assertEq(1, returned.size(), r.out.join("\n"));
+        assertRegex("^BINARY-MODULE-SOURCE-FALLBACK: binary module '.*RestrictedBg\\.qmod' for feature "
+            "'RestrictedBg' failed to load; loading source module '.*RestrictedBg\\.qm' instead: " + RefusalErr
+            + ": ", returned[0]);
+        assertEq((), r.err);
+        r = run(module_path, "try-module", 0, explicit_dir);
+        assertEq((split_src_dir + "/RestrictedBg.qm",), lines(r.out, "loaded"), r.out.join("\n"));
+        assertEq((), lines(r.out, "returned"));
+        assertEq((), r.err);
+        # the source fails as well: %try-module ignores the error, and nothing is written to stderr
+        r = run(both_dir, "try-module", WARN_ALL, both_dir);
+        assertEq((), chain(r.out), r.out.join("\n"));
+        assertEq((), lines(r.out, "returned"));
+        assertEq((), r.err);
+    }
+
+    testBothFail() {
+        list<string> layouts = (both_dir + ":" + wrap_dir, split_aot_dir + ":" + both_dir + ":" + wrap_dir);
+        foreach string module_path in (layouts) {
+            foreach string api in (keys Apis) {
+                foreach int mask in ((0, WARN_MODULES, WARN_ALL)) {
+                    string ctx = sprintf("%s mask %d (%s)", api, mask, module_path);
+                    hash<auto> r = run(module_path, api, mask, both_dir);
+                    assertEq(0, r.rc, ctx);
+                    assertEq((), lines(r.out, "loaded"), ctx + ": not loaded");
+                    list<string> ex = chain(r.out);
+                    assertRegex("^PARSE-EXCEPTION: illegal use of 'background' operator", ex[0] ?? "", ctx + ": "
+                        + r.out.join("\n"));
+                    # the source error is followed by the refusal of the AOT module
+                    string refusal = ex[1] ?? "";
+                    assertEq(RefusalErr, (refusal =~ x/^([^:]+): /)[0], ctx + ": the refusal follows the source "
+                        "error: " + r.out.join("\n"));
+                    assertRegex(RefusalRegex, refusal.substr(RefusalErr.size() + 2), ctx);
+                    assertRegex("source module '.*RestrictedBg\\.qm' was tried instead\\)$", refusal, ctx);
+                    # the refusal is reported once
+                    assertEq(1, (select ex, $1 =~ /uses functionality that the parse options/).size(), ctx);
+                    # nothing is written to stderr
+                    assertEq((), r.err, ctx + ": stderr");
+                }
+            }
+        }
+    }
+
+    testSplitWarn() {
+        string module_path = split_aot_dir + ":" + split_src_dir + ":" + wrap_dir;
+        foreach hash<auto> i in (Apis.pairIterator()) {
+            foreach int mask in ((WARN_MODULES, WARN_ALL)) {
+                string ctx = sprintf("%s mask %d", i.key, mask);
+                hash<auto> r = run(module_path, i.key, mask, explicit_dir);
+                assertEq(0, r.rc, ctx);
+                # the source module is loaded and runs
+                bool by_path = i.key =~ /-path$/;
+                string aot_dir = by_path ? explicit_dir : split_aot_dir;
+                string src_dir = by_path ? explicit_dir : split_src_dir;
+                assertEq((), lines(r.out, "exception"), ctx + ": " + r.out.join("\n"));
+                assertEq((src_dir + "/RestrictedBg.qm",), lines(r.out, "loaded"), ctx);
+                assertEq(("42",), lines(r.out, "run"), ctx);
+                string warning_regex = sprintf("binary module '%s/RestrictedBg\\.qmod' for feature 'RestrictedBg' "
+                    "failed to load; loading source module '%s/RestrictedBg\\.qm' instead: %s: AOT module "
+                    "'RestrictedBg' \\(.*\\) uses functionality that the parse options of the Program loading it do "
+                    "not allow", aot_dir, src_dir, RefusalErr);
+                if (i.value) {
+                    # the warning is returned to the caller, and nothing is written to stderr
+                    list<string> returned = lines(r.out, "returned");
+                    assertEq(1, returned.size(), ctx + ": " + r.out.join("\n"));
+                    assertRegex("^BINARY-MODULE-SOURCE-FALLBACK: " + warning_regex, returned[0], ctx);
+                    assertEq((), lines(r.out, "next"), ctx);
+                    assertEq((), r.err, ctx + ": stderr");
+                } else {
+                    # no caller can receive the warning: it is written to stderr
+                    assertEq((), lines(r.out, "returned"), ctx);
+                    assertEq(1, r.err.size(), ctx + ": " + r.err.join("\n"));
+                    assertRegex("^warning: " + warning_regex, r.err[0], ctx);
+                }
+            }
+        }
+    }
+
+    testSplitNoWarn() {
+        string module_path = split_aot_dir + ":" + split_src_dir + ":" + wrap_dir;
+        foreach string api in (keys Apis) {
+            string ctx = sprintf("%s mask 0", api);
+            hash<auto> r = run(module_path, api, 0, explicit_dir);
+            assertEq(0, r.rc, ctx);
+            assertEq((), lines(r.out, "exception"), ctx + ": " + r.out.join("\n"));
+            assertEq(((api =~ /-path$/ ? explicit_dir : split_src_dir) + "/RestrictedBg.qm",),
+                lines(r.out, "loaded"), ctx);
+            assertEq(("42",), lines(r.out, "run"), ctx);
+            assertEq((), lines(r.out, "returned"), ctx);
+            assertEq((), r.err, ctx + ": stderr");
+        }
+    }
+
+    testNoSource() {
+        foreach string api in (("loadModule", "loadModuleWarn", "loadModule-path", "requires")) {
+            hash<auto> r = run(split_aot_dir, api, WARN_ALL, split_aot_dir);
+            assertEq(0, r.rc, api);
+            list<string> ex = chain(r.out);
+            assertEq(1, ex.size(), api + ": " + r.out.join("\n"));
+            assertEq(RefusalErr, (ex[0] =~ x/^([^:]+): /)[0], api);
+            assertRegex(RefusalRegex, ex[0].substr(RefusalErr.size() + 2), api);
+            assertEq((), r.err, api + ": stderr");
+        }
+    }
+
+    testRequiresNestedWarnings() {
+        # the main program of qore parses with a warning sink: a module loaded by a %requires directive of a module
+        # source that the script requires reports its warning as a parse warning of the script
+        string module_path = split_aot_dir + ":" + split_src_dir + ":" + wrap_dir;
+        string script = writeFile(tmp.path + "/nested.q", "%modern\n%requires RestrictedWrap\n"
+            "printf(\"run: %d\\n\", RestrictedWrap::run());\n");
+        TmpFile err("qore-aot-module-restricted-fallback-", ".err");
+        int rc;
+        compileModule();
+        string out = backquote(sprintf("%s %s -b --enable-debug -pno-thread-control %s 2>%s", env(module_path),
+            qore_bin, script, err.path), \rc);
+        string err_text = ReadOnlyFile::readTextFile(err.path) ?? "";
+        assertEq(0, rc, out + err_text);
+        assertEq("run: 42\n", out);
+        assertRegex("warning encountered at .*\nBINARY-MODULE-SOURCE-FALLBACK: binary module '.*RestrictedBg\\.qmod' "
+            "for feature 'RestrictedBg' failed to load; loading source module '.*RestrictedBg\\.qm' instead: ",
+            err_text);
+        assertNRegex("(^|\n)warning: ", err_text);
+    }
+}

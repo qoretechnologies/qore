@@ -172,9 +172,10 @@ public hash<ModeRunResult> sub run_command(string command) {
     if (err_lines && err_lines.last() == "") {
         pop err_lines;
     }
-    list<string> errors = select err_lines, !is_trace_line($1) && !is_loader_warning($1);
     list<string> trace = select err_lines, is_trace_line($1);
-    list<string> loader_warnings = select err_lines, is_loader_warning($1);
+    hash<auto> sw = LoaderWarnings::split_loader_warning_lines(select err_lines, !is_trace_line($1));
+    list<string> errors = sw.lines;
+    list<string> loader_warnings = sw.warnings;
     map stderr.printf("%s\n", $1), loader_warnings;
     string err_out = errors ? errors.join("\n") + "\n" : "";
     return <ModeRunResult>{

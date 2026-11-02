@@ -11623,6 +11623,23 @@ static thread_local std::string aot_module_init_context_path;
 // QoreAOTModuleInitLoaderHelper)
 static thread_local QoreProgram* aot_module_init_loader_pgm = nullptr;
 
+//! The error code of an AOT module initialization error that is not \c MODULE-LOAD-ERROR
+/** qore_aot_module_init_v3() returns only the description of an error, which the init adapter that qcc generates in
+    every module passes to qore_aot_raise_init_error() in the same thread; an error with another code records its
+    description and its code here, and qore_aot_raise_init_error() raises that description with the code.
+
+    The codes:
+    - \c AOT-MODULE-RESTRICTED: the module uses functionality that the restrictions inherited from the Program loading
+      it do not allow (see design/module-parse-option-masks.md)
+*/
+struct QoreAOTModuleInitError {
+    //! the description returned by qore_aot_module_init_v3(), only compared, never dereferenced
+    const QoreStringNode* desc = nullptr;
+    //! the error code
+    const char* err = nullptr;
+};
+static thread_local QoreAOTModuleInitError aot_module_init_error;
+
 QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
         : old_loader(aot_module_init_loader_pgm) {
     aot_module_init_loader_pgm = loader;
@@ -15683,6 +15700,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Construct full 128-bit parse options from lo+hi components
     QoreParseOptions parse_options(parse_options_lo, parse_options_hi);
 
+    // an error of a previous initialization in this thread that was not raised is forgotten
+    aot_module_init_error = QoreAOTModuleInitError();
+
     ExceptionSink xsink;
 
     QoreProgram* parent_pgm = getProgram();
@@ -15763,6 +15783,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
                 static_cast<unsigned long long>(refused.getHi()), static_cast<unsigned long long>(refused.getLo()));
             local_pgm->waitForTerminationAndDeref(nullptr);
+            // the refusal has its own error code (see qore_aot_raise_init_error())
+            aot_module_init_error.desc = err;
+            aot_module_init_error.err = "AOT-MODULE-RESTRICTED";
             return err;
         }
     }
@@ -16126,9 +16149,15 @@ extern "C" DLLEXPORT void qore_aot_fill_module_children(QoreModuleInfo* mod_info
     }
 }
 
+//! Raises the error returned by qore_aot_module_init_v3(); called by the init adapter of every AOT module
+/** The error is a \c MODULE-LOAD-ERROR unless qore_aot_module_init_v3() recorded another code for it in this thread
+    (see QoreAOTModuleInitError).
+*/
 extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err) {
+    const char* code = err && err == aot_module_init_error.desc ? aot_module_init_error.err : "MODULE-LOAD-ERROR";
+    aot_module_init_error = QoreAOTModuleInitError();
     if (err) {
-        xsink->raiseException("MODULE-LOAD-ERROR", err);
+        xsink->raiseException(code, err);
     }
 }
 

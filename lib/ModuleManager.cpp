@@ -199,17 +199,179 @@ static bool qore_binary_load_error_can_fallback_to_source(ExceptionSink& xsink) 
     return true;
 }
 
-static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
-        const char* name, const char* binary_path, const char* source_path, ExceptionSink& binary_xsink) {
-    if (!warning_mask) {
+//! A module load in progress in this thread that can receive the warnings of the module loader
+/** There are two kinds of frames: a module load made by a \c %%requires or \c %%try-module directive, which has no
+    warning sink of its own, so the parse action that has the directive reports its warnings (\a pgm is the Program
+    being parsed), and a module load made at run time by an API (\a pgm is nullptr), which has the warning mask and
+    the warning sink, if any, of its caller.  The frames of nested module loads are linked from the innermost one: a
+    module loaded from its source parses its own \c %%requires directives while the load of the module is in progress.
+
+    See qore_report_module_load_warning()
+*/
+struct QoreModuleLoadWarningFrame {
+    //! the Program whose parse action has the directive, or nullptr for a module load made at run time
+    QoreProgram* pgm;
+    //! the location of the directive, if known
+    const QoreProgramLocation* loc;
+    //! the warning sink of the caller of a module load made at run time, if separate from its exception sink
+    ExceptionSink* wsink;
+    //! the warning mask of a module load made at run time
+    int warning_mask;
+    //! the frame of the module load in progress when this one started, if any
+    QoreModuleLoadWarningFrame* parent;
+};
+
+//! The innermost module load in progress in this thread that can receive the warnings of the module loader, if any
+static thread_local QoreModuleLoadWarningFrame* qore_module_load_warning_frame = nullptr;
+
+//! Adds a frame for the warnings of the module loader for the duration of its scope
+/** See qore_report_module_load_warning()
+*/
+class QoreModuleLoadWarningFrameHelper {
+public:
+    //! A module load made by a parse directive of \a pgm at the given location, if known
+    DLLLOCAL QoreModuleLoadWarningFrameHelper(QoreProgram* pgm, const QoreProgramLocation* loc)
+            : frame({pgm, loc, nullptr, 0, qore_module_load_warning_frame}) {
+        assert(pgm);
+        qore_module_load_warning_frame = &frame;
+    }
+
+    //! A module load made at run time with the given warning sink (nullptr if none) and warning mask
+    DLLLOCAL QoreModuleLoadWarningFrameHelper(ExceptionSink* wsink, int warning_mask)
+            : frame({nullptr, nullptr, wsink, warning_mask, qore_module_load_warning_frame}) {
+        qore_module_load_warning_frame = &frame;
+    }
+
+    DLLLOCAL ~QoreModuleLoadWarningFrameHelper() {
+        assert(qore_module_load_warning_frame == &frame);
+        qore_module_load_warning_frame = frame.parent;
+    }
+
+    QoreModuleLoadWarningFrameHelper(const QoreModuleLoadWarningFrameHelper&) = delete;
+    QoreModuleLoadWarningFrameHelper& operator=(const QoreModuleLoadWarningFrameHelper&) = delete;
+
+private:
+    QoreModuleLoadWarningFrame frame;
+};
+
+//! Reports a warning of the module loader about how a module was loaded
+/** These are the loader's own warnings: an AOT module that was not loaded and whose source module was loaded instead
+    (\c BINARY-MODULE-SOURCE-FALLBACK), an AOT module loaded without functionality (\c BINARY-MODULE-STALE), and a
+    child module declared with \c %%try-child-module that failed to load or was not attached (\c MODULE-CHILD-FAILED,
+    \c MODULE-CHILD-SKIPPED), as opposed to the parse warnings in the source of a module.  A warning does not fail the load of the module.
+
+    A module load with a \a warning_mask of 0 issues no warning unless \a always is set.  The warning goes to the
+    warning sink of the caller of the module load if the caller has one separate from its exception sink (the
+    \c *Warn() variants of the module loading APIs) and \a warning_mask is not 0.  A module load without such a sink
+    is part of an outer one (see QoreModuleLoadWarningFrame), which decides, from the innermost
+    one outwards:
+    - a module load made by a \c %%requires or \c %%try-module directive of a Program reports the warning as a
+      warning of the parse action that has the directive, if that parse action has a warning sink separate from its
+      exception sink and warnings enabled, so that Program::parse() and the other parse APIs return it like any other
+      parse warning; if the parse action has warnings disabled (a warning mask of 0, the default of Program::parse()),
+      the warning is not issued;
+    - a module load made by a directive in the source of a user module is decided by the next frame, the load of the
+      user module: the warning mask of the module's parse action can be the module's own (\c %%modern enables all
+      warnings), and its parse warnings can be raised in its exception sink, where they are errors;
+    - a module load made at run time by an API reports it in the warning sink of its caller if the caller has one and
+      warnings enabled; with a warning mask of 0, the warning is not issued; otherwise no caller can receive it;
+    - if no frame can receive the warning, it is written to stderr, unless warnings are disabled.
+
+    With a warning mask of 0, no warnings are issued, as documented for the module loading and parse APIs; this
+    includes \c BINARY-MODULE-SOURCE-FALLBACK, since the source module that is loaded instead is the module, and the
+    program runs as it does without the AOT module.  A warning with \a always set is issued even then (on stderr if no
+    frame can receive it), as the code run is not the code that the caller would expect: an AOT module that is out of
+    date with its sources, or that lacks functionality.
+
+    @param xsink the exception sink of the module load
+    @param caller_wsink the warning sink of the caller of the module load if separate from \a xsink, otherwise nullptr
+    @param warning_mask the warning mask of the module load
+    @param always issue the warning even when warnings are disabled
+    @param err the warning code
+    @param name the name of the module
+    @param desc the description of the warning; ownership is taken
+*/
+static void qore_report_module_load_warning(ExceptionSink& xsink, ExceptionSink* caller_wsink, int warning_mask,
+        bool always, const char* err, const char* name, QoreStringNode* desc) {
+    SimpleRefHolder<QoreStringNode> desc_holder(desc);
+    assert(caller_wsink != &xsink);
+
+    // a module load with warnings disabled issues none, whichever load it is part of (as a module load that checks
+    // whether an optional module is available)
+    if (!warning_mask && !always) {
         return;
     }
 
+    ExceptionSink* target = nullptr;
+    // the parse action that receives the warning, if any
+    QoreModuleLoadWarningFrame* parse_frame = nullptr;
+    bool issue = warning_mask || always;
+    if (caller_wsink) {
+        if (warning_mask) {
+            target = caller_wsink;
+        }
+    } else {
+        for (QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame; frame; frame = frame->parent) {
+            if (frame->pgm) {
+                // a module load made by a parse directive in the source of a user module: the load of the user
+                // module decides, as the warning mask of the module's parse action can be the module's own (set by
+                // %modern, for example), and its parse warnings can be raised in its exception sink, as errors
+                if (frame->pgm->getParseOptions64() & PO_IN_MODULE) {
+                    continue;
+                }
+                // a module load made by a parse directive of a Program
+                if (!qore_program_private::getParseWarningMask(*frame->pgm)) {
+                    issue = always;
+                    break;
+                }
+                target = qore_program_private::getSeparateParseWarningSink(*frame->pgm);
+                if (target) {
+                    parse_frame = frame;
+                } else {
+                    // the parse action raises its warnings in its exception sink, where they are errors
+                    issue = true;
+                }
+                break;
+            }
+            // a module load made at run time
+            if (!frame->warning_mask) {
+                issue = always;
+            } else if (frame->wsink) {
+                target = frame->wsink;
+            } else {
+                issue = true;
+            }
+            break;
+        }
+    }
+
+    if (target) {
+        // no allocation may happen between the release() calls; the argument evaluation order is unspecified
+        SimpleRefHolder<QoreStringNode> arg(new QoreStringNode(name));
+        if (parse_frame && parse_frame->loc) {
+            // a warning of the parse action, at the location of the directive
+            qore_program_private::raiseModuleLoadWarning(*parse_frame->pgm, *target, *parse_frame->loc, err,
+                arg.release(), desc_holder.release());
+        } else {
+            target->raiseExceptionArg(err, arg.release(), desc_holder.release());
+        }
+        return;
+    }
+    if (issue) {
+        printe("warning: %s\n", desc_holder->c_str());
+    }
+}
+
+//! Reports that a binary module failed to load and that its source module was loaded instead
+/** See qore_report_module_load_warning(); the warning is not reported with a warning mask of 0
+*/
+static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
+        const char* name, const char* binary_path, const char* source_path, ExceptionSink& binary_xsink) {
     QoreStringValueHelper err(binary_xsink.getExceptionErr());
     QoreStringValueHelper desc(binary_xsink.getExceptionDesc());
 
-    QoreStringNode* warn_desc = new QoreStringNodeMaker("binary module '%s' for feature '%s' failed to load; "
-        "loading source module '%s' instead", binary_path, name, source_path);
+    SimpleRefHolder<QoreStringNode> warn_desc(new QoreStringNodeMaker("binary module '%s' for feature '%s' failed "
+        "to load; loading source module '%s' instead", binary_path, name, source_path));
 
     const char* err_str = err->c_str();
     const char* desc_str = desc->c_str();
@@ -222,13 +384,30 @@ static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, Except
         warn_desc->sprintf(": %s", desc_str);
     }
 
-    if (&xsink == &wsink) {
-        printe("warning: %s\n", warn_desc->c_str());
-        warn_desc->deref();
-        return;
-    }
+    qore_report_module_load_warning(xsink, &xsink == &wsink ? nullptr : &wsink, warning_mask, false,
+        "BINARY-MODULE-SOURCE-FALLBACK", name, warn_desc.release());
+}
 
-    wsink.raiseExceptionArg("BINARY-MODULE-SOURCE-FALLBACK", new QoreStringNode(name), warn_desc);
+//! Reports the failure of the source module loaded instead of a binary module that failed to load
+/** The exception of the binary module, which tells why it was not loaded, follows the exception of the source module
+    in \a xsink (as \c next in the exception hash), so that the caller sees both why the binary module was not used and
+    why the source module failed.
+
+    @param xsink the exception sink of the module load, with the exception of the source module, if any
+    @param name the name of the module
+    @param binary_path the path of the binary module
+    @param source_path the path of the source module
+    @param binary_xsink the exception of the binary module; it is moved to \a xsink
+*/
+static void qore_raise_binary_module_source_fallback_error(ExceptionSink& xsink, const char* name,
+        const char* binary_path, const char* source_path, ExceptionSink& binary_xsink) {
+    if (!xsink) {
+        xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source '%s' after binary "
+            "module '%s' failed", name, source_path, binary_path);
+    }
+    binary_xsink.appendLastDescription(" (the binary module was not loaded; source module '%s' was tried "
+        "instead)", source_path);
+    xsink.assimilate(binary_xsink);
 }
 
 #ifndef _Q_WINDOWS
@@ -541,21 +720,25 @@ bool qore_aot_read_module_source_fingerprints(const std::string& path,
     return true;
 }
 
-//! Returns true if a source of an AOT module linked into a source tree has changed since the module was compiled
+//! Returns true if a source of an AOT module of a build tree has changed since the module was compiled
 /** A build tree links the AOT modules it builds into the source \c qlib directory (\c QORE_AOT_LINK_SOURCE_MODULES),
-    where the in-tree tests find them before the module sources; without this check, a module built before one of its
-    sources was changed would run the old code without any sign of it.  Only a module that is a symbolic link is
-    checked, so an installed module is never checked.
+    where the in-tree tests find them before the module sources, and the test runner puts the directory of the built
+    modules (\c build/qlib-qmod) first in the module path; without this check, a module built before one of its
+    sources was changed would run the old code without any sign of it.  A module that is a symbolic link is checked,
+    and a module that is a regular file is checked if qcc wrote a dependency file next to it
+    (<tt>\<module\>.d</tt>), as the build of a tree does.  An installed module has no dependency file (the install
+    rules remove it, see QoreMacros.cmake), so it is never checked; nor is a module compiled with
+    <tt>qcc --compile-module</tt> without <tt>--depfile</tt>.
 
-    The sources are the files listed in the dependency file that qcc wrote next to the module it links to
-    (<tt>\<module\>.d</tt>), which include the sources of the modules it depends on.  A source has changed if its
+    The sources are the files listed in the dependency file that qcc wrote next to the module it links to, or next to
+    the module itself (<tt>\<module\>.d</tt>), which include the sources of the modules it depends on.  A source has changed if its
     content differs from the content it had when the module was compiled, as recorded by qcc in the fingerprint file
     next to the dependency file (see QoreModuleSourceFingerprints.h): a source whose size and modification time are those
     recorded is not read, and one with only another modification time, as after a checkout or a copy of a build tree,
     is compared by its content hash.  A source that has no fingerprint, or a module without a fingerprint file, is
-    compared by its modification time: a source that is newer than the module has changed.  Without a dependency
-    file, the main source of the module and, for a module in a directory of its own, the module sources in that
-    directory are compared by their modification time.
+    compared by its modification time: a source that is newer than the module has changed.  For a linked module
+    without a dependency file, the main source of the module and, for a module in a directory of its own, the module
+    sources in that directory are compared by their modification time.
 
     The check is skipped if the Program cannot access the filesystem; a file that the filesystem policy of a sandbox
     does not allow to be read is not checked.
@@ -569,24 +752,33 @@ bool qore_aot_read_module_source_fingerprints(const std::string& path,
 
     @return true if a source has changed since the module was compiled
 */
-static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::string& source_dir, const char* name,
+static bool qore_build_aot_module_is_stale(const char* qmod_path, const std::string& source_dir, const char* name,
         const QoreProgram* pgm, std::string& stale_source, ExceptionSink& xsink) {
 #ifdef _Q_WINDOWS
     return false;
 #else
     struct stat lsb;
-    if (lstat(qmod_path, &lsb) || !S_ISLNK(lsb.st_mode)) {
+    if (lstat(qmod_path, &lsb)) {
+        return false;
+    }
+    const bool linked = S_ISLNK(lsb.st_mode);
+    if (!linked && !S_ISREG(lsb.st_mode)) {
         return false;
     }
     if (pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
         return false;
     }
-    char* resolved = realpath(qmod_path, nullptr);
-    if (!resolved) {
-        return false;
+    std::string target;
+    if (linked) {
+        char* resolved = realpath(qmod_path, nullptr);
+        if (!resolved) {
+            return false;
+        }
+        target = resolved;
+        free(resolved);
+    } else {
+        target = qmod_path;
     }
-    std::string target = resolved;
-    free(resolved);
     struct stat sb;
     if (stat(target.c_str(), &sb) || !S_ISREG(sb.st_mode)) {
         return false;
@@ -610,6 +802,14 @@ static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::st
     std::string depfile = target + ".d";
     if (!allowed(depfile)) {
         return false;
+    }
+
+    // a module that is a regular file is checked only with its dependency file
+    if (!linked) {
+        struct stat dsb;
+        if (stat(depfile.c_str(), &dsb) || !S_ISREG(dsb.st_mode)) {
+            return false;
+        }
     }
 
     std::vector<std::string> deps;
@@ -644,7 +844,12 @@ static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::st
         return false;
     }
 
-    // without a dependency file, the sources of the module itself are checked
+    // a regular file whose dependency file cannot be read is not checked
+    if (!linked) {
+        return false;
+    }
+
+    // without a dependency file, the sources of the linked module itself are checked
     std::string main_source = source_dir + QORE_DIR_SEP_STR + name + ".qm";
     if (allowed(main_source) && qore_module_file_newer(main_source, qmod_mtime)) {
         stale_source = main_source;
@@ -683,16 +888,12 @@ static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::st
 //! Raises the warning for an AOT module that is not loaded because one of its sources has changed
 static void qore_warn_stale_aot_module(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
         const char* name, const char* qmod_path, const char* source_path, const char* stale_source) {
-    QoreStringNode* warn_desc = new QoreStringNodeMaker("AOT module '%s' for feature '%s' is out of date: its source "
-        "'%s' has changed since it was compiled; loading source module '%s' instead; rebuild the AOT module",
-        qmod_path, name, stale_source, source_path);
-    // the warning is always reported, as the module that is run is not the one the build tree provides
-    if (!warning_mask || &xsink == &wsink) {
-        printe("warning: %s\n", warn_desc->c_str());
-        warn_desc->deref();
-        return;
-    }
-    wsink.raiseExceptionArg("BINARY-MODULE-SOURCE-FALLBACK", new QoreStringNode(name), warn_desc);
+    // the warning is always reported, as the module that is run is not the one the build tree provides (see
+    // qore_report_module_load_warning())
+    qore_report_module_load_warning(xsink, &xsink == &wsink ? nullptr : &wsink, warning_mask, true,
+        "BINARY-MODULE-SOURCE-FALLBACK", name, new QoreStringNodeMaker("AOT module '%s' for feature '%s' is out of "
+        "date: its source '%s' has changed since it was compiled; loading source module '%s' instead; rebuild the "
+        "AOT module", qmod_path, name, stale_source, source_path));
 }
 
 static bool qore_find_user_module_source(const std::string& dir, const char* name, QoreString& source_path,
@@ -1598,6 +1799,9 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
         }
     }
 
+    // the warnings of the module loader for the modules loaded with this one are reported to the caller (see
+    // qore_report_module_load_warning())
+    QoreModuleLoadWarningFrameHelper mlwfh(&wsink == &xsink ? nullptr : &wsink, warning_mask);
     OptLocker ol(&mutex);
     loadModuleIntern(xsink, wsink, name, pgm, reexport, MOD_OP_NONE, 0, 0, pholder.release(), load_opt, warning_mask,
         mod_desc_func);
@@ -2136,11 +2340,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     if (mi && !xsink) {
                         qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name, raw_path,
                             source_path.c_str(), binary_xsink);
-                    }
-                    binary_xsink.clear();
-                    if (!mi && !xsink) {
-                        xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
-                            "fallback after binary module '%s' failed", name, raw_path);
+                        binary_xsink.clear();
+                    } else {
+                        qore_raise_binary_module_source_fallback_error(xsink, name, raw_path, source_path.c_str(),
+                            binary_xsink);
                     }
                 } else {
                     xsink.assimilate(binary_xsink);
@@ -2235,12 +2438,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
     };
 
-    // an AOT module that a build tree links into a source tree is not loaded if one of its sources has changed: the
-    // source module is loaded instead, with a warning that the AOT module must be rebuilt
+    // an AOT module of a build tree (linked into a source tree, or a built module with its depfile) is not loaded if
+    // one of its sources has changed: the source module is loaded instead, with a warning that the AOT module must be
+    // rebuilt
     auto load_source_for_stale_aot_module = [&](const char* qmod_path, const std::string& source_dir,
             QoreAbstractModule*& rv) -> bool {
         std::string stale_source;
-        if (!qore_linked_aot_module_is_stale(qmod_path, source_dir, name, ctx_pgm, stale_source, xsink)) {
+        if (!qore_build_aot_module_is_stale(qmod_path, source_dir, name, ctx_pgm, stale_source, xsink)) {
             return false;
         }
         bool source_found = false;
@@ -2252,6 +2456,15 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (rv && !xsink) {
             qore_warn_stale_aot_module(xsink, wsink, warning_mask, name, qmod_path, source_path.c_str(),
                 stale_source.c_str());
+        } else {
+            // the source failed: why the AOT module was not loaded follows its error, as for an AOT module that
+            // fails to load (see qore_raise_binary_module_source_fallback_error())
+            ExceptionSink stale_xsink;
+            stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for "
+                "feature '%s' is out of date: its source '%s' has changed since it was compiled; rebuild the AOT "
+                "module", qmod_path, name, stale_source.c_str());
+            qore_raise_binary_module_source_fallback_error(xsink, name, qmod_path, source_path.c_str(),
+                stale_xsink);
         }
         return true;
     };
@@ -2325,11 +2538,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                             if (mi && !xsink) {
                                 qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name,
                                     str.c_str(), source_path.c_str(), binary_xsink);
-                            }
-                            binary_xsink.clear();
-                            if (!mi && !xsink) {
-                                xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
-                                    "fallback after binary module '%s' failed", name, str.c_str());
+                                binary_xsink.clear();
+                            } else {
+                                qore_raise_binary_module_source_fallback_error(xsink, name, str.c_str(),
+                                    source_path.c_str(), binary_xsink);
                             }
                         } else {
                             xsink.assimilate(binary_xsink);
@@ -2394,11 +2606,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                             if (mi && !xsink) {
                                 qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name,
                                     str.c_str(), source_path.c_str(), binary_xsink);
-                            }
-                            binary_xsink.clear();
-                            if (!mi && !xsink) {
-                                xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s' from source "
-                                    "fallback after binary module '%s' failed", name, str.c_str());
+                                binary_xsink.clear();
+                            } else {
+                                qore_raise_binary_module_source_fallback_error(xsink, name, str.c_str(),
+                                    source_path.c_str(), binary_xsink);
                             }
                         } else {
                             xsink.assimilate(binary_xsink);
@@ -2820,7 +3031,7 @@ void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* p
 }
 
 int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
-        QoreProgram* pgm, bool reexport) {
+        QoreProgram* pgm, bool reexport, const QoreProgramLocation* loc) {
     //printd(5, "ModuleManager::parseLoadModule(name: %s, pgm: %p, reexport: %d)\n", name, pgm, reexport);
 
     assert(!xsink);
@@ -2834,6 +3045,9 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
 
     QoreAbstractModule* mod = nullptr;
     {
+        // the warnings of the module loader for this load are reported by the parse action of pgm (see
+        // qore_report_module_load_warning())
+        QoreModuleLoadWarningFrameHelper mlwfh(pgm, loc);
         OptLocker ol(&mutex);
         // Load module; handle reexport flag separately to ensure correct module context
         mod = loadModuleIntern(xsink, wsink, str.c_str(), pgm, false, mo, mo == MOD_OP_NONE ? nullptr : &iv);
@@ -2870,13 +3084,14 @@ ChildAttachHelper::~ChildAttachHelper() {
 /** A child declared with %try-child-module is optional, so neither a skipped nor a failed child is an
     error for the parent; the diagnostic is reported as a warning instead.
 
-    A broken child is reported unconditionally: if warnings are disabled, or if the caller has no warning
-    sink separate from its exception sink (the %requires path, where a warning raised in the sink would
-    become a parse error), the message is written to \c stderr.  A broken extension must never be silently
-    indistinguishable from an absent one.
+    A broken child is reported unconditionally, as \c MODULE-CHILD-FAILED: if no caller can receive the
+    warning (see qore_report_module_load_warning()), as when warnings are disabled, the message is written to
+    \c stderr.  A broken extension must never be silently indistinguishable from an absent one.  For a module
+    loaded by \c %%requires, which has no warning sink separate from its exception sink (raising the warning
+    there would make it a parse error), the warning is a parse warning of the code with the directive.
 
-    A skipped child reflects a deliberate restriction in the container Program and is only reported when
-    warnings are enabled.
+    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction in the container Program and is
+    only reported when warnings are enabled.
 */
 static void qore_report_child_module_not_attached(ExceptionSink& xsink, ExceptionSink& wsink,
         int warning_mask, const char* mod_name, const ChildModuleInfo& c) {
@@ -2892,16 +3107,10 @@ static void qore_report_child_module_not_attached(ExceptionSink& xsink, Exceptio
         : new QoreStringNodeMaker("module '%s': child module '%s' declared with %%try-child-module was "
             "not attached: %s", mod_name, c.name.c_str(), c.desc.c_str()));
 
-    if (!warning_mask || &xsink == &wsink) {
-        printe("warning: %s\n", warn_desc->c_str());
-        return;
-    }
-
-    // no allocation may happen between the two release() calls; the argument evaluation order is
-    // unspecified, and a throw between them would leak the other argument
-    SimpleRefHolder<QoreStringNode> arg(new QoreStringNode(c.name));
-    wsink.raiseExceptionArg(failed ? "MODULE-CHILD-FAILED" : "MODULE-CHILD-SKIPPED", arg.release(),
-        warn_desc.release());
+    // reported where the other warnings of the module loader go (see qore_report_module_load_warning()); the
+    // warning's argument is the name of the child module
+    qore_report_module_load_warning(xsink, &xsink == &wsink ? nullptr : &wsink, warning_mask, failed,
+        failed ? "MODULE-CHILD-FAILED" : "MODULE-CHILD-SKIPPED", c.name.c_str(), warn_desc.release());
 }
 
 bool QoreModuleManager::hasUserModuleDependencyPath(const std::string& from, const std::string& to) {
@@ -3001,8 +3210,9 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             printd(5, "QoreModuleManager::attachChildModules() '%s': attaching child '%s'\n", mi.getName(),
                 cname.c_str());
             // the child's warnings are its own: with no warning sink of the caller's separate from its exception
-            // sink (the %requires path), they are written to stderr as for a module loaded with %requires, and not
-            // raised in the caller's sink, where they would fail the import of the module that declares the child
+            // sink (the %requires path), they are reported as for a module loaded with %requires (see
+            // qore_report_module_load_warning()), and not raised in the caller's sink, where they would fail the
+            // import of the module that declares the child
             cmi = loadModuleIntern(cx, &xsink == &wsink ? cx : wsink, cname.c_str(), nullptr, false, op,
                 op == MOD_OP_NONE ? nullptr : &version, nullptr, nullptr, QMLO_NONE, warning_mask, nullptr,
                 ppgm, &not_found);
@@ -3838,11 +4048,8 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
                 "optional module '%s' was not available, but it is available now, and no source module was "
                 "found; the binary module is loaded without the functionality that requires the optional module; "
                 "rebuild the binary module", path, available.c_str()));
-            if (wsink && warning_mask && wsink != &xsink) {
-                wsink->raiseExceptionArg("BINARY-MODULE-STALE", new QoreStringNode(feature), desc.release());
-            } else {
-                printe("warning: %s\n", desc->c_str());
-            }
+            qore_report_module_load_warning(xsink, wsink != &xsink ? wsink : nullptr, warning_mask, true,
+                "BINARY-MODULE-STALE", feature, desc.release());
         }
     }
 

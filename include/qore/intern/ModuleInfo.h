@@ -665,8 +665,19 @@ public:
         return importModuleNSUnlocked(name, pgm, xsink);
     }
 
+    //! Loads a module for a parse directive (\c %%requires or \c %%try-module) of \a pgm
+    /** The warnings of the module loader for the module and the modules loaded with it are warnings of the parse
+        action of \a pgm (see qore_report_module_load_warning() in ModuleManager.cpp).
+
+        @param xsink exception sink
+        @param wsink warning sink; normally the same as \a xsink
+        @param name the module name with an optional version specification
+        @param pgm the Program being parsed
+        @param reexport if the module is reexported
+        @param loc the location of the directive, if known, for the warnings of the module loader
+    */
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
-            bool reexport = false);
+            bool reexport = false, const QoreProgramLocation* loc = nullptr);
     DLLLOCAL int runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             QoreProgram* mpgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
             bool reexport = false, qore_binary_module_desc_t mod_desc_func = nullptr);

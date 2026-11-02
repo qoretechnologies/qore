@@ -3582,6 +3582,54 @@ public:
         return rv;
     }
 
+    //! Returns the warning mask of the parse action in progress in the Program, or 0 if it has no warning sink
+    /** @note must be called by the thread that holds the parse lock of the Program
+    */
+    DLLLOCAL static int getParseWarningMask(const QoreProgram& pgm) {
+        return pgm.priv->warnSink ? pgm.priv->pwo.warn_mask : 0;
+    }
+
+    //! Returns the warning sink of the parse action in progress in the Program if it has warnings enabled and a
+    //! warning sink separate from its exception sink, otherwise nullptr
+    /** Used by the module loader to report its own warnings about the modules that the \c %%requires and
+        \c %%try-module directives load, which have no warning sink of their own (see
+        qore_report_module_load_warning() in ModuleManager.cpp).  A parse action whose warnings are raised in its
+        exception sink, as for a user module loaded without a warning sink of its own, where warnings are errors,
+        has none.
+
+        @note must be called by the thread that holds the parse lock of the Program
+    */
+    DLLLOCAL static ExceptionSink* getSeparateParseWarningSink(const QoreProgram& pgm) {
+        const qore_program_private* p = pgm.priv;
+        if (!p->warnSink || !p->pwo.warn_mask || p->warnSink == p->parseSink) {
+            return nullptr;
+        }
+        return p->warnSink;
+    }
+
+    //! Raises a warning of the module loader in the warning sink of the parse action in progress in the Program
+    /** @param pgm the Program being parsed
+        @param wsink the warning sink of the parse action, as returned by getSeparateParseWarningSink()
+        @param loc the location of the parse directive that loaded the module
+        @param err the warning code
+        @param arg the argument of the warning; ownership is taken
+        @param desc the description of the warning; ownership is taken
+
+        @note must be called by the thread that holds the parse lock of the Program
+    */
+    DLLLOCAL static void raiseModuleLoadWarning(QoreProgram& pgm, ExceptionSink& wsink,
+            const QoreProgramLocation& loc, const char* err, QoreStringNode* arg, QoreStringNode* desc) {
+        SimpleRefHolder<QoreStringNode> arg_holder(arg);
+        SimpleRefHolder<QoreStringNode> desc_holder(desc);
+        assert(&wsink == pgm.priv->warnSink);
+        if (pgm.priv->collect_diagnostics) {
+            pgm.priv->diagnostics.push_back(QoreDiagnostic(false, err, -1, loc, desc->c_str()));
+        }
+        QoreException* ne = new ParseException(loc, err, desc_holder.release());
+        ne->arg = arg_holder.release();
+        wsink.raiseException(ne);
+    }
+
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation &loc, int code,
             const char* warn, const char* fmt, ...) {
         //printd(5, "QP::mPW(code: %d, warn: '%s', fmt: '%s') priv->pwo.warn_mask: %d priv->warnSink: %p %s\n", code,

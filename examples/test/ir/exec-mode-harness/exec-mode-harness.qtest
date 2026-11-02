@@ -9,6 +9,7 @@
 %requires QUnit
 %requires FsUtil
 %requires ../../ExecModeHarness.qm
+%requires ../../LoaderWarnings.qm
 
 %exec-class ExecModeHarnessTest
 
@@ -32,6 +33,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
         string output;
         #! a script that prints on stdout and stderr, and the warnings of the module loader on stderr
         string loader_warning;
+        string parse_loader_warning;
     }
 
     #! the warning of the module loader for an AOT module that is out of date
@@ -57,6 +59,9 @@ class ExecModeHarnessTest inherits QUnit::Test {
         output = write("output.q", "%modern\nprintf(\"out\\n\");\nstderr.print(\"err\\n\");\nexit(3);\n");
         loader_warning = write("loader-warning.q", sprintf("%%modern\nprintf(\"out\\n\");\nstderr.print(%y);\n"
             "stderr.print(\"err\\n\");\nstderr.print(%y);\n", StaleWarning + "\n", FallbackWarning + "\n"));
+        parse_loader_warning = write("parse-loader-warning.q", sprintf("%%modern\nprintf(\"out\\n\");\n"
+            "stderr.print(%y);\nstderr.print(\"err\\n\");\n", "warning encountered at script.q:2 (Qore builtin "
+            "code)\nBINARY-MODULE-SOURCE-FALLBACK" + FallbackWarning.substr(7) + "\n"));
 
         addTestCase("trace lines", \testTraceLines());
         addTestCase("execution mode of a command", \testGetMode());
@@ -152,6 +157,45 @@ class ExecModeHarnessTest inherits QUnit::Test {
         assertEq("out\n", r.stdout);
         assertEq("err\n", r.stderr);
         assertEq((StaleWarning, FallbackWarning), r.loader_warnings);
+        assertEq(0, r.rc);
+
+        # the warnings of a module loaded by a %requires directive of the script are written as parse warnings
+        string fallback_parse = "BINARY-MODULE-SOURCE-FALLBACK" + FallbackWarning.substr(7);
+        string stale_parse = "BINARY-MODULE-SOURCE-FALLBACK" + StaleWarning.substr(7);
+        assertTrue(ExecModeHarness::is_loader_warning(fallback_parse));
+        assertTrue(ExecModeHarness::is_loader_warning(stale_parse));
+        assertFalse(ExecModeHarness::is_loader_warning("BINARY-MODULE-SOURCE-FALLBACK: something else"));
+        string header = "warning encountered at script.q:2 (Qore builtin code)";
+        string other_header = "warning encountered at script.q:5 (Qore builtin code)";
+        string other = "UNREACHABLE-CODE: code after this statement can never be reached";
+        # alone, after another warning, before another warning, and between loader warnings
+        list<hash<auto>> cases = (
+            {"lines": (header, fallback_parse), "rest": ()},
+            {"lines": (other_header, other, "next warning:", header, fallback_parse), "rest": (other_header, other)},
+            {"lines": (header, fallback_parse, "next warning:", other_header, other), "rest": (other_header, other)},
+            {"lines": (header, stale_parse, "next warning:", header, fallback_parse), "rest": ()},
+            {"lines": (header, stale_parse, "next warning:", other_header, other, "next warning:", header,
+                fallback_parse), "rest": (other_header, other)},
+            # the code alone without the location line is not a loader warning of qore
+            {"lines": ("err", fallback_parse), "rest": ("err", fallback_parse), "warnings": ()},
+            # a location line followed by another warning is kept
+            {"lines": (header, other), "rest": (header, other), "warnings": ()},
+        );
+        foreach hash<auto> c in (cases) {
+            hash<auto> h = LoaderWarnings::split_loader_warning_lines(c.lines);
+            assertEq(c.rest, h.lines, sprintf("case %d", $#));
+            *list<string> expected_warnings = c.warnings ?? (select c.lines, $1 =~ /^BINARY-MODULE/);
+            assertEq(expected_warnings ?? (), h.warnings, sprintf("case %d", $#));
+            # the same with line breaks
+            hash<auto> t = LoaderWarnings::split_loader_warnings((map $1 + "\n", c.lines).join(""));
+            assertEq((map $1 + "\n", c.rest).join(""), t.text, sprintf("case %d text", $#));
+            assertEq(expected_warnings ?? (), t.warnings, sprintf("case %d text", $#));
+        }
+
+        r = runScript("jit", parse_loader_warning);
+        assertEq("out\nerr\n", r.out);
+        assertEq("err\n", r.stderr);
+        assertEq((fallback_parse,), r.loader_warnings);
         assertEq(0, r.rc);
     }
 

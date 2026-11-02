@@ -33,6 +33,7 @@ public class TryChildModuleTest inherits QUnit::Test {
 
     constructor() : Test("Try child module test", "1.0") {
         addTestCase("absent and present children", \basicTest());
+        addTestCase("an absent child issues no warning", \absentNoWarningTest());
         addTestCase("child module attach order", \orderTest());
         addTestCase("nested module load", \nestedTest());
         addTestCase("child module loaded first", \childFirstTest());
@@ -157,7 +158,9 @@ module %s {
         # A child module whose binary module cannot be loaded (for example, compiled for another Qore) is loaded
         # from its source, with a warning.  The warning is the child's: it must not fail the import of the module
         # that declares the child.  A %requires load has no warning sink separate from its exception sink, and
-        # the child was loaded with that sink as its warning sink, so the warning failed the parent's import.
+        # the child was loaded with that sink as its warning sink, so the warning failed the parent's import.  The
+        # warning is a warning of the parse action of the script that has the %requires directive, which qore
+        # writes with the location of the directive.
         TmpDir tmp();
         TryChildModuleTest::writeFallbackModules(tmp.path, "TcmFbBase", "TcmFbExt",
             "push TcmFbBase::children, \"ext\";");
@@ -168,11 +171,13 @@ module %s {
 printf(\"hello: %s children: %y\\n\", TcmFbBase::hello(), TcmFbBase::children);
 ", \rc);
         assertEq(0, rc, out);
-        assertRegex("warning: binary module '[^']*TcmFbExt\\.qmod' for feature 'TcmFbExt' failed to load; loading "
-            "source module '[^']*TcmFbExt\\.qm' instead", out);
+        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nBINARY-MODULE-SOURCE-FALLBACK: binary module "
+            "'[^']*TcmFbExt\\.qmod' for feature 'TcmFbExt' failed to load; loading source module '[^']*TcmFbExt\\.qm' "
+            "instead", out);
         # the child module is attached from its source
         assertRegex("hello: hello children: \\[\"ext\"\\]", out);
-        assertFalse(out =~ /BINARY-MODULE-SOURCE-FALLBACK/, out);
+        # the warning did not fail the import
+        assertFalse(out =~ /unhandled QORE/, out);
 
         # a genuine error in the child module's source still makes the child fail: as an optional child it is
         # reported and skipped, and a %requires of the child module itself fails
@@ -185,8 +190,10 @@ printf(\"hello: %s children: %y\\n\", TcmFbBase::hello(), TcmFbBase::children);
 printf(\"hello: %s children: %y\\n\", TcmFbErrBase::hello(), TcmFbErrBase::children);
 ", \rc);
         assertEq(0, rc, out);
-        assertRegex("warning: module 'TcmFbErrBase': child module 'TcmFbErrExt' declared with %try-child-module is "
-            "present but failed to load and was skipped", out);
+        # the warning is a parse warning of the script with the %requires directive
+        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nMODULE-CHILD-FAILED: module 'TcmFbErrBase': child "
+            "module 'TcmFbErrExt' declared with %try-child-module is present but failed to load and was skipped", out);
+        assertFalse(out =~ /^warning: /m, out);
         assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmFbErrBase::no_such_method\\(\\)'", out);
         assertRegex("hello: hello children: \\[\\]", out);
 
@@ -299,19 +306,52 @@ printf(\"loaded\\n\");
         assertEq("failed", childInfo("TcmBrokenBase").TcmBroken.status);
     }
 
+    absentNoWarningTest() {
+        # a child that is not installed is the documented optional case: no warning, even with all warnings
+        # enabled, so that code built with warnings as errors (qcc --warnings-are-errors) does not fail on it;
+        # TcmBase declares the absent TcmNoSuchChildModule
+        string out = runScript("%modern
+Program p(PO_NEW_STYLE);
+*hash<ExceptionInfo> w = p.parse(\"%requires TcmBase\\n\", \"requires\", WARN_ALL);
+printf(\"warn: %y\\n\", w ? w.err : NOTHING);
+");
+        assertEq("warn: null\n", out);
+
+        # qcc --warnings-are-errors compiles a module that requires it
+        string qcc = dirname(qore_bin) + "/qcc";
+        if (!is_executable(qcc)) {
+            testSkip("qcc is not available next to " + qore_bin);
+        }
+        TmpDir tmp();
+        string src = tmp.path + "/TcmAbsentUser.qm";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%requires TcmBase\nmodule TcmAbsentUser { version = \"1.0\"; desc = \"absent child "
+            "user\"; author = \"Qore Technologies, s.r.o.\"; license = \"MIT\"; }\npublic namespace "
+            "TcmAbsentUser { public int sub count() { return TcmBase::children.size(); } }\n");
+        f.close();
+        int rc;
+        out = backquote(sprintf("QORE_MODULE_DIR=%s %s --warnings-are-errors -m %s -o %s/TcmAbsentUser.qmod 2>&1",
+            dir, qcc, src, tmp.path), \rc);
+        assertEq(0, rc, out);
+        assertFalse(out =~ /MODULE-CHILD|warning/, out);
+    }
+
     brokenReportTest() {
         # A broken child must never be silently indistinguishable from an absent one, so it is always
-        # reported.  Both channels are checked here, each in a process of its own, since a module can only
+        # reported.  The channels are checked here, each in a process of its own, since a module can only
         # fail to load once per process: a %requires load has no warning sink separate from its exception
-        # sink and therefore writes to the console, while Program::loadModuleWarn() has one and gets a
-        # MODULE-CHILD-FAILED warning.
+        # sink, so the warning is a parse warning of the code with the directive (written by qore with its
+        # other warnings, returned by Program::parse()), while Program::loadModuleWarn() has one and gets a
+        # MODULE-CHILD-FAILED warning; with warnings disabled, the console gets it.
         string out = runScript("%modern
 %requires TcmBrokenBase
 
 printf(\"hello: %s\\n\", TcmBrokenBase::hello());
 ");
-        assertRegex("warning: module 'TcmBrokenBase': child module 'TcmBroken' declared with "
-            "%try-child-module is present but failed to load and was skipped", out);
+        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nMODULE-CHILD-FAILED: module 'TcmBrokenBase': child "
+            "module 'TcmBroken' declared with %try-child-module is present but failed to load and was skipped", out);
+        assertFalse(out =~ /^warning: /m, out);
         # the child module's own error must be part of the message; it is how the broken child is found
         assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmBrokenBase::no_such_method\\(\\)'", out);
         assertRegex("hello: hello", out);
@@ -329,6 +369,25 @@ printf(\"hello: %s\\n\", p.callFunction(\"h\"));
         assertRegex("hello: hello", out);
         # with a warning sink available nothing is written to the console
         assertFalse(out =~ /^warning: /m);
+
+        # Program::parse() with warnings returns the warning of a module loaded by %requires
+        out = runScript("%modern
+Program p(PO_NEW_STYLE);
+*hash<ExceptionInfo> w = p.parse(\"%requires TcmBrokenBase\\n\", \"requires\", WARN_ALL);
+printf(\"warn: %s: %s\\n\", w.err, w.arg);
+");
+        assertRegex("warn: MODULE-CHILD-FAILED: TcmBroken", out);
+        assertFalse(out =~ /^warning: /m, out);
+
+        # without warnings, a broken child is still reported, on the console
+        out = runScript("%modern
+Program p(PO_NEW_STYLE);
+p.parse(\"%requires TcmBrokenBase\\n\", \"requires\");
+printf(\"parsed\\n\");
+");
+        assertRegex("warning: module 'TcmBrokenBase': child module 'TcmBroken' declared with "
+            "%try-child-module is present but failed to load and was skipped", out);
+        assertRegex("parsed", out);
     }
 
     versionTest() {

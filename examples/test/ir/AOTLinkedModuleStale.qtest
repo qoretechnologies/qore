@@ -18,7 +18,8 @@
 # instead, with a warning that the AOT module must be rebuilt.  A source has changed if its content differs from the
 # content that qcc recorded in the fingerprint file next to the depfile; a source with only a new modification time,
 # as after a checkout or a copy of a build tree, has not.  Without a fingerprint, a source that is newer than the
-# module has changed.  A module that is not a symbolic link, such as an installed one, is not checked.
+# module has changed.  A module that is not a symbolic link and has no depfile next to it, such as an installed one or
+# a copy, is not checked (a built module with its depfile is: see AOTModuleStaleFallback.qtest).
 class AOTLinkedModuleStaleTest inherits QUnit::Test {
     private {
         string qore_bin;
