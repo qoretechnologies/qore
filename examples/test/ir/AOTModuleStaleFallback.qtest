@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestFileTime.qm
+
+%exec-class AOTModuleStaleFallbackTest
+
+#! How the module loader reports an AOT module of a build tree that is out of date with its sources
+/** An AOT module of a build tree one of whose sources has changed since it was compiled is not loaded: its source
+    module is loaded instead (see design/aot-linked-module-sources.md).  When the source module fails to load, the
+    error that tells why the AOT module was not loaded (\c AOT-MODULE-STALE) follows the error of the source module in
+    the exception chain.
+*/
+class AOTModuleStaleFallbackTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTModuleStaleFallbackTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("an out-of-date linked module whose source fails reports why it was not loaded",
+            \staleSourceFailsTest());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! sets the modification time of a file to a time after any build
+    private touchLater(string path) {
+        TestFileTime::set_file_times(2030-01-01T00:00:00Z, path);
+        assertEq(1893456000, hstat(path).mtime.getEpochSeconds(), "touch " + path);
+    }
+
+    #! writes the source of the Stale module, which returns the given code
+    private writeStale(string dir, string body) {
+        write(dir + "/Stale.qm", sprintf("%%modern\nmodule Stale { version = \"1.0\"; desc = \"stale\"; "
+            "author = \"Qore\"; license = \"MIT\"; }\npublic namespace Stale { public string sub value() { %s } }\n",
+            body));
+    }
+
+    #! compiles the Stale module from \a src_dir to \a qmod, with a depfile next to it
+    private compile(string src_dir, string qmod) {
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --depfile=%s.d --depfile-module-deps=source -o %s %s",
+            env, src_dir, qcc_bin, qmod, qmod, src_dir + "/Stale.qm"));
+        assertTrue(is_file(qmod), "compiled Stale.qmod: " + out);
+        assertTrue(is_file(qmod + ".d"), "depfile written: " + out);
+    }
+
+    #! runs a script that loads the module with the given module path and prints what happened
+    private string runStale(string module_path) {
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s -ne 'try { load_module(\"Stale\", WARN_MODULES); "
+            "printf(\"%%s %%s\\n\", call_function(\"Stale::value\"), basename(get_module_hash().Stale.filename)); } "
+            "catch (hash<ExceptionInfo> ex) { while (ex) { printf(\"ex: %%s: %%s\\n\", ex.err, ex.desc); "
+            "ex = ex.next; } }'", env, module_path, qore_bin)));
+    }
+
+    staleSourceFailsTest() {
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/qlib";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+        mkdir(build_dir);
+        writeStale(src_dir, "return \"v1\";");
+        compile(src_dir, build_dir + "/Stale.qmod");
+        assertEq(0, system(sprintf("ln -s '%s/Stale.qmod' '%s/Stale.qmod'", build_dir, src_dir)), "link");
+        assertEq("v1 Stale.qmod", runStale(src_dir));
+
+        # the source is changed so that it does not parse: the AOT module is out of date, and its source fails
+        writeStale(src_dir, "return \"v2\" SYNTAX ERROR;");
+        touchLater(src_dir + "/Stale.qm");
+        list<string> lines = runStale(src_dir).split("\n");
+        list<string> ex = map $1.substr(4), lines, !$1.find("ex: ");
+        assertEq(2, ex.size(), lines.join("\n"));
+        assertRegex("^PARSE-EXCEPTION: .*while loading user module \"Stale\"", ex[0]);
+        assertRegex("^AOT-MODULE-STALE: AOT module '.*/Stale\\.qmod' for feature 'Stale' is out of date: its "
+            "source '.*/Stale\\.qm' has changed since it was compiled; rebuild the AOT module \\(the binary module "
+            "was not loaded; source module '.*/Stale\\.qm' was tried instead\\)$", ex[1] ?? "");
+        # no warning about the fallback: the load failed
+        assertEq((), (select lines, $1 =~ /^warning/), lines.join("\n"));
+    }
+}

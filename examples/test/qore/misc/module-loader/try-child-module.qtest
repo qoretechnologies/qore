@@ -189,8 +189,10 @@ printf(\"hello: %s children: %y\\n\", TcmFbBase::hello(), TcmFbBase::children);
 printf(\"hello: %s children: %y\\n\", TcmFbErrBase::hello(), TcmFbErrBase::children);
 ", \rc);
         assertEq(0, rc, out);
-        assertRegex("warning: module 'TcmFbErrBase': child module 'TcmFbErrExt' declared with %try-child-module is "
-            "present but failed to load and was skipped", out);
+        # the warning is a parse warning of the script with the %requires directive
+        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nMODULE-CHILD-FAILED: module 'TcmFbErrBase': child "
+            "module 'TcmFbErrExt' declared with %try-child-module is present but failed to load and was skipped", out);
+        assertFalse(out =~ /^warning: /m, out);
         assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmFbErrBase::no_such_method\\(\\)'", out);
         assertRegex("hello: hello children: \\[\\]", out);
 
@@ -305,17 +307,19 @@ printf(\"loaded\\n\");
 
     brokenReportTest() {
         # A broken child must never be silently indistinguishable from an absent one, so it is always
-        # reported.  Both channels are checked here, each in a process of its own, since a module can only
+        # reported.  The channels are checked here, each in a process of its own, since a module can only
         # fail to load once per process: a %requires load has no warning sink separate from its exception
-        # sink and therefore writes to the console, while Program::loadModuleWarn() has one and gets a
-        # MODULE-CHILD-FAILED warning.
+        # sink, so the warning is a parse warning of the code with the directive (written by qore with its
+        # other warnings, returned by Program::parse()), while Program::loadModuleWarn() has one and gets a
+        # MODULE-CHILD-FAILED warning; with warnings disabled, the console gets it.
         string out = runScript("%modern
 %requires TcmBrokenBase
 
 printf(\"hello: %s\\n\", TcmBrokenBase::hello());
 ");
-        assertRegex("warning: module 'TcmBrokenBase': child module 'TcmBroken' declared with "
-            "%try-child-module is present but failed to load and was skipped", out);
+        assertRegex("warning encountered at [^\n]*:2 [^\n]*\nMODULE-CHILD-FAILED: module 'TcmBrokenBase': child "
+            "module 'TcmBroken' declared with %try-child-module is present but failed to load and was skipped", out);
+        assertFalse(out =~ /^warning: /m, out);
         # the child module's own error must be part of the message; it is how the broken child is found
         assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmBrokenBase::no_such_method\\(\\)'", out);
         assertRegex("hello: hello", out);
@@ -333,6 +337,25 @@ printf(\"hello: %s\\n\", p.callFunction(\"h\"));
         assertRegex("hello: hello", out);
         # with a warning sink available nothing is written to the console
         assertFalse(out =~ /^warning: /m);
+
+        # Program::parse() with warnings returns the warning of a module loaded by %requires
+        out = runScript("%modern
+Program p(PO_NEW_STYLE);
+*hash<ExceptionInfo> w = p.parse(\"%requires TcmBrokenBase\\n\", \"requires\", WARN_ALL);
+printf(\"warn: %s: %s\\n\", w.err, w.arg);
+");
+        assertRegex("warn: MODULE-CHILD-FAILED: TcmBroken", out);
+        assertFalse(out =~ /^warning: /m, out);
+
+        # without warnings, a broken child is still reported, on the console
+        out = runScript("%modern
+Program p(PO_NEW_STYLE);
+p.parse(\"%requires TcmBrokenBase\\n\", \"requires\");
+printf(\"parsed\\n\");
+");
+        assertRegex("warning: module 'TcmBrokenBase': child module 'TcmBroken' declared with "
+            "%try-child-module is present but failed to load and was skipped", out);
+        assertRegex("parsed", out);
     }
 
     versionTest() {

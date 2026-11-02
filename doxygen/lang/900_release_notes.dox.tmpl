@@ -1391,8 +1391,11 @@
       reported; the AOT module's error now follows it in the exception chain (see @ref aot_module_source_fallback)
     - the \c BINARY-MODULE-SOURCE-FALLBACK warning of a module loaded by \c %%requires or \c %%try-module was written
       to stderr; it is now a parse warning of the code with the directive, returned by Program::parse() and written
-      by \c qore with the other warnings, and not issued for code parsed without warnings (see
-      @ref aot_module_source_fallback)
+      by \c qore with the other warnings, and not issued for code parsed without warnings; the same applies to the
+      \c MODULE-CHILD-FAILED and \c MODULE-CHILD-SKIPPED warnings of @ref user_module_children "child modules",
+      and a broken child is still always reported (see @ref aot_module_source_fallback)
+    - when an AOT module of a build tree was out of date with its sources and its source module failed to load, only
+      the source error was reported; an \c AOT-MODULE-STALE error now follows it in the exception chain
     - a @ref thread_local "thread_local" variable declared in a user module was refused when the module inherited
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL": thread-local storage is not thread control (see
       @ref module_parse_option_masks)

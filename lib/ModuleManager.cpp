@@ -256,8 +256,9 @@ private:
 
 //! Reports a warning of the module loader about how a module was loaded
 /** These are the loader's own warnings: an AOT module that was not loaded and whose source module was loaded instead
-    (\c BINARY-MODULE-SOURCE-FALLBACK), or an AOT module loaded without functionality (\c BINARY-MODULE-STALE), as
-    opposed to the parse warnings in the source of a module.  A warning does not fail the load of the module.
+    (\c BINARY-MODULE-SOURCE-FALLBACK), an AOT module loaded without functionality (\c BINARY-MODULE-STALE), and a
+    child module declared with \c %%try-child-module that failed to load or was not attached (\c MODULE-CHILD-FAILED,
+    \c MODULE-CHILD-SKIPPED), as opposed to the parse warnings in the source of a module.  A warning does not fail the load of the module.
 
     A module load with a \a warning_mask of 0 issues no warning unless \a always is set.  The warning goes to the
     warning sink of the caller of the module load if the caller has one separate from its exception sink (the
@@ -2428,6 +2429,15 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (rv && !xsink) {
             qore_warn_stale_aot_module(xsink, wsink, warning_mask, name, qmod_path, source_path.c_str(),
                 stale_source.c_str());
+        } else {
+            // the source failed: why the AOT module was not loaded follows its error, as for an AOT module that
+            // fails to load (see qore_raise_binary_module_source_fallback_error())
+            ExceptionSink stale_xsink;
+            stale_xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(qmod_path), "AOT module '%s' for "
+                "feature '%s' is out of date: its source '%s' has changed since it was compiled; rebuild the AOT "
+                "module", qmod_path, name, stale_source.c_str());
+            qore_raise_binary_module_source_fallback_error(xsink, name, qmod_path, source_path.c_str(),
+                stale_xsink);
         }
         return true;
     };
@@ -3047,13 +3057,14 @@ ChildAttachHelper::~ChildAttachHelper() {
 /** A child declared with %try-child-module is optional, so neither a skipped nor a failed child is an
     error for the parent; the diagnostic is reported as a warning instead.
 
-    A broken child is reported unconditionally: if warnings are disabled, or if the caller has no warning
-    sink separate from its exception sink (the %requires path, where a warning raised in the sink would
-    become a parse error), the message is written to \c stderr.  A broken extension must never be silently
-    indistinguishable from an absent one.
+    A broken child is reported unconditionally, as \c MODULE-CHILD-FAILED: if no caller can receive the
+    warning (see qore_report_module_load_warning()), as when warnings are disabled, the message is written to
+    \c stderr.  A broken extension must never be silently indistinguishable from an absent one.  For a module
+    loaded by \c %%requires, which has no warning sink separate from its exception sink (raising the warning
+    there would make it a parse error), the warning is a parse warning of the code with the directive.
 
-    A skipped child reflects a deliberate restriction in the container Program and is only reported when
-    warnings are enabled.
+    A skipped child (\c MODULE-CHILD-SKIPPED) reflects a deliberate restriction in the container Program and is
+    only reported when warnings are enabled.
 */
 static void qore_report_child_module_not_attached(ExceptionSink& xsink, ExceptionSink& wsink,
         int warning_mask, const char* mod_name, const ChildModuleInfo& c) {
@@ -3069,16 +3080,10 @@ static void qore_report_child_module_not_attached(ExceptionSink& xsink, Exceptio
         : new QoreStringNodeMaker("module '%s': child module '%s' declared with %%try-child-module was "
             "not attached: %s", mod_name, c.name.c_str(), c.desc.c_str()));
 
-    if (!warning_mask || &xsink == &wsink) {
-        printe("warning: %s\n", warn_desc->c_str());
-        return;
-    }
-
-    // no allocation may happen between the two release() calls; the argument evaluation order is
-    // unspecified, and a throw between them would leak the other argument
-    SimpleRefHolder<QoreStringNode> arg(new QoreStringNode(c.name));
-    wsink.raiseExceptionArg(failed ? "MODULE-CHILD-FAILED" : "MODULE-CHILD-SKIPPED", arg.release(),
-        warn_desc.release());
+    // reported where the other warnings of the module loader go (see qore_report_module_load_warning()); the
+    // warning's argument is the name of the child module
+    qore_report_module_load_warning(xsink, &xsink == &wsink ? nullptr : &wsink, warning_mask, failed,
+        failed ? "MODULE-CHILD-FAILED" : "MODULE-CHILD-SKIPPED", c.name.c_str(), warn_desc.release());
 }
 
 bool QoreModuleManager::hasUserModuleDependencyPath(const std::string& from, const std::string& to) {
@@ -3178,8 +3183,9 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             printd(5, "QoreModuleManager::attachChildModules() '%s': attaching child '%s'\n", mi.getName(),
                 cname.c_str());
             // the child's warnings are its own: with no warning sink of the caller's separate from its exception
-            // sink (the %requires path), they are written to stderr as for a module loaded with %requires, and not
-            // raised in the caller's sink, where they would fail the import of the module that declares the child
+            // sink (the %requires path), they are reported as for a module loaded with %requires (see
+            // qore_report_module_load_warning()), and not raised in the caller's sink, where they would fail the
+            // import of the module that declares the child
             cmi = loadModuleIntern(cx, &xsink == &wsink ? cx : wsink, cname.c_str(), nullptr, false, op,
                 op == MOD_OP_NONE ? nullptr : &version, nullptr, nullptr, QMLO_NONE, warning_mask, nullptr,
                 ppgm, &not_found);

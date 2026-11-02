@@ -37,8 +37,13 @@ the AOT module; only the report differs (`lib/ModuleManager.cpp`):
   the loader's warning path (`qore_report_module_load_warning()`); with a warning mask of 0 no warning is issued;
 - **no source is found**: the refusal is the exception of the load.
 
-The warning path of the loader's own warnings (`BINARY-MODULE-SOURCE-FALLBACK`, also for an out-of-date linked AOT
-module, and `BINARY-MODULE-STALE`):
+An AOT module of a build tree that is out of date with its sources (see `design/aot-linked-module-sources.md`) is
+not tried at all; if its source fails, `AOT-MODULE-STALE` ("... is out of date: its source '...' has changed since
+it was compiled; rebuild the AOT module") follows the source error in the same way.
+
+The warning path of the loader's own warnings (`BINARY-MODULE-SOURCE-FALLBACK`, also for an out-of-date AOT
+module of a build tree, `BINARY-MODULE-STALE`, and `MODULE-CHILD-FAILED` and `MODULE-CHILD-SKIPPED` for child modules
+declared with `%try-child-module`):
 
 | Load | Warning |
 |---|---|
@@ -49,10 +54,10 @@ module, and `BINARY-MODULE-STALE`):
 | any of these with a warning mask of 0 (the default of `Program::parse()`) | not issued |
 
 The frames that decide are kept in a thread-local chain (`QoreModuleLoadWarningFrame`): a run-time API load pushes
-its caller's warning sink and mask, a parse directive pushes the Program being parsed.  `BINARY-MODULE-STALE` and
-the out-of-date warning are issued even with a warning mask of 0 (on stderr if no frame can receive them), as the code
-that runs is not the code the caller would expect; a source module loaded instead of a refused AOT module is the
-module, so its warning follows the mask, as documented for the warning masks of the module loading and parse APIs.
+its caller's warning sink and mask, a parse directive pushes the Program being parsed.  `BINARY-MODULE-STALE`,
+`MODULE-CHILD-FAILED` and the out-of-date warning are issued even with a warning mask of 0 (on stderr if no frame
+can receive them), as the code that runs is not the code the caller would expect; a source module loaded instead of
+a refused AOT module is the module, so its warning follows the mask, as documented for the warning masks of the module loading and parse APIs.
 The test harness (`examples/test/LoaderWarnings.qm`) recognizes the warnings in both of the forms that `qore` writes
 (`warning: ...` on stderr, and a parse warning with its location line).
 

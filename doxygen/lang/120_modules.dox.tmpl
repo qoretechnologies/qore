@@ -1465,7 +1465,9 @@ qcc of this Qore installation
     - if the source module loads, a \c BINARY-MODULE-SOURCE-FALLBACK warning gives the reason; with a warning mask
       of 0, no warning is issued, except for a compiled module that is out of date with its sources
 
-    The warnings of the module loader are reported where the warnings of the load go:
+    The warnings of the module loader (\c BINARY-MODULE-SOURCE-FALLBACK, \c BINARY-MODULE-STALE, and
+    \c MODULE-CHILD-FAILED and \c MODULE-CHILD-SKIPPED for @ref user_module_children "child modules") are reported
+    where the warnings of the load go:
     |!Module load|!Warning
     |Program::loadModuleWarn(), load_module_warn(), Program::loadApplyToUserModuleWarn() and the other \c *Warn() \
      methods|returned with the other warnings
@@ -1775,8 +1777,10 @@ module MyBaseExtension {
     installed is silently ignored, and a child that is installed but cannot be loaded (due to a parse error, an error
     in its initialization code, or a version mismatch) is skipped, leaving the declaring module fully usable without
     it.  Because an extension that silently disappears is a deployment problem in its own right, a child that could
-    not be loaded is always reported: as a \c MODULE-CHILD-FAILED warning if the module is loaded with a warning sink
-    (as with Program::loadModuleWarn()), and otherwise on \c stderr.  The child's own error is also recorded in the
+    not be loaded is always reported as a \c MODULE-CHILD-FAILED warning, where the other warnings of the module loader
+    go (see @ref aot_module_source_fallback): returned by Program::loadModuleWarn() and the other \c *Warn() methods,
+    a parse warning of the code with the directive for a module loaded by @ref requires "%requires", and otherwise,
+    as when warnings are disabled, on \c stderr.  The child's own error is also recorded in the
     module hash, as shown below, which is how an incompatible or broken extension is diagnosed after the fact.
 
     A child that could not be loaded is not tried again in the same process: a module load failure is deterministic,

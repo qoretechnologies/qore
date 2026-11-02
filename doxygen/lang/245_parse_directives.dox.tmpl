@@ -3010,7 +3010,7 @@ module SalesforceRestDataProvider {
     - Child modules are attached once the outermost module load in progress has completed, so that a child that depends on any module still being loaded resolves it correctly.
     - Child modules are attached in declaration order; a child that declares child modules of its own has them attached before the next declaration in the parent.
     - The child is loaded with the parse options and module search path of the declaring module's @ref Qore::Program "Program" object; if that object was created with @ref Qore::PO_NO_MODULES "PO_NO_MODULES", no child is loaded and a \c MODULE-CHILD-SKIPPED warning is raised instead.
-    - A broken child is always reported; when the module is loaded without a warning sink separate from its exception sink (as with @ref requires "%requires"), or when warnings are disabled, the message is written to \c stderr.
+    - A broken child is always reported; for a module loaded by @ref requires "%requires", the warning is a parse warning of the code with the directive (returned by Program::parse() with a warning mask, and written by \c qore with its other warnings); when no caller can receive it, as when warnings are disabled, the message is written to \c stderr (see @ref aot_module_source_fallback).
     - A child that could not be loaded is not tried again in the same process; a child fixed on disk is picked up the next time the program is started.
     - Use get_module_hash() to see the attachment status of each declared child module; see @ref user_module_children "Child Modules" for details.
 
