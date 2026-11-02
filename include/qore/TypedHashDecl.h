@@ -446,6 +446,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclListSerializationInfo;
 /** @since %Qore 0.9.3
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclUrlInfo;
+DLLEXPORT extern const TypedHashDecl* hashdeclModuleParseOptionMaskInfo;
 
 //! FtpResponseInfo hashdecl
 /** @since %Qore 0.9.4

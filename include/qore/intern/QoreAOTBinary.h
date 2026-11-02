@@ -1724,6 +1724,15 @@ private:
 DLLLOCAL QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions& parent_po,
         const QoreParseOptions& exclude);
 
+struct QoreModuleParseOptionMask;
+
+//! returns the parse options that a user module loaded by \a p inherits from it, with the module parse option mask
+//! applied; see QoreModuleParseOptionMask
+/** \a p may be nullptr; \a exclude names the options the module does not inherit
+*/
+DLLLOCAL QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
+        const QoreModuleParseOptionMask& mask);
+
 //! Serialize the functional domains that the code of a Program uses into the FUNCTIONAL_DOMAIN section
 /** Nothing is written if \a dom is empty.  Loading an AOT module checks the restrictions of the Program loading it
     against these domains, as parsing the module's source does (issue #5556).

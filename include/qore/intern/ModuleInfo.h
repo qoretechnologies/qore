@@ -45,6 +45,7 @@ extern "C" {
 #include <map>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 // parse options set while parsing the module's header (init & del)
@@ -52,6 +53,46 @@ extern "C" {
 
 // initial user module parse options
 #define USER_MOD_PO (PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR | PO_IN_MODULE)
+
+//! A user module's parse option mask: restrictions stripped from and added to those it inherits
+/** A user module (source or AOT) inherits the restrictions of the Program that loads it (see
+    QoreModuleManager::loadSeparatedModule()).  A mask strips restrictions from what the module inherits, so that a
+    trusted module may use functionality that its loader may not (for example a module that uses threads loaded by
+    code with PO_NO_THREAD_CONTROL), and adds restrictions to it.  Only restricting options can be
+    masked (see check()); an option that is both stripped and added is added.  See design/module-parse-option-masks.md.
+*/
+struct QoreModuleParseOptionMask {
+    //! the restrictions the module does not inherit
+    QoreParseOptions strip;
+    //! the restrictions added to the module's parse options
+    QoreParseOptions add;
+
+    //! the options that a mask may contain: restrictions only, not explicitly-allowed (positive), language
+    //! (free) or style options, nor the options that every user module has
+    DLLLOCAL static QoreParseOptions maskable();
+
+    //! Raises an exception and returns -1 if a mask contains an option that cannot be masked, or an option both
+    //! to strip and to add
+    DLLLOCAL static int check(const QoreParseOptions& strip, const QoreParseOptions& add, ExceptionSink* xsink);
+
+    //! returns true if the mask is empty
+    DLLLOCAL bool empty() const {
+        return !strip && !add;
+    }
+
+    //! returns the given inherited options with the mask applied: stripped restrictions removed, added ones added
+    DLLLOCAL QoreParseOptions apply(const QoreParseOptions& inherited) const {
+        return (inherited & ~strip) | add;
+    }
+
+    //! adds another mask to this one; an option added by either is not stripped
+    DLLLOCAL QoreModuleParseOptionMask& operator|=(const QoreModuleParseOptionMask& other) {
+        strip |= other.strip;
+        add |= other.add;
+        strip &= ~add;
+        return *this;
+    }
+};
 
 // module load options
 #define QMLO_NONE            0
@@ -285,6 +326,23 @@ public:
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink)
         = 0;
 
+    //! returns the module's parse option mask
+    DLLLOCAL QoreModuleParseOptionMask getParseOptionMask() const {
+        std::lock_guard<std::mutex> lck(po_mask_lock);
+        return po_mask;
+    }
+
+    //! adds a mask to the module's parse option mask
+    DLLLOCAL void addParseOptionMask(const QoreModuleParseOptionMask& mask) {
+        std::lock_guard<std::mutex> lck(po_mask_lock);
+        po_mask |= mask;
+    }
+
+    //! returns the Program of a user module (source or AOT), or nullptr for a binary module
+    DLLLOCAL virtual QoreProgram* getModuleProgram() const {
+        return nullptr;
+    }
+
 protected:
     QoreString filename,
         name,
@@ -315,6 +373,11 @@ protected:
         injected : 1,
         reinjected : 1,
         init_failed : 1;
+
+    // guards po_mask, which a privileged Program can change while other threads import the module
+    mutable std::mutex po_mask_lock;
+    // the module's parse option mask; see QoreModuleParseOptionMask
+    QoreModuleParseOptionMask po_mask;
 
     DLLLOCAL QoreHashNode* getHashIntern(bool with_filename = true) const;
 
@@ -541,6 +604,36 @@ public:
         AutoLocker al(mutex);
         return findModuleUnlocked(name);
     }
+
+    //! Sets the parse option mask applied to every user module loaded from now on; see QoreModuleParseOptionMask
+    /** @return 0 for OK, -1 if an exception was raised for an invalid mask
+    */
+    DLLLOCAL int setParseOptionMask(const QoreModuleParseOptionMask& mask, ExceptionSink* xsink);
+
+    //! Returns the parse option mask applied to every user module loaded from now on
+    DLLLOCAL QoreModuleParseOptionMask getParseOptionMask() const;
+
+    //! Returns the mask that applies to a user module loaded now in this thread: the global mask and the mask of
+    //! the masked load in progress in this thread, if any (see runTimeLoadModuleMasked())
+    DLLLOCAL QoreModuleParseOptionMask getLoadParseOptionMask() const;
+
+    //! Loads a module with a parse option mask, which the module gets also when it has been loaded already
+    /** The mask applies to the module and to the modules it loads while it is loaded; see
+        QoreModuleParseOptionMask
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int runTimeLoadModuleMasked(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
+            QoreProgram* pgm, const QoreModuleParseOptionMask& mask, int warning_mask = QP_WARN_MODULES);
+
+    //! Adds a parse option mask to a loaded module and applies it to the module's Program
+    /** The stripped restrictions are removed from the parse options of the module's Program and the added ones are
+        added to it; restrictions stripped earlier are not restored
+
+        @return 0 for OK, -1 if an exception was raised: an invalid mask or a module that is not loaded
+    */
+    DLLLOCAL int addModuleParseOptionMask(const char* name, const QoreModuleParseOptionMask& mask,
+            ExceptionSink* xsink);
 
     //! Load a reexported module into a program using the current module-load locking context.
     DLLLOCAL void loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm);
@@ -939,6 +1032,11 @@ protected:
     DLLLOCAL void getUniqueName(QoreString& nname, const char* name, const char* prefix);
 
     DLLLOCAL int checkBlacklist(ExceptionSink& xsink, const char* name);
+
+    // guards po_mask
+    mutable std::mutex po_mask_lock;
+    // the parse option mask applied to every user module loaded from now on
+    QoreModuleParseOptionMask po_mask;
 };
 
 DLLLOCAL extern QoreModuleManager QMM;
@@ -957,6 +1055,9 @@ public:
               info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
               dependencies(mod_info.dependencies), aot(mod_info.is_aot) {
     }
+
+    //! returns the Program of an AOT user module, or nullptr for a binary module
+    DLLLOCAL virtual QoreProgram* getModuleProgram() const;
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
         printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s' (feature '%s'): %s calling module_delete: %p\n",
@@ -1041,6 +1142,10 @@ public:
     DLLLOCAL virtual ~QoreUserModule();
 
     DLLLOCAL QoreProgram* getProgram() const {
+        return pgm;
+    }
+
+    DLLLOCAL virtual QoreProgram* getModuleProgram() const {
         return pgm;
     }
 

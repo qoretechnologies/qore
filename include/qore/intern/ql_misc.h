@@ -36,6 +36,7 @@
 DLLLOCAL void init_misc_functions(QoreNamespace& ns);
 
 DLLLOCAL TypedHashDecl* init_hashdecl_UrlInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ModuleParseOptionMaskInfo(QoreNamespace& ns);
 
 //! Returns the approximate byte size of a QoreValue
 /** Recursively calculates the byte size of strings, binary data, hashes, and lists.
