@@ -5147,6 +5147,18 @@ void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
     emitLocalReloadCleanup(module);
 }
 
+void QoreIRToLLVM::reloadLocalsAfterHandlers(llvm::Module& module, llvm::Function* llvm_func) {
+    // Only the function's own OnBlockExit instructions register handlers in the runtime list that the scope's
+    // helper runs, and a callee runs and removes its own before it returns: without one, the helper runs nothing,
+    // publishLocalsForHandlers() published and released nothing, and every local cache is still current.  A
+    // function of N try statements with N locals otherwise reloaded every local at each try's scope exit and
+    // landing pad, N x N reloads.
+    if (!has_on_block_exit_handlers) {
+        return;
+    }
+    reloadAllLocalsFromRuntime(module, llvm_func, true, true);
+}
+
 void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
     if (!has_on_block_exit_handlers || local_allocas.empty()) {
         return;
@@ -25184,8 +25196,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(helper, {saved_count, xsink_arg});
                     // On-block-exit handlers execute through the AST path and can modify
                     // any local variable on the thread-local stack; the reload is eager, since the locals'
-                    // reload storage was released before the handlers ran
-                    reloadAllLocalsFromRuntime(module, llvm_func, true, true);
+                    // reload storage was released before the handlers ran.  A function without handlers
+                    // registers none, so the call runs no code and the locals are neither published nor reloaded
+                    // (see reloadLocalsAfterHandlers())
+                    reloadLocalsAfterHandlers(module, llvm_func);
                 }
             }
             return true;
@@ -38542,7 +38556,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // allocas so subsequent LoadLocal sees the updated values; eagerly, since the
                 // locals' reload storage was released before the handlers ran
                 if (!sinst->inline_lowered) {
-                    reloadAllLocalsFromRuntime(module, llvm_func, true, true);
+                    reloadLocalsAfterHandlers(module, llvm_func);
                     emitExceptionCheck(module, llvm_func, inst);
                 }
             }

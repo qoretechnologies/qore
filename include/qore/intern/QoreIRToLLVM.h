@@ -1593,6 +1593,11 @@ private:
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.
     void syncLocalsToRuntimeForHandlers(llvm::Module& module);
+    //! Reloads every local eagerly after a scope's handlers ran, in a function that has handlers
+    /** In a function without OnBlockExit instructions the scope helpers run no handler and the caches stay
+        current, so nothing is emitted.
+    */
+    void reloadLocalsAfterHandlers(llvm::Module& module, llvm::Function* llvm_func);
     // Publishes the locals to the runtime local stack for handlers that run at runtime and releases the native
     // code's reload storage, so that the stack holds the only reference that the function has to each value; the
     // caller reloads the locals after the handlers
