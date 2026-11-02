@@ -1,0 +1,395 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ModuleParseOptionMaskTest
+
+#! Module restrictions and module parse option masks, with source and AOT modules in every execution mode
+/** A user module inherits the restrictions of the Program that loads it first and is refused by it if its code uses
+    functionality they forbid; a loaded module is imported by other Programs without a check.  Source modules and AOT
+    modules are treated the same way: an AOT module records the restrictions its code would conflict with, which are
+    checked when it is loaded.  A thread_local variable in a module is not thread
+    control.  Module parse option masks (set_module_parse_option_mask(), load_module_masked(),
+    add_module_parse_option_mask()) strip restrictions from and add restrictions to modules.
+
+    Each case runs a script with the source modules and with the modules AOT-compiled with <tt>--compile-module</tt>
+    in every execution mode, and expects the given output, which is that of the source modules with the AST
+    interpreter.
+*/
+class ModuleParseOptionMaskTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+
+        #! holds the source and AOT modules and the scripts
+        TmpDir tmp("qore-module-parse-option-mask-");
+
+        #! the directory with the source modules
+        string src_dir;
+        #! the directory with the AOT modules
+        string qmod_dir;
+
+        #! the test modules
+        const Modules = {
+            "MaskTlMod": "%modern
+module MaskTlMod {
+    version = \"1.0\";
+    desc = \"module parse option mask test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+thread_local int tl_counter;
+public namespace MaskTlMod {
+    public int sub bump() { return ++tl_counter; }
+}
+",
+            "MaskThreadMod": "%modern
+module MaskThreadMod {
+    version = \"1.0\";
+    desc = \"module parse option mask test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace MaskThreadMod {
+    public int sub run_background() {
+        Counter c(1);
+        int rv;
+        background sub () { rv = 42; c.dec(); }();
+        c.waitForZero();
+        return rv;
+    }
+}
+",
+            "MaskExitMod": "%modern
+module MaskExitMod {
+    version = \"1.0\";
+    desc = \"module parse option mask test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace MaskExitMod {
+    public sub leave() { thread_exit; }
+    public string sub name() { return \"exit\"; }
+}
+",
+            "MaskHostMod": "%modern
+module MaskHostMod {
+    version = \"1.0\";
+    desc = \"module parse option mask test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace MaskHostMod {
+    public bool sub has_host() { return gethostname().val(); }
+}
+",
+            "MaskThreadUser": "%modern
+%requires MaskThreadMod
+module MaskThreadUser {
+    version = \"1.0\";
+    desc = \"module parse option mask test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace MaskThreadUser {
+    public int sub run() { return MaskThreadMod::run_background(); }
+}
+",
+            "MaskClassMod": "%modern
+module MaskClassMod {
+    version = \"1.0\";
+    desc = \"module parse option mask test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace MaskClassMod {
+    public class Box {
+        public { int v = 7; }
+    }
+    public int sub value() { return (new Box()).v; }
+}
+",
+        };
+
+        #! the code included by every script
+        const Common = "const TC = PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES;
+
+#! loads a module into a new Program with the given restrictions and calls the given code, returning what happened
+string sub try_load(int po, string mod, *string call) {
+    try {
+        Program p(PO_NEW_STYLE | po);
+        p.loadModule(mod);
+        if (!call) {
+            return \"loaded\";
+        }
+        p.parse(\"auto sub t() { return \" + call + \"; }\", \"call\");
+        return sprintf(\"loaded: %y\", p.callFunction(\"t\"));
+    } catch (hash<ExceptionInfo> ex) {
+        return \"refused\";
+    }
+}
+
+#! returns the mask as a sorted string
+string sub mask_str(hash<ModuleParseOptionMaskInfo> m) {
+    return sprintf(\"strip=%s add=%s\", sort(m.strip).join(\",\"), sort(m.add).join(\",\"));
+}
+
+#! runs code and returns the exception code or \"ok\"
+string sub err(code c) {
+    try {
+        c();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the scripts, without their header
+        const Scripts = {
+            "load": "printf(\"tl: %s\\n\", try_load(PO_NO_THREAD_CONTROL, \"MaskTlMod\", \"MaskTlMod::bump()\"));
+printf(\"exit: %s\\n\", try_load(PO_NO_THREAD_CONTROL, \"MaskExitMod\"));
+printf(\"thread: %s\\n\", try_load(TC, \"MaskThreadMod\"));
+printf(\"user: %s\\n\", try_load(TC, \"MaskThreadUser\"));
+printf(\"unrestricted: %s\\n\", try_load(0, \"MaskThreadUser\", \"MaskThreadUser::run()\"));
+",
+            "global": "set_module_parse_option_mask(TC);
+printf(\"mask: %s\\n\", mask_str(get_module_parse_option_mask()));
+printf(\"thread: %s\\n\", try_load(TC, \"MaskThreadMod\", \"MaskThreadMod::run_background()\"));
+printf(\"exit: %s\\n\", try_load(PO_NO_THREAD_CONTROL, \"MaskExitMod\", \"MaskExitMod::name()\"));
+printf(\"module: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskThreadMod\")));
+set_module_parse_option_mask(0);
+printf(\"reset: %s\\n\", mask_str(get_module_parse_option_mask()));
+printf(\"later: %s\\n\", try_load(TC, \"MaskThreadUser\"));
+",
+            "import": "load_module(\"MaskThreadMod\");
+printf(\"import: %s\\n\", try_load(TC, \"MaskThreadMod\"));
+add_module_parse_option_mask(\"MaskThreadMod\", TC);
+printf(\"module: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskThreadMod\")));
+printf(\"masked import: %s\\n\", try_load(TC, \"MaskThreadMod\", \"MaskThreadMod::run_background()\"));
+printf(\"other restriction: %s\\n\", try_load(PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL, \"MaskThreadMod\",
+    \"MaskThreadMod::run_background()\"));
+",
+            "add": "set_module_parse_option_mask(0, PO_NO_EXTERNAL_INFO);
+printf(\"mask: %s\\n\", mask_str(get_module_parse_option_mask()));
+printf(\"host: %s\\n\", try_load(0, \"MaskHostMod\"));
+printf(\"tl: %s\\n\", try_load(0, \"MaskTlMod\", \"MaskTlMod::bump()\"));
+",
+            "masked": "load_module_masked(\"MaskThreadUser\", new ParseOptions((\"no-thread-control\", \"no-thread-classes\")));
+printf(\"user: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskThreadUser\")));
+printf(\"dependency: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskThreadMod\")));
+printf(\"global: %s\\n\", mask_str(get_module_parse_option_mask()));
+printf(\"import: %s\\n\", try_load(TC, \"MaskThreadUser\", \"MaskThreadUser::run()\"));
+printf(\"not masked: %s\\n\", try_load(PO_NO_THREAD_CONTROL, \"MaskExitMod\"));
+# a module loaded before gets the mask when it is loaded again with one
+load_module(\"MaskTlMod\");
+load_module_masked(\"MaskTlMod\", 0, PO_NO_EXTERNAL_INFO);
+printf(\"again: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskTlMod\")));
+",
+            "negative": "printf(\"positive: %s\\n\", err(sub () { set_module_parse_option_mask(PO_ALLOW_INJECTION); }));
+printf(\"free: %s\\n\", err(sub () { set_module_parse_option_mask(PO_BROKEN_LOGIC_PRECEDENCE); }));
+printf(\"style: %s\\n\", err(sub () { set_module_parse_option_mask(0, PO_REQUIRE_TYPES); }));
+printf(\"both: %s\\n\", err(sub () { set_module_parse_option_mask(PO_NO_THREAD_CONTROL, PO_NO_THREAD_CONTROL); }));
+printf(\"unchanged: %s\\n\", mask_str(get_module_parse_option_mask()));
+printf(\"not loaded: %s\\n\", err(sub () { add_module_parse_option_mask(\"MaskNoSuchMod\", TC); }));
+printf(\"get not loaded: %s\\n\", err(sub () { get_module_parse_option_mask(\"MaskNoSuchMod\"); }));
+printf(\"load missing: %s\\n\", err(sub () { load_module_masked(\"MaskNoSuchMod\", TC); }));
+printf(\"load invalid: %s\\n\", err(sub () { load_module_masked(\"MaskTlMod\", PO_ALLOW_INJECTION); }));
+printf(\"invalid not loaded: %s\\n\", err(sub () { get_module_parse_option_mask(\"MaskTlMod\"); }));
+# code that may not control the process cannot call the APIs
+{
+    Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+    printf(\"no process control: %s\\n\", err(sub () { p.parse(\"sub f() { set_module_parse_option_mask(0); }\", \"p\"); }));
+}
+# sandboxed code cannot call them
+{
+    Program p(PO_NEW_STYLE);
+    SandboxManager sm();
+    p.setSandboxManager(sm);
+    p.parse(\"sub f() { set_module_parse_option_mask(PO_NO_THREAD_CONTROL); } \"
+        \"sub g() { load_module_masked(\\\"MaskTlMod\\\", PO_NO_THREAD_CONTROL); } \"
+        \"sub h() { add_module_parse_option_mask(\\\"MaskTlMod\\\", PO_NO_THREAD_CONTROL); }\", \"s\");
+    printf(\"sandboxed set: %s\\n\", err(sub () { p.callFunction(\"f\"); }));
+    printf(\"sandboxed load: %s\\n\", err(sub () { p.callFunction(\"g\"); }));
+    printf(\"sandboxed add: %s\\n\", err(sub () { p.callFunction(\"h\"); }));
+    printf(\"still unchanged: %s\\n\", mask_str(get_module_parse_option_mask()));
+}
+",
+            "defs": "ParseOptions no_class_defs(\"no-class-defs\");
+string sub try_load_po(ParseOptions po, string mod, *string call) {
+    try {
+        ParseOptions opts(PO_NEW_STYLE);
+        opts.set(po);
+        Program p(opts);
+        p.loadModule(mod);
+        if (!call) {
+            return \"loaded\";
+        }
+        p.parse(\"auto sub t() { return \" + call + \"; }\", \"call\");
+        return sprintf(\"loaded: %y\", p.callFunction(\"t\"));
+    } catch (hash<ExceptionInfo> ex) {
+        return \"refused\";
+    }
+}
+printf(\"first: %s\\n\", try_load_po(no_class_defs, \"MaskClassMod\"));
+load_module(\"MaskClassMod\");
+printf(\"import: %s\\n\", try_load_po(no_class_defs, \"MaskClassMod\"));
+add_module_parse_option_mask(\"MaskClassMod\", no_class_defs);
+printf(\"masked: %s\\n\", try_load_po(no_class_defs, \"MaskClassMod\", \"MaskClassMod::value()\"));
+printf(\"module: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskClassMod\")));
+",
+        };
+
+        #! the expected output of each script
+        const Expected = {
+            "load": "tl: loaded: 1
+exit: refused
+thread: refused
+user: refused
+unrestricted: loaded: 42
+",
+            "global": "mask: strip=no-thread-classes,no-thread-control add=
+thread: loaded: 42
+exit: loaded: \"exit\"
+module: strip=no-thread-classes,no-thread-control add=
+reset: strip= add=
+later: loaded
+",
+            "import": "import: loaded
+module: strip=no-thread-classes,no-thread-control add=
+masked import: loaded: 42
+other restriction: loaded: 42
+",
+            "add": "mask: strip= add=no-external-info
+host: refused
+tl: loaded: 1
+",
+            "masked": "user: strip=no-thread-classes,no-thread-control add=
+dependency: strip=no-thread-classes,no-thread-control add=
+global: strip= add=
+import: loaded: 42
+not masked: refused
+again: strip= add=no-external-info
+",
+            "negative": "positive: MODULE-PARSE-OPTION-MASK-ERROR
+free: MODULE-PARSE-OPTION-MASK-ERROR
+style: MODULE-PARSE-OPTION-MASK-ERROR
+both: MODULE-PARSE-OPTION-MASK-ERROR
+unchanged: strip= add=
+not loaded: MODULE-PARSE-OPTION-MASK-ERROR
+get not loaded: MODULE-PARSE-OPTION-MASK-ERROR
+load missing: LOAD-MODULE-ERROR
+load invalid: MODULE-PARSE-OPTION-MASK-ERROR
+invalid not loaded: MODULE-PARSE-OPTION-MASK-ERROR
+no process control: PARSE-EXCEPTION
+sandboxed set: MODULE-PARSE-OPTION-MASK-ERROR
+sandboxed load: MODULE-PARSE-OPTION-MASK-ERROR
+sandboxed add: MODULE-PARSE-OPTION-MASK-ERROR
+still unchanged: strip= add=
+",
+            "defs": "first: refused
+import: loaded
+masked: loaded: 7
+module: strip=no-class-defs add=
+",
+        };
+    }
+
+    constructor() : QUnit::Test("ModuleParseOptionMaskTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../qlib");
+        src_dir = tmp.path + "/src";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        foreach hash<auto> i in (Modules.pairIterator()) {
+            writeFile(src_dir + "/" + i.key + ".qm", i.value);
+        }
+        writeFile(tmp.path + "/common.ql", Common);
+
+        addTestCase("a module with thread_local variables is loaded by code without thread control; a module that uses thread control or threads, or a module that loads one, is not", \testScript(), ("load",));
+        addTestCase("the process mask lets code without threads load modules that use threads; a module keeps the mask it was loaded with", \testScript(), ("global",));
+        addTestCase("a module loaded by unrestricted code is imported by a restricted Program without a check, and a loaded module can be masked", \testScript(), ("import",));
+        addTestCase("a mask adds restrictions to the modules loaded after it is set", \testScript(), ("add",));
+        addTestCase("a masked load masks the module and the modules it loads, and an already loaded module gets the mask too", \testScript(), ("masked",));
+        addTestCase("invalid masks, unknown modules and callers that may not change masks are refused", \testScript(), ("negative",));
+        addTestCase("definition restrictions apply to the first load of source and AOT modules alike, masks strip them, and a loaded module is imported without a check", \testScript(), ("defs",));
+        set_return_value(main());
+    }
+
+    #! writes \a contents to \a path and returns \a path
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    #! AOT-compiles \a name from the source modules with the given module path and asserts that it succeeded
+    private compileModule(string name, string module_dir) {
+        string qmod_path = qmod_dir + "/" + name + ".qmod";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            module_dir, qore_bin, qmod_path, src_dir + "/" + name + ".qm"));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", name, compile_out));
+    }
+
+    #! AOT-compiles the test modules once
+    private compileModules() {
+        if (is_file(qmod_dir + "/MaskThreadUser.qmod")) {
+            return;
+        }
+        foreach string name in (keys Modules) {
+            if (name != "MaskThreadUser") {
+                compileModule(name, src_dir + ":" + qlib_dir);
+            }
+        }
+        # depends on MaskThreadMod
+        compileModule("MaskThreadUser", qmod_dir + ":" + src_dir + ":" + qlib_dir);
+    }
+
+    #! returns the module path for running scripts against the modules in \a dir
+    private string modulePath(string dir) {
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        return env_dir ? dir + ":" + qlib_dir + ":" + env_dir : dir + ":" + qlib_dir;
+    }
+
+    #! runs \a script_path in \a mode with the modules found in \a module_path first
+    private hash<ExecModeHarness::ModeRunResult> runScript(string module_path, string script_path, string mode) {
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
+            module_path, qore_bin, mode, script_path));
+    }
+
+    #! runs a script with the source and the AOT modules in every execution mode and checks its output
+    testScript(string name) {
+        compileModules();
+        string script_path = writeFile(tmp.path + "/" + name + ".q", "%modern\n%include " + tmp.path
+            + "/common.ql\n" + Scripts{name});
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = runScript(modulePath(src_dir), script_path, mode);
+            assertEq(Expected{name}, r.out, sprintf("%s: source modules, %s", name, mode));
+            r = runScript(modulePath(qmod_dir), script_path, mode);
+            assertEq(Expected{name}, r.out, sprintf("%s: AOT modules, %s", name, mode));
+            assertEq((), r.loader_warnings, sprintf("%s: AOT modules, %s: loader warnings", name, mode));
+        }
+    }
+}

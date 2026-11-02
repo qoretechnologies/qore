@@ -4312,6 +4312,12 @@ bool parse_check_parse_option(const QoreParseOptions& o) {
     return (parse_get_parse_options() & o) == o;
 }
 
+bool parse_check_restriction(const QoreParseOptions& o) {
+    QoreProgram* pgm = getProgram();
+    // without a Program there is nothing to record, and the parse options are checked as they are
+    return pgm ? (bool)qore_program_private::parseAddDomain(pgm, o) : parse_check_parse_option(o);
+}
+
 bool runtime_check_parse_option(const QoreParseOptions& o) {
     return (runtime_get_parse_options() & o) == o;
 }

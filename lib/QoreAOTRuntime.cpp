@@ -15617,13 +15617,13 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // A source module is parsed with the restrictions and permissions of the Program loading it
     // (QoreModuleManager::loadSeparatedModule()); the AOT module's Program inherits the same ones, and its code is
     // checked against them below and runs with them (see attachAOTEntryStatementBlock()) (#5556)
+    // The module parse option mask applies as for a source module (see QoreModuleParseOptionMask); PO_ENABLE_DEBUG
+    // is not inherited, as AOT code has no debugger hooks
     QoreParseOptions inherited_po;
     {
         QoreProgram* loader_pgm = aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm;
-        if (loader_pgm) {
-            inherited_po = qore_get_inherited_module_parse_options(loader_pgm->getParseOptions(),
-                PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG);
-        }
+        inherited_po = qore_get_masked_module_parse_options(loader_pgm, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS,
+            QMM.getLoadParseOptionMask()) & ~QoreParseOptions(PO_ENABLE_DEBUG);
     }
     parse_options |= inherited_po;
 

@@ -280,6 +280,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclHashSerializationInfo,
     * hashdeclListSerializationInfo,
     * hashdeclUrlInfo,
+    * hashdeclModuleParseOptionMaskInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclExtraPollFdInfo,
     * hashdeclSocketPollInfo,
@@ -1473,6 +1474,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclHashSerializationInfo = init_hashdecl_HashSerializationInfo(qns);
     hashdeclListSerializationInfo = init_hashdecl_ListSerializationInfo(qns);
     hashdeclUrlInfo = init_hashdecl_UrlInfo(qns);
+    hashdeclModuleParseOptionMaskInfo = init_hashdecl_ModuleParseOptionMaskInfo(qns);
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
     hashdeclExtraPollFdInfo = init_hashdecl_ExtraPollFdInfo(qns);
@@ -3159,7 +3161,10 @@ int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
             "option NO_GLOBAL_VARS)", vname.ostr);
         err = -1;
     }
-    if ((po & PO_NO_THREAD_CONTROL) && v->isThreadLocal()) {
+    // thread-local storage in a user module is not thread control: a module that keeps per-thread state can be
+    // loaded by code that may not control threads, and its source and AOT forms are treated the same way (an AOT
+    // image records no thread-local declarations)
+    if ((po & PO_NO_THREAD_CONTROL) && v->isThreadLocal() && !(po & PO_IN_MODULE)) {
         parse_error(*v->getParseLocation(), "illegal reference to new thread_local variable '%s' (conflicts with parse " \
             "option NO_THREAD_CONTROL)", vname.ostr);
         if (!err) {

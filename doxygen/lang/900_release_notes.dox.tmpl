@@ -2216,6 +2216,18 @@ val = "string";      # OK
     @endparblock
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Module Parse Option Masks
+    @parblock
+    A process can let code with fewer privileges load trusted modules that use more functionality: a module parse
+    option mask strips restrictions from what user modules inherit from the %Program that loads them, and can add
+    restrictions to them (@ref module_parse_option_masks).
+    set_module_parse_option_mask() sets the mask of every module loaded from then on, load_module_masked() loads a
+    module with a mask of its own, add_module_parse_option_mask() masks a loaded module and
+    get_module_parse_option_mask() returns a mask; the C++ API is
+    \c ModuleManager::setModuleParseOptionMask() and related functions.  Only restrictions can be masked, and the
+    functions require code that may control the process and has no @ref Qore::SandboxManager "SandboxManager".
+    @endparblock
+
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock
     %Qore now uses one shared IR pipeline for the @ref exec_mode_ir "IR interpreter", the
@@ -5561,6 +5573,16 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+
+    - an AOT module was loaded by a @ref Qore::Program "Program" whose restrictions refused its source: the image
+      recorded only the builtin functions and classes that the code uses, not the restrictions that the parser checks
+      for the code itself (the \c background operator, \c thread_exit, backquotes, definitions of functions, classes,
+      constants and namespaces, \c new, \c %%include and other directives that access the filesystem, module path
+      directives and the summarize operator); these are now recorded, so source and AOT modules are loaded under the
+      same conditions
+    - a @ref thread_local "thread_local" variable declared in a user module is no longer refused by an inherited
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL": thread-local storage is not thread control, and the AOT
+      form of such a module was loaded already
 
     - @ref Qore::set_local_var_value() "set_local_var_value()", which debuggers use to set a local variable, assigned
       a value to a local variable that is not bound to a closure without its type: a value of another type was

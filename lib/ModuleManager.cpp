@@ -1179,6 +1179,10 @@ static QoreStringNode* loadModuleError(const char* name, ExceptionSink& xsink) {
     return rv;
 }
 
+QoreProgram* QoreBuiltinModule::getModuleProgram() const {
+    return qore_is_aot_user_module(name.c_str()) ? qore_aot_get_module_pgm(name.c_str()) : nullptr;
+}
+
 void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
     QoreModuleContextHelper qmc(name.c_str(), tpgm, xsink);
     // issue #3592: must add feature first
@@ -1330,14 +1334,9 @@ QoreUserModule::~QoreUserModule() {
 void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
     //printd(5, "QoreUserModule::addToProgramImpl() mod '%s': tpgm %p po: %p pgm dom: %p\n", name.c_str(), tpgm,
     //    tpgm->getParseOptions(), qore_program_private::getDomain(*pgm));
-    // first check the module's functional domain
-    QoreParseOptions dom = qore_program_private::getDomain(*pgm);
-    if (tpgm->getParseOptions() & dom) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s' implements "
-            "functionality restricted in the Program object trying to import the module (" QLLX ")",
-            name.c_str(), (tpgm->getParseOptions() & dom).getLo());
-        return;
-    }
+    // a module that another Program has loaded is not checked against the restrictions of the Program importing it:
+    // it is a capability that the host gave the Program, and its code runs with the restrictions of its callers as
+    // well as its own; only the first load is checked (see QoreModuleManager::loadSeparatedModule())
     // issue #3592: must add feature first
     qore_program_private::get(*tpgm)->addUserFeature(name.c_str());
 
@@ -1373,9 +1372,6 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
 
     // mark the feature as fully committed so the lock-free fast path in runTimeLoadModule() can see it
     qore_program_private::get(*tpgm)->commitFeature(name.c_str());
-
-    // add domain to current Program's domain
-    qore_program_private::runtimeAddDomain(*tpgm, dom);
 
     QMM.trySetUserModuleDependency(this);
 }
@@ -2506,6 +2502,34 @@ QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions&
     return get_inherited_module_parse_options(parent_po, exclude);
 }
 
+//! Returns the parse options a user module loaded by a Program inherits from it, with a parse option mask applied
+/** PO_ENABLE_DEBUG is inherited only from a Program that may control the process; the mask, which holds only
+    restrictions (QoreModuleParseOptionMask::maskable()), strips restrictions from the inherited options and adds
+    restrictions to them, also when there is no loading Program.
+
+    @param p the Program loading the module, if any
+    @param exclude the options the module does not inherit
+    @param mask the module parse option mask
+*/
+static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
+        const QoreModuleParseOptionMask& mask) {
+    QoreParseOptions inherited;
+    if (p) {
+        QoreParseOptions parent_po = p->getParseOptions();
+        // PO_ENABLE_DEBUG is not propagated automatically: only from a parent that may control the process
+        inherited = get_inherited_module_parse_options(parent_po, exclude | PO_ENABLE_DEBUG);
+        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
+            inherited |= PO_ENABLE_DEBUG;
+        }
+    }
+    return mask.apply(inherited);
+}
+
+QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
+        const QoreModuleParseOptionMask& mask) {
+    return get_masked_module_parse_options(p, exclude, mask);
+}
+
 QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* pgm, bool reexport, QoreProgram* mpgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
@@ -2532,20 +2556,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         }
     }
 
-    // parse options for the module
-    QoreParseOptions parseOptions = USER_MOD_PO;
-    // add in parse options from the current program, if any, disabling style and types options already set with
-    // USER_MOD_PO
-    if (p) {
-        QoreParseOptions parent_po = p->getParseOptions();
-        // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
-        parseOptions |= get_inherited_module_parse_options(parent_po,
-            PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG);
-        // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
-        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
-            parseOptions |= PO_ENABLE_DEBUG;
-        }
-    }
+    // parse options for the module: those inherited from the current program, if any, with the module parse option
+    // mask applied, disabling style and types options already set with USER_MOD_PO
+    const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    QoreParseOptions parseOptions = USER_MOD_PO
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask);
 
     QoreString modulePath(path);
     modulePath += QORE_DIR_SEP_STR;
@@ -2592,6 +2607,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     std::unique_ptr<QoreUserModule> userModule(new QoreUserModule(pholder.release(), td, modulePath.c_str(), feature,
         load_opt, warning_mask, path));
+    userModule->addParseOptionMask(load_mask);
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
     QoreUserModuleDefContextHelper qmd(feature, path,  mpgm, xsink);
@@ -3171,6 +3187,130 @@ void QoreModuleManager::registerUserModuleFromSource(const char* name, const cha
 }
 
 // const char* path, const char* feature, ReferenceHolder<QoreProgram>& pgm
+
+// the mask of the masked module load in progress in this thread, if any; see QoreModuleManager::runTimeLoadModuleMasked()
+static thread_local const QoreModuleParseOptionMask* thread_load_po_mask = nullptr;
+
+namespace {
+//! Sets the parse option mask of the masked module load in progress in this thread; nested loads add to it
+class QoreLoadParseOptionMaskHelper {
+public:
+    DLLLOCAL QoreLoadParseOptionMaskHelper(const QoreModuleParseOptionMask& mask) : saved(thread_load_po_mask) {
+        if (saved) {
+            combined = *saved;
+        }
+        combined |= mask;
+        thread_load_po_mask = &combined;
+    }
+
+    DLLLOCAL ~QoreLoadParseOptionMaskHelper() {
+        thread_load_po_mask = saved;
+    }
+
+    QoreLoadParseOptionMaskHelper(const QoreLoadParseOptionMaskHelper&) = delete;
+    QoreLoadParseOptionMaskHelper& operator=(const QoreLoadParseOptionMaskHelper&) = delete;
+
+private:
+    const QoreModuleParseOptionMask* saved;
+    QoreModuleParseOptionMask combined;
+};
+}
+
+QoreParseOptions QoreModuleParseOptionMask::maskable() {
+    // every user module has USER_MOD_PO; the style options are set by the module's own directives
+    return ~(QoreParseOptions::POSITIVE_OPTIONS | QoreParseOptions::FREE_OPTIONS
+        | QoreParseOptions(PO_STYLE_OPTIONS | USER_MOD_PO));
+}
+
+int QoreModuleParseOptionMask::check(const QoreParseOptions& strip, const QoreParseOptions& add,
+        ExceptionSink* xsink) {
+    const QoreParseOptions bad = (strip | add) & ~maskable();
+    if (bad) {
+        xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "a module parse option mask may only strip or add "
+            "restrictions; options " QLLX ":" QLLX " are explicitly-allowed, language, style or module options",
+            bad.getHi(), bad.getLo());
+        return -1;
+    }
+    const QoreParseOptions both = strip & add;
+    if (both) {
+        xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "a module parse option mask cannot both strip and "
+            "add options " QLLX ":" QLLX, both.getHi(), both.getLo());
+        return -1;
+    }
+    return 0;
+}
+
+int QoreModuleManager::setParseOptionMask(const QoreModuleParseOptionMask& mask, ExceptionSink* xsink) {
+    if (QoreModuleParseOptionMask::check(mask.strip, mask.add, xsink)) {
+        return -1;
+    }
+    std::lock_guard<std::mutex> lck(po_mask_lock);
+    po_mask = mask;
+    return 0;
+}
+
+QoreModuleParseOptionMask QoreModuleManager::getParseOptionMask() const {
+    std::lock_guard<std::mutex> lck(po_mask_lock);
+    return po_mask;
+}
+
+QoreModuleParseOptionMask QoreModuleManager::getLoadParseOptionMask() const {
+    QoreModuleParseOptionMask rv = getParseOptionMask();
+    if (thread_load_po_mask) {
+        rv |= *thread_load_po_mask;
+    }
+    return rv;
+}
+
+//! returns the feature name of a module given by name or by path
+static std::string get_module_feature_name(const char* name) {
+    std::string feature = q_basenameptr(name);
+    for (const char* ext : {".qmod", ".qm"}) {
+        size_t len = strlen(ext);
+        if (feature.size() > len && !feature.compare(feature.size() - len, len, ext)) {
+            feature.erase(feature.size() - len);
+            break;
+        }
+    }
+    return feature;
+}
+
+int QoreModuleManager::runTimeLoadModuleMasked(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
+        QoreProgram* pgm, const QoreModuleParseOptionMask& mask, int warning_mask) {
+    if (QoreModuleParseOptionMask::check(mask.strip, mask.add, &xsink)) {
+        return -1;
+    }
+    {
+        QoreLoadParseOptionMaskHelper lpomh(mask);
+        if (runTimeLoadModule(xsink, wsink, name, pgm, nullptr, QMLO_NONE, warning_mask)) {
+            return -1;
+        }
+    }
+    // a module that was loaded before gets the mask as well
+    return addModuleParseOptionMask(get_module_feature_name(name).c_str(), mask, &xsink);
+}
+
+int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModuleParseOptionMask& mask,
+        ExceptionSink* xsink) {
+    if (QoreModuleParseOptionMask::check(mask.strip, mask.add, xsink)) {
+        return -1;
+    }
+    QoreAbstractModule* mi = findModule(name);
+    if (!mi) {
+        xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "module '%s' is not loaded", name);
+        return -1;
+    }
+    mi->addParseOptionMask(mask);
+    // the module's code runs with the parse options of its Program
+    QoreProgram* mpgm = mi->getModuleProgram();
+    if (mpgm && !mask.empty()) {
+        qore_program_private::forceReplaceParseOptions(*mpgm, mask.apply(mpgm->getParseOptions()));
+        qore_program_private::setAOTInheritedParseOptions(*mpgm,
+            mask.apply(qore_program_private::getAOTInheritedParseOptions(*mpgm)));
+    }
+    return 0;
+}
+
 QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std::unique_ptr<QoreUserModule>& mi,
         QoreUserModuleDefContextHelper& qmd, unsigned load_opt, int warning_mask) {
     // see if a module with this name is already registered
@@ -3369,19 +3509,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         }
     }
 
-    // parse options for the module
-    QoreParseOptions po = USER_MOD_PO;
-    // add in parse options from the current program, if any, disabling style and types options already set with
-    // USER_MOD_PO
-    if (p) {
-        QoreParseOptions parent_po = p->getParseOptions();
-        // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
-        po |= get_inherited_module_parse_options(parent_po, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG);
-        // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
-        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
-            po |= PO_ENABLE_DEBUG;
-        }
-    }
+    // parse options for the module: those inherited from the current program, if any, with the module parse option
+    // mask applied, disabling style and types options already set with USER_MOD_PO
+    const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    QoreParseOptions po = USER_MOD_PO
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask);
 
     const char* td = p ? p->parseGetScriptDir() : nullptr;
 
@@ -3427,6 +3559,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // note: the module will contain a normalized path which will be used for parsing
     std::unique_ptr<QoreUserModule> mi(new QoreUserModule(pholder.release(), td, path, feature, load_opt,
         warning_mask));
+    mi->addParseOptionMask(load_mask);
 
     td = mi->getFileName();
     //printd(5, "QoreModuleManager::loadUserModuleFromPath() normalized path: '%s'\n", td);
@@ -3482,19 +3615,10 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         }
     }
 
-    // parse options for the module
-    QoreParseOptions po = USER_MOD_PO;
-    // add in parse options from the current program, if any, disabling style and types options already set with
-    // USER_MOD_PO
-    if (p) {
-        QoreParseOptions parent_po = p->getParseOptions();
-        // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
-        po |= get_inherited_module_parse_options(parent_po, PO_REQUIRE_TYPES | PO_ENABLE_DEBUG);
-        // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
-        if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
-            po |= PO_ENABLE_DEBUG;
-        }
-    }
+    // parse options for the module: those inherited from the current program, if any, with the module parse option
+    // mask applied, disabling style and types options already set with USER_MOD_PO
+    const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    QoreParseOptions po = USER_MOD_PO | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask);
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
@@ -3528,6 +3652,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
 
     std::unique_ptr<QoreUserModule> mi(new QoreUserModule(pholder.release(), nullptr, path, feature, QMLO_NONE));
+    mi->addParseOptionMask(load_mask);
 
     ModuleReExportHelper mrh(mi.get(), reexport);
 
@@ -4051,6 +4176,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
 
     std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, mod_info,
         dlh ? dlh->release() : nullptr, info, load_opt));
+    // an AOT user module has the mask its Program was created with (see qore_aot_module_init_impl())
+    if (qore_is_aot_user_module(name)) {
+        bmi->addParseOptionMask(getLoadParseOptionMask());
+    }
     // record any child modules declared with %try-child-module; for AOT-compiled modules these are
     // delivered by the module description function, since the directive cannot be processed again when the
     // embedded source is parsed (see design/qore-module-structure.md "Child Modules")
@@ -4570,6 +4699,45 @@ QoreProgram* ModuleManager::findUserModuleProgram(const char* name) {
         return nullptr;
     }
     return static_cast<QoreUserModule*>(m)->getProgram();
+}
+
+int ModuleManager::setModuleParseOptionMask(const QoreParseOptions& strip, const QoreParseOptions& add,
+        ExceptionSink* xsink) {
+    return QMM.setParseOptionMask(QoreModuleParseOptionMask{strip, add}, xsink);
+}
+
+QoreParseOptions ModuleManager::getMaskableParseOptions() {
+    return QoreModuleParseOptionMask::maskable();
+}
+
+void ModuleManager::getModuleParseOptionMask(QoreParseOptions& strip, QoreParseOptions& add) {
+    QoreModuleParseOptionMask mask = QMM.getParseOptionMask();
+    strip = mask.strip;
+    add = mask.add;
+}
+
+int ModuleManager::runTimeLoadModuleMasked(ExceptionSink* xsink, const char* name, QoreProgram* pgm,
+        const QoreParseOptions& strip, const QoreParseOptions& add) {
+    return QMM.runTimeLoadModuleMasked(*xsink, *xsink, name, pgm ? pgm : getProgram(),
+        QoreModuleParseOptionMask{strip, add});
+}
+
+int ModuleManager::addModuleParseOptionMask(const char* name, const QoreParseOptions& strip,
+        const QoreParseOptions& add, ExceptionSink* xsink) {
+    return QMM.addModuleParseOptionMask(name, QoreModuleParseOptionMask{strip, add}, xsink);
+}
+
+int ModuleManager::getModuleParseOptionMask(const char* name, QoreParseOptions& strip, QoreParseOptions& add,
+        ExceptionSink* xsink) {
+    QoreAbstractModule* mi = QMM.findModule(name);
+    if (!mi) {
+        xsink->raiseException("MODULE-PARSE-OPTION-MASK-ERROR", "module '%s' is not loaded", name);
+        return -1;
+    }
+    QoreModuleParseOptionMask mask = mi->getParseOptionMask();
+    strip = mask.strip;
+    add = mask.add;
+    return 0;
 }
 
 QoreHashNode* ModuleManager::getModuleHash() {
