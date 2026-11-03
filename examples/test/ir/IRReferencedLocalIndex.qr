@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+# The '[]' operator, slices and member reads on locals whose reference has been taken, and in try blocks, where the
+# reads are lowered with exception edges: every mode must give the interpreter's results, so '[]' on a hash (typed or
+# not) or an object gives no value instead of reading a key
+
+hashdecl T {
+    string base_type = "string";
+}
+
+class C {
+    public {
+        int a = 1;
+    }
+}
+
+sub take(reference<auto> r) {}
+
+sub show(string label, auto value) {
+    printf("%s: %y\n", label, value);
+}
+
+sub show_error(string label, code c) {
+    try {
+        show(label, c());
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s: %s\n", label, ex.err, ex.desc);
+    }
+}
+
+sub hash_reads(hash<auto> h) {
+    hash<auto> rv = h;
+    take(\rv.x);
+    show("hash ti[0]", rv.ti[0]);
+    show("hash ti[0][1]", rv.ti[0][1]);
+    show("hash plain[0]", rv.plain[0]);
+    auto ra = rv;
+    take(\ra);
+    show("hash [0]", ra[0]);
+    show("hash ti.base_type", rv.ti.base_type);
+    show("hash key", rv{"x"});
+    show("hash slice", rv.("x", "plain"));
+    show("hash list[1]", rv.list[1]);
+    show("hash list[-1]", rv.list[-1]);
+    show("hash str[1]", rv.str[1]);
+    show("hash obj[0]", rv.obj[0]);
+    string k = "unknown";
+    show_error("hash ti.unknown", auto sub () { return rv.ti{k}; });
+}
+
+sub list_reads(list<auto> l) {
+    list<auto> rv = l;
+    take(\rv[1]);
+    show("list [0][0]", rv[0][0]);
+    show("list [0]", rv[0]);
+    show("list [-1]", rv[-1]);
+    show("list [10]", rv[10]);
+    show("list [0, 2]", rv[0, 2]);
+    show("list [1..2]", rv[1..2]);
+    show("list [2][1]", rv[2][1]);
+    show("list [3][0]", rv[3][0]);
+    show("list [0].base_type", rv[0].base_type);
+}
+
+sub string_reads(string s) {
+    string rv = s;
+    take(\rv);
+    show("string [1]", rv[1]);
+    show("string [-1]", rv[-1]);
+    show("string [10]", rv[10]);
+    show("string [0, 2]", rv[0, 2]);
+    show("string [1..2]", rv[1..2]);
+}
+
+sub binary_reads(binary b) {
+    binary rv = b;
+    take(\rv);
+    show("binary [1]", rv[1]);
+    show("binary [10]", rv[10]);
+}
+
+sub try_reads(hash<auto> h, list<auto> l) {
+    hash<auto> rh = h;
+    list<auto> rl = l;
+    try {
+        show("try hash ti[0]", rh.ti[0]);
+        auto ra = rh;
+        show("try hash [0]", ra[0]);
+        show("try list [0][0]", rl[0][0]);
+        show("try list [-1]", rl[-1]);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("try: %s: %s\n", ex.err, ex.desc);
+    }
+}
+
+# an offset whose type does not exclude a list: a list of offsets makes a slice, also when the local has no reference
+sub offset_reads(list<auto> l, string s, binary b, auto i, int n) {
+    show("offset list", l[i]);
+    show("offset string", s[i]);
+    show("offset binary", b[i]);
+    show("offset int list", l[n]);
+    show("offset int string", s[n]);
+    list<auto> rl = l;
+    take(\rl);
+    show("offset referenced list", rl[i]);
+}
+
+sub untouched_reads(hash<auto> h) {
+    hash<auto> rv = h;
+    show("untouched ti[0]", rv.ti[0]);
+}
+
+hash<auto> h = {
+    "ti": cast<hash<T>>({}),
+    "plain": {"a": 1},
+    "x": 1,
+    "list": (1, 2, 3),
+    "str": "abc",
+    "obj": new C(),
+};
+list<auto> l = (cast<hash<T>>({}), 1, "xyz", ({"a": 1},));
+
+# each function runs more than once so that the tiered mode and the JIT compile it
+for (int i = 0; i < 3; ++i) {
+    printf("run %d\n", i);
+    hash_reads(h);
+    list_reads(l);
+    string_reads("abc");
+    binary_reads(<0102>);
+    try_reads(h, l);
+    offset_reads((1, 2, 3), "abc", <010203>, (0, 2), 1);
+    offset_reads((1, 2, 3), "abc", <010203>, 2, 0);
+    untouched_reads(h);
+}
+print("ir-referenced-local-index: ok\n");
