@@ -97,6 +97,12 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
             "url": ENV.MONGODB_URL,
             "options": {"database": "qore_rag_test", "index_name": "unused"},
         });
+        # CI sets MONGODB_URL on runners where the server is not reachable
+        try {
+            store.countByFilter();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("MongoDB is not reachable at %y: %s", ENV.MONGODB_URL, ex.desc));
+        }
         on_exit {
             try {
                 store.deleteByFilter({"payload_eq": {"scope": scope}});

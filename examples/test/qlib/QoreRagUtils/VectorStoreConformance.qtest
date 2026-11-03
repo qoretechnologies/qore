@@ -113,6 +113,11 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
     qdrantTest() {
         string name = "conformance_" + get_random_string(8).lwr();
         RestClientIo::RestClientIo rest({"url": ENV.QDRANT_URL, "data": "json"});
+        try {
+            rest.restGet("/collections");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Qdrant is not reachable at %y: %s", ENV.QDRANT_URL, ex.desc));
+        }
         rest.restPut("/collections/" + name, {"vectors": {"size": 3, "distance": "Cosine"}});
         on_exit {
             try {
@@ -137,7 +142,7 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
             ds.exec("CREATE EXTENSION IF NOT EXISTS vector");
             ds.commit();
         } catch (hash<ExceptionInfo> ex) {
-            ds.rollback();
+            on_error ds.rollback();
             testSkip("pgvector is not available: " + ex.desc);
         }
         string table = "conformance_" + get_random_string(8).lwr();
@@ -163,6 +168,11 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
                 "url": ENV.MONGODB_URL,
                 "options": {"database": "qore_rag_test", "index_name": "unused"},
             });
+        try {
+            store.countByFilter();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("MongoDB is not reachable at %y: %s", ENV.MONGODB_URL, ex.desc));
+        }
         string scope = "mongo-" + get_random_string(6);
         on_exit {
             try {
