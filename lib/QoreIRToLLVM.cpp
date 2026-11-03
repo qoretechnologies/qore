@@ -18851,10 +18851,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Rethrow ===
         case QoreIROpcode::Rethrow: {
             const auto* rethrow_inst = static_cast<const QoreIRThrowInstruction*>(inst);
-            int catch_cleanup_start = 0;
             if (!rethrow_inst->synthetic) {
                 if (!rethrow_inst->operands.empty()) {
-                    // Rethrow with args: replaceTop() + rethrow + catch_end
+                    // Rethrow with args: replaceTop() + rethrow
                     llvm::Value* args_val = getVal(rethrow_inst->operands[0].id, error);
                     if (!args_val) {
                         return false;
@@ -18864,21 +18863,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
                     builder->CreateCall(rethrow_args_helper, {args_val, xsink_arg});
                 } else {
-                    // Plain rethrow: copy exception from td->catchException into xsink,
-                    // clean up catch scope.  qore_rt_rethrow() handles 1 catch scope.
+                    // Plain rethrow: copy exception from td->catchException into xsink
                     auto rethrow_helper = module.getOrInsertFunction("qore_rt_rethrow",
                             llvm::FunctionType::get(void_type, {ptr_type}, false));
                     builder->CreateCall(rethrow_helper, {xsink_arg});
                 }
-                catch_cleanup_start = 1;
             }
             // Synthetic rethrows (foreach/context cleanup) only propagate the
             // exception already in xsink.  They must not read td->catchException,
             // but still need to release any catch scopes recorded on the IR node.
-            if (rethrow_inst->catch_depth > catch_cleanup_start) {
+            // The rethrow helpers pop no catch scope: exactly the catch scopes of
+            // this frame that the statement leaves are popped here.  A rethrow in
+            // an on_error handler has none (its exception is the handler's, not a
+            // catch scope's), so a scope of a caller is never popped.
+            if (rethrow_inst->catch_depth > 0) {
                 auto catch_end_helper = module.getOrInsertFunction("qore_rt_catch_end",
                         llvm::FunctionType::get(void_type, {ptr_type}, false));
-                for (int i = catch_cleanup_start; i < rethrow_inst->catch_depth; ++i) {
+                for (int i = 0; i < rethrow_inst->catch_depth; ++i) {
                     builder->CreateCall(catch_end_helper, {xsink_arg});
                 }
             }

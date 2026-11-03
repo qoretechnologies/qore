@@ -761,6 +761,22 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
+    //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
+    /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
+        leaves only the catch scopes entered since the try body began; the catch scopes that enclose the try statement
+        stay active (see catchScopesLeftByThrow()).
+    */
+    std::vector<int> try_catch_cleanup_depth_stack;
+
+    //! Returns the number of active catch scopes that a throw or rethrow statement at the current point leaves
+    /** These are the catch scopes entered since the body of the innermost enclosing try statement began, or all of
+        them when there is none.  Popping more would delete the exception of a catch block that is still running, and
+        that a rethrow in it reads after the inner try statement.
+    */
+    int catchScopesLeftByThrow() const {
+        return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
+    }
+
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
     /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
      * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
