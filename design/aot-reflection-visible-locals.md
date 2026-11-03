@@ -99,7 +99,9 @@ visible) before code generation.  This ordering change is the main implementatio
 - `QoreIRFunction::reflection_free` is set before lowering; `QoreIRLowering::localsMayBeReflected()` applies the
   block re-activation and `push` rules only without it, and on_exit/on_error handler bodies inherit it.
 - The IR tiers (`UserVariantBase::lowerIRFunction()`) re-lower a function that neither reflects by itself nor calls a
-  user function.  AOT (`tryLowerFunction()`, `aotFunctionMayReflect()`) follows exact callees through their own
+  user function.  The reflection-free lowering does not activate the locals of nested blocks at their declaration;
+  its locals still have the slots of every other lowering of the function, since all of them take the canonical
+  numbering (`ir-local-slot-numbering.md`), which the debugger body, serialized IR and handler IR bind by.  AOT (`tryLowerFunction()`, `aotFunctionMayReflect()`) follows exact callees through their own
   conservatively lowered bodies, up to 64.
 - In a reflective AOT frame the body locals move to the runtime stack, and so do the parameters that the function
   may access after an instruction that may reflect, before assigning them (`qore_ir_get_params_read_after_reflection()`).

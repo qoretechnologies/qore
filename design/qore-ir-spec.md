@@ -98,7 +98,8 @@ the resolution back races with the other threads' reads of the same field.
 Locals are mutable runtime locations, not SSA variables. IR uses explicit
 load/store instructions and a per-function `local_var_slots` map.
 
-Slot identity is significant:
+Slot identity is significant, so every lowering of a function numbers its locals alike, from the AST, before it is
+lowered (`ir-local-slot-numbering.md`):
 
 - Deferred handler IR inherits parent locals by IR slot ID.
 - AOT local tables preserve IR slot IDs so handler inheritance remains exact.
