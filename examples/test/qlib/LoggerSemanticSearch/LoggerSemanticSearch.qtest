@@ -315,6 +315,50 @@ public class MemoryVectorStore inherits QoreRagUtils::AbstractVectorStore {
         }
     }
 
+    #! Returns the stored records whose payload equals every \c payload_eq entry of the filter
+    private list<hash<auto>> matching(*hash<auto> filter) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> rec in (records.values()) {
+            hash<auto> payload = rec{"payload"} ?? {};
+            bool ok = True;
+            foreach string key in (keys filter.payload_eq) {
+                if (!exists payload{key} || payload{key} != filter.payload_eq{key}) {
+                    ok = False;
+                    break;
+                }
+            }
+            if (ok) {
+                push rv, rec;
+            }
+        }
+        return rv;
+    }
+
+    int countByFilter(*hash<auto> filter) {
+        return matching(filter).size();
+    }
+
+    int deleteByFilter(hash<auto> filter) {
+        QoreRagUtils::AbstractVectorStore::requireFilterCriteria(filter.payload_eq instanceof hash
+            && filter.payload_eq.size() > 0);
+        list<hash<auto>> hits = matching(filter);
+        foreach hash<auto> rec in (hits) {
+            remove records{rec{"id"}};
+        }
+        return hits.size();
+    }
+
+    list<hash<QoreRagUtils::VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter,
+            *string timestamp_field) {
+        hash<string, hash<auto>> groups = {};
+        foreach hash<auto> rec in (matching(filter)) {
+            hash<auto> payload = rec{"payload"} ?? {};
+            QoreRagUtils::AbstractVectorStore::addToSummary(\groups, payload{field},
+                timestamp_field ? payload{timestamp_field} : NOTHING);
+        }
+        return QoreRagUtils::AbstractVectorStore::finishSummary(groups);
+    }
+
     list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
             int k, *hash<auto> filter) {
         list<hash<QoreRagUtils::VectorSearchResult>> hits = ();

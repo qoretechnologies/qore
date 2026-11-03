@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires RestClientIo
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires json
+
+# Conformance of AbstractVectorStore::countByFilter(), deleteByFilter() and summarizeBy() (issue #5576).
+#
+# One scenario runs against every store that has a backend available:
+#   - the in-memory reference store (always)
+#   - Qdrant        (QDRANT_URL, for example http://127.0.0.1:6333; a temporary collection is created)
+#   - pgvector      (QORE_DB_CONNSTR_PGSQL or PGVECTOR_DB_CONNSTR; a temporary table is created)
+#   - MongoDB       (MONGODB_URL; records are scoped by a random payload value)
+# Stores without a backend are covered by the mocked-transport tests next to each module.
+
+%exec-class VectorStoreConformanceTest
+
+#! Reference implementation: the behavior every store must match
+class ReferenceVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    private {
+        hash<string, hash<auto>> records = {};
+    }
+
+    upsert(list<hash<QoreRagUtils::VectorRecord>> recs) {
+        foreach hash<QoreRagUtils::VectorRecord> r in (recs) {
+            records{r.id} = {"id": r.id, "payload": r.payload ?? {}};
+        }
+    }
+
+    deleteByIds(list<string> ids) {
+        foreach string id in (ids) {
+            remove records{id};
+        }
+    }
+
+    list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector, int k, *hash<auto> filter) {
+        return ();
+    }
+
+    string getCollection() { return "reference"; }
+    int getDimension() { return 3; }
+
+    private list<hash<auto>> matching(*hash<auto> filter) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> r in (records.values()) {
+            bool ok = True;
+            foreach string key in (keys filter.payload_eq) {
+                if (!exists r.payload{key} || r.payload{key} != filter.payload_eq{key}) {
+                    ok = False;
+                    break;
+                }
+            }
+            if (ok) {
+                push rv, r;
+            }
+        }
+        return rv;
+    }
+
+    int countByFilter(*hash<auto> filter) {
+        return matching(filter).size();
+    }
+
+    int deleteByFilter(hash<auto> filter) {
+        QoreRagUtils::AbstractVectorStore::requireFilterCriteria(filter.payload_eq instanceof hash
+            && filter.payload_eq.size() > 0);
+        list<hash<auto>> hits = matching(filter);
+        foreach hash<auto> r in (hits) {
+            remove records{r.id};
+        }
+        return hits.size();
+    }
+
+    list<hash<QoreRagUtils::VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter,
+            *string timestamp_field) {
+        hash<string, hash<auto>> groups = {};
+        foreach hash<auto> r in (matching(filter)) {
+            QoreRagUtils::AbstractVectorStore::addToSummary(\groups, r.payload{field},
+                timestamp_field ? r.payload{timestamp_field} : NOTHING);
+        }
+        return QoreRagUtils::AbstractVectorStore::finishSummary(groups);
+    }
+}
+
+public class VectorStoreConformanceTest inherits QUnit::Test {
+    constructor() : Test("VectorStore conformance", "1.0", \ARGV) {
+        addTestCase("in-memory reference store", \referenceTest());
+        if (ENV.QDRANT_URL.val()) {
+            addTestCase("Qdrant", \qdrantTest());
+        }
+        if ((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL).val()) {
+            addTestCase("pgvector", \pgvectorTest());
+        }
+        if (ENV.MONGODB_URL.val()) {
+            addTestCase("MongoDB", \mongoTest());
+        }
+        set_return_value(main());
+    }
+
+    referenceTest() {
+        runScenario(new ReferenceVectorStore(), "ref-" + get_random_string(6));
+    }
+
+    qdrantTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.QDRANT_URL, "data": "json"});
+        rest.restPut("/collections/" + name, {"vectors": {"size": 3, "distance": "Cosine"}});
+        on_exit {
+            try {
+                rest.restDel("/collections/" + name);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": name,
+                "url": ENV.QDRANT_URL,
+                "options": {"dimension": 3},
+            });
+        runScenario(store, "qd-" + get_random_string(6));
+    }
+
+    pgvectorTest() {
+        Datasource ds((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL));
+        on_exit ds.close();
+        try {
+            ds.exec("CREATE EXTENSION IF NOT EXISTS vector");
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            testSkip("pgvector is not available: " + ex.desc);
+        }
+        string table = "conformance_" + get_random_string(8).lwr();
+        ds.exec(sprintf("CREATE TABLE %s (id text PRIMARY KEY, embedding vector(3), payload jsonb)", table));
+        ds.commit();
+        on_exit {
+            ds.exec("DROP TABLE IF EXISTS " + table);
+            ds.commit();
+        }
+        QoreRagUtils::AbstractVectorStore store = new QoreRagUtils::PgVectorRagProvider(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": table,
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        runScenario(store, "pg-" + get_random_string(6));
+    }
+
+    mongoTest() {
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "mongo-atlas",
+                "collection": "qore_rag_conformance",
+                "url": ENV.MONGODB_URL,
+                "options": {"database": "qore_rag_test", "index_name": "unused"},
+            });
+        string scope = "mongo-" + get_random_string(6);
+        on_exit {
+            try {
+                store.deleteByFilter({"payload_eq": {"scope": scope}});
+            } catch () {
+            }
+        }
+        runScenario(store, scope);
+    }
+
+    #! The scenario every store must satisfy; \a scope isolates this run's records from any others in the store
+    private runScenario(QoreRagUtils::AbstractVectorStore store, string scope) {
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{"id": "1", "vector": (1.0, 0.0, 0.0),
+                "payload": {"k": "a", "scope": scope, "t": "2026-11-01T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": "2", "vector": (0.0, 1.0, 0.0),
+                "payload": {"k": "b", "scope": scope, "t": "2026-11-02T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": "3", "vector": (0.0, 0.0, 1.0),
+                "payload": {"k": "b", "scope": scope, "t": "2026-11-03T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": "4", "vector": (1.0, 1.0, 0.0), "payload": {"scope": scope}},
+        ));
+        hash<auto> mine = {"payload_eq": {"scope": scope}};
+
+        # counting
+        assertEq(4, store.countByFilter(mine));
+        assertEq(2, store.countByFilter({"payload_eq": {"scope": scope, "k": "b"}}));
+        assertEq(0, store.countByFilter({"payload_eq": {"scope": scope + "-none"}}));
+
+        # summary: ordered by descending count; the group without the field sorts last among equal counts
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("k", mine, "t");
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
+        assertEq((2, 1, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertEq(2026-11-01T10:00:00, groups[1].last_write);
+        assertFalse(exists groups[2].last_write);
+        # without a timestamp field there is no last_write
+        groups = store.summarizeBy("k", mine);
+        assertEq((2, 1, 1), map $1.count, groups);
+        assertFalse(exists groups[0].last_write);
+        # nothing matches
+        assertEq((), store.summarizeBy("k", {"payload_eq": {"scope": scope + "-none"}}));
+
+        # deletion: counts what it removed, leaves the rest, and is idempotent
+        assertEq(2, store.deleteByFilter({"payload_eq": {"scope": scope, "k": "b"}}));
+        assertEq(2, store.countByFilter(mine));
+        assertEq(0, store.deleteByFilter({"payload_eq": {"scope": scope, "k": "b"}}));
+
+        # a filter that selects everything is refused, and removes nothing
+        foreach hash<auto> bad in (({}, {"payload_eq": {}})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(2, store.countByFilter(mine), "a refused delete removes nothing");
+
+        assertEq(2, store.deleteByFilter(mine));
+        assertEq(0, store.countByFilter(mine));
+    }
+}

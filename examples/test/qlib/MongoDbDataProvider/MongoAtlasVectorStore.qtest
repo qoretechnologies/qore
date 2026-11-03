@@ -32,6 +32,11 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
         addTestCase("factory registered + lazy-loadable",   \factoryTest());
         addTestCase("constructor validates required config", \constructorValidationTest());
         addTestCase("constructor accepts full config",       \constructorOkTest());
+        addTestCase("management filters and summary pipeline", \managementBuildersTest());
+        # the management methods use plain MongoDB operations, so any server (not only Atlas) will do
+        if (ENV.MONGODB_URL.val()) {
+            addTestCase("live: count, delete and summarize by payload filter", \liveManagementTest());
+        }
         addTestCase("vector-search action wired into collection ChildMap",
             \childMapTest());
 
@@ -46,6 +51,85 @@ public class MongoAtlasVectorStoreTest inherits QUnit::Test {
                 "index)", \liveMongoAtlasTest());
         }
         set_return_value(main());
+    }
+
+    #! The match document, summary pipeline and group conversion that countByFilter(), deleteByFilter() and
+    #! summarizeBy() send to MongoDB
+    private managementBuildersTest() {
+        QoreRagUtils::MongoAtlasVectorStore store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "mongo-atlas",
+            "collection": "docs",
+            "url": "mongodb://localhost:27017",
+            "options": {"database": "db", "index_name": "idx"},
+        });
+        assertEq({}, store.makeMatch());
+        assertEq({"payload.k": "a", "payload.n": 3}, store.makeMatch({"payload_eq": {"k": "a", "n": 3}}));
+        assertEq({"n": {"$gt": 1}}, store.makeMatch({"mql": {"n": {"$gt": 1}}}));
+        foreach string bad in ("", "$set", "a.b") {
+            assertThrows("MONGO-ATLAS-VECTOR-STORE-ERROR", \store.makeMatch(), {"payload_eq": {bad: 1}});
+        }
+
+        assertEq(({"$group": {"_id": "$payload.k", "count": {"$sum": 1}}},),
+            store.buildSummaryPipeline("k", {}));
+        assertEq(({"$match": {"payload.s": "x"}},
+            {"$group": {"_id": "$payload.k", "count": {"$sum": 1}, "last": {"$max": "$payload.t"}}}),
+            store.buildSummaryPipeline("k", {"payload.s": "x"}, "t"));
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = QoreRagUtils::MongoAtlasVectorStore::summaryFromGroups((
+            {"_id": "a", "count": 1, "last": "2026-11-01T10:00:00"},
+            {"_id": "b", "count": 2, "last": 2026-11-03T10:00:00},
+            {"_id": NULL, "count": 2},
+        ));
+        assertEq(("b", NOTHING, "a"), map $1.value, groups);
+        assertEq((2, 2, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertFalse(exists groups[1].last_write);
+        assertEq(2026-11-01T10:00:00, groups[2].last_write);
+        assertEq((), QoreRagUtils::MongoAtlasVectorStore::summaryFromGroups(()));
+    }
+
+    #! Exercises countByFilter(), summarizeBy() and deleteByFilter() against a real MongoDB server (MONGODB_URL)
+    private liveManagementTest() {
+        string scope = "mgmt-" + get_random_string(8);
+        QoreRagUtils::MongoAtlasVectorStore store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "mongo-atlas",
+            "collection": "qore_rag_mgmt_test",
+            "url": ENV.MONGODB_URL,
+            "options": {"database": "qore_rag_test", "index_name": "unused"},
+        });
+        on_exit {
+            try {
+                store.deleteByFilter({"payload_eq": {"scope": scope}});
+            } catch () {
+            }
+        }
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{"id": scope + "1", "vector": (1.0, 0.0),
+                "payload": {"k": "a", "scope": scope, "t": "2026-11-01T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": scope + "2", "vector": (0.0, 1.0),
+                "payload": {"k": "b", "scope": scope, "t": "2026-11-02T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": scope + "3", "vector": (0.0, 1.0),
+                "payload": {"k": "b", "scope": scope, "t": "2026-11-03T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": scope + "4", "vector": (1.0, 1.0), "payload": {"scope": scope}},
+        ));
+
+        hash<auto> mine = {"payload_eq": {"scope": scope}};
+        assertEq(4, store.countByFilter(mine));
+        assertEq(0, store.countByFilter({"payload_eq": {"scope": scope + "-none"}}));
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("k", mine, "t");
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
+        assertEq((2, 1, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertEq(2026-11-01T10:00:00, groups[1].last_write);
+        assertFalse(exists groups[2].last_write);
+        assertEq((), store.summarizeBy("k", {"payload_eq": {"scope": scope + "-none"}}));
+
+        assertEq(2, store.deleteByFilter({"payload_eq": {"scope": scope, "k": "b"}}));
+        assertEq(2, store.countByFilter(mine));
+        assertEq(0, store.deleteByFilter({"payload_eq": {"scope": scope, "k": "b"}}));
+        assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), {});
+        assertEq(2, store.countByFilter(mine), "a refused delete removes nothing");
     }
 
     private usageIntern() {
