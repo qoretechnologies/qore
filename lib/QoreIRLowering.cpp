@@ -2893,8 +2893,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             msg = builder.createConstString("assertion failed", stmt->loc)->result;
         }
         QoreIRValue throw_list = builder.createMakeList({err, msg}, stmt->loc)->result;
-        // Emit CatchCleanup for all active catch scopes before throwing
-        for (int i = 0; i < catch_cleanup_depth; ++i) {
+        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing
+        for (int i = 0, e = catchScopesLeftByThrow(); i < e; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
@@ -3551,6 +3551,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         exception_stack.push_back(catch_block);
         size_t try_scope_depth = scope_stack.size();
         exception_scope_depth_stack.push_back(try_scope_depth);
+        try_catch_cleanup_depth_stack.push_back(catch_cleanup_depth);
 
         // Allocate a try-level scope ID and emit ScopeEnter to save the OBE count
         // at try entry. This is used by the LandingPad to execute on_error/on_exit
@@ -3579,11 +3580,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             cleanup_stack.pop_back();
             exception_stack.pop_back();
             exception_scope_depth_stack.pop_back();
+            try_catch_cleanup_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
             return false;
         }
         exception_stack.pop_back();
         exception_scope_depth_stack.pop_back();
+        try_catch_cleanup_depth_stack.pop_back();
         guard_exception_target_override = prev_guard_override;
         if (!blockHasTerminator(builder.getBlock())) {
             // On normal path, emit ScopeExit for the try-level scope (no-op since
@@ -3690,8 +3693,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // before on_error handlers fire (for CatchExceptionHelper/rethrow support).
         // For exception-target case: the LandingPad fires scope exits after the invoke.
         // For no-exception-target case: the Throw handler fires scope exits after raising.
-        // Emit CatchCleanup for all active catch scopes before throwing
-        for (int i = 0; i < catch_cleanup_depth; ++i) {
+        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing: a throw in a try
+        // statement nested in a catch block lands in that try statement's catch block, and the enclosing catch block
+        // keeps running with its exception (which a rethrow there reads)
+        for (int i = 0, e = catchScopesLeftByThrow(); i < e; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
@@ -3712,7 +3717,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // AFTER rethrowing.
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
-            rethrow_inst->catch_depth = catch_cleanup_depth;
+            rethrow_inst->catch_depth = catchScopesLeftByThrow();
             // Attach args to the Rethrow instruction so the interpreter/JIT can
             // call catch_get_exception()->replaceTop() with the new err/desc/arg.
             rethrow_inst->operands.push_back(value);
@@ -3721,10 +3726,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException
             // intact to get the exception to rethrow.  Instead, store catch_cleanup_depth
             // in the instruction so the rethrow handler can clean up all catch scopes
-            // AFTER rethrowing.
+            // AFTER rethrowing.  Only the catch scopes that the exception leaves are cleaned up (see Throw above).
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
-            rethrow_inst->catch_depth = catch_cleanup_depth;
+            rethrow_inst->catch_depth = catchScopesLeftByThrow();
         }
         return true;
     }

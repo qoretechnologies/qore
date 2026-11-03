@@ -1412,13 +1412,17 @@ extern "C" DLLEXPORT void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xs
     }
 }
 
+// The rethrow helpers only raise the exception of the current catch context (td->catchException) on the sink: the
+// catch scopes that the rethrow leaves are popped by the qore_rt_catch_end() calls the generated code makes after
+// them, one for each catch scope of the frame that the statement is in (the Rethrow instruction's catch_depth).  A
+// rethrow in an on_error handler is in no catch scope of the frame: its exception is the handler's
+// (CatchExceptionHelper, set by the code that runs the handler), and popping a scope there would pop one that belongs
+// to a caller and delete the exception that a later rethrow in that caller reads.
 extern "C" DLLEXPORT void qore_rt_rethrow(ExceptionSink* xsink) {
     QoreException* ex = catch_get_exception();
     if (ex) {
         qore_es_private::get(*xsink)->rethrow(ex);
     }
-    // Clean up catch scope after rethrow
-    qore_rt_catch_end(xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_rethrow_with_args(uint64_t args_bits, ExceptionSink* xsink) {
@@ -1438,8 +1442,6 @@ extern "C" DLLEXPORT void qore_rt_rethrow_with_args(uint64_t args_bits, Exceptio
         }
         qore_es_private::get(*xsink)->rethrow(ex);
     }
-    // Clean up catch scope after rethrow
-    qore_rt_catch_end(xsink);
 }
 
 // --- Deopt helpers ---
