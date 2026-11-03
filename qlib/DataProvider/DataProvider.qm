@@ -1631,6 +1631,13 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_11 DataProvider v3.11
+    - added catalog change listeners
+      (@ref DataProvider::DataProviderActionCatalog::addCatalogChangeListener() "DataProviderActionCatalog::addCatalogChangeListener()",
+      @ref DataProvider::DataProviderCatalogChangeListener "DataProviderCatalogChangeListener"): a listener is
+      called after each change of the catalog revision, outside the catalog lock; the catalog keeps only a weak
+      reference to it, it can be removed, and an exception it raises is retained
+      (@ref DataProvider::DataProviderActionCatalog::getCatalogChangeListenerFailures() "getCatalogChangeListenerFailures()")
+      instead of failing the change or the other listeners
     - fixed searches with a where hash whose operator hash is a typed hash without an \c op_args member, such as a
       SqlUtil \c OperatorInfo hash from \c op_gt(), which raised \c INVALID-MEMBER; the arguments of such an operator
       of more than two arguments, such as \c "between", are taken from its \c arg list, and the argument count of
