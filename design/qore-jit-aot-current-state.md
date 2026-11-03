@@ -422,6 +422,23 @@ Do not relax this rule without a real dominator-tree or equivalent
 scope/finalization design. See
 [`aot-eh-cleanup-dominance.md`](aot-eh-cleanup-dominance.md).
 
+## Publishing Locals Before Block-Exit Handlers
+
+Before compiled code runs the `on_exit`, `on_success` or `on_error` handlers of
+a block (at a scope exit, including the exit of a `try` block, and on the
+exception paths), it publishes the locals it caches in LLVM allocas to the
+runtime local stack (`syncLocalsToRuntimeForHandlers()`) and seeds the native
+handler slot cache (`beginNativeHandlerSlotCache()`). Only a local whose alloca
+is authoritative may be published. A weak-assigned local (a `foreach` variable
+that is not IR-only, or a local assigned with `:=`) lives on the runtime stack:
+every store writes it there, every load reads it from there, an lvalue-path
+operation on it (`item.key = v`, `item[i] = v`, `delete item.key`,
+`item += v`) changes only the runtime value, and its alloca is never reloaded.
+Both functions therefore skip it, as they skip closure-use locals. Publishing
+its alloca lost every in-place change made in a `try` block of a function with
+a handler, and gave the loop body's own handler the old value
+(`AOTWeakLocalHandlerSync.qtest`).
+
 ## Block-Scoped IR-Only Local Lifetime
 
 An IR-only body local never has a runtime local-stack entry: the call wrapper

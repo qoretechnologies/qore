@@ -3064,6 +3064,16 @@ void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
             continue;
         }
 
+        // A weak-assigned local (a foreach variable that is not IR-only, or a local assigned with :=) lives on
+        // the runtime stack: every store writes it there, every load reads it from there, and an lvalue-path
+        // operation (item.key = v, item[i] = v, delete item.key, item += v) modifies only the runtime value.
+        // Its alloca is not reloaded (canReloadLocalFromRuntime() excludes it), so it can hold the value from
+        // before such an operation; publishing it here would overwrite the operation's result.  The runtime
+        // stack already holds the current value.
+        if (weak_assigned_locals.count(key)) {
+            continue;
+        }
+
         ensureLocalCacheFresh(key, module, builder->GetInsertBlock()->getParent());
 
         // raw local cache: the value is published to the runtime stack as it is stored
@@ -3143,6 +3153,13 @@ llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
             // Closure-use locals live on the cvstack / closure environment. Their
             // LLVM allocas are not authoritative, so publishing them through the
             // native handler slot cache can overwrite the real CVV value.
+            continue;
+        }
+
+        if (weak_assigned_locals.count(key) && !(ir_only_locals_set && ir_only_locals_set->count(key))) {
+            // Like a closure-use local, a weak-assigned local that is not IR-only lives on the runtime stack, and
+            // its alloca can be stale (see syncLocalsToRuntimeForHandlers()), so it is not seeded from the alloca;
+            // handlers read it from the runtime stack.
             continue;
         }
 

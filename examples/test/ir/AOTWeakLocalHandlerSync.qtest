@@ -1,0 +1,503 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTWeakLocalHandlerSyncTest
+
+#! Tests that running the on_block_exit handlers of compiled code keeps changes to the members of a foreach variable
+/** Before compiled code runs the on_exit, on_success or on_error handlers of a block, it publishes the locals it
+    caches in native storage to the runtime local stack, where the handlers read them.  In AOT-compiled code the
+    variable of a foreach loop is not IR-only: it lives on the runtime stack, every load reads it from there, and an
+    lvalue-path operation on it (\c item.key = v, \c item[i] = v, <tt>delete item.key</tt>, \c item += v) changes
+    only the runtime value.  Its native cache is never reloaded, so it still held the value from before the
+    operation, and publishing it overwrote the operation's result.
+
+    A try block is a scope whose exit runs the handlers registered in it, so in a function with any on_exit,
+    on_success or on_error handler, a change to a member of the loop variable made in a try block was lost when the
+    try block was left, normally or through its catch block; the same happened at the end of a loop body that has
+    its own handler, and the handler itself saw the old value.  JIT code published the same stale cache, and as it
+    never writes the cache of such a variable, the loop variable became NOTHING once its function was compiled.
+
+    The cases cover changes in the try and in the catch block, nested try blocks, foreach in while and nested
+    foreach loops, on_exit, on_success and on_error, hash, list, untyped, object and reference loop variables, a
+    weak (:=) local, a handler registered in the try block or the loop body that reads or changes the loop
+    variable, and scalar loop variables and ordinary locals that were not affected; every mode, AOT executables
+    (with and without LLVM optimization, source-stripped) and a source-stripped compiled module must print the AST
+    result.
+*/
+class AOTWeakLocalHandlerSyncTest inherits QUnit::Test {
+    public {
+        const ModuleSource = "%modern
+%allow-weak-references
+module WeakLocalChecks {
+    version = \"1.0\";
+    desc = \"foreach variable handler sync checks\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace WeakLocalChecks {
+class C {
+    public {
+        int v = 1;
+    }
+}
+
+class Log {
+    public {
+        static list<string> l = ();
+    }
+}
+
+sub log(string fmt, ...) {
+    Log::l += vsprintf(fmt, argv);
+}
+
+#! a hash with value type auto, so members of any type can be added
+hash<auto> sub mk(list<string> ks) {
+    hash<auto> h = {};
+    foreach string k in (ks) {
+        h{k} = 1;
+    }
+    return h;
+}
+
+# the original case: a callback result assigned in the try block
+list<hash<auto>> sub callback_result(code cb) {
+    list<hash<auto>> pending = (mk((\"a\",)),);
+    list<hash<auto>> results = ();
+    on_exit log(\"\");
+    foreach hash<auto> item in (pending) {
+        try {
+            item.out = cb();
+        } catch (hash<ExceptionInfo> ex) {
+            item.ex = ex.err;
+        }
+        results += item;
+    }
+    return results;
+}
+
+sub try_member() {
+    on_exit log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            item.out = 1;
+            log(\"try_member in %y\", item);
+        } catch () {
+        }
+        log(\"try_member after %y\", item);
+        item.z = 2;
+        log(\"try_member later %y\", item);
+    }
+}
+
+sub catch_member() {
+    on_exit log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            item.out = 1;
+            throw \"X\";
+        } catch (hash<ExceptionInfo> ex) {
+            item.ex = ex.err;
+        }
+        log(\"catch_member %y\", item);
+    }
+}
+
+sub nested_try() {
+    on_exit log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            try {
+                item.out = 1;
+            } catch () {
+            }
+            item.out2 = 2;
+        } catch () {
+        }
+        log(\"nested_try %y\", item);
+    }
+}
+
+sub while_loop() {
+    on_exit log(\"\");
+    list<hash<auto>> l = (mk((\"a\",)), mk((\"b\",)));
+    int i = 0;
+    while (i < 2) {
+        foreach hash<auto> item in (l) {
+            try {
+                item.i = i;
+            } catch () {
+            }
+            log(\"while_loop %y\", item);
+        }
+        ++i;
+    }
+}
+
+sub nested_foreach() {
+    on_exit log(\"\");
+    foreach hash<auto> o in (mk((\"x\",)),) {
+        foreach hash<auto> item in (mk((\"a\",)),) {
+            try {
+                item.out = 1;
+                o.y = 2;
+            } catch () {
+            }
+            log(\"nested_foreach %y %y\", item, o);
+        }
+    }
+}
+
+sub on_success_handler() {
+    on_success log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            item.out = 1;
+        } catch () {
+        }
+        log(\"on_success %y\", item);
+    }
+}
+
+sub on_error_handler() {
+    on_error log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            item.out = 1;
+        } catch () {
+        }
+        log(\"on_error %y\", item);
+    }
+}
+
+sub list_var() {
+    on_exit log(\"\");
+    foreach list<auto> item in ((1, 2),) {
+        try {
+            item[2] = 3;
+        } catch () {
+        }
+        log(\"list_var %y\", item);
+    }
+}
+
+sub untyped_var() {
+    on_exit log(\"\");
+    foreach auto item in (mk((\"a\",)),) {
+        try {
+            item.out = 1;
+        } catch () {
+        }
+        log(\"untyped_var %y\", item);
+    }
+}
+
+sub add_assign() {
+    on_exit log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            item += mk((\"out\",));
+        } catch () {
+        }
+        log(\"add_assign %y\", item);
+    }
+}
+
+sub delete_member() {
+    on_exit log(\"\");
+    foreach hash<auto> item in (mk((\"a\", \"b\")),) {
+        try {
+            delete item.b;
+        } catch () {
+        }
+        log(\"delete_member %y\", item);
+    }
+}
+
+sub object_var() {
+    on_exit log(\"\");
+    foreach C item in (new C(),) {
+        try {
+            item.v = 2;
+        } catch () {
+        }
+        log(\"object_var %y\", item.v);
+    }
+}
+
+sub reference_var() {
+    list<hash<auto>> l = (mk((\"a\",)),);
+    on_exit log(\"\");
+    foreach hash<auto> item in (\\l) {
+        try {
+            item.out = 1;
+        } catch () {
+        }
+    }
+    log(\"reference_var %y\", l);
+}
+
+sub weak_local() {
+    on_exit log(\"\");
+    C o = new C();
+    C w;
+    w := o;
+    try {
+        w.v = 5;
+    } catch () {
+    }
+    log(\"weak_local %y %y\", w.v, o.v);
+}
+
+# a handler registered in the try block reads and changes the loop variable
+sub handler_in_try() {
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            on_exit {
+                log(\"handler_in_try handler %y\", item);
+                item.h = 1;
+            }
+            item.out = 1;
+        } catch () {
+        }
+        log(\"handler_in_try %y\", item);
+    }
+}
+
+# the handler of the loop body runs after a try block changed the loop variable
+sub handler_in_body() {
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        on_exit log(\"handler_in_body handler %y\", item);
+        try {
+            item.out = 1;
+        } catch () {
+        }
+    }
+}
+
+# the handler of the loop body runs on the exception path
+sub handler_on_error() {
+    try {
+        foreach hash<auto> item in (mk((\"a\",)),) {
+            on_error log(\"handler_on_error handler %y\", item);
+            try {
+                item.out = 1;
+            } catch () {
+            }
+            throw \"Y\";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log(\"handler_on_error caught %s\", ex.err);
+    }
+}
+
+# not affected: the loop variable is replaced, not changed in place
+sub reassign() {
+    on_exit log(\"\");
+    foreach hash<auto> item in (mk((\"a\",)),) {
+        try {
+            item = mk((\"b\",));
+        } catch () {
+        }
+        log(\"reassign %y\", item);
+    }
+}
+
+# not affected: scalar loop variables and ordinary locals
+sub scalars_and_locals() {
+    on_exit log(\"\");
+    foreach string s in (\"a\",) {
+        try {
+            s += \"b\";
+        } catch () {
+        }
+        log(\"scalar string %y\", s);
+    }
+    foreach int i in (1,) {
+        try {
+            i += 2;
+        } catch () {
+        }
+        log(\"scalar int %y\", i);
+    }
+    for (int i = 0; i < 1; ++i) {
+        hash<auto> h = mk((\"a\",));
+        try {
+            h.out = 1;
+        } catch () {
+        }
+        log(\"local %y\", h);
+    }
+}
+
+public list<string> sub run() {
+    Log::l = ();
+    log(\"callback_result %y\", callback_result(int sub () { return 42; }));
+    log(\"callback_error %y\", callback_result(int sub () { throw \"CB\"; }));
+    try_member();
+    catch_member();
+    nested_try();
+    while_loop();
+    nested_foreach();
+    on_success_handler();
+    on_error_handler();
+    list_var();
+    untyped_var();
+    add_assign();
+    delete_member();
+    object_var();
+    reference_var();
+    weak_local();
+    handler_in_try();
+    handler_in_body();
+    handler_on_error();
+    reassign();
+    scalars_and_locals();
+    # drop the lines the handlers that only mark the function log
+    return select Log::l, $1.val();
+}
+}
+";
+
+        #! the worker printing the results of the checks, three times so tiered execution runs native code
+        const WorkerLoop = "for (int i = 0; i < 3; ++i) {
+    print(WeakLocalChecks::run().join(\"|\") + \"\\n\");
+}
+";
+        const Worker = "%modern\n%requires WeakLocalChecks\n" + WorkerLoop;
+
+        #! the AST result
+        const Expected = (
+            "callback_result [{a: 1, out: 42}]",
+            "callback_error [{a: 1, ex: \"CB\"}]",
+            "try_member in {a: 1, out: 1}",
+            "try_member after {a: 1, out: 1}",
+            "try_member later {a: 1, out: 1, z: 2}",
+            "catch_member {a: 1, out: 1, ex: \"X\"}",
+            "nested_try {a: 1, out: 1, out2: 2}",
+            "while_loop {a: 1, i: 0}",
+            "while_loop {b: 1, i: 0}",
+            "while_loop {a: 1, i: 1}",
+            "while_loop {b: 1, i: 1}",
+            "nested_foreach {a: 1, out: 1} {x: 1, y: 2}",
+            "on_success {a: 1, out: 1}",
+            "on_error {a: 1, out: 1}",
+            "list_var [1, 2, 3]",
+            "untyped_var {a: 1, out: 1}",
+            "add_assign {a: 1, out: 1}",
+            "delete_member {a: 1}",
+            "object_var 2",
+            "reference_var [{a: 1, out: 1}]",
+            "weak_local 5 5",
+            "handler_in_try handler {a: 1, out: 1}",
+            "handler_in_try {a: 1, out: 1, h: 1}",
+            "handler_in_body handler {a: 1, out: 1}",
+            "handler_on_error handler {a: 1, out: 1}",
+            "handler_on_error caught Y",
+            "reassign {b: 1}",
+            "scalar string \"ab\"",
+            "scalar int 3",
+            "local {a: 1, out: 1}",
+        ).join("|");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTWeakLocalHandlerSync", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("AOT executables", \testExecutables());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-aot-weak-local-sync-src-");
+        writeSources(tmp.path);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "--enable-debug --exec-mode=%s %s", libqore_dir, tmp.path, qore_bin, mode,
+                tmp.path + DirSep + "worker.q")));
+        }
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-aot-weak-local-sync-exe-");
+        # one script: the module source without its module block, followed by the worker without its %requires
+        string script = tmp.path + DirSep + "case.q";
+        writeFile(script, scriptSource());
+        foreach int opt in ((0, 3)) {
+            string exe = tmp.path + DirSep + "case-O" + string(opt);
+            string out = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O%d --strip-source "
+                "-o %s %s", libqore_dir, libqore_dir, qcc_bin, opt, exe, script));
+            assertTrue(is_file(exe), sprintf("AOT compile -O%d: %s", opt, out));
+            checkOutput(sprintf("AOT -O%d", opt), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s -b "
+                "--enable-debug", libqore_dir, exe)));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-aot-weak-local-sync-mod-");
+        writeSources(tmp.path);
+        string mod_dir = tmp.path + DirSep + "modules";
+        mkdir(mod_dir);
+        string qmod = mod_dir + DirSep + "WeakLocalChecks.qmod";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod, tmp.path + DirSep + "WeakLocalChecks.qm"));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkOutput("aot module", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+            "--enable-debug %s", libqore_dir, mod_dir, qore_bin, tmp.path + DirSep + "worker.q")));
+    }
+
+    #! returns the checks as one script
+    private string scriptSource() {
+        string src = ModuleSource;
+        # remove the module block
+        int start = src.find("module WeakLocalChecks {");
+        int end = src.find("}\n", start) + 2;
+        assertTrue(start > 0 && end > start, "module block");
+        src = src.substr(0, start) + src.substr(end);
+        return src + WorkerLoop;
+    }
+
+    private writeSources(string dir) {
+        writeFile(dir + DirSep + "WeakLocalChecks.qm", ModuleSource);
+        writeFile(dir + DirSep + "worker.q", Worker);
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (map $1, out.split("\n"), $1.val());
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            assertEq(Expected, line, sprintf("%s: round %d", label, $#));
+        }
+    }
+}
