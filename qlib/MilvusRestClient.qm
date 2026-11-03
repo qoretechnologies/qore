@@ -206,6 +206,12 @@ public namespace QoreRagUtils {
 public class MilvusVectorStore inherits AbstractVectorStore {
     public {
         const Backend = "milvus";
+
+        #! Largest <tt>offset + limit</tt> a Milvus query accepts
+        const MaxQueryWindow = 16384;
+
+        #! Entities fetched per query request by summarizeBy()
+        const QueryPageSize = 1000;
     }
 
     private {
@@ -228,6 +234,26 @@ public class MilvusVectorStore inherits AbstractVectorStore {
             throw "VECTOR-STORE-CONFIG-ERROR",
                 "MilvusVectorStore requires 'options.api_key'";
         }
+        init();
+    }
+
+    #! Creates the vector store with a pre-built REST client (for example a client with a custom transport)
+    /** @param config the store configuration; \c options.api_key is not required because the client is supplied
+        @param rest_client the Milvus REST client to use
+
+        @throw VECTOR-STORE-CONFIG-ERROR \c collection is missing
+    */
+    constructor(hash<VectorStoreConfig> config, MilvusRestClient::MilvusRestClientIo rest_client) {
+        self.config = config;
+        if (!config.collection.val()) {
+            throw "VECTOR-STORE-CONFIG-ERROR",
+                "MilvusVectorStore requires 'collection' (Milvus collection name)";
+        }
+        self.rest_client = rest_client;
+        init();
+    }
+
+    private init() {
         coll_name = config.collection;
         id_field = config.options.id_field ?? "id";
         vector_field = config.options.vector_field ?? "vector";
@@ -299,12 +325,142 @@ public class MilvusVectorStore inherits AbstractVectorStore {
         return result;
     }
 
+    #! Counts the entities that match a payload filter
+    /** Calls \c POST \c /entities/query with <tt>count(*)</tt>.
+
+        @param filter optional filter: the portable \c payload_eq form (each key an equality on a field, joined by
+            \c and) or \c expr, a Milvus filter expression
+
+        @return the number of matching entities
+
+        @throw MILVUS-VECTOR-STORE-ERROR a \c payload_eq key is not a valid field name or a value cannot be written
+            as a Milvus literal
+    */
+    int countByFilter(*hash<auto> filter) {
+        ensureRestClient();
+        return queryCount(MilvusVectorStore::makeExpr(filter) ?? "");
+    }
+
+    #! Deletes the entities that match a payload filter
+    /** Counts the matching entities, then calls \c POST \c /entities/delete with the filter expression, because
+        the REST API does not reliably report the number of entities removed.
+
+        @param filter the filter; see countByFilter()
+
+        @return the number of entities that matched immediately before the delete
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty
+    */
+    int deleteByFilter(hash<auto> filter) {
+        *string expr = MilvusVectorStore::makeExpr(filter);
+        AbstractVectorStore::requireFilterCriteria(expr.val());
+        ensureRestClient();
+        int matched = queryCount(expr);
+        if (matched) {
+            rest_client.restPost("/entities/delete", {"collectionName": coll_name, "filter": expr});
+        }
+        return matched;
+    }
+
+    #! Summarizes the entities by the distinct values of a payload field
+    /** Pages through the matching entities with \c POST \c /entities/query, fetching only the requested fields,
+        and groups them here.  Milvus limits <tt>offset + limit</tt> of a query to @ref MaxQueryWindow entities, so
+        a filter that matches more is refused rather than silently truncated.
+
+        @param field the payload field to group by
+        @param filter optional filter; see countByFilter()
+        @param timestamp_field optional payload field holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+
+        @throw MILVUS-VECTOR-STORE-ERROR more than @ref MaxQueryWindow entities match; narrow the filter
+    */
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) {
+        ensureRestClient();
+        string expr = MilvusVectorStore::makeExpr(filter) ?? "";
+        int total = queryCount(expr);
+        if (total > MaxQueryWindow) {
+            throw "MILVUS-VECTOR-STORE-ERROR", sprintf("%d entities match, more than the %d that a Milvus query can "
+                "page through; narrow the filter", total, MaxQueryWindow);
+        }
+        hash<string, hash<auto>> groups = {};
+        list<string> fields = timestamp_field ? (field, timestamp_field) : (field,);
+        for (int offset = 0; offset < total; offset += QueryPageSize) {
+            hash<auto> resp = rest_client.restPost("/entities/query", {
+                "collectionName": coll_name,
+                "filter": expr,
+                "outputFields": fields,
+                "limit": QueryPageSize,
+                "offset": offset,
+            });
+            list<auto> rows = resp.body."data" ?? ();
+            foreach hash<auto> row in (rows) {
+                AbstractVectorStore::addToSummary(\groups, row{field}, timestamp_field ? row{timestamp_field} : NOTHING);
+            }
+            if (rows.size() < QueryPageSize) {
+                break;
+            }
+        }
+        return AbstractVectorStore::finishSummary(groups);
+    }
+
     string getCollection() {
         return coll_name;
     }
 
     int getDimension() {
         return cached_dimension ?? -1;
+    }
+
+    #! Runs a <tt>count(*)</tt> query for a filter expression ("" for all entities)
+    private int queryCount(string expr) {
+        hash<auto> resp = rest_client.restPost("/entities/query", {
+            "collectionName": coll_name,
+            "filter": expr,
+            "outputFields": ("count(*)",),
+        });
+        return (resp.body."data"[0]."count(*)" ?? 0).toInt();
+    }
+
+    #! Returns the Milvus filter expression for a filter, or NOTHING for no filter
+    private static *string makeExpr(*hash<auto> filter) {
+        if (!filter) {
+            return;
+        }
+        if (filter.expr.typeCode() == NT_STRING) {
+            return filter.expr;
+        }
+        if (!(filter.payload_eq instanceof hash) || filter.payload_eq.empty()) {
+            return;
+        }
+        list<string> terms = ();
+        foreach string key in (keys filter.payload_eq) {
+            if (key !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+                throw "MILVUS-VECTOR-STORE-ERROR", sprintf("the payload_eq filter key %y is not a valid Milvus field "
+                    "name", key);
+            }
+            push terms, sprintf("%s == %s", key, MilvusVectorStore::literal(filter.payload_eq{key}));
+        }
+        return terms.join(" and ");
+    }
+
+    #! Writes a value as a Milvus filter literal
+    private static string literal(auto value) {
+        switch (value.typeCode()) {
+            case NT_STRING: {
+                string esc = value;
+                esc =~ s/\\/\\\\/g;
+                esc =~ s/"/\\"/g;
+                return "\"" + esc + "\"";
+            }
+            case NT_INT:
+            case NT_FLOAT:
+                return value.toString();
+            case NT_BOOLEAN:
+                return value ? "true" : "false";
+        }
+        throw "MILVUS-VECTOR-STORE-ERROR", sprintf("a %s value cannot be used in a Milvus payload_eq filter",
+            value.type());
     }
 
     private ensureRestClient() {

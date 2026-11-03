@@ -1715,7 +1715,8 @@ int removed = store.deleteByFilter({"payload_eq": {"instance_key": "retired-host
             ISO 8601 string); when given, each group reports the latest value in @ref VectorFieldSummary::last_write
 
         @return one @ref VectorFieldSummary per distinct value of \a field, ordered by descending count and then
-            by value; records without the field are grouped under a @ref nothing value; an empty list when no
+            by value; records without the field are grouped under a @ref nothing value, which sorts last among
+            groups of the same count; an empty list when no
             record matches
 
         @par Example
@@ -1788,6 +1789,11 @@ foreach hash<VectorFieldSummary> g in (store.summarizeBy("instance_key", {"paylo
         return sort(groups, int sub (hash<VectorFieldSummary> a, hash<VectorFieldSummary> b) {
             if (a.count != b.count) {
                 return b.count <=> a.count;
+            }
+            bool a_missing = !exists a.value || a.value === NULL;
+            bool b_missing = !exists b.value || b.value === NULL;
+            if (a_missing || b_missing) {
+                return int(a_missing) <=> int(b_missing);
             }
             return a.value.toString() <=> b.value.toString();
         });
