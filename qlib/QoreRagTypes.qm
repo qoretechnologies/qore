@@ -1744,6 +1744,40 @@ foreach hash<VectorFieldSummary> g in (store.summarizeBy("instance_key", {"paylo
         }
     }
 
+    #! Adds one record to the in-memory groups of a client-side summary
+    /** Helper for implementations of @ref summarizeBy() whose backend cannot group: they page through the matching
+        records and add each to \a groups, then return @ref finishSummary()
+
+        @param groups the groups so far, keyed by an internal rendering of the value
+        @param value the record's value of the grouping field (@ref nothing if it has none)
+        @param timestamp the record's value of the timestamp field: a date, an ISO 8601 string, or anything else
+            (ignored)
+    */
+    static addToSummary(reference<hash<string, hash<auto>>> groups, auto value, auto timestamp) {
+        string key = sprintf("%y", value);
+        if (!groups{key}) {
+            groups{key} = {"value": value, "count": 0};
+        }
+        ++groups{key}.count;
+        *date ts;
+        if (timestamp instanceof date) {
+            ts = timestamp;
+        } else if (timestamp instanceof string) {
+            try {
+                ts = date(timestamp);
+            } catch () {
+            }
+        }
+        if (ts && (!groups{key}.last_write || ts > groups{key}.last_write)) {
+            groups{key}.last_write = ts;
+        }
+    }
+
+    #! Converts the groups built by @ref addToSummary() to the ordered result of @ref summarizeBy()
+    static list<hash<VectorFieldSummary>> finishSummary(hash<string, hash<auto>> groups) {
+        return AbstractVectorStore::sortSummary(map cast<hash<VectorFieldSummary>>($1), groups.values());
+    }
+
     #! Orders summary groups by descending count, then by value, and returns them
     /** Helper for implementations of @ref summarizeBy()
 

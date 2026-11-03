@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires RestClient
+%requires RestClientIo
+%requires QoreRagTypes
+%requires OpenSearchDataProvider
+
+%exec-class OpenSearchVectorStoreManagementTest
+
+# Fake REST client recording every request and serving canned responses.
+class FakeOpenSearchRestClient inherits RestClientIo::RestClientIo {
+    public {
+        int count_result = 0;
+        int deleted_result = 0;
+        *hash<auto> delete_failures;
+        # canned _search?scroll response, then the /_search/scroll pages, served in order
+        hash<auto> first_page = {};
+        list<hash<auto>> next_pages = ();
+        list<hash<auto>> requests = ();
+    }
+
+    constructor() : RestClientIo({"url": "http://localhost:9200", "data": "json"}) {
+    }
+
+    hash<auto> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": method, "path": path, "body": body};
+        hash<auto!> result;
+        if (path =~ /\/_count$/) {
+            result = {"count": count_result};
+        } else if (path =~ /\/_delete_by_query/) {
+            result = {"deleted": deleted_result};
+            if (delete_failures) {
+                result.failures = delete_failures;
+            }
+        } else if (path =~ /\/_search\?scroll=/) {
+            result = first_page;
+        } else if (path == "_search/scroll" && method == "POST") {
+            result = shift next_pages ?? {"hits": {"hits": ()}};
+        } else {
+            result = {};
+        }
+        return <RestClient::RestResponseInfo>{"body": result, "status_code": 200};
+    }
+
+    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+}
+
+public class OpenSearchVectorStoreManagementTest inherits QUnit::Test {
+    constructor() : Test("OpenSearchVectorStore management", "1.0", \ARGV) {
+        addTestCase("countByFilter", \countTest());
+        addTestCase("deleteByFilter", \deleteTest());
+        addTestCase("summarizeBy", \summarizeTest());
+        set_return_value(main());
+    }
+
+    private OpenSearchDataProvider::OpenSearchVectorStore newStore(FakeOpenSearchRestClient fake) {
+        return new OpenSearchDataProvider::OpenSearchVectorStore(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "opensearch",
+            "collection": "mgmt",
+            "options": {"dimension": 3, "refresh": "true"},
+        }, fake);
+    }
+
+    countTest() {
+        FakeOpenSearchRestClient fake();
+        fake.count_result = 9;
+        OpenSearchDataProvider::OpenSearchVectorStore store = newStore(fake);
+
+        assertEq(9, store.countByFilter());
+        assertEq("mgmt/_count", fake.requests[0].path);
+        assertEq({"query": {"match_all": {}}}, fake.requests[0].body);
+
+        assertEq(9, store.countByFilter({"payload_eq": {"instance_key": "canoe", "n": 3}}));
+        assertEq({"query": {"bool": {"filter": (
+            {"term": {"instance_key": "canoe"}},
+            {"term": {"n": 3}},
+        )}}}, fake.requests[1].body);
+
+        store.countByFilter({"native_filter": {"range": {"n": {"gt": 1}}}});
+        assertEq({"query": {"range": {"n": {"gt": 1}}}}, fake.requests[2].body);
+
+        fake.count_result = 0;
+        assertEq(0, store.countByFilter({"payload_eq": {"instance_key": "none"}}));
+    }
+
+    deleteTest() {
+        FakeOpenSearchRestClient fake();
+        fake.deleted_result = 4;
+        OpenSearchDataProvider::OpenSearchVectorStore store = newStore(fake);
+
+        assertEq(4, store.deleteByFilter({"payload_eq": {"instance_key": "retired"}}));
+        assertEq(1, fake.requests.size());
+        assertEq("mgmt/_delete_by_query?conflicts=proceed&refresh=true", fake.requests[0].path);
+        assertEq({"query": {"bool": {"filter": ({"term": {"instance_key": "retired"}},)}}}, fake.requests[0].body);
+
+        # a filter that selects everything is refused before any request
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"native_filter": {}})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(1, fake.requests.size());
+
+        # failures reported by the server are an error
+        fake.delete_failures = {"reason": "boom"};
+        assertThrows("OPENSEARCH-VECTOR-STORE-ERROR", \store.deleteByFilter(),
+            {"payload_eq": {"instance_key": "retired"}});
+    }
+
+    summarizeTest() {
+        FakeOpenSearchRestClient fake();
+        fake.first_page = {"_scroll_id": "s1", "hits": {"hits": (
+            {"_source": {"instance_key": "a", "t": "2026-11-01T10:00:00"}},
+            {"_source": {"instance_key": "b", "t": "2026-11-02T10:00:00"}},
+            {"_source": {"instance_key": "b", "t": "2026-11-03T10:00:00"}},
+        )}};
+        fake.next_pages = (
+            {"_scroll_id": "s2", "hits": {"hits": (
+                {"_source": {"instance_key": "a", "t": "2026-10-01T10:00:00"}},
+                {"_source": {"t": "bad"}},
+            )}},
+            {"_scroll_id": "s2", "hits": {"hits": ()}},
+        );
+        OpenSearchDataProvider::OpenSearchVectorStore store = newStore(fake);
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key",
+            {"payload_eq": {"scope": "system"}}, "t");
+        assertEq(("a", "b", NOTHING), map $1.value, groups);
+        assertEq((2, 2, 1), map $1.count, groups);
+        assertEq(2026-11-01T10:00:00, groups[0].last_write);
+        assertEq(2026-11-03T10:00:00, groups[1].last_write);
+        assertFalse(exists groups[2].last_write);
+
+        assertEq("mgmt/_search?scroll=1m", fake.requests[0].path);
+        assertEq(("instance_key", "t"), fake.requests[0].body."_source");
+        assertEq(OpenSearchDataProvider::OpenSearchVectorStore::ScrollPageSize, fake.requests[0].body.size);
+        assertEq({"scroll": "1m", "scroll_id": "s1"}, fake.requests[1].body);
+        assertEq({"scroll": "1m", "scroll_id": "s2"}, fake.requests[2].body);
+        hash<auto> last = fake.requests[fake.requests.size() - 1];
+        assertEq("DELETE", last.method, "the scroll context is cleared");
+        assertEq({"scroll_id": "s2"}, last.body);
+
+        # nothing matches
+        FakeOpenSearchRestClient empty();
+        empty.first_page = {"_scroll_id": "e", "hits": {"hits": ()}};
+        assertEq((), newStore(empty).summarizeBy("instance_key"));
+    }
+}

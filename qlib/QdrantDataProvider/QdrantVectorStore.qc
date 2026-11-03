@@ -262,30 +262,19 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
         if (filter) {
             body.filter = QdrantVectorStore::normalizeSearchFilter(filter);
         }
-        hash<string, hash<auto>> groups;
+        hash<string, hash<auto>> groups = {};
         while (True) {
             hash<auto> result = rest.restPost(pointsPath("/scroll"), body).body.result;
             foreach hash<auto> p in (result.points ?? ()) {
-                auto value = p.payload{field};
-                string key = sprintf("%y", value);
-                if (!groups{key}) {
-                    groups{key} = {"value": value, "count": 0};
-                }
-                ++groups{key}.count;
-                if (timestamp_field) {
-                    *date ts = QdrantVectorStore::parseTimestamp(p.payload{timestamp_field});
-                    if (ts && (!groups{key}.last_write || ts > groups{key}.last_write)) {
-                        groups{key}.last_write = ts;
-                    }
-                }
+                QoreRagUtils::AbstractVectorStore::addToSummary(\groups, p.payload{field},
+                    timestamp_field ? p.payload{timestamp_field} : NOTHING);
             }
             if (!exists result.next_page_offset) {
                 break;
             }
             body.offset = result.next_page_offset;
         }
-        return QoreRagUtils::AbstractVectorStore::sortSummary(
-            map cast<hash<QoreRagUtils::VectorFieldSummary>>($1), groups.values());
+        return QoreRagUtils::AbstractVectorStore::finishSummary(groups);
     }
 
     #! Returns the configured collection name
@@ -408,19 +397,6 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
             }
         }
         return False;
-    }
-
-    #! Parses a payload timestamp (a date or an ISO 8601 string); NOTHING if it is neither
-    private:internal static *date parseTimestamp(auto value) {
-        if (value instanceof date) {
-            return value;
-        }
-        if (value instanceof string) {
-            try {
-                return date(value);
-            } catch () {
-            }
-        }
     }
 
     #! Converts provider-neutral payload filters to Qdrant filter syntax

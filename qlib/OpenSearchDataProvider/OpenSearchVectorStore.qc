@@ -54,6 +54,14 @@ public namespace OpenSearchDataProvider {
     backend-specific filters in a portable outer hash.
 */
 public class OpenSearchVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    public {
+        #! Documents fetched per scroll request by summarizeBy()
+        const ScrollPageSize = 1000;
+
+        #! How long OpenSearch keeps a scroll context between requests
+        const ScrollKeepAlive = "1m";
+    }
+
     private {
         #! Captured configuration
         hash<QoreRagUtils::VectorStoreConfig> config;
@@ -182,6 +190,86 @@ public class OpenSearchVectorStore inherits QoreRagUtils::AbstractVectorStore {
             boolean(config.options.include_vectors ?? False)), hits;
     }
 
+    #! Counts the documents that match a payload filter
+    /** Calls \c POST \c /{index}/_count.
+
+        @param filter optional filter: the portable \c payload_eq form (each key is an exact \c term match, so
+            string payload fields should be mapped as \c keyword), \c native_filter (an OpenSearch query), or an
+            OpenSearch query
+
+        @return the number of matching documents
+    */
+    int countByFilter(*hash<auto> filter) {
+        return rest.restPost(indexPath("_count"), {"query": OpenSearchVectorStore::makeQuery(filter)})
+            .body.count.toInt();
+    }
+
+    #! Deletes the documents that match a payload filter
+    /** Calls \c POST \c /{index}/_delete_by_query, which reports the number of documents it removed.
+
+        @param filter the filter; see countByFilter()
+
+        @return the number of documents removed
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty or would select every document
+        @throw OPENSEARCH-VECTOR-STORE-ERROR the delete reported failures
+    */
+    int deleteByFilter(hash<auto> filter) {
+        QoreRagUtils::AbstractVectorStore::requireFilterCriteria(OpenSearchVectorStore::hasCriteria(filter));
+        string uri = indexPath("_delete_by_query?conflicts=proceed");
+        if (exists config.options.refresh) {
+            uri += sprintf("&refresh=%s", encode_url(string(config.options.refresh), True));
+        }
+        hash<auto> response = rest.restPost(uri, {"query": OpenSearchVectorStore::makeQuery(filter)}).body;
+        if (response.failures) {
+            throw "OPENSEARCH-VECTOR-STORE-ERROR", sprintf("delete by query failed: %y", response.failures);
+        }
+        return response.deleted.toInt();
+    }
+
+    #! Summarizes the documents by the distinct values of a payload field
+    /** Pages through the matching documents with the scroll API, fetching only the requested payload fields, and
+        groups them here, so that the result does not depend on how the index maps the fields.
+
+        @param field the top-level payload field to group by
+        @param filter optional filter; see countByFilter()
+        @param timestamp_field optional top-level payload field holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+    */
+    list<hash<QoreRagUtils::VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter,
+            *string timestamp_field) {
+        hash<auto> body = {
+            "size": ScrollPageSize,
+            "query": OpenSearchVectorStore::makeQuery(filter),
+            "_source": timestamp_field ? (field, timestamp_field) : (field,),
+        };
+        hash<string, hash<auto>> groups = {};
+        hash<auto> response = rest.restPost(indexPath("_search?scroll=" + ScrollKeepAlive), body).body;
+        *string scroll_id = response."_scroll_id";
+        on_exit {
+            if (scroll_id) {
+                try {
+                    rest.restDoRequest("DELETE", "_search/scroll", {"scroll_id": scroll_id});
+                } catch () {
+                }
+            }
+        }
+        while (True) {
+            list<hash<auto>> hits = response.hits.hits ?? ();
+            if (!hits) {
+                break;
+            }
+            foreach hash<auto> hit in (hits) {
+                QoreRagUtils::AbstractVectorStore::addToSummary(\groups, hit."_source"{field},
+                    timestamp_field ? hit."_source"{timestamp_field} : NOTHING);
+            }
+            response = rest.restPost("_search/scroll", {"scroll": ScrollKeepAlive, "scroll_id": scroll_id}).body;
+            scroll_id = response."_scroll_id" ?? scroll_id;
+        }
+        return QoreRagUtils::AbstractVectorStore::finishSummary(groups);
+    }
+
     #! Returns the configured index name
     string getCollection() {
         return config.collection;
@@ -266,6 +354,38 @@ public class OpenSearchVectorStore inherits QoreRagUtils::AbstractVectorStore {
             return sprintf("%s?refresh=%s", uri, encode_url(string(config.options.refresh), True));
         }
         return uri;
+    }
+
+    #! Returns the OpenSearch query for a filter: \c match_all, \c native_filter, \c payload_eq or a native query
+    private static hash<auto> makeQuery(*hash<auto> filter) {
+        if (!filter) {
+            return {"match_all": {}};
+        }
+        if (exists filter.native_filter) {
+            return filter.native_filter;
+        }
+        if (exists filter{"payload_eq"}) {
+            if (!(filter.payload_eq instanceof hash) || filter.payload_eq.empty()) {
+                return {"match_all": {}};
+            }
+            list<hash<auto>> terms = ();
+            foreach string key in (keys filter.payload_eq) {
+                push terms, {"term": {key: filter.payload_eq{key}}};
+            }
+            return {"bool": {"filter": terms}};
+        }
+        return filter;
+    }
+
+    #! Returns True if the filter constrains the documents
+    private static bool hasCriteria(hash<auto> filter) {
+        if (exists filter.native_filter) {
+            return filter.native_filter.size() > 0;
+        }
+        if (exists filter{"payload_eq"}) {
+            return filter.payload_eq instanceof hash && filter.payload_eq.size() > 0;
+        }
+        return filter.size() > 0;
     }
 
     private static hash<QoreRagUtils::VectorSearchResult> hitFromWire(hash<auto> hit, string vector_field,
