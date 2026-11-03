@@ -23424,6 +23424,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = builder->CreateCall(helper, {opcode_val, val_boxed, xsink_arg});
                 // No reloadAllLocalsFromRuntime — pure computation
 
+            } else if (inv->invoke_opcode == QoreIROpcode::ListIndexDynamic && inv->operands.size() == 2) {
+                // '[]' with exception edges: as the instruction without them, with the operator's
+                // string_index_char option (qore_rt_list_index_dynamic())
+                auto* lhs = getVal(inv->operands[0].id, error);
+                auto* rhs = getVal(inv->operands[1].id, error);
+                if (!lhs || !rhs) { return false; }
+                llvm::Value* lhs_boxed = boxValue(lhs, inv->operands[0].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
+                int32_t string_index_char = 1;
+                if (inv->expr.hasNode()) {
+                    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(inv->expr.getInternalNode())) {
+                        string_index_char = sq->hasStringIndexChar() ? 1 : 0;
+                    }
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {lhs_boxed, rhs_boxed, llvm::ConstantInt::get(i32_type, string_index_char), xsink_arg});
+                // No reloadAllLocalsFromRuntime — pure computation
+
             } else if (!inv->operands.empty() && isBinaryInvokeOpcode(inv->invoke_opcode)
                     && inv->operands.size() >= 2) {
                 // Binary invoke: use pre-evaluated operands with qore_rt_binary_op
@@ -40402,9 +40422,12 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
     // Box the list operand and unbox the index
     llvm::Value* list_boxed = boxValue(list_val, inst->operands[0].id);
 
-    // The index needs to be an i64 (native int)
+    // The index needs to be an i64 (native int).  A boxed index is read as an integer only when it is never a
+    // list: a list of offsets makes a slice (QoreSquareBracketsOperatorNode::doSquareBrackets()), which
+    // qore_rt_list_index_dynamic() evaluates
     llvm::Value* idx_int;
-    if (idx_val->getType() == i64_type) {
+    if (idx_val->getType() == i64_type
+            && (!nanboxed_values.count(inst->operands[1].id) || !sq_brackets->offsetMayBeList())) {
         idx_int = ensureIntTypeInline(idx_val, inst->operands[1].id);
     } else {
         return false;  // Can't determine index type

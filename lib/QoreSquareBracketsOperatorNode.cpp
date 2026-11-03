@@ -44,6 +44,8 @@ QoreOperatorNode* QoreSquareBracketsOperatorNode::copyBackground(ExceptionSink* 
         rv->rhs_list_range = rhs_list_range;
         rv->string_index_char = string_index_char;
         rv->negative_offsets = negative_offsets;
+        rv->slice = slice;
+        rv->offset_may_be_list = offset_may_be_list;
     }
     return rv;
 }
@@ -143,6 +145,7 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     bool rti_is_list = QoreTypeInfo::isType(rti, NT_LIST);
     slice = rti_is_list;
     bool rti_can_be_list = rti_is_list ? true : QoreTypeInfo::parseReturns(rti, NT_LIST);
+    offset_may_be_list = rti_can_be_list;
 
     if (QoreTypeInfo::hasType(lti)) {
         // if we are trying to convert to a list

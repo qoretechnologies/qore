@@ -574,6 +574,33 @@ static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
     return getWeakReferenceTarget(l->retrieveEntry(i));
 }
 
+//! Evaluates a ListIndexDynamic instruction (container[index]) as the AST's '[]' operator does
+/** A list, string, binary or buffer gives the element at the offset, and a list of offsets a slice; any other value,
+    a hash (typed or not) or an object among them, gives no value (QoreSquareBracketsOperatorNode::doSquareBrackets()).
+    '[]' never reads a key or a member, and so never raises an error for a key that a hashdecl does not declare.  A
+    weak reference read from a list reads as its target.
+
+    @param expr the instruction's '[]' expression, which gives the operator's string_index_char option; without one
+    (as in source-stripped IR), a string index gives a character
+
+    @return the value, owned by the caller; no value if an exception was raised
+*/
+static QoreValue qore_ir_list_index_dynamic(const QoreValue& left, const QoreValue& right, const QoreValue& expr,
+        ExceptionSink* xsink) {
+    bool string_index_char = true;
+    if (expr.hasNode()) {
+        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(expr.getInternalNode())) {
+            string_index_char = sq->hasStringIndexChar();
+        }
+    }
+    QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, string_index_char,
+        runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink);
+    if (left.getType() == NT_LIST && !(xsink && *xsink)) {
+        evaluateOwnedListElement(out, xsink);
+    }
+    return out;
+}
+
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
     switch (op) {
@@ -4959,7 +4986,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
         case QoreIROpcode::HashDerefDynamic:
-        case QoreIROpcode::ListIndexDynamic:
         case QoreIROpcode::FoldlAny:
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat:
@@ -5027,6 +5053,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
             QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
+        }
+        // '[]' with exception edges, as the instruction without them (see qore_ir_list_index_dynamic())
+        case QoreIROpcode::ListIndexDynamic: {
+            QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
+            QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
+            return qore_ir_list_index_dynamic(left, right, inv->expr, xsink);
         }
         // Ternary computation opcodes.  These can be emitted as Invoke
         // instructions inside try/on_error regions so exceptions branch to the
@@ -13458,13 +13490,8 @@ load_local_done:
                 }
                 QoreValue right_val = getIRValue(values, inst->operands[1]);
                 QoreValue res = inst->opcode == QoreIROpcode::ListIndexDynamic
-                    ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
-                        string_index_char != 0, runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink)
+                    ? qore_ir_list_index_dynamic(left_val, right_val, expr_inst->expr, xsink)
                     : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
-                if (inst->opcode == QoreIROpcode::ListIndexDynamic && left_val.getType() == NT_LIST
-                        && !(xsink && *xsink)) {
-                    evaluateOwnedListElement(res, xsink);
-                }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -18237,35 +18264,9 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             return QoreValue();
         }
-        case QoreIROpcode::ListIndexDynamic: {
-            // Dynamic list/container index: container[index]
-            qore_type_t bt = left.getType();
-            if (bt == NT_LIST || bt == NT_STRING || bt == NT_BINARY || bt == NT_BUFFER
-                    || right.getType() == NT_LIST) {
-                QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
-                    runtime_check_parse_option(PO_NEGATIVE_OFFSETS), xsink);
-                if (bt == NT_LIST && !(xsink && *xsink)) {
-                    evaluateOwnedListElement(out, xsink);
-                }
-                return out;
-            }
-            if (bt == NT_HASH) {
-                // hash[key] is equivalent to hash{key}
-                const QoreHashNode* h = left.get<const QoreHashNode>();
-                QoreHashKeyHelper kstr(right, xsink);
-                if (*xsink) {
-                    return QoreValue();
-                }
-                QoreValue result = h->getKeyValue(kstr.c_str(), xsink);
-                if (xsink && *xsink) {
-                    return QoreValue();
-                }
-                QoreValue out = result.refSelf();
-                evaluateOwnedWeakReferenceResult(out, xsink);
-                return out;
-            }
-            return QoreValue();
-        }
+        case QoreIROpcode::ListIndexDynamic:
+            // container[index]; without the instruction, a string index gives a character
+            return qore_ir_list_index_dynamic(left, right, QoreValue(), xsink);
         default:
             break;
     }

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -63,6 +63,12 @@ public:
         return slice;
     }
 
+    //! Returns false only if the offset operand's parse type proves that it is never a list, so the expression is
+    //! never a slice and the offset can be read as an integer
+    DLLLOCAL bool offsetMayBeList() const {
+        return offset_may_be_list;
+    }
+
     DLLLOCAL bool hasStringIndexChar() const {
         return string_index_char;
     }
@@ -77,6 +83,8 @@ protected:
     bool rhs_list_range = false;
     // is the offset operand a list at parse time?
     bool slice = false;
+    //! false if the offset operand is never a list (set at parse time; true until proven otherwise)
+    bool offset_may_be_list = true;
     bool string_index_char = true;
     bool negative_offsets = false;
 
