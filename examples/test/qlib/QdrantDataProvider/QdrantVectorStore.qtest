@@ -36,6 +36,15 @@ class FakeQdrantRestClient inherits RestClientIo::RestClientIo {
             ),
         };
 
+        # canned count for /points/count
+        int count_result = 0;
+
+        # canned /points/scroll result pages, served in order
+        list<hash<auto>> scroll_pages = ();
+
+        # every request seen: {method, path, body}
+        list<hash<auto>> requests = ();
+
         # canned response body for /collections/<name> (dim probe)
         hash<auto> collection_info = {
             "config": {
@@ -56,9 +65,14 @@ class FakeQdrantRestClient inherits RestClientIo::RestClientIo {
         last_method = method;
         last_path = path;
         last_body = body;
+        push requests, {"method": method, "path": path, "body": body};
 
         hash<auto> result_body;
-        if (method == "POST" && path =~ /\/points\/query$/) {
+        if (method == "POST" && path =~ /\/points\/count$/) {
+            result_body = {"count": count_result};
+        } else if (method == "POST" && path =~ /\/points\/scroll$/) {
+            result_body = shift scroll_pages;
+        } else if (method == "POST" && path =~ /\/points\/query$/) {
             result_body = query_response_points;
         } else if (method == "GET" && path =~ /\/collections\/[^\/]+$/) {
             result_body = collection_info;
@@ -117,6 +131,9 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         addTestCase("offline search + filter pass-through", \offlineSearchTest());
         addTestCase("offline search + portable payload equality filter", \offlinePayloadEqFilterTest());
         addTestCase("offline search + invalid portable payload equality filter", \offlineInvalidPayloadEqFilterTest());
+        addTestCase("offline countByFilter", \offlineCountByFilterTest());
+        addTestCase("offline deleteByFilter", \offlineDeleteByFilterTest());
+        addTestCase("offline summarizeBy", \offlineSummarizeByTest());
         addTestCase("offline dimension probe", \offlineDimensionProbeTest());
         addTestCase("offline dimension mismatch is rejected", \offlineDimensionMismatchTest());
         addTestCase("live upsert -> search -> delete", \liveRoundTripTest());
@@ -209,6 +226,119 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         assertEq("/collections/delete-test/points/delete", fake.last_path);
         # all-digit ids -> ints, others stay strings
         assertEq((1, 2, "xyz"), fake.last_body.points);
+    }
+
+    private QdrantDataProvider::QdrantVectorStore newOfflineStore(FakeQdrantRestClient fake) {
+        return new QdrantDataProvider::QdrantVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "qdrant",
+                "collection": "mgmt-test",
+                "options": {"dimension": 4},
+            }, fake);
+    }
+
+    #! countByFilter() posts an exact count with the translated filter
+    private offlineCountByFilterTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        fake.count_result = 12;
+        QdrantDataProvider::QdrantVectorStore store = newOfflineStore(fake);
+
+        assertEq(12, store.countByFilter());
+        assertEq("/collections/mgmt-test/points/count", fake.last_path);
+        assertEq({"exact": True}, fake.last_body);
+
+        assertEq(12, store.countByFilter({"payload_eq": {"instance_key": "canoe", "scope": "system"}}));
+        assertEq({"exact": True, "filter": {"must": (
+            {"key": "instance_key", "match": {"value": "canoe"}},
+            {"key": "scope", "match": {"value": "system"}},
+        )}}, fake.last_body);
+
+        fake.count_result = 0;
+        assertEq(0, store.countByFilter({"payload_eq": {"instance_key": "none"}}));
+    }
+
+    #! deleteByFilter() counts, then deletes by filter, and refuses a filter that selects every point
+    private offlineDeleteByFilterTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        fake.count_result = 5;
+        QdrantDataProvider::QdrantVectorStore store = newOfflineStore(fake);
+
+        assertEq(5, store.deleteByFilter({"payload_eq": {"instance_key": "retired"}}));
+        assertEq(2, fake.requests.size());
+        assertEq("/collections/mgmt-test/points/count", fake.requests[0].path);
+        assertEq("/collections/mgmt-test/points/delete", fake.requests[1].path);
+        hash<auto> expected = {"must": ({"key": "instance_key", "match": {"value": "retired"}},)};
+        assertEq({"exact": True, "filter": expected}, fake.requests[0].body);
+        assertEq({"filter": expected}, fake.requests[1].body);
+
+        # a native filter is accepted
+        fake.requests = ();
+        assertEq(5, store.deleteByFilter({"must_not": ({"key": "scope", "match": {"value": "tenant"}},)}));
+        assertEq(2, fake.requests.size());
+
+        # nothing matches: no delete request
+        fake.requests = ();
+        fake.count_result = 0;
+        assertEq(0, store.deleteByFilter({"payload_eq": {"instance_key": "none"}}));
+        assertEq(1, fake.requests.size());
+
+        # a filter that selects every point is refused before any request
+        fake.requests = ();
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"unrelated": 1})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(0, fake.requests.size());
+    }
+
+    #! summarizeBy() pages through scroll results without vectors and groups them
+    private offlineSummarizeByTest() {
+        checkModule(self);
+        FakeQdrantRestClient fake();
+        fake.scroll_pages = (
+            {"points": (
+                {"id": 1, "payload": {"instance_key": "a", "written_at": "2026-11-01T10:00:00"}},
+                {"id": 2, "payload": {"instance_key": "b", "written_at": "2026-11-02T10:00:00"}},
+                {"id": 3, "payload": {"instance_key": "b", "written_at": "2026-11-03T10:00:00"}},
+            ), "next_page_offset": 4},
+            {"points": (
+                {"id": 4, "payload": {"instance_key": "a", "written_at": "2026-10-01T10:00:00"}},
+                {"id": 5, "payload": {"written_at": "not a date"}},
+                {"id": 6, "payload": {"instance_key": "b"}},
+            ), "next_page_offset": NOTHING},
+        );
+        QdrantDataProvider::QdrantVectorStore store = newOfflineStore(fake);
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key",
+            {"payload_eq": {"scope": "system"}}, "written_at");
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
+        assertEq((3, 2, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertEq(2026-11-01T10:00:00, groups[1].last_write, "the latest of the group's parseable values");
+        assertFalse(exists groups[2].last_write, "an unparseable timestamp gives none");
+
+        assertEq(2, fake.requests.size());
+        hash<auto> first = fake.requests[0].body;
+        assertEq("/collections/mgmt-test/points/scroll", fake.requests[0].path);
+        assertEq(False, first.with_vector);
+        assertEq({"include": ("instance_key", "written_at")}, first.with_payload);
+        assertEq(QdrantDataProvider::QdrantVectorStore::ScrollPageSize, first.limit);
+        assertFalse(exists first.offset);
+        assertEq(4, fake.requests[1].body.offset, "the next page continues from the returned offset");
+        assertEq({"must": ({"key": "scope", "match": {"value": "system"}},)}, first.filter);
+
+        # without a timestamp field only the grouping key is fetched
+        fake.requests = ();
+        fake.scroll_pages = ({"points": ({"id": 1, "payload": {"instance_key": "a"}},)},);
+        groups = store.summarizeBy("instance_key");
+        assertEq(1, groups.size());
+        assertFalse(exists groups[0].last_write);
+        assertEq({"include": ("instance_key",)}, fake.requests[0].body.with_payload);
+
+        # nothing matches
+        fake.scroll_pages = ({"points": ()},);
+        assertEq((), store.summarizeBy("instance_key"));
     }
 
     #! search() must use POST /points/query, pass filter through, and parse results

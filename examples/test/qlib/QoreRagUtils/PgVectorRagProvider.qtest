@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires json
 %requires ConnectionProvider
 %requires QoreRagTypes
 %requires QoreRagUtils
@@ -161,6 +162,9 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
             \searchFilterTest());
         addTestCase("search translates portable payload equality filter",
             \payloadEqFilterTest());
+        addTestCase("countByFilter counts with and without a filter", \countByFilterTest());
+        addTestCase("deleteByFilter deletes by filter and refuses an empty one", \deleteByFilterTest());
+        addTestCase("summarizeBy groups by a payload key", \summarizeByTest());
         addTestCase("getDimension probes vector_dims when not cached",
             \dimensionProbeTest());
         addTestCase("score conversion differs by distance metric",
@@ -176,6 +180,8 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         if (conn_name) {
             addTestCase("live: ping + vector-search (existing table)",
                 \livePgVectorTest());
+            addTestCase("live: count, delete and summarize by payload filter (temporary table)",
+                \liveManagementTest());
         }
         set_return_value(main());
     }
@@ -273,6 +279,88 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         assertTrue(calls[0].args[2] =~ /title/);  # payload contains "title"
         # commit() called on success
         assertEq(1, ds.commit_count);
+    }
+
+    private PgVectorRagProvider newStore(FakePgsqlDatasource ds) {
+        return new QoreRagUtils::PgVectorRagProvider(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": "embeddings",
+            "options": {"datasource": ds, "dimension": 3},
+        });
+    }
+
+    private countByFilterTest() {
+        FakePgsqlDatasource ds();
+        ds.selectRow_response = {"cnt": 7};
+        QoreRagUtils::PgVectorRagProvider store = newStore(ds);
+
+        assertEq(7, store.countByFilter());
+        assertEq(7, store.countByFilter({"payload_eq": {"instance_key": "canoe", "scope": "system"}}));
+
+        list<hash<auto>> calls = ds.getSelectCalls();
+        assertEq(2, calls.size());
+        assertEq("SELECT count(*) AS cnt FROM \"embeddings\"", calls[0].sql);
+        assertEq((), calls[0].args);
+        assertEq("SELECT count(*) AS cnt FROM \"embeddings\" WHERE payload @> %v::jsonb", calls[1].sql);
+        assertEq(1, calls[1].args.size());
+        assertEq({"instance_key": "canoe", "scope": "system"}, parse_json(calls[1].args[0]));
+    }
+
+    private deleteByFilterTest() {
+        FakePgsqlDatasource ds();
+        QoreRagUtils::PgVectorRagProvider store = newStore(ds);
+
+        assertEq(1, store.deleteByFilter({"payload_eq": {"instance_key": "retired"}}));
+        list<hash<auto>> calls = ds.getExecCalls();
+        assertEq(1, calls.size());
+        assertEq("DELETE FROM \"embeddings\" WHERE payload @> %v::jsonb", calls[0].sql);
+        assertEq({"instance_key": "retired"}, parse_json(calls[0].args[0]));
+        assertEq(1, ds.commit_count);
+
+        # a filter that selects every row is refused without touching the database
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"unrelated": 1})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(1, ds.getExecCalls().size());
+        assertEq(1, ds.commit_count);
+    }
+
+    private summarizeByTest() {
+        FakePgsqlDatasource ds();
+        ds.select_response = {
+            "val": ('"a"', '"b"', NOTHING, '"c"'),
+            "cnt": (2, 5, 1, 5),
+            "last_write": ("2026-11-01T10:00:00", "2026-11-02T10:00:00", NOTHING, NOTHING),
+        };
+        QoreRagUtils::PgVectorRagProvider store = newStore(ds);
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key",
+            {"payload_eq": {"scope": "system"}}, "written_at");
+        # descending count, then value; a missing field is a NOTHING value
+        assertEq(("b", "c", "a", NOTHING), map $1.value, groups);
+        assertEq((5, 5, 2, 1), map $1.count, groups);
+        assertEq(2026-11-02T10:00:00, groups[0].last_write);
+        assertEq(2026-11-01T10:00:00, groups[2].last_write);
+        assertFalse(exists groups[1].last_write);
+
+        list<hash<auto>> calls = ds.getSelectCalls();
+        assertEq("SELECT (payload -> %v::text)::text AS val, count(*) AS cnt, max(payload ->> %v::text) AS "
+            "last_write FROM \"embeddings\" WHERE payload @> %v::jsonb GROUP BY 1", calls[0].sql);
+        assertEq("instance_key", calls[0].args[0]);
+        assertEq("written_at", calls[0].args[1]);
+        assertEq({"scope": "system"}, parse_json(calls[0].args[2]));
+
+        # no filter and no timestamp
+        ds.select_response = {"val": ('"a"',), "cnt": (3,)};
+        groups = store.summarizeBy("instance_key");
+        assertEq(1, groups.size());
+        assertEq(3, groups[0].count);
+        assertEq("SELECT (payload -> %v::text)::text AS val, count(*) AS cnt FROM \"embeddings\" GROUP BY 1",
+            ds.getSelectCalls()[1].sql);
+
+        # nothing matches
+        ds.select_response = NOTHING;
+        assertEq((), store.summarizeBy("instance_key"));
     }
 
     private deleteTest() {
@@ -461,5 +549,58 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         # query was accepted by the server
         assertTrue(hits.typeCode() == NT_LIST,
             "PgVector search returned a list");
+    }
+
+    #! Exercises countByFilter(), summarizeBy() and deleteByFilter() against a real database, in a temporary table
+    private liveManagementTest() {
+        AbstractConnection conn = get_connection(conn_name);
+        Qore::SQL::AbstractDatasource ds = conn.get();
+        string table = "qore_rag_mgmt_" + get_random_string(8).lwr();
+        try {
+            ds.exec("CREATE EXTENSION IF NOT EXISTS vector");
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            testSkip("pgvector is not available: " + ex.desc);
+        }
+        ds.exec(sprintf("CREATE TABLE %s (id text PRIMARY KEY, embedding vector(3), payload jsonb)", table));
+        ds.commit();
+        on_exit {
+            ds.exec("DROP TABLE IF EXISTS " + table);
+            ds.commit();
+        }
+
+        QoreRagUtils::PgVectorRagProvider store(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pgvector",
+            "collection": table,
+            "options": {"datasource": ds, "dimension": 3},
+        });
+        store.upsert((
+            <QoreRagUtils::VectorRecord>{"id": "1", "vector": (1.0, 0.0, 0.0),
+                "payload": {"k": "a", "scope": "system", "t": "2026-11-01T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": "2", "vector": (0.0, 1.0, 0.0),
+                "payload": {"k": "b", "scope": "system", "t": "2026-11-02T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": "3", "vector": (0.0, 0.0, 1.0),
+                "payload": {"k": "b", "scope": "system", "t": "2026-11-03T10:00:00"}},
+            <QoreRagUtils::VectorRecord>{"id": "4", "vector": (1.0, 1.0, 0.0), "payload": {"scope": "tenant"}},
+        ));
+
+        assertEq(4, store.countByFilter());
+        assertEq(3, store.countByFilter({"payload_eq": {"scope": "system"}}));
+        assertEq(0, store.countByFilter({"payload_eq": {"scope": "none"}}));
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("k", NOTHING, "t");
+        assertEq(3, groups.size());
+        assertEq("b", groups[0].value);
+        assertEq(2, groups[0].count);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertEq(("b", NOTHING, "a"), map $1.value, groups);
+        assertEq((), store.summarizeBy("k", {"payload_eq": {"scope": "none"}}));
+
+        assertEq(2, store.deleteByFilter({"payload_eq": {"k": "b"}}));
+        assertEq(2, store.countByFilter());
+        assertEq(0, store.deleteByFilter({"payload_eq": {"k": "b"}}));
+        assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), {});
+        assertEq(2, store.countByFilter(), "a refused delete removes nothing");
     }
 }

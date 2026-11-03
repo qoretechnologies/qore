@@ -983,6 +983,23 @@ public hashdecl VectorSearchResult {
     *hash<auto> payload;
 }
 
+#! One group of a vector store summary: a distinct payload field value with its record count
+/** Returned by @ref AbstractVectorStore::summarizeBy()
+
+    @since %QoreRagTypes 1.0
+*/
+public hashdecl VectorFieldSummary {
+    #! The payload field value shared by the group; @ref nothing for records that have no such field
+    auto value;
+    #! The number of records in the group
+    int count;
+    #! The latest value of the optional timestamp field among the group's records
+    /** Set only when a timestamp field was requested and at least one record of the group has a parseable
+        value for it; vector stores do not record write times themselves
+    */
+    *date last_write;
+}
+
 #! A reranker result
 public hashdecl RerankResult {
     #! Original index in the input documents list
@@ -1654,6 +1671,93 @@ public class AbstractVectorStore {
 
     #! Returns the vector dimension this store expects
     abstract int getDimension();
+
+    #! Counts the records that match a payload filter
+    /** @param filter optional payload filter, in the form accepted by @ref search(); with no filter every record
+            is counted
+
+        @return the number of matching records; @c 0 when nothing matches
+
+        @par Example
+        @code{.py}
+int stale = store.countByFilter({"payload_eq": {"scope": "system", "instance_key": "canoe"}});
+        @endcode
+
+        @note payload values are read, vectors never are
+    */
+    abstract int countByFilter(*hash<auto> filter);
+
+    #! Deletes the records that match a payload filter
+    /** @param filter the payload filter, in the form accepted by @ref search(); it must select a subset of the
+            records: an empty filter, or one that would select every record, is refused so that a missing
+            argument can never empty a store
+
+        @return the number of records removed; @c 0 when nothing matches
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty or would select every record
+
+        @par Example
+        @code{.py}
+int removed = store.deleteByFilter({"payload_eq": {"instance_key": "retired-host"}});
+        @endcode
+
+        @note the count is the number of matching records seen immediately before the delete; a backend that does
+            not report the number of removed records counts first, so a concurrent writer can make it differ
+    */
+    abstract int deleteByFilter(hash<auto> filter);
+
+    #! Summarizes the records by the distinct values of a payload field
+    /** @param field the name of a top-level payload key, addressed as the keys of the portable \c payload_eq
+            filter are
+        @param filter optional payload filter, in the form accepted by @ref search(); only matching records are
+            summarized
+        @param timestamp_field optional name of a top-level payload key that holds a write time (a date, or an
+            ISO 8601 string); when given, each group reports the latest value in @ref VectorFieldSummary::last_write
+
+        @return one @ref VectorFieldSummary per distinct value of \a field, ordered by descending count and then
+            by value; records without the field are grouped under a @ref nothing value; an empty list when no
+            record matches
+
+        @par Example
+        @code{.py}
+foreach hash<VectorFieldSummary> g in (store.summarizeBy("instance_key", {"payload_eq": {"scope": "system"}})) {
+    printf("%y: %d records\n", g.value, g.count);
+}
+        @endcode
+
+        @note payload values are read, vectors never are
+    */
+    abstract list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field);
+
+    #! Throws unless the filter selects a subset of the records
+    /** Helper for implementations of @ref deleteByFilter(): \a has_criteria is what the implementation found to
+        constrain the delete after reading the filter in its own dialect
+
+        @param has_criteria @c True if the filter constrains the records
+
+        @throw VECTOR-STORE-FILTER-ERROR \a has_criteria is @c False
+    */
+    static requireFilterCriteria(bool has_criteria) {
+        if (!has_criteria) {
+            throw "VECTOR-STORE-FILTER-ERROR", "deleteByFilter() requires a filter that selects a subset of the "
+                "records; an empty filter would remove every record";
+        }
+    }
+
+    #! Orders summary groups by descending count, then by value, and returns them
+    /** Helper for implementations of @ref summarizeBy()
+
+        @param groups the unordered groups
+        @return the groups ordered as @ref summarizeBy() documents
+    */
+    static list<hash<VectorFieldSummary>> sortSummary(list<hash<VectorFieldSummary>> groups) {
+        return sort(groups, int sub (hash<VectorFieldSummary> a, hash<VectorFieldSummary> b) {
+            if (a.count != b.count) {
+                return b.count <=> a.count;
+            }
+            return a.value.toString() <=> b.value.toString();
+        });
+    }
 }
 
 #! Abstract factory for an embedder
