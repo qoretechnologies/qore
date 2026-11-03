@@ -2679,8 +2679,13 @@ ENDFUNCTION (QORE_INSTALL_QMOD_ATOMIC)
 # Param #2: the module's source directory
 FUNCTION (QORE_USER_MODULE_RESOURCE_DIRS _out _source_root)
     set(_rv "")
-    # CONFIGURE_DEPENDS so that adding a resource directory re-runs configure, like the module's source glob
-    file(GLOB _children LIST_DIRECTORIES true CONFIGURE_DEPENDS RELATIVE "${_source_root}" "${_source_root}/*")
+    file(GLOB _children LIST_DIRECTORIES true RELATIVE "${_source_root}" "${_source_root}/*")
+    # Adding a resource directory re-runs configure, like the module's source glob.  The glob that watches for it
+    # lists what the subdirectories hold, not the module directory itself: the build links the module's AOT qmod into
+    # that directory (<name>/<name>.qmod, QORE_AOT_LINK_SOURCE_MODULES), so a CONFIGURE_DEPENDS glob of it found a
+    # new file after every configure that preceded a build, and the next build configured again.  A resource
+    # directory without files has nothing to make available.
+    file(GLOB _qore_resource_dir_files LIST_DIRECTORIES true CONFIGURE_DEPENDS "${_source_root}/*/*")
     foreach(_child ${_children})
         if (NOT IS_DIRECTORY "${_source_root}/${_child}" OR _child STREQUAL "jar" OR _child STREQUAL "i18n"
                 OR _child MATCHES "^\\.")

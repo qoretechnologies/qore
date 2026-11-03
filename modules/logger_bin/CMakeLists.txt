@@ -112,7 +112,8 @@ if (SINGLE_COMPILATION_UNIT)
         set(_scu_content "${_scu_content}#include \"${_f}\"\n")
     endforeach()
 
-    file(WRITE ${LOGGER_SCU_PATH} "${_scu_content}")
+    # rewritten only when it changes, so a reconfigure does not rebuild the module (see qore_write_generated_source())
+    qore_write_generated_source(${LOGGER_SCU_PATH} "${_scu_content}")
 
     add_library(${logger_module_name} MODULE ${LOGGER_SCU_PATH})
 
