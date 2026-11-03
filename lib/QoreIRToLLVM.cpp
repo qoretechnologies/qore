@@ -20549,9 +20549,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!val) { return false; }
             llvm::Value* result;
             if (inst->aot_int_to_string_measure) {
-                if (val->getType() != i64_type
-                        || nanboxed_values.count(inst->operands[0].id)) {
-                    error = "integer string measurement requires a native integer";
+                // The operand is a native int in the IR, but its LLVM value is boxed where the source is a boxed
+                // local cache, such as a parameter or body local of a reflective frame: unbox it; the boxed value is
+                // borrowed and needs no release.
+                if (val->getType() == i64_type && nanboxed_values.count(inst->operands[0].id)) {
+                    val = ensureIntType(val, inst->operands[0].id);
+                } else if (val->getType() != i64_type) {
+                    error = "integer string measurement requires an integer operand";
                     return false;
                 }
                 auto helper = module.getOrInsertFunction(
@@ -28862,11 +28866,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!input) {
                     return false;
                 }
-                if (input->getType() != i64_type
-                        || nanboxed_values.count(
-                            inst->operands[operand].id)) {
+                // a boxed local cache, such as a parameter or body local of a reflective frame, holds the native int
+                // of the IR boxed: unbox it; the boxed value is borrowed and needs no release
+                if (input->getType() == i64_type && nanboxed_values.count(inst->operands[operand].id)) {
+                    input = ensureIntType(input, inst->operands[operand].id);
+                } else if (input->getType() != i64_type) {
                     error = "object integer string measurement requires"
-                        " a native integer";
+                        " an integer operand";
                     return false;
                 }
                 // while a debugger is attached, the ordinary method call runs the method, and its unfused
