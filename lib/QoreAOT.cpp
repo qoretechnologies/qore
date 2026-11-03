@@ -2858,7 +2858,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         const QoreTypeInfo* specialization_receiver_type_info = nullptr,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr,
         const AOTConstantReverseMap* constant_reverse_map = nullptr,
-        bool emit_debug_statements = false, bool reflection_free = false, bool unwind_order_proven = false) {
+        bool emit_debug_statements = false, bool reflection_free = false, bool unwind_order_proven = false,
+        const QoreIRFunction* slot_source = nullptr) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2868,6 +2869,15 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     ir_func = new QoreIRFunction(name);
     ir_func->reflection_free = reflection_free;
     ir_func->unwind_order_proven = unwind_order_proven;
+    // A lowering of the same function again (reflection-free or without unwind anchors) numbers its locals as the
+    // lowering it replaces: slots are otherwise numbered by first reference in block order, which these lowerings
+    // change (ex: a reflection-free body does not activate block locals at their declaration), while the debugger
+    // body, the serialized IR and handler IR bind locals by the numbering of the ordinary lowering
+    // (buildAOTFunctionSlotMap() checks that both bodies agree).  computeSlotIdsAndEmbed() keeps seeded slots.
+    if (slot_source) {
+        ir_func->local_var_slots = slot_source->local_var_slots;
+        ir_func->max_local_slot_id = slot_source->max_local_slot_id;
+    }
     // Native code has no statement callbacks. Debugger execution uses a separately lowered body: its callbacks
     // can inspect/mutate locals or throw, so native optimization must not erase or move work across them.
     ir_func->emit_debug_statements = emit_debug_statements;
@@ -3015,11 +3025,12 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // (design/aot-reflection-visible-locals.md).  The debugger body always keeps every local visible.
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER) && !ir_func->reflection_free) {
         if (!emit_debug_statements && !aot_reflection_analysis_depth && !aotFunctionMayReflect(*ir_func)) {
-            delete ir_func;
+            // the reflective lowering gives the numbering of the locals that the debugger body also has
+            std::unique_ptr<QoreIRFunction> reflective(ir_func);
             ir_func = nullptr;
             return tryLowerFunction(uvb, name, pgm, ir_func, error, source_qf, specialization_receiver_type_info,
                 specialization_type_param_instantiation, constant_reverse_map, emit_debug_statements, true,
-                unwind_order_proven);
+                unwind_order_proven, slot_source ? slot_source : reflective.get());
         }
         // Body locals move to the runtime stack.  A parameter is published for reflection by every entry of a
         // reflective frame, which makes reads by name correct; but set_local_var_value() in a callee replaces it
@@ -3110,7 +3121,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         std::string unanchored_error;
         if (!tryLowerFunction(uvb, name, pgm, unanchored, unanchored_error, source_qf,
                 specialization_receiver_type_info, specialization_type_param_instantiation, constant_reverse_map,
-                emit_debug_statements, ir_func->reflection_free, true)) {
+                emit_debug_statements, ir_func->reflection_free, true, slot_source)) {
             std::unique_ptr<QoreIRFunction> unanchored_holder(unanchored);
             if (qore_ir_local_unwind_order_is_exact(statements, *unanchored)) {
                 delete ir_func;
