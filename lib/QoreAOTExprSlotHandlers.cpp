@@ -1130,11 +1130,6 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     }
 
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-    if (!::qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
-        ::qoreAOTReportExprSerializationError(std::string("cancelled while preparing the local slots of closure '")
-            + ucf->getName() + "'");
-        return false;
-    }
     ::qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
     if (!::qoreAOTWriteClosureCaptures(ctx.writer, vlist, closure_ir, ctx.parent_locals)) {
         ::qoreAOTReportExprSerializationError(std::string("the captures of closure '") + ucf->getName()

@@ -789,8 +789,6 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 extern void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
         const LVarSet* vlist);
-extern bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
-        const LVarSet* vlist);
 
 static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 
@@ -2858,8 +2856,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         const QoreTypeInfo* specialization_receiver_type_info = nullptr,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr,
         const AOTConstantReverseMap* constant_reverse_map = nullptr,
-        bool emit_debug_statements = false, bool reflection_free = false, bool unwind_order_proven = false,
-        const QoreIRFunction* slot_source = nullptr) {
+        bool emit_debug_statements = false, bool reflection_free = false, bool unwind_order_proven = false) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2869,14 +2866,14 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     ir_func = new QoreIRFunction(name);
     ir_func->reflection_free = reflection_free;
     ir_func->unwind_order_proven = unwind_order_proven;
-    // A lowering of the same function again (reflection-free or without unwind anchors) numbers its locals as the
-    // lowering it replaces: slots are otherwise numbered by first reference in block order, which these lowerings
-    // change (ex: a reflection-free body does not activate block locals at their declaration), while the debugger
-    // body, the serialized IR and handler IR bind locals by the numbering of the ordinary lowering
-    // (buildAOTFunctionSlotMap() checks that both bodies agree).  computeSlotIdsAndEmbed() keeps seeded slots.
-    if (slot_source) {
-        ir_func->local_var_slots = slot_source->local_var_slots;
-        ir_func->max_local_slot_id = slot_source->max_local_slot_id;
+    // Every lowering of the function (native, reflection-free, without unwind anchors, debugger body, serialized
+    // closure IR) numbers its locals alike, since the debugger body, the serialized IR, closure runtime bindings and
+    // handler IR bind them by slot index (design/ir-local-slot-numbering.md)
+    if (!qore_ir_seed_canonical_local_slots(*ir_func, *uvb)) {
+        delete ir_func;
+        ir_func = nullptr;
+        error = "cancelled during canonical local slot numbering";
+        return -1;
     }
     // Native code has no statement callbacks. Debugger execution uses a separately lowered body: its callbacks
     // can inspect/mutate locals or throw, so native optimization must not erase or move work across them.
@@ -2993,6 +2990,16 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         ir_func = nullptr;
         return -1;
     }
+    if (aot_reflection_analysis_depth) {
+        qore_ir_trace_local_slots(*ir_func, "aot-reflection-analysis");
+    } else if (emit_debug_statements) {
+        qore_ir_trace_local_slots(*ir_func, unwind_order_proven ? "aot-debug-unanchored" : "aot-debug");
+    } else if (reflection_free) {
+        qore_ir_trace_local_slots(*ir_func, unwind_order_proven ? "aot-reflection-free-unanchored"
+            : "aot-reflection-free");
+    } else {
+        qore_ir_trace_local_slots(*ir_func, unwind_order_proven ? "aot-unanchored" : "aot");
+    }
 
     // Collect ALL body locals from the statement tree (includes nested blocks from
     // for/while/if/try/switch statements).  Mark them as pre-instantiated so the
@@ -3025,12 +3032,11 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // (design/aot-reflection-visible-locals.md).  The debugger body always keeps every local visible.
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER) && !ir_func->reflection_free) {
         if (!emit_debug_statements && !aot_reflection_analysis_depth && !aotFunctionMayReflect(*ir_func)) {
-            // the reflective lowering gives the numbering of the locals that the debugger body also has
-            std::unique_ptr<QoreIRFunction> reflective(ir_func);
+            delete ir_func;
             ir_func = nullptr;
             return tryLowerFunction(uvb, name, pgm, ir_func, error, source_qf, specialization_receiver_type_info,
                 specialization_type_param_instantiation, constant_reverse_map, emit_debug_statements, true,
-                unwind_order_proven, slot_source ? slot_source : reflective.get());
+                unwind_order_proven);
         }
         // Body locals move to the runtime stack.  A parameter is published for reflection by every entry of a
         // reflective frame, which makes reads by name correct; but set_local_var_value() in a callee replaces it
@@ -3121,7 +3127,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         std::string unanchored_error;
         if (!tryLowerFunction(uvb, name, pgm, unanchored, unanchored_error, source_qf,
                 specialization_receiver_type_info, specialization_type_param_instantiation, constant_reverse_map,
-                emit_debug_statements, ir_func->reflection_free, true, slot_source)) {
+                emit_debug_statements, ir_func->reflection_free, true)) {
             std::unique_ptr<QoreIRFunction> unanchored_holder(unanchored);
             if (qore_ir_local_unwind_order_is_exact(statements, *unanchored)) {
                 delete ir_func;
@@ -3207,37 +3213,6 @@ static int tryLowerFunctionWithDebugIR(UserVariantBase* uvb, const char* name, Q
     return rc;
 }
 
-//! Returns in \a unanchored whether the native body of a closure is lowered without local unwind anchors
-/** The runtime binds the local slots of a closure's native body to the variables of its serialized IR by slot index
-    (AOTClosureRuntimeBinding::local_slots), and lowering numbers local slots in block order, which the unwind anchors
-    change: an anchored block splits at every call into an invoke continuation block placed after the block's
-    siblings.  tryLowerFunction() lowers a body a second time without anchors when its locals are released in
-    reverse declaration order without them, so the serializer (lowerClosureForSerialization()) has to take the same
-    decision to number the slots as the native body does.  The decision is that of the lowering whose slots the
-    native body has: the debugger body if one is lowered (buildAOTFunctionSlotMap() requires the native body to have
-    the same slots), otherwise the native body itself.
-
-    @param variant the closure variant
-    @param emit_debug_statements true if the closure has a debugger body (its serialized IR emits debug statements)
-    @param unanchored [out] true if the native body is lowered without local unwind anchors
-    @param error [out] the reason on failure
-
-    @return false if the closure cannot be lowered, in which case it has no native body
-*/
-bool qoreAOTClosureBodyIsUnanchored(UserClosureVariant* variant, bool emit_debug_statements, bool& unanchored,
-        std::string& error) {
-    unanchored = false;
-    QoreIRFunction* ir_func = nullptr;
-    int rc = tryLowerFunction(variant, "<closure>", variant->pgm, ir_func, error, nullptr, nullptr, nullptr, nullptr,
-        emit_debug_statements);
-    std::unique_ptr<QoreIRFunction> holder(ir_func);
-    if (rc || !holder) {
-        return false;
-    }
-    unanchored = holder->unwind_order_proven;
-    return true;
-}
-
 // AOTConstantReverseMap typedef is in QoreAOTBinary.h
 
 // Forward declarations for slot identity extraction (defined after buildAOTContext)
@@ -3281,9 +3256,11 @@ static bool buildAOTFunctionSlotMap(const QoreIRFunction& func, const QoreIRFunc
     if (!debug_ir) {
         return true;
     }
-    // Both bodies assign slots before optimization. In particular, native closures and handler IR bind by these
-    // indices. Never silently combine independently numbered locals (even if their names/types happen to match).
+    // Native closures and handler IR bind locals by slot index.  Both bodies have canonical slots
+    // (qore_ir_seed_canonical_local_slots()), so they always agree; this cheap check guards that invariant: never
+    // silently combine independently numbered locals (even if their names/types happen to match).
     if (func.local_var_slots.size() != debug_ir->local_var_slots.size()) {
+        assert(false);
         return false;
     }
     size_t count = 0;
@@ -3293,6 +3270,7 @@ static bool buildAOTFunctionSlotMap(const QoreIRFunction& func, const QoreIRFunc
         }
         auto it = debug_ir->local_var_slots.find(local);
         if (it == debug_ir->local_var_slots.end() || it->second != slot) {
+            assert(false);
             return false;
         }
     }
@@ -19529,26 +19507,11 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         }
 
         // the runtime binds this body's local slots to the variables of the closure's serialized IR by slot index
-        // (AOTClosureRuntimeBinding::local_slots), so the slots must be those of that IR: its own slot ids, then the
-        // parameters, argv and the captures in the order the serializer reserves them; a capture that only an
-        // on_block_exit handler of the closure uses has no IR slot id otherwise
-        if (!qoreAOTPrepareClosureIRLocalSlots(ir_func, sig,
-                const_cast<UserClosureFunction*>(ucf)->getVList())) {
-            delete ir_func;
-            setAOTCompileFatal(fatal_error, "closure", native_key, "native closure local slot preparation",
-                "cancelled");
-            return false;
-        }
+        // (AOTClosureRuntimeBinding::local_slots); both lowerings give the closure's parameters, argv, body locals and
+        // captures their canonical slots (qore_ir_seed_canonical_local_slots())
         qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
             const_cast<UserClosureFunction*>(ucf)->getVList());
         if (debug_ir) {
-            if (!qoreAOTPrepareClosureIRLocalSlots(debug_ir.get(), sig,
-                    const_cast<UserClosureFunction*>(ucf)->getVList())) {
-                delete ir_func;
-                setAOTCompileFatal(fatal_error, "closure", native_key, "debug closure local slot preparation",
-                    "cancelled");
-                return false;
-            }
             qoreAOTPruneClosureIRBodyLocals(debug_ir.get(), sig,
                 const_cast<UserClosureFunction*>(ucf)->getVList());
         }

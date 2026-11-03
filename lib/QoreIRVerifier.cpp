@@ -2149,6 +2149,12 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         }
     }
 
+    // With canonical slots (qore_ir_seed_canonical_local_slots()), a local that the IR refers to and that has no
+    // canonical slot is numbered after the walk, by name, rather than by first reference, which depends on the order
+    // of the IR and so on the lowering (design/ir-local-slot-numbering.md)
+    std::vector<const LocalVar*> noncanonical_locals;
+    std::unordered_set<const LocalVar*> noncanonical_set;
+
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->result.isValid() && inst->result.id > max_vid) {
@@ -2163,10 +2169,17 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             // Track LocalVar* pointers — assign slot IDs to all locals referenced
             // by any instruction type (LoadLocal, StoreLocal, fused ops, etc.)
             auto assign_slot = [&](const LocalVar* lv) {
-                if (lv && slot_map.find(lv) == slot_map.end()) {
-                    slot_map[lv] = next_local_slot++;
-                    used_local_slots.insert(slot_map[lv]);
+                if (!lv || slot_map.find(lv) != slot_map.end()) {
+                    return;
                 }
+                if (canonical_local_slots) {
+                    if (noncanonical_set.insert(lv).second) {
+                        noncanonical_locals.push_back(lv);
+                    }
+                    return;
+                }
+                slot_map[lv] = next_local_slot++;
+                used_local_slots.insert(slot_map[lv]);
             };
             auto assign_expr_slots = [&](const QoreValue& expr) {
                 std::vector<const LocalVar*> expr_locals;
@@ -2269,6 +2282,27 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 assign_expr_slots(find_inst->find_exp);
                 assign_expr_slots(find_inst->where);
             }
+        }
+    }
+    if (!noncanonical_locals.empty()) {
+        // the first reference breaks ties between locals of the same name
+        std::stable_sort(noncanonical_locals.begin(), noncanonical_locals.end(),
+            [](const LocalVar* lhs, const LocalVar* rhs) {
+                const char* lname = lhs->getName();
+                const char* rname = rhs->getName();
+                return strcmp(lname ? lname : "", rname ? rname : "") < 0;
+            });
+        size_t count = 0;
+        for (const LocalVar* lv : noncanonical_locals) {
+            // the numbering cannot be left incomplete: a cancellation is only registered here
+            if (++count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR non-canonical local slot numbering");
+            }
+            while (used_local_slots.find(next_local_slot) != used_local_slots.end()) {
+                ++next_local_slot;
+            }
+            slot_map[lv] = next_local_slot;
+            used_local_slots.insert(next_local_slot++);
         }
     }
     max_value_id = max_vid;
@@ -2421,4 +2455,57 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
         }
     }
+}
+
+void qore_ir_trace_local_slots(const QoreIRFunction& func, const char* lowering) {
+    if (!func.canonical_local_slots || !q_env_is_set("QORE_IR_TRACE_LOCAL_SLOTS")) {
+        return;
+    }
+    std::vector<const LocalVar*> by_slot(func.local_var_slots.size() > func.max_local_slot_id
+        ? func.local_var_slots.size() : static_cast<size_t>(func.max_local_slot_id) + 1, nullptr);
+    size_t count = 0;
+    for (const auto& [lv, slot_id] : func.local_var_slots) {
+        if (++count % 100 == 0) {
+            (void)qore_check_cancel(nullptr, "IR local slot trace");
+        }
+        if (slot_id >= by_slot.size()) {
+            by_slot.resize(static_cast<size_t>(slot_id) + 1, nullptr);
+        }
+        by_slot[slot_id] = lv;
+    }
+    std::string line = "IR-LOCAL-SLOTS ";
+    const QoreProgramLocation* loc = func.canonical_slot_loc;
+    if (loc && loc->getFile()) {
+        line += loc->getFile();
+        line += ":";
+        line += std::to_string(loc->start_line);
+        // a closure can start on the line of the body that creates it
+        if (loc->start_column >= 0) {
+            line += ":";
+            line += std::to_string(loc->start_column);
+        }
+    } else {
+        line += "<unknown>";
+    }
+    line += " ";
+    line += lowering ? lowering : "<unknown>";
+    line += ":";
+    for (size_t i = 0; i < by_slot.size(); ++i) {
+        if (i && !(i % 100)) {
+            (void)qore_check_cancel(nullptr, "IR local slot trace");
+        }
+        line += " ";
+        line += std::to_string(i);
+        line += "=";
+        if (!by_slot[i]) {
+            line += "-";
+            continue;
+        }
+        line += by_slot[i]->getName() ? by_slot[i]->getName() : "<anonymous>";
+        if (i >= func.canonical_local_slot_count) {
+            line += "*";
+        }
+    }
+    line += "\n";
+    fputs(line.c_str(), stderr);
 }

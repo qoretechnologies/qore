@@ -11803,18 +11803,19 @@ bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreV
         param_name, error, parent_locals);
 }
 
-// defined in QoreAOT.cpp
-extern bool qoreAOTClosureBodyIsUnanchored(UserClosureVariant* variant, bool emit_debug_statements,
-        bool& unanchored, std::string& error);
+//! Lower a closure variant to IR for serialization
+/** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
 
-//! Lowers a closure variant to IR for serialization, with or without local unwind anchors
-/** @param variant the closure variant to lower
-    @param unwind_order_proven true to lower the closure without local unwind anchors
+    The runtime binds the local slots of the closure's native body to the variables of this IR by slot index
+    (AOTClosureRuntimeBinding::local_slots); both give the closure's locals their canonical slots
+    (qore_ir_seed_canonical_local_slots()), so they agree whether or not the native body was lowered with local
+    unwind anchors (design/ir-local-slot-numbering.md).
+
+    @param variant the closure variant to lower
     @param error_out optional detailed error destination
     @return heap-allocated IR function, or nullptr on failure (caller owns)
 */
-static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVariant* variant,
-        bool unwind_order_proven, std::string* error_out) {
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out) {
     StatementBlock* sb = const_cast<UserClosureVariant*>(variant)->getStatementBlock();
     if (!sb) {
         if (error_out) {
@@ -11823,8 +11824,14 @@ static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVaria
         return nullptr;
     }
 
-    auto* ir = new QoreIRFunction("<closure>");
-    ir->unwind_order_proven = unwind_order_proven;
+    std::unique_ptr<QoreIRFunction> ir_holder(new QoreIRFunction("<closure>"));
+    QoreIRFunction* ir = ir_holder.get();
+    if (!qore_ir_seed_canonical_local_slots(*ir, *variant)) {
+        if (error_out) {
+            *error_out = "closure IR lowering cancelled";
+        }
+        return nullptr;
+    }
 
     // Record pre-instantiated locals from signature
     const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
@@ -11856,7 +11863,6 @@ static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVaria
         if (error_out) {
             *error_out = "closure IR lowering failed: " + error;
         }
-        delete ir;
         return nullptr;
     }
 
@@ -11879,7 +11885,6 @@ static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVaria
         if (error_out) {
             *error_out = "closure IR verification failed: " + verify_error;
         }
-        delete ir;
         return nullptr;
     }
 
@@ -11892,7 +11897,6 @@ static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVaria
         if (error_out) {
             *error_out = "closure handler IR compilation failed: " + handler_error;
         }
-        delete ir;
         return nullptr;
     }
 
@@ -11900,34 +11904,8 @@ static QoreIRFunction* lowerClosureForSerializationIntern(const UserClosureVaria
     collectAllStatementLocals(sb, ir->all_body_locals);
 
     ir->computeSlotIdsAndEmbed();
-    return ir;
-}
-
-//! Lower a closure variant to IR for serialization
-/** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
-
-    The runtime binds the local slots of the closure's native body to the variables of this IR by slot index, so this
-    IR is lowered with or without local unwind anchors as the native body is (see qoreAOTClosureBodyIsUnanchored()):
-    the anchors change the block order and therefore the slot numbering.
-
-    @param variant the closure variant to lower
-    @param error_out optional detailed error destination
-    @return heap-allocated IR function, or nullptr on failure (caller owns)
-*/
-QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out) {
-    std::unique_ptr<QoreIRFunction> ir(lowerClosureForSerializationIntern(variant, false, error_out));
-    // without an anchor for its locals, the native body is never lowered again without anchors
-    if (!ir || !ir->has_local_unwind_anchor) {
-        return ir.release();
-    }
-    bool unanchored = false;
-    std::string decision_error;
-    // a closure that cannot be lowered for its native body has none, so no slot numbering has to match
-    if (!qoreAOTClosureBodyIsUnanchored(const_cast<UserClosureVariant*>(variant), ir->emit_debug_statements,
-            unanchored, decision_error) || !unanchored) {
-        return ir.release();
-    }
-    return lowerClosureForSerializationIntern(variant, true, error_out);
+    qore_ir_trace_local_slots(*ir, "closure-ir");
+    return ir_holder.release();
 }
 
 namespace {
@@ -11982,61 +11960,6 @@ bool qoreAOTClosureOwnsLocal(const QoreIRFunction* closure_ir, const LocalVar* l
 */
 void qoreAOTReportExprSerializationError(std::string msg) {
     qoreAOTSetExprSerializationError(std::move(msg));
-}
-
-bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
-        const LVarSet* vlist) {
-    if (!closure_ir) {
-        return true;
-    }
-    size_t local_count = 0;
-    bool added_local = false;
-    auto reserve = [&](const LocalVar* lv) -> bool {
-        if (!lv) {
-            return true;
-        }
-        if (local_count++ && !(local_count % 100)
-                && qore_check_cancel(nullptr, "AOT closure local slot preparation")) {
-            return false;
-        }
-        if (!closure_ir->local_var_slots.count(lv)) {
-            closure_ir->reserveLocalSlot(lv);
-            added_local = true;
-        }
-        return true;
-    };
-    if (sig) {
-        for (unsigned p = 0; p < sig->numParams(); ++p) {
-            if (!reserve(sig->lv[p])) {
-                return false;
-            }
-        }
-        // Lexical self must come from vlist. Reserving the closure signature's
-        // synthetic selfid would replace the captured parent object identity.
-        if (!reserve(sig->argvid)) {
-            return false;
-        }
-    }
-    if (vlist) {
-        // Parser capture sets are ordered by pointer. Captures missing from the IR must
-        // receive stable slot identities as well; names identify lexical capture bindings.
-        std::vector<LocalVar*> ordered_captures(vlist->begin(), vlist->end());
-        std::sort(ordered_captures.begin(), ordered_captures.end(),
-            [](const LocalVar* lhs, const LocalVar* rhs) {
-                return strcmp(lhs->getName(), rhs->getName()) < 0;
-            });
-        for (LocalVar* lv : ordered_captures) {
-            if (!reserve(lv)) {
-                return false;
-            }
-        }
-    }
-    if (added_local) {
-        // Relocation can leave signature locals referenced only by expression
-        // metadata out of the initial slot pass. Existing IDs are preserved.
-        closure_ir->computeSlotIdsAndEmbed();
-    }
-    return true;
 }
 
 bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vlist,
@@ -13391,11 +13314,6 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 }
 
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-                if (!qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
-                    qoreAOTSetExprSerializationError("cancelled while preparing closure local slots for "
-                        + qoreAOTDescribeExpr(expr));
-                    return false;
-                }
                 qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
                 if (!qoreAOTWriteClosureCaptures(writer, vlist, closure_ir, parent_locals)) {
                     qoreAOTSetExprSerializationError("closure captures exceed AOT format limit in "

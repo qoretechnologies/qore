@@ -5567,6 +5567,72 @@ void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar
     }
 }
 
+const LVarSet* UserVariantBase::getClosureCaptures() const {
+    if (!is_closure || !source_qf) {
+        return nullptr;
+    }
+    // a closure variant's function is always its UserClosureFunction (UserClosureVariant::parseInit())
+    return static_cast<UserClosureFunction*>(const_cast<QoreFunction*>(source_qf))->getVList();
+}
+
+bool qore_ir_seed_canonical_local_slots(QoreIRFunction& func, const UserVariantBase& uvb) {
+    assert(func.local_var_slots.empty());
+    size_t count = 0;
+    auto reserve = [&func, &count](const LocalVar* lv) -> bool {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "IR canonical local slot numbering")) {
+            return false;
+        }
+        func.reserveLocalSlot(lv);
+        return true;
+    };
+
+    const UserSignature* sig = uvb.getUserSignature();
+    const bool closure = uvb.isClosureVariant();
+    // the signature's locals as the caller instantiates them; a closure's self is the captured self of the code that
+    // created it (a capture below), not the synthetic one of its signature
+    if (sig) {
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            if (!reserve(sig->lv[i])) {
+                return false;
+            }
+        }
+        if (!reserve(sig->argvid)) {
+            return false;
+        }
+        if (!closure && !reserve(sig->selfid)) {
+            return false;
+        }
+    }
+
+    // every local declared in the body, in lexical declaration (pre-order) order: nested blocks, loop and foreach
+    // variables, catch parameters and the locals of on_exit/on_error/on_success handlers
+    std::vector<LocalVar*> body_locals;
+    collectAllStatementLocals(uvb.getStatementBlock(), body_locals);
+    for (LocalVar* lv : body_locals) {
+        if (!reserve(lv)) {
+            return false;
+        }
+    }
+
+    // a closure's captured variables, in declaration order (LVarSet), whether or not its code refers to them: the
+    // runtime binds them to the variables of the code that creates the closure
+    if (closure) {
+        if (const LVarSet* captures = uvb.getClosureCaptures()) {
+            for (LocalVar* lv : *captures) {
+                if (!reserve(lv)) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    func.canonical_local_slots = true;
+    func.canonical_local_slot_count = static_cast<uint32_t>(func.local_var_slots.size());
+    const StatementBlock* body = uvb.getStatementBlock();
+    func.canonical_slot_loc = body ? body->loc : nullptr;
+    return true;
+}
+
 void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
     if (!block || locals.empty()) {
         return;
@@ -5679,16 +5745,12 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
         func->pre_instantiated_cache.insert(lv);
     }
-    // Reserve stable slot-cache entries before lowering.  Nested on_exit handler
-    // compilation can compute parent slots while this function is still being
-    // lowered, so signature/body locals must not be assigned later from slot 0.
-    for (unsigned i = 0; i < signature.numParams(); ++i) {
-        func->reserveLocalSlot(signature.lv[i]);
-    }
-    func->reserveLocalSlot(signature.argvid);
-    func->reserveLocalSlot(signature.selfid);
-    for (LocalVar* lv : func->all_body_locals) {
-        func->reserveLocalSlot(lv);
+    // Give the locals their canonical slots before lowering (design/ir-local-slot-numbering.md); nested on_exit
+    // handler compilation also inherits the parent's slots while this function is still being lowered
+    if (!qore_ir_seed_canonical_local_slots(*func, *this)) {
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' cancelled\n", name);
+        return nullptr;
     }
     QoreIRBuilder builder(func);
     auto* entry = func->createBlock("entry");
@@ -5763,15 +5825,10 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
 
-    // Keep signature-owned slots reserved after lowering and expose parameter
-    // assignment/type metadata before IR optimization. Slot IDs are populated
-    // later and remain independent of this map.
+    // Expose parameter assignment/type metadata before IR optimization; the parameters have canonical slots
     for (unsigned i = 0; i < signature.numParams(); ++i) {
-        func->reserveLocalSlot(signature.lv[i]);
         func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
     }
-    func->reserveLocalSlot(signature.argvid);
-    func->reserveLocalSlot(signature.selfid);
 
     // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
     // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
@@ -5800,6 +5857,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
         return nullptr;
     }
+    qore_ir_trace_local_slots(*func, reflection_free
+        ? (unwind_order_proven ? "jit-reflection-free-unanchored" : "jit-reflection-free")
+        : (unwind_order_proven ? "jit-unanchored" : "jit"));
 
     // Classify locals as IR-only vs AST-visible for optimization; the variant's flags describing the body are set
     // only if and when it is published (see publishIRContextFlags())

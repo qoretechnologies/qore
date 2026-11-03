@@ -56,8 +56,10 @@ class ClassLocalAssignmentTest inherits QUnit::Test {
                         + "_[^\n]*\n(.*?)\n\\}");
                     assertTrue(!!body, name + " LLVM definition");
                     # The invoke fixture also filters its catch hash. Match the
-                    # receiver's slot, not unrelated coercions in the function.
-                    int receiver_slot = name == "classLocalPhi" ? 5 : 1;
+                    # receiver's slot, not unrelated coercions in the function:
+                    # its canonical slot follows the parameters, argv and the
+                    # locals declared before it (design/ir-local-slot-numbering.md)
+                    int receiver_slot = name == "classLocalPhi" ? 6 : 2;
                     string slot_pattern = "[^\\n]*\\(ptr %ctx, i32 " + receiver_slot + ",";
                     assertEq(separate_coercion,
                         regex(body[0] ?? "", "qore_rt_coerce_value_aot" + slot_pattern),

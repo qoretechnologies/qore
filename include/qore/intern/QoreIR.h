@@ -104,6 +104,34 @@ DLLLOCAL bool qore_ir_local_may_hold_reference(const LocalVar* lv);
 */
 DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv);
 
+//! Gives the local variables of a function body their canonical slots before it is lowered
+/** Every lowering of a function (native, reflection-free, without unwind anchors, debugger body, serialized closure
+    IR, JIT) numbers its locals alike by construction, since AOT native code, serialized IR, debugger bodies, closure
+    runtime bindings and handler IR bind locals by slot index: the parameters in order, \c argv, \c self (not for a
+    closure, whose \c self is a capture), every local declared in the body in lexical (pre-order) declaration order
+    (collectAllStatementLocals()), then a closure's captured variables in declaration order.  See
+    design/ir-local-slot-numbering.md.
+
+    @param func the function to seed; it must not have local slots yet
+    @param uvb the variant whose body \a func lowers
+
+    @return false if cancelled (the slots are then incomplete and \a func must not be used)
+*/
+DLLLOCAL bool qore_ir_seed_canonical_local_slots(QoreIRFunction& func, const UserVariantBase& uvb);
+
+//! Writes the local slots of \a func to stderr if \c QORE_IR_TRACE_LOCAL_SLOTS is set
+/** One line per lowering of a function with canonical slots: <tt>IR-LOCAL-SLOTS <file>:<line>[:<column>]
+    <lowering>: <slot>=<name>...</tt> with the location of the function's body, a non-canonical local (see
+    QoreIRFunction::canonical_local_slots) marked with \c *.
+    Tests compare the lines of all lowerings of a function.
+
+    Nothing is written for a function without canonical slots.
+
+    @param func the lowered function
+    @param lowering the name of the lowering (ex: \c "aot", \c "aot-debug", \c "jit", \c "closure-ir")
+*/
+DLLLOCAL void qore_ir_trace_local_slots(const QoreIRFunction& func, const char* lowering);
+
 DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
     uint16_t& local_type_id, const QoreTypeInfo*& type_info);
 
@@ -3567,6 +3595,19 @@ public:
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
+
+    //! True if the local slots were seeded by qore_ir_seed_canonical_local_slots()
+    /** Then computeSlotIdsAndEmbed() numbers any other local that the IR refers to after the canonical ones, by name,
+        so that the numbering does not depend on the order of the IR.  Handler IR inherits it with its function's
+        slots.
+    */
+    bool canonical_local_slots = false;
+
+    //! The number of canonical local slots: slots 0..canonical_local_slot_count-1 (see canonical_local_slots)
+    uint32_t canonical_local_slot_count = 0;
+
+    //! The location of the body whose locals were given canonical slots; only for QORE_IR_TRACE_LOCAL_SLOTS
+    const QoreProgramLocation* canonical_slot_loc = nullptr;
 
     //! Reserve a stable local slot before full IR lowering is complete.
     /** Block-level on_exit handler compilation can compute and inherit parent

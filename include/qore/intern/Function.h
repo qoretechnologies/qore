@@ -1146,6 +1146,17 @@ public:
         }
     }
 
+    //! Returns true if this is the variant of a closure
+    DLLLOCAL bool isClosureVariant() const {
+        return is_closure;
+    }
+
+    //! Returns the variables that the closure of this variant captures, in declaration order
+    /** @return the captured variables, or nullptr if this is not the variant of a closure or the closure's function is
+        not recorded
+    */
+    DLLLOCAL const LVarSet* getClosureCaptures() const;
+
     //! Returns the name of the call stack frame of a call of the variant, as an AST call names it
     /** The name of the function, qualified with its class for a method (see CodeEvaluationHelper::setCallName());
         built once, it is valid as long as the variant exists, so native code can push frames with it.

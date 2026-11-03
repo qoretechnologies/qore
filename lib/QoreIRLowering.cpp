@@ -5400,6 +5400,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
         handler_func->parent_slot_count = parent_slot_count;
+        handler_func->canonical_local_slots = parent_func->canonical_local_slots;
+        handler_func->canonical_local_slot_count = parent_func->canonical_local_slot_count;
+        handler_func->canonical_slot_loc = parent_func->canonical_slot_loc;
 
         // Mark parent locals as pre-instantiated in the handler
         for (auto& [lvar, slot_id] : handler_func->local_var_slots) {
@@ -5468,6 +5471,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 
         // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
         handler_func->computeSlotIdsAndEmbed();
+        qore_ir_trace_local_slots(*handler_func, "handler");
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
@@ -5524,6 +5528,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
         handler_func->parent_slot_count = parent_slot_count;
+        handler_func->canonical_local_slots = parent_func->canonical_local_slots;
+        handler_func->canonical_local_slot_count = parent_func->canonical_local_slot_count;
+        handler_func->canonical_slot_loc = parent_func->canonical_slot_loc;
 
         // Mark parent locals as pre-instantiated in the handler
         for (auto& [lvar, slot_id] : handler_func->local_var_slots) {
@@ -5593,6 +5600,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
         handler_func->computeSlotIdsAndEmbed();
+        qore_ir_trace_local_slots(*handler_func, "handler");
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
