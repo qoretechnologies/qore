@@ -186,9 +186,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_catch_depth", reinterpret_cast<void*>(&qore_rt_catch_depth) },
     { "qore_rt_catch_unwind", reinterpret_cast<void*>(&qore_rt_catch_unwind) },
     { "qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow) },
-    { "qore_rt_rethrow_keep_v1", reinterpret_cast<void*>(&qore_rt_rethrow_keep_v1) },
     { "qore_rt_rethrow_with_args", reinterpret_cast<void*>(&qore_rt_rethrow_with_args) },
-    { "qore_rt_rethrow_with_args_keep_v1", reinterpret_cast<void*>(&qore_rt_rethrow_with_args_keep_v1) },
     { "qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt) },
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
@@ -1633,26 +1631,22 @@ extern "C" DLLEXPORT void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xs
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_rethrow_keep_v1(ExceptionSink* xsink) {
+// The rethrow helpers only raise the exception of the current catch context (td->catchException) on the sink: the
+// catch scopes that the rethrow leaves are popped by the qore_rt_catch_end() calls the generated code makes after
+// them, one for each catch scope of the frame that the statement ends itself (the Rethrow instruction's catch_depth,
+// see QoreIRLowering::catchScopesLeftByThrow()); with a handler in the frame that is none, and the CatchUnwind of each
+// catch block that the exception leaves ends that block's scope.  A rethrow in an on_error handler is in no catch scope
+// of the frame: its exception is the handler's (CatchExceptionHelper, set by the code that runs the handler), and
+// popping a scope there would pop one that belongs to a caller and delete the exception that a later rethrow in that
+// caller reads.
+extern "C" DLLEXPORT void qore_rt_rethrow(ExceptionSink* xsink) {
     QoreException* ex = catch_get_exception();
     if (ex) {
         qore_es_private::get(*xsink)->rethrow(ex);
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_rethrow(ExceptionSink* xsink) {
-    qore_rt_rethrow_keep_v1(xsink);
-    // Clean up catch scope after rethrow
-    qore_rt_catch_end(xsink);
-}
-
 extern "C" DLLEXPORT void qore_rt_rethrow_with_args(uint64_t args_bits, ExceptionSink* xsink) {
-    qore_rt_rethrow_with_args_keep_v1(args_bits, xsink);
-    // Clean up catch scope after rethrow
-    qore_rt_catch_end(xsink);
-}
-
-extern "C" DLLEXPORT void qore_rt_rethrow_with_args_keep_v1(uint64_t args_bits, ExceptionSink* xsink) {
     QoreException* ex = catch_get_exception();
     if (ex) {
         QoreValue args = fromBits(args_bits);

@@ -2907,8 +2907,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             msg = builder.createConstString("assertion failed", stmt->loc)->result;
         }
         QoreIRValue throw_list = builder.createMakeList({err, msg}, stmt->loc)->result;
-        // Emit CatchCleanup for all active catch scopes before throwing
-        for (int i = 0; i < catch_cleanup_depth; ++i) {
+        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing
+        for (int i = 0, e = catchScopesLeftByThrow(); i < e; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
@@ -3732,15 +3732,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // before on_error handlers fire (for CatchExceptionHelper/rethrow support).
         // For exception-target case: the LandingPad fires scope exits after the invoke.
         // For no-exception-target case: the Throw handler fires scope exits after raising.
-        // Without a handler in this function, emit CatchCleanup for all active catch scopes before throwing; with
-        // one, the catch blocks that the exception leaves end their scopes on the way to it (CatchUnwind), and the
-        // others stay open
-        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
-        if (!handler) {
-            for (int i = 0; i < catch_cleanup_depth; ++i) {
-                builder.createCatchCleanup(stmt->loc);
-            }
+        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing when it leaves the
+        // function; with a handler in this function, the catch blocks that the exception leaves end their scopes on
+        // the way to it (CatchUnwind), and the catch scopes that enclose the try statement whose catch block receives
+        // it stay open for the catch blocks that are still running (see catchScopesLeftByThrow())
+        for (int i = 0, e = catchScopesLeftByThrow(); i < e; ++i) {
+            builder.createCatchCleanup(stmt->loc);
         }
+        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(value, handler, stmt->loc);
         return true;
     }
@@ -3759,7 +3758,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
             // with a handler in this function, the catch blocks left end their scopes (see Throw above)
-            rethrow_inst->catch_depth = handler ? 0 : catch_cleanup_depth;
+            rethrow_inst->catch_depth = catchScopesLeftByThrow();
             // Attach args to the Rethrow instruction so the interpreter/JIT can
             // call catch_get_exception()->replaceTop() with the new err/desc/arg.
             rethrow_inst->operands.push_back(value);
@@ -3768,11 +3767,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException
             // intact to get the exception to rethrow.  Instead, store catch_cleanup_depth
             // in the instruction so the rethrow handler can clean up all catch scopes
-            // AFTER rethrowing.
+            // AFTER rethrowing.  Only the catch scopes that the exception leaves are cleaned up (see Throw above).
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
             // with a handler in this function, the catch blocks left end their scopes (see Throw above)
-            rethrow_inst->catch_depth = handler ? 0 : catch_cleanup_depth;
+            rethrow_inst->catch_depth = catchScopesLeftByThrow();
         }
         return true;
     }

@@ -372,18 +372,11 @@ uint64_t qore_rt_catch_depth();
 //! left active when an exception escapes a catch block are cleaned up and their exceptions deleted.
 void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xsink);
 
-//! Rethrow the current catch exception: copies exception into xsink and cleans up catch scope.
+//! Rethrow the current catch exception: copies the exception into xsink; pops no catch scope (see qore_rt_catch_end())
 void qore_rt_rethrow(ExceptionSink* xsink);
 
-//! Rethrow the current catch exception without ending its catch scope, which the CatchUnwind of the catch blocks
-//! that the exception leaves ends.
-void qore_rt_rethrow_keep_v1(ExceptionSink* xsink);
-
-//! Rethrow the current catch exception with replaced err/desc/arg and end its catch scope.
+//! Rethrow the current catch exception with replaced err/desc/arg; pops no catch scope (see qore_rt_catch_end())
 void qore_rt_rethrow_with_args(uint64_t args_bits, ExceptionSink* xsink);
-
-//! Rethrow the current catch exception with replaced err/desc/arg without ending its catch scope.
-void qore_rt_rethrow_with_args_keep_v1(uint64_t args_bits, ExceptionSink* xsink);
 
 // --- Deopt helpers ---
 

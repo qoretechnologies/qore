@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class CatchScopeRethrowTest
+
+#! Tests that a rethrow in a catch block raises the catch block's exception after code that caught others
+/** Native code keeps the catch scopes of a thread on one stack, and a rethrow reads the exception of the current
+    catch context.  Two statements popped catch scopes that they did not leave:
+    - a rethrow in an on_error handler popped one catch scope, although the handler's exception is not a catch
+      scope's: it popped a scope of a caller, deleting the exception of a catch block that was still running, so a
+      later rethrow in that catch block read a deleted exception (a crash in compiled code; seen with a REST client
+      whose on_error handler rethrows an HTTP error with redacted arguments, called from a catch block)
+    - a throw or rethrow in a try statement nested in a catch block popped the catch block's scope as well, although
+      the exception lands in the nested try statement's catch block and the enclosing catch block keeps running
+
+    The worker runs each case three times and prints one line per case.  It is run in every execution mode and as a
+    qcc-compiled executable, and every line must match the expected (interpreter) result exactly.
+*/
+class CatchScopeRethrowTest inherits QUnit::Test {
+    public {
+        #! the expected "<outcome>" of each case in the worker
+        const Expected = {
+            "on_error_rethrow_args": "caught OUTER:outer",
+            "on_error_rethrow_plain": "caught OUTER:outer",
+            "on_error_rethrow_args_returned": "caught OUTER:outer",
+            "on_error_rethrow_args_value": "returned \"INNER-R\"",
+            "callee_nested_throw": "caught OUTER:outer",
+            "callee_nested_throw_value": "returned \"CALLEE\"",
+            "nested_throw": "caught OUTER:outer",
+            "nested_assert": "caught OUTER:outer",
+            "nested_rethrow": "caught OUTER-OUTER:outer",
+            "nested_rethrow_args": "caught NESTED:nested",
+            "nested_throw_in_loop": "caught OUTER:outer",
+            "throw_from_catch": "caught FROM-CATCH:from catch",
+            "nested_throw_then_nested_rethrow": "returned \"OUTER\"",
+            "callee_nested_throw_then_nested_rethrow": "returned \"OUTER/CALLEE\"",
+        };
+
+        #! the interpreted execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc optimization levels that the worker is compiled with
+        const OptLevels = ("0", "3");
+    }
+
+    private {
+        string qore_bin;
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
+        string libqore_dir;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("CatchScopeRethrowTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        worker = get_script_dir() + DirSep + "catch-scope-rethrow-worker.q";
+
+        addTestCase("the expected results parse", \testExpectedParse());
+        addTestCase("negative: the output check rejects a wrong or missing result", \testCheckRejects());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("qcc-compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExpectedParse() {
+        # the parser must accept every expected line, or the mode checks below would compare nothing
+        string out = foldl $1 + $2, (map sprintf("%s: %s\n", $1.key, $1.value), Expected.pairIterator());
+        assertEq(Expected, parseOutput("expected", out));
+    }
+
+    testCheckRejects() {
+        # what the defect produced in IR execution: the rethrow found no exception
+        hash<string, string> results = Expected + {
+            "nested_throw_then_nested_rethrow": "returned \"IR-EXEC-ERROR\"",
+        };
+        assertEq(("nested_throw_then_nested_rethrow",), getMismatches(results));
+
+        # compiled code crashed: the cases from the crash on are missing
+        assertEq(("throw_from_catch",), getMismatches(Expected - "throw_from_catch"));
+
+        # and output the worker should not print is rejected
+        assertThrows("WORKER-OUTPUT-ERROR", \parseOutput(), ("bad", "Segmentation fault\n"));
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, worker));
+            checkResults(mode, parseOutput(mode, out));
+        }
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        TmpDir tmp("qore-catch-scope-rethrow-");
+        foreach string opt in (OptLevels) {
+            string exe = tmp.path + DirSep + "catch-scope-rethrow-O" + opt;
+            string compile_out = backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env, qcc_bin, opt, exe,
+                worker));
+            assertTrue(is_file(exe), sprintf("qcc -O%s: %s", opt, compile_out));
+            string label = "aot-O" + opt;
+            int rc;
+            string out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+            assertEq(0, rc, label + ": exit code");
+            checkResults(label, parseOutput(label, out));
+        }
+    }
+
+    #! parses the "<case>: <result>" lines printed by the worker
+    private hash<string, string> parseOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> parts = (line =~ x/^([a-z_]+): (.*)$/);
+            if (!parts) {
+                throw "WORKER-OUTPUT-ERROR", sprintf("%s: unexpected worker output line %y in: %s", label, line,
+                    out);
+            }
+            results{parts[0]} = parts[1];
+        }
+        return results;
+    }
+
+    #! returns the names of the cases whose result differs from the expected one, or that are missing or extra
+    private list<string> getMismatches(hash<string, string> results) {
+        list<string> rv = ();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            if (results{i.key} !== i.value) {
+                push rv, i.key;
+            }
+        }
+        foreach string key in (keys results) {
+            if (!Expected.hasKey(key)) {
+                push rv, key;
+            }
+        }
+        return rv;
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": cases run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+        assertEq((), getMismatches(results), label + ": mismatches");
+    }
+}

@@ -1024,6 +1024,8 @@
       - deferrable foreign constraints for PostgreSQL and Oracle
         (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
       - alignment drops an index that the template does not have (see @ref qore_3_0_0_compatibility)
+      - @ref SqlUtil::RestartableTransaction "RestartableTransaction" restarts Oracle transactions when sessions are
+        killed (ex: during RAC rolling patching) or the connection is lost
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref utilintro "Util" module

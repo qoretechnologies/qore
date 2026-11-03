@@ -840,6 +840,25 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
+    //! Returns the number of active catch scopes that a throw, assert or rethrow statement at the current point ends
+    //! itself
+    /** With a handler for the exception in this function (an enclosing try statement's catch block, or the exception
+        cleanup block of an enclosing catch block or of a block with locals or handlers), the statement ends none: each
+        catch block that the exception leaves on its way to the handler ends its own catch scope on its exception edge
+        (QoreIROpcode::CatchUnwind, after releasing its catch variable, in the order the AST interpreter ends them), and
+        the catch scopes that enclose the try statement whose catch block receives the exception stay active, so a
+        rethrow in such an enclosing catch block still reads its own exception after the inner try statement.  Without
+        a handler in this function, the exception leaves the function and with it every catch scope of the function.
+
+        A rethrow reads the exception of the current catch context before the scopes are ended: the rethrow helpers
+        and the IR interpreter pop no catch scope themselves, only the Rethrow instruction's catch_depth after raising
+        the exception.  A rethrow in an on_error handler, whose exception is the handler's and not a catch scope's,
+        therefore never pops a scope of a caller.
+    */
+    int catchScopesLeftByThrow() const {
+        return exception_stack.empty() ? catch_cleanup_depth : 0;
+    }
+
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
     /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
      * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
