@@ -378,14 +378,10 @@ public class OpenSearchVectorStore inherits QoreRagUtils::AbstractVectorStore {
     }
 
     #! Returns True if the filter constrains the documents
+    /** The query is built as it will be sent, so an explicit \c match_all (or an empty query) is no constraint. */
     private static bool hasCriteria(hash<auto> filter) {
-        if (exists filter.native_filter) {
-            return filter.native_filter.size() > 0;
-        }
-        if (exists filter{"payload_eq"}) {
-            return filter.payload_eq instanceof hash && filter.payload_eq.size() > 0;
-        }
-        return filter.size() > 0;
+        hash<auto> query = OpenSearchVectorStore::makeQuery(filter);
+        return query.size() > 0 && !(query.size() == 1 && exists query.match_all);
     }
 
     private static hash<QoreRagUtils::VectorSearchResult> hitFromWire(hash<auto> hit, string vector_field,

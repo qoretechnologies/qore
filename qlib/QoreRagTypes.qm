@@ -93,13 +93,6 @@ module QoreRagTypes {
 
     @subsection qoreragtypes_1_0 QoreRagTypes 1.0
     - initial release
-    - @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore" can be managed, not only written to and searched:
-      @ref QoreRagUtils::AbstractVectorStore::countByFilter() "countByFilter()",
-      @ref QoreRagUtils::AbstractVectorStore::deleteByFilter() "deleteByFilter()" (which refuses a filter that
-      selects every record) and @ref QoreRagUtils::AbstractVectorStore::summarizeBy() "summarizeBy()" (record counts
-      and last write per distinct value of a payload field) are implemented by every vector store: Qdrant,
-      pgvector, OpenSearch, Milvus, Chroma, Pinecone (serverless), Weaviate and MongoDB Atlas.  The portable
-      \c payload_eq filter selects the records on all of them.
 */
 
 #! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)

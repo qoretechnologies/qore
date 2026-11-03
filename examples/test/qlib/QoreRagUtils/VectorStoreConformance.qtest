@@ -53,7 +53,7 @@ class ReferenceVectorStore inherits QoreRagUtils::AbstractVectorStore {
         list<hash<auto>> rv = ();
         foreach hash<auto> r in (records.values()) {
             bool ok = True;
-            foreach string key in (keys filter.payload_eq) {
+            foreach string key in (keys (filter.payload_eq ?? {})) {
                 if (!exists r.payload{key} || r.payload{key} != filter.payload_eq{key}) {
                     ok = False;
                     break;
@@ -185,6 +185,16 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
             <QoreRagUtils::VectorRecord>{"id": "4", "vector": (1.0, 1.0, 0.0), "payload": {"scope": scope}},
         ));
         hash<auto> mine = {"payload_eq": {"scope": scope}};
+
+        # no filter is valid: it covers every record, including the ones seeded here
+        assertTrue(store.countByFilter() >= 4, "countByFilter() without a filter counts every record");
+        assertTrue(store.countByFilter({}) >= 4, "an empty filter counts every record");
+        int total;
+        foreach hash<QoreRagUtils::VectorFieldSummary> g in (store.summarizeBy("scope")) {
+            total += g.count;
+        }
+        assertTrue(total >= 4, "summarizeBy() without a filter covers every record");
+        assertEq(4, (select store.summarizeBy("scope"), $1.value == scope)[0].count);
 
         # counting
         assertEq(4, store.countByFilter(mine));

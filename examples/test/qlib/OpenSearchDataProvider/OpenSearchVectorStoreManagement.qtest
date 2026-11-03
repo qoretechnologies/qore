@@ -104,7 +104,8 @@ public class OpenSearchVectorStoreManagementTest inherits QUnit::Test {
         assertEq({"query": {"bool": {"filter": ({"term": {"instance_key": "retired"}},)}}}, fake.requests[0].body);
 
         # a filter that selects everything is refused before any request
-        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"native_filter": {}})) {
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"native_filter": {}}, {"native_filter": {"match_all": {}}},
+                {"match_all": {}})) {
             assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
         }
         assertEq(1, fake.requests.size());

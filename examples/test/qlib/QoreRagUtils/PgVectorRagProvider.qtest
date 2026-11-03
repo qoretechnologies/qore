@@ -318,7 +318,8 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         assertEq(1, ds.commit_count);
 
         # a filter that selects every row is refused without touching the database
-        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"unrelated": 1})) {
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"unrelated": 1}, {"where_sql": ""},
+                {"where_sql": "", "payload_eq": {}})) {
             assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
         }
         assertEq(1, ds.getExecCalls().size());

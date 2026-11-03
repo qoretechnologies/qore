@@ -374,7 +374,7 @@ public class PgVectorRagProvider inherits AbstractVectorStore {
     */
     private string buildWhere(hash<auto> filter, reference<list<auto>> bind_args) {
         list<string> where_clauses = ();
-        if (exists filter.where_sql && filter.where_sql.typeCode() == NT_STRING) {
+        if (filter.where_sql.typeCode() == NT_STRING && filter.where_sql.val()) {
             # Pass-through raw WHERE fragment for users who want full SQL
             # filter expressivity; placeholders use Qore `%v` binds supplied
             # positionally in the `where_args` list
