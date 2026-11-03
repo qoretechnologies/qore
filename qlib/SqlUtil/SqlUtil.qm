@@ -339,7 +339,11 @@ module SqlUtil {
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
       bounded, driver-independent recovery of complete idempotent transaction
       bodies after a transaction abort (a deadlock or any other serialization
-      failure), database failover, and datasource-pool timeout errors
+      failure), database failover, and datasource-pool timeout errors; Oracle
+      transactions are restarted when the connection is lost in a transaction
+      (\c DBI:ORACLE:TRANSACTION-ERROR), when sessions are killed (ex: during
+      RAC rolling patching), when an instance shuts down, and on listener
+      errors raised while a service is relocated
     - added
       @ref SqlUtil::AbstractDatabase::getSchemaPhysicalSize() "AbstractDatabase::getSchemaPhysicalSize()" for portable schema-level
       physical storage measurement; PostgreSQL includes tables, partitions,

@@ -17,6 +17,10 @@ class RestartableTransactionTest inherits QUnit::Test {
             \transactionAbortClassificationTest());
         addTestCase("transaction abort is not confused with other errors",
             \nonRestartableErrorTest());
+        addTestCase("Oracle lost connection classification",
+            \oracleLostConnectionTest());
+        addTestCase("Oracle errors that are not restartable",
+            \oracleNonRestartableErrorTest());
         addTestCase("bounded restart policy", \boundedRestartPolicyTest());
         addTestCase("invalid policy arguments", \invalidArgumentsTest());
         set_return_value(main());
@@ -137,6 +141,107 @@ class RestartableTransactionTest inherits QUnit::Test {
             exception("DBI:ORACLE:OCI-ERROR",
                 "ORA-00001: unique constraint violated",
                 {"alterr": "OCI-00001"})));
+    }
+
+    #! returns an Oracle driver error for the given "ORA-nnnnn: text" message
+    private hash<ExceptionInfo> oracleError(string desc) {
+        return exception("DBI:ORACLE:OCI-ERROR",
+            "omq@OMQP01: QorePreparedStatement::exec(): " + desc,
+            {"alterr": "OCI-" + (desc =~ x/ORA-([0-9]+)/)[0]});
+    }
+
+    #! errors raised when sessions are killed (ex: Oracle RAC rolling
+    #! patching), an instance shuts down or a service is relocated
+    oracleLostConnectionTest() {
+        list<string> errs = (
+            "ORA-00028: your session has been killed",
+            "ORA-00060: deadlock detected while waiting for resource",
+            "ORA-01012: not logged on",
+            "ORA-01041: internal error. hostdef extension doesn't exist",
+            "ORA-01089: immediate shutdown or close in progress",
+            "ORA-01092: ORACLE instance terminated. Disconnection forced",
+            "ORA-02396: exceeded maximum idle time, please connect again",
+            "ORA-03113: end-of-file on communication channel",
+            "ORA-03114: not connected to ORACLE",
+            "ORA-03135: connection lost contact",
+            "ORA-08177: can't serialize access for this transaction",
+            "ORA-12514: TNS:listener does not currently know of service",
+            "ORA-12521: TNS:listener does not currently know of instance",
+            "ORA-12528: TNS:listener: all appropriate instances are blocking",
+            "ORA-12537: TNS:connection closed",
+            "ORA-12541: TNS:no listener",
+            "ORA-12570: TNS:packet reader failure",
+            "ORA-12571: TNS:packet writer failure",
+            "ORA-25401: can not continue fetches",
+            "ORA-25402: transaction must roll back",
+            "ORA-25408: can not safely replay call",
+            "ORA-25409: failover happened during the network operation",
+        );
+        foreach string desc in (errs) {
+            *string msg = SqlUtil::get_restart_transaction_reason("oracle",
+                oracleError(desc));
+            assertTrue(exists msg, desc);
+            assertRegex((desc =~ x/(ORA-[0-9]+)/)[0], cast<string>(msg), desc);
+        }
+
+        # a restart code after the error's own code is recognized
+        assertRegex("ORA-03113", cast<string>(
+            SqlUtil::get_restart_transaction_reason("oracle", oracleError(
+                "ORA-04088: error during execution of trigger 'OMQ.T'\n"
+                "ORA-03113: end-of-file on communication channel"))));
+
+        # the driver connected again, but the transaction is lost; recognized
+        # with the original error in the description, and without one, as
+        # raised by older drivers
+        hash<ExceptionInfo> ex = oracleError("ORA-03113: end-of-file");
+        ex.err = "DBI:ORACLE:TRANSACTION-ERROR";
+        ex.desc = "connection to Oracle database server omq@OMQP01 lost while "
+            "in a transaction; transaction has been lost: "
+            "QorePreparedStatement::exec(): ORA-03113: end-of-file";
+        *string msg = SqlUtil::get_restart_transaction_reason("oracle", ex);
+        assertRegex("DBI:ORACLE:TRANSACTION-ERROR", cast<string>(msg));
+        assertRegex("lost in a transaction", cast<string>(msg));
+        ex.desc = "connection to Oracle database server omq@OMQP01 lost while "
+            "in a transaction; transaction has been lost";
+        assertRegex("DBI:ORACLE:TRANSACTION-ERROR", cast<string>(
+            SqlUtil::get_restart_transaction_reason("oracle", ex)));
+
+        # the policy restarts a transaction whose session was killed
+        SqlUtil::RestartableTransaction policy("oracle", 2, 0s, 2);
+        assertRegex("ORA-00028", cast<string>(policy.restartTransaction(
+            oracleError("ORA-00028: your session has been killed"))));
+        assertRegex("DBI:ORACLE:TRANSACTION-ERROR", cast<string>(
+            policy.restartTransaction(ex)));
+        assertEq(2, policy.getCount());
+
+        # Oracle errors are not classified for other drivers
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("pgsql", ex));
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("mysql",
+            oracleError("ORA-00028: your session has been killed")));
+    }
+
+    #! errors that a restart would hit again are not restartable
+    oracleNonRestartableErrorTest() {
+        list<string> errs = (
+            "ORA-00001: unique constraint (OMQ.PK_TEST) violated",
+            "ORA-00942: table or view does not exist",
+            "ORA-01017: invalid username/password; logon denied",
+            "ORA-01400: cannot insert NULL into (\"OMQ\".\"TEST\".\"ID\")",
+            "ORA-25400: must replay fetch",
+            "ORA-28000: The account is locked; login denied.",
+            # a code is not matched as the prefix of a longer number
+            "ORA-000281: unknown",
+            "ORA-031131: unknown",
+        );
+        foreach string desc in (errs) {
+            assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("oracle",
+                oracleError(desc)), desc);
+        }
+        # an invalid handle error has no ORA code
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("oracle",
+            exception("DBI:ORACLE:OCI-INVALID-HANDLE", "omq@OMQP01: "
+                "QoreOracleStatement::bindByPos(): an invalid OCI handle was "
+                "used")));
     }
 
     boundedRestartPolicyTest() {

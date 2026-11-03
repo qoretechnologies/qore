@@ -80,6 +80,61 @@ const MysqlRestartTransactionCodes = {
     "2013": True,
 };
 
+#! Oracle error codes (the number of the \c ORA code) that require a complete transaction restart
+/** The driver's \c DBI:ORACLE:TRANSACTION-ERROR, raised when the connection is lost in a transaction, also requires a
+    restart.
+
+    @since SqlUtil 3.11
+*/
+const OracleRestartTransactionCodes = {
+    # your session has been killed (ex: during a RAC rolling patch)
+    "00028": True,
+    # deadlock detected while waiting for resource
+    "00060": True,
+    # not logged on
+    "01012": True,
+    # internal error. hostdef extension doesn't exist
+    "01041": True,
+    # immediate shutdown or close in progress
+    "01089": True,
+    # ORACLE instance terminated. Disconnection forced
+    "01092": True,
+    # exceeded maximum idle time
+    "02396": True,
+    # end-of-file on communication channel
+    "03113": True,
+    # not connected to ORACLE
+    "03114": True,
+    # connection lost contact
+    "03135": True,
+    # can't serialize access for this transaction
+    "08177": True,
+    # TNS:listener does not currently know of service requested in connect descriptor
+    "12514": True,
+    # TNS:listener does not currently know of instance requested in connect descriptor
+    "12521": True,
+    # TNS:listener: all appropriate instances are blocking new connections
+    "12528": True,
+    # TNS:connection closed
+    "12537": True,
+    # TNS:no listener
+    "12541": True,
+    # TNS:packet reader failure
+    "12570": True,
+    # TNS:packet writer failure
+    "12571": True,
+    # transparent application failover errors
+    "25401": True,
+    "25402": True,
+    "25403": True,
+    "25404": True,
+    "25405": True,
+    "25406": True,
+    "25407": True,
+    "25408": True,
+    "25409": True,
+};
+
 #! Returns a diagnostic for a driver error requiring transaction restart
 /** @param driver database driver name
     @param ex one exception in a caught exception chain
@@ -92,12 +147,24 @@ public *string sub get_restart_transaction_reason(string driver,
         hash<ExceptionInfo> ex) {
     switch (driver) {
         case "oracle": {
+            # the driver raises this error when the connection is lost in a
+            # transaction (ex: the session was killed, as in a RAC rolling
+            # patch, or the instance failed over); the driver has connected
+            # again, but the transaction is lost and must be restarted
+            if (ex.err == "DBI:ORACLE:TRANSACTION-ERROR") {
+                return sprintf("Oracle connection lost in a transaction; the "
+                    "transaction must be restarted: %s: %s", ex.err, ex.desc);
+            }
             # the ORA code is matched in the description rather than in the
             # exception argument, because the driver reports it as "OCI-nnnnn"
             # in "alterr" and because errors raised outside the DBI layer
-            # carry no argument hash at all
-            if (*string code = (ex.desc =~
-                    x/ORA-(08177|01041|2540[1-9]|0311[34]|00060)/)[0]) {
+            # carry no argument hash at all; a code is matched only as a whole
+            # number, and every code in the description is checked, as an
+            # error can report its cause after its own code
+            foreach string code in (ex.desc =~ x/ORA-(\d{5})\b/g) {
+                if (!OracleRestartTransactionCodes{code}) {
+                    continue;
+                }
                 if (code == "00060") {
                     return sprintf("Oracle deadlock (ORA-00060); the "
                         "transaction was rolled back and must be restarted: "
