@@ -225,6 +225,9 @@ public namespace QoreRagUtils {
 public class ChromaVectorStore inherits AbstractVectorStore {
     public {
         const Backend = "chroma";
+
+        #! Records fetched per request by countByFilter() and summarizeBy()
+        const GetPageSize = 1000;
     }
 
     private {
@@ -243,6 +246,26 @@ public class ChromaVectorStore inherits AbstractVectorStore {
             throw "VECTOR-STORE-CONFIG-ERROR",
                 "ChromaVectorStore requires 'collection' (Chroma collection ID)";
         }
+        init();
+    }
+
+    #! Creates the vector store with a pre-built REST client (for example a client with a custom transport)
+    /** @param config the store configuration
+        @param rest_client the Chroma REST client to use
+
+        @throw VECTOR-STORE-CONFIG-ERROR \c collection is missing
+    */
+    constructor(hash<VectorStoreConfig> config, ChromaRestClient::ChromaRestClientIo rest_client) {
+        self.config = config;
+        if (!config.collection.val()) {
+            throw "VECTOR-STORE-CONFIG-ERROR",
+                "ChromaVectorStore requires 'collection' (Chroma collection ID)";
+        }
+        self.rest_client = rest_client;
+        init();
+    }
+
+    private init() {
         collection_id = config.collection;
         tenant = config.options.tenant
             ?? ChromaRestClient::ChromaRestClientBase::DefaultTenant;
@@ -327,8 +350,110 @@ public class ChromaVectorStore inherits AbstractVectorStore {
         return result;
     }
 
+    #! Counts the records that match a payload filter
+    /** Without a filter, calls \c GET \c /count.  With one, pages the matching ids with \c POST \c /get, because
+        the count endpoint takes no filter.
+
+        @param filter optional filter: the portable \c payload_eq form (equality on metadata keys, combined with
+            \c $and), or \c where, a Chroma metadata filter
+
+        @return the number of matching records
+    */
+    int countByFilter(*hash<auto> filter) {
+        ensureRestClient();
+        *hash<auto> wf = ChromaVectorStore::makeWhere(filter);
+        if (!wf) {
+            return rest_client.restGet(collectionPath("/count")).body.toInt();
+        }
+        int total = 0;
+        while (True) {
+            int n = getPage(wf, total, ("metadatas",)).ids.size();
+            total += n;
+            if (n < GetPageSize) {
+                return total;
+            }
+        }
+    }
+
+    #! Deletes the records that match a payload filter
+    /** Counts the matching records, then calls \c POST \c /delete with the filter, because Chroma does not report
+        the number of records removed.
+
+        @param filter the filter; see countByFilter()
+
+        @return the number of records that matched immediately before the delete
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty
+    */
+    int deleteByFilter(hash<auto> filter) {
+        *hash<auto> wf = ChromaVectorStore::makeWhere(filter);
+        AbstractVectorStore::requireFilterCriteria(exists wf);
+        int matched = countByFilter(filter);
+        if (matched) {
+            rest_client.restPost(collectionPath("/delete"), {"where": wf});
+        }
+        return matched;
+    }
+
+    #! Summarizes the records by the distinct values of a metadata key
+    /** Pages through the matching records with \c POST \c /get, fetching only metadata, and groups them here.
+
+        @param field the metadata key to group by
+        @param filter optional filter; see countByFilter()
+        @param timestamp_field optional metadata key holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+    */
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) {
+        ensureRestClient();
+        *hash<auto> wf = ChromaVectorStore::makeWhere(filter);
+        hash<string, hash<auto>> groups = {};
+        int offset = 0;
+        while (True) {
+            hash<auto> page = getPage(wf, offset, ("metadatas",));
+            list<auto> metas = page.metadatas ?? ();
+            int n = page.ids.size();
+            for (int i = 0; i < n; ++i) {
+                hash<auto> meta = metas[i].typeCode() == NT_HASH ? metas[i] : {};
+                AbstractVectorStore::addToSummary(\groups, meta{field}, timestamp_field ? meta{timestamp_field} : NOTHING);
+            }
+            offset += n;
+            if (n < GetPageSize) {
+                break;
+            }
+        }
+        return AbstractVectorStore::finishSummary(groups);
+    }
+
     string getCollection() {
         return collection_id;
+    }
+
+    #! Fetches one page of records with \c POST \c /get
+    private hash<auto> getPage(*hash<auto> wf, int offset, list<string> include) {
+        hash<auto!> body = {"limit": GetPageSize, "offset": offset, "include": include};
+        if (wf) {
+            body."where" = wf;
+        }
+        return rest_client.restPost(collectionPath("/get"), body).body;
+    }
+
+    #! Returns the Chroma \c where filter for a filter, or NOTHING for no filter
+    private static *hash<auto> makeWhere(*hash<auto> filter) {
+        if (!filter) {
+            return;
+        }
+        if (filter."where" instanceof hash && filter."where") {
+            return filter."where";
+        }
+        if (!(filter.payload_eq instanceof hash) || filter.payload_eq.empty()) {
+            return;
+        }
+        list<hash<auto>> terms = ();
+        foreach string key in (keys filter.payload_eq) {
+            push terms, {key: {"$eq": filter.payload_eq{key}}};
+        }
+        return terms.size() == 1 ? terms[0] : {"$and": terms};
     }
 
     int getDimension() {
