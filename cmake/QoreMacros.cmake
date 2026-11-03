@@ -543,6 +543,30 @@ function(_QORE_QCC_RESET_COMPILER_DEPENDS)
     endforeach()
 endfunction()
 
+# Sets _out_var to the COMMAND that a custom command with a DEPFILE in target
+# _target runs first, so that the Makefile generators read its depfile from
+# scratch the next time; empty where that is not needed.
+#
+# The Makefile generators before CMake 4.0 append a rewritten "custom" depfile
+# to the dependencies they consolidated from it before (cmDependsCompiler::
+# CheckDependencies() in CMakeFiles/<target>.dir/compiler_depend.internal and
+# .make) instead of replacing them, so a file that the command depended on once
+# stays a dependency forever.  When that file is removed, the command is out of
+# date in every build, and every rebuild appends another copy of its depfile.
+# Removing the consolidated file makes CMake read the target's depfiles again
+# when it next checks the target's dependencies, which keeps only what the
+# command's current depfile names.  It is removed when the command runs, as
+# the depfile is rewritten then; CMake 4.0 replaces the dependencies itself.
+function(_QORE_DEPFILE_FRESH_READ_COMMAND _out_var _target)
+    set(_qore_depfile_fresh_read_command)
+    if (CMAKE_GENERATOR MATCHES "Makefiles" AND CMAKE_VERSION VERSION_LESS 4.0)
+        set(_qore_depfile_fresh_read_command
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_target}.dir/compiler_depend.internal")
+    endif ()
+    set(${_out_var} ${_qore_depfile_fresh_read_command} PARENT_SCOPE)
+endfunction()
+
 function(_QORE_QCC_REGISTER_MANAGED_DIRS)
     foreach(_qore_qcc_managed_dir ${ARGN})
         get_filename_component(_qore_qcc_managed_dir_abs
@@ -2831,6 +2855,9 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # whole-dir avoids.  Revisit per-file mode after the slice-4 fix and
     # add an opt-in option for dev-loop incremental builds.
     set(_qmod_dep ${_qmod_out}.d)
+    # the module's dependencies are what its current depfile names, not every
+    # file it ever depended on (see _QORE_DEPFILE_FRESH_READ_COMMAND())
+    _QORE_DEPFILE_FRESH_READ_COMMAND(_qmod_depfile_fresh_read_command ${_name}-qmod)
 
     # For split-dir modules, collect sibling resource files at cmake-time
     # so they can be declared as BYPRODUCTS of the copy step and tracked
@@ -2905,6 +2932,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # to ModuleManager::loadModuleIntern.
         add_custom_command(
             OUTPUT ${_qmod_out}
+            ${_qmod_depfile_fresh_read_command}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             ${_qmod_jar_stage_commands}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
@@ -2970,6 +2998,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # preference order pick the AOT artifact.
         add_custom_command(
             OUTPUT ${_qmod_out}
+            ${_qmod_depfile_fresh_read_command}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
