@@ -1,0 +1,543 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+/*  Every lowering of a function numbers its local slots alike (design/ir-local-slot-numbering.md): AOT native code,
+    serialized IR, debugger bodies, closure runtime bindings and handler IR bind locals by slot index.  Slots were
+    numbered by first reference in block order, which differs between the lowerings of one function: a
+    reflection-free body does not activate the locals of nested blocks at their declaration, an anchored block splits
+    at calls and moves its continuations after its siblings, and the debugger body and the serialized closure IR are
+    separate lowerings; PgsqlSqlUtil's bulk closures read "stmt" as "sql", and the Qorus build failed with "slot map
+    construction failed ...: cancelled or invalid slot numbering".
+
+    The program allows the debugger and has reflection-free functions, a closure that calls a method before it reads
+    its captures, object locals in nested blocks with calls, on_exit/on_error/on_success handlers, foreach and catch
+    variables and same-name locals in sibling scopes.  Every lowering writes its slots (QORE_IR_TRACE_LOCAL_SLOTS):
+    the test checks that all lowerings of each function agree, in executables, modules, per-source objects linked with
+    --from-objects, split compilation, at -O0 and -O3, with and without QORE_AOT_EH=1 and in the JIT, and that the
+    compiled code gives the results of the AST interpreter.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTCanonicalLocalSlotsTest
+
+class AOTCanonicalLocalSlotsTest inherits QUnit::Test {
+    public {
+        const ModuleName = "AOTCanonicalLocalSlotsMod";
+
+        #! the objects, closures and the statements binding locals that their code uses
+        const Classes1 = "class CsLog {
+    public {
+        static string log = \"\";
+    }
+}
+
+string sub cs_log() {
+    return CsLog::log;
+}
+
+class CsObj {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        CsLog::log += \"~\" + n;
+    }
+
+    string get() {
+        return n;
+    }
+}
+
+class CsExec {
+    string vexec(string sql, list<auto> args) {
+        return \"direct \" + sql + \":\" + (foldl $1 + \",\" + $2, args);
+    }
+}
+
+class CsStmt {
+    private {
+        string sql;
+    }
+
+    prepare(string n_sql) {
+        sql = n_sql;
+    }
+
+    string execArgs(list<auto> args) {
+        return \"stmt \" + sql + \":\" + (foldl $1 + \",\" + $2, args);
+    }
+}
+
+class CsTable {
+    private {
+        CsExec ds();
+        string prefix = \"t\";
+    }
+
+    # the closure calls a method of the object before it reads its captures (PgsqlTable::getBulkUpdateClosure())
+    code<string(hash<auto>)> getClosure(hash<auto> example, bool use_direct_exec) {
+        string sql = \"update \" + (foldl $1 + \",\" + $2, keys example);
+        *CsStmt stmt;
+        if (!use_direct_exec) {
+            stmt = new CsStmt();
+            stmt.prepare(sql);
+        }
+        list<string> set_keys = keys example;
+        return string sub (hash<auto> data) {
+            hash<auto> combined;
+            map (combined{$1} = data{$1}), set_keys;
+            list<auto> args = combined.values();
+            string rv;
+            if (use_direct_exec) {
+                rv = ds.vexec(sql, args);
+            } else {
+                rv = stmt.execArgs(args);
+            }
+            on_exit {
+                string seen = rv;
+                CsLog::log += \"[\" + seen.size() + \"]\";
+            }
+            return prefix + \":\" + rv;
+        };
+    }
+}
+";
+
+        #! reflection-free code, unwind anchors, handlers and sibling scopes
+        const Classes2 = "class CsCycle {
+    const MaxOffset = 8;
+    const MaxCycle = 16;
+
+    # reflection-free (design/aot-reflection-visible-locals.md), with the locals of nested blocks
+    static *hash<auto> findCycle(list<string> frames) {
+        for (int start = 0; start <= MaxOffset; ++start) {
+            int available = frames.size() - start;
+            int max_cycle = available / 2;
+            if (max_cycle > MaxCycle) {
+                max_cycle = MaxCycle;
+            }
+            for (int cycle = 1; cycle <= max_cycle; ++cycle) {
+                int limit = cycle * 3;
+                if (limit > available - cycle) {
+                    limit = available - cycle;
+                }
+                bool match = True;
+                for (int i = 0; i < limit; ++i) {
+                    if (frames[start + i] != frames[start + i + cycle]) {
+                        match = False;
+                        break;
+                    }
+                }
+                if (match) {
+                    return {\"start\": start, \"length\": cycle};
+                }
+            }
+        }
+    }
+
+    # reflection-free, with same-name locals in sibling scopes
+    static int siblings(list<int> l) {
+        int t = 0;
+        foreach int i in (l) {
+            int v = i * 2;
+            t += v;
+        }
+        for (int i = 0; i < 3; ++i) {
+            int v = i + 100;
+            t += v;
+        }
+        return t;
+    }
+}
+
+class CsFuncs {
+    # object locals in nested blocks released around calls: local unwind anchors
+    static string anchored(int n) {
+        string out;
+        for (int i = 0; i < n; ++i) {
+            CsObj a(\"a\" + i);
+            if (i % 2) {
+                CsObj b(\"b\" + i);
+                out += b.get() + a.get();
+            } else {
+                CsObj c(\"c\" + i);
+                out += c.get() + \"/\" + a.get();
+            }
+        }
+        return out;
+    }
+
+    # the locals of handlers, foreach and catch variables
+    static string handlers(list<string> l) {
+        string out;
+        on_success {
+            string total = out;
+            CsLog::log += \"ok\" + total.size();
+        }
+        on_error {
+            string why = $1.err;
+            CsLog::log += \"error:\" + why;
+        }
+        foreach string s in (l) {
+            on_exit {
+                string mark = \"<\" + s + \">\";
+                CsLog::log += mark;
+            }
+            if (s == \"fatal\") {
+                throw \"FATAL\", s;
+            }
+            try {
+                if (s == \"x\") {
+                    throw \"ERR\", s;
+                }
+                CsObj o(s);
+                out += o.get();
+            } catch (hash<ExceptionInfo> ex) {
+                string e = ex.err + \":\" + ex.desc;
+                out += e;
+            }
+        }
+        return out;
+    }
+}
+";
+
+        const Main = "CsTable t();
+printf(\"%s\\n\", t.getClosure({\"a\": 1, \"b\": 2}, True)({\"a\": 1, \"b\": \"x\"}));
+printf(\"%s\\n\", t.getClosure({\"a\": 1, \"b\": 2}, False)({\"a\": 1, \"b\": \"x\"}));
+printf(\"%s\\n\", t.getClosure({\"c\": 3}, False)({\"c\": True}));
+printf(\"%y\\n\", CsCycle::findCycle((\"a\", \"b\", \"a\", \"b\", \"a\", \"b\", \"a\", \"b\")));
+printf(\"%y\\n\", CsCycle::findCycle((\"x\", \"y\", \"z\")));
+printf(\"%d\\n\", CsCycle::siblings((1, 2, 3)));
+printf(\"%s\\n\", CsFuncs::anchored(4));
+printf(\"%s\\n\", CsFuncs::handlers((\"p\", \"x\", \"q\")));
+try {
+    CsFuncs::handlers((\"p\", \"fatal\", \"q\"));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught %s: %s\\n\", ex.err, ex.desc);
+}
+printf(\"%s\\n\", cs_log());
+";
+
+        const Expected = "t:direct update a,b:1,x
+t:stmt update a,b:1,x
+t:stmt update c:1
+{start: 0, length: 2}
+null
+315
+c0/a0b1a1c2/a2b3a3
+pERR:xq
+caught FATAL: fatal
+[21][19][15]~c0~a0~b1~a1~c2~a2~b3~a3~p<p><x>~q<q>ok7~p<p><fatal>error:FATAL
+";
+
+        #! the lowerings that the program must have
+        const Lowerings = ("aot", "aot-debug", "aot-reflection-free", "aot-unanchored", "aot-debug-unanchored",
+            "closure-ir", "handler", "jit", "jit-reflection-free");
+
+        #! the compile variants: environment prefixes
+        const CompileEnvs = ("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ");
+
+        #! the prefix of a trace line
+        const TracePrefix = "IR-LOCAL-SLOTS ";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        #! the lowerings seen in all traces
+        hash<string, bool> seen_lowerings;
+    }
+
+    constructor() : QUnit::Test("AOTCanonicalLocalSlotsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("trace parsing", \testTraceParsing());
+        addTestCase("an executable numbers the locals of every lowering alike and matches AST", \testExecutable());
+        addTestCase("a module numbers the locals of every lowering alike and matches AST", \testModule());
+        addTestCase("a module linked from per-source objects numbers the locals alike and matches AST",
+            \testObjects());
+        addTestCase("every lowering variant was checked", \testLoweringsSeen());
+
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string env(*string module_dir) {
+        string rv = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s ", quote(libqore_dir),
+            quote(libqore_dir), quote(libqore_dir));
+        if (module_dir) {
+            rv += "QORE_MODULE_DIR=" + quote(module_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""))
+                + " ";
+        }
+        return rv;
+    }
+
+    private static string run(string cmd, reference<int> status) {
+        return backquote(cmd + " 2>&1", \status);
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        on_exit f.close();
+        f.write(body);
+    }
+
+    #! returns the slots of each lowering of each function in the output of a command: location -> lowering -> slots
+    static hash<string, hash<string, list<string>>> parseTrace(string output) {
+        hash<string, hash<string, list<string>>> rv = {};
+        foreach string line in (output.split("\n")) {
+            if (!line.equalPartial(TracePrefix)) {
+                continue;
+            }
+            *list<*string> m = line.regexExtract("^" + TracePrefix + "(\\S+) ([a-z-]+):(.*)$");
+            if (!m) {
+                throw "TRACE-ERROR", sprintf("malformed trace line: %y", line);
+            }
+            string loc = m[0];
+            string lowering = m[1];
+            if (!rv{loc}) {
+                rv{loc} = {};
+            }
+            if (!rv{loc}{lowering}) {
+                rv{loc}{lowering} = ();
+            }
+            rv{loc}{lowering} += trim(m[2]);
+        }
+        return rv;
+    }
+
+    #! returns the disagreements in a trace: the lowerings of a function that number its locals differently
+    /** A local without a canonical slot is marked with "*"; the only one allowed is the signature's self of a closure
+        in a method, which its code refers to and which is not a capture (design/ir-local-slot-numbering.md)
+
+        @param trace the parsed trace (parseTrace())
+        @param lowerings [out] the lowerings in the trace are added here
+    */
+    static list<string> traceProblems(hash<string, hash<string, list<string>>> trace,
+            reference<hash<string, bool>> lowerings) {
+        list<string> rv = ();
+        foreach hash<auto> fi in (trace.pairIterator()) {
+            *string first;
+            *string first_lowering;
+            foreach hash<auto> li in (fi.value.pairIterator()) {
+                lowerings{li.key} = True;
+                foreach string slots in (li.value) {
+                    foreach string star in (slots.regexExtract("([^ ]+\\*)", Qore::RE_Global) ?? ()) {
+                        if (star !~ /^[0-9]+=self\*$/) {
+                            rv += sprintf("%s %s: %y has no canonical slot: %s", fi.key, li.key, star, slots);
+                        }
+                    }
+                    if (!exists first) {
+                        first = slots;
+                        first_lowering = li.key;
+                    } else if (first != slots) {
+                        rv += sprintf("%s: %s numbers the locals as %y, %s as %y", fi.key, li.key, slots,
+                            first_lowering, first);
+                    }
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! checks that every lowering of each function in the output of a command numbers its locals alike
+    private checkTrace(string output, string label, bool require_trace = True) {
+        hash<string, hash<string, list<string>>> trace = parseTrace(output);
+        if (require_trace) {
+            assertTrue(trace.size() > 0, label + ": the compile wrote slot traces: " + output);
+        }
+        assertEq((), traceProblems(trace, \seen_lowerings), label);
+    }
+
+    #! returns the module's main source with the given body
+    private string moduleHeader() {
+        return sprintf("%%modern\n%%allow-debugger\nmodule %s {\n    version = \"1.0\";\n"
+            "    desc = \"AOT canonical local slot regression\";\n    author = \"Qore Technologies, s.r.o.\";\n"
+            "    url = \"https://qore.org\";\n    license = \"MIT\";\n}\n\n", ModuleName);
+    }
+
+    #! makes the declarations of a module source public
+    private static string publicDecls(string src) {
+        return regex_subst(src, "^(class|string sub) ", "public $1 ", RE_MultiLine | RE_Global);
+    }
+
+    #! returns the probe script requiring the module
+    private string probeSource() {
+        return sprintf("%%modern\n%%allow-debugger\n%%requires %s\n", ModuleName) + Main;
+    }
+
+    #! returns the AST output of a program (which must be the expected one)
+    private string astOutput(string script, *string module_dir) {
+        int status;
+        string out = run(env(module_dir) + quote(qore_bin) + " --exec-mode=ast " + quote(script), \status);
+        assertEq(0, status, out);
+        assertEq(Expected, out, "AST baseline");
+        return out;
+    }
+
+    testTraceParsing() {
+        string output = "noise\n" + TracePrefix + "/a/b.q:7 aot: 0=x 1=y 2=self*\n" + TracePrefix
+            + "/a/b.q:7 closure-ir: 0=x 1=y 2=self*\nqcc: done\n" + TracePrefix + "/a/b.q:9 jit-reflection-free: \n";
+        hash<string, hash<string, list<string>>> trace = parseTrace(output);
+        assertEq(("/a/b.q:7", "/a/b.q:9"), sort(keys trace));
+        assertEq({"aot": ("0=x 1=y 2=self*",), "closure-ir": ("0=x 1=y 2=self*",)}, trace."/a/b.q:7");
+        assertEq({"jit-reflection-free": ("",)}, trace."/a/b.q:9");
+        assertThrows("TRACE-ERROR", \AOTCanonicalLocalSlotsTest::parseTrace(), TracePrefix + "garbage");
+
+        hash<string, bool> lowerings = {};
+        assertEq((), traceProblems(trace, \lowerings), "agreeing lowerings");
+        assertEq({"aot": True, "closure-ir": True, "jit-reflection-free": True}, lowerings);
+
+        # the swap of the PgsqlSqlUtil bulk closures, and a local without a canonical slot
+        output = TracePrefix + "/a/b.q:7 aot: 0=data 1=sql 2=stmt\n" + TracePrefix
+            + "/a/b.q:7 closure-ir: 0=data 1=stmt 2=sql\n" + TracePrefix + "/a/b.q:9 aot: 0=x 1=y*\n";
+        list<string> problems = traceProblems(parseTrace(output), \lowerings);
+        assertEq(2, problems.size(), sprintf("%N", problems));
+        assertRegex("^/a/b.q:7: closure-ir numbers the locals as \"0=data 1=stmt 2=sql\", aot as", problems[0]);
+        assertRegex("^/a/b.q:9 aot: \"1=y\\*\" has no canonical slot", problems[1]);
+    }
+
+    testExecutable() {
+        TmpDir tmp("qore-aot-canonical-slots-exe-");
+        string src = tmp.path + "/prog.qr";
+        write(src, "%modern\n%allow-debugger\n" + Classes1 + Classes2 + Main);
+        string ast_out = astOutput(src);
+
+        # the JIT tiers lower each function on its first call
+        int status;
+        string jit_out = run(env() + "QORE_IR_TRACE_LOCAL_SLOTS=1 QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 "
+            "QORE_JIT_THRESHOLD=1 " + quote(qore_bin) + " --exec-mode=jit " + quote(src), \status);
+        assertEq(0, status, jit_out);
+        checkTrace(jit_out, "JIT");
+
+        foreach string prefix in (CompileEnvs) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = sprintf("executable %s%s", prefix, level);
+                string exe = tmp.path + "/prog" + level;
+                string compile_out = run(env() + prefix + "QORE_IR_TRACE_LOCAL_SLOTS=1 " + quote(qcc_bin) + " "
+                    + level + " -o " + quote(exe) + " " + quote(src), \status);
+                assertEq(0, status, label + ": " + compile_out);
+                assertTrue(is_file(exe), label + ": compiled: " + compile_out);
+                # the JIT and the AOT lowerings of the same source agree too
+                checkTrace(jit_out + compile_out, label);
+                string out = run(env() + quote(exe), \status);
+                assertEq(0, status, label + ": " + out);
+                assertEq(ast_out, out, label);
+            }
+        }
+    }
+
+    testModule() {
+        TmpDir tmp("qore-aot-canonical-slots-mod-");
+        string src_dir = tmp.path + "/src";
+        mkdir(src_dir);
+        string module_src = src_dir + "/" + ModuleName + ".qm";
+        write(module_src, moduleHeader() + publicDecls(Classes1 + Classes2));
+        string probe = tmp.path + "/probe.qr";
+        write(probe, probeSource());
+        string ast_out = astOutput(probe, src_dir);
+
+        foreach string prefix in (CompileEnvs) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = sprintf("module %s%s", prefix, level);
+                string mod_dir = tmp.path + "/qmod" + level + $#;
+                mkdir(mod_dir);
+                string qmod = mod_dir + "/" + ModuleName + ".qmod";
+                int status;
+                string compile_out = run(env(src_dir) + prefix + "QORE_IR_TRACE_LOCAL_SLOTS=1 " + quote(qcc_bin)
+                    + " " + level + " --module -o " + quote(qmod) + " " + quote(module_src), \status);
+                assertEq(0, status, label + ": " + compile_out);
+                assertTrue(is_file(qmod), label + ": compiled: " + compile_out);
+                checkTrace(compile_out, label);
+                # only the AOT image can satisfy the module requirement
+                string out = run(env(mod_dir) + quote(qore_bin) + " " + quote(probe), \status);
+                assertEq(0, status, label + ": " + out);
+                assertEq(ast_out, out, label);
+
+                # a per-source object of the whole module, as the batch builds of applications compile them
+                string obj = tmp.path + "/" + ModuleName + level + $# + ".qo";
+                string obj_out = run(env(src_dir) + prefix + "QORE_IR_TRACE_LOCAL_SLOTS=1 " + quote(qcc_bin) + " "
+                    + level + " --module -c -o " + quote(obj) + " " + quote(module_src), \status);
+                assertEq(0, status, label + " object: " + obj_out);
+                assertTrue(is_file(obj), label + ": object compiled: " + obj_out);
+                checkTrace(obj_out, label + " object");
+            }
+        }
+    }
+
+    testObjects() {
+        TmpDir tmp("qore-aot-canonical-slots-obj-");
+        string mod_dir = tmp.path + "/src/" + ModuleName;
+        mkdir(tmp.path + "/src");
+        mkdir(mod_dir);
+        hash<string, string> files = {
+            ModuleName + ".qm": moduleHeader(),
+            "Classes1.qc": publicDecls(Classes1),
+            "Classes2.qc": publicDecls(Classes2),
+        };
+        map write(mod_dir + "/" + $1.key, $1.value), files.pairIterator();
+        string probe = tmp.path + "/probe.qr";
+        write(probe, probeSource());
+        string ast_out = astOutput(probe, tmp.path + "/src");
+
+        foreach string prefix in (CompileEnvs) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = sprintf("objects %s%s", prefix, level);
+                string base = tmp.path + "/build" + level + $#;
+                mkdir(base);
+                mkdir(base + "/modules");
+                list<string> objs = ();
+                int status;
+                foreach string file in (keys files) {
+                    string obj = base + "/" + file + ".qo";
+                    string obj_out = run(env() + prefix + "QORE_IR_TRACE_LOCAL_SLOTS=1 " + quote(qcc_bin) + " "
+                        + level + " -c --context=" + quote(mod_dir) + " -o " + quote(obj) + " "
+                        + quote(mod_dir + "/" + file), \status);
+                    assertEq(0, status, label + " " + file + ": " + obj_out);
+                    # the module's main source has no code
+                    checkTrace(obj_out, label + " " + file, file =~ /\.qc$/);
+                    objs += obj;
+                }
+                # the link takes the slot map walk of the objects' functions without generating their code again
+                string link_out = run(env() + prefix + "QORE_IR_TRACE_LOCAL_SLOTS=1 " + quote(qcc_bin) + " " + level
+                    + " -m --from-objects --context=" + quote(mod_dir) + " -o "
+                    + quote(base + "/modules/" + ModuleName + ".qmod") + " " + (map quote($1), objs).join(" "),
+                    \status);
+                assertEq(0, status, label + " link: " + link_out);
+                checkTrace(link_out, label + " link", False);
+                string out = run(env(base + "/modules") + quote(qore_bin) + " " + quote(probe), \status);
+                assertEq(0, status, label + ": " + out);
+                assertEq(ast_out, out, label);
+            }
+        }
+    }
+
+    testLoweringsSeen() {
+        foreach string lowering in (Lowerings) {
+            assertTrue(seen_lowerings{lowering}, sprintf("lowering %y checked; seen: %y", lowering,
+                keys seen_lowerings));
+        }
+    }
+}
