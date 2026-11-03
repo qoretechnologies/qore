@@ -210,9 +210,14 @@ if ! id qore >/dev/null 2>&1; then
     useradd -o -m -d /home/qore -u ${QORE_UID} -g ${QORE_GID} qore
 fi
 
-# install gdb for crash diagnostics (captures backtraces on segfault)
+# Install gdb for crash diagnostics (captures backtraces on segfault).  This is strictly optional: gdb only
+# post-processes core dumps after a test has already failed, so an unreachable apt mirror must never fail the job.
+# Current CI images ship gdb, so this only runs on older images; a failed install of any step (update or install)
+# warns and carries on without crash backtrace support.
 if ! command -v gdb > /dev/null 2>&1; then
-    apt-get update -qq && apt-get install -y -qq gdb > /dev/null 2>&1
+    if ! { apt-get update -qq && apt-get install -y -qq gdb > /dev/null 2>&1; }; then
+        echo "WARNING: gdb install failed (apt mirror unreachable?); continuing without crash backtrace support"
+    fi
 fi
 
 # Enable core dumps before dropping to qore user (needs root for /proc/sys writes): the pattern is the one every CI

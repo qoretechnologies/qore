@@ -10,6 +10,68 @@ if (NOT DEFINED QORE_CMAKE_DIR)
     get_filename_component(QORE_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
 endif ()
 
+# Atomic link outputs (see design/atomic-link-outputs.md).
+#
+# Invariant: every executable, shared library and module (add_library(MODULE), i.e. every binary .qmod) built by a
+# project that includes this file is linked to "<target>.partial" and renamed over "<target>" only after the link
+# succeeds, so the target path holds the previous complete output or the new complete output, never a partial one.
+#
+# Why: GNU BFD ld truncates its output in place (unlink, then O_CREAT|O_TRUNC) and writes it during the link. A make
+# killed with SIGKILL mid-link cannot apply .DELETE_ON_ERROR, which covers only the signals make catches, so it left a
+# short or empty binary newer than its inputs; the next incremental make treated it as up to date and installed it
+# (Qorus once installed a 0-byte qwf this way).
+#
+# How: CMake's own rule for the platform is kept and only its "-o <TARGET>" operand changes. The rule becomes a
+# two-element command LIST (link, then rename), never one string joined with "&&": the Makefile generator runs
+# link.txt through "cmake -E cmake_link_script", one command per list element, without a shell. A rule without
+# "-o <TARGET>" fails the configure, as linking it in place would silently break the invariant.
+#
+# The macro is idempotent: a rule that already contains the marker "-o <TARGET>.partial" is left alone, so including
+# this file more than once (Qore's own build, find_package(Qore) from a module) and Qorus's cmake/QorusLinker.cmake,
+# which uses the same marker, apply it exactly once. It is a macro, run in the including scope after project() has
+# enabled C and/or CXX, because the rule variables are directory-scoped (a function's set() would not reach the
+# caller); subdirectories added afterwards inherit the rules. A language enabled after this file is included keeps
+# CMake's in-place rule unless QORE_ATOMIC_LINK_RULES() is called again. MSVC-style compilers, whose rules have no
+# "-o", are not changed.
+macro (QORE_ATOMIC_LINK_RULES)
+    foreach (_qore_atomic_link_lang C CXX)
+        if (MSVC OR "${CMAKE_${_qore_atomic_link_lang}_COMPILER_FRONTEND_VARIANT}" STREQUAL "MSVC")
+            continue()
+        endif ()
+        foreach (_qore_atomic_link_rule LINK_EXECUTABLE CREATE_SHARED_LIBRARY CREATE_SHARED_MODULE)
+            set(_qore_atomic_link_var CMAKE_${_qore_atomic_link_lang}_${_qore_atomic_link_rule})
+            # not defined: the language is not enabled
+            if (NOT DEFINED ${_qore_atomic_link_var})
+                continue()
+            endif ()
+            set(_qore_atomic_link_cmds "${${_qore_atomic_link_var}}")
+            if (_qore_atomic_link_cmds MATCHES "-o <TARGET>\\.partial")
+                continue()
+            endif ()
+            list(LENGTH _qore_atomic_link_cmds _qore_atomic_link_count)
+            if (NOT _qore_atomic_link_count EQUAL 1)
+                message(FATAL_ERROR "Qore: ${_qore_atomic_link_var} has ${_qore_atomic_link_count} commands; "
+                    "expected one link command to redirect to <TARGET>.partial: ${_qore_atomic_link_cmds}")
+            endif ()
+            string(REGEX REPLACE "-o <TARGET>( |$)" "-o <TARGET>.partial\\1" _qore_atomic_link_partial
+                "${_qore_atomic_link_cmds}")
+            if (_qore_atomic_link_partial STREQUAL _qore_atomic_link_cmds)
+                message(FATAL_ERROR "Qore: ${_qore_atomic_link_var} does not write \"-o <TARGET>\", so its output "
+                    "cannot be linked to <TARGET>.partial and renamed into place: ${_qore_atomic_link_cmds}")
+            endif ()
+            set(${_qore_atomic_link_var} "${_qore_atomic_link_partial}"
+                "\"${CMAKE_COMMAND}\" -E rename <TARGET>.partial <TARGET>")
+        endforeach ()
+    endforeach ()
+    unset(_qore_atomic_link_lang)
+    unset(_qore_atomic_link_rule)
+    unset(_qore_atomic_link_var)
+    unset(_qore_atomic_link_cmds)
+    unset(_qore_atomic_link_count)
+    unset(_qore_atomic_link_partial)
+endmacro (QORE_ATOMIC_LINK_RULES)
+QORE_ATOMIC_LINK_RULES()
+
 # Global list to collect user module names for documentation cross-referencing
 set(QORE_USER_MODULE_NAMES "" CACHE INTERNAL "List of user module names for doc cross-referencing")
 
