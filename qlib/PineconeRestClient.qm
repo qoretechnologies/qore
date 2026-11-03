@@ -572,6 +572,12 @@ public class PineconeVectorStore inherits AbstractVectorStore {
         /** @see @ref checkIndexHost()
         */
         const AllowedHostSuffix = "pinecone.io";
+
+        #! Ids requested per \c /vectors/list page (the maximum Pinecone allows)
+        const ListPageSize = 100;
+
+        #! Ids sent per \c /vectors/delete request
+        const DeleteBatchSize = 1000;
     }
 
     private {
@@ -595,6 +601,26 @@ public class PineconeVectorStore inherits AbstractVectorStore {
             throw "VECTOR-STORE-CONFIG-ERROR",
                 "PineconeVectorStore requires 'options.api_key'";
         }
+        init();
+    }
+
+    #! Creates the vector store with a pre-built data-plane REST client (for example a client with a custom transport)
+    /** @param config the store configuration; \c options.api_key is not required because the client is supplied
+        @param data_client the Pinecone data-plane REST client to use
+
+        @throw VECTOR-STORE-CONFIG-ERROR \c collection is missing
+    */
+    constructor(hash<VectorStoreConfig> config, PineconeRestClient::PineconeRestClientIo data_client) {
+        self.config = config;
+        if (!config.collection.val()) {
+            throw "VECTOR-STORE-CONFIG-ERROR",
+                "PineconeVectorStore requires 'collection' (Pinecone index name)";
+        }
+        self.data_client = data_client;
+        init();
+    }
+
+    private init() {
         index_name = config.collection;
         namespace_name = config.options.namespace ?? "";
         if (config.options.index_host.val()) {
@@ -667,8 +693,147 @@ public class PineconeVectorStore inherits AbstractVectorStore {
         return result;
     }
 
+    #! Counts the vectors whose metadata matches a payload filter
+    /** Without a filter, calls \c POST \c /describe_index_stats and reads the namespace's vector count.  With a
+        filter, enumerates the namespace (see @ref summarizeBy()) and counts the matches, because serverless
+        indexes support no metadata filter in statistics or deletion.
+
+        @param filter optional filter: only the portable \c payload_eq form (equality on metadata keys) is supported
+
+        @return the number of matching vectors
+
+        @throw PINECONE-VECTOR-STORE-ERROR the filter has a key other than \c payload_eq
+    */
+    int countByFilter(*hash<auto> filter) {
+        *hash<auto> eq = PineconeVectorStore::payloadEq(filter);
+        ensureDataClient();
+        if (!eq) {
+            hash<auto> stats = data_client.restPost("/describe_index_stats", {}).body;
+            hash<auto> namespaces = stats.namespaces ?? {};
+            # the unnamed namespace is reported as "__default__" or ""
+            *hash<auto> ns = namespace_name.val() ? namespaces{namespace_name}
+                : (namespaces."__default__" ?? namespaces{""});
+            if (ns) {
+                return ns.vectorCount.toInt();
+            }
+            return namespace_name.val() ? 0 : (stats.totalVectorCount ?? 0).toInt();
+        }
+        int count = 0;
+        scan(eq, sub (string id, hash<auto> meta) {
+            ++count;
+        });
+        return count;
+    }
+
+    #! Deletes the vectors whose metadata matches a payload filter
+    /** Enumerates the namespace for the matching ids, then deletes them with \c POST \c /vectors/delete in batches
+        of @ref DeleteBatchSize.
+
+        @param filter the filter; see countByFilter()
+
+        @return the number of vectors deleted
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty
+    */
+    int deleteByFilter(hash<auto> filter) {
+        *hash<auto> eq = PineconeVectorStore::payloadEq(filter);
+        AbstractVectorStore::requireFilterCriteria(exists eq);
+        ensureDataClient();
+        list<string> ids = ();
+        scan(eq, sub (string id, hash<auto> meta) {
+            push ids, id;
+        });
+        for (int i = 0; i < ids.size(); i += DeleteBatchSize) {
+            deleteByIds(ids[i .. i + DeleteBatchSize - 1]);
+        }
+        return ids.size();
+    }
+
+    #! Summarizes the vectors by the distinct values of a metadata key
+    /** Enumerates the namespace with \c GET \c /vectors/list (serverless indexes only) and fetches the metadata of
+        each page of ids with \c GET \c /vectors/fetch, so the cost is proportional to the size of the namespace.
+
+        @param field the metadata key to group by
+        @param filter optional filter; see countByFilter()
+        @param timestamp_field optional metadata key holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+
+        @throw PINECONE-VECTOR-STORE-ERROR the index does not support listing (a pod-based index)
+    */
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) {
+        *hash<auto> eq = PineconeVectorStore::payloadEq(filter);
+        ensureDataClient();
+        hash<string, hash<auto>> groups = {};
+        scan(eq, sub (string id, hash<auto> meta) {
+            AbstractVectorStore::addToSummary(\groups, meta{field}, timestamp_field ? meta{timestamp_field} : NOTHING);
+        });
+        return AbstractVectorStore::finishSummary(groups);
+    }
+
     string getCollection() {
         return index_name;
+    }
+
+    #! Calls \a visit with the id and metadata of every vector in the namespace whose metadata equals \a eq
+    private scan(*hash<auto> eq, code visit) {
+        *string token;
+        while (True) {
+            string path = sprintf("/vectors/list?limit=%d", ListPageSize);
+            if (namespace_name.val()) {
+                path += "&namespace=" + encode_url(namespace_name, True);
+            }
+            if (token) {
+                path += "&paginationToken=" + encode_url(token, True);
+            }
+            hash<auto> page;
+            try {
+                page = data_client.restGet(path).body;
+            } catch (hash<ExceptionInfo> ex) {
+                throw "PINECONE-VECTOR-STORE-ERROR", sprintf("cannot list the vectors of index %y (listing needs a "
+                    "serverless index): %s", index_name, ex.desc), ex;
+            }
+            list<string> ids = map $1.id.toString(), page.vectors ?? ();
+            if (ids) {
+                string fpath = "/vectors/fetch?" + (foldl $1 + "&" + $2, map "ids=" + encode_url($1, True), ids);
+                if (namespace_name.val()) {
+                    fpath += "&namespace=" + encode_url(namespace_name, True);
+                }
+                hash<auto> fetched = data_client.restGet(fpath).body.vectors ?? {};
+                foreach string id in (ids) {
+                    hash<auto> meta = fetched{id}.metadata.typeCode() == NT_HASH ? fetched{id}.metadata : {};
+                    if (PineconeVectorStore::matches(meta, eq)) {
+                        call_function(visit, id, meta);
+                    }
+                }
+            }
+            token = page.pagination.next;
+            if (!token) {
+                break;
+            }
+        }
+    }
+
+    #! Returns the \c payload_eq equalities of a filter, NOTHING for no filter
+    private static *hash<auto> payloadEq(*hash<auto> filter) {
+        if (!filter) {
+            return;
+        }
+        if (filter - ("payload_eq",)) {
+            throw "PINECONE-VECTOR-STORE-ERROR", sprintf("only the payload_eq filter is supported, not %y",
+                keys (filter - ("payload_eq",)));
+        }
+        return filter.payload_eq instanceof hash && filter.payload_eq ? filter.payload_eq : NOTHING;
+    }
+
+    #! Returns True if every equality holds in the metadata
+    private static bool matches(hash<auto> meta, *hash<auto> eq) {
+        foreach string key in (keys eq) {
+            if (!exists meta{key} || meta{key} !== eq{key}) {
+                return False;
+            }
+        }
+        return True;
     }
 
     int getDimension() {

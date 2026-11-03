@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires RestClient
+%requires QoreRagUtils
+%requires MilvusRestClient
+
+%exec-class MilvusVectorStoreManagementTest
+
+# Milvus REST client recording every request and serving canned responses
+class FakeMilvusRest inherits MilvusRestClient::MilvusRestClientIo {
+    public {
+        int count_result = 0;
+        # rows served by the paged (non-count) /entities/query requests
+        list<hash<auto>> rows = ();
+        list<hash<auto>> requests = ();
+    }
+
+    constructor() : MilvusRestClientIo({"url": "http://localhost:19530", "apikey": "k"}) {
+    }
+
+    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+        push requests, {"path": path, "body": body};
+        hash<auto!> result = {"code": 0};
+        if (path == "/entities/query") {
+            if (body.outputFields == ("count(*)",)) {
+                result."data" = ({"count(*)": count_result},);
+            } else {
+                result."data" = rows[body.offset ?? 0 .. (body.offset ?? 0) + body.limit - 1];
+            }
+        } else {
+            result."data" = {};
+        }
+        return <RestClient::RestResponseInfo>{"body": result, "status_code": 200};
+    }
+}
+
+public class MilvusVectorStoreManagementTest inherits QUnit::Test {
+    constructor() : Test("MilvusVectorStore management", "1.0", \ARGV) {
+        addTestCase("countByFilter", \countTest());
+        addTestCase("deleteByFilter", \deleteTest());
+        addTestCase("summarizeBy", \summarizeTest());
+        addTestCase("filter literals", \literalTest());
+        set_return_value(main());
+    }
+
+    private QoreRagUtils::MilvusVectorStore newStore(FakeMilvusRest fake) {
+        return new QoreRagUtils::MilvusVectorStore(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "milvus",
+            "collection": "mgmt",
+        }, fake);
+    }
+
+    countTest() {
+        FakeMilvusRest fake();
+        fake.count_result = 11;
+        QoreRagUtils::MilvusVectorStore store = newStore(fake);
+
+        assertEq(11, store.countByFilter());
+        assertEq({"collectionName": "mgmt", "filter": "", "outputFields": ("count(*)",)}, fake.requests[0].body);
+        assertEq(11, store.countByFilter({"payload_eq": {"instance_key": "canoe", "n": 3}}));
+        assertEq("instance_key == \"canoe\" and n == 3", fake.requests[1].body.filter);
+        store.countByFilter({"expr": "n > 1"});
+        assertEq("n > 1", fake.requests[2].body.filter);
+        fake.count_result = 0;
+        assertEq(0, store.countByFilter({"payload_eq": {"instance_key": "none"}}));
+    }
+
+    deleteTest() {
+        FakeMilvusRest fake();
+        fake.count_result = 6;
+        QoreRagUtils::MilvusVectorStore store = newStore(fake);
+
+        assertEq(6, store.deleteByFilter({"payload_eq": {"instance_key": "retired"}}));
+        assertEq(2, fake.requests.size());
+        assertEq("/entities/query", fake.requests[0].path);
+        assertEq("/entities/delete", fake.requests[1].path);
+        assertEq({"collectionName": "mgmt", "filter": "instance_key == \"retired\""}, fake.requests[1].body);
+
+        # nothing matches: no delete request
+        fake.requests = ();
+        fake.count_result = 0;
+        assertEq(0, store.deleteByFilter({"payload_eq": {"instance_key": "none"}}));
+        assertEq(1, fake.requests.size());
+
+        # a filter that selects everything is refused before any request
+        fake.requests = ();
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"expr": ""})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(0, fake.requests.size());
+    }
+
+    summarizeTest() {
+        FakeMilvusRest fake();
+        fake.rows = (
+            {"instance_key": "a", "t": "2026-11-01T10:00:00"},
+            {"instance_key": "b", "t": "2026-11-02T10:00:00"},
+            {"instance_key": "b", "t": "2026-11-03T10:00:00"},
+            {"t": "bad"},
+        );
+        fake.count_result = fake.rows.size();
+        QoreRagUtils::MilvusVectorStore store = newStore(fake);
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key",
+            {"payload_eq": {"scope": "system"}}, "t");
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
+        assertEq((2, 1, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertFalse(exists groups[2].last_write);
+        assertEq(("instance_key", "t"), fake.requests[1].body.outputFields);
+        assertEq(0, fake.requests[1].body.offset);
+        assertEq("scope == \"system\"", fake.requests[1].body.filter);
+
+        # more matches than a Milvus query can page through is an error, not a truncation
+        fake.count_result = QoreRagUtils::MilvusVectorStore::MaxQueryWindow + 1;
+        fake.requests = ();
+        assertThrows("MILVUS-VECTOR-STORE-ERROR", \store.summarizeBy(), "instance_key");
+        assertEq(1, fake.requests.size(), "only the count was requested");
+
+        # nothing matches
+        fake.count_result = 0;
+        assertEq((), store.summarizeBy("instance_key"));
+    }
+
+    literalTest() {
+        FakeMilvusRest fake();
+        QoreRagUtils::MilvusVectorStore store = newStore(fake);
+        store.countByFilter({"payload_eq": {"a": "x\"y\\z", "b": True, "c": 1.5}});
+        assertEq("a == \"x\\\"y\\\\z\" and b == true and c == 1.5", fake.requests[0].body.filter);
+        assertThrows("MILVUS-VECTOR-STORE-ERROR", \store.countByFilter(), {"payload_eq": {"bad key": 1}});
+        assertThrows("MILVUS-VECTOR-STORE-ERROR", \store.countByFilter(), {"payload_eq": {"a": (1, 2)}});
+    }
+}

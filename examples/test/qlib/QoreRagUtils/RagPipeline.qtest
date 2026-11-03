@@ -72,6 +72,10 @@ class TestVectorStore inherits AbstractVectorStore {
 
     deleteByIds(list<string> ids) {}
 
+    int countByFilter(*hash<auto> filter) { return 0; }
+    int deleteByFilter(hash<auto> filter) { return 0; }
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) { return (); }
+
     list<hash<VectorSearchResult>> search(list<float> query_vector, int k,
             *hash<auto> filter) {
         ++search_calls;

@@ -99,6 +99,47 @@ class FakeVectorStore inherits QoreRagUtils::AbstractVectorStore {
         rows = kept;
     }
 
+    #! Returns the rows whose payload equals every \c payload_eq entry of the filter
+    private list<hash<QoreRagUtils::VectorRecord>> matching(*hash<auto> filter) {
+        list<hash<QoreRagUtils::VectorRecord>> rv = ();
+        foreach hash<QoreRagUtils::VectorRecord> row in (rows) {
+            bool ok = True;
+            foreach string key in (keys (filter.payload_eq ?? {})) {
+                if (!exists row.payload{key} || row.payload{key} != filter.payload_eq{key}) {
+                    ok = False;
+                    break;
+                }
+            }
+            if (ok) {
+                push rv, row;
+            }
+        }
+        return rv;
+    }
+
+    int countByFilter(*hash<auto> filter) {
+        return matching(filter).size();
+    }
+
+    int deleteByFilter(hash<auto> filter) {
+        QoreRagUtils::AbstractVectorStore::requireFilterCriteria(filter.payload_eq instanceof hash
+            && filter.payload_eq.size() > 0);
+        list<hash<QoreRagUtils::VectorRecord>> hits = matching(filter);
+        list<string> ids = map $1.id, hits;
+        deleteByIds(ids);
+        return hits.size();
+    }
+
+    list<hash<QoreRagUtils::VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter,
+            *string timestamp_field) {
+        hash<string, hash<auto>> groups = {};
+        foreach hash<QoreRagUtils::VectorRecord> row in (matching(filter)) {
+            QoreRagUtils::AbstractVectorStore::addToSummary(\groups, row.payload{field},
+                timestamp_field ? row.payload{timestamp_field} : NOTHING);
+        }
+        return QoreRagUtils::AbstractVectorStore::finishSummary(groups);
+    }
+
     list<hash<QoreRagUtils::VectorSearchResult>> search(
             list<float> query_vector, int k, *hash<auto> filter) {
         list<hash<QoreRagUtils::VectorSearchResult>> rv = ();

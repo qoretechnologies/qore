@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires RestClient
+%requires QoreRagUtils
+%requires ChromaRestClient
+
+%exec-class ChromaVectorStoreManagementTest
+
+# Chroma REST client serving a fixed set of records from /get and recording every request
+class FakeChromaRest inherits ChromaRestClient::ChromaRestClientIo {
+    public {
+        int total_count = 0;
+        list<hash<auto>> records = ();
+        list<hash<auto>> requests = ();
+    }
+
+    constructor() : ChromaRestClientIo({"url": "http://localhost:8000"}) {
+    }
+
+    hash<auto> restGet(string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": "GET", "path": path};
+        return <RestClient::RestResponseInfo>{"body": total_count, "status_code": 200};
+    }
+
+    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": "POST", "path": path, "body": body};
+        auto result = {};
+        if (path =~ /\/get$/) {
+            list<hash<auto>> page = records[body.offset .. body.offset + body.limit - 1];
+            list<auto> ids = map $1.id, page;
+            list<auto> metas = map $1.meta, page;
+            result = {"ids": ids, "metadatas": metas};
+        }
+        return <RestClient::RestResponseInfo>{"body": result, "status_code": 200};
+    }
+}
+
+public class ChromaVectorStoreManagementTest inherits QUnit::Test {
+    constructor() : Test("ChromaVectorStore management", "1.0", \ARGV) {
+        addTestCase("countByFilter", \countTest());
+        addTestCase("deleteByFilter", \deleteTest());
+        addTestCase("summarizeBy", \summarizeTest());
+        set_return_value(main());
+    }
+
+    private QoreRagUtils::ChromaVectorStore newStore(FakeChromaRest fake) {
+        return new QoreRagUtils::ChromaVectorStore(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "chroma",
+            "collection": "cid",
+        }, fake);
+    }
+
+    private static list<hash<auto>> makeRecords(int n, string key = "a") {
+        list<hash<auto>> rv = ();
+        for (int i = 0; i < n; ++i) {
+            push rv, {"id": sprintf("id%d", i), "meta": {"instance_key": key}};
+        }
+        return rv;
+    }
+
+    countTest() {
+        FakeChromaRest fake();
+        fake.total_count = 8;
+        QoreRagUtils::ChromaVectorStore store = newStore(fake);
+
+        # no filter: the cheap count endpoint
+        assertEq(8, store.countByFilter());
+        assertEq("GET", fake.requests[0].method);
+        assertTrue(fake.requests[0].path =~ /\/collections\/cid\/count$/);
+
+        # a filter pages the matching ids, across more than one page
+        fake.requests = ();
+        fake.records = ChromaVectorStoreManagementTest::makeRecords(
+            QoreRagUtils::ChromaVectorStore::GetPageSize + 5);
+        assertEq(QoreRagUtils::ChromaVectorStore::GetPageSize + 5,
+            store.countByFilter({"payload_eq": {"instance_key": "a"}}));
+        assertEq(2, fake.requests.size());
+        assertEq({"instance_key": {"$eq": "a"}}, fake.requests[0].body."where");
+        assertEq(0, fake.requests[0].body.offset);
+        assertEq(QoreRagUtils::ChromaVectorStore::GetPageSize, fake.requests[1].body.offset);
+
+        # several keys are combined with $and; a native where is used as given
+        fake.requests = ();
+        fake.records = ();
+        assertEq(0, store.countByFilter({"payload_eq": {"instance_key": "a", "n": 1}}));
+        assertEq({"$and": ({"instance_key": {"$eq": "a"}}, {"n": {"$eq": 1}})}, fake.requests[0].body."where");
+        store.countByFilter({"where": {"n": {"$gt": 1}}});
+        assertEq({"n": {"$gt": 1}}, fake.requests[1].body."where");
+    }
+
+    deleteTest() {
+        FakeChromaRest fake();
+        fake.records = ChromaVectorStoreManagementTest::makeRecords(3);
+        QoreRagUtils::ChromaVectorStore store = newStore(fake);
+
+        assertEq(3, store.deleteByFilter({"payload_eq": {"instance_key": "a"}}));
+        hash<auto> last = fake.requests[fake.requests.size() - 1];
+        assertTrue(last.path =~ /\/delete$/);
+        assertEq({"where": {"instance_key": {"$eq": "a"}}}, last.body);
+
+        # nothing matches: no delete request
+        fake.records = ();
+        fake.requests = ();
+        assertEq(0, store.deleteByFilter({"payload_eq": {"instance_key": "none"}}));
+        assertEq(1, fake.requests.size());
+
+        # a filter that selects everything is refused before any request
+        fake.requests = ();
+        foreach hash<auto> bad in (({}, {"payload_eq": {}}, {"where": {}})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(0, fake.requests.size());
+    }
+
+    summarizeTest() {
+        FakeChromaRest fake();
+        fake.records = (
+            {"id": "1", "meta": {"instance_key": "a", "t": "2026-11-01T10:00:00"}},
+            {"id": "2", "meta": {"instance_key": "b", "t": "2026-11-02T10:00:00"}},
+            {"id": "3", "meta": {"instance_key": "b", "t": "2026-11-03T10:00:00"}},
+            {"id": "4", "meta": {"t": "bad"}},
+            {"id": "5", "meta": NOTHING},
+        );
+        QoreRagUtils::ChromaVectorStore store = newStore(fake);
+
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key", NOTHING, "t");
+        assertEq(("b", NOTHING, "a"), map $1.value, groups);
+        assertEq((2, 2, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertFalse(exists groups[1].last_write);
+        assertEq(2026-11-01T10:00:00, groups[2].last_write);
+        assertEq(("metadatas",), fake.requests[0].body.include);
+
+        fake.records = ();
+        assertEq((), store.summarizeBy("instance_key"));
+    }
+}
