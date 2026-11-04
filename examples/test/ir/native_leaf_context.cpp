@@ -32,6 +32,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #elif defined(__x86_64__)
 #include <qore/macros-x86_64.h>
 #endif
+#include "fixture_worker_thread.h"
 
 // The compiler may seed sparse IR identities, then overwrite a former highest seed during specialization.
 // Test-only adapters: the actual compiled callee entry still executes, with the live stack limit moved above the
@@ -2786,13 +2787,13 @@ int main(int argc, char** argv) {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     checkLocalSlots();
     check(inline_entry, inline_method);
-    std::thread worker([inline_entry, inline_method]() {
+    // the worker parses Qore code: see fixture_worker_thread.h
+    run_in_fixture_worker([inline_entry, inline_method]() {
         for (unsigned i = 0; i < 3; ++i) {
             QoreForeignThreadHelper foreign;
             check(inline_entry, inline_method);
         }
     });
-    worker.join();
     qore_cleanup();
     std::puts("native-leaf-context: ok");
 }

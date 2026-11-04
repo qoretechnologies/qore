@@ -18,13 +18,13 @@
 #include <cstdlib>
 #include <initializer_list>
 #include <string>
-#include <thread>
 #include <utility>
 #if defined(__aarch64__)
 #include <qore/macros-aarch64.h>
 #elif defined(__x86_64__)
 #include <qore/macros-x86_64.h>
 #endif
+#include "fixture_worker_thread.h"
 
 extern "C" void init_CLOSURE_DEFERRED_CONTEXT_qo(QoreProgram*);
 
@@ -450,13 +450,13 @@ int main() {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     for (unsigned version : {3, 4, 5, 9}) {
         check(version);
-        std::thread worker([version]() {
+        // the worker parses Qore code: see fixture_worker_thread.h
+        run_in_fixture_worker([version]() {
             for (unsigned i = 0; i < 3; ++i) {
                 QoreForeignThreadHelper foreign;
                 check(version);
             }
         });
-        worker.join();
     }
     qore_cleanup();
     std::puts("closure-deferred-context: ok");
