@@ -2676,7 +2676,11 @@ __attribute__((always_inline)) int RuntimeConfigNativeAccess::checkStackForPrepa
 #endif
 }
 
-extern "C" DLLEXPORT __attribute__((always_inline)) const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc) {
+// libqore's own scalar fast paths call this hidden helper, which the compiler inlines into them in a single
+// compilation unit; the exported qore_rt_get_stack_limit_v1() below is the symbol generated code binds to.  An
+// exported default-visibility function can be interposed on ELF, so it cannot itself be inlined (or forced inline)
+// into its callers in libqore
+DLLLOCAL const size_t* qore_get_stack_limit_intern(RuntimeConfig* rc) {
 #if defined(QORE_MANAGE_STACK) && defined(STACK_DIRECTION_DOWN) \
         && (defined(__aarch64__) || defined(__x86_64__))
     // These targets use the same native SP for get_stack_pos() and LLVM
@@ -2687,6 +2691,10 @@ extern "C" DLLEXPORT __attribute__((always_inline)) const size_t* qore_rt_get_st
     }
 #endif
     return nullptr;
+}
+
+extern "C" DLLEXPORT const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc) {
+    return qore_get_stack_limit_intern(rc);
 }
 
 #ifdef QORE_MANAGE_STACK
@@ -2701,7 +2709,7 @@ extern "C" DLLEXPORT int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeCon
     // A nonnull view supports this exact downward-stack predicate. Read both the live limit and current SP;
     // unsupported targets and failed comparisons retain the full guard, including any platform-specific state.
     // Keeping this wrapper beside the accessor also avoids an extra call in split compilation-unit builds.
-    const size_t* limit = qore_rt_get_stack_limit_v1(rc);
+    const size_t* limit = qore_get_stack_limit_intern(rc);
     if (limit && *limit <= get_stack_pos()) {
         return 0;
     }

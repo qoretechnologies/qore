@@ -164,6 +164,8 @@ int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc);
 //! must not escape the acquiring thread's invocation. Only 64-bit x86-64/AArch64 are supported;
 //! other pointer/size_t layouts receive nullptr and must retain the complete helper check.
 const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc);
+//! the live stack-limit view of qore_rt_get_stack_limit_v1() for libqore's own callers (hidden, so it can be inlined)
+DLLLOCAL const size_t* qore_get_stack_limit_intern(RuntimeConfig* rc);
 
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 

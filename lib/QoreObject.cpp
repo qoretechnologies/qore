@@ -1396,7 +1396,8 @@ int qore_object_private::getLValueOrUpdateIntMember(const char* key,
             if (!disable_int_update) {
                 // Both values are immediate: no ownership, recursive graph or container-count
                 // change, no allocation and no user callback. All guards precede the update.
-                member->val.set(new_value);
+                // QoreValue stores Qore's int64 (long long), which is not int64_t on LP64 Linux
+                member->val.set(static_cast<int64>(new_value));
                 previous = old_value;
                 return 1;
             }
@@ -1446,7 +1447,7 @@ bool qore_object_private::tryUpdateInlineIntMemberImpl(const char* key, size_t h
     if (!QoreValue::fitsInline(value)) {
         return false;
     }
-    member->val.set(value);
+    member->val.set(static_cast<int64>(value));
     return true;
 }
 

@@ -11755,7 +11755,7 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
         if (auto inline_entry = ref->getTypedInlineStackEntry(Signature)) {
             using InlineEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
             *result = reinterpret_cast<InlineEntry>(inline_entry)(args..., ctx, xsink, &rc,
-                qore_rt_get_stack_limit_v1(&rc));
+                qore_get_stack_limit_intern(&rc));
         } else if (auto explicit_entry = ref->getTypedRuntimeConfigEntry(Signature)) {
             using ExplicitEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
             *result = reinterpret_cast<ExplicitEntry>(explicit_entry)(args..., ctx, xsink, &rc);
@@ -11868,7 +11868,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
         using InlineEntry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
         try {
             *result = reinterpret_cast<InlineEntry>(inline_entry)(args..., ctx, xsink, &rc,
-                qore_rt_get_stack_limit_v1(&rc));
+                qore_get_stack_limit_intern(&rc));
         } catch (const QoreJITException&) {
             // Any overflow has materialized context; the frame restores it.
         }
@@ -11976,7 +11976,7 @@ __attribute__((always_inline)) static int tryReusableFunctionRef(RuntimeConfig& 
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
     try {
         *result = reinterpret_cast<Entry>(inline_entry)(args..., ctx, xsink, &rc,
-            qore_rt_get_stack_limit_v1(&rc));
+            qore_get_stack_limit_intern(&rc));
     } catch (const QoreJITException&) {
         // Overflow materialized this context; Scope restores it before reuse.
     }
@@ -12034,7 +12034,7 @@ __attribute__((always_inline)) static int tryInvariantFunctionRef(RuntimeConfig&
     using Entry = Result (*)(Args..., QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
     try {
         *result = reinterpret_cast<Entry>(inline_entry)(args..., ctx, xsink, &rc,
-            qore_rt_get_stack_limit_v1(&rc));
+            qore_get_stack_limit_intern(&rc));
     } catch (const QoreJITException&) {
         // The native output is private to the caller. Initialize it only on a
         // handled failure; a successful scalar entry supplies its value directly.
@@ -19972,7 +19972,7 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_scalar_method(QoreObject* obj
         if (!*xsink) {
             try {
                 value = QoreValue(inline_entry
-                    ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                    ? inline_entry(arg, ctx, xsink, &rc, qore_get_stack_limit_intern(&rc))
                     : explicit_entry ? explicit_entry(arg, ctx, xsink, &rc) : entry(arg, ctx, xsink));
             } catch (const QoreJITException&) {
                 // Stack overflow already belongs to the sink; RAII restores context.
@@ -20051,8 +20051,9 @@ static QORE_ALWAYS_INLINE bool try_dispatch_native_method(QoreObject* object,
     // Reject other types without coercion or changing ownership on a miss.
     QoreValue arg = fromBits(args[0]);
     if (arg.getType() == NT_INT) {
+        // int64_t: the scalar type of the native entry ABI (Qore's int64 is long long; int64_t is long on LP64 Linux)
         return try_dispatch_native_scalar_method<CachedAdmission, CallerProgramFrame>(object, cache, uvb,
-            arg.getAsBigInt(), arg_cleanups, xsink, result, caller_pgm);
+            static_cast<int64_t>(arg.getAsBigInt()), arg_cleanups, xsink, result, caller_pgm);
     }
     if (arg.getType() == NT_FLOAT) {
         return try_dispatch_native_scalar_method<CachedAdmission, CallerProgramFrame>(object, cache, uvb,
@@ -21203,7 +21204,7 @@ static bool try_dispatch_forwarded_scalar_leaf_native(QoreObject* object,
         QoreCompactNativeMethodFramePair frames(rc, outer, *inner, outer_context, inner_context, loc);
         try {
             result = inline_entry
-                ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                ? inline_entry(arg, ctx, xsink, &rc, qore_get_stack_limit_intern(&rc))
                 : entry(arg, ctx, xsink, &rc);
         } catch (const QoreJITException&) {
             // The leaf guard materializes both contexts before constructing its exception.
@@ -21469,8 +21470,9 @@ static __attribute__((noinline)) bool try_dispatch_cross_program_member_method(R
     }
     QoreValue arg = fromBits(args[0]);
     if (arg.getTypeInfo() == bigIntTypeInfo && !arg.needsEval()) {
-        return try_dispatch_cross_program_scalar_member(rc, object, method, variant, uvb, arg.getAsBigInt(),
-            arg_cleanups, xsink, result, caller_pgm);
+        // int64_t: the scalar type of the native entry ABI (Qore's int64 is long long; int64_t is long on LP64 Linux)
+        return try_dispatch_cross_program_scalar_member(rc, object, method, variant, uvb,
+            static_cast<int64_t>(arg.getAsBigInt()), arg_cleanups, xsink, result, caller_pgm);
     }
     if (arg.getTypeInfo() == floatTypeInfo && !arg.needsEval()) {
         return try_dispatch_cross_program_scalar_member(rc, object, method, variant, uvb, arg.getAsFloat(),
@@ -21494,7 +21496,7 @@ __attribute__((noinline)) static void qore_rt_invoke_eager_scalar_method(QoreObj
     if (!*xsink) {
         try {
             result = inline_entry
-                ? inline_entry(arg, ctx, xsink, &rc, qore_rt_get_stack_limit_v1(&rc))
+                ? inline_entry(arg, ctx, xsink, &rc, qore_get_stack_limit_intern(&rc))
                 : entry(arg, ctx, xsink, &rc);
         } catch (const QoreJITException&) {
             // The sink owns the exception; frame/context restoration remains RAII.
@@ -21698,7 +21700,7 @@ __attribute__((always_inline)) static int qore_rt_try_method_unary(QoreAOTContex
         if (!*xsink) {
             try {
                 *result = inline_entry
-                    ? inline_entry(arg, ctx, xsink, rc, qore_rt_get_stack_limit_v1(rc))
+                    ? inline_entry(arg, ctx, xsink, rc, qore_get_stack_limit_intern(rc))
                     : entry(arg, ctx, xsink, rc);
             } catch (const QoreJITException&) {
                 // The sink owns the exception; frame/context restoration remains RAII.
