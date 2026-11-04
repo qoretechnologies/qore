@@ -19026,6 +19026,27 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
         builder->CreateRet(getNothingReturnValue());
     }
 
+    // The entry block takes the references of the pre-instantiated locals and of the fast entry parameters before
+    // the stack check (they are loaded where their allocas are created), so the failed check's exit releases them as
+    // every other exit does: it returned without releasing them, and each stack overflow at the entry of a function
+    // leaked a reference to each, such as one to the receiver object of a method call.  Nothing else has run on that
+    // path: no statement, handler, local instantiation, or catch scope.
+    llvm::BasicBlock* stack_overflow_exit_bb = stack_overflow_bb;
+    if (stack_overflow_bb) {
+        auto* overflow_ret = llvm::cast<llvm::ReturnInst>(qoreGetTerminator(stack_overflow_bb));
+        llvm::Value* overflow_value = overflow_ret->getReturnValue();
+        overflow_ret->eraseFromParent();
+        builder->SetInsertPoint(stack_overflow_bb);
+        emitPreinstantiatedCleanup(module);
+        if (overflow_value) {
+            builder->CreateRet(overflow_value);
+        } else {
+            builder->CreateRetVoid();
+        }
+        // the closure re-instantiation checks of the cleanup can end it in another block
+        stack_overflow_exit_bb = builder->GetInsertBlock();
+    }
+
     // C++ EH prototype: finalize the shared function-level unwind landing pad
     // if any invoke emitted during body lowering needed it.
     finalizeFunctionUnwindLP(module);
@@ -19077,8 +19098,9 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
     // catch scopes pushed with no CatchCleanup executed; without this the
     // caught exceptions (and their arg/desc/callstack trees) leak.
     // qore_rt_catch_unwind() pops down to the entry watermark, so it is a
-    // no-op on balanced paths.  stack_overflow_bb returns before
-    // catch_depth_saved is defined and must be skipped (SSA dominance).
+    // no-op on balanced paths.  stack_overflow_bb (ending in
+    // stack_overflow_exit_bb) returns before catch_depth_saved is defined and
+    // must be skipped (SSA dominance).
     if (catch_depth_saved) {
         std::unordered_set<llvm::BasicBlock*> catch_reachable_blocks;
         if (catch_scope_count) {
@@ -19108,7 +19130,7 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
         }
         std::vector<llvm::Instruction*> exit_terms;
         for (llvm::BasicBlock& bb : *llvm_func) {
-            if (&bb == stack_overflow_bb) {
+            if (&bb == stack_overflow_bb || &bb == stack_overflow_exit_bb) {
                 continue;
             }
             llvm::Instruction* term = qoreGetTerminator(bb);

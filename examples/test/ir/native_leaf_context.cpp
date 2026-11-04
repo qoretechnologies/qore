@@ -2248,11 +2248,16 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
         constexpr unsigned METHOD_SWEEP_RANGE = 32768;
         constexpr unsigned METHOD_SWEEP_SUCCESS_MARGIN = 1024;
         unsigned sweep_end = METHOD_SWEEP_RANGE;
+        const QoreObject* receiver = object->get<QoreObject>();
+        const int receiver_refs = receiver->reference_count();
         for (unsigned gap = 0; gap < sweep_end; gap += 16) {
             *limit = get_stack_pos() - gap;
             QoreValue value = program->callFunction(caller_name, *args, &xsink);
             *limit = saved_limit;
             ValueHolder result(value, &xsink);
+            // every reference that the call took to the receiver is released, also where the stack check at the
+            // entry of the compiled caller fails, after its entry block took its references to the arguments
+            assert(receiver->reference_count() == receiver_refs);
             assert(qore_get_call_program_context() == caller);
             assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
             if (xsink) {
