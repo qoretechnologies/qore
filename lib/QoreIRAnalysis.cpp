@@ -7053,7 +7053,8 @@ static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& 
                 }
             }
             if (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || inst->opcode == QoreIROpcode::ReleaseOperandTemp) {
                 // an owned call result is released here, so a call before this point must not be
                 // reused after it
                 available.clear();
@@ -7591,7 +7592,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
 
             if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || inst.opcode == QoreIROpcode::ReleaseOperandTemp) {
                 scoped_expressions.clear();
                 scoped_loads.clear();
             }
@@ -12913,7 +12915,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (instruction->opcode == QoreIROpcode::DiscardTemps
                     || instruction->opcode == QoreIROpcode::DiscardTempsKeep
                     || instruction->opcode == QoreIROpcode::UnwindTemps
-                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || instruction->opcode == QoreIROpcode::ReleaseOperandTemp) {
                 discarded = true;
             }
         }
@@ -19187,6 +19190,7 @@ bool qore_ir_get_params_read_after_reflection(const QoreIRFunction& func,
             case QoreIROpcode::DiscardTempsKeep:
             case QoreIROpcode::UnwindTemps:
             case QoreIROpcode::ReleaseOwnedTemp:
+            case QoreIROpcode::ReleaseOperandTemp:
             case QoreIROpcode::Decref:
             case QoreIROpcode::DecrefNoThrow:
                 return object_values;

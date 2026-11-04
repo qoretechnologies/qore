@@ -694,6 +694,65 @@ public namespace TemporaryLifetimeChecks {
             }
         }
         rv."64 exceptions at each call of a statement with a block local" = Trace::take();
+        # the value of an operand that an operator consumes is released when the operator returns, after its other
+        # operands, while a temporary that the result can refer to lives until the end of the statement
+        {
+            string s = (make("ternary-cond") ? log("then") : log("else")) + log("after");
+        }
+        rv."65 condition of a ternary operator" = Trace::take();
+
+        {
+            bool b = (make("and-left") && make("and-right")) && log("after");
+        }
+        rv."66 operands of a logical and" = Trace::take();
+
+        {
+            bool b = (!make("or-left") || make("or-right")) && log("after");
+        }
+        rv."67 operands of a logical or and a logical not" = Trace::take();
+
+        {
+            bool b = !(exists make("exists")) || log("after");
+        }
+        rv."68 operand of exists" = Trace::take();
+
+        {
+            bool b = !(make("instanceof") instanceof Doc) || log("after");
+        }
+        rv."69 operand of instanceof" = Trace::take();
+
+        {
+            bool b = (make("eq-left") == make("eq-right")) || log("after");
+        }
+        rv."70 operands of a comparison" = Trace::take();
+
+        {
+            *Doc d = make("removed-cond");
+            string s = ((remove d) ? log("then") : log("else")) + log("after");
+        }
+        rv."71 removed value as the condition of a ternary operator" = Trace::take();
+
+        {
+            string s = ((new Doc("new-cond")) ? log("then") : log("else")) + log("after");
+        }
+        rv."72 new object as the condition of a ternary operator" = Trace::take();
+
+        {
+            string s = (make("chain-cond").getName() ? log("then") : log("else")) + log("after");
+        }
+        rv."73 chain as the condition of a ternary operator" = Trace::take();
+
+        # a list or hash that a statement constructs holds the values created for it, so a call argument constructed
+        # that way is released when the call returns, as one created by a call is
+        {
+            string s = type((make("list-arg"), 1)) + log("after");
+        }
+        rv."74 list literal as a call argument" = Trace::take();
+
+        {
+            string s = type({"a": make("hash-arg")}) + log("after");
+        }
+        rv."75 hash literal as a call argument" = Trace::take();
 
         return rv;
     }

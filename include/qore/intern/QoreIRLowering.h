@@ -570,6 +570,23 @@ private:
     */
     DLLLOCAL bool localsMayBeReflected() const;
 
+    //! Releases the value of an operand that an operator has consumed, as the AST interpreter releases it
+    /** The AST interpreter holds the value of an operand while the operator is evaluated and releases it when the
+        operator returns; the compiled tiers release a temporary at the end of its statement otherwise
+        (QoreIROpcode::ReleaseOperandTemp, design/temporary-lifetime.md).  Nothing is emitted for a variable, a
+        constant, or a value whose type cannot be or hold an object.
+        @param operand the operand's expression
+        @param value the operand's value
+        @param loc the operator's location
+    */
+    DLLLOCAL void releaseConsumedOperand(const QoreValue& operand, QoreIRValue value, const QoreProgramLocation* loc);
+
+    //! Releases the values of the operands of a binary operator after its result (see releaseConsumedOperand())
+    /** @return \a result
+    */
+    DLLLOCAL QoreIRValue releaseConsumedOperands(QoreIRValue result, const QoreValue& left_expr, QoreIRValue left,
+        const QoreValue& right_expr, QoreIRValue right, const QoreProgramLocation* loc);
+
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
      *  - OBE_Unconditional: always executes

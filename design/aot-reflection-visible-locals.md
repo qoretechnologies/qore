@@ -163,10 +163,11 @@ visible) before code generation.  This ordering change is the main implementatio
   a variable referred to by a reference replaces a local or a parameter of the updating frame, and every tier and AOT
   variant reads the new value; stores of values that cannot hold an object keep their native entries.
 
-Known, separate from the above: a destructor run while the lock of a global or static is held (`r -= "a"` with `r` a
-reference to it) deadlocks in `get_local_vars()` on a frame whose reference refers to that variable, in every tier
-including the AST interpreter; and the AST interpreter releases the value of a `?:` condition right away, where the
-compiled tiers release it with the statement's temporaries.
+Found with it and fixed separately: a destructor run while the lock of a global or static is held (`r -= "a"` with
+`r` a reference to it) deadlocked in `get_local_vars()` on a frame whose reference refers to that variable, in every
+tier (the value removed is now released after the lock, lvalue-release-unlocked.qtest); and the compiled tiers released
+the value of a `?:` condition, and the other operands that an operator consumes, with the statement's temporaries,
+where the AST interpreter releases them when the operator returns (`ReleaseOperandTemp`, design/temporary-lifetime.md).
 
 ## Limits
 

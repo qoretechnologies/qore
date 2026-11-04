@@ -968,7 +968,19 @@ enum class QoreIROpcode : uint16_t {
     //! refers to is destroyed when the loop ends, as in the AST interpreter.
     KeysIteratorSource = 423,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (424, 425, ...)
+    //! Release the reference that the function holds to the value of an operand that an operator has consumed.
+    //!
+    //! operands[0] = the operand's value; no result.  The AST interpreter holds the value of an operand of an operator
+    //! only while the operator is evaluated (ValueEvalRefHolder) and releases it when the operator returns, after its
+    //! other operands: the condition of a `?:` operator after the branch, the left operand of `&&` and `||` after the
+    //! right one, the operand of `!`, `?*` (when it is not the result), `exists` and `instanceof`, and the operands of
+    //! a comparison.  The compiled tiers otherwise release such a temporary with the temporaries of its statement.
+    //! The instruction releases the value only when the function holds it as a temporary of the current temp scope and
+    //! no other instruction uses it, and clears its slot, so the release at the end of the statement finds nothing.
+    //! See design/temporary-lifetime.md.
+    ReleaseOperandTemp = 424,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (425, 426, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -977,8 +989,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::KeysIteratorSource);
-static_assert(QORE_IR_MAX_OPCODE == 423, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReleaseOperandTemp);
+static_assert(QORE_IR_MAX_OPCODE == 424, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -3289,6 +3301,26 @@ inline int qore_ir_call_arg_start(const QoreIRInstruction* inst) {
             return 0;
         default:
             return -1;
+    }
+}
+
+//! Returns true if the result of the instruction is a temporary that it creates: a call's result, a new object, or a
+//! list or hash that it constructs
+/** Such a value passed to a call as an argument is released when the call returns, as the AST interpreter releases the
+    argument list of a call; a value loaded from a variable or a constant is not a temporary
+    (design/temporary-lifetime.md).
+*/
+inline bool qore_ir_result_is_created_temporary(const QoreIRInstruction* inst) {
+    if (qore_ir_call_arg_start(inst) >= 0) {
+        return true;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+            return true;
+        default:
+            return false;
     }
 }
 

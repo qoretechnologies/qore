@@ -1704,6 +1704,13 @@ QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, cons
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createReleaseOperandTemp(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOperandTemp);
+    inst->operands.push_back(value);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
         const std::string& helper_name, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRCallAOTHelperInstruction>(helper_name);

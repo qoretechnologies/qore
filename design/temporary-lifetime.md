@@ -19,6 +19,24 @@ function, method or closure call or an object construction), in the block or the
 there: a value loaded from a variable or a constant is not a temporary, and a loop invariant is defined in a temp scope of
 its own.
 
+## Operands of operators
+
+The AST interpreter holds the value of an operand of an operator only while the operator is evaluated
+(`ValueEvalRefHolder`) and releases it when the operator returns, in the reverse order of the operands; a chain node
+hands its receiver to the statement instead (see below), and an operator whose result is the operand itself (`??`,
+`?*` when the left operand is the result, a cast) returns it.  So the condition of a `?:` operator is released after
+the branch, the left operand of `&&` and `||` after the right one, the left operand of `?*` before the right one is
+evaluated, and the operands of `!`, `exists`, `instanceof` and the comparison operators when the operator returns.
+
+The IR lowering emits `ReleaseOperandTemp` for each such operand at the same point (`releaseConsumedOperand()`,
+`releaseConsumedOperands()`), unless the operand is a variable or a constant, which the variable holds, or its type
+cannot be or hold an object, whose release no code can observe.  The interpreter releases the value only if it is a
+temporary of the current temp scope that no other instruction uses; native code only if it has a cleanup of its own in
+the operand's temp scope and this is its last use, as for a consumed call argument (`releaseCleanupForValueId()`); a
+value defined in an enclosing scope, such as a loop invariant, is left for that scope.  Before, the compiled tiers
+released all of these with the statement's temporaries, after the code that follows the operator in the statement
+(`temporary-lifetime-checks.qi` cases 65 to 73).
+
 ## Statement boundaries
 
 These parts of a statement are statements of their own: their temporaries are released when their value has been

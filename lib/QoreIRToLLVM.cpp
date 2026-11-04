@@ -57,7 +57,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 423,
+static_assert(QORE_IR_MAX_OPCODE == 424,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -16912,7 +16912,7 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
             if (inst_ptr->result.isValid()) {
                 value_def_block[inst_ptr->result.id] = block.get();
                 value_def_temp_scope[inst_ptr->result.id] = inst_ptr->temp_scope_id;
-                if (qore_ir_call_arg_start(inst_ptr.get()) >= 0) {
+                if (qore_ir_result_is_created_temporary(inst_ptr.get())) {
                     value_defined_by_call.insert(inst_ptr->result.id);
                 }
             }
@@ -39143,6 +39143,43 @@ bool QoreIRToLLVM::lowerInstructionBody(const QoreIRInstruction* inst, llvm::Fun
             }
             // no exception check: the instruction also runs on the path of an exception, which stays raised (see
             // the interpreter)
+            return true;
+        }
+        case QoreIROpcode::ReleaseOperandTemp: {
+            // an operator has consumed the value of an operand, which the AST interpreter releases when the operator
+            // returns (see QoreIROpcode::ReleaseOperandTemp): a temporary of this temp scope with a cleanup of its own
+            // and no other use is released here, as a consumed call argument is (releaseConsumedCallArgs())
+            uint32_t id = inst->operands.empty() ? 0 : inst->operands[0].id;
+            // the analysis can prove more about the value than its expression's type: a value that cannot be or hold
+            // an object has nothing whose release code can observe
+            const QoreIRValueFacts* facts = id && current_ir_func ? current_ir_func->getValueFacts(inst->operands[0])
+                : nullptr;
+            if (facts && facts->type_info && !qore_ir_type_may_hold_object(facts->type_info)) {
+                return true;
+            }
+            auto uses_it = operand_remaining_uses.find(id);
+            auto scope_it = value_def_temp_scope.find(id);
+            auto alloca_it = invoke_alloca_map.find(id);
+            if (id && !weak_load_result_ids.count(id) && uses_it != operand_remaining_uses.end()
+                    && uses_it->second <= 1 && scope_it != value_def_temp_scope.end() && scope_it->second
+                    && scope_it->second == inst->temp_scope_id && alloca_it != invoke_alloca_map.end()
+                    && (alloca_it->second || values.count(id))) {
+                // only a value with a node has a reference to release: a scalar takes the branch around the release
+                llvm::Value* val = alloca_it->second ? builder->CreateLoad(i64_type, alloca_it->second) : values[id];
+                llvm::BasicBlock* release_block = llvm::BasicBlock::Create(ctx, "operand_release", llvm_func);
+                llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx, "operand_release_cont", llvm_func);
+                builder->CreateCondBr(hasNodeInline(val), release_block, cont_block);
+                builder->SetInsertPoint(release_block);
+                releaseCleanupForValueId(id, module);
+                // a destructor can replace a local of a frame that reflection can reach (see lowerInstruction())
+                if (current_ir_func && current_ir_func->reflective_frame) {
+                    reloadAllLocalsFromRuntime(module, llvm_func);
+                }
+                // and can raise an exception, which the operator raises
+                emitExceptionCheck(module, llvm_func, inst);
+                builder->CreateBr(cont_block);
+                builder->SetInsertPoint(cont_block);
+            }
             return true;
         }
         case QoreIROpcode::UnwindTemps: {

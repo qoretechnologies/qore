@@ -385,6 +385,8 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    //! Releases the temporary value of an operand that an operator has consumed (QoreIROpcode::ReleaseOperandTemp)
+    QoreIRInstruction* createReleaseOperandTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 

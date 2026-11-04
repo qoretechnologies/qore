@@ -114,6 +114,19 @@ public namespace TemporaryLifetimeChecks {
             "+keep1 +e1 ~e1 ~keep1 caught e1 +keep2 +e2 getName(e2) +f2 ~f2 ~e2 ~keep2 caught f2 +keep3 +e3 "
             "getName(e3) +f3 getName(f3) +g3 ~g3 ~f3 ~e3 ~keep3 caught g3 +keep4 +e4 getName(e4) +f4 getName(f4) +g4 "
             "getName(g4) e4 f4 g4 ~g4 ~f4 ~e4 ~keep4 log(keep4)",
+        "65 condition of a ternary operator": "+ternary-cond log(then) ~ternary-cond log(after)",
+        "66 operands of a logical and": "+and-left +and-right ~and-right ~and-left log(after)",
+        "67 operands of a logical or and a logical not": "+or-left ~or-left +or-right ~or-right log(after)",
+        "68 operand of exists": "+exists ~exists log(after)",
+        "69 operand of instanceof": "+instanceof ~instanceof log(after)",
+        "70 operands of a comparison": "+eq-left +eq-right ~eq-right ~eq-left log(after)",
+        "71 removed value as the condition of a ternary operator":
+            "+removed-cond log(then) ~removed-cond log(after)",
+        "72 new object as the condition of a ternary operator": "+new-cond log(then) ~new-cond log(after)",
+        "73 chain as the condition of a ternary operator":
+            "+chain-cond getName(chain-cond) log(then) log(after) ~chain-cond",
+        "74 list literal as a call argument": "+list-arg ~list-arg log(after)",
+        "75 hash literal as a call argument": "+hash-arg ~hash-arg log(after)",
         "loop member": "{alive: 1500}",
         "loop method": "{alive: 1500}",
         "weak live":

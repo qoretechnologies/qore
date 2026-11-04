@@ -10288,7 +10288,9 @@ QoreIRValue QoreIRLowering::lowerLogicalEquals(const QoreValue& expr, std::strin
         op = selectComparisonOpcode(eq->getLeft(), eq->getRight(),
             QoreIROpcode::EqInt, QoreIROpcode::EqFloat, QoreIROpcode::EqAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, eq->loc, error),
+        eq->getLeft(), left, eq->getRight(), right, eq->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::string& error) {
@@ -10316,7 +10318,9 @@ QoreIRValue QoreIRLowering::lowerLogicalNotEquals(const QoreValue& expr, std::st
         op = selectComparisonOpcode(ne->getLeft(), ne->getRight(),
             QoreIROpcode::NeInt, QoreIROpcode::NeFloat, QoreIROpcode::NeAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, ne->loc, error),
+        ne->getLeft(), left, ne->getRight(), right, ne->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAbsoluteEquals(const QoreValue& expr, std::string& error) {
@@ -10334,7 +10338,9 @@ QoreIRValue QoreIRLowering::lowerLogicalAbsoluteEquals(const QoreValue& expr, st
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    return lowerBinaryOpOrInvoke(QoreIROpcode::EqHard, expr, left, right, eq->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(QoreIROpcode::EqHard, expr, left, right, eq->loc, error),
+        eq->getLeft(), left, eq->getRight(), right, eq->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalAbsoluteNotEquals(const QoreValue& expr, std::string& error) {
@@ -10352,7 +10358,9 @@ QoreIRValue QoreIRLowering::lowerLogicalAbsoluteNotEquals(const QoreValue& expr,
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    return lowerBinaryOpOrInvoke(QoreIROpcode::NeHard, expr, left, right, ne->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(QoreIROpcode::NeHard, expr, left, right, ne->loc, error),
+        ne->getLeft(), left, ne->getRight(), right, ne->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::string& error) {
@@ -10380,7 +10388,9 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThan(const QoreValue& expr, std::str
         op = selectComparisonOpcode(lt->getLeft(), lt->getRight(),
             QoreIROpcode::LtInt, QoreIROpcode::LtFloat, QoreIROpcode::LtAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, lt->loc, error),
+        lt->getLeft(), left, lt->getRight(), right, lt->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, std::string& error) {
@@ -10408,7 +10418,9 @@ QoreIRValue QoreIRLowering::lowerLogicalLessThanOrEquals(const QoreValue& expr, 
         op = selectComparisonOpcode(le->getLeft(), le->getRight(),
             QoreIROpcode::LeInt, QoreIROpcode::LeFloat, QoreIROpcode::LeAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, le->loc, error),
+        le->getLeft(), left, le->getRight(), right, le->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::string& error) {
@@ -10436,7 +10448,9 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThan(const QoreValue& expr, std::
         op = selectComparisonOpcode(gt->getLeft(), gt->getRight(),
             QoreIROpcode::GtInt, QoreIROpcode::GtFloat, QoreIROpcode::GtAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, gt->loc, error),
+        gt->getLeft(), left, gt->getRight(), right, gt->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& expr, std::string& error) {
@@ -10464,7 +10478,9 @@ QoreIRValue QoreIRLowering::lowerLogicalGreaterThanOrEquals(const QoreValue& exp
         op = selectComparisonOpcode(ge->getLeft(), ge->getRight(),
             QoreIROpcode::GeInt, QoreIROpcode::GeFloat, QoreIROpcode::GeAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, ge->loc, error),
+        ge->getLeft(), left, ge->getRight(), right, ge->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::string& error) {
@@ -10492,7 +10508,9 @@ QoreIRValue QoreIRLowering::lowerLogicalComparison(const QoreValue& expr, std::s
         op = selectComparisonOpcode(cmp->getLeft(), cmp->getRight(),
             QoreIROpcode::CmpInt, QoreIROpcode::CmpFloat, QoreIROpcode::CmpAny);
     }
-    return lowerBinaryOpOrInvoke(op, expr, left, right, cmp->loc, error);
+    // the AST interpreter releases the operands when the comparison returns
+    return releaseConsumedOperands(lowerBinaryOpOrInvoke(op, expr, left, right, cmp->loc, error),
+        cmp->getLeft(), left, cmp->getRight(), right, cmp->loc);
 }
 
 QoreIRValue QoreIRLowering::lowerUnaryPlus(const QoreValue& expr, std::string& error) {
@@ -11830,7 +11848,12 @@ QoreIRValue QoreIRLowering::lowerInstanceOf(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{operand};
-    return lowerExprOpOrInvoke(QoreIROpcode::InstanceOfBool, expr, operands, op->loc, error);
+    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::InstanceOfBool, expr, operands, op->loc, error);
+    if (result.isValid()) {
+        // the AST interpreter releases the operand when the operator returns
+        releaseConsumedOperand(op->getExp(), operand, op->loc);
+    }
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerTrim(const QoreValue& expr, std::string& error) {
@@ -12549,7 +12572,12 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
                 [&values_vec](size_t i) { return values_vec[i]; })) {
             inst->exception_target = getCurrentExceptionTarget();
         }
-        return inst->result;
+        QoreIRValue result = inst->result;
+        // the hash holds the values, as in the AST interpreter, where it takes the references of the values created
+        for (size_t i = 0; i < values_vec.size(); ++i) {
+            releaseConsumedOperand(values_vec[i], value_operands[i], hash->loc);
+        }
+        return result;
     }
 
     // General path: alternating key-value operands
@@ -12568,7 +12596,12 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         operands.push_back(value);
     }
     // a key that is evaluated at runtime can be invalid
-    return withExceptionTarget(builder.createMakeHash(operands, hash->loc, parse_ti))->result;
+    QoreIRValue result = withExceptionTarget(builder.createMakeHash(operands, hash->loc, parse_ti))->result;
+    // as for constant keys above
+    for (size_t i = 0; i < values_vec.size(); ++i) {
+        releaseConsumedOperand(values_vec[i], operands[i * 2 + 1], hash->loc);
+    }
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
@@ -12613,7 +12646,12 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
     if (qoreIrContainerLiteralMayRaise(parse_ti, false, list->size(), [list](size_t i) { return list->get(i); })) {
         inst->exception_target = getCurrentExceptionTarget();
     }
-    return inst->result;
+    QoreIRValue result = inst->result;
+    // the list holds the elements, as in the AST interpreter, where it takes the references of the values created
+    for (size_t i = 0; i < values.size(); ++i) {
+        releaseConsumedOperand(list->get(i), values[i], list->loc);
+    }
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& error) {
@@ -12636,7 +12674,12 @@ QoreIRValue QoreIRLowering::lowerExists(const QoreValue& expr, std::string& erro
         && QoreTypeInfo::isType(analysis.known_type, NT_BOOLEAN)) {
         opcode = QoreIROpcode::ExistsBool;
     }
-    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
+    QoreIRValue result = lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
+    if (result.isValid()) {
+        // the AST interpreter releases the operand when the operator returns
+        releaseConsumedOperand(op->getExp(), operand, op->loc);
+    }
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerElements(const QoreValue& expr, std::string& error) {
@@ -20924,6 +20967,37 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
     return result_phi->result;
 }
 
+// documented in QoreIRLowering.h
+void QoreIRLowering::releaseConsumedOperand(const QoreValue& operand, QoreIRValue value,
+        const QoreProgramLocation* loc) {
+    if (!value.isValid() || !operand.hasNode()) {
+        return;
+    }
+    // a variable or a constant is not a temporary: the variable holds the value, which the AST interpreter does not
+    // release either; nor is a member or an element, which its container holds (a temporary container lives until the
+    // end of the statement), or a value that cannot be or hold an object: no code can observe their release
+    const AbstractQoreNode* node = operand.getInternalNode();
+    if (dynamic_cast<const VarRefNode*>(node) || dynamic_cast<const RuntimeConstantRefNode*>(node)
+            || dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)
+            || dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
+            || dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)
+            || !qore_ir_type_may_hold_object(getExprTypeInfo(operand))) {
+        return;
+    }
+    builder.createReleaseOperandTemp(value, loc);
+}
+
+// documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::releaseConsumedOperands(QoreIRValue result, const QoreValue& left_expr,
+        QoreIRValue left, const QoreValue& right_expr, QoreIRValue right, const QoreProgramLocation* loc) {
+    if (result.isValid()) {
+        // in the reverse order of their evaluation, as the AST interpreter's holders are destroyed
+        releaseConsumedOperand(right_expr, right, loc);
+        releaseConsumedOperand(left_expr, left, loc);
+    }
+    return result;
+}
+
 QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (dynamic_cast<const QoreLogicalOrOperatorNode*>(node)) {
@@ -20967,6 +21041,8 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
     if (!right_bool.isValid()) {
         return QoreIRValue();
     }
+    // the AST interpreter releases the right operand, and then the left one, when the operator returns
+    releaseConsumedOperand(and_node->getRight(), right_value, and_node->loc);
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
@@ -20975,7 +21051,9 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
         {false_value, left_block},
         {right_bool, rhs_exit_block},
     };
-    return builder.createPhi(incoming)->result;
+    QoreIRValue result = builder.createPhi(incoming)->result;
+    releaseConsumedOperand(and_node->getLeft(), left_value, and_node->loc);
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& error) {
@@ -21018,6 +21096,8 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
     if (!right_bool.isValid()) {
         return QoreIRValue();
     }
+    // as for a logical and
+    releaseConsumedOperand(or_node->getRight(), right_value, or_node->loc);
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
@@ -21026,7 +21106,9 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
         {true_value, left_block},
         {right_bool, rhs_exit_block},
     };
-    return builder.createPhi(incoming)->result;
+    QoreIRValue result = builder.createPhi(incoming)->result;
+    releaseConsumedOperand(or_node->getLeft(), left_value, or_node->loc);
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerLogicalNot(const QoreValue& expr, std::string& error) {
@@ -21048,7 +21130,10 @@ QoreIRValue QoreIRLowering::lowerLogicalNot(const QoreValue& expr, std::string& 
     if (!bool_value.isValid()) {
         return QoreIRValue();
     }
-    return builder.createUnaryOp(QoreIROpcode::Not, bool_value)->result;
+    QoreIRValue result = builder.createUnaryOp(QoreIROpcode::Not, bool_value)->result;
+    // the AST interpreter releases the operand when the operator returns
+    releaseConsumedOperand(not_node->getExp(), value, not_node->loc);
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerNullCoalescing(const QoreValue& expr, std::string& error) {
@@ -21122,6 +21207,8 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
     builder.createBranchIf(left_bool, merge_block, rhs_block);
 
     builder.setBlock(rhs_block);
+    // the AST interpreter releases the left operand before it evaluates the right one, when it is not the result
+    releaseConsumedOperand(coalesce->getLeft(), left_value, coalesce->loc);
     QoreIRValue right_value = lowerExpression(coalesce->getRight(), error);
     if (!right_value.isValid()) {
         return QoreIRValue();
@@ -21187,5 +21274,8 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
         {left_value, left_exit_block},
         {right_value, right_exit_block},
     };
-    return builder.createPhi(incoming)->result;
+    QoreIRValue result = builder.createPhi(incoming)->result;
+    // the AST interpreter releases the condition when the operator returns, after the branch
+    releaseConsumedOperand(ternary->get(0), cond_value, ternary->loc);
+    return result;
 }

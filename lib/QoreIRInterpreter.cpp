@@ -82,7 +82,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 423,
+static_assert(QORE_IR_MAX_OPCODE == 424,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2041,7 +2041,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
-                def_by_call[inst->result.id] = arg_start >= 0;
+                def_by_call[inst->result.id] = qore_ir_result_is_created_temporary(inst);
             }
         }
     }
@@ -7147,6 +7147,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         values[id] = QoreValue();
     };
 
+    // A destructor run by the release of a value that may hold an object can replace a local of a frame that
+    // reflection can reach by name (set_local_var_value()), as a callee can: in such a frame, the caches of the locals
+    // on the runtime stack are invalidated after an instruction that can release one when it changes an lvalue
+    // (qore_ir_instruction_may_release_object()), and after the release of a temporary that is or can hold an object,
+    // before the next instruction runs (see design/aot-reflection-visible-locals.md)
+    const bool reflective_frame = func.reflective_frame;
+    bool reflective_release_pending = false;
+    auto noteReleasedTemp = [&](const QoreValue& value) {
+        if (reflective_frame && !reflective_release_pending && interpreterValueMayHoldObject(value)) {
+            reflective_release_pending = true;
+        }
+    };
+
     // Releases the temporary arguments of a completed call that the call consumes (their only use, in the block that
     // defines them; see buildValueUseCounts()), as the AST interpreter releases the argument list of a call when
     // the call returns: a temporary argument does not live until the end of the statement.  A value defined outside
@@ -7174,6 +7187,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             removeAllCleanupEntries(cleanup, id);
             QoreValue v = values[id];
             values[id] = QoreValue();
+            noteReleasedTemp(v);
             // an exception raised by a destructor is added to any exception raised by the call, as in the AST
             v.discard(xsink);
         }
@@ -7237,18 +7251,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    // A destructor run by the release of a value that may hold an object can replace a local of a frame that
-    // reflection can reach by name (set_local_var_value()), as a callee can: in such a frame, the caches of the locals
-    // on the runtime stack are invalidated after an instruction that can release one when it changes an lvalue
-    // (qore_ir_instruction_may_release_object()), and after the release of a temporary that is or can hold an object,
-    // before the next instruction runs (see design/aot-reflection-visible-locals.md)
-    const bool reflective_frame = func.reflective_frame;
-    bool reflective_release_pending = false;
-    auto noteReleasedTemp = [&](const QoreValue& value) {
-        if (reflective_frame && !reflective_release_pending && interpreterValueMayHoldObject(value)) {
-            reflective_release_pending = true;
-        }
-    };
 
     // keep_mark: release only the temps registered after the mark's sentinel and keep the mark, as a branch to an
     // exception handler in this frame does: the scope an instruction records can belong to a statement that is still
@@ -12820,6 +12822,50 @@ load_local_done:
                 // no exception check: the instruction also runs on the path of an exception, which stays raised; an
                 // exception raised by a destructor is added to it, and the CheckException that follows the releases
                 // of a statement's exit, as UninstantiateLocal, branches to the handler
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ReleaseOperandTemp: {
+                // an operator has consumed the value of an operand, which the AST interpreter releases when the
+                // operator returns (see QoreIROpcode::ReleaseOperandTemp): only a temporary of the current temp scope
+                // that no other instruction uses is released, so a value defined in an enclosing scope (a loop
+                // invariant) stays for the code that runs again
+                uint32_t id = inst->operands.front().id;
+                if (id < values.size() && id < operand_use_counts.size() && operand_use_counts[id] <= 2
+                        && cleanup.pushCount(id) == 1 && !weak_load_temp_slots.count(id)
+                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                    // the entries of the current temp scope follow its mark's sentinel
+                    const bool scoped = !temp_cleanup_marks.empty();
+                    const size_t scope_start = scoped ? temp_cleanup_marks.back().cleanup_size : 0;
+                    size_t pos = cleanup.size();
+                    bool in_scope = false;
+                    for (auto it = cleanup.rbegin(), e = cleanup.rend(); it != e; ++it) {
+                        --pos;
+                        if (scoped && pos <= scope_start) {
+                            break;
+                        }
+                        if (*it == id) {
+                            in_scope = true;
+                            break;
+                        }
+                    }
+                    if (in_scope) {
+                        removeAllCleanupEntries(cleanup, id);
+                        QoreValue v = values[id];
+                        values[id] = QoreValue();
+                        noteReleasedTemp(v);
+                        v.discard(xsink);
+                    }
+                }
+                if (xsink && *xsink) {
+                    // a destructor raised an exception, which the operator raises, as in the AST interpreter
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }

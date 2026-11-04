@@ -339,7 +339,8 @@ constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //!      distinguish the old CommonTypeFold (414, three operands) from HashSetKeyValueFold (414,
 //!      five operands), and old/current ListAppendElement (417, two/three operands). New map opcodes
 //!      use 419/420 here; compatibility-only two-operand append uses 421. Older performance files
-//!      with maximum 410 retain snapshots. Existing v22 opcode assignments remain unchanged.
+//!      with maximum 410 retain snapshots. Existing v22 opcode assignments remain unchanged;
+//!      CatchUnwind, KeysIteratorSource and ReleaseOperandTemp are appended as 422..424.
 //! v23: the LValuePath instruction count in the header of a SLOT_MAPS function record is a u32, not a u8.  The u8
 //!      kept only the low 8 bits of the count, so a function with 256 or more LValuePath instructions (such as
 //!      256 `remove` statements) was read back with fewer entries than its code refers to, and the bytes of the

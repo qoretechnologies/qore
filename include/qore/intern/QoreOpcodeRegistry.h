@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[424] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[425] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -482,12 +482,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[424] = {
     { "LegacyListAppendElement"        , false, false, false,  2, "Append a value to a map result list as the AST interpreter pushes it", false, true , "QoreMapOperatorNode", false, false, false, false, false }, // 421
     { "CatchUnwind"                    , false, false, false,  1, "End the catch scopes of the frame beyond a number", true , true , "ParseNode", false, false, false, false, false }, // 422
     { "KeysIteratorSource"             , true , false, false,  1, "The value that the functional keys iterator holds", false, true , "QoreKeysOperatorNode", true , false, true , true , false }, // 423
+    { "ReleaseOperandTemp"             , false, false, false,  1, "Release the temporary value of an operand that an operator has consumed", true , true , "ParseNode", false, false, false, false, false }, // 424
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 424,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 424"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 425,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 425"
 );
 
 //! ============================================================================

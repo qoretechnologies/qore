@@ -4216,6 +4216,7 @@ static std::unique_ptr<QoreIRInstruction> aotOutlineCloneSharedReturnInstruction
         case QoreIROpcode::PopImplicitElement:
         case QoreIROpcode::IteratorRelease:
         case QoreIROpcode::ReleaseOwnedTemp:
+        case QoreIROpcode::ReleaseOperandTemp:
             if (typeid(*inst) != typeid(QoreIRInstruction)) {
                 return nullptr;
             }
