@@ -1102,13 +1102,15 @@ public class QdbgScriptTest inherits QUnit::Test {
     threadEndTest() {
         string program = "%modern\n"                     # 1
             "sub work(int w) {\n"                         # 2
-            "    int n = 0;\n"                            # 3
+            # no thread reaches the loop before all of them have started, so each stop is of a program with all of its
+            # threads, whichever thread stops and however slowly a thread starts
+            "    int n = 0; started.dec(); started.waitForZero();\n"  # 3
             "    while (True) {\n"                        # 4
             "        ++n;\n"                              # 5
             "        usleep(1ms);\n"                      # 6
             "    }\n"                                     # 7
             "}\n"                                         # 8
-            "background work(1);\n"                       # 9
+            "our Counter started(3); background work(1);\n"  # 9
             "background work(2);\n"                       # 10
             "work(0);\n";                                 # 11
         hash<auto> res = runQdbg(program, (
