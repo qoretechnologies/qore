@@ -1119,6 +1119,33 @@ public:
         value_list->push_back(v);
     }
 
+    //! hands each value saved to the given function, which takes over its reference, and forgets them
+    /** For a caller that holds a lock beyond the life of this object: the function saves the values for releasing
+        once the lock has been released.  A function that throws leaves the values not yet handed over to the
+        destructor.
+    */
+    template <typename F>
+    DLLLOCAL void handOver(F&& take) {
+        if (!value_list) {
+            return;
+        }
+        // in the order saved, as the destructor releases them
+        size_t i = 0;
+        ON_BLOCK_EXIT([&] () {
+            // a value not handed over stays for the destructor
+            value_list->erase(value_list->begin(), value_list->begin() + i);
+            if (value_list->empty()) {
+                delete value_list;
+                value_list = nullptr;
+            }
+        });
+        for (size_t e = value_list->size(); i < e;) {
+            QoreValue v = (*value_list)[i];
+            take(v);
+            ++i;
+        }
+    }
+
 protected:
     ExceptionSink* xsink;
     arg_vec_t* value_list = nullptr;

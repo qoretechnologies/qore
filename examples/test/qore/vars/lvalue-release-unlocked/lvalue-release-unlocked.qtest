@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class LValueReleaseUnlockedTest
+
+#! Tests that a value released by an update of a variable is released once the variable's lock has been released
+/** An update that removes or replaces a value in a hash, a list or an object held by a global variable, a class static
+    or a variable referred to by a reference (`-=`, `+=` of a hash, `extract`, `delete`) holds the variable's lock
+    while it changes the value.  The destructor of an object that the update releases is user code that can read the
+    variable, also through a reference in the updating frame, which get_local_vars() reads: it must run once the lock
+    has been released, in every execution mode, or it waits for the lock that its own thread holds (an assertion in a
+    DEBUG build).  The worker runs in a process of its own in each mode and as an AOT program, and each run must give
+    the destructor trace of the AST interpreter.
+*/
+class LValueReleaseUnlockedTest inherits QUnit::Test {
+    public {
+        #! the cases of the worker, in the order of their destructors
+        const Cases = ("global-minus", "global-minus-list", "global-plus", "global-extract",
+            "global-extract-replace", "global-object-minus", "global-object-plus", "global-delete", "static-minus",
+            "static-plus", "static-extract", "static-delete", "ref-minus", "ref-minus-list", "ref-plus",
+            "ref-extract", "ref-extract-replace", "ref-delete", "ref-object-minus", "ref-object-plus");
+    }
+
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/lvalue-release-unlocked-worker.q";
+        string ast_trace;
+    }
+
+    constructor() : Test("LValueReleaseUnlockedTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter", \testAst());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("AOT program", \testAot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getAstTrace() {
+        if (!ast_trace) {
+            ast_trace = run((qore, "--exec-mode=ast", worker));
+        }
+        return ast_trace;
+    }
+
+    testAst() {
+        list<string> lines = getAstTrace().split("\n");
+        lines = select lines, $1;
+        assertEq(Cases, map $1.split(":")[0], lines);
+        foreach string line in (lines) {
+            # the destructor read every variable that it could, also through the frame's reference
+            list<string> parts = line.split(":");
+            assertTrue(parts[1].toInt() > 0, line);
+            assertEq(parts[0].substr(0, 4) == "ref-" ? "1" : "0", parts[2], line);
+        }
+    }
+
+    testExecModes() {
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(getAstTrace(), run((qore, "--exec-mode=" + mode, worker),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+    }
+
+    testAot() {
+        TmpDir dir("qore-lvalue-release-unlocked-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/worker";
+            run((qcc, level, "--strip-source", "-o", executable, worker));
+            assertEq(getAstTrace(), run((executable,)), level);
+        }
+    }
+}

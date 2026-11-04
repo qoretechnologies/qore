@@ -14144,6 +14144,9 @@ load_local_done:
                             finish_delete_result(res, pending_delete_direct_list);
                         }
                     } else if (is_remove) {
+                        // an object deleted is deleted once the lvalue locks are released (see below)
+                        bool pending_object_delete = false;
+                        bool delete_borrowed = false;
                         // Single-step path: navigate to the variable itself and clear.
                         //
                         // Special case: if the variable holds a ReferenceNode (e.g.
@@ -14232,17 +14235,13 @@ load_local_done:
                             bool static_assignment = false;
                             res = lvh.remove(static_assignment);
                             if (res.getType() == NT_OBJECT) {
-                                QoreObject* o = res.get<QoreObject>();
-                                if (!o->isSystemObject()) {
-                                    o->doDelete(xsink);
-                                }
+                                // the destructor is Qore code that can access the variable, whose lock this thread
+                                // holds until the LValueHelper is destroyed
+                                pending_object_delete = true;
                                 // Only deref non-borrowed refs.  static_assignment means the
                                 // LocalVarValue didn't own the +1 (e.g. `self`); the caller's
                                 // ref covers the object lifetime until the method frame unwinds.
-                                if (!static_assignment) {
-                                    res.discard(xsink);
-                                }
-                                res = QoreValue();
+                                delete_borrowed = static_assignment;
                             } else if (static_assignment) {
                                 // Non-object with static_assignment (shouldn't occur for self
                                 // but handle defensively) — borrowed ref, don't discard below.
@@ -14251,6 +14250,16 @@ load_local_done:
                         }
                         }  // end of LValueHelper scope
                         single_step_remove_done:;
+                        if (pending_object_delete) {
+                            QoreObject* o = res.get<QoreObject>();
+                            if (!o->isSystemObject()) {
+                                o->doDelete(xsink);
+                            }
+                            if (!delete_borrowed) {
+                                res.discard(xsink);
+                            }
+                            res = QoreValue();
+                        }
                     } else {
                         // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:
                         // if the target is NOTHING, these should be no-ops rather than creating
@@ -18507,8 +18516,15 @@ static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
 // documented in QoreIRInterpreter.h
 QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, ExceptionSink* xsink) {
     const QoreValue right = *right_holder;
-    // values requiring dereferencing must be dereferenced outside the lock
+    // values requiring dereferencing must be dereferenced outside the lock: the values replaced are released with the
+    // lvalue's other temporaries once its locks are released, since the lvalue is still locked when this function
+    // returns, and a destructor can access the variable
     SafeDerefHelper sdh(xsink);
+    ON_BLOCK_EXIT([&] () {
+        sdh.handOver([&] (QoreValue& replaced) {
+            v.saveTemp(replaced);
+        });
+    });
 
     qore_type_t vtype = v.getType();
 
@@ -18684,6 +18700,16 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
         if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
             v.ensureUnique();
             QoreHashNode* vh = v.getValue().get<QoreHashNode>();
+            // a value removed is released with the lvalue's other temporaries once its locks are released: its
+            // destructor can access the variable, whose lock this thread holds
+            auto remove_key = [&](const QoreString& key) -> int {
+                QoreHashKeyHelper enc(key, xsink);
+                if (!enc) {
+                    return -1;
+                }
+                v.saveTemp(vh->takeKeyValue(enc.c_str()));
+                return 0;
+            };
 
             const QoreListNode* nrl = (right.getType() == NT_LIST)
                 ? right.get<const QoreListNode>()
@@ -18692,19 +18718,23 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
                 ConstListIterator li(nrl);
                 while (li.next()) {
                     QoreStringValueHelper val(li.getValue());
-                    vh->removeKey(*val, xsink);
-                    if (*xsink) {
+                    if (remove_key(**val)) {
                         return QoreValue();
                     }
                 }
             } else {
                 QoreStringValueHelper str(right);
-                vh->removeKey(*str, xsink);
+                remove_key(**str);
             }
         }
     } else if (vtype == NT_OBJECT) {
         if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
             QoreObject* o = v.getValue().get<QoreObject>();
+            // as for a hash above
+            auto remove_member = [&](const QoreString& key) -> int {
+                v.saveTemp(o->takeMember(&key, xsink));
+                return *xsink ? -1 : 0;
+            };
 
             const QoreListNode* nrl = (right.getType() == NT_LIST)
                 ? right.get<const QoreListNode>()
@@ -18713,14 +18743,13 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
                 ConstListIterator li(nrl);
                 while (li.next()) {
                     QoreStringValueHelper val(li.getValue());
-                    o->removeMember(*val, xsink);
-                    if (*xsink) {
+                    if (remove_member(**val)) {
                         return QoreValue();
                     }
                 }
             } else {
                 QoreStringValueHelper str(right);
-                o->removeMember(*str, xsink);
+                remove_member(**str);
             }
         }
     } else {

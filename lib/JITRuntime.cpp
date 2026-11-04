@@ -16800,6 +16800,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             }
         }
 
+        // an object deleted is deleted once the lvalue locks are released: its destructor is Qore code that can
+        // access the variable, whose lock this thread holds until the LValueHelper is destroyed
+        bool pending_object_delete = false;
+        bool delete_borrowed = false;
         {
             LValueHelper lvh(xsink);
             if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
@@ -16815,18 +16819,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 bool static_assignment = false;
                 res = lvh.remove(static_assignment);
                 if (res.getType() == NT_OBJECT) {
-                    QoreObject* o = res.get<QoreObject>();
-                    if (!o->isSystemObject()) {
-                        o->doDelete(xsink);
-                    }
-                    if (!static_assignment) {
-                        res.discard(xsink);
-                    }
-                    res = QoreValue();
+                    pending_object_delete = true;
+                    delete_borrowed = static_assignment;
                 } else if (static_assignment) {
                     res = QoreValue();
                 }
             }
+        }
+        if (pending_object_delete) {
+            QoreObject* o = res.get<QoreObject>();
+            if (!o->isSystemObject()) {
+                o->doDelete(xsink);
+            }
+            if (!delete_borrowed) {
+                res.discard(xsink);
+            }
+            res = QoreValue();
         }
     } else {
         // Pop, Shift, Trim, Chomp should not vivify containers (use for_remove=true)
@@ -17298,12 +17306,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
             }
         }
     }
-    if (*xsink) {
-        res.discard(xsink);
-        return toBits(QoreValue());
-    }
-    if (!inst->ref_rv) {
-        res.discard(xsink);
+    // a value extracted that is not returned is released once the lvalue locks are released: its destructor can
+    // access the variable
+    if (*xsink || !inst->ref_rv) {
+        lvh.saveTemp(res);
         return toBits(QoreValue());
     }
     return toBits(res);
