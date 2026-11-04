@@ -1832,8 +1832,34 @@ static bool qore_ir_preserves_scalar_publication(const llvm::Instruction& inst) 
     return !inst.mayWriteToMemory() && !llvm::isa<llvm::FenceInst>(inst);
 }
 
+//! Verifies the functions that a late module pass changed; false with the diagnostic in \a error if one is invalid
+/** The module is verified once when it is lowered, and the LLVM pipeline keeps it valid.  A pass run after that edits
+    only the functions it lists, so verifying those finds every defect it can introduce, without verifying the
+    complete module again after each pass: five full verifications cost as much as some of the optimization passes.
+*/
+template <typename C>
+static bool qore_ir_verify_changed_functions(const C& changed, std::string& error) {
+    llvm::raw_string_ostream diagnostic(error);
+    size_t checked = 0;
+    for (llvm::Function* function : changed) {
+        if (++checked % 100 == 0 && qore_check_cancel(nullptr, "LLVM function verification")) {
+            diagnostic.flush();
+            if (error.empty()) {
+                error = "cancelled during LLVM function verification";
+            }
+            return false;
+        }
+        if (llvm::verifyFunction(*function, &diagnostic)) {
+            diagnostic.flush();
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreIRToLLVM::prepareScalarBoundaryReuse(llvm::Module& module, std::string& error) {
     size_t checked = 0, guards = 0, barriers = 0, functions = 0, dead_cleanup = 0;
+    std::vector<llvm::Function*> changed;
     const bool prune_dead_cleanup = !q_env_is_set("QORE_DISABLE_AOT_SCALAR_BOUNDARY_LIVENESS");
     auto cancelled = [&]() {
         if (++checked % 100 == 0 && qore_check_cancel(nullptr, "AOT scalar publication effects")) {
@@ -1864,6 +1890,7 @@ bool QoreIRToLLVM::prepareScalarBoundaryReuse(llvm::Module& module, std::string&
             continue;
         }
         ++functions;
+        changed.push_back(&function);
         auto guardable_cleanup = [](llvm::Instruction* inst) {
             auto* call = llvm::dyn_cast<llvm::CallInst>(inst);
             llvm::StringRef name = call && call->getCalledFunction() && !call->isMustTailCall()
@@ -1997,8 +2024,7 @@ bool QoreIRToLLVM::prepareScalarBoundaryReuse(llvm::Module& module, std::string&
         fprintf(stderr, "IR-OPT-LLVM: scalar-boundary-functions=%zu cleanup-guards=%zu barriers=%zu"
             " dead-cleanup-candidates=%zu\n", functions, guards, barriers, dead_cleanup);
     }
-    llvm::raw_string_ostream diagnostic(error);
-    return !llvm::verifyModule(module, &diagnostic);
+    return qore_ir_verify_changed_functions(changed, error);
 }
 
 bool QoreIRToLLVM::selectInvariantFunctionRefs(llvm::Module& module, std::string& error) {
@@ -2152,17 +2178,21 @@ bool QoreIRToLLVM::selectInvariantFunctionRefs(llvm::Module& module, std::string
             }
         }
     }
+    // selected holds the calls of one function after another
+    std::vector<llvm::Function*> changed;
     for (const auto& item : selected) {
         if (cancelled()) {
             return false;
         }
         item.first->setCalledFunction(module.getOrInsertFunction(item.second, item.first->getFunctionType()));
+        if (changed.empty() || changed.back() != item.first->getFunction()) {
+            changed.push_back(item.first->getFunction());
+        }
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT-LLVM: invariant-funcref-calls=%zu\n", selected.size());
     }
-    llvm::raw_string_ostream diagnostic(error);
-    return !llvm::verifyModule(module, &diagnostic);
+    return qore_ir_verify_changed_functions(changed, error);
 }
 
 namespace {
@@ -2468,8 +2498,7 @@ bool QoreIRToLLVM::bypassClearCancellationChecks(llvm::Module& module, std::stri
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT-LLVM: clear-cancel-sink-edges=%zu\n", bypassed);
     }
-    llvm::raw_string_ostream diagnostic(error);
-    return !llvm::verifyModule(module, &diagnostic);
+    return qore_ir_verify_changed_functions(changed, error);
 }
 
 bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) {
@@ -2523,8 +2552,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
         fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-guards=%zu\n", guards);
         fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-float-guards=%zu\n", include_float ? guards : 0);
     }
-    llvm::raw_string_ostream diagnostic(error);
-    return !llvm::verifyModule(module, &diagnostic);
+    return qore_ir_verify_changed_functions(changed, error);
 }
 
 bool QoreIRToLLVM::guardScalarReferenceLoads(llvm::Module& module, std::string& error) {
@@ -2645,8 +2673,7 @@ bool QoreIRToLLVM::guardScalarReferenceLoads(llvm::Module& module, std::string& 
         fprintf(stderr, "IR-OPT-LLVM: scalar-reference-guards=%zu\n", guards);
         fprintf(stderr, "IR-OPT-LLVM: scalar-reference-removed=%zu\n", removed);
     }
-    llvm::raw_string_ostream diagnostic(error);
-    return !llvm::verifyModule(module, &diagnostic);
+    return qore_ir_verify_changed_functions(changed, error);
 }
 
 static bool qore_ir_generic_fast_entry_matches(
