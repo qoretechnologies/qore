@@ -13393,6 +13393,9 @@ static int qore_socket_process_port_held(int socktype, int port, F&& matches, Ex
             continue;
         }
         size_t fd_count = std::min(fds.size(), static_cast<size_t>(got) / sizeof(proc_fdinfo));
+        // the effective user of the process, read when a socket's description has no owner (see below)
+        bool have_process_uid = false;
+        uid_t process_uid = static_cast<uid_t>(-1);
         for (size_t j = 0; j < fd_count; ++j) {
             if (cancelled()) {
                 return -1;
@@ -13429,7 +13432,24 @@ static int qore_socket_process_port_held(int socktype, int port, F&& matches, Ex
             entry.options = socket.soi_options;
             entry.listening = tcp && (socket.soi_proto.pri_tcp.tcpsi_state == TSI_S_LISTEN
                 || (entry.options & SO_ACCEPTCONN));
-            entry.uid = socket.soi_stat.vst_uid;
+            // The owner of the socket is in its stat information, which macOS 27 leaves empty in the description
+            // (all of soi_stat is zero, while fstat() of the socket reports its owner): an empty one has no file
+            // type in vst_mode, and the owner is then taken to be the effective user of the process, the creator of
+            // the socket unless the process changed its user or was given the descriptor.  If that cannot be read,
+            // the socket belongs to no user, so it does not share the port by SO_REUSEPORT.
+            if (socket.soi_stat.vst_mode) {
+                entry.uid = socket.soi_stat.vst_uid;
+            } else {
+                if (!have_process_uid) {
+                    have_process_uid = true;
+                    struct proc_bsdinfo bsd_info;
+                    if (proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 0, &bsd_info, sizeof(bsd_info))
+                            == static_cast<int>(sizeof(bsd_info))) {
+                        process_uid = bsd_info.pbi_uid;
+                    }
+                }
+                entry.uid = process_uid;
+            }
             if (matches(entry)) {
                 return 1;
             }
