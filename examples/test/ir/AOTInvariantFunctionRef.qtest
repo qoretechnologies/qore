@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../LlvmConfig.qm
 %exec-class InvariantFunctionRefTest
 
 class InvariantFunctionRefTest inherits QUnit::Test {
@@ -33,28 +34,9 @@ class InvariantFunctionRefTest inherits QUnit::Test {
         return output;
     }
 
+    #! the llvm-config of the LLVM this qore was built with, which the driver must be built with
     private string llvmConfig() {
-        if (ENV.LLVM_CONFIG) {
-            return ENV.LLVM_CONFIG;
-        }
-        # Prefer the exact tool selected by this build over a different LLVM
-        # installed on PATH. File access is test setup, outside a sandbox.
-        string cache = libdir + "/CMakeCache.txt";
-        if (is_file(cache)) {
-            string contents = File::readTextFile(cache);
-            *list<*string> match = regex_extract(contents,
-                "(?m)^LLVM_CONFIG_EXECUTABLE:FILEPATH=([^\r\n]+)");
-            if (match && is_executable(match[0])) {
-                return match[0];
-            }
-        }
-        foreach string directory in (split(":", ENV.PATH ?? "")) {
-            string path = (directory ? directory : ".") + "/llvm-config";
-            if (is_executable(path)) {
-                return path;
-            }
-        }
-        throw "TEST-SETUP-ERROR", "set LLVM_CONFIG to the llvm-config matching this Qore build";
+        return LlvmConfig::llvm_config_path();
     }
 
     private native() {

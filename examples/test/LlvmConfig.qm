@@ -1,0 +1,164 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LlvmConfig.qm finds the llvm-config of the LLVM that Qore was built with, for tests that build C++ drivers
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module LlvmConfig {
+    version = "1.0";
+    desc = "finds the llvm-config of the LLVM that Qore was built with";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage LlvmConfig Module
+
+    A test driver that includes the library's JIT headers includes LLVM's headers and links LLVM: built with another
+    LLVM than libqore's, it has two LLVMs in one process and crashes.  llvm_config_path() returns the \c llvm-config
+    of the LLVM this %Qore was built with (Qore::LLVMVersion).
+
+    \c llvm-config is only in the \c PATH where the distribution ships a single LLVM (Ubuntu's \c llvm package
+    links it into \c /usr/bin); everywhere else it lives in the versioned prefix (\c /usr/lib/llvm<major> with only
+    \c /usr/bin/llvm-config-<major> on Alpine, \c /usr/lib/llvm-<major> on Ubuntu without the \c llvm package,
+    MacPorts and Homebrew), so a lookup in the \c PATH alone fails on exactly the platforms where the JIT is fully
+    functional.
+*/
+
+#! the namespace of the module
+public namespace LlvmConfig {
+#! Returns the path to the llvm-config of the LLVM this qore was built with (Qore::LLVMVersion)
+/** Of the llvm-config found in the \c PATH and in the versioned prefixes, the first whose version matches is taken;
+    \c LLVM_CONFIG overrides the search and must name a matching one.
+
+    @throw TEST-SETUP-ERROR no matching llvm-config was found, or \c LLVM_CONFIG names one of another version
+*/
+public string sub llvm_config_path() {
+    string want = LlvmConfigPriv::version_key(Qore::LLVMVersion);
+    if (ENV.LLVM_CONFIG) {
+        string path = LlvmConfigPriv::executable_path(ENV.LLVM_CONFIG);
+        *string version = LlvmConfigPriv::llvm_config_version(path);
+        if (!version || LlvmConfigPriv::version_key(version) != want) {
+            throw "TEST-SETUP-ERROR", sprintf("LLVM_CONFIG names %s, which reports LLVM %s, but this qore was "
+                "built with LLVM %s; set LLVM_CONFIG to the llvm-config of LLVM %s", path,
+                version ?? "<no version>", Qore::LLVMVersion, Qore::LLVMVersion);
+        }
+        return path;
+    }
+    list<string> candidates = ();
+    foreach string directory in (split(":", ENV.PATH ?? "")) {
+        string path = (directory ? directory : ".") + "/llvm-config";
+        if (is_executable(path)) {
+            candidates += realpath(path);
+        }
+    }
+    foreach string prefix in (LlvmConfigPriv::llvm_prefixes()) {
+        string path = prefix + "/bin/llvm-config";
+        if (is_executable(path)) {
+            candidates += realpath(path);
+        }
+    }
+    list<string> found = ();
+    foreach string path in (candidates) {
+        *string version = LlvmConfigPriv::llvm_config_version(path);
+        if (version && LlvmConfigPriv::version_key(version) == want) {
+            return path;
+        }
+        found += sprintf("%s (%s)", path, version ?? "cannot be run");
+    }
+    throw "TEST-SETUP-ERROR", sprintf("this qore was built with LLVM %s, but no llvm-config of that version was "
+        "found (%s); set LLVM_CONFIG to the llvm-config of LLVM %s", Qore::LLVMVersion,
+        found ? "found: " + found.join(", ") : "none found", Qore::LLVMVersion);
+}
+}
+
+#! private implementation of the module
+namespace LlvmConfigPriv {
+#! Returns the given string quoted for a shell
+string sub quote(string value) {
+    return "'" + join("'\\''", split("'", value)) + "'";
+}
+
+#! Returns the absolute path of an executable, looked up in the PATH if the name has no directory
+/** @throw TEST-SETUP-ERROR the executable cannot be found
+*/
+string sub executable_path(string name) {
+    if (name.regex("/")) {
+        return realpath(name);
+    }
+    foreach string directory in (split(":", ENV.PATH ?? "")) {
+        string path = (directory ? directory : ".") + "/" + name;
+        if (is_executable(path)) {
+            return realpath(path);
+        }
+    }
+    throw "TEST-SETUP-ERROR", "cannot locate executable " + name;
+}
+
+#! Returns the toolchain roots that hold a versioned LLVM install, newest version first
+/** Distributions that ship several LLVM versions side by side keep each one in its own prefix and do not link its
+    driver into a PATH directory: alpine uses \c /usr/lib/llvm<major>, Ubuntu \c /usr/lib/llvm-<major>, MacPorts
+    \c /opt/local/libexec/llvm-<major> and Homebrew \c /opt/homebrew/opt/llvm@<major>.  These are the same families
+    examples/test/docker_test/test-alpine.sh, test-ubuntu.sh and test-macos.sh search when they configure the
+    build.
+*/
+list<string> sub llvm_prefixes() {
+    list<string> prefixes = ();
+    foreach string parent in (("/usr/lib", "/usr/lib64", "/usr/local/lib", "/usr/local/lib64",
+        "/opt/homebrew/opt", "/usr/local/opt", "/opt/local/libexec")) {
+        foreach string candidate in (glob(parent + "/llvm*") ?? ()) {
+            if (is_dir(candidate)) {
+                prefixes += candidate;
+            }
+        }
+    }
+    # newest first; an unversioned prefix (Homebrew's plain "llvm") sorts last
+    return sort_descending(prefixes, int sub (string l, string r) {
+        int lv = prefix_version(l);
+        int rv = prefix_version(r);
+        return lv == rv ? (l < r ? -1 : (l == r ? 0 : 1)) : (lv < rv ? -1 : 1);
+    });
+}
+
+#! Returns the major LLVM version encoded in a prefix directory name, or 0 if it has none
+int sub prefix_version(string prefix) {
+    *list<*string> match = (basename(prefix) =~ x/([0-9]+)/);
+    return match[0].toInt();
+}
+
+#! Returns the "<major>.<minor>" part of an LLVM version, which names the LLVM library's ABI
+string sub version_key(string version) {
+    *list<*string> m = (version =~ x/^([0-9]+\.[0-9]+)/);
+    return m ? m[0] : version;
+}
+
+#! Returns the LLVM version that the given llvm-config reports, or nothing if it cannot be run
+*string sub llvm_config_version(string path) {
+    int rc;
+    string out = backquote(quote(path) + " --version 2>/dev/null", \rc);
+    if (rc) {
+        return;
+    }
+    return trim(out);
+}
+}
