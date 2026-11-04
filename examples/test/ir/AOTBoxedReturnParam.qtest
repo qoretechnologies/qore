@@ -102,6 +102,16 @@ int sub temporaryCall() {
     return identityHash({\"value\": 5}).value;
 }
 
+hash<string, int> sub makeRow() {
+    return {\"value\": 3};
+}
+
+# the argument that the fold gives as the result is created by a call, which releases a consumed argument when it
+# returns: the folded call keeps it for its result
+int sub callResultArgument() {
+    return identityHash(makeRow()).value;
+}
+
 int sub chainedCall() {
     hash<string, int> row = {\"value\": 8};
     return identityHash(identityHash(row)).value;
@@ -197,8 +207,8 @@ bool sub removedRejected() {
 int sub main() {
     *hash<string, int> missing;
     ExactIdentity exact();
-    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d:%d\\n\",
-        localCalls(), temporaryCall(), chainedCall(), aliasing(),
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d:%d\\n\",
+        localCalls(), temporaryCall(), callResultArgument(), chainedCall(), aliasing(),
         sideEffectArgument(), staticCall(), invokeCall(), exact.selfCall(),
         optionalIdentity(missing),
         unassignedRejected(), removedRejected(),
@@ -239,7 +249,7 @@ combined_file.write("%modern\n\n" + providerCode() + consumerCode()
     + "\nmain();\n");
 combined_file.close();
 
-string expected = "743:5:8:19:66:6:6:6:null:True:True:2:9:94:True:6:777\n";
+string expected = "743:5:3:8:19:66:6:6:6:null:True:True:2:9:94:True:6:777\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = ExecModeHarness::run(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
@@ -334,7 +344,7 @@ string disabled_compile = backquote(sprintf(
         + " QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD=1"
         + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
-foreach string function in (("localCalls", "temporaryCall", "chainedCall",
+foreach string function in (("localCalls", "temporaryCall", "callResultArgument", "chainedCall",
         "aliasing", "sideEffectArgument", "multiParamCall",
         "multiParamSideEffect", "multiParamOptionalNothing",
         "wrapperCalls", "staticCall", "invokeCall", "selfCall")) {

@@ -9302,11 +9302,19 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
         return false;
     }
     bool released = false;
+    // a call folded to one of its arguments, kept for an attached debugger, gives that argument as its result to native
+    // code, which borrows it: the argument lives as long as the result (lowerKeptDebuggerCall())
+    uint32_t folded_result_arg = inst->debugger_alternative
+            && inst->debugger_alternative->kind == QoreIRDebuggerAlternative::Kind::Fold
+        ? inst->debugger_alternative->native_value.id : 0;
     for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
         if (i > static_cast<size_t>(arg_start) && !((i - arg_start) % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM call argument release");
         }
         uint32_t id = inst->operands[i].id;
+        if (id && id == folded_result_arg) {
+            continue;
+        }
         // only a value created by a call is a temporary whose release is observable; a value loaded from a
         // variable or a constant is not
         if (!id || weak_load_result_ids.count(id) || !value_defined_by_call.count(id)
