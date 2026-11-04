@@ -112,6 +112,11 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     - \c gcp_quota_project_id (optional): billing/quota project sent as the
       \c x-goog-user-project header; not required for the project-scoped
       endpoints used here
+    - \c gcp_endpoint_location (optional): the location a custom connection URL (a private endpoint or a proxy)
+      serves; it must be the connection's \c gcp_region
+    - \c gcp_model_locations (optional): a hash of model name to the location its requests must be processed in; a
+      request for a listed model is refused unless that location is the connection's \c gcp_region, so a model is
+      never processed outside the location configured for it
 
     @par LlmBackendConfig options
 
@@ -125,6 +130,9 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     - \c provider_options.gcp_scopes (optional)
     - \c provider_options.gcp_quota_project_id (optional): billing/quota project
       sent as the \c x-goog-user-project header
+    - \c provider_options.gcp_endpoint_location (optional): the location that \c url serves; must be the region
+    - \c provider_options.gcp_model_locations (optional): model name to required location; see the connection
+      option of the same name
 
     @par Example
 
@@ -181,6 +189,9 @@ provider.deleteCachedContent(cache.name);
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
     - initial release
+    - the \c gcp_endpoint_location and \c gcp_model_locations connection and provider options state the location a
+      custom endpoint serves and the location each model must be processed in; a request that would be processed
+      elsewhere is refused (@ref VertexAiRestClient::checkLocationOptions())
 */
 
 #! Contains all public definitions in the VertexAiRestClient module
@@ -190,6 +201,88 @@ public const DefaultRegion = "us-central1";
 
 #! Default OAuth2 scope for Vertex AI calls
 public const DefaultScopes = ("https://www.googleapis.com/auth/cloud-platform",);
+
+#! Validates the location options of a Vertex AI connection or provider
+/** @param opts the connection or provider options
+    @param region the effective region (\c gcp_region, else @ref DefaultRegion)
+
+    @return the validated \c gcp_model_locations (model name to location), empty when not set
+
+    @throw VERTEX-AI-CONFIG-ERROR \c gcp_endpoint_location is not a location ID or names another location than
+    @p region, or \c gcp_model_locations is not a hash of model names to location IDs
+
+    @par Example
+    @code{.py}
+# a private endpoint in europe-west4, with one model pinned to that region
+hash<string, string> locations = VertexAiRestClient::checkLocationOptions({
+    "gcp_region": "europe-west4",
+    "gcp_endpoint_location": "europe-west4",
+    "gcp_model_locations": {"gemini-2.5-pro": "europe-west4"},
+}, "europe-west4");
+    @endcode
+
+    @since VertexAiRestClient 1.0
+*/
+public hash<string, string> sub checkLocationOptions(*hash<auto> opts, string region) {
+    auto endpoint_location = opts.gcp_endpoint_location;
+    if (exists endpoint_location) {
+        if (!isLocationId(endpoint_location)) {
+            throw "VERTEX-AI-CONFIG-ERROR", sprintf("gcp_endpoint_location must be a Vertex AI location ID; got %y",
+                endpoint_location);
+        }
+        if (endpoint_location != region) {
+            throw "VERTEX-AI-CONFIG-ERROR", sprintf("the endpoint serves the location %y (gcp_endpoint_location), "
+                "but the region is %y: requests would not be processed in %y", endpoint_location, region, region);
+        }
+    }
+    hash<string, string> rv = {};
+    auto locations = opts.gcp_model_locations;
+    if (!exists locations) {
+        return rv;
+    }
+    if (locations.typeCode() != NT_HASH) {
+        throw "VERTEX-AI-CONFIG-ERROR", sprintf("gcp_model_locations must be a hash of model names to location IDs; "
+            "got type %y", locations.type());
+    }
+    foreach hash<auto> i in (locations.pairIterator()) {
+        if (!i.key.val() || !isLocationId(i.value)) {
+            throw "VERTEX-AI-CONFIG-ERROR", sprintf("gcp_model_locations: model %y has an invalid location %y",
+                i.key, i.value);
+        }
+        rv{i.key} = i.value;
+    }
+    return rv;
+}
+
+#! Returns True when a value is a syntactically valid Vertex AI location ID
+/** @param value the value to check
+    @return True for a nonempty string of lower-case letters, digits and hyphens
+    @since VertexAiRestClient 1.0
+*/
+public bool sub isLocationId(auto value) {
+    return value.typeCode() == NT_STRING && value.val() && value.length() <= 64 && value =~ /^[a-z0-9-]+$/;
+}
+
+#! Refuses a model whose required location is not the region a client serves
+/** @param model_locations the validated \c gcp_model_locations
+    @param model the request's model name (a bare name or a \c publishers/... or \c models/... path)
+    @param region the region the client serves
+
+    @throw VERTEX-AI-CONFIG-ERROR the model must be processed in another location
+    @since VertexAiRestClient 1.0
+*/
+public sub checkModelLocation(hash<string, string> model_locations, string model, string region) {
+    if (!model_locations) {
+        return;
+    }
+    # a publisher path (publishers/google/models/X) and a models/X path name the same model as X
+    string bare = regex_subst(model, "^(?:publishers/[^/]+/)?models/", "");
+    *string required = model_locations{bare} ?? model_locations{model};
+    if (exists required && required != region) {
+        throw "VERTEX-AI-CONFIG-ERROR", sprintf("model %y must be processed in %y (gcp_model_locations), but this "
+            "client serves %y; use a connection for %y", bare, required, region, required);
+    }
+}
 
 #! Returns the official Vertex AI API base URL for a location
 /** @param location a regional location such as \c us-central1 or
@@ -301,6 +394,25 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
                         "for the project-scoped Vertex endpoints, where the "
                         "project in the URL path is authoritative",
                 },
+                "gcp_endpoint_location": <ConnectionOptionInfo>{
+                    "display_name": "Endpoint Location",
+                    "short_desc": "The location a custom connection URL serves",
+                    "type": "string",
+                    "desc": "The Vertex AI location that a custom connection URL, such as a private endpoint or a "
+                        "proxy, serves.\n\nIt must be the connection's `gcp_region`, so requests are processed in "
+                        "the location the connection names. Leave it unset when the connection uses the region's "
+                        "public endpoint.\n\nExample value: `europe-west4`",
+                },
+                "gcp_model_locations": <ConnectionOptionInfo>{
+                    "display_name": "Model Locations",
+                    "short_desc": "The location each listed model must be processed in",
+                    "type": "hash",
+                    "desc": "Model names mapped to the Vertex AI location their requests must be processed in, "
+                        "for data residency.\n\nA request for a listed model is refused unless its location is "
+                        "the connection's `gcp_region`, so a model is never processed outside the location "
+                        "configured for it; use one connection per location.\n\nExample value: "
+                        "`{\"gemini-2.5-pro\": \"europe-west4\"}`",
+                },
             },
         });
     }
@@ -310,9 +422,11 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
             : RestConnection(name, description,
                 VertexAiRestClient::ensureVertexUrl(url, options),
                 attributes, options) {
+        VertexAiRestClient::checkLocationOptions(options, options.gcp_region ?? DefaultRegion);
     }
 
     constructor(hash<auto> config, *hash<auto> attr) : RestConnection(config, attr) {
+        VertexAiRestClient::checkLocationOptions(config.opts, config.opts.gcp_region ?? DefaultRegion);
     }
 
     string getType() {
@@ -355,6 +469,8 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
         *string sa_json_path;
         *string quota_project_id;
         list<string> scopes;
+        #! Model name to required location (gcp_model_locations)
+        hash<string, string> model_locations;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
@@ -366,6 +482,7 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
         }
         project_id = p;
         region = config.provider_options.gcp_region ?? DefaultRegion;
+        model_locations = checkLocationOptions(config.provider_options, region);
         sa_json_path = config.provider_options.gcp_sa_json_path;
         quota_project_id = config.provider_options.gcp_quota_project_id;
         list<auto> raw_scopes =
@@ -408,6 +525,7 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
     #! Builds the path for a :generateContent or :streamGenerateContent call
     string getVertexPath(*hash<QoreLlmUtils::LlmRequestOptions> opts,
             *string suffix) {
+        checkModelLocation(model_locations, getModelName(opts), region);
         return sprintf(
             "/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
             encode_url(project_id, True),
@@ -428,6 +546,9 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
     */
     string getModelResourceName(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         string model = getModelName(opts);
+        if (model !~ /^projects\//) {
+            checkModelLocation(model_locations, model, region);
+        }
         return model =~ /^projects\//
             ? model
             : sprintf("projects/%s/locations/%s/publishers/google/models/%s", project_id, region,
@@ -679,6 +800,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
         self.config = config;
         project_id = p;
         region = config.options.gcp_region ?? DefaultRegion;
+        checkModelLocation(checkLocationOptions(config.options, region), config.model, region);
         sa_json_path = config.options.gcp_sa_json_path;
         quota_project_id = config.options.gcp_quota_project_id;
         list<auto> raw_scopes = config.options.gcp_scopes ?? DefaultScopes;

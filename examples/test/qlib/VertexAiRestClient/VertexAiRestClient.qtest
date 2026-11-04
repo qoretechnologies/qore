@@ -176,6 +176,9 @@ public class VertexAiTest inherits QUnit::Test {
         addTestCase("missing project_id throws",          \missingProjectTest());
         addTestCase("embedder factory + round-trip",      \embedderTest());
         addTestCase("VertexAiRestConnection constructs",  \connectionTest());
+        addTestCase("location options are validated",     \locationOptionsTest());
+        addTestCase("a model is processed only in its configured location", \modelLocationTest());
+        addTestCase("a custom endpoint must serve the region", \endpointLocationTest());
         addTestCase("chat body with and without cached content", \cachedContentBodyShapeTest());
         addTestCase("cachedContents create/get/refresh/delete requests", \cacheResourceTest());
         addTestCase("chat with cached content omits cached parts", \cachedChatTest());
@@ -743,6 +746,95 @@ public class VertexAiTest inherits QUnit::Test {
                 "gcp_region": "us-central1",
             });
         assertEq("vertex-ai", conn.getType());
+    }
+
+    private locationOptionsTest() {
+        assertEq({}, VertexAiRestClient::checkLocationOptions(NOTHING, "us-central1"));
+        assertEq({}, VertexAiRestClient::checkLocationOptions({"gcp_region": "eu"}, "eu"));
+        assertEq({"gemini-2.5-pro": "europe-west4", "gemini-2.0-flash": "us"},
+            VertexAiRestClient::checkLocationOptions({"gcp_endpoint_location": "europe-west4",
+                "gcp_model_locations": {"gemini-2.5-pro": "europe-west4", "gemini-2.0-flash": "us"}},
+                "europe-west4"));
+        foreach auto bad in (("", "Europe-West4", "europe west4", 4, ("eu",), strmul("a", 65))) {
+            assertThrows("VERTEX-AI-CONFIG-ERROR", \VertexAiRestClient::checkLocationOptions(),
+                ({"gcp_endpoint_location": bad}, "eu"), sprintf("endpoint location %y", bad));
+            assertThrows("VERTEX-AI-CONFIG-ERROR", \VertexAiRestClient::checkLocationOptions(),
+                ({"gcp_model_locations": {"gemini-2.5-pro": bad}}, "eu"), sprintf("model location %y", bad));
+        }
+        assertThrows("VERTEX-AI-CONFIG-ERROR", \VertexAiRestClient::checkLocationOptions(),
+            ({"gcp_model_locations": "gemini-2.5-pro=eu"}, "eu"), "not a hash");
+        assertThrows("VERTEX-AI-CONFIG-ERROR", \VertexAiRestClient::checkLocationOptions(),
+            ({"gcp_model_locations": {"": "eu"}}, "eu"), "an empty model name");
+        assertTrue(VertexAiRestClient::isLocationId("us-central1"));
+        assertFalse(VertexAiRestClient::isLocationId(NOTHING));
+        # the connection validates its own options
+        VertexAiRestClient::VertexAiRestConnection conn("vertex-eu", "test", "https://vertex-proxy.example.test",
+            NOTHING, {"gcp_project_id": "fake-project", "gcp_region": "europe-west4",
+                "gcp_endpoint_location": "europe-west4", "gcp_model_locations": {"gemini-2.5-pro": "europe-west4"}});
+        assertEq("vertex-ai", conn.getType());
+        assertThrows("VERTEX-AI-CONFIG-ERROR", sub () {
+            new VertexAiRestClient::VertexAiRestConnection("vertex-eu", "test", "https://vertex-proxy.example.test",
+                NOTHING, {"gcp_project_id": "fake-project", "gcp_region": "europe-west4",
+                    "gcp_endpoint_location": "us-central1"});
+        });
+        assertThrows("VERTEX-AI-CONFIG-ERROR", sub () {
+            new VertexAiRestClient::VertexAiRestConnection({"name": "vertex-eu", "desc": "test",
+                "url": "https://europe-west4-aiplatform.googleapis.com", "opts": {"gcp_project_id": "fake-project",
+                "gcp_model_locations": {"gemini-2.5-pro": 5}}});
+        }, NOTHING, "the configuration constructor validates too");
+    }
+
+    private VertexAiRestClient::VertexAiLlmProvider locationProvider(string region, *hash<auto> extra) {
+        return new VertexAiRestClient::VertexAiLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-2.0-flash",
+            "provider_options": {"gcp_project_id": "fake-project", "gcp_region": region,
+                "gcp_model_locations": {"gemini-2.5-pro": "europe-west4", "gemini-2.0-flash": "us"}} + extra,
+        });
+    }
+
+    private modelLocationTest() {
+        VertexAiRestClient::VertexAiLlmProvider eu = locationProvider("europe-west4");
+        assertEq("/v1/projects/fake-project/locations/europe-west4/publishers/google/models/gemini-2.5-pro:"
+            "generateContent", eu.getVertexPath(<QoreLlmUtils::LlmRequestOptions>{"model": "gemini-2.5-pro"}));
+        assertEq("projects/fake-project/locations/europe-west4/publishers/google/models/gemini-2.5-pro",
+            eu.getModelResourceName(<QoreLlmUtils::LlmRequestOptions>{"model": "gemini-2.5-pro"}));
+        # an unlisted model is processed in the region
+        assertEq("/v1/projects/fake-project/locations/europe-west4/publishers/google/models/gemini-3-flash:"
+            "generateContent", eu.getVertexPath(<QoreLlmUtils::LlmRequestOptions>{"model": "gemini-3-flash"}));
+        # the default model is pinned to the US multi-region: this client refuses it
+        assertThrows("VERTEX-AI-CONFIG-ERROR", \eu.getVertexPath(), NOTHING, "the default model");
+        assertThrows("VERTEX-AI-CONFIG-ERROR", \eu.getVertexPath(),
+            (<QoreLlmUtils::LlmRequestOptions>{"model": "publishers/google/models/gemini-2.0-flash"},),
+            "a publisher path names the same model");
+        assertThrows("VERTEX-AI-CONFIG-ERROR", \eu.getModelResourceName(),
+            (<QoreLlmUtils::LlmRequestOptions>{"model": "gemini-2.0-flash"},));
+        # an explicit full resource name states its own location
+        string full = "projects/p/locations/us/publishers/google/models/gemini-2.0-flash";
+        assertEq(full, eu.getModelResourceName(<QoreLlmUtils::LlmRequestOptions>{"model": full}));
+        VertexAiRestClient::VertexAiLlmProvider us = locationProvider("us");
+        assertEq("/v1/projects/fake-project/locations/us/publishers/google/models/gemini-2.0-flash:generateContent",
+            us.getVertexPath());
+        assertThrows("VERTEX-AI-CONFIG-ERROR", \us.getVertexPath(),
+            (<QoreLlmUtils::LlmRequestOptions>{"model": "gemini-2.5-pro"},));
+        # the embedder refuses a model configured for another location
+        QoreRagUtils::AbstractEmbedderFactory f = QoreRagUtils::RagProviderRegistry::getEmbedderFactoryEx("vertex-ai");
+        assertThrows("VERTEX-AI-CONFIG-ERROR", sub () {
+            f.create(<QoreRagUtils::EmbedderConfig>{"backend": "vertex-ai", "model": "text-embedding-005",
+                "options": {"gcp_project_id": "fake-project", "gcp_region": "us-central1",
+                    "gcp_model_locations": {"text-embedding-005": "europe-west4"}}});
+        });
+        assertEq("VertexAiEmbedder", f.create(<QoreRagUtils::EmbedderConfig>{"backend": "vertex-ai",
+            "model": "text-embedding-005", "options": {"gcp_project_id": "fake-project",
+            "gcp_region": "europe-west4", "gcp_model_locations": {"text-embedding-005": "europe-west4"}}})
+            .className(), "a model in its configured location is accepted");
+    }
+
+    private endpointLocationTest() {
+        assertEq("europe-west4", locationProvider("europe-west4", {"gcp_endpoint_location": "europe-west4"})
+            .getRegion());
+        assertThrows("VERTEX-AI-CONFIG-ERROR", sub () {
+            locationProvider("europe-west4", {"gcp_endpoint_location": "us-central1"});
+        }, NOTHING, "an endpoint serving another location");
     }
 
     private QoreLlmUtils::LlmBackend newBackend() {
