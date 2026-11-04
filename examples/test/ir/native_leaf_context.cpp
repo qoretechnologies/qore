@@ -16,6 +16,7 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #undef NDEBUG
 #endif
 #include <cassert>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -2240,7 +2241,14 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
         unsigned observed_success = 0;
         // Include the compiled caller and public Program entry in the sweep.
         // Restore the real limit before inspecting diagnostics or cleanup.
-        for (unsigned gap = 0; gap < 32768; gap += 16) {
+        // A call that succeeds with the limit at a gap passed every stack check above that limit, and so passes
+        // them with any larger gap: the sweep checks every gap up to the first success and the gaps of
+        // METHOD_SWEEP_SUCCESS_MARGIN bytes past it, all of which must succeed.  Sweeping the rest of the range
+        // repeated the same successful call more than 1500 times in each of the hundreds of sweeps of the test.
+        constexpr unsigned METHOD_SWEEP_RANGE = 32768;
+        constexpr unsigned METHOD_SWEEP_SUCCESS_MARGIN = 1024;
+        unsigned sweep_end = METHOD_SWEEP_RANGE;
+        for (unsigned gap = 0; gap < sweep_end; gap += 16) {
             *limit = get_stack_pos() - gap;
             QoreValue value = program->callFunction(caller_name, *args, &xsink);
             *limit = saved_limit;
@@ -2248,6 +2256,8 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
             assert(qore_get_call_program_context() == caller);
             assert(rc->getObject() == saved_object && rc->getClass() == saved_class);
             if (xsink) {
+                // no stack check fails with a larger gap than one with which the call succeeded
+                assert(!observed_success);
                 assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
                 ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
                 assert(!xsink);
@@ -2266,7 +2276,9 @@ static void checkMethod(QoreProgram* program, const char* caller_name, bool inli
                 observed_early += !method;
             } else {
                 assert(result->getAsBigInt() == 24);
-                ++observed_success;
+                if (!observed_success++) {
+                    sweep_end = std::min(METHOD_SWEEP_RANGE, gap + METHOD_SWEEP_SUCCESS_MARGIN);
+                }
             }
             if (!(gap % 160)) {
                 assert(!qore_check_cancel(&xsink, "native method guard sweep"));
