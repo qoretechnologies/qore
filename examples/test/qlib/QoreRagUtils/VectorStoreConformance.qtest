@@ -12,6 +12,10 @@
 %requires QoreRagTypes
 %requires QoreRagUtils
 %requires json
+%requires OpenSearchDataProvider
+%requires MilvusRestClient
+%requires ChromaRestClient
+%requires WeaviateRestClient
 
 # Conformance of AbstractVectorStore::countByFilter(), deleteByFilter() and summarizeBy() (issue #5576).
 #
@@ -20,6 +24,10 @@
 #   - Qdrant        (QDRANT_URL, for example http://127.0.0.1:6333; a temporary collection is created)
 #   - pgvector      (QORE_DB_CONNSTR_PGSQL or PGVECTOR_DB_CONNSTR; a temporary table is created)
 #   - MongoDB       (MONGODB_URL; records are scoped by a random payload value)
+#   - OpenSearch    (OPENSEARCH_URL, for example http://127.0.0.1:9200; a temporary index is created)
+#   - Milvus        (MILVUS_URL, for example http://127.0.0.1:19530; a temporary collection is created)
+#   - Chroma        (CHROMA_URL, for example http://127.0.0.1:8000; a temporary collection is created)
+#   - Weaviate      (WEAVIATE_URL, for example http://127.0.0.1:8080; a temporary class is created)
 # Stores without a backend are covered by the mocked-transport tests next to each module.
 
 %exec-class VectorStoreConformanceTest
@@ -103,6 +111,9 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if (ENV.MONGODB_URL.val()) {
             addTestCase("MongoDB", \mongoTest());
         }
+        if (ENV.OPENSEARCH_URL.val()) {
+            addTestCase("OpenSearch", \opensearchTest());
+        }
         set_return_value(main());
     }
 
@@ -133,6 +144,39 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
                 "options": {"dimension": 3},
             });
         runScenario(store, "qd-" + get_random_string(6));
+    }
+
+    opensearchTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.OPENSEARCH_URL, "data": "json"});
+        try {
+            rest.restGet("/");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("OpenSearch is not reachable at %y: %s", ENV.OPENSEARCH_URL, ex.desc));
+        }
+        rest.restPut("/" + name, {
+            "settings": {"index": {"knn": True}},
+            # payload_eq is an exact term match, so the string payload fields must be keyword fields
+            "mappings": {"properties": {
+                "embedding": {"type": "knn_vector", "dimension": 3},
+                "scope": {"type": "keyword"},
+                "k": {"type": "keyword"},
+            }},
+        });
+        on_exit {
+            try {
+                rest.restDel("/" + name);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "opensearch",
+                "collection": name,
+                "url": ENV.OPENSEARCH_URL,
+                "options": {"dimension": 3, "refresh": "true"},
+            });
+        runScenario(store, "os-" + get_random_string(6));
     }
 
     pgvectorTest() {
