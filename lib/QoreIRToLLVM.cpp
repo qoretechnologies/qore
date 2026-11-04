@@ -24776,16 +24776,34 @@ bool QoreIRToLLVM::lowerInstructionBody(const QoreIRInstruction* inst, llvm::Fun
                     result = emitMaybeInvoke(helper, helper_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                             module, llvm_func, inst);
-                } else {
-                    const auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(
-                            inv->expr.getInternalNode());
-                    assert(rt_const);
+                } else if (const auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(
+                        inv->expr.getInternalNode())) {
                     llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(rt_const));
                     llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
                     auto helper = module.getOrInsertFunction("qore_rt_load_constant",
                             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                } else {
+                    // IR deserialized from an AOT binary holds an initialized constant's value
+                    // instead of a reference to it (the reader resolves the reference when the
+                    // constant already has its value), or a node that resolves the constant when
+                    // evaluated; serve it as the IR interpreter does.  The instruction owns the
+                    // expression for as long as this code can run.
+                    QoreValue expr_val = inv->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    if (expr_val.needsEval()) {
+                        auto helper = module.getOrInsertFunction("qore_rt_load_constant_expr",
+                                llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {llvm::ConstantInt::get(i64_type, expr_bits), xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_load_constant_value",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        result = builder->CreateCall(helper,
+                                {llvm::ConstantInt::get(i64_type, expr_bits)});
+                    }
                 }
                 // LoadConstant doesn't modify locals — no reload needed
 
@@ -34906,14 +34924,25 @@ bool QoreIRToLLVM::lowerInstructionBody(const QoreIRInstruction* inst, llvm::Fun
                         {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             } else {
                 // No RuntimeConstantRefNode — expr holds the value directly (e.g., number,
-                // binary, object, or container constants). Return expr.refSelf().
+                // binary, object, or container constants), or, in IR deserialized from an AOT
+                // binary, a node that resolves the constant when evaluated, which is evaluated as
+                // the IR interpreter does.
                 QoreValue expr_val = lcinst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                auto helper = module.getOrInsertFunction("qore_rt_load_constant_value",
-                        llvm::FunctionType::get(i64_type, {i64_type}, false));
-                result = builder->CreateCall(helper,
-                        {llvm::ConstantInt::get(i64_type, expr_bits)});
+                if (expr_val.needsEval()) {
+                    auto lc_ft = llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_load_constant_expr", lc_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_load_constant_expr_throwing", lc_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {llvm::ConstantInt::get(i64_type, expr_bits), xsink_arg}, module, llvm_func, inst);
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_load_constant_value",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    result = builder->CreateCall(helper,
+                            {llvm::ConstantInt::get(i64_type, expr_bits)});
+                }
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

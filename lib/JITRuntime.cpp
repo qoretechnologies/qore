@@ -3055,10 +3055,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant_value(uint64_t val_bits) {
     return toBits(val.refSelf());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx,
-        ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
-    QoreValue expr = fromBits(ctx->exprs[idx]);
+extern "C" DLLEXPORT uint64_t qore_rt_load_constant_expr(uint64_t expr_bits, ExceptionSink* xsink) {
+    QoreValue expr = fromBits(expr_bits);
     if (expr.hasNode()) {
         if (auto* node = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode())) {
             return qore_rt_load_constant(node, xsink);
@@ -3067,7 +3065,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int
     if (expr.needsEval()) {
         return toBits(expr.eval(xsink));
     }
-    return qore_rt_load_constant_value(ctx->exprs[idx]);
+    return qore_rt_load_constant_value(expr_bits);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return qore_rt_load_constant_expr(ctx->exprs[idx], xsink);
 }
 
 // --- Closure creation helper ---
@@ -15134,6 +15138,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_constant_throwing(
         const RuntimeConstantRefNode* node, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_constant(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_constant_expr_throwing(
+        uint64_t expr_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_constant_expr(expr_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

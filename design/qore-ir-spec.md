@@ -89,6 +89,17 @@ constants: an unresolved field becomes a null pointer in native code that faults
 the first time the instruction is reached, which can be long after the program
 started and only on the first execution that takes that branch.
 
+The serialized expression itself need not come back in the form the compiler
+gave it. A constant reference is stored as the constant's path, and the reader
+resolves the path again: a constant that already has its value is read back as
+that value, and only a constant that is still pending becomes a
+`RuntimeConstantRefNode` (or a node that resolves it when evaluated). A
+`LoadConstant` instruction, or an `Invoke` whose `invoke_opcode` is
+`LoadConstant` (a read inside a try block or a loop with cleanup), can therefore
+hold a reference, a node that needs evaluation, or the value, and every consumer
+must serve all three as the IR interpreter does (`qore_rt_load_constant_expr()`
+in the JIT runtime).
+
 Resolution happens per execution, so a consumer must keep the resolved address in
 a local. Every thread executing a function shares one instruction, and writing
 the resolution back races with the other threads' reads of the same field.

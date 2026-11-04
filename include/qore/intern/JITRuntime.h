@@ -945,6 +945,13 @@ class RuntimeConstantRefNode;
 //! Load a runtime constant value; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink* xsink);
 
+//! Load a constant from the expression a LoadConstant instruction holds; returns NaN-boxed QoreValue
+/** The expression is a RuntimeConstantRefNode, a node that resolves on evaluation (a deferred reference),
+    or the constant's value itself, which is what IR deserialized from an AOT binary carries for a
+    constant that is already initialized; each is served as the IR interpreter serves it.
+*/
+uint64_t qore_rt_load_constant_expr(uint64_t expr_bits, ExceptionSink* xsink);
+
 //! Load a runtime constant or direct constant value via AOT context slot
 uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
