@@ -138,6 +138,8 @@ class DebugWrapper {
         Mutex shutdown();
         #! True when qdbg-remote ends, so that only one of them ends it
         bool ending;
+        #! True when a signal ends qdbg-remote: an error of a command that its disconnect ends is not reported
+        bool endingOnSignal;
     }
 
     private {
@@ -267,6 +269,7 @@ class DebugWrapper {
                     return;
                 }
                 ending = True;
+                endingOnSignal = True;
             }
             try {
                 dcl.wsc.disconnect();
@@ -313,6 +316,11 @@ class DebugWrapper {
             }
             dcl.wsc.disconnect();
         } catch (hash<ExceptionInfo> e) {
+            # the signal handler ends the process with its exit code
+            if (endingOnSignal) {
+                Counter forever(1);
+                forever.waitForZero();
+            }
             stderr.printf("%s: %s\n", e.err, e.desc);
             exit(-1);
         }

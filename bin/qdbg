@@ -177,6 +177,8 @@ class DebugWrapper {
         Mutex shutdown();
         #! True when qdbg ends, so that only one of them ends it
         bool ending;
+        #! True when a signal ends qdbg: an error of a command that the end of the program ends is not reported
+        bool endingOnSignal;
     }
 
     private {
@@ -334,6 +336,11 @@ class DebugWrapper {
             # in destructors when module programs are destroyed first
             dpcl.endDebugging();
         } catch (hash<ExceptionInfo> ex) {
+            # the signal handler ends the process with its exit code
+            if (endingOnSignal) {
+                Counter forever(1);
+                forever.waitForZero();
+            }
             # the call stack of the error with -v
             if (opt.verbose) {
                 stderr.printf("%s\n", get_exception_string(ex));
@@ -362,6 +369,7 @@ class DebugWrapper {
                 return;
             }
             ending = True;
+            endingOnSignal = True;
         }
         foreach ProgramControl pgm in (dcl.dpc.getAllPrograms()) {
             try {

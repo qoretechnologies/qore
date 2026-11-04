@@ -559,14 +559,17 @@ public namespace DebugProgramControl {
             int pgm_id = pgm.getProgramId();
             list<int> stopped = ();
             {
+                AutoLock al(startedLock);
+                terminatingPrograms{pgm_id} = True;
+            }
+            # the threads that end with the cancellation end without an error; this is set before any thread is resumed
+            # or cancelled, as a thread that ended first would report its exception as unhandled
+            setProgramTerminating(pgm);
+            {
                 # no thread is registered as stopped while the program is marked, so each thread that is stopped is
                 # resumed here and no other one stops (see handleInterrupt())
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
-                {
-                    AutoLock al(startedLock);
-                    terminatingPrograms{pgm_id} = True;
-                }
                 foreach hash<auto> i in (ctxThread.pairIterator()) {
                     if (i.value.pgmId == pgm_id) {
                         push stopped, int(i.key);
@@ -578,8 +581,6 @@ public namespace DebugProgramControl {
                     }
                 }
             }
-            # the threads that end with the cancellation end without an error
-            setProgramTerminating(pgm);
             # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
             # debugger; it ends when it continues (see handleInterrupt()); the lock makes checking and cancelling a
             # thread atomic against a thread that ends its code (see threadEnds())
