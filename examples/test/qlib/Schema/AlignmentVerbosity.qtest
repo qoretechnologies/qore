@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Schema
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class AlignmentVerbosityTest
+
+#! Tests what a schema alignment prints at each verbosity level; the alignments run in a qore process of their own
+class AlignmentVerbosityTest inherits QUnit::Test {
+    private {
+        #! creates a schema, upgrades it with a table reconciliation that adds a column, and aligns it again, with
+        #! the verbosity level and the message flag given as arguments
+        const Script = "%modern
+%requires SqlUtil
+%requires Schema
+%requires sqlite3
+
+hash<auto> sub definition(string version, *bool reconcile) {
+    hash<auto!> payments = {
+        \"columns\": {\"id\": {\"type\": \"int\", \"notnull\": True}, \"amount\": {\"type\": \"int\"}},
+        \"primary_key\": {\"name\": \"pk_payments_legacy\", \"columns\": (\"id\",)},
+    };
+    hash<auto!> def = {
+        \"schema\": {\"name\": \"Pay\", \"version\": version, \"version_table\": \"pay_version\",
+            \"version_column\": \"version\", \"version_where\": {\"name\": \"Pay\"}},
+        \"tables\": {
+            \"pay_version\": {
+                \"columns\": {\"name\": {\"type\": \"varchar\", \"size\": 40, \"notnull\": True},
+                    \"version\": {\"type\": \"varchar\", \"size\": 40}},
+                \"primary_key\": {\"name\": \"pk_pay_version\", \"columns\": (\"name\",)},
+            },
+        },
+        \"reference_data\": {\"normal\": {\"pay_version\": {\"columns\": (\"name\", \"version\"),
+            \"rows\": ((\"Pay\", version),)}}},
+    };
+    if (reconcile) {
+        payments.columns.payment_id = {\"type\": \"int\"};
+        def.migrations = ({\"version\": \"1.1\", \"pre_align\": ({\"action\": \"reconcile_table\", \"contract\": contract()},)},);
+    }
+    def.tables.payments = payments;
+    return Schema::DataSchemaLoader::loadHash(def, True);
+}
+
+hash<auto> sub contract() {
+    return {
+        \"contract_version\": 1,
+        \"migration_id\": \"canonical-payment-id\",
+        \"table\": \"payments\",
+        \"canonical_columns\": (
+            {\"name\": \"payment_id\", \"type\": \"int\", \"primary_key\": True, \"missing_live\": True},
+            {\"name\": \"amount\", \"type\": \"int\"},
+        ),
+        \"column_mappings\": (
+            {\"target\": \"payment_id\", \"source\": \"id\", \"source_kind\": \"legacy_column\",
+                \"conversion\": \"numeric_compatible\"},
+            {\"target\": \"amount\", \"source\": \"amount\", \"source_kind\": \"existing_column\",
+                \"conversion\": \"identity\"},
+        ),
+        \"backfill\": {\"batch_size\": 100, \"quarantine_table\": \"payments_schema_quarantine\"},
+        \"constraints_and_indexes\": {
+            \"primary_key\": {\"name\": \"pk_payments\", \"columns\": (\"payment_id\",)},
+            \"indexes\": ({\"name\": \"ix_payments_amount\", \"columns\": (\"amount\",), \"unique\": False},),
+        },
+    };
+}
+
+#! Returns the schema at the given version; from 1.1, the payments table has the canonical column, which the
+#! reconciliation in the given phase adds and fills, and keeps its legacy primary key
+
+int verbose = ARGV[0].toInt();
+bool do_msgs = parse_boolean(ARGV[1]);
+Datasource ds(\"sqlite3:@:memory:\");
+(new Schema::DataSchema(ds, definition(\"1.0\"))).align(False, verbose, do_msgs);
+Table payments(ds, \"payments\");
+payments.insert({\"id\": 1, \"amount\": 10});
+ds.commit();
+(new Schema::DataSchema(ds, definition(\"1.1\", True))).align(False, verbose, do_msgs);
+# the version matches: with and without the force option
+(new Schema::DataSchema(ds, definition(\"1.1\", True))).align(False, verbose, do_msgs);
+(new Schema::DataSchema(ds, definition(\"1.1\", True))).alignWithInfo(True, verbose, do_msgs);
+# the log methods work again after the alignment
+Schema::DataSchema schema(ds, definition(\"1.1\", True));
+schema.alignWithInfo(False, verbose, do_msgs);
+schema.log(\"END-OF-RUN\");
+";
+
+        FsUtil::TmpDir tmp_dir("schema-align-verbosity-");
+        string path;
+    }
+
+    constructor() : Test("AlignmentVerbosityTest", "1.0", \ARGV) {
+        path = tmp_dir.path + "/align.q";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Script);
+        addTestCase("a negative verbosity level prints nothing", \silentTest());
+        addTestCase("a negative verbosity level prints nothing with progress messages", \silentWithMessagesTest());
+        addTestCase("the default level prints the alignment", \defaultTest());
+        addTestCase("level 1 prints the progress of a table reconciliation", \verboseTest());
+        addTestCase("the messages of an alignment follow the message flag above a negative level", \noMessagesTest());
+        set_return_value(main());
+    }
+
+    #! nothing is printed, and the log methods print again after the alignment
+    silentTest() {
+        checkSqlite();
+        assertEq("END-OF-RUN\n", run(-1, False));
+    }
+
+    silentWithMessagesTest() {
+        checkSqlite();
+        assertEq("END-OF-RUN\n", run(-1, True));
+    }
+
+    #! the paired case of the silent tests: each kind of output that they exclude is printed here
+    defaultTest() {
+        checkSqlite();
+        string out = run(0, True);
+        assertRegex("creating Pay schema 1.0", out);
+        assertRegex("schema is at version \"1.0\" targeting \"1.1\": running schema alignment", out);
+        assertRegex("schema is already at target version \"1.1\": no alignment necessary", out);
+        assertRegex("schema is already at target version \"1.1\": forcing check", out);
+        assertRegex("changes? made; schema is now at version", out);
+    }
+
+    #! a table reconciliation prints its progress from level 1
+    verboseTest() {
+        checkSqlite();
+        string out = run(1, True);
+        assertRegex("added nullable canonical column payments.payment_id", out);
+        assertRegex("migration .* complete: original=1", out);
+        assertRegex("COMMITTED ALIGNMENT", out);
+    }
+
+    noMessagesTest() {
+        checkSqlite();
+        string out = run(0, False);
+        assertNRegex("creating Pay schema", out);
+        assertNRegex("schema is now at version", out);
+        # the checks of the version are not progress messages
+        assertRegex("schema is already at target version", out);
+    }
+
+    private checkSqlite() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+    }
+
+    #! runs the alignments and returns their output
+    private string run(int verbose, bool do_msgs) {
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        string module_dir = get_script_dir() + "/../../../../qlib" + (ENV.QORE_MODULE_DIR ? PathSep + ENV.QORE_MODULE_DIR : "");
+        cmd += sprintf("QORE_MODULE_DIR='%s' '%s' '%s' %d %s 2>&1", module_dir, ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore",
+            path, verbose, do_msgs ? "true" : "false");
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+}
