@@ -573,6 +573,80 @@ static void ut_program_context_snapshot(UnitTestCounters& c) {
     canonical.setThreadLocalProgramData(caller_tlpd);
 }
 
+//! A location scope leaves the thread's live parse options alone unless it sets them.
+/** The parse options field of a RuntimeConfig is a snapshot that only AST execution keeps up to date: with compiled
+    code and the IR interpreter it can hold the options of another Program, or none at all.  A location scope that
+    wrote it to the thread would change the policy of the code running there, for example disabling negative offsets
+    for every following native indexed read.
+*/
+static void ut_runtime_location_helper_live_options(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    const QoreParseOptions live = runtime_get_parse_options();
+    const QoreParseOptions saved_snapshot = rc.getParseOptions();
+    const QoreProgramLocation* saved_loc = rc.getLocation();
+    const AbstractStatement* saved_stmt = rc.getStatement();
+    const QoreProgramLocation* live_loc = get_runtime_location();
+    const AbstractStatement* live_stmt = get_runtime_statement();
+    // a stale snapshot that differs from the live options in an option the scope does not set
+    const QoreParseOptions stale = live ^ PO_NEGATIVE_OFFSETS;
+    QoreProgramLocation location("runtime-location-helper-unit", 23, 23);
+    for (bool with_sink : {false, true}) {
+        rc.setParseOptions(stale);
+        {
+            RuntimeConfigLocationHelper scope(rc, &location, nullptr, false, QoreParseOptions(),
+                with_sink ? &xsink : nullptr);
+            UT_ASSERT(c, !xsink, "a location scope raises no exception");
+            UT_ASSERT(c, get_runtime_location() == &location && rc.getLocation() == &location,
+                "a location scope sets the live and snapshot location");
+            UT_ASSERT(c, runtime_get_parse_options() == live,
+                "a location scope without parse options keeps the live options, not the snapshot");
+            UT_ASSERT(c, rc.getParseOptions() == stale, "a location scope without parse options keeps the snapshot");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == live,
+            "leaving a location scope without parse options keeps the live options");
+        UT_ASSERT(c, get_runtime_location() == live_loc && get_runtime_statement() == live_stmt,
+            "leaving a location scope restores the live location and statement");
+        UT_ASSERT(c, rc.getLocation() == saved_loc && rc.getStatement() == saved_stmt,
+            "leaving a location scope restores the snapshot location and statement");
+        // an active runtime override survives a location scope
+        {
+            QoreCallParseOptionsOverride override_po;
+            override_po.mask = PO_NEGATIVE_OFFSETS;
+            override_po.value = (live & PO_NEGATIVE_OFFSETS) ? QoreParseOptions() : PO_NEGATIVE_OFFSETS;
+            override_po.replace = PO_NEGATIVE_OFFSETS;
+            RuntimeParseOptionsOverrideHelper policy(override_po);
+            const QoreParseOptions overridden = runtime_get_parse_options();
+            UT_ASSERT(c, overridden == stale, "the override changes the live negative-offset policy");
+            rc.setParseOptions(live);
+            {
+                RuntimeConfigLocationHelper scope(rc, &location, nullptr, false, QoreParseOptions(),
+                    with_sink ? &xsink : nullptr);
+                UT_ASSERT(c, runtime_get_parse_options() == overridden,
+                    "a location scope keeps the live options of an active override");
+            }
+            UT_ASSERT(c, runtime_get_parse_options() == overridden,
+                "leaving a location scope keeps the live options of an active override");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == live, "the override restores the live options");
+        // a scope that sets the parse options restores the live options, not the snapshot
+        rc.setParseOptions(stale);
+        {
+            RuntimeConfigLocationHelper scope(rc, &location, nullptr, true, stale, with_sink ? &xsink : nullptr);
+            UT_ASSERT(c, runtime_get_parse_options() == stale && rc.getParseOptions() == stale,
+                "a location scope with parse options sets the live and snapshot options");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == live,
+            "leaving a location scope with parse options restores the live options");
+        UT_ASSERT(c, rc.getParseOptions() == stale,
+            "leaving a location scope with parse options restores the snapshot options");
+        UT_ASSERT(c, get_runtime_location() == live_loc && get_runtime_statement() == live_stmt,
+            "leaving a location scope with parse options restores the live location and statement");
+    }
+    rc.setParseOptions(saved_snapshot);
+    UT_ASSERT(c, !xsink, "location scope checks leave a clean sink");
+}
+
 //! Explicit context scopes restore both policy and the Program owning inherited restrictions.
 static void ut_native_call_options(UnitTestCounters& c) {
     // IDs are never reused, so leave the monotonic counter advanced for the following callback/closure fixtures.
@@ -2441,8 +2515,16 @@ static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc,
         return QoreValue(raw);
     };
     for (bool enabled : {false, true}) {
-        RuntimeParseOptionsOverrideHelper policy(rc, PO_NEGATIVE_OFFSETS,
-            enabled ? PO_NEGATIVE_OFFSETS : QoreParseOptions());
+        // The calling Program's options are those of the thread (%modern code has negative offsets), and an
+        // override adds an option that is not positive without removing it, so the override replaces it to set
+        // both policies independently of the caller.
+        QoreCallParseOptionsOverride override_po;
+        override_po.mask = PO_NEGATIVE_OFFSETS;
+        override_po.value = enabled ? PO_NEGATIVE_OFFSETS : QoreParseOptions();
+        override_po.replace = PO_NEGATIVE_OFFSETS;
+        RuntimeParseOptionsOverrideHelper policy(rc, override_po);
+        UT_ASSERT_EQ(c, enabled, runtime_check_parse_option(PO_NEGATIVE_OFFSETS),
+            "the override sets the thread's negative-offset policy");
         // Deliberately stale snapshot: native reads must use the live thread
         // view, including the override above, rather than this copied field.
         read_context.setParseOptions(enabled ? QoreParseOptions() : PO_NEGATIVE_OFFSETS);
@@ -16139,6 +16221,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_native_closure_context(c);
     ut_native_method_frame_pair(c);
     ut_program_context_snapshot(c);
+    ut_runtime_location_helper_live_options(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
     ut_native_closure_option_replacement(c);
@@ -16178,6 +16261,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_native_closure_context(c);
     ut_native_method_frame_pair(c);
     ut_program_context_snapshot(c);
+    ut_runtime_location_helper_live_options(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
     ut_native_closure_option_replacement(c);

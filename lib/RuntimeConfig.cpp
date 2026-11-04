@@ -309,39 +309,41 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreParseOptions& new_po,
         ExceptionSink* xsink)
     : rc(rc), old_loc(rc.getLocation()), old_stmt(rc.getStatement()), old_po(rc.getParseOptions()),
-      tls_old_loc(rc.getLocation()), tls_old_stmt(rc.getStatement()), tls_old_po(rc.getParseOptions()),
-      restore_po(has_po), used_swap(false) {
+      restore_po(has_po) {
     rc.setLocation(new_loc);
     if (new_stmt) {
         rc.setStatement(new_stmt);
     }
+    // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts
+    // without RuntimeConfig access) gets the correct location.  The thread's previous state is saved from the thread
+    // itself: the snapshot fields of the RuntimeConfig are not maintained by every execution mode (compiled code and
+    // the IR interpreter keep the live thread view only), so they must never be written back to the thread.
     if (has_po) {
         rc.setParseOptions(new_po);
-    }
-    // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts
-    // without RuntimeConfig access) gets the correct location
-    if (xsink) {
-        used_swap = true;
-        swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), rc.getParseOptions(),
+        swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), new_po,
             tls_old_stmt, tls_old_loc, tls_old_po);
-    } else {
-        update_runtime_statement_location(rc.getStatement(), rc.getLocation(), rc.getParseOptions());
+        return;
     }
+    // without new parse options, the thread's runtime parse options, including any runtime override, stay as they are
+    tls_old_stmt = get_runtime_statement();
+    tls_old_loc = get_runtime_location();
+    update_runtime_statement_location(rc.getStatement(), rc.getLocation());
+#ifdef QORE_MANAGE_STACK
+    if (xsink) {
+        check_stack(xsink);
+    }
+#endif
 }
 
 RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
     rc.setLocation(old_loc);
     rc.setStatement(old_stmt);
+    // Restore TLS to its old values
     if (restore_po) {
         rc.setParseOptions(old_po);
-    }
-    // Restore TLS to old values
-    if (restore_po) {
         update_runtime_statement_location(tls_old_stmt, tls_old_loc, tls_old_po);
-    } else if (used_swap) {
-        update_runtime_statement_location(tls_old_stmt, tls_old_loc);
     } else {
-        update_runtime_statement_location(old_stmt, old_loc, rc.getParseOptions());
+        update_runtime_statement_location(tls_old_stmt, tls_old_loc);
     }
 }
 

@@ -730,6 +730,11 @@ private:
 
 /**
  * @brief RAII helper to temporarily change location in RuntimeConfig.
+ *
+ * The location and statement are also set in the thread's live view and restored on exit.  The thread's runtime
+ * parse options are changed (and restored) only if \a has_po is true; otherwise the live options, including any
+ * runtime override, are left as they are: the RuntimeConfig's parse options snapshot is not written to the thread,
+ * as it is maintained only by AST execution.
  */
 class RuntimeConfigLocationHelper {
 public:
@@ -748,9 +753,10 @@ private:
     QoreParseOptions old_po;
     const QoreProgramLocation* tls_old_loc;
     const AbstractStatement* tls_old_stmt;
+    //! the thread's runtime parse options to restore; set only if \a restore_po is true
     QoreParseOptions tls_old_po;
+    //! true if the helper sets the parse options (and restores them on exit)
     bool restore_po;
-    bool used_swap;
 };
 
 /**
