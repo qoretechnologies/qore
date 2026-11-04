@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires Util
 %requires ../TestFileTime.qm
 
 %exec-class AOTModuleStaleFallbackTest
@@ -30,10 +31,12 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTModuleStaleFallbackTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the commands of the test run in other directories, so a relative path is made absolute; a command without a
+        # directory is found through the PATH
+        qore_bin = AOTModuleStaleFallbackTest::absolutePath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = AOTModuleStaleFallbackTest::absolutePath(ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc"));
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
 
@@ -48,6 +51,11 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
             \malformedTargetTest());
         addTestCase("a depfile with a relative target names the module in its directory", \relativeTargetTest());
         set_return_value(main());
+    }
+
+    #! returns the absolute path of a program given with a directory, and the name of a program without one
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
     }
 
     private string run(string cmd) {
