@@ -34,6 +34,118 @@ extern "C" void init_NATIVE_LEAF_CONTEXT_qo(QoreProgram*);
 #endif
 
 // The compiler may seed sparse IR identities, then overwrite a former highest seed during specialization.
+// Test-only adapters: the actual compiled callee entry still executes, with the live stack limit moved above the
+// stack after the dispatch helper has checked its stack and published the callee's frame.  A limit set before the
+// call is passed or failed by the dispatch helper's guard and the callee's guard together, and the callee's guard
+// fails first only where the callee checks its stack deeper than the dispatch helper does, which depends on the frame
+// sizes of the build (a DEBUG library checks in deeper frames than an optimized callee).  Each test owns an unshared
+// Program; the saved entry belongs only to this thread and is restored before the next call.
+static thread_local QoreFunctionRefTypedEntry forced_callee_entry = nullptr;
+static thread_local unsigned forced_callee_calls = 0;
+
+//! Moves the live stack limit above the stack for the adapter's call of the real entry, and restores it on every path
+class ForcedCalleeLimit {
+public:
+    explicit ForcedCalleeLimit(RuntimeConfig* rc)
+            : limit(const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc))) {
+        assert(limit);
+        saved = *limit;
+        ++forced_callee_calls;
+        // above every stack position of the callee
+        *limit = get_stack_pos() + 4096;
+    }
+    ~ForcedCalleeLimit() {
+        *limit = saved;
+    }
+private:
+    size_t* limit;
+    size_t saved;
+};
+
+template <typename Result, typename Arg>
+static Result forcedInlineStackEntry(Arg arg, QoreAOTContext* ctx, ExceptionSink* xsink, RuntimeConfig* rc,
+        const size_t* view) {
+    ForcedCalleeLimit forced(rc);
+    using Entry = Result (*)(Arg, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*);
+    return reinterpret_cast<Entry>(forced_callee_entry)(arg, ctx, xsink, rc, view);
+}
+
+template <typename Result, typename Arg>
+static Result forcedRuntimeConfigEntry(Arg arg, QoreAOTContext* ctx, ExceptionSink* xsink, RuntimeConfig* rc) {
+    ForcedCalleeLimit forced(rc);
+    using Entry = Result (*)(Arg, QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+    return reinterpret_cast<Entry>(forced_callee_entry)(arg, ctx, xsink, rc);
+}
+
+template <typename Result, typename Arg>
+static Result forcedEntry(Arg arg, QoreAOTContext* ctx, ExceptionSink* xsink) {
+    ForcedCalleeLimit forced(qore_rt_get_fast_runtime_config());
+    using Entry = Result (*)(Arg, QoreAOTContext*, ExceptionSink*);
+    return reinterpret_cast<Entry>(forced_callee_entry)(arg, ctx, xsink);
+}
+
+//! Replaces the entry of a prepared callback that the dispatch helper calls with an adapter that overflows the stack
+/** The dispatch helper calls the v3 entry (with the live stack limit) if the reference has one, otherwise the
+    RuntimeConfig entry if it has one, otherwise the entry in the prepared cache.
+*/
+template <typename Result, typename Arg>
+class ForcedCalleeOverflow {
+public:
+    ForcedCalleeOverflow(QorePreparedFunctionRefV3& cache, uint32_t signature) : cache(cache),
+            ref(const_cast<FunctionCallReferenceNode*>(cache.ref)) {
+        assert(!forced_callee_entry);
+        forced_callee_calls = 0;
+        if ((forced_callee_entry = ref->getTypedInlineStackEntry(signature))) {
+            kind = Kind::InlineStack;
+            ref->setTypedInlineStackEntry(reinterpret_cast<QoreFunctionRefTypedEntry>(
+                &forcedInlineStackEntry<Result, Arg>));
+        } else if ((forced_callee_entry = ref->getTypedRuntimeConfigEntry(signature))) {
+            kind = Kind::RuntimeConfig;
+            ref->setTypedRuntimeConfigEntry(reinterpret_cast<QoreFunctionRefTypedEntry>(
+                &forcedRuntimeConfigEntry<Result, Arg>));
+        } else {
+            forced_callee_entry = cache.entry;
+            assert(forced_callee_entry);
+            kind = Kind::Legacy;
+            cache.entry = reinterpret_cast<QoreFunctionRefTypedEntry>(&forcedEntry<Result, Arg>);
+        }
+    }
+    ~ForcedCalleeOverflow() {
+        switch (kind) {
+            case Kind::InlineStack: ref->setTypedInlineStackEntry(forced_callee_entry); break;
+            // the RuntimeConfig setter clears the v3 entry, which this reference does not have
+            case Kind::RuntimeConfig: ref->setTypedRuntimeConfigEntry(forced_callee_entry); break;
+            case Kind::Legacy: cache.entry = forced_callee_entry; break;
+        }
+        forced_callee_entry = nullptr;
+    }
+private:
+    enum class Kind { InlineStack, RuntimeConfig, Legacy };
+    QorePreparedFunctionRefV3& cache;
+    FunctionCallReferenceNode* ref;
+    Kind kind;
+};
+
+//! Returns true if the call stack of the exception has a user frame whose name contains the given name
+static bool exceptionHasFrame(ExceptionSink& xsink, const char* name) {
+    ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+    assert(info);
+    const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+    assert(stack);
+    bool found = false;
+    for (size_t i = 0; i < stack->size(); ++i) {
+        const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+        assert(frame);
+        const auto* function = frame->getKeyValue("function").get<const QoreStringNode>();
+        found |= function && std::strstr(function->c_str(), name);
+        if (!(i % 100)) {
+            ExceptionSink cancel;
+            assert(!qore_check_cancel(&cancel, "native leaf stack inspection"));
+        }
+    }
+    return found;
+}
+
 static void checkLocalSlots() {
     std::array<int, 8> keys{};
     AOTSlotMap slots;
@@ -508,7 +620,6 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
 #if defined(__aarch64__) || defined(__x86_64__)
     if (limit) {
         const size_t saved_limit = *limit;
-        unsigned published = 0;
         for (unsigned gap = 0; gap < 4096; gap += 16) {
             *limit = get_stack_pos() - gap;
             int handled = qore_rt_try_funcref_int_int_v4(invocation.bits, 7, &result, xsink, rc, invocation.cache,
@@ -525,9 +636,7 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
                     const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
                     assert(frame);
                     const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
-                    if (name && std::strstr(name->c_str(), "nativeLeafProbe")) {
-                        ++published;
-                    }
+                    assert(name);
                     if (!(i % 100)) {
                         assert(!qore_check_cancel(xsink, "padded native leaf stack inspection"));
                     }
@@ -539,7 +648,19 @@ static QoreValue paddedSweep(const void* ptr, const QoreListNode*, RuntimeConfig
                 assert(!qore_check_cancel(xsink, "padded native leaf guard sweep"));
             }
         }
-        assert(published);
+        // whether the sweep reaches the callee's own guard depends on the build's frame sizes (published may be 0);
+        // with the limit moved after the dispatch helper's check, the callee's guard fails for certain
+        {
+            ForcedCalleeOverflow<int64_t, int64_t> forced(*invocation.cache, 1 | (1 << 2));
+            int handled = qore_rt_try_funcref_int_int_v4(invocation.bits, 7, &result, xsink, rc, invocation.cache,
+                &reusable.slot);
+            assert(handled == 1 && forced_callee_calls == 1 && *limit == saved_limit);
+            assert(qore_get_call_program_context() == caller);
+        }
+        assert(result == 0 && *xsink);
+        assert(xsink->getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+        assert(exceptionHasFrame(*xsink, "nativeLeafProbe"));
+        xsink->clear();
     }
 #else
     assert(!limit);
@@ -2295,7 +2416,6 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
 #if defined(__aarch64__) || defined(__x86_64__)
         if (limit) {
             const size_t saved_limit = *limit;
-            unsigned observed_leaf = 0;
             unsigned observed_early = 0;
             for (unsigned gap = 0; gap < 4096; ++gap) {
                 result = -123.5;
@@ -2320,7 +2440,7 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
                             assert(!qore_check_cancel(&xsink, "float leaf stack inspection"));
                         }
                     }
-                    ++(leaf ? observed_leaf : observed_early);
+                    observed_early += !leaf;
                 } else {
                     assert(result == 1.75);
                 }
@@ -2328,7 +2448,21 @@ static void checkFloat(QoreProgram* program, bool inline_entry) {
                     assert(!qore_check_cancel(&xsink, "float leaf guard sweep"));
                 }
             }
-            assert(observed_leaf && observed_early);
+            // the callee's own guard fails for certain with the limit moved after the dispatch helper's check
+            assert(observed_early);
+            {
+                ForcedCalleeOverflow<double, double> forced(cache, 2 | (2 << 2));
+                result = -123.5;
+                int handled = call(bits, 1.25, &result, &xsink, rc, &cache);
+                assert(handled == 1 && forced_callee_calls == 1 && *limit == saved_limit);
+                assert(qore_get_call_program_context() == caller);
+            }
+            assert(result == 0.0 && xsink);
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+            assert(exceptionHasFrame(xsink, "nativeLeafFloatProbe"));
+            xsink.clear();
+            assert(call(bits, 1.25, &result, &xsink, rc, &cache) == 1);
+            assert(!xsink && result == 1.75);
         }
 #else
         assert(!limit);
@@ -2488,7 +2622,6 @@ static void check(bool inline_entry, bool inline_method) {
         size_t* limit = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
 #if defined(__aarch64__) || defined(__x86_64__)
         if (limit) {
-            unsigned observed_leaf = 0;
             unsigned observed_early = 0;
             const size_t saved_limit = *limit;
             // Test-only mutation of the same-thread live limit. Sweep individual
@@ -2522,7 +2655,7 @@ static void check(bool inline_entry, bool inline_method) {
                             assert(!qore_check_cancel(&xsink, "native leaf stack inspection"));
                         }
                     }
-                    ++(leaf ? observed_leaf : observed_early);
+                    observed_early += !leaf;
                 } else {
                     assert(result == 24);
                 }
@@ -2530,7 +2663,21 @@ static void check(bool inline_entry, bool inline_method) {
                     assert(!qore_check_cancel(&xsink, "native leaf guard sweep"));
                 }
             }
-            assert(observed_leaf && observed_early);
+            // the callee's own guard fails for certain with the limit moved after the dispatch helper's check
+            assert(observed_early);
+            {
+                ForcedCalleeOverflow<int64_t, int64_t> forced(cache, 1 | (1 << 2));
+                result = 123;
+                int handled = call(bits, 7, &result, &xsink, rc, &cache);
+                assert(handled == 1 && forced_callee_calls == 1 && *limit == saved_limit);
+                assert(qore_get_call_program_context() == caller);
+            }
+            assert(result == 0 && xsink);
+            assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+            assert(exceptionHasFrame(xsink, "nativeLeafProbe"));
+            xsink.clear();
+            assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);
+            assert(!xsink && result == 24);
         }
 #else
         assert(!limit);

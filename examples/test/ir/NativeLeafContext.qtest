@@ -1,6 +1,11 @@
 #!/usr/bin/env qore
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
+#
+# The driver runs 112 times (4 configurations, 2 optimization levels, 14 runtime controls), and each run sweeps the
+# stack limit byte by byte through every guard; a run takes about 3.3 s against a debug build on x86_64 Linux (CI
+# tests a debug build), so the whole test takes about 7 minutes there, more than the default 300 s budget.
+# test-timeout: 1200
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
