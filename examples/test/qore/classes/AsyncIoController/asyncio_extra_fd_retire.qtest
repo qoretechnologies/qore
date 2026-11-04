@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoExtraFdRetireTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The source of the operation of the test: the same source runs in this Program and in a Program that is deleted
+const OpSource = "
+#! Waits for a notifier and an extra fd; its second step runs for the event of its extra fd
+class ExtraFdOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        EventNotifier extra;
+        Counter stepped;
+        int steps = 0;
+    }
+
+    constructor(EventNotifier notifier, EventNotifier extra, Counter stepped) {
+        self.notifier = notifier;
+        self.extra = extra;
+        self.stepped = stepped;
+    }
+
+    string getGoal() {
+        return \"extra-fd\";
+    }
+
+    string getState() {
+        return \"waiting\";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (++steps == 2) {
+            extra.acknowledge();
+            stepped.dec();
+        }
+        return <SocketPollInfo>{
+            \"events\": SOCK_POLLIN,
+            \"socket\": notifier,
+            \"extra_fds\": (<ExtraPollFdInfo>{\"fd\": extra.getPollableDescriptor(), \"events\": SOCK_POLLIN},),
+        };
+    }
+}
+
+auto sub submitExtraFdOperation(string owner, string key, EventNotifier notifier, EventNotifier extra,
+        Counter stepped) {
+    return AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new ExtraFdOperation(notifier, extra, stepped),
+        \"owner\": owner,
+        \"key\": key,
+        \"to\": -1s,
+    });
+}
+";
+
+#! An operation that leaves the controller leaves no registration of an extra fd in the I/O thread
+/** A registration that stays is level-triggered with nothing to run for its events: the I/O thread polled and
+    discarded them at 100% CPU while the descriptor was ready.  The controller reports the registrations of its I/O
+    threads in AsyncIoController::getInfo(), which the I/O threads answer after the commands sent before it.
+*/
+class AsyncIoExtraFdRetireTest inherits QUnit::Test {
+    private {
+        int serial = 0;
+    }
+
+    constructor() : Test("AsyncIoExtraFdRetireTest", "1.0") {
+        addTestCase("cancelByOwner() removes the registrations of extra fds", \testCancelByOwner());
+        addTestCase("cancelByKey() removes the registrations of extra fds", \testCancelByKey());
+        addTestCase("cancel() removes the registrations of extra fds", \testCancelBySocket());
+        addTestCase("a deleted Program's operations leave no registrations of extra fds", \testCancelByProgram());
+        addTestCase("a running operation's extra fd is registered and is no orphan", \testRunning());
+        set_return_value(main());
+    }
+
+    #! Returns a Program with the operation of the test
+    private Program getOpProgram() {
+        Program p(PO_NEW_STYLE);
+        p.parse(OpSource, "asyncio-extra-fd-op");
+        return p;
+    }
+
+    #! Returns the sums of the registration counts of the I/O threads
+    private hash<auto> getRegistrations() {
+        hash<auto> rv = {"extra_fds": 0, "orphan_registrations": 0};
+        foreach hash<auto> t in (AsyncIoController::getInfo().threads) {
+            rv.extra_fds += t.extra_fds;
+            rv.orphan_registrations += t.orphan_registrations;
+        }
+        return rv;
+    }
+
+    #! Submits the operation in the given Program and waits until it has run for the event of its extra fd
+    private auto startOp(Program p, string name, EventNotifier notifier, EventNotifier extra) {
+        Counter stepped(1);
+        auto rq = p.callFunction("submitExtraFdOperation", name, name + "-key", notifier, extra, stepped);
+        extra.notify();
+        assertEq(0, stepped.waitForZero(HangGuard), "the operation runs for the event of its extra fd");
+        return rq;
+    }
+
+    private string getName(string test) {
+        return sprintf("%s-%d-%d", test, getpid(), ++serial);
+    }
+
+    testCancelByOwner() {
+        string owner = getName("extra-fd-owner");
+        EventNotifier notifier();
+        EventNotifier extra();
+        Program p = getOpProgram();
+        hash<auto> before = getRegistrations();
+        auto rq = startOp(p, owner, notifier, extra);
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        hash<auto> h = rq.get(HangGuard);
+        assertTrue(h.canceled);
+        assertLeft(before);
+    }
+
+    testCancelByKey() {
+        string owner = getName("extra-fd-key");
+        EventNotifier notifier();
+        EventNotifier extra();
+        Program p = getOpProgram();
+        hash<auto> before = getRegistrations();
+        auto rq = startOp(p, owner, notifier, extra);
+        assertTrue(AsyncIoController::cancelByKey(owner + "-key"), "the operation is canceled");
+        hash<auto> h = rq.get(HangGuard);
+        assertTrue(h.canceled);
+        assertLeft(before);
+    }
+
+    testCancelBySocket() {
+        string owner = getName("extra-fd-socket");
+        EventNotifier notifier();
+        EventNotifier extra();
+        Program p = getOpProgram();
+        hash<auto> before = getRegistrations();
+        auto rq = startOp(p, owner, notifier, extra);
+        assertTrue(AsyncIoController::cancel(notifier), "the operation is canceled");
+        hash<auto> h = rq.get(HangGuard);
+        assertTrue(h.canceled);
+        assertLeft(before);
+    }
+
+    testCancelByProgram() {
+        string owner = getName("extra-fd-program");
+        EventNotifier notifier();
+        EventNotifier extra();
+        *Program p = getOpProgram();
+        hash<auto> before = getRegistrations();
+        startOp(p, owner, notifier, extra);
+        # the deletion of a Program cancels its operations
+        delete p;
+        assertLeft(before);
+    }
+
+    testRunning() {
+        string owner = getName("extra-fd-running");
+        EventNotifier notifier();
+        EventNotifier extra();
+        Program p = getOpProgram();
+        hash<auto> before = getRegistrations();
+        Counter stepped(1);
+        auto rq = p.callFunction("submitExtraFdOperation", owner, owner + "-key", notifier, extra, stepped);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        extra.notify();
+        assertEq(0, stepped.waitForZero(HangGuard), "the operation runs for the event of its extra fd");
+        assertEq(before.orphan_registrations, getRegistrations().orphan_registrations,
+            "the registrations of a running operation are not removed as orphans");
+        # a canceled result arrives for the operation at the end, not before
+        assertEq(0, rq.size(), "the operation is still running");
+    }
+
+    #! Asserts that the operation left its registrations behind neither in the I/O thread nor as orphans
+    private assertLeft(hash<auto> before) {
+        hash<auto> after = getRegistrations();
+        assertEq(before.extra_fds, after.extra_fds, "no extra fd stays registered");
+        assertEq(before.orphan_registrations, after.orphan_registrations,
+            "the registrations were removed when the operation left");
+    }
+}

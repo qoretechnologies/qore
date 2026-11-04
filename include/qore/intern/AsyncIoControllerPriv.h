@@ -1286,7 +1286,13 @@ private:
 
         Only the I/O thread that owns the cache uses it.
     */
+    struct IoThreadContext;
+
     class OpCache {
+        // an operation leaves the cache through its I/O thread's context, so that it cannot leave with registrations
+        // by accident; see AsyncIoControllerPriv::retireOp()
+        friend struct AsyncIoControllerPriv::IoThreadContext;
+        friend class AsyncIoOpCacheTest;
     public:
         using map_t = std::unordered_map<std::string, PollInfo>;
         using iterator = map_t::iterator;
@@ -1322,6 +1328,20 @@ private:
             return it->second;
         }
 
+        //! Removes all operations
+        DLLLOCAL void clear() {
+            by_id.clear();
+            node_ids.clear();
+            map.clear();
+        }
+
+        //! Returns the operation with the given ID, or nullptr if there is none
+        DLLLOCAL node_t* findId(uint64_t id) {
+            auto i = by_id.find(id);
+            return i == by_id.end() ? nullptr : i->second;
+        }
+
+    private:
         //! Removes an operation
         DLLLOCAL iterator erase(iterator it) {
             // the ID is looked up by node: the entry's PollInfo can have been reset before it is removed
@@ -1340,20 +1360,6 @@ private:
             }
         }
 
-        //! Removes all operations
-        DLLLOCAL void clear() {
-            by_id.clear();
-            node_ids.clear();
-            map.clear();
-        }
-
-        //! Returns the operation with the given ID, or nullptr if there is none
-        DLLLOCAL node_t* findId(uint64_t id) {
-            auto i = by_id.find(id);
-            return i == by_id.end() ? nullptr : i->second;
-        }
-
-    private:
         map_t map;
         //! Operations by ID; the nodes of an unordered_map stay where they are until they are removed
         std::unordered_map<uint64_t, node_t*> by_id;
@@ -1366,6 +1372,39 @@ private:
     struct IoThreadContext {
         //! Release the event loop and notifier on resize, failed setup, or destruction
         DLLLOCAL ~IoThreadContext();
+
+        //! Takes an operation out of the cache and returns it, leaving what is registered for its ID
+        /** Only for an operation whose ID lives on in the operation that replaces it at once in the cache
+            (OpCache::emplaceWithId()).  Every other operation leaves with retireOp().
+        */
+        DLLLOCAL PollInfo takeOpKeepingId(OpCache::iterator it) {
+            PollInfo rv = it->second;
+            it->second = PollInfo();
+            cache.erase(it);
+            cache_size.fetch_sub(1, std::memory_order_relaxed);
+            return rv;
+        }
+
+        //! Takes an operation with no registrations out of the cache and returns it; see retireOp()
+        /** Used directly only for a thread that is not running: an I/O thread removes all of its registrations when
+            it exits.
+        */
+        DLLLOCAL PollInfo takeUnregisteredOp(OpCache::iterator it) {
+            assert(!hasRegistrations(it->second.op_id));
+            return takeOpKeepingId(it);
+        }
+
+        //! Removes an operation with no registrations that has been processed in place from the cache
+        DLLLOCAL void removeUnregisteredOp(uint64_t op_id) {
+            assert(!hasRegistrations(op_id));
+            cache.eraseId(op_id);
+            cache_size.fetch_sub(1, std::memory_order_relaxed);
+        }
+
+        //! Returns true if the event loop has anything registered for the operation with the given ID
+        DLLLOCAL bool hasRegistrations(uint64_t op_id) const {
+            return key_extra_fds.count(op_id) || registered_sockets.count(op_id);
+        }
 
         MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
         std::atomic<bool> running{false};  //!< True when this thread accepts commands
@@ -1443,6 +1482,11 @@ private:
         // Registered socket tracking; operations are identified by their ID (see OpCache), sockets by their hash
         //! The socket each operation is registered for, by operation ID (referenced)
         std::unordered_map<uint64_t, QoreObject*> registered_sockets;
+        //! The hash each operation in @ref registered_sockets is registered under
+        /** Recorded with the registration, because the object cannot be asked when the registration is removed: a
+            deleted object has no private data, and without the hash the registration of its descriptor would stay
+        */
+        std::unordered_map<uint64_t, std::string> registered_hashes;
         std::unordered_map<std::string, int> registered_events;
         std::unordered_map<std::string, int> registered_fds;
         //! The events each operation waits for, by operation ID
@@ -1468,6 +1512,9 @@ private:
         */
         std::unordered_map<std::string, std::shared_ptr<void>> fd_holds;
         //! The extra fds of each operation, by operation ID
+        /** No operation leaves the I/O thread with an entry here; see retireOp().  While a worker runs a step of an
+            operation it has none either (see unregisterOp()).
+        */
         std::unordered_map<uint64_t, std::unordered_set<int>> key_extra_fds;
         //! The holds of the owned extra fds of operations, by operation ID and descriptor
         /** An extra fd is registered by number; when its owner made it an owned descriptor (see
@@ -1478,6 +1525,11 @@ private:
         std::map<std::pair<uint64_t, int>, std::shared_ptr<void>> extra_fd_holds;
         //! Extra fd readiness is operation-scoped (by operation ID); primary socket event masks can be zero.
         std::unordered_map<int, std::unordered_map<uint64_t, int>> extra_fd_to_key_events;
+        //! The registrations removed because an event came for them and nothing was running for them
+        /** See removeOrphanRegistration().  Read through getInfo(); not zero only if a path that retires an operation
+            left a registration behind, which is a defect.
+        */
+        uint64_t orphan_registrations = 0;
 
         //! Tombstone record: TTL (memory-hygiene bound) + sequence gate
         /** The sequence gate is authoritative: a SubmitOp whose @c seq_at_push
@@ -1956,6 +2008,58 @@ private:
     /** @since %Qore 3.0
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink);
+
+    //! Removes everything that the event loop has registered for an operation: its extra fds and its socket
+    /** For an operation that leaves (see retireOp()), and for one whose next step runs on a worker: the I/O thread
+        cannot run it for an event meanwhile, and a level-triggered descriptor that is ready would make it poll and
+        discard the event at 100% CPU until the step returns.  The step's result registers what it waits for again.
+    */
+    DLLLOCAL void unregisterOp(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink);
+
+    //! Takes an operation out of the cache, with everything registered for it, and returns it
+    /** The source of truth of this invariant: <b>an operation never leaves the cache with a registration in the event
+        loop</b>.  Registrations are made for the operation's ID, which no later operation has (see OpCache), and they
+        are level-triggered: nothing runs for the event of a registration left behind, so the descriptor, if it stays
+        ready, makes the I/O thread poll and discard at 100% CPU, and the registration's hold keeps the descriptor open
+        for as long as the thread runs.  So every path that ends an operation uses this function, or has called
+        unregisterOp() before it removes the operation (a finished one that is still processed in place); OpCache only
+        lets IoThreadContext remove an operation, and removing one with registrations fails an assertion.  The only
+        other paths are an operation replaced at once by one that keeps its ID (IoThreadContext::takeOpKeepingId()),
+        and a thread that is not running, which removed all of its registrations when it exited.
+
+        A registration left behind in spite of this is removed at its first event; see removeOrphanRegistration().
+    */
+    DLLLOCAL PollInfo retireOp(IoThreadContext& t, OpCache::iterator it, ExceptionSink* xsink);
+
+    //! Returns true if an operation in the cache waits for the socket with the given hash
+    DLLLOCAL static bool socketHasOperation(IoThreadContext& t, const std::string& sock_hash);
+
+    //! Returns true if the operation polls the socket with the given hash
+    /** The socket of its last poll info, or before its first result, the socket it was submitted for
+    */
+    DLLLOCAL static bool pollsSocket(const PollInfo& pinfo, const std::string& sock_hash) {
+        if (!pinfo.cached_sock_hash.empty()) {
+            return pinfo.cached_sock_hash == sock_hash;
+        }
+        return pinfo.sock && pinfo.sock->getIoIdentityHash() == sock_hash;
+    }
+
+    //! Removes a registration that an event came for and that no running operation or socket has
+    /** The events of the event loop are read right after the poll, before anything can change the registrations, so
+        an event for such a registration is never a late event of an operation that has just left: the registration is
+        one that was left behind, in breach of the invariant of retireOp().  Discarding the event would make the I/O
+        thread spin for as long as the descriptor is ready, which is a far worse failure than removing the registration
+        of what no one runs for; so it is removed, with the hold of its descriptor, counted in
+        IoThreadContext::orphan_registrations and logged once at debug level.
+
+        @param t the I/O thread context
+        @param fd the descriptor of the event
+        @param key the registration key of the event
+    */
+    DLLLOCAL void removeOrphanRegistration(IoThreadContext& t, int fd, uint64_t key);
+
+    //! Adds the registration counts of an I/O thread to its hash in getInfo(); must run on the I/O thread
+    DLLLOCAL void setRegistrationInfo(QoreHashNode* entry, const IoThreadContext& t, ExceptionSink* xsink);
 
     //! The bit that marks the event loop registration key of an operation's extra fd; see extraRegKey()
     static constexpr uint64_t ExtraRegKeyBit = 1ULL << 63;

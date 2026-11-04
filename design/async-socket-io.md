@@ -468,9 +468,7 @@ for diagnostics (`getInfo()`, traces).
   again for its key, and a direct submit with `replace` on the I/O thread, keep the event loop registrations of the
   replaced entry, as they did when the registrations were made for the key.  A different poll operation submitted
   for the key through a command has its predecessor's registrations released first and gets a new ID.
-- **Every removal releases the operation's registrations**, as no later operation can take them over by its key:
-  the cancels made directly on the I/O thread (`cancelByKey()`, `cancelByOwner()`, the cancel by program) release
-  them like the Cancel commands do.
+- **An operation never leaves the cache with a registration**; see "An operation's registrations" below.
 - `OpCache::erase()` finds the ID of an entry by its node, so an entry whose `PollInfo` was reset before it is removed
   (as several removal paths do) leaves no stale index entry.
 - **A step run on a callback worker is identified by its operation's ID**: the `DT_CONTINUE_POLL` item and the
@@ -485,6 +483,41 @@ for diagnostics (`getInfo()`, traces).
   and is marked in flight, so no second step of it is dispatched before the first one returns; the step's result is
   the new submission's.  `asyncio_replace_in_flight.qtest` replaces an operation whose step blocks until the test
   releases it.
+
+### An operation's registrations
+
+The invariant, whose source of truth is `AsyncIoControllerPriv::retireOp()`: **an operation never leaves the cache with
+a registration in the event loop**, neither of its socket nor of an extra fd.  Registrations are made for the
+operation's ID, which no later operation has, and they are level-triggered.  Nothing runs for the event of a registration
+left behind, so a descriptor that stays ready makes the I/O thread poll, discard the event and poll again at 100% CPU, and
+the registration's hold keeps the descriptor open for as long as the thread runs.  This happened: the CancelOwner and
+CancelByProgram commands removed only the socket registration of an operation, and a connection attempt of happy
+eyeballs left behind by a canceled connect, whose peer later closed it, was write-ready in `CLOSE_WAIT` for hours.
+
+- **One path out.** Every path that ends an operation uses `retireOp()` (`unregisterOp()`, then
+  `IoThreadContext::takeUnregisteredOp()`).  A finished operation that is still processed in place calls
+  `unregisterOp()` first and is removed with `IoThreadContext::removeUnregisteredOp()`.  `OpCache::erase()` and `eraseId()`
+  are private to `IoThreadContext`, so another path does not compile, and removing an operation with registrations fails
+  an assertion.
+- **The exceptions.** An operation replaced at once by one that keeps its ID (`takeOpKeepingId()`; see above) keeps what
+  is registered for the ID.  The cancels of a thread that is not running find nothing to remove: an exiting I/O thread
+  removes all of its registrations.
+- **A step on a worker.** While a callback worker runs a step of an operation, `unregisterOp()` has removed its socket and
+  its extra fds: the I/O thread cannot run the operation for an event meanwhile, so a ready descriptor would make it spin
+  until the step returns.  The step's result registers what the operation waits for again.  An owned extra fd that the
+  step gives up is closed at once then, with no registration left to hold it.
+- **A deleted object.** `IoThreadContext::registered_hashes` records the hash each operation's socket is registered under,
+  because a deleted object has no private data to ask: without it, the registration of the object's descriptor stayed.
+- **The backstop.** The events of a poll are read right after it, before anything can change the registrations, so an event
+  for a registration that no operation in the cache or known socket has is never a late event of an operation that has
+  just left: it is a registration that was left behind.  Discarding it would mean a spin, so
+  `removeOrphanRegistration()` removes it with the hold of its descriptor, logs it once at debug level and counts it in
+  `orphan_registrations`.  A registration of a running operation is never removed this way.
+
+`AsyncIoController::getInfo()` reports per I/O thread `extra_fds` (the extra fds registered now) and
+`orphan_registrations` (not 0 only if a retire path has a defect).  Tests: `asyncio_extra_fd_retire.qtest`, and
+`runCanceledExtraFd()`, `runWorkerStepExtraFd()` and `runOrphanRegistrations()` in `AsyncIoDescriptorHoldTest` and
+`runDeletedObject()` in `AsyncIoClosedPollableTest`, which read the same counters, so they need no timing.
 
 ### Poll Info Reuse
 
