@@ -205,6 +205,7 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
       declared prerequisites always run in the same shard as their dependents
     - skip reasons (failed prerequisite, filter exclusion, or a user
       @ref QUnit::Test::testSkip() reason) are now shown on the test report line
+    - where a test case was skipped is shown only with verbosity 3 (\c -vvv), as its reason is on the report line
 
     @section qunit_v0_4_3 Version 0.4.3
     - added constructors for use with languages that don't support lvalue references (ex: %Python)
@@ -1115,8 +1116,10 @@ public class TestReporter {
         if (testcase.result == TEST_SKIPPED && testcase.detail.val())
             printf(" (%s)", testcase.detail);
         print("\n");
+        # the report line of a skipped test case gives the reason; where it was skipped is shown only on request
         if (testcase.result != TEST_SUCCESS
-                && (testcase.result != TEST_SKIPPED || testcase.error || testcase.pos)) {
+                && (testcase.result != TEST_SKIPPED
+                    || (m_options.verbose > 2 && (testcase.error || testcase.pos)))) {
             string out = "";
             printf("%s at %s\n", testcase.error, testcase.pos);
             ListIterator errorDescription(testcase.detail ? testcase.detail.split("\n") : ());

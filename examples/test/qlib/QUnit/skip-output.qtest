@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class SkipOutputTest
+
+#! Tests what QUnit prints for a skipped test case at each verbosity; the script runs in a qore process of its own
+class SkipOutputTest inherits QUnit::Test {
+    private {
+        const Script = "%modern
+%requires QUNIT_PATH
+%exec-class SkippingTest
+class SkippingTest inherits QUnit::Test {
+    constructor() : Test(\"SkippingTest\", \"1.0\", \\ARGV) {
+        addTestCase(\"skipped case\", \\skipCase());
+        addTestCase(\"failing case\", \\failCase());
+        set_return_value(main());
+    }
+    skipCase() {
+        testSkip(\"the reason of the skip\");
+    }
+    failCase() {
+        assertEq(1, 2, \"the failed assertion\");
+    }
+}
+";
+        FsUtil::TmpDir tmp_dir("qunit-skip-output-");
+        string path;
+    }
+
+    constructor() : Test("skip output", "1.0", \ARGV) {
+        path = tmp_dir.path + "/skipping.qtest";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(replace(Script, "QUNIT_PATH", get_module_hash().QUnit.filename));
+        addTestCase("default verbosity", \defaultVerbosity());
+        addTestCase("verbosity 1", \verbosityOne());
+        addTestCase("verbosity 3", \verbosityThree());
+        set_return_value(main());
+    }
+
+    defaultVerbosity() {
+        hash<auto> res = run();
+        # the failing case makes the run fail, so the output of a failure is checked with the skip
+        assertNeq(0, res.rc, res.out);
+        assertRegex("Skipped: skipped case: 0 assertions \\(the reason of the skip\\)", res.out);
+        assertNRegex("Skip requested", res.out);
+        assertNRegex(">> the reason of the skip", res.out);
+        # the details of a failure are always shown
+        assertRegex("Assertion \"the failed assertion\" failure", res.out);
+    }
+
+    verbosityOne() {
+        hash<auto> res = run("-v");
+        assertRegex("Skipped: skipped case", res.out);
+        assertNRegex("Skip requested", res.out);
+    }
+
+    verbosityThree() {
+        hash<auto> res = run("-vvv");
+        assertRegex("Skipped: skipped case", res.out);
+        assertRegex("Skip requested", res.out);
+        assertRegex(">> the reason of the skip", res.out);
+    }
+
+    private hash<auto> run(*string args) {
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        cmd += sprintf("'%s' '%s' %s 2>&1", ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore", path, args ?? "");
+        int rc;
+        string out = backquote(cmd, \rc);
+        return {"rc": rc, "out": out};
+    }
+}
