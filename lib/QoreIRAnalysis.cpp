@@ -2260,6 +2260,110 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
     }
 }
 
+//! Returns the normal target of an invoke, or nullptr if the instruction is not an invoke
+static const QoreIRBasicBlock* qore_ir_invoke_normal_target(const QoreIRInstruction& inst) {
+    switch (inst.opcode) {
+        case QoreIROpcode::Invoke:
+            return static_cast<const QoreIRInvokeInstruction&>(inst).normal_target;
+        case QoreIROpcode::InvokeMethodDirect:
+            return static_cast<const QoreIRInvokeMethodDirectInstruction&>(inst).normal_target;
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction&>(inst).normal_target;
+        default:
+            break;
+    }
+    return nullptr;
+}
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_compute_invoke_regions(const QoreIRFunction& func, std::vector<uint32_t>& region) {
+    const size_t block_count = func.blocks.size();
+    region.assign(block_count, 0);
+    std::unordered_map<const QoreIRBasicBlock*, uint32_t> block_ids;
+    block_ids.reserve(block_count);
+    for (size_t i = 0; i < block_count; ++i) {
+        block_ids.emplace(func.blocks[i].get(), static_cast<uint32_t>(i));
+        region[i] = static_cast<uint32_t>(i);
+    }
+    // every edge into each block, normal and exceptional; the entry block is entered by the call as well
+    std::vector<uint32_t> pred_count(block_count, 0);
+    // the block whose invoke continues normally to each block, if any
+    std::vector<uint32_t> invoke_pred(block_count, UINT32_MAX);
+    if (block_count) {
+        ++pred_count[0];
+    }
+    size_t check_count = 0;
+    for (size_t i = 0; i < block_count; ++i) {
+        const QoreIRBasicBlock* block = func.blocks[i].get();
+        if (!block) {
+            continue;
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR invoke region analysis")) {
+                return false;
+            }
+            if (!inst || !inst->exception_target) {
+                continue;
+            }
+            auto it = block_ids.find(inst->exception_target);
+            if (it != block_ids.end()) {
+                ++pred_count[it->second];
+            }
+        }
+        if (block->instructions.empty() || !block->instructions.back()) {
+            continue;
+        }
+        const QoreIRInstruction& term = *block->instructions.back();
+        const QoreIRBasicBlock* normal = qore_ir_invoke_normal_target(term);
+        qore_ir_visit_successors(term, [&](QoreIRBasicBlock* successor) {
+            auto it = block_ids.find(successor);
+            if (it == block_ids.end()) {
+                return;
+            }
+            ++pred_count[it->second];
+            if (successor == normal && it->second != i) {
+                invoke_pred[it->second] = static_cast<uint32_t>(i);
+            }
+        });
+    }
+    // a block whose only way in is the normal edge of an invoke is in the region of the invoke's block; each block is
+    // resolved along its chain of such predecessors, which ends at a block that has another way in (the region's
+    // head), or, in an unreachable cycle of such blocks, at a block of the chain
+    std::vector<uint8_t> resolved(block_count, 0);
+    std::vector<uint8_t> in_chain(block_count, 0);
+    std::vector<uint32_t> chain;
+    auto is_continuation = [&](uint32_t b) {
+        return pred_count[b] == 1 && invoke_pred[b] != UINT32_MAX;
+    };
+    for (size_t i = 0; i < block_count; ++i) {
+        if (resolved[i]) {
+            continue;
+        }
+        uint32_t b = static_cast<uint32_t>(i);
+        chain.clear();
+        while (!resolved[b] && !in_chain[b] && is_continuation(b)) {
+            if (qore_ir_analysis_cancelled(check_count, "IR invoke region analysis")) {
+                return false;
+            }
+            in_chain[b] = 1;
+            chain.push_back(b);
+            b = invoke_pred[b];
+        }
+        const bool cycle = in_chain[b];
+        if (!cycle && !resolved[b]) {
+            // the head of a region
+            resolved[b] = 1;
+        }
+        for (uint32_t c : chain) {
+            // the blocks of an unreachable cycle are regions of their own
+            region[c] = cycle ? c : region[b];
+            resolved[c] = 1;
+            in_chain[c] = 0;
+        }
+    }
+    return true;
+}
+
 QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
         bool include_exception_edges) {
     blocks.reserve(func.blocks.size());

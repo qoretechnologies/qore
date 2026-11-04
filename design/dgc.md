@@ -97,7 +97,12 @@ over to the list; the compiled tiers do the same for an lvalue path when the val
 which owns it on failure as well, and a statement-form operation has no result, so no reference is taken for one.
 The value is handed over only when it has a cleanup slot of its own, this is its only use, it is not a weak-reference
 load, and it is defined in the same block as the operation - the use counts are static, so a value defined before a
-loop and used once in its body would otherwise be handed over on the first iteration.
+loop and used once in its body would otherwise be handed over on the first iteration.  A block that an invoke (a call
+with an exception edge, which ends its block) continues to, and that has no other way in, counts as the invoke's
+block (`qore_ir_compute_invoke_regions()`): it runs once each time the invoke's block does.  A frame whose locals are
+released in a set order on unwinding, or that has handlers, has exception edges at all of its calls, so without this
+no call result there, such as a new object, would be handed over.  The same rule decides when `DiscardTempsKeep`
+moves the reference of the value that it keeps instead of taking a new one.
 `examples/test/ir/lvalue-assign-ownership/lvalue-assign-ownership.qtest` checks that every tier releases values
 exactly as the AST interpreter does.
 

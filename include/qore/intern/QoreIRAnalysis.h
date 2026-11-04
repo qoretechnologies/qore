@@ -37,6 +37,21 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Groups the blocks of a function into the straight-line regions that invokes split them into
+/** An invoke (a call that can raise, with an exception edge) ends its block and continues in the block of its normal
+    target; a block entered only that way runs exactly once each time the invoke's block does, so it continues the
+    invoke's block, as if the invoke did not end it.  A region is a block that has another way in (its head), with the
+    blocks that continue it this way.  A value defined in a region and used only once later in the same region is
+    therefore used exactly once per definition, as a value defined and used in one block is, which lets an operation
+    take over its reference: a function whose locals are released in a set order on unwinding, or that has handlers,
+    has exception edges at all of its calls, and would otherwise hand no call's result over.
+    @param func the function
+    @param region receives, for each block of the function (by its index in \a func.blocks), the index of its region's
+    head
+    @return false if the analysis was cancelled; then \a region is incomplete
+*/
+DLLLOCAL bool qore_ir_compute_invoke_regions(const QoreIRFunction& func, std::vector<uint32_t>& region);
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze

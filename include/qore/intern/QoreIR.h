@@ -3892,6 +3892,12 @@ public:
         excluded from that block-local kill and are released by the normal
         end-of-function value cleanup instead. */
     mutable std::vector<uint8_t> interpreter_cross_block_slots;
+    //! Slots whose definition and uses are not all in one region of blocks split only by invokes
+    /** As interpreter_cross_block_slots, with the blocks grouped as qore_ir_compute_invoke_regions() groups them.
+        An operation may take over the reference of an operand used only by it (a hand-over) unless its slot is
+        marked here: a slot defined in an invoke's block and used in the block that the invoke continues to is used
+        once per definition, as one defined and used in one block is. */
+    mutable std::vector<uint8_t> interpreter_cross_region_slots;
     //! Slots of native scalars (NativeInt or NativeFloat facts), which own their value in the interpreter.
     /** Native code keeps such values in registers, so the optimizer forwards them from one statement to the
         next and around loops; in the interpreter an integer outside the inline range or a double whose bits

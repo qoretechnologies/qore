@@ -4331,6 +4331,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     value_def_block.clear();
+    block_region_head.clear();
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
     immediate_closure_creates.clear();
@@ -9276,6 +9277,20 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
         released = true;
     }
     return released;
+}
+
+bool QoreIRToLLVM::definedInCurrentInvokeRegion(uint32_t id) const {
+    auto def_it = value_def_block.find(id);
+    if (def_it == value_def_block.end() || !current_lowering_block_) {
+        return false;
+    }
+    if (def_it->second == current_lowering_block_) {
+        return true;
+    }
+    auto def_head = block_region_head.find(def_it->second);
+    auto use_head = block_region_head.find(current_lowering_block_);
+    return def_head != block_region_head.end() && use_head != block_region_head.end()
+        && def_head->second == use_head->second;
 }
 
 bool QoreIRToLLVM::buildArgsArray(const QoreIRInstruction* inst, int arg_start,
@@ -16603,6 +16618,17 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
     value_def_block.clear();
+    block_region_head.clear();
+    {
+        std::vector<uint32_t> block_region;
+        if (!qore_ir_compute_invoke_regions(func, block_region)) {
+            error = "cancelled during IR invoke region analysis";
+            return false;
+        }
+        for (size_t i = 0; i < block_region.size() && i < func.blocks.size(); ++i) {
+            block_region_head.emplace(func.blocks[i].get(), func.blocks[block_region[i]].get());
+        }
+    }
     value_def_temp_scope.clear();
     value_defined_by_call.clear();
     immediate_closure_creates.clear();
@@ -39075,21 +39101,19 @@ bool QoreIRToLLVM::lowerInstructionBody(const QoreIRInstruction* inst, llvm::Fun
             }
             llvm::Value* boxed = boxValue(val, kept_id);
             // When this function owns the kept value's reference in a cleanup slot of the scope (defined in this
-            // block, used only here, not a weak-reference load), the reference is moved to the result instead of
-            // taking a new one and releasing the slot's: releasing a real reference to a new object runs the
-            // recursive-reference scan that its constructor deferred (see design/dgc.md), as the consuming
-            // LValuePathAssign avoids
+            // block or in a block of its invoke region, used only here, not a weak-reference load), the reference is
+            // moved to the result instead of taking a new one and releasing the slot's: releasing a real reference
+            // to a new object runs the recursive-reference scan that its constructor deferred (see design/dgc.md),
+            // as the consuming LValuePathAssign avoids
             bool move = false;
             {
                 auto alloca_it = invoke_alloca_map.find(kept_id);
                 auto uses_it = operand_remaining_uses.find(kept_id);
-                auto def_it = value_def_block.find(kept_id);
                 if (alloca_it != invoke_alloca_map.end()
                         && nanboxed_values.count(kept_id)
                         && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
                         && !weak_load_result_ids.count(kept_id)
-                        && def_it != value_def_block.end()
-                        && def_it->second == current_lowering_block_) {
+                        && definedInCurrentInvokeRegion(kept_id)) {
                     llvm::Value* ca = alloca_it->second;
                     if (!ca) {
                         ca = promoteSsaEntryToAlloca(kept_id, module, llvm_func);
@@ -39987,20 +40011,19 @@ bool QoreIRToLLVM::lowerInstructionBody(const QoreIRInstruction* inst, llvm::Fun
             llvm::Value* result_val;
             // The value of the operand is handed over to the lvalue instead of borrowed when this function owns it
             // (it has a cleanup slot), this is its last use, it is not a weak-reference load, and it is defined in
-            // this block - the use counts are static, so a value defined before a loop and used once in it would
-            // otherwise be handed over on the first iteration.  The helper then owns the value in every case,
-            // including when the operation fails, so the cleanup slot is cleared before the call.  See
+            // this block or in a block of its invoke region (definedInCurrentInvokeRegion()) - the use counts are
+            // static, so a value defined before a loop and used once in it would otherwise be handed over on the
+            // first iteration.  The helper then owns the value in every case, including when the operation fails,
+            // so the cleanup slot is cleared before the call.  See
             // qore_rt_lv_path_assign_consume().
             auto consume_rhs = [&](uint32_t rhs_id) -> bool {
                 auto alloca_it = invoke_alloca_map.find(rhs_id);
                 auto uses_it = operand_remaining_uses.find(rhs_id);
-                auto def_it = value_def_block.find(rhs_id);
                 if (alloca_it == invoke_alloca_map.end()
                         || !nanboxed_values.count(rhs_id)
                         || (uses_it != operand_remaining_uses.end() && uses_it->second > 1)
                         || weak_load_result_ids.count(rhs_id)
-                        || def_it == value_def_block.end()
-                        || def_it->second != current_lowering_block_) {
+                        || !definedInCurrentInvokeRegion(rhs_id)) {
                     return false;
                 }
                 llvm::Value* ca = alloca_it->second;

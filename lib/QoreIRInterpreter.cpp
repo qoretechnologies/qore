@@ -2177,7 +2177,14 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     }
     // A slot is safe for the block-local liveness scan only when its single definition and
     // every use live in the same block; otherwise the scan cannot prove the value is dead.
+    // A hand-over of a value used once only needs its definition and use in one region of blocks
+    // split only by invokes (see qore_ir_compute_invoke_regions()).
+    std::vector<uint32_t> block_region;
+    if (!qore_ir_compute_invoke_regions(func, block_region)) {
+        return raiseInterpreterAnalysisCancel(xsink);
+    }
     std::vector<uint8_t> cross_block_slots(func.max_value_id + 1, 0);
+    std::vector<uint8_t> cross_region_slots(func.max_value_id + 1, 0);
     for (size_t id = 0; id < cross_block_slots.size(); ++id) {
         if (id && ((id % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
             return false;
@@ -2186,9 +2193,15 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             // never read: the block-local scan has nothing to get wrong
             continue;
         }
-        if (slot_multi_use_block[id] || slot_multi_def_block[id]
-                || slot_def_block[id] == no_block || slot_def_block[id] != slot_use_block[id]) {
+        if (slot_multi_use_block[id] || slot_multi_def_block[id] || slot_def_block[id] == no_block) {
             cross_block_slots[id] = 1;
+            cross_region_slots[id] = 1;
+        } else if (slot_def_block[id] != slot_use_block[id]) {
+            cross_block_slots[id] = 1;
+            if (slot_def_block[id] >= block_region.size() || slot_use_block[id] >= block_region.size()
+                    || block_region[slot_def_block[id]] != block_region[slot_use_block[id]]) {
+                cross_region_slots[id] = 1;
+            }
         }
     }
     int max_param_idx = -1;
@@ -2245,6 +2258,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
     func.interpreter_cross_block_slots = std::move(cross_block_slots);
+    func.interpreter_cross_region_slots = std::move(cross_region_slots);
     // the slots of native scalars own their value (see IRCleanupSlots)
     std::vector<uint8_t> slot_owned_values(func.max_value_id + 1, 0);
     for (size_t id = 0; id < slot_owned_values.size() && id < func.value_facts.size(); ++id) {
@@ -7309,19 +7323,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     const std::vector<uint8_t>& return_protected_slots = func.interpreter_return_protected_slots;
     const std::vector<uint8_t>& cross_block_slots = func.interpreter_cross_block_slots;
+    // an operand handed over needs its definition and its one use only in one region of blocks split by invokes
+    const std::vector<uint8_t>& cross_region_slots = func.interpreter_cross_region_slots;
     const std::vector<uint32_t>& return_value_slot_ids = func.interpreter_return_value_slot_ids;
     const std::vector<uint32_t>& return_preserve_slot_ids = func.interpreter_return_preserve_slot_ids;
     const std::vector<int32_t>& operand_use_counts = func.interpreter_operand_use_counts;
 
     // Takes over the reference of the value of an operand that an lvalue operation stores (an assignment, += or a
-    // push) when its slot owns it (it has a cleanup entry), this is its only use, in the block defining it, and it is
-    // not a borrowed weak-reference temporary, as compiled code does (see qore_rt_lv_path_assign_consume()); the
-    // slot no longer holds the value afterwards.  Handing the value over keeps a dereference with no real reference
+    // push) when its slot owns it (it has a cleanup entry), this is its only use, in the block defining it or a block
+    // that an invoke of that block continues to (see qore_ir_compute_invoke_regions()), and it is not a borrowed
+    // weak-reference temporary, as compiled code does (see qore_rt_lv_path_assign_consume()); the slot no longer
+    // holds the value afterwards.  Handing the value over keeps a dereference with no real reference
     // from happening once the value is linked into the graph, which would make a scan that its constructor deferred.
     auto consumeLValueOperand = [&](QoreIRValue operand, const QoreValue& val) -> bool {
         uint32_t id = operand.id;
         if (!val.hasNode() || id >= value_use_counts.size() || value_use_counts[id] != 1
-                || (id < cross_block_slots.size() && cross_block_slots[id])
+                || (id < cross_region_slots.size() && cross_region_slots[id])
                 || (id < return_protected_slots.size() && return_protected_slots[id])
                 || weak_load_temp_slots.find(id) != weak_load_temp_slots.end()
                 || !removeAllCleanupEntries(cleanup, id)) {
@@ -12870,7 +12887,7 @@ load_local_done:
                 QoreValue kept = getIRValue(values, inst->operands.front());
                 if (kept.needsRef()) {
                     bool move = kept_id < value_use_counts.size() && value_use_counts[kept_id] == 1
-                        && !(kept_id < cross_block_slots.size() && cross_block_slots[kept_id])
+                        && !(kept_id < cross_region_slots.size() && cross_region_slots[kept_id])
                         && !(kept_id < return_protected_slots.size() && return_protected_slots[kept_id])
                         && weak_load_temp_slots.find(kept_id) == weak_load_temp_slots.end()
                         && cleanup.pushCount(kept_id) == 1;
@@ -13912,6 +13929,10 @@ load_local_done:
                     }
                 }
                 // lvh is now destructed — object lock released
+                // The operand's reference, when += did not store the value, is released now, before an exception
+                // is routed: the value can be the last reference to an object, whose destructor can raise (and
+                // a value handed over has no other reference left)
+                rhs_holder = QoreValue();
                 if (navigation_failed || (xsink && *xsink)) {
                     res.discard(xsink);
                     res = QoreValue();
@@ -14610,6 +14631,9 @@ load_local_done:
                         }
                     }
                 }
+                // the operand's reference, when the operation did not store the value, is released before an
+                // exception is routed, as for LValuePathCompound
+                rhs_holder = QoreValue();
                 if (navigation_failed || (xsink && *xsink)) {
                     res.discard(xsink);
                     if (xsink && *xsink && inst->exception_target) {

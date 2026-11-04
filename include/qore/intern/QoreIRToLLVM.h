@@ -949,6 +949,11 @@ private:
         but that use runs on every iteration.
     */
     std::unordered_map<uint32_t, const QoreIRBasicBlock*> value_def_block;
+    //! the head of each block's region of blocks split only by invokes (see qore_ir_compute_invoke_regions())
+    /** A value used once, in the region of the block defining it, is used once per definition, so the use can take
+        over its reference; see definedInCurrentInvokeRegion().
+    */
+    std::unordered_map<const QoreIRBasicBlock*, const QoreIRBasicBlock*> block_region_head;
     // the temp scope (QoreIRInstruction::temp_scope_id) of the instruction defining each value
     std::unordered_map<uint32_t, uint32_t> value_def_temp_scope;
     // the values created by a call instruction (qore_ir_call_arg_start() >= 0)
@@ -1860,6 +1865,12 @@ private:
     void emitCondBrWithSsaPreamble(llvm::Module& module,
             llvm::Function* llvm_func, llvm::Value* cond,
             llvm::BasicBlock* exception_target, llvm::BasicBlock* normal_target);
+
+    //! Returns true if the value is defined in the block being lowered or in a block of its invoke region
+    /** A value used only by the instruction being lowered is then used once per definition, so the instruction can
+        take over its reference; see qore_ir_compute_invoke_regions().
+    */
+    DLLLOCAL bool definedInCurrentInvokeRegion(uint32_t id) const;
 
     // Phase 2B — promote a single SSA-direct cleanup entry (identified
     // by its IR result id) to a cleanup alloca.  Used when downstream
