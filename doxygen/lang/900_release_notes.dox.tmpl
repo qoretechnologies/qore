@@ -1770,6 +1770,9 @@
     - fixed hangs and crashes of @ref signal_handling "signal handling" when the signal thread's wakeup was denied,
       when several threads changed signal handlers at once, at exit, and when a signal callback's handler was
       replaced while it ran
+    - fixed signals without a handler not ending the process on macOS, as \c SIGUSR1 or \c SIGTERM after
+      @ref Qore::remove_signal_handler() "remove_signal_handler()"; a signal is now processed after its handler is
+      removed as if it never had one, on all platforms
     - fixed @ref Qore::SSLCertificate "SSLCertificate" validity dates being read in the local time zone and with
       wrong years; an invalid date raises \c SSLCERTIFICATE-DATE-ERROR
     - fixed the serialization of @ref Qore::SQL::Datasource "Datasource" and

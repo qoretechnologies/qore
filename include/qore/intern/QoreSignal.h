@@ -178,6 +178,8 @@ private:
    DLLLOCAL void stop_signal_thread();
    DLLLOCAL void wait_signal_thread_stopped();
    DLLLOCAL void setMask(sigset_t& mask);
+   //! Returns the signals that the signal thread waits for; the signal manager's mutex must be held
+   DLLLOCAL void getWaitMask(sigset_t& wait_mask);
    //! releases a signal taken over by a module; the signal manager's mutex must be held
    /** @param i the entry of the signal in fmap
    */

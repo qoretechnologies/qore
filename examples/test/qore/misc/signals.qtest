@@ -41,6 +41,39 @@ printf(\"events: %s %s; next callback: %d\\n\", first, second, next.get());
 remove_signal_handler(SIGUSR1);
 ";
 
+#! a script that sends itself a signal after setting its handler as the mode says; the arguments are the signal and the
+#! mode; see signalDispositionTest()
+const DispositionScript = "%modern
+int sig = int(ARGV[0]);
+string mode = ARGV[1];
+Queue handled();
+code callback = sub (int s) { handled.push(s); };
+switch (mode) {
+    case \"unset\":
+        remove_signal_handler(sig);
+        break;
+    case \"removed\":
+        set_signal_handler(sig, callback);
+        remove_signal_handler(sig);
+        break;
+    case \"readded\":
+        set_signal_handler(sig, callback);
+        remove_signal_handler(sig);
+        set_signal_handler(sig, callback);
+        break;
+}
+kill(getpid(), sig);
+if (mode == \"readded\") {
+    printf(\"handled %d\\n\", handled.get(30s));
+    exit(0);
+}
+# a signal that ends the process does so before this limit, which is only for a failure; for a signal that must not end
+# the process, a shorter wait cannot make the test fail, only miss an effect on a very slow machine
+Counter deadline(1);
+deadline.waitForZero(ARGV[2] == \"ends\" ? 30s : 100ms);
+printf(\"alive\\n\");
+";
+
 #! records the life of a signal callback: the callback finishing, and the destruction of what its closure captured
 class SignalCallbackTracker {
     private {
@@ -68,6 +101,8 @@ class SignalCallbackTracker {
 class SignalTest inherits QUnit::Test {
     constructor() : QUnit::Test("Signal test", "1.0") {
         addTestCase("signal neg test", \signalNegTest());
+        addTestCase("a signal without a handler, also after its handler is removed", \signalDispositionTest());
+        addTestCase("reserved signals have no handlers", \signalReservedTest());
         addTestCase("signal test", \signalTest());
         addTestCase("signal handler re-register", \signalReregisterTest());
         addTestCase("signal handler rapid re-register", \signalRapidReregisterTest());
@@ -224,6 +259,81 @@ class SignalTest inherits QUnit::Test {
         assertEq(0, rc, out);
         assertRegex("SIGNAL-CALLBACK-TRACKER-ERROR: raised by the destructor", out);
         assertRegex("events: finished destroyed; next callback: " + SIGUSR1 + "\n", out);
+    }
+
+    #! runs DispositionScript and returns its output and its exit code, with 128 plus the signal that ended it
+    private hash<auto> runDisposition(TmpFile script, int sig, string mode, string expected = "ends") {
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        cmd += sprintf("'%s' '%s' %d %s %s 2>/dev/null; echo rc=$?", QORE_ARGV[0], script.path, sig, mode, expected);
+        string out = backquote(cmd);
+        *list<string> m = (out =~ x/rc=([0-9]+)/);
+        return {"out": out, "rc": int(m[0])};
+    }
+
+    # removing a handler returns the signal to the state that it had before the handler was set
+    signalDispositionTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        TmpFile script("qore-signals-", ".q");
+        script.file.write(DispositionScript);
+        script.file.close();
+
+        # a signal that ends the process, by its default action or, for SIGTERM, with its cleanup, with and without a
+        # handler that was removed
+        foreach int sig in (SIGTERM, SIGUSR1, SIGUSR2) {
+            foreach string mode in ("never", "unset", "removed") {
+                hash<auto> res = runDisposition(script, sig, mode);
+                assertEq(128 + sig, res.rc, sprintf("%s %s: %y", SignalToName{sig}, mode, res.out));
+                assertFalse(res.out =~ /alive/, sprintf("%s %s", SignalToName{sig}, mode));
+            }
+            # negative: a handler that is set again handles the signal
+            hash<auto> res = runDisposition(script, sig, "readded");
+            assertEq(0, res.rc, sprintf("%s: %y", SignalToName{sig}, res.out));
+            assertRegex("handled " + sig + "\n", res.out);
+        }
+
+        # negative: SIGHUP has no action without a handler, and SIGPIPE is always ignored
+        foreach int sig in (SIGHUP, SIGPIPE) {
+            foreach string mode in ("never", "unset") {
+                hash<auto> res = runDisposition(script, sig, mode, "survives");
+                assertEq(0, res.rc, sprintf("%s %s: %y", SignalToName{sig}, mode, res.out));
+                assertRegex("alive\n", res.out);
+            }
+        }
+        hash<auto> res = runDisposition(script, SIGHUP, "removed", "survives");
+        assertEq(0, res.rc, res.out);
+        assertRegex("alive\n", res.out);
+
+        # SIGINT does as the process inherited, which an ignored SIGINT of the test run changes: the same in any case
+        hash<auto> never = runDisposition(script, SIGINT, "never", "survives");
+        hash<auto> removed = runDisposition(script, SIGINT, "removed", "survives");
+        assertEq(never.rc, removed.rc, sprintf("%y %y", never, removed));
+    }
+
+    # a reserved signal cannot have a handler, and removing a handler that it cannot have changes nothing
+    signalReservedTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        foreach int sig in (SIGALRM, SIGCHLD, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP) {
+            remove_signal_handler(sig);
+            assertThrows("SIGNAL-HANDLER-ERROR", \set_signal_handler(), (sig, sub (int s) {}),
+                SignalToName{sig});
+        }
+        # usleep() and backquote, which use SIGALRM and SIGCHLD, still work
+        usleep(1ms);
+        int rc;
+        backquote("exit 3", \rc);
+        assertEq(3, rc);
     }
 
     signalNegTest() {
