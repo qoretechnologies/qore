@@ -119,8 +119,6 @@ int port = http.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).
 
     @subsection debugmcpserver_v1_0 v1.0
     - initial release
-    - \c pause_timeout_ms of \c qore_debug_continue limits the wait for the pause that the tool requests when
-      \c timeout_ms passes
 */
 
 #! the DebugMcpServer namespace contains all the definitions in the DebugMcpServer module
