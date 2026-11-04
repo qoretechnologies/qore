@@ -6,9 +6,40 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
 %requires QUnit
 
 %exec-class SignalTest
+
+#! a script whose signal callback has captured an object whose destructor raises an exception; see signalReleaseExceptionTest()
+const ReleaseExceptionScript = "%modern
+class Tracker {
+    private { Queue events; }
+    constructor(Queue events) { self.events = events; }
+    destructor() {
+        events.push(\"destroyed\");
+        throw \"SIGNAL-CALLBACK-TRACKER-ERROR\", \"raised by the destructor of an object a signal callback captured\";
+    }
+    finished() { events.push(\"finished\"); }
+}
+sub install(Queue events) {
+    Tracker tracker(events);
+    set_signal_handler(SIGUSR1, sub (int sig) {
+        remove_signal_handler(SIGUSR1);
+        tracker.finished();
+    });
+}
+Queue events();
+install(events);
+kill(getpid(), SIGUSR1);
+string first = events.get();
+string second = events.get();
+Queue next();
+set_signal_handler(SIGUSR1, sub (int sig) { next.push(sig); });
+kill(getpid(), SIGUSR1);
+printf(\"events: %s %s; next callback: %d\\n\", first, second, next.get());
+remove_signal_handler(SIGUSR1);
+";
 
 #! records the life of a signal callback: the callback finishing, and the destruction of what its closure captured
 class SignalCallbackTracker {
@@ -175,11 +206,24 @@ class SignalTest inherits QUnit::Test {
         }
 
         # the destructor of the object that the removed callback captured raises an exception when the signal
-        # thread releases the callback; the signal thread reports it on stderr, and the next callback runs
-        checkCallback(sub () {
-            remove_signal_handler(SIGUSR1);
-        }, True);
-        checkNextCallback();
+        # thread releases the callback; the signal thread reports it on stderr, and the next callback runs; it runs in
+        # a process of its own to check what is reported
+        TmpFile script("qore-signals-", ".q");
+        script.file.write(ReleaseExceptionScript);
+        script.file.close();
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        cmd += sprintf("'%s' '%s' 2>&1", QORE_ARGV[0], script.path);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        assertRegex("SIGNAL-CALLBACK-TRACKER-ERROR: raised by the destructor", out);
+        assertRegex("events: finished destroyed; next callback: " + SIGUSR1 + "\n", out);
     }
 
     signalNegTest() {

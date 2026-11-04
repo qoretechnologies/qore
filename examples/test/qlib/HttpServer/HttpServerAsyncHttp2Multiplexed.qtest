@@ -47,6 +47,24 @@
 
 %exec-class HttpServerAsyncHttp2MultiplexedTest
 
+#! prints log messages, except those of the errors that a test case raises in its handler, unless all are requested
+class MuxLogAppender inherits StdoutAppender {
+    private {
+        bool all;
+    }
+
+    constructor(bool all) {
+        self.all = all;
+    }
+
+    processEventImpl(int type, auto params) {
+        if (!all && type == EVENT_LOG && params =~ /intentional handler error/) {
+            return;
+        }
+        StdoutAppender::processEventImpl(type, params);
+    }
+}
+
 #! Simple handler for regular HTTP/2 GET requests
 class SimpleGetHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -289,7 +307,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         mLogger = new Logger("http2-mux-test", m_options.verbose > 2
             ? LoggerLevel::getLevelInfo()
             : LoggerLevel::getLevelWarn());
-        mLogger.addAppender(new StdoutAppender());
+        mLogger.addAppender(new MuxLogAppender(m_options.verbose > 2));
         if (m_options.verbose > 2) {
             mWsHandler.debug = True;
         }

@@ -100,7 +100,8 @@ public namespace ExplicitFallbackLoadModuleTest {
 
         Program p(PO_NEW_STYLE);
         p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
-        p.loadModule(qmod_path, WARN_MODULES);
+        hash<ExceptionInfo> warning = p.loadModuleWarn(qmod_path, WARN_MODULES);
+        assertEq("BINARY-MODULE-SOURCE-FALLBACK", warning.err);
         p.parse("int sub get_value() { return ExplicitFallbackLoadModuleTest::value(); }\n",
             "explicit-qmod-fallback-load-module");
 
