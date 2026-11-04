@@ -139,17 +139,20 @@ public class QdrantPointsScrollRequestDataType inherits DataProvider::HashDataTy
                 "example_value": 0,
             },
             "with_payload": {
-                "type": SoftBoolOrNothingType,
+                "type": AutoType,
                 "display_name": "With Payload",
                 "short_desc": "Payload selector",
-                "desc": "Select which payload fields to return; `true` for all, `false` for none",
-                "example_value": True,
+                "desc": "Select which payload fields to return: `true` for all, `false` for none, a list of payload "
+                    "keys, or a hash with an `include` or `exclude` list of keys; selecting only the keys needed "
+                    "keeps large payloads off the wire",
+                "example_value": {"include": ("city", "country")},
             },
             "with_vector": {
-                "type": SoftBoolOrNothingType,
+                "type": AutoType,
                 "display_name": "With Vector",
                 "short_desc": "Vector selector",
-                "desc": "Select which vectors to return; `true` for all, `false` for none",
+                "desc": "Select which vectors to return: `true` for all, `false` for none, or a list of the names "
+                    "of the named vectors to return",
                 "example_value": False,
             },
             "order_by": {

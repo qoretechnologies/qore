@@ -466,6 +466,34 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         });
         assertEq(2, h.points.size());
 
+        # Scroll with a payload selection: only the selected keys come back (include hash, key list, and none)
+        h = scroll.doRequest({
+            "collection": collection,
+            "limit": 10,
+            "with_payload": {"include": ("country",)},
+            "with_vector": False,
+        });
+        assertTrue(h.points.size() > 0);
+        foreach hash<auto> pt in (h.points) {
+            assertEq(("country",), keys pt.payload, "include selects only the listed keys");
+        }
+        h = scroll.doRequest({
+            "collection": collection,
+            "limit": 10,
+            "with_payload": ("country",),
+        });
+        foreach hash<auto> pt in (h.points) {
+            assertEq(("country",), keys pt.payload, "a key list selects only the listed keys");
+        }
+        h = scroll.doRequest({
+            "collection": collection,
+            "limit": 10,
+            "with_payload": False,
+        });
+        foreach hash<auto> pt in (h.points) {
+            assertFalse(pt.payload.size() > 0, "no payload is returned");
+        }
+
         # Set payload
         QdrantPointsSetPayloadDataProvider set_payload(rest);
         h = set_payload.doRequest({
