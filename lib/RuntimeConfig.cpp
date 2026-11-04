@@ -49,24 +49,35 @@ RuntimeConfig::RuntimeConfig(const RuntimeConfig& other) : impl(nullptr), owned(
     }
 }
 
+// A RuntimeConfig that does not own its Impl is a view of storage owned elsewhere: the thread's canonical
+// RuntimeConfig (rc_get_tls_ref()) uses thread-local storage that stays valid while the thread runs, including the
+// exit handlers of the main thread, which run after the thread-local destructors and destroy the static namespace,
+// whose objects use the canonical RuntimeConfig.  So the canonical RuntimeConfig must never own, and hence never
+// free, an Impl: assigning to a view assigns its state (and moving an owner's state to it releases the owner's), and
+// moving from a view leaves the view as it is.
+
 RuntimeConfig::RuntimeConfig(RuntimeConfig&& other) noexcept : impl(other.impl), owned(other.owned) {
-    other.impl = nullptr;
-    other.owned = false;
+    if (owned) {
+        other.impl = nullptr;
+        other.owned = false;
+    }
 }
 
 RuntimeConfig& RuntimeConfig::operator=(const RuntimeConfig& other) {
     if (this == &other) {
         return *this;
     }
+    if (impl && !owned) {
+        *impl = other.impl ? *other.impl : Impl();
+        return *this;
+    }
+    // allocate before releasing the current state, so that a failed allocation leaves this object unchanged
+    Impl* new_impl = other.impl ? new Impl(*other.impl) : nullptr;
     if (owned && impl) {
         delete impl;
     }
-    impl = nullptr;
-    owned = false;
-    if (other.impl) {
-        impl = new Impl(*other.impl);
-        owned = true;
-    }
+    impl = new_impl;
+    owned = new_impl != nullptr;
     return *this;
 }
 
@@ -74,13 +85,25 @@ RuntimeConfig& RuntimeConfig::operator=(RuntimeConfig&& other) noexcept {
     if (this == &other) {
         return *this;
     }
+    if (impl && !owned) {
+        *impl = other.impl ? *other.impl : Impl();
+        // the state moved from an owner is released, so it is empty as after any other move
+        if (other.owned) {
+            delete other.impl;
+            other.impl = nullptr;
+            other.owned = false;
+        }
+        return *this;
+    }
     if (owned && impl) {
         delete impl;
     }
     impl = other.impl;
     owned = other.owned;
-    other.impl = nullptr;
-    other.owned = false;
+    if (owned) {
+        other.impl = nullptr;
+        other.owned = false;
+    }
     return *this;
 }
 

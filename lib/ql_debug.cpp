@@ -573,6 +573,64 @@ static void ut_program_context_snapshot(UnitTestCounters& c) {
     canonical.setThreadLocalProgramData(caller_tlpd);
 }
 
+//! The thread's canonical RuntimeConfig keeps its thread-local storage when it is assigned or moved from.
+/** Its thread-local destructor runs before the exit handlers of the main thread destroy the static namespace, whose
+    objects still use it: if it owned a heap state, that state would be freed and then written to.
+*/
+static void ut_runtime_config_thread_storage(UnitTestCounters& c) {
+    RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+    UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical), "the canonical RuntimeConfig is a thread-storage view");
+    const int saved_element = canonical.getElement();
+    const QoreProgramLocation* saved_loc = canonical.getLocation();
+    {
+        RuntimeConfig moved(std::move(canonical));
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getLocation() == saved_loc,
+            "moving from the canonical RuntimeConfig leaves its state in place");
+        UT_ASSERT(c, moved.getLocation() == saved_loc, "a RuntimeConfig moved from the canonical one has its state");
+    }
+    UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getLocation() == saved_loc,
+        "destroying a RuntimeConfig moved from the canonical one leaves its state in place");
+    {
+        RuntimeConfig replacement(canonical);
+        UT_ASSERT(c, !RuntimeConfigNativeAccess::isView(replacement), "a copy owns its state");
+        replacement.setElement(saved_element + 1);
+        canonical = std::move(replacement);
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getElement() == saved_element + 1,
+            "move-assigning to the canonical RuntimeConfig assigns its thread storage");
+        UT_ASSERT(c, !replacement.getElement() && !RuntimeConfigNativeAccess::isView(replacement),
+            "the state moved to the canonical RuntimeConfig is released");
+        RuntimeConfig copy(canonical);
+        copy.setElement(saved_element + 2);
+        canonical = copy;
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getElement() == saved_element + 2
+            && copy.getElement() == saved_element + 2,
+            "copy-assigning to the canonical RuntimeConfig assigns its thread storage");
+        RuntimeConfig empty;
+        RuntimeConfig emptied(std::move(empty));
+        // a moved-from RuntimeConfig has no state; assigning it resets the thread storage
+        RuntimeConfig saved(canonical);
+        canonical = empty;
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && !canonical.getLocation()
+            && !canonical.getElement(), "assigning an empty RuntimeConfig resets the thread storage");
+        canonical = saved;
+    }
+    UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getLocation() == saved_loc,
+        "the canonical RuntimeConfig keeps its location");
+    // an owned RuntimeConfig still transfers its state on a move
+    {
+        RuntimeConfig owner;
+        owner.setElement(7);
+        RuntimeConfig target(std::move(owner));
+        UT_ASSERT(c, !RuntimeConfigNativeAccess::isView(target) && target.getElement() == 7
+            && !owner.getElement(), "moving an owned RuntimeConfig transfers its state");
+        RuntimeConfig assigned;
+        assigned = std::move(target);
+        UT_ASSERT(c, assigned.getElement() == 7 && !target.getElement(),
+            "move-assigning an owned RuntimeConfig transfers its state");
+    }
+    canonical.setElement(saved_element);
+}
+
 //! A location scope leaves the thread's live parse options alone unless it sets them.
 /** The parse options field of a RuntimeConfig is a snapshot that only AST execution keeps up to date: with compiled
     code and the IR interpreter it can hold the options of another Program, or none at all.  A location scope that
@@ -16222,6 +16280,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_native_method_frame_pair(c);
     ut_program_context_snapshot(c);
     ut_runtime_location_helper_live_options(c);
+    ut_runtime_config_thread_storage(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
     ut_native_closure_option_replacement(c);
@@ -16262,6 +16321,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_native_method_frame_pair(c);
     ut_program_context_snapshot(c);
     ut_runtime_location_helper_live_options(c);
+    ut_runtime_config_thread_storage(c);
     ut_native_call_options(c);
     ut_native_callback_policy(c);
     ut_native_closure_option_replacement(c);

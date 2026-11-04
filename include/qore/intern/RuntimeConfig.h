@@ -166,6 +166,13 @@ public:
         assert(rc.impl && rc.impl->native_thread_data);
         return rc.impl->native_thread_data;
     }
+    //! Whether \a rc is a view of state that it does not own, as the thread's canonical RuntimeConfig always is
+    /** The canonical RuntimeConfig uses thread-local storage that stays valid after the thread-local destructors have
+        run, when the exit handlers of the main thread destroy the static namespace.
+    */
+    static bool isView(const RuntimeConfig& rc) {
+        return rc.impl && !rc.owned;
+    }
 };
 
 //! Object/class substitution using an already-acquired native invocation context.
