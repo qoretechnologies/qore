@@ -78,6 +78,11 @@ and JIT code used to evaluate the AST node again, which evaluated the receiver e
 
 When a statement raises an exception that a handler in the same function catches, its temporaries are released before
 the handler runs (the IR interpreter's `cleanupToTempScope()`, native code's `QoreIRToLLVM::getExceptionEdgeTarget()`).
+In native code each exception edge of a statement releases a prefix of the same sequence - the cleanup allocas registered
+since the statement's mark, newest first - so the edges with the same mark and handler share one chain of release
+blocks, one per alloca, and an edge enters it at the block of the last alloca registered before it
+(`QoreIRToLLVM::ExceptionTempChain`).  A copy of the releases on each edge grew with the product of the throwing
+instructions and the temporaries of a statement (5844 release calls in 155 edge blocks for `Util::parse_to_qore_value()`).
 When the function is left, the temporaries of the statements still running and the iterators of the `foreach`
 statements left are released before the `on_exit` / `on_error` handlers that the function exit runs
 (`QoreIRToLLVM::emitExitStatementCleanup()`), as the AST interpreter releases them when the statements unwind.

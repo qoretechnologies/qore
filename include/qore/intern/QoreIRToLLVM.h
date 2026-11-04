@@ -1707,6 +1707,27 @@ private:
     llvm::BasicBlock* getExceptionEdgeTarget(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, llvm::BasicBlock* handler);
 
+    //! The release blocks shared by the exception edges of the temporaries registered since one mark
+    /** An edge releases the cleanup allocas from the mark's position up to the number registered when it is
+        emitted, in reverse order, and then branches to its handler.  The edges of a statement with the same mark and
+        handler therefore release prefixes of the same sequence: a chain with one block per alloca, each releasing
+        its alloca and branching to the block of the previous one (or to the handler), serves them all from the
+        block of the last alloca of the edge.  One copy per alloca replaces a copy per edge, which grew with the
+        product of the throwing instructions and the temporaries of a statement.  The allocas are only appended
+        while a function is lowered, so a chain is only extended at its end.
+    */
+    struct ExceptionTempChain {
+        //! for each alloca from the mark's position: the block that releases it and those before it, which is the
+        //! entry of an edge emitted after it; the handler if none of them is released (persistent allocas)
+        std::vector<llvm::BasicBlock*> entries;
+    };
+    //! exception temp release chains by the mark's position in invoke_result_allocas and the handler
+    std::map<std::pair<size_t, llvm::BasicBlock*>, ExceptionTempChain> exception_temp_chains;
+    //! the exception edges of the current function that release temporaries, for QORE_IR_OPT_STATS
+    size_t exception_temp_edges = 0;
+    //! the release blocks of exception_temp_chains in the current function, for QORE_IR_OPT_STATS
+    size_t exception_temp_releases = 0;
+
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
     //! Releases the temps registered since the mark of \a scope_id; \a statement_end also releases the local

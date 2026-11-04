@@ -5485,39 +5485,44 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     if (pending_ssa_cleanup.size() > mark->pending_ssa_count) {
         promotePendingSsaToAllocas(module, llvm_func);
     }
-    size_t start = mark->invoke_alloca_count;
-    std::vector<llvm::Value*> temps;
-    for (size_t i = invoke_result_allocas.size(); i > start; --i) {
-        if (!((invoke_result_allocas.size() - i + 1) % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
-        }
-        llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
-        if (!persistent_cleanup_allocas.count(alloca_ptr)) {
-            temps.push_back(alloca_ptr);
-        }
-    }
-    if (temps.empty()) {
+    const size_t start = mark->invoke_alloca_count;
+    const size_t end = invoke_result_allocas.size();
+    if (end <= start) {
         return handler;
     }
-    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
-    auto saved_ip = builder->GetInsertPoint();
-    llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "exception_temps", llvm_func);
-    builder->SetInsertPoint(edge);
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    // in the reverse order of their creation, as DiscardTemps releases them
-    size_t count = 0;
-    for (llvm::Value* alloca_ptr : temps) {
-        if (!(++count % 100)) {
-            (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
+    // the temporaries are released in the reverse order of their creation, as DiscardTemps releases them, by the
+    // shared chain of the mark and handler (see ExceptionTempChain)
+    std::vector<llvm::BasicBlock*>& chain = exception_temp_chains[{start, handler}].entries;
+    if (start + chain.size() < end) {
+        llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+        auto saved_ip = builder->GetInsertPoint();
+        auto helper = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        llvm::BasicBlock* next = chain.empty() ? handler : chain.back();
+        chain.reserve(end - start);
+        for (size_t i = start + chain.size(); i < end; ++i) {
+            if (!((i - start + 1) % 100)) {
+                (void)qore_check_cancel(nullptr, "LLVM exception edge temp release");
+            }
+            llvm::Value* alloca_ptr = invoke_result_allocas[i];
+            if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+                llvm::BasicBlock* block = llvm::BasicBlock::Create(ctx, "exception_temps", llvm_func);
+                builder->SetInsertPoint(block);
+                llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
+                builder->CreateCall(helper, {val, xsink_arg});
+                builder->CreateBr(next);
+                next = block;
+                ++exception_temp_releases;
+            }
+            chain.push_back(next);
         }
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
+        builder->SetInsertPoint(saved_insert, saved_ip);
     }
-    builder->CreateBr(handler);
-    builder->SetInsertPoint(saved_insert, saved_ip);
-    return edge;
+    if (chain[end - start - 1] != handler) {
+        ++exception_temp_edges;
+    }
+    return chain[end - start - 1];
 }
 
 uint64_t QoreIRToLLVM::getLocalDeclarationRank(const void* key, size_t index) const {
@@ -15497,6 +15502,9 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
     // LLVM function has been created and its entry block exists.
     pending_ssa_cleanup.clear();
     temp_cleanup_marks.clear();
+    exception_temp_chains.clear();
+    exception_temp_edges = 0;
+    exception_temp_releases = 0;
     immediate_dominator.clear();
     entry_block_for_idom = nullptr;
     last_call_was_invoke_eh = false;
@@ -16186,6 +16194,9 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
     persistent_cleanup_allocas.clear();
     funcref_frame_allocas.clear();
     temp_cleanup_marks.clear();
+    exception_temp_chains.clear();
+    exception_temp_edges = 0;
+    exception_temp_releases = 0;
     boxed_exit_cleanup_array = nullptr;
     boxed_exit_cleanup_array_count = 0;
     iterator_cleanup_array = nullptr;
@@ -19246,6 +19257,10 @@ bool QoreIRToLLVM::lowerFunctionIntern(const QoreIRFunction& func, llvm::Module&
             " fused-fresh-container-inits=%zu\n",
             aot_mode ? "AOT" : "JIT", fn_name.c_str(),
             fused_fresh_container_inits);
+    }
+    if (exception_temp_edges && q_env_is_set("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-%s-LOWERING: %s: exception-temp-edges=%zu exception-temp-releases=%zu\n",
+            aot_mode ? "AOT" : "JIT", fn_name.c_str(), exception_temp_edges, exception_temp_releases);
     }
     if (assigned_hash_guard_elisions
             && q_env_is_set("QORE_IR_OPT_STATS")) {

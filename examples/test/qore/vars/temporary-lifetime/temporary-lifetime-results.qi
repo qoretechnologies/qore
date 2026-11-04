@@ -106,6 +106,14 @@ public namespace TemporaryLifetimeChecks {
         "62 break in a foreach over a map":
             "+map-break-1 +map-break-2 getName(map-break-1) map break body map-break-1 ~map-break-1 ~map-break-2 "
             "after the break",
+        "63 exceptions at each call of a statement in a try block":
+            "+a1 ~a1 caught a1 +a2 getName(a2) +b2 ~b2 ~a2 caught b2 +a3 getName(a3) +b3 getName(b3) +c3 ~c3 ~b3 ~a3 "
+            "caught c3 +a4 getName(a4) +b4 getName(b4) +c4 getName(c4) +d4 ~d4 ~c4 ~b4 ~a4 caught d4 +a5 getName(a5) "
+            "+b5 getName(b5) +c5 getName(c5) +d5 getName(d5) a5 b5 c5 d5 ~d5 ~c5 ~b5 ~a5",
+        "64 exceptions at each call of a statement with a block local":
+            "+keep1 +e1 ~e1 ~keep1 caught e1 +keep2 +e2 getName(e2) +f2 ~f2 ~e2 ~keep2 caught f2 +keep3 +e3 "
+            "getName(e3) +f3 getName(f3) +g3 ~g3 ~f3 ~e3 ~keep3 caught g3 +keep4 +e4 getName(e4) +f4 getName(f4) +g4 "
+            "getName(g4) e4 f4 g4 ~g4 ~f4 ~e4 ~keep4 log(keep4)",
         "loop member": "{alive: 1500}",
         "loop method": "{alive: 1500}",
         "weak live":

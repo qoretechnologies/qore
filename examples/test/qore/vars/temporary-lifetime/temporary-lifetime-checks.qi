@@ -324,6 +324,29 @@ public namespace TemporaryLifetimeChecks {
         }
     }
 
+    #! a statement whose method chains raise in a try block of the function at chain \a n while it holds the
+    #! documents of the chains before it
+    string sub temps_throw_in_try(int n) {
+        try {
+            Trace::add(sprintf("%s %s %s %s", n == 1 ? make("a" + n).fail() : make("a" + n).getName(),
+                n == 2 ? make("b" + n).fail() : make("b" + n).getName(),
+                n == 3 ? make("c" + n).fail() : make("c" + n).getName(),
+                n == 4 ? make("d" + n).fail() : make("d" + n).getName()));
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.desc);
+        }
+        return "";
+    }
+
+    #! the same statement in a function whose local holds an object, raising to the caller
+    string sub temps_throw_with_local(int n) {
+        Doc keep("keep" + n);
+        Trace::add(sprintf("%s %s %s", n == 1 ? make("e" + n).fail() : make("e" + n).getName(),
+            n == 2 ? make("f" + n).fail() : make("f" + n).getName(),
+            n == 3 ? make("g" + n).fail() : make("g" + n).getName()));
+        return keep.name;
+    }
+
     string sub on_exit_chain() {
         on_exit log(make("on-exit").getSchema().state());
         Trace::add("body");
@@ -656,6 +679,21 @@ public namespace TemporaryLifetimeChecks {
         }
         Trace::add("after the break");
         rv."62 break in a foreach over a map" = Trace::take();
+
+        # each exception edge of a statement releases the temporaries created before it, in reverse order
+        for (int n = 1; n <= 5; ++n) {
+            temps_throw_in_try(n);
+        }
+        rv."63 exceptions at each call of a statement in a try block" = Trace::take();
+
+        for (int n = 1; n <= 4; ++n) {
+            try {
+                log(temps_throw_with_local(n));
+            } catch (hash<ExceptionInfo> ex) {
+                Trace::add("caught " + ex.desc);
+            }
+        }
+        rv."64 exceptions at each call of a statement with a block local" = Trace::take();
 
         return rv;
     }

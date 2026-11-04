@@ -77,6 +77,16 @@ class TemporaryLifetimeTest inherits QUnit::Test {
         assertEq("+if state(if)=alive ~if if alive", r."24 if");
         # the temporaries of a return statement are released before the on_exit handler and the local variables
         assertEq("+local +ret state(ret)=alive ~ret on_exit ~local log(alive)", r."27 return");
+        # an exception releases the temporaries that its statement holds, and only those, in the reverse order of their
+        # creation, before the catch block runs or the locals of the function are released
+        foreach string part in (("+a1 ~a1 caught a1", "+b2 ~b2 ~a2 caught b2", "+c3 ~c3 ~b3 ~a3 caught c3",
+                "+d4 ~d4 ~c4 ~b4 ~a4 caught d4", "a5 b5 c5 d5 ~d5 ~c5 ~b5 ~a5")) {
+            assertNeq(-1, r."63 exceptions at each call of a statement in a try block".find(part), part);
+        }
+        foreach string part in (("+e1 ~e1 ~keep1 caught e1", "+f2 ~f2 ~e2 ~keep2 caught f2",
+                "+g3 ~g3 ~f3 ~e3 ~keep3 caught g3", "e4 f4 g4 ~g4 ~f4 ~e4 ~keep4 log(keep4)")) {
+            assertNeq(-1, r."64 exceptions at each call of a statement with a block local".find(part), part);
+        }
         # a foreach statement that a return, a break or an exception leaves releases its list, then its variable,
         # before the code after it runs: the on_exit and on_error handlers of the enclosing blocks, or the next
         # statement; a variable of the function keeps its value
