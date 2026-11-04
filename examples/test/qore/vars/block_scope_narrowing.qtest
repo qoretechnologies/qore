@@ -19,7 +19,6 @@ int failed = 0;
         x = m;  # x is narrowed to Mutex here
         string result = auto_variant(x);
         if (result == "mutex") {
-            printf("PASS: x narrowed to Mutex within block\n");
             ++passed;
         } else {
             printf("FAIL: x within block selected %s variant\n", result);
@@ -29,10 +28,8 @@ int failed = 0;
     # Outside the block, x may not be narrowed
     string result = auto_variant(x);
     if (result == "mutex") {
-        printf("PASS: x still narrowed to Mutex after block (narrowing persisted)\n");
         ++passed;
     } else {
-        printf("INFO: x no longer narrowed after block (narrowing lost) - needs clarification\n");
         ++passed;  # Count as pass for now - behavior needs to be defined
     }
 }
@@ -48,7 +45,6 @@ int failed = 0;
     # This depends on whether both branches assign to x
     string result = auto_variant(x);
     # We're not asserting here because the behavior needs to be defined
-    printf("INFO: x in conditional - selected %s variant (behavior undefined)\n", result);
     ++passed;
 }
 
@@ -61,7 +57,6 @@ int failed = 0;
     }
     # After the loop, x may or may not be narrowed
     string result = auto_variant(x);
-    printf("INFO: x in loop - selected %s variant (behavior undefined)\n", result);
     ++passed;
 }
 
@@ -76,7 +71,6 @@ int failed = 0;
     }
     # After the if/else, x should be narrowed to union of both types?
     string result = auto_variant(x);
-    printf("INFO: x with multiple assignments - selected %s variant\n", result);
     ++passed;
 }
 
@@ -86,7 +80,6 @@ int failed = 0;
     auto x = m;  # x narrowed to Mutex
     string result1 = auto_variant(x);
     if (result1 == "mutex") {
-        printf("PASS: x initially narrowed to Mutex\n");
         ++passed;
     } else {
         printf("FAIL: x initially selected %s variant\n", result1);
@@ -96,18 +89,12 @@ int failed = 0;
     x = "string";  # x reassigned to string
     string result2 = auto_variant(x);
     if (result2 == "auto") {
-        printf("PASS: x after string assignment selected auto variant (narrowing changed)\n");
         ++passed;
     } else {
-        printf("INFO: x after string assignment selected %s variant\n", result2);
         ++passed;  # Count as pass for now
     }
 }
 
-printf("\n=== Block Scope Narrowing Test Results ===\n");
-printf("Passed: %d\n", passed);
-printf("Failed: %d\n", failed);
-printf("Total: %d\n", passed + failed);
 
 if (failed > 0) {
     exit(1);

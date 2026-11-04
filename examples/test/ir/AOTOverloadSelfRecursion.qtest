@@ -127,4 +127,3 @@ assertInterpretedAndAot("direct", direct_overload_code, "ok:test\n",
 assertInterpretedAndAot("global-method", global_method_overload_code, "ok:test\n",
     "real-world-shaped overload-to-overload call");
 
-printf("AOT overload self-recursion regression OK\n");

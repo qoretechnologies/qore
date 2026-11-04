@@ -105,4 +105,3 @@ foreach string warm in (("QORE_IR_THRESHOLD=1 ", "")) {
     }
 }
 
-printf("OK\n");

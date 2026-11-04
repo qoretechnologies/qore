@@ -112,4 +112,3 @@ if (aot_actual != expected) {
     exit(2);
 }
 
-printf("OK\n");

@@ -73,4 +73,3 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
 if (errors) {
     exit(2);
 }
-printf("OK\n");

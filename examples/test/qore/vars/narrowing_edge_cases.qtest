@@ -26,7 +26,6 @@ int failed = 0;
     # Both "auto" (x=NOTHING) and "mutex" (x=Mutex) are correct
     string result = auto_variant(x);
     if (result == "auto" || result == "mutex") {
-        printf("PASS: x in conditional with only one assignment selected %s (parse type is auto)\n", result);
         ++passed;
     } else {
         printf("FAIL: x in conditional with only one assignment incorrectly selected %s\n", result);
@@ -46,7 +45,6 @@ int failed = 0;
     # After if/else, x should be narrowed to union of Mutex | string?
     # Or should it fall back to auto since the narrowed types conflict?
     string result = auto_variant(x);
-    printf("INFO: x with different types in branches selected %s variant\n", result);
     ++passed;
 }
 
@@ -60,7 +58,6 @@ int failed = 0;
     # x is still unassigned (auto), should select auto variant
     string result = auto_variant(x);
     if (result == "auto") {
-        printf("PASS: x unassigned after non-executing loop correctly selected auto\n");
         ++passed;
     } else {
         printf("FAIL: x unassigned after non-executing loop incorrectly selected %s\n", result);
@@ -78,7 +75,6 @@ int failed = 0;
     # x should still be narrowed to Mutex (loop doesn't execute)
     string result = auto_variant(x);
     if (result == "mutex") {
-        printf("PASS: x initially Mutex stays Mutex with non-executing loop\n");
         ++passed;
     } else {
         printf("FAIL: x initially Mutex changed to %s\n", result);
@@ -98,13 +94,9 @@ int failed = 0;
     # If loop doesn't execute: x is still Mutex
     # The actual value at parse time is unknown, so either narrowing could be wrong
     string result = auto_variant(x);
-    printf("INFO: x after loop with possible reassignment selected %s\n", result);
     ++passed;
 }
 
-printf("\n=== Narrowing Edge Cases Results ===\n");
-printf("Passed: %d\n", passed);
-printf("Failed: %d\n", failed);
 
 if (failed > 0) {
     exit(1);

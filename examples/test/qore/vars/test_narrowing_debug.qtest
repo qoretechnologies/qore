@@ -6,6 +6,13 @@
 string sub auto_variant(auto x) { return "auto"; }
 string sub auto_variant(Mutex x) { return "mutex"; }
 
+sub check(string desc, string expected, string actual) {
+    if (actual != expected) {
+        printf("FAIL: %s is %s (should be %s)\n", desc, actual, expected);
+        exit(1);
+    }
+}
+
 # Simple test: if/else with different assignments
 {
     auto x;
@@ -16,7 +23,7 @@ string sub auto_variant(Mutex x) { return "mutex"; }
         x = NOTHING;
     }
     string result = auto_variant(x);
-    printf("If-else (always if): x is %s (should be mutex)\n", result);
+    check("if-else (always if): x", "mutex", result);
 }
 
 # Even simpler: just assign NOTHING
@@ -24,7 +31,7 @@ string sub auto_variant(Mutex x) { return "mutex"; }
     auto y;
     y = NOTHING;
     string result = auto_variant(y);
-    printf("After NOTHING assignment: y is %s (should be auto)\n", result);
+    check("after NOTHING assignment: y", "auto", result);
 }
 
 # Baseline: straight assignment
@@ -32,5 +39,5 @@ string sub auto_variant(Mutex x) { return "mutex"; }
     Mutex m();
     auto z = m;
     string result = auto_variant(z);
-    printf("Direct Mutex assignment: z is %s (should be mutex)\n", result);
+    check("direct Mutex assignment: z", "mutex", result);
 }

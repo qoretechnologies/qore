@@ -234,7 +234,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             body = resp.body;
         }
 
-        @debug(printf("SSE response body: %y\n", body));
+        if (m_options.verbose > 2) {
+            printf("SSE response body: %y\n", body);
+        }
 
         # Verify events are present in the response
         assertTrue(body.find("data: event-1") >= 0,

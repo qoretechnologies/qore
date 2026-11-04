@@ -108,7 +108,9 @@ class AOTExitCleanupScalingTest inherits QUnit::Test {
         int small = compile(tmp.path, 2, 100, \small_exe);
         int large = compile(tmp.path, 8, 100, \large_exe);
         float ratio = large.toFloat() / small;
-        printf("object sizes: 200 cases: %d bytes, 800 cases: %d bytes, ratio %.2f\n", small, large, ratio);
+        if (m_options.verbose > 2) {
+            printf("object sizes: 200 cases: %d bytes, 800 cases: %d bytes, ratio %.2f\n", small, large, ratio);
+        }
         # four times the cases: linear growth gives about 4, quadratic about 16
         assertLt(6.0, ratio, "the object grows linearly with the cases");
 

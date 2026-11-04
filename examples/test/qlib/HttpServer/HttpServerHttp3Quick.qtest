@@ -65,7 +65,16 @@ pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
 l50Xb2GWQesIt9k5jF5IOw==
 -----END PRIVATE KEY-----";
 
-printf("=== Quick HTTP/3 Performance Measurement ===\n");
+#! the results are printed only with verbosity 3, as for a QUnit test
+our bool verbose = inlist("-vvv", ARGV ?? ());
+
+sub report(string fmt) {
+    if (verbose) {
+        vprintf(fmt, argv);
+    }
+}
+
+report("=== Quick HTTP/3 Performance Measurement ===\n");
 
 # Create server
 HttpServer server = new HttpServer();
@@ -79,23 +88,23 @@ hash<auto> h3info = server.addQuicListener(<HttpListenerOptionInfo>{
 });
 
 string url = sprintf("https://127.0.0.1:%d", h3info.port);
-printf("Server listening on %s\n", url);
+report("Server listening on %s\n", url);
 
 # Create client
 HttpClientIo::HttpClientConnectionManager mgr = new HttpClientConnectionManager();
 
 # Warmup
-printf("Warmup (3 requests)...\n");
+report("Warmup (3 requests)...\n");
 for (int i = 0; i < 3; i++) {
     try {
         mgr.request(url, "GET", "/test");
     } catch (hash<ExceptionInfo> ex) {
-        printf("  Warmup error: %s\n", ex.desc);
+        report("  Warmup error: %s\n", ex.desc);
     }
 }
 
 # Benchmark: 20 sequential requests
-printf("\nBenchmark: 20 sequential requests\n");
+report("\nBenchmark: 20 sequential requests\n");
 date start = now_us();
 int success = 0;
 int errors = 0;
@@ -111,7 +120,7 @@ for (int i = 0; i < 20; i++) {
     } catch (hash<ExceptionInfo> ex) {
         errors++;
         if (i < 3) {
-            printf("  Request %d error: %s\n", i, ex.desc);
+            report("  Request %d error: %s\n", i, ex.desc);
         }
     }
 }
@@ -121,11 +130,11 @@ float seconds = elapsed.toFloat() / 1000000.0;
 
 # Prevent division by zero if test runs too fast
 float req_per_sec = seconds > 0 ? (success + errors) / seconds : -1;
-printf("Results: %d success, %d errors in %.3f seconds", success, errors, seconds);
+report("Results: %d success, %d errors in %.3f seconds", success, errors, seconds);
 if (req_per_sec > 0) {
-    printf(" (%.1f req/sec)\n", req_per_sec);
+    report(" (%.1f req/sec)\n", req_per_sec);
 } else {
-    printf(" (< 1 microsecond)\n");
+    report(" (< 1 microsecond)\n");
 }
 
 mgr.closeAll();
