@@ -3698,6 +3698,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
                 name, i, lname ? lname : "", lflags, param_idx, static_cast<void*>(lv));
+        } else if (((lflags & 0x08) && (!sig || !ctx->uses_argv)) || ((lflags & 0x04) && (!sig || !ctx->uses_self))) {
+            // Canonical local slot numbering (design/ir-local-slot-numbering.md) reserves the argv and self slots of
+            // every function, also of one that never refers to them.  An init function (a module's init closure) has
+            // no signature to bind them to: it is run with no arguments and no object, and an empty slot reads as
+            // NOTHING, as argv does in the closure's AST.  Either way the slot stays empty.
+            printd(5, "AOT v2: '%s' %s slot %d left unbound\n", name, (lflags & 0x08) ? "argv" : "self", i);
         } else {
             printd(0, "AOT v2: '%s' unresolved local slot %d ('%s' flags=0x%x param_idx=%d)\n",
                 name, i, lname ? lname : "", lflags, param_idx);

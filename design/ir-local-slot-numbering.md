@@ -88,6 +88,13 @@ Code that is lowered once and not bound by index across lowerings keeps first-re
 (whose root locals belong to the `Program`; AOT top-level code and the runtime rebuild its context with the same
 lowering) and background helpers.
 
+A function that never refers to its `argv` or `self` still has their slots.  The AOT loader leaves such a slot empty,
+and also the `argv` and `self` slots of an init function (a module's init closure), which is run with no arguments and
+no object and has no signature to bind them to: an empty slot reads as `NOTHING`, as `argv` does in the closure's AST.
+It reports an unresolved `argv` or `self` slot only for a function with a signature that uses it
+(`QoreAOTContext::uses_argv` / `uses_self`); it used to report every module init function in DEBUG builds
+(`printd(0)`), which broke the tests comparing their output.
+
 ## Cost
 
 - Compile time: the extra lowering per anchored closure that decided how to lower its serialized IR is gone, and so
