@@ -120,6 +120,9 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if (ENV.CHROMA_URL.val()) {
             addTestCase("Chroma", \chromaTest());
         }
+        if (ENV.WEAVIATE_URL.val()) {
+            addTestCase("Weaviate", \weaviateTest());
+        }
         set_return_value(main());
     }
 
@@ -257,6 +260,46 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         runScenario(store, "ch-" + get_random_string(6));
     }
 
+    weaviateTest() {
+        # Weaviate class names start with an uppercase letter
+        string name = "Conformance" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.WEAVIATE_URL, "data": "json"});
+        try {
+            rest.restGet("/v1/.well-known/ready");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Weaviate is not reachable at %y: %s", ENV.WEAVIATE_URL, ex.desc));
+        }
+        rest.restPost("/v1/schema", {
+            "class": name,
+            "vectorizer": "none",
+            "properties": (
+                {"name": "scope", "dataType": ("text",)},
+                {"name": "k", "dataType": ("text",)},
+                {"name": "t", "dataType": ("text",)},
+            ),
+        });
+        on_exit {
+            try {
+                rest.restDel("/v1/schema/" + name);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "weaviate",
+                "collection": name,
+                "url": ENV.WEAVIATE_URL,
+                "options": {"dimension": 3},
+            });
+        # Weaviate object ids must be UUIDs
+        runScenario(store, "wv-" + get_random_string(6), (
+            "5e4d1a10-0000-4000-8000-000000000001",
+            "5e4d1a10-0000-4000-8000-000000000002",
+            "5e4d1a10-0000-4000-8000-000000000003",
+            "5e4d1a10-0000-4000-8000-000000000004",
+        ));
+    }
+
     pgvectorTest() {
         Datasource ds((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL));
         on_exit ds.close();
@@ -306,15 +349,19 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
     }
 
     #! The scenario every store must satisfy; \a scope isolates this run's records from any others in the store
-    private runScenario(QoreRagUtils::AbstractVectorStore store, string scope) {
+    /** \a ids are the four record ids to use, for stores that require a particular id format
+    */
+    private runScenario(QoreRagUtils::AbstractVectorStore store, string scope,
+            list<string> ids = ("1", "2", "3", "4")) {
+        @assert(ids.size() == 4);
         store.upsert((
-            <QoreRagUtils::VectorRecord>{"id": "1", "vector": (1.0, 0.0, 0.0),
+            <QoreRagUtils::VectorRecord>{"id": ids[0], "vector": (1.0, 0.0, 0.0),
                 "payload": {"k": "a", "scope": scope, "t": "2026-11-01T10:00:00"}},
-            <QoreRagUtils::VectorRecord>{"id": "2", "vector": (0.0, 1.0, 0.0),
+            <QoreRagUtils::VectorRecord>{"id": ids[1], "vector": (0.0, 1.0, 0.0),
                 "payload": {"k": "b", "scope": scope, "t": "2026-11-02T10:00:00"}},
-            <QoreRagUtils::VectorRecord>{"id": "3", "vector": (0.0, 0.0, 1.0),
+            <QoreRagUtils::VectorRecord>{"id": ids[2], "vector": (0.0, 0.0, 1.0),
                 "payload": {"k": "b", "scope": scope, "t": "2026-11-03T10:00:00"}},
-            <QoreRagUtils::VectorRecord>{"id": "4", "vector": (1.0, 1.0, 0.0), "payload": {"scope": scope}},
+            <QoreRagUtils::VectorRecord>{"id": ids[3], "vector": (1.0, 1.0, 0.0), "payload": {"scope": scope}},
         ));
         hash<auto> mine = {"payload_eq": {"scope": scope}};
 
