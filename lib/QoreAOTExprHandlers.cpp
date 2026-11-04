@@ -1796,8 +1796,12 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
     return QoreValue(fe->makeCallReference(&loc_builtin));
 }
 
+//! resolves the target of a serialized method call reference
+/** @param deferred if not null, a method that its class does not have yet is not an error: the call reference is
+    returned here as a DeferredStaticMethodCallReferenceNode, which resolves the method when it is evaluated
+*/
 static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
-        bool prefer_static) {
+        bool prefer_static, QoreValue* deferred = nullptr) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
     if (!class_path || !*class_path || !method_name || !*method_name) {
@@ -1816,6 +1820,32 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
         ? qc->findStaticMethod(method_name) : qc->findMethod(method_name);
     if (!method) {
         method = prefer_static ? qc->findMethod(method_name) : qc->findStaticMethod(method_name);
+    }
+    if (!method) {
+        // the writer encodes the class that owns the method, so the method is local to it; while the binary
+        // that defines the class is being loaded, its methods are not committed yet, and the committed lookups
+        // above do not see them -- a static member initialized with a call reference to a method of its own
+        // class (`static code c = \Cls::m();`) is read at that point
+        const qore_class_private* priv = qore_class_private::get(*qc);
+        method = prefer_static ? priv->parseFindLocalStaticMethod(method_name)
+            : priv->parseFindLocalMethod(method_name);
+        if (!method) {
+            method = prefer_static ? priv->parseFindLocalMethod(method_name)
+                : priv->parseFindLocalStaticMethod(method_name);
+        }
+    }
+    if (!method && deferred) {
+        // a binary's classes get their methods only after its hashdecls are read, so a hashdecl member whose
+        // default is a call reference to a static method of a class of the same binary
+        // (`hashdecl H { code c = \Cls::m(); }`) is read before the class has any method; the default is evaluated
+        // whenever a hash is created, by which time the method is there.  A class that has its methods and still
+        // has no such method is an error
+        const qore_class_private* priv = qore_class_private::get(*qc);
+        if (priv->hm.empty() && priv->shm.empty()) {
+            *deferred = QoreValue(new DeferredStaticMethodCallReferenceNode(&loc_builtin, class_path,
+                method_name));
+            return nullptr;
+        }
     }
     if (!method) {
         ctx.error = std::string("cannot resolve ") + kind + " method reference '"
@@ -1898,8 +1928,12 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_static_method_ref(AOTExprReadCtx& ctx) {
-    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true);
-    return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method)) : QoreValue();
+    QoreValue deferred;
+    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true, &deferred);
+    if (!method) {
+        return deferred;
+    }
+    return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method));
 }
 
 static bool write_expr_deferred_static_method_ref(AOTExprWriteCtx& ctx) {
