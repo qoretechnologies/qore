@@ -61,6 +61,10 @@ class FakeVectorStore inherits QoreRagUtils::AbstractVectorStore {
     }
     deleteByIds(list<string> ids) {
     }
+
+    int countByFilter(*hash<auto> filter) { return 0; }
+    int deleteByFilter(hash<auto> filter) { return 0; }
+    list<hash<QoreRagUtils::VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) { return (); }
     list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
             int k, *hash<auto> filter) {
         return ();

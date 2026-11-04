@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires RestClient
+%requires QoreRagUtils
+%requires PineconeRestClient
+
+%exec-class PineconeVectorStoreManagementTest
+
+# Pinecone data-plane client serving a fixed namespace from /vectors/list and /vectors/fetch
+class FakePineconeRest inherits PineconeRestClient::PineconeRestClientIo {
+    public {
+        list<hash<auto>> vectors = ();
+        hash<auto> stats = {};
+        bool list_unsupported = False;
+        list<hash<auto>> requests = ();
+    }
+
+    constructor() : PineconeRestClientIo({"url": "https://idx.svc.test.pinecone.io", "apikey": "k"}) {
+    }
+
+    hash<auto> restGet(string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": "GET", "path": path};
+        hash<auto!> result = {};
+        if (path =~ /^\/vectors\/list/) {
+            if (list_unsupported) {
+                throw "REST-RESPONSE-ERROR", "list is not supported for pod-based indexes";
+            }
+            int start = 0;
+            if (path =~ /paginationToken=([0-9]+)/) {
+                start = int(regex_extract(path, "paginationToken=([0-9]+)")[0]);
+            }
+            list<hash<auto>> page = vectors[start .. start + 99];
+            list<hash<auto>> listed = ();
+            foreach hash<auto> v in (page) {
+                push listed, {"id": v.id};
+            }
+            result.vectors = listed;
+            if (start + 100 < vectors.size()) {
+                result.pagination = {"next": string(start + 100)};
+            }
+        } else if (path =~ /^\/vectors\/fetch/) {
+            hash<auto!> fetched = {};
+            list<string> wanted = ();
+            foreach string part in (path.split("&")) {
+                if (part =~ /ids=/) {
+                    wanted += part.substr(part.find("ids=") + 4);
+                }
+            }
+            foreach string id in (wanted) {
+                foreach hash<auto> v in (vectors) {
+                    if (v.id == id) {
+                        fetched{id} = {"id": id, "metadata": v.meta};
+                    }
+                }
+            }
+            result.vectors = fetched;
+        }
+        return <RestClient::RestResponseInfo>{"body": result, "status_code": 200};
+    }
+
+    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": "POST", "path": path, "body": body};
+        hash<auto> result = path == "/describe_index_stats" ? stats : {};
+        return <RestClient::RestResponseInfo>{"body": result, "status_code": 200};
+    }
+}
+
+public class PineconeVectorStoreManagementTest inherits QUnit::Test {
+    constructor() : Test("PineconeVectorStore management", "1.0", \ARGV) {
+        addTestCase("countByFilter", \countTest());
+        addTestCase("deleteByFilter", \deleteTest());
+        addTestCase("summarizeBy", \summarizeTest());
+        addTestCase("unsupported filters and indexes", \unsupportedTest());
+        set_return_value(main());
+    }
+
+    private QoreRagUtils::PineconeVectorStore newStore(FakePineconeRest fake, string ns = "") {
+        return new QoreRagUtils::PineconeVectorStore(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "pinecone",
+            "collection": "idx",
+            "options": {"namespace": ns},
+        }, fake);
+    }
+
+    private static list<hash<auto>> makeVectors(int n, string key) {
+        list<hash<auto>> rv = ();
+        for (int i = 0; i < n; ++i) {
+            push rv, {"id": sprintf("%s-%03d", key, i), "meta": {"instance_key": key}};
+        }
+        return rv;
+    }
+
+    countTest() {
+        FakePineconeRest fake();
+        fake.stats = {"namespaces": {"__default__": {"vectorCount": 42}, "other": {"vectorCount": 7}}};
+        QoreRagUtils::PineconeVectorStore store = newStore(fake);
+        assertEq(42, store.countByFilter());
+        assertEq("/describe_index_stats", fake.requests[0].path);
+        assertEq(7, newStore(fake, "other").countByFilter());
+        assertEq(0, newStore(fake, "missing").countByFilter());
+
+        # with a filter the namespace is enumerated, across list pages
+        fake.requests = ();
+        fake.vectors = PineconeVectorStoreManagementTest::makeVectors(120, "a")
+            + PineconeVectorStoreManagementTest::makeVectors(30, "b");
+        assertEq(30, store.countByFilter({"payload_eq": {"instance_key": "b"}}));
+        assertEq(0, store.countByFilter({"payload_eq": {"instance_key": "none"}}));
+        fake.stats = {"namespaces": {"__default__": {"vectorCount": 150}}};
+        assertEq(150, store.countByFilter({"payload_eq": {}}), "an empty payload_eq is no filter");
+    }
+
+    deleteTest() {
+        FakePineconeRest fake();
+        fake.vectors = PineconeVectorStoreManagementTest::makeVectors(3, "a")
+            + PineconeVectorStoreManagementTest::makeVectors(2, "b");
+        QoreRagUtils::PineconeVectorStore store = newStore(fake);
+
+        assertEq(2, store.deleteByFilter({"payload_eq": {"instance_key": "b"}}));
+        hash<auto> del = fake.requests[fake.requests.size() - 1];
+        assertEq("/vectors/delete", del.path);
+        assertEq(("b-000", "b-001"), del.body.ids);
+
+        # nothing matches: no delete request
+        fake.requests = ();
+        assertEq(0, store.deleteByFilter({"payload_eq": {"instance_key": "none"}}));
+        assertEq(0, (select fake.requests, $1.path == "/vectors/delete").size());
+
+        # a filter that selects everything is refused before any request
+        fake.requests = ();
+        foreach hash<auto> bad in (({}, {"payload_eq": {}})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(0, fake.requests.size());
+    }
+
+    summarizeTest() {
+        FakePineconeRest fake();
+        fake.vectors = (
+            {"id": "1", "meta": {"instance_key": "a", "t": "2026-11-01T10:00:00"}},
+            {"id": "2", "meta": {"instance_key": "b", "t": "2026-11-02T10:00:00"}},
+            {"id": "3", "meta": {"instance_key": "b", "t": "2026-11-03T10:00:00"}},
+            {"id": "4", "meta": {"t": "bad"}},
+        );
+        QoreRagUtils::PineconeVectorStore store = newStore(fake);
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key", NOTHING, "t");
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
+        assertEq((2, 1, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertFalse(exists groups[2].last_write);
+
+        fake.vectors = ();
+        assertEq((), store.summarizeBy("instance_key"));
+    }
+
+    unsupportedTest() {
+        FakePineconeRest fake();
+        QoreRagUtils::PineconeVectorStore store = newStore(fake);
+        assertThrows("PINECONE-VECTOR-STORE-ERROR", \store.countByFilter(), {"filter": {"a": 1}});
+        fake.list_unsupported = True;
+        assertThrows("PINECONE-VECTOR-STORE-ERROR", \store.summarizeBy(), "instance_key");
+    }
+}

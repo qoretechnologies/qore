@@ -170,8 +170,120 @@ public class MongoAtlasVectorStore inherits AbstractVectorStore {
         return result;
     }
 
+    #! Counts the documents whose payload matches a filter
+    /** Calls \c countDocuments() with the match document.
+
+        @param filter optional filter: the portable \c payload_eq form (equality on top-level payload keys) or
+            \c mql, a MongoDB match document
+
+        @return the number of matching documents
+
+        @throw MONGO-ATLAS-VECTOR-STORE-ERROR a \c payload_eq key is empty, starts with a dollar sign or has a dot
+    */
+    int countByFilter(*hash<auto> filter) {
+        hash<auto> match = makeMatch(filter);
+        ensureClient();
+        return match ? coll.countDocuments(match) : coll.countDocuments();
+    }
+
+    #! Deletes the documents whose payload matches a filter
+    /** Calls \c deleteMany() with the match document and returns the \c deletedCount it reports.
+
+        @param filter the filter; see countByFilter()
+
+        @return the number of documents deleted
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty
+    */
+    int deleteByFilter(hash<auto> filter) {
+        hash<auto> match = makeMatch(filter);
+        AbstractVectorStore::requireFilterCriteria(match.size() > 0);
+        ensureClient();
+        return coll.deleteMany(match).deletedCount.toInt();
+    }
+
+    #! Summarizes the documents by the distinct values of a payload key
+    /** Groups on the server with an aggregation: <tt>$match</tt>, then <tt>$group</tt> on the payload key with a
+        <tt>$sum</tt> count and, when a timestamp key is given, a <tt>$max</tt> of it.
+
+        @param field the top-level payload key to group by
+        @param filter optional filter; see countByFilter()
+        @param timestamp_field optional top-level payload key holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+    */
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) {
+        list<hash<auto>> pipeline = buildSummaryPipeline(field, makeMatch(filter), timestamp_field);
+        ensureClient();
+        return MongoAtlasVectorStore::summaryFromGroups(coll.aggregate(pipeline).toList());
+    }
+
     string getCollection() {
         return coll_name;
+    }
+
+    #! Returns the MongoDB match document for a filter; empty for no filter
+    hash<auto> makeMatch(*hash<auto> filter) {
+        if (!filter) {
+            return {};
+        }
+        if (filter.mql instanceof hash && filter.mql) {
+            return filter.mql;
+        }
+        hash<auto!> match = {};
+        if (filter.payload_eq instanceof hash) {
+            foreach string key in (keys filter.payload_eq) {
+                match{payloadPath(key)} = filter.payload_eq{key};
+            }
+        }
+        return match;
+    }
+
+    #! Returns the dotted document path of a top-level payload key
+    /** @throw MONGO-ATLAS-VECTOR-STORE-ERROR the key is empty, starts with a dollar sign or has a dot */
+    string payloadPath(string key) {
+        if (!key.val() || key[0] == "$" || key.find(".") >= 0) {
+            throw "MONGO-ATLAS-VECTOR-STORE-ERROR", sprintf("payload key %y must be a non-empty top-level key "
+                "without a dot and not starting with a dollar sign", key);
+        }
+        return payload_field + "." + key;
+    }
+
+    #! Returns the aggregation pipeline that summarizes the matching documents
+    list<hash<auto>> buildSummaryPipeline(string field, hash<auto> match, *string timestamp_field) {
+        hash<auto!> group = {"_id": "$" + payloadPath(field), "count": {"$sum": 1}};
+        if (timestamp_field) {
+            group.last = {"$max": "$" + payloadPath(timestamp_field)};
+        }
+        list<hash<auto>> pipeline = ();
+        if (match) {
+            push pipeline, {"$match": match};
+        }
+        push pipeline, {"$group": group};
+        return pipeline;
+    }
+
+    #! Converts the documents returned by the summary pipeline to ordered summary groups
+    /** A document without the key groups under a null \c _id, which becomes a @ref nothing value. */
+    static list<hash<VectorFieldSummary>> summaryFromGroups(list<hash<auto>> docs) {
+        list<hash<VectorFieldSummary>> groups = ();
+        foreach hash<auto> doc in (docs) {
+            *date ts;
+            if (doc.last instanceof date) {
+                ts = doc.last;
+            } else if (doc.last instanceof string) {
+                try {
+                    ts = date(doc.last);
+                } catch () {
+                }
+            }
+            push groups, <VectorFieldSummary>{
+                "value": doc."_id" === NULL ? NOTHING : doc."_id",
+                "count": doc.count.toInt(),
+                "last_write": ts,
+            };
+        }
+        return AbstractVectorStore::sortSummary(groups);
     }
 
     int getDimension() {

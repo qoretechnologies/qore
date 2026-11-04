@@ -213,6 +213,9 @@ public namespace QoreRagUtils {
 public class WeaviateVectorStore inherits AbstractVectorStore {
     public {
         const Backend = "weaviate";
+
+        #! Objects fetched per \c /objects request
+        const ListPageSize = 100;
     }
 
     private {
@@ -230,6 +233,26 @@ public class WeaviateVectorStore inherits AbstractVectorStore {
             throw "VECTOR-STORE-CONFIG-ERROR",
                 "WeaviateVectorStore requires 'collection' (Weaviate class name)";
         }
+        init();
+    }
+
+    #! Creates the vector store with a pre-built REST client (for example a client with a custom transport)
+    /** @param config the store configuration
+        @param rest_client the Weaviate REST client to use
+
+        @throw VECTOR-STORE-CONFIG-ERROR \c collection is missing
+    */
+    constructor(hash<VectorStoreConfig> config, WeaviateRestClient::WeaviateRestClientIo rest_client) {
+        self.config = config;
+        if (!config.collection.val()) {
+            throw "VECTOR-STORE-CONFIG-ERROR",
+                "WeaviateVectorStore requires 'collection' (Weaviate class name)";
+        }
+        self.rest_client = rest_client;
+        init();
+    }
+
+    private init() {
         class_name = config.collection;
         if (config.options.tenant.val()) {
             tenant = config.options.tenant;
@@ -302,8 +325,116 @@ public class WeaviateVectorStore inherits AbstractVectorStore {
         return result;
     }
 
+    #! Counts the objects whose properties match a payload filter
+    /** Enumerates the class with the cursor-based \c GET \c /objects listing (see @ref summarizeBy()) and counts the
+        matches, evaluating the equalities here.
+
+        @param filter optional filter: only the portable \c payload_eq form (equality on properties) is supported
+
+        @return the number of matching objects
+
+        @throw WEAVIATE-VECTOR-STORE-ERROR the filter has a key other than \c payload_eq
+    */
+    int countByFilter(*hash<auto> filter) {
+        *hash<auto> eq = WeaviateVectorStore::payloadEq(filter);
+        ensureRestClient();
+        int count = 0;
+        scan(eq, sub (string id, hash<auto> props) {
+            ++count;
+        });
+        return count;
+    }
+
+    #! Deletes the objects whose properties match a payload filter
+    /** Enumerates the class for the matching ids, then deletes them with @ref deleteByIds().
+
+        @param filter the filter; see countByFilter()
+
+        @return the number of objects deleted
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty
+    */
+    int deleteByFilter(hash<auto> filter) {
+        *hash<auto> eq = WeaviateVectorStore::payloadEq(filter);
+        AbstractVectorStore::requireFilterCriteria(exists eq);
+        ensureRestClient();
+        list<string> ids = ();
+        scan(eq, sub (string id, hash<auto> props) {
+            push ids, id;
+        });
+        deleteByIds(ids);
+        return ids.size();
+    }
+
+    #! Summarizes the objects by the distinct values of a property
+    /** Pages through the class with \c GET \c /objects using the \c after cursor, which has no result-window
+        limit, and groups the objects here, so the cost is proportional to the size of the class (and tenant).
+
+        @param field the property to group by
+        @param filter optional filter; see countByFilter()
+        @param timestamp_field optional property holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+    */
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) {
+        *hash<auto> eq = WeaviateVectorStore::payloadEq(filter);
+        ensureRestClient();
+        hash<string, hash<auto>> groups = {};
+        scan(eq, sub (string id, hash<auto> props) {
+            AbstractVectorStore::addToSummary(\groups, props{field}, timestamp_field ? props{timestamp_field} : NOTHING);
+        });
+        return AbstractVectorStore::finishSummary(groups);
+    }
+
     string getCollection() {
         return class_name;
+    }
+
+    #! Calls \a visit with the id and properties of every object of the class whose properties equal \a eq
+    private scan(*hash<auto> eq, code visit) {
+        *string after;
+        while (True) {
+            string path = sprintf("/objects?class=%s&limit=%d", encode_url(class_name, True), ListPageSize);
+            if (tenant) {
+                path += "&tenant=" + encode_url(tenant, True);
+            }
+            if (after) {
+                path += "&after=" + encode_url(after, True);
+            }
+            list<auto> objects = rest_client.restGet(path).body.objects ?? ();
+            foreach hash<auto> obj in (objects) {
+                hash<auto> props = obj.properties.typeCode() == NT_HASH ? obj.properties : {};
+                if (WeaviateVectorStore::matches(props, eq)) {
+                    call_function(visit, obj.id.toString(), props);
+                }
+            }
+            if (objects.size() < ListPageSize) {
+                break;
+            }
+            after = objects[objects.size() - 1].id.toString();
+        }
+    }
+
+    #! Returns the \c payload_eq equalities of a filter, NOTHING for no filter
+    private static *hash<auto> payloadEq(*hash<auto> filter) {
+        if (!filter) {
+            return;
+        }
+        if (filter - ("payload_eq",)) {
+            throw "WEAVIATE-VECTOR-STORE-ERROR", sprintf("only the payload_eq filter is supported, not %y",
+                keys (filter - ("payload_eq",)));
+        }
+        return filter.payload_eq instanceof hash && filter.payload_eq ? filter.payload_eq : NOTHING;
+    }
+
+    #! Returns True if every equality holds in the properties
+    private static bool matches(hash<auto> props, *hash<auto> eq) {
+        foreach string key in (keys eq) {
+            if (!exists props{key} || props{key} !== eq{key}) {
+                return False;
+            }
+        }
+        return True;
     }
 
     int getDimension() {

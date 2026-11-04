@@ -78,6 +78,11 @@ public namespace QdrantDataProvider {
     cannot duplicate the probe request.
 */
 public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
+    public {
+        #! Points fetched per scroll request by summarizeBy()
+        const ScrollPageSize = 1000;
+    }
+
     private {
         #! Captured configuration
         hash<QoreRagUtils::VectorStoreConfig> config;
@@ -197,6 +202,81 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
         return map QdrantVectorStore::pointFromWire($1), raw_points;
     }
 
+    #! Counts the points that match a payload filter
+    /** Calls \c POST \c /collections/{collection}/points/count with \c exact set.
+
+        @param filter optional payload filter; see search()
+
+        @return the number of matching points
+
+        @throw QDRANT-VECTOR-STORE-ERROR a \c payload_eq key has a double quote or a backslash
+    */
+    int countByFilter(*hash<auto> filter) {
+        hash<auto!> body = {"exact": True};
+        if (filter) {
+            body.filter = QdrantVectorStore::normalizeSearchFilter(filter);
+        }
+        return rest.restPost(pointsPath("/count"), body).body.result.count.toInt();
+    }
+
+    #! Deletes the points that match a payload filter
+    /** Counts the matching points, then calls \c POST \c /collections/{collection}/points/delete with the filter,
+        because Qdrant does not report the number of points a filtered delete removed.
+
+        @param filter the payload filter; see search()
+
+        @return the number of points that matched immediately before the delete
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty or has no \c must, \c should or \c must_not clause
+        @throw QDRANT-VECTOR-STORE-ERROR a \c payload_eq key has a double quote or a backslash
+    */
+    int deleteByFilter(hash<auto> filter) {
+        hash<auto> qfilter = QdrantVectorStore::normalizeSearchFilter(filter);
+        QoreRagUtils::AbstractVectorStore::requireFilterCriteria(QdrantVectorStore::hasClauses(qfilter));
+        int matched = rest.restPost(pointsPath("/count"), {"exact": True, "filter": qfilter}).body.result.count.toInt();
+        if (matched) {
+            rest.restPost(pointsPath("/delete"), {"filter": qfilter});
+        }
+        return matched;
+    }
+
+    #! Summarizes the points by the distinct values of a payload field
+    /** Pages through the matching points with \c POST \c /collections/{collection}/points/scroll, fetching only
+        the requested payload keys and no vectors, and groups them here.
+
+        @param field the top-level payload key to group by
+        @param filter optional payload filter; see search()
+        @param timestamp_field optional top-level payload key holding a date or an ISO 8601 string
+
+        @return the groups ordered by descending count and then by value
+
+        @throw QDRANT-VECTOR-STORE-ERROR a \c payload_eq key has a double quote or a backslash
+    */
+    list<hash<QoreRagUtils::VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter,
+            *string timestamp_field) {
+        hash<auto!> body = {
+            "limit": ScrollPageSize,
+            "with_payload": {"include": timestamp_field ? (field, timestamp_field) : (field,)},
+            "with_vector": False,
+        };
+        if (filter) {
+            body.filter = QdrantVectorStore::normalizeSearchFilter(filter);
+        }
+        hash<string, hash<auto>> groups = {};
+        while (True) {
+            hash<auto> result = rest.restPost(pointsPath("/scroll"), body).body.result;
+            foreach hash<auto> p in (result.points ?? ()) {
+                QoreRagUtils::AbstractVectorStore::addToSummary(\groups, p.payload{field},
+                    timestamp_field ? p.payload{timestamp_field} : NOTHING);
+            }
+            if (!exists result.next_page_offset) {
+                break;
+            }
+            body.offset = result.next_page_offset;
+        }
+        return QoreRagUtils::AbstractVectorStore::finishSummary(groups);
+    }
+
     #! Returns the configured collection name
     string getCollection() {
         return config.collection;
@@ -307,6 +387,16 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
             "score": p.score,
             "payload": p.payload,
         };
+    }
+
+    #! Returns True if a Qdrant filter has at least one non-empty clause
+    private:internal static bool hasClauses(hash<auto> qfilter) {
+        foreach string clause in (("must", "should", "must_not")) {
+            if (qfilter{clause}) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Converts provider-neutral payload filters to Qdrant filter syntax

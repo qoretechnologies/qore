@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires RestClient
+%requires QoreRagUtils
+%requires WeaviateRestClient
+
+%exec-class WeaviateVectorStoreManagementTest
+
+# Weaviate client serving a fixed class from the cursor-based /objects listing
+class FakeWeaviateRest inherits WeaviateRestClient::WeaviateRestClientIo {
+    public {
+        list<hash<auto>> objects = ();
+        list<hash<auto>> requests = ();
+    }
+
+    constructor() : WeaviateRestClientIo({"url": "http://localhost:8080"}) {
+    }
+
+    hash<auto> restGet(string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": "GET", "path": path};
+        int start = 0;
+        if (path =~ /after=([^&]+)/) {
+            string after = regex_extract(path, "after=([^&]+)")[0];
+            foreach hash<auto> o in (objects) {
+                ++start;
+                if (o.id == after) {
+                    break;
+                }
+            }
+        }
+        return <RestClient::RestResponseInfo>{"body": {"objects": objects[start .. start + 99]}, "status_code": 200};
+    }
+
+    hash<auto> restDel(string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": "DELETE", "path": path};
+        return <RestClient::RestResponseInfo>{"body": {}, "status_code": 204};
+    }
+}
+
+public class WeaviateVectorStoreManagementTest inherits QUnit::Test {
+    constructor() : Test("WeaviateVectorStore management", "1.0", \ARGV) {
+        addTestCase("countByFilter", \countTest());
+        addTestCase("deleteByFilter", \deleteTest());
+        addTestCase("summarizeBy", \summarizeTest());
+        addTestCase("unsupported filters", \unsupportedTest());
+        set_return_value(main());
+    }
+
+    private QoreRagUtils::WeaviateVectorStore newStore(FakeWeaviateRest fake, *string tenant) {
+        return new QoreRagUtils::WeaviateVectorStore(<QoreRagUtils::VectorStoreConfig>{
+            "backend": "weaviate",
+            "collection": "Doc",
+            "options": tenant ? {"tenant": tenant} : {},
+        }, fake);
+    }
+
+    private static list<hash<auto>> makeObjects(int n, string key, int base = 0) {
+        list<hash<auto>> rv = ();
+        for (int i = 0; i < n; ++i) {
+            push rv, {"id": sprintf("%s-%04d", key, base + i), "properties": {"instance_key": key}};
+        }
+        return rv;
+    }
+
+    countTest() {
+        FakeWeaviateRest fake();
+        # more than one page: the cursor continues after the last id of the previous page
+        fake.objects = WeaviateVectorStoreManagementTest::makeObjects(150, "a")
+            + WeaviateVectorStoreManagementTest::makeObjects(30, "b");
+        QoreRagUtils::WeaviateVectorStore store = newStore(fake, "t1");
+        assertEq(180, store.countByFilter());
+        assertEq(30, store.countByFilter({"payload_eq": {"instance_key": "b"}}));
+        assertEq(0, store.countByFilter({"payload_eq": {"instance_key": "none"}}));
+        assertEq("/objects?class=Doc&limit=100&tenant=t1", fake.requests[0].path);
+        assertEq("/objects?class=Doc&limit=100&tenant=t1&after=a-0099", fake.requests[1].path);
+    }
+
+    deleteTest() {
+        FakeWeaviateRest fake();
+        fake.objects = WeaviateVectorStoreManagementTest::makeObjects(3, "a")
+            + WeaviateVectorStoreManagementTest::makeObjects(2, "b");
+        QoreRagUtils::WeaviateVectorStore store = newStore(fake);
+
+        assertEq(2, store.deleteByFilter({"payload_eq": {"instance_key": "b"}}));
+        list<hash<auto>> dels = select fake.requests, $1.method == "DELETE";
+        assertEq(("/objects/Doc/b-0000", "/objects/Doc/b-0001"), map $1.path, dels);
+
+        # nothing matches: no delete request
+        fake.requests = ();
+        assertEq(0, store.deleteByFilter({"payload_eq": {"instance_key": "none"}}));
+        assertEq(0, (select fake.requests, $1.method == "DELETE").size());
+
+        # a filter that selects everything is refused before any request
+        fake.requests = ();
+        foreach hash<auto> bad in (({}, {"payload_eq": {}})) {
+            assertThrows("VECTOR-STORE-FILTER-ERROR", \store.deleteByFilter(), bad);
+        }
+        assertEq(0, fake.requests.size());
+    }
+
+    summarizeTest() {
+        FakeWeaviateRest fake();
+        fake.objects = (
+            {"id": "1", "properties": {"instance_key": "a", "t": "2026-11-01T10:00:00"}},
+            {"id": "2", "properties": {"instance_key": "b", "t": "2026-11-02T10:00:00"}},
+            {"id": "3", "properties": {"instance_key": "b", "t": "2026-11-03T10:00:00"}},
+            {"id": "4", "properties": {"t": "bad"}},
+        );
+        QoreRagUtils::WeaviateVectorStore store = newStore(fake);
+        list<hash<QoreRagUtils::VectorFieldSummary>> groups = store.summarizeBy("instance_key", NOTHING, "t");
+        assertEq(("b", "a", NOTHING), map $1.value, groups);
+        assertEq((2, 1, 1), map $1.count, groups);
+        assertEq(2026-11-03T10:00:00, groups[0].last_write);
+        assertFalse(exists groups[2].last_write);
+
+        fake.objects = ();
+        assertEq((), store.summarizeBy("instance_key"));
+    }
+
+    unsupportedTest() {
+        FakeWeaviateRest fake();
+        QoreRagUtils::WeaviateVectorStore store = newStore(fake);
+        assertThrows("WEAVIATE-VECTOR-STORE-ERROR", \store.countByFilter(), {"where": {"a": 1}});
+    }
+}

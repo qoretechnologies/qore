@@ -196,26 +196,7 @@ public class PgVectorRagProvider inherits AbstractVectorStore {
             distance_op, quoteIdent(table_name));
         list<auto> bind_args = (vec_lit,);
         if (filter) {
-            list<string> where_clauses = ();
-            # Bind the raw pass-through WHERE fragment first so its `%v` placeholders keep stable
-            # positions (immediately after the vector literal) regardless of whether `payload_eq`
-            # is also supplied; `payload_eq`'s bind is always appended last.
-            if (exists filter.where_sql && filter.where_sql.typeCode() == NT_STRING) {
-                # Pass-through raw WHERE fragment for users who want full SQL
-                # filter expressivity; placeholders use Qore `%v` binds supplied
-                # positionally in the `where_args` list
-                push where_clauses, "(" + filter.where_sql + ")";
-                if (filter.where_args && filter.where_args.typeCode() == NT_LIST) {
-                    bind_args += filter.where_args;
-                }
-            }
-            if (filter.payload_eq && filter.payload_eq.typeCode() == NT_HASH && filter.payload_eq.size()) {
-                push where_clauses, "payload @> %v::jsonb";
-                push bind_args, call_function_args("make_json", (filter.payload_eq,));
-            }
-            if (where_clauses) {
-                sql += " WHERE " + where_clauses.join(" AND ");
-            }
+            sql += buildWhere(filter, \bind_args);
         }
         sql += sprintf(" ORDER BY dist LIMIT %d", k);
 
@@ -249,6 +230,90 @@ public class PgVectorRagProvider inherits AbstractVectorStore {
     string getCollection() {
         return table_name;
     }
+
+    #! Counts the rows whose payload matches the filter
+    /** @param filter optional filter; \c payload_eq and \c where_sql as for search()
+
+        @return the number of matching rows
+    */
+    int countByFilter(*hash<auto> filter) {
+        list<auto> bind_args = ();
+        string sql = sprintf("SELECT count(*) AS cnt FROM %s", quoteIdent(table_name));
+        if (filter) {
+            sql += buildWhere(filter, \bind_args);
+        }
+        return ds.vselectRow(sql, bind_args).cnt.toInt();
+    }
+
+    #! Deletes the rows whose payload matches the filter
+    /** @param filter the filter; \c payload_eq and \c where_sql as for search()
+
+        @return the number of rows removed
+
+        @throw VECTOR-STORE-FILTER-ERROR the filter is empty or has no \c payload_eq or \c where_sql criteria
+    */
+    int deleteByFilter(hash<auto> filter) {
+        list<auto> bind_args = ();
+        string clause = buildWhere(filter, \bind_args);
+        AbstractVectorStore::requireFilterCriteria(clause.val());
+        string sql = sprintf("DELETE FROM %s%s", quoteIdent(table_name), clause);
+        on_error ds.rollback();
+        on_success ds.commit();
+        return ds.vexec(sql, bind_args).toInt();
+    }
+
+    #! Summarizes the rows by the distinct values of a payload key
+    /** Groups in SQL: <tt>SELECT (payload -&gt; field)::text, count(*) ... GROUP BY 1</tt>, with
+        <tt>max(payload -&gt;&gt; timestamp_field)</tt> when a timestamp key is requested.
+
+        @param field the top-level payload key to group by
+        @param filter optional filter; \c payload_eq and \c where_sql as for search()
+        @param timestamp_field optional top-level payload key holding an ISO 8601 string; its maximum per group is
+            the group's \c last_write (ISO 8601 strings in the same format order chronologically)
+
+        @return the groups ordered by descending count and then by value
+    */
+    list<hash<VectorFieldSummary>> summarizeBy(string field, *hash<auto> filter, *string timestamp_field) {
+        list<auto> bind_args = (field,);
+        string sql = "SELECT (payload -> %v::text)::text AS val, count(*) AS cnt";
+        if (timestamp_field) {
+            sql += ", max(payload ->> %v::text) AS last_write";
+            push bind_args, timestamp_field;
+        }
+        sql += sprintf(" FROM %s", quoteIdent(table_name));
+        if (filter) {
+            sql += buildWhere(filter, \bind_args);
+        }
+        sql += " GROUP BY 1";
+
+        list<hash<VectorFieldSummary>> groups = ();
+        *hash<auto> rows = ds.vselect(sql, bind_args);
+        if (!rows) {
+            return groups;
+        }
+        int n = rows.cnt.size();
+        for (int i = 0; i < n; ++i) {
+            auto value;
+            # a record without the key gives SQL NULL, which is not NOTHING
+            if (rows.val[i].typeCode() == NT_STRING) {
+                value = call_function_args("parse_json", (rows.val[i],));
+            }
+            *date ts;
+            if (timestamp_field && rows.last_write[i].typeCode() == NT_STRING) {
+                try {
+                    ts = date(rows.last_write[i]);
+                } catch () {
+                }
+            }
+            push groups, <VectorFieldSummary>{
+                "value": value,
+                "count": rows.cnt[i].toInt(),
+                "last_write": ts,
+            };
+        }
+        return AbstractVectorStore::sortSummary(groups);
+    }
+
 
     int getDimension() {
         if (exists cached_dimension) {
@@ -300,6 +365,29 @@ public class PgVectorRagProvider inherits AbstractVectorStore {
             push parts, sprintf("%g", v);
         }
         return "[" + (foldl $1 + "," + $2, parts) + "]";
+    }
+
+    #! Builds the WHERE clause (with its leading space) for a filter, appending its binds
+    /** \c where_sql is bound first, then \c payload_eq, so the placeholders keep stable positions
+
+        @return the clause, or an empty string if the filter has no criteria
+    */
+    private string buildWhere(hash<auto> filter, reference<list<auto>> bind_args) {
+        list<string> where_clauses = ();
+        if (filter.where_sql.typeCode() == NT_STRING && filter.where_sql.val()) {
+            # Pass-through raw WHERE fragment for users who want full SQL
+            # filter expressivity; placeholders use Qore `%v` binds supplied
+            # positionally in the `where_args` list
+            push where_clauses, "(" + filter.where_sql + ")";
+            if (filter.where_args && filter.where_args.typeCode() == NT_LIST) {
+                bind_args += filter.where_args;
+            }
+        }
+        if (filter.payload_eq && filter.payload_eq.typeCode() == NT_HASH && filter.payload_eq.size()) {
+            push where_clauses, "payload @> %v::jsonb";
+            push bind_args, call_function_args("make_json", (filter.payload_eq,));
+        }
+        return where_clauses ? " WHERE " + where_clauses.join(" AND ") : "";
     }
 
     #! Wraps an identifier in double quotes, escaping any embedded quotes
