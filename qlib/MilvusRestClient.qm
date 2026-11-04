@@ -202,6 +202,13 @@ public namespace QoreRagUtils {
     - \c options.dimension (optional): vector dimension
     - \c options.id_field (optional): primary key field (default \c "id")
     - \c options.vector_field (optional): vector field name (default \c "vector")
+
+    @par Consistency
+
+    The Milvus REST API cannot set a consistency level per request, so reads see the collection's consistency
+    level.  With the default \c Bounded level, a count or summary issued right after an upsert or a delete can still
+    reflect the earlier state, and so can the count that deleteByFilter() returns.  Create the collection with
+    <tt>params.consistencyLevel = "Strong"</tt> when the management calls must see the preceding writes.
 */
 public class MilvusVectorStore inherits AbstractVectorStore {
     public {

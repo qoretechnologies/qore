@@ -12,6 +12,10 @@
 %requires QoreRagTypes
 %requires QoreRagUtils
 %requires json
+%requires OpenSearchDataProvider
+%requires MilvusRestClient
+%requires ChromaRestClient
+%requires WeaviateRestClient
 
 # Conformance of AbstractVectorStore::countByFilter(), deleteByFilter() and summarizeBy() (issue #5576).
 #
@@ -20,6 +24,10 @@
 #   - Qdrant        (QDRANT_URL, for example http://127.0.0.1:6333; a temporary collection is created)
 #   - pgvector      (QORE_DB_CONNSTR_PGSQL or PGVECTOR_DB_CONNSTR; a temporary table is created)
 #   - MongoDB       (MONGODB_URL; records are scoped by a random payload value)
+#   - OpenSearch    (OPENSEARCH_URL, for example http://127.0.0.1:9200; a temporary index is created)
+#   - Milvus        (MILVUS_URL, for example http://127.0.0.1:19530; a temporary collection is created)
+#   - Chroma        (CHROMA_URL, for example http://127.0.0.1:8000; a temporary collection is created)
+#   - Weaviate      (WEAVIATE_URL, for example http://127.0.0.1:8080; a temporary class is created)
 # Stores without a backend are covered by the mocked-transport tests next to each module.
 
 %exec-class VectorStoreConformanceTest
@@ -103,6 +111,18 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if (ENV.MONGODB_URL.val()) {
             addTestCase("MongoDB", \mongoTest());
         }
+        if (ENV.OPENSEARCH_URL.val()) {
+            addTestCase("OpenSearch", \opensearchTest());
+        }
+        if (ENV.MILVUS_URL.val()) {
+            addTestCase("Milvus", \milvusTest());
+        }
+        if (ENV.CHROMA_URL.val()) {
+            addTestCase("Chroma", \chromaTest());
+        }
+        if (ENV.WEAVIATE_URL.val()) {
+            addTestCase("Weaviate", \weaviateTest());
+        }
         set_return_value(main());
     }
 
@@ -133,6 +153,151 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
                 "options": {"dimension": 3},
             });
         runScenario(store, "qd-" + get_random_string(6));
+    }
+
+    opensearchTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.OPENSEARCH_URL, "data": "json"});
+        try {
+            rest.restGet("/");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("OpenSearch is not reachable at %y: %s", ENV.OPENSEARCH_URL, ex.desc));
+        }
+        rest.restPut("/" + name, {
+            "settings": {"index": {"knn": True}},
+            # payload_eq is an exact term match, so the string payload fields must be keyword fields
+            "mappings": {"properties": {
+                "embedding": {"type": "knn_vector", "dimension": 3},
+                "scope": {"type": "keyword"},
+                "k": {"type": "keyword"},
+            }},
+        });
+        on_exit {
+            try {
+                rest.restDel("/" + name);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "opensearch",
+                "collection": name,
+                "url": ENV.OPENSEARCH_URL,
+                "options": {"dimension": 3, "refresh": "true"},
+            });
+        runScenario(store, "os-" + get_random_string(6));
+    }
+
+    milvusTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        string token = ENV.MILVUS_TOKEN ?? "root:Milvus";
+        RestClientIo::RestClientIo rest({"url": ENV.MILVUS_URL, "data": "json",
+            "headers": {"Authorization": "Bearer " + token}});
+        # Milvus reports errors in the response body with a 200 status
+        code check = sub (hash<auto> response, string what) {
+            if (response.body.code != 0) {
+                throw "MILVUS-TEST-ERROR", sprintf("%s failed: %y", what, response.body);
+            }
+        };
+        try {
+            check(rest.restPost("/v2/vectordb/collections/list", {}), "listing collections");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Milvus is not reachable at %y: %s", ENV.MILVUS_URL, ex.desc));
+        }
+        # a quick-setup collection: VarChar primary key "id", COSINE vector field "vector", dynamic fields on, loaded
+        check(rest.restPost("/v2/vectordb/collections/create", {
+            "collectionName": name,
+            "dimension": 3,
+            "metricType": "COSINE",
+            "idType": "VarChar",
+            "autoID": False,
+            "primaryFieldName": "id",
+            "vectorFieldName": "vector",
+            # Strong consistency: Milvus REST reads see the collection's level, and the scenario reads right after writes
+            "params": {"max_length": 64, "enableDynamicField": True, "consistencyLevel": "Strong"},
+        }), "creating the collection");
+        on_exit {
+            try {
+                rest.restPost("/v2/vectordb/collections/drop", {"collectionName": name});
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "milvus",
+                "collection": name,
+                "url": ENV.MILVUS_URL,
+                "options": {"api_key": token, "dimension": 3},
+            });
+        runScenario(store, "mv-" + get_random_string(6));
+    }
+
+    chromaTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.CHROMA_URL, "data": "json"});
+        string base = "/api/v2/tenants/default_tenant/databases/default_database/collections";
+        string id;
+        try {
+            rest.restGet("/api/v2/heartbeat");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Chroma is not reachable at %y: %s", ENV.CHROMA_URL, ex.desc));
+        }
+        # the store addresses a collection by its UUID, which Chroma assigns
+        id = rest.restPost(base, {"name": name, "configuration": {"hnsw": {"space": "cosine"}}}).body.id;
+        on_exit {
+            try {
+                rest.restDel(base + "/" + id);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "chroma",
+                "collection": id,
+                "url": ENV.CHROMA_URL,
+                "options": {"dimension": 3},
+            });
+        runScenario(store, "ch-" + get_random_string(6));
+    }
+
+    weaviateTest() {
+        # Weaviate class names start with an uppercase letter
+        string name = "Conformance" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.WEAVIATE_URL, "data": "json"});
+        try {
+            rest.restGet("/v1/.well-known/ready");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Weaviate is not reachable at %y: %s", ENV.WEAVIATE_URL, ex.desc));
+        }
+        rest.restPost("/v1/schema", {
+            "class": name,
+            "vectorizer": "none",
+            "properties": (
+                {"name": "scope", "dataType": ("text",)},
+                {"name": "k", "dataType": ("text",)},
+                {"name": "t", "dataType": ("text",)},
+            ),
+        });
+        on_exit {
+            try {
+                rest.restDel("/v1/schema/" + name);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "weaviate",
+                "collection": name,
+                "url": ENV.WEAVIATE_URL,
+                "options": {"dimension": 3},
+            });
+        # Weaviate object ids must be UUIDs
+        runScenario(store, "wv-" + get_random_string(6), (
+            "5e4d1a10-0000-4000-8000-000000000001",
+            "5e4d1a10-0000-4000-8000-000000000002",
+            "5e4d1a10-0000-4000-8000-000000000003",
+            "5e4d1a10-0000-4000-8000-000000000004",
+        ));
     }
 
     pgvectorTest() {
@@ -184,15 +349,19 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
     }
 
     #! The scenario every store must satisfy; \a scope isolates this run's records from any others in the store
-    private runScenario(QoreRagUtils::AbstractVectorStore store, string scope) {
+    /** \a ids are the four record ids to use, for stores that require a particular id format
+    */
+    private runScenario(QoreRagUtils::AbstractVectorStore store, string scope,
+            list<string> ids = ("1", "2", "3", "4")) {
+        @assert(ids.size() == 4);
         store.upsert((
-            <QoreRagUtils::VectorRecord>{"id": "1", "vector": (1.0, 0.0, 0.0),
+            <QoreRagUtils::VectorRecord>{"id": ids[0], "vector": (1.0, 0.0, 0.0),
                 "payload": {"k": "a", "scope": scope, "t": "2026-11-01T10:00:00"}},
-            <QoreRagUtils::VectorRecord>{"id": "2", "vector": (0.0, 1.0, 0.0),
+            <QoreRagUtils::VectorRecord>{"id": ids[1], "vector": (0.0, 1.0, 0.0),
                 "payload": {"k": "b", "scope": scope, "t": "2026-11-02T10:00:00"}},
-            <QoreRagUtils::VectorRecord>{"id": "3", "vector": (0.0, 0.0, 1.0),
+            <QoreRagUtils::VectorRecord>{"id": ids[2], "vector": (0.0, 0.0, 1.0),
                 "payload": {"k": "b", "scope": scope, "t": "2026-11-03T10:00:00"}},
-            <QoreRagUtils::VectorRecord>{"id": "4", "vector": (1.0, 1.0, 0.0), "payload": {"scope": scope}},
+            <QoreRagUtils::VectorRecord>{"id": ids[3], "vector": (1.0, 1.0, 0.0), "payload": {"scope": scope}},
         ));
         hash<auto> mine = {"payload_eq": {"scope": scope}};
 
