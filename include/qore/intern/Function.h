@@ -1005,7 +1005,15 @@ protected:
     //! the location of the body of the AOT-compiled function, which its image holds (QoreAOTFunc::body_loc)
     const QoreProgramLocation* aot_body_loc = nullptr;
     mutable std::atomic<QoreAOTContext*> cached_aot_ctx{nullptr};
-    mutable std::once_flag ir_lower_once;
+    //! Serializes the IR lowering attempts of this variant; see lowerIROnce()
+    mutable std::mutex ir_lower_mutex;
+    //! True once an IR lowering attempt has had a final result: the IR, or a failure that does not depend on the stack
+    mutable std::atomic_bool ir_lower_done{false};
+    //! The stack that remained above the stack limit in the last lowering attempt that stopped for lack of stack
+    /** 0 if no attempt stopped for lack of stack.  The failure depends on the stack of the call that made the
+        attempt, not on the code: lowering is attempted again by a call that has more stack than that.
+    */
+    mutable std::atomic<size_t> ir_lower_stack_room{0};
     //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
     mutable std::atomic<int> jit_compile_state{0};
     mutable std::atomic_bool ir_lower_failed{false};
@@ -1061,7 +1069,8 @@ protected:
         under --exec-mode=ir/jit/tiered so IR gaps surface as parse errors
         rather than silently falling back to AST.
     */
-    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false,
+    //! returns true if the result is final, false if lowering stopped for lack of stack; see lowerIROnce()
+    DLLLOCAL bool attemptIRLowering(const char* name, bool raise_on_failure = false,
             bool promote_to_ir = true) const;
     DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
             const QoreTypeInfo* specialization_receiver_type_info,
@@ -1401,10 +1410,35 @@ public:
     //! promote_to_ir=false when the IR is only an internal batch body.
     DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false,
             bool promote_to_ir = true) const {
-        std::call_once(ir_lower_once, [this, name, raise_on_failure, promote_to_ir]() {
-            attemptIRLowering(name, raise_on_failure, promote_to_ir);
+        lowerIROnce([this, name, raise_on_failure, promote_to_ir]() {
+            return attemptIRLowering(name, raise_on_failure, promote_to_ir);
         });
     }
+
+    //! Runs an IR lowering attempt unless an attempt has had a final result; attempts are serialized
+    /** @param attempt the attempt: returns true if its result is final, false if lowering stopped for lack of stack
+
+        An attempt that stopped for lack of stack is not final: the stack depends on the call that made it, which can
+        be deep in a recursion, not on the code.  Another attempt is made only by a call that has more stack above
+        the stack limit than the last one that stopped (ir_lower_stack_room), so that the calls of a deep recursion
+        do not each attempt it again.
+    */
+    template <typename F>
+    DLLLOCAL void lowerIROnce(F&& attempt) const {
+        if (ir_lower_done.load(std::memory_order_acquire) || !hasLowerIRStackRoom()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(ir_lower_mutex);
+        if (ir_lower_done.load(std::memory_order_relaxed) || !hasLowerIRStackRoom()) {
+            return;
+        }
+        if (attempt()) {
+            ir_lower_done.store(true, std::memory_order_release);
+        }
+    }
+
+    //! Returns true if no lowering attempt stopped for lack of stack, or if this call has more stack than it had
+    DLLLOCAL bool hasLowerIRStackRoom() const;
 
     //! Eagerly compile to IR and optionally JIT when --exec-mode is specified
     //! This respects the user's explicit request to execute in a specific mode

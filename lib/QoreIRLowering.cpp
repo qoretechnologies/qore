@@ -3830,6 +3830,11 @@ static bool qoreIrCollectBlockLocals(const StatementBlock* block, std::vector<co
     if (!block) {
         return true;
     }
+    // the scan recurses with the nesting of the blocks: with too little stack it cannot enumerate the locals, and
+    // the lowering in progress fails (see qore_ir_walk_stack_reserve_reached())
+    if (qore_ir_walk_stack_reserve_reached()) {
+        return false;
+    }
     if (!qoreIrAppendScopeLocals(block->getLVList(), locals, count)) {
         return false;
     }
@@ -3955,6 +3960,11 @@ static size_t qoreIrCountStatementReturns(const AbstractStatement* stmt, size_t&
 
 static size_t qoreIrCountReturns(const StatementBlock* block, size_t& count) {
     if (!block) {
+        return 0;
+    }
+    // the count recurses with the nesting of the blocks: with too little stack the block counts as having none, and
+    // the lowering in progress fails (see qore_ir_walk_stack_reserve_reached())
+    if (qore_ir_walk_stack_reserve_reached()) {
         return 0;
     }
     size_t n = 0;
