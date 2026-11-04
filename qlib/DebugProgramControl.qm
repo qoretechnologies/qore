@@ -132,6 +132,10 @@ module DebugProgramControl {
     - fixed a thread that stopped while the last client disconnected: it waited for a client that no longer existed,
       and the code waiting for the program to end, such as the debug adapter of an IDE ending its session, waited for
       that thread forever
+    - fixed a thread that reached a stop while debugging ended, as when \c qdbg quits: it waited for a command that
+      nobody would send, and the process did not end
+    - fixed a stopped thread of a program that the debugger ended, when debugging ended before the thread continued, as
+      when \c qdbg quits after its \c kill command stopped waiting: the thread and the program continued
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -568,7 +572,9 @@ public namespace DebugProgramControl {
                         push stopped, int(i.key);
                         # it runs, so that it leaves the program as a thread that is debugged (the detach is
                         # reported), also from the stop at the start of the program, where it was not yet debugged
-                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}});
+                        # the command itself tells the thread to end: the mark of the program is gone if debugging
+                        # ends before the thread continues, and the thread is not cancelled (see handleInterrupt())
+                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
                     }
                 }
             }
@@ -2429,13 +2435,19 @@ public namespace DebugProgramControl {
             # check at the start of this method, and the threads that it resumes when it disconnects are those that are
             # registered then (see unregisterConnection(), which removes the connection before shutdown() takes the
             # thread lock); a thread that registered after that would wait for a client that no longer exists
+            # the same holds for a thread whose program is no longer debugged, also with a client: debugging ends by
+            # removing the programs and then calling shutdown() (see endDebugging() of qdbg), and a thread that was
+            # already in this method does not see the removal otherwise; so a thread that stops is either registered
+            # when shutdown() resumes the threads, or does not stop; the end of a thread is still reported, as a client
+            # resumes it
             bool unattended;
             {
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
                 @assert(!exists ctxThread{tid});
                 terminating = !ends && isTerminating(ctx.pgmId);
-                unattended = !terminating && !program_start && !hasConnection();
+                unattended = !terminating && ((!program_start && !hasConnection())
+                    || (!ends && !isDebugged(ctx.pgmId)));
                 if (!terminating && !unattended) {
                     ctxThread{tid} = ctx;
                 }
@@ -2500,8 +2512,13 @@ public namespace DebugProgramControl {
             ctxCT.frameId = 0;
             # wait to process command passed as marshalled call from websocket thread
             bool ret = False;
+            # True if terminateProgram() ended the program while this thread was stopped
+            bool terminated = False;
             while (!ret) {
                 auto qrd = ctx.queue.get();
+                if (qrd.terminate) {
+                    terminated = True;
+                }
                 {
                     auto result;
                     hash<auto> sd;
@@ -2777,6 +2794,9 @@ public namespace DebugProgramControl {
             # queued any more, as the thread is no longer registered as stopped
             while (ctx.queue.size()) {
                 hash<auto> qrd = ctx.queue.get();
+                if (qrd.terminate) {
+                    terminated = True;
+                }
                 if (qrd.cx) {
                     try {
                         sendDataImpl(qrd.cx, {
@@ -2810,8 +2830,10 @@ public namespace DebugProgramControl {
             } catch (hash<ExceptionInfo> ex) {
                 # suppress exceptions
             }
-            # a thread of a program that the debugger ends ends, unless it ends anyway
-            if (!ends && isTerminating(ctx.pgmId)) {
+            # a thread of a program that the debugger ends ends, unless it ends anyway; a thread that was stopped then
+            # has not been cancelled, so it must end here also if its program is no longer debugged, or nothing would
+            # end it
+            if (!ends && (terminated || isTerminating(ctx.pgmId))) {
                 throw "THREAD-CANCELLED", TerminateReason;
             }
         }
@@ -2840,6 +2862,16 @@ public namespace DebugProgramControl {
         private:internal threadStarts(int pgm_id, int tid) {
             AutoLock al(startedLock);
             remove endedThreads{pgm_id}{tid};
+        }
+
+        #! Returns True if the program is debugged, which it no longer is once it has been removed
+        private:internal bool isDebugged(int pgm_id) {
+            foreach ProgramControl p in (getAllPrograms()) {
+                if (p.getProgramId() == pgm_id) {
+                    return True;
+                }
+            }
+            return False;
         }
 
         #! Returns True for the first thread of a program that attaches, which starts the program

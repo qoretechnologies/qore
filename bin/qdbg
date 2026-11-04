@@ -149,7 +149,8 @@ class DebugProgramControlLocal inherits DebugProgramControl {
     }
     #! Ends debugging: the programs are no longer debugged, and their stopped threads continue
     /** The programs are removed first, so that a thread that continues does not stop again, as at the end of a
-        program, with nobody to resume it
+        program, with nobody to resume it; a thread that reaches a stop meanwhile does not stop, as its program is no
+        longer debugged when it registers as stopped (see DebugProgramControl::handleInterrupt())
     */
     endDebugging() {
         map removeProgram($1), getAllPrograms();
