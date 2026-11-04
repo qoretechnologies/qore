@@ -318,7 +318,7 @@ class DebugWrapper {
                 }();
             }
             if (wait_start) {
-                dcl.waitForStop();
+                dcl.waitForStart();
             }
             # a command of a file can end the debugger
             if (dcl.runStartupCommandFiles(cmd_files)) {
@@ -405,7 +405,7 @@ class DebugWrapper {
             "                               prompt\n"
             "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
             "                               when the input is not a terminal; then the script is paused (default: no\n"
-            "                               limit)\n"
+            "                               limit); it does not limit the wait for the start of the script\n"
             "  --pause-timeout=ms           the time that such a command waits for that pause (default: as long as\n"
             "                               --wait-timeout)\n"
             "\n"

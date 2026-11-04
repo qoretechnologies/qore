@@ -423,6 +423,8 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("debugging ends while a thread reaches a stop", \endDebuggingStoppingTest());
         addTestCase("debugging ends while a program starts", \endDebuggingStartingTest());
         addTestCase("debugging ends after the debugger ended a stopped program", \endDebuggingTerminatedTest());
+        addTestCase("debugging ends after the debugger's code caught the cancellation of a thread",
+            \endDebuggingSwallowedCancelTest());
         set_return_value(main());
     }
 
@@ -1583,6 +1585,56 @@ int x = 1;
         hash<auto> rv = p.done.get(EventTimeout);
         p.finished = True;
         assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+    }
+
+    # a thread in the debugger's code when the debugger ends its program, which is not stopped so it is cancelled: the
+    # locks of that code are cancellation points, and handleInterrupt() suppresses the exceptions of what it sends to
+    # the clients; the cancellation stays set after the exception, so it still ends the thread, also when debugging has
+    # ended by then and nothing else would
+    endDebuggingSwallowedCancelTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        p.breakAt(7);
+        hash<auto> e = p.runToStop();
+        assertEq(7, e.line);
+        ProgramControl pgm = p.pgm.getProgram();
+        Counter reached(1);
+        Counter cancellable(1);
+        Counter cancelled(1);
+        Counter removed(1);
+        on_exit if (removed.getCount()) {
+            removed.dec();
+        }
+        on_exit if (cancellable.getCount()) {
+            cancellable.dec();
+        }
+        *string err;
+        # the thread has left its stop and tells the clients that it runs
+        dpc.runEventHook = sub () {
+            reached.dec();
+            try {
+                cancellable.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            cancelled.dec();
+            # the cancellation stays set, and would end this wait too
+            defer_thread_cancel(sub () {
+                removed.waitForZero();
+            });
+        };
+        on_exit dpc.runEventHook = NOTHING;
+        dpc.go(p.tid);
+        reached.waitForZero();
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        cancelled.waitForZero();
+        assertEq("THREAD-CANCELLED", err);
+        dpc.removeProgram(pgm);
+        removed.dec();
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err, sprintf("%y", rv));
         assertTrue(DebugProgramControl::isTerminateException(rv.ex));
     }
 

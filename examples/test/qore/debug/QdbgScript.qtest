@@ -1281,6 +1281,22 @@ public class QdbgScriptTest inherits QUnit::Test {
             "No thread paused within 50 ms after the request",
         ));
 
+        # the wait timeout does not limit the start of the program: the first command has its program and thread
+        res = runQdbg(Program, ("thread list", "go", "quit"), ("--wait-timeout=1", PauseBound));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, ("Paused at the start of the program", "thread "));
+        assertFalse(res.out =~ /there is no current/, res.out);
+
+        # the wait for the start ends also for a program that ends at once, raises an exception or does not parse
+        res = runQdbg("%modern\nexit(3);\n", ("go", "quit"), ("--wait-timeout=1", PauseBound));
+        assertEq(3, res.rc, res.out);
+        res = runQdbg("%modern\nthrow \"EARLY-ERROR\";\n", ("go", "go", "quit"), ("--wait-timeout=1", PauseBound));
+        assertRegex("EARLY-ERROR", res.out);
+        assertFalse(res.out =~ /there is no current program/, res.out);
+        res = runQdbg("%modern\nint x = ;\n", ("quit",), ("--wait-timeout=1", PauseBound));
+        assertNeq(0, res.rc, res.out);
+        assertRegex("PARSE", res.out);
+
         # negative: a negative wait timeout and pause timeout
         res = runQdbg(loop, ("quit",), ("--wait-timeout=-1",));
         assertNeq(0, res.rc);

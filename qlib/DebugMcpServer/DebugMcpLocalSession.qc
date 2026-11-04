@@ -215,7 +215,7 @@ public class DebugMcpLocalSession inherits DebugMcpSession {
             cancelStop();
             rethrow;
         }
-        waitForStop();
+        waitForStart();
         return makeReport();
     }
 

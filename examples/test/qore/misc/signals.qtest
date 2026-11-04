@@ -286,8 +286,8 @@ class SignalTest inherits QUnit::Test {
         script.file.write(DispositionScript);
         script.file.close();
 
-        # a signal that ends the process, by its default action or, for SIGTERM, with its cleanup, with and without a
-        # handler that was removed
+        # a signal that ends the process, with and without a handler that was removed: by its default action, or for
+        # SIGTERM with the exit code of the signal thread
         foreach int sig in (SIGTERM, SIGUSR1, SIGUSR2) {
             foreach string mode in ("never", "unset", "removed") {
                 hash<auto> res = runDisposition(script, sig, mode);
@@ -300,7 +300,7 @@ class SignalTest inherits QUnit::Test {
             assertRegex("handled " + sig + "\n", res.out);
         }
 
-        # negative: SIGHUP has no action without a handler, and SIGPIPE is always ignored
+        # negative: without a handler the signal thread consumes and drops SIGHUP, and SIGPIPE is always ignored
         foreach int sig in (SIGHUP, SIGPIPE) {
             foreach string mode in ("never", "unset") {
                 hash<auto> res = runDisposition(script, sig, mode, "survives");

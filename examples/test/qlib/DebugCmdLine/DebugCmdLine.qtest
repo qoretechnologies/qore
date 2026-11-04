@@ -83,6 +83,7 @@ public class DebugCmdLineTest inherits QUnit::Test {
         addTestCase("JSON output of commands", \jsonCommandTests());
         addTestCase("JSON output of events", \jsonEventTests());
         addTestCase("the wait timeout option", \waitTimeoutOptionTests());
+        addTestCase("the wait for the start of a program", \waitForStartTests());
         set_return_value(main());
     }
 
@@ -563,6 +564,70 @@ public class DebugCmdLineTest inherits QUnit::Test {
         # an error of the debug server
         dcl.printData({"type": DebugResponseType::Error, "cmd": "x/y", "result": {"err": "E", "desc": "failed"}});
         assertEq(({"type": "error", "command": "x/y", "error": "E: failed"},), dcl.objects);
+    }
+
+    #! runs a process that sends itself the signal while it waits for the start of a program; returns its exit code
+    private int runStartWaitSignal(int sig, bool handler) {
+        TmpFile script("qore-debug-start-", ".q");
+        script.file.write(sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires DebugCmdLine\n"
+            "class C inherits DebugCmdLine::DebugCommandLine {\n"
+            "    public printfImpl(string fmt, ...) {}\n"
+            "    public *hash<auto> doCommandImpl(hash<auto> data) {}\n"
+            "}\n"
+            "%sC c();\nc.expectStop();\n"
+            "background sub () { kill(getpid(), %d); }();\n"
+            "c.waitForStart();\n"
+            "exit(99);\n", normalize_dir(get_script_dir() + "/../../../../qlib"),
+            handler ? sprintf("set_signal_handler(%d, sub (int s) { exit(128 + s); });\n", sig) : "", sig));
+        script.file.close();
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        cmd += sprintf("'%s' '%s' > /dev/null 2>&1; echo $?", QORE_ARGV[0], script.path);
+        return int(trim(backquote(cmd)));
+    }
+
+    # the wait for the start of a program has no time limit: it ends when the program attaches, or when it has ended
+    waitForStartTests() {
+        # the signals that end qdbg also end the wait, with a handler as qdbg sets them, and SIGTERM without one
+        assertEq(128 + SIGTERM, runStartWaitSignal(SIGTERM, True));
+        assertEq(128 + SIGINT, runStartWaitSignal(SIGINT, True));
+        assertEq(128 + SIGTERM, runStartWaitSignal(SIGTERM, False));
+
+        hash<auto> attach = {
+            "type": DebugResponseType::Event,
+            "cmd": DebugEventCmd::Interrupt,
+            "pgmid": 1,
+            "tid": 2,
+            "func": "attach",
+            "programstart": True,
+        };
+        foreach bool attaches in ((True, False)) {
+            TestDebugCommandLine cl();
+            cl.waitTimeout = 1;
+            cl.expectStop();
+            Queue q();
+            background sub () {
+                try {
+                    cl.waitForStart();
+                    q.push("returned");
+                } catch (hash<ExceptionInfo> ex) {
+                    q.push(ex.err);
+                }
+            }();
+            # still waiting long after the wait timeout, whatever the speed of the machine
+            assertThrows("QUEUE-TIMEOUT", \q.get(), 100ms);
+            if (attaches) {
+                cl.eventReceived(attach);
+            } else {
+                cl.cancelStop();
+            }
+            assertEq("returned", q.get(30s));
+        }
     }
 
     waitTimeoutOptionTests() {

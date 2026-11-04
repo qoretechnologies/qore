@@ -261,7 +261,10 @@ exception filter uncaught
 
     With \c --wait-timeout, a command that resumes a thread waits for a thread to pause as many milliseconds at most;
     then the program is paused, and the command waits as long again for the pause, or as long as \c --pause-timeout
-    says.  A thread that waits, as for a lock or I/O, pauses only when it continues; \c kill ends the program also then.
+    says.  A thread that waits, as for a lock or I/O, pauses only when it continues; \c kill ends the program also then,
+    and waits for its end as long as \c --wait-timeout says.  The wait of \c qdbg for the start of the script has no time
+    limit: it ends when the script has attached or ended, or on \c SIGINT or \c SIGTERM, so the first command always has
+    its program.
     @code{.sh}
 printf 'break create 3\ngo\nlocals\ngo\nquit\n' | qdbg --json --wait-timeout=5000 myfile.q
     @endcode
