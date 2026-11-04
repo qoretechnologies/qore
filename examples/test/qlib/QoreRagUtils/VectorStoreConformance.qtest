@@ -117,6 +117,9 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if (ENV.MILVUS_URL.val()) {
             addTestCase("Milvus", \milvusTest());
         }
+        if (ENV.CHROMA_URL.val()) {
+            addTestCase("Chroma", \chromaTest());
+        }
         set_return_value(main());
     }
 
@@ -224,6 +227,34 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
                 "options": {"api_key": token, "dimension": 3},
             });
         runScenario(store, "mv-" + get_random_string(6));
+    }
+
+    chromaTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        RestClientIo::RestClientIo rest({"url": ENV.CHROMA_URL, "data": "json"});
+        string base = "/api/v2/tenants/default_tenant/databases/default_database/collections";
+        string id;
+        try {
+            rest.restGet("/api/v2/heartbeat");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Chroma is not reachable at %y: %s", ENV.CHROMA_URL, ex.desc));
+        }
+        # the store addresses a collection by its UUID, which Chroma assigns
+        id = rest.restPost(base, {"name": name, "configuration": {"hnsw": {"space": "cosine"}}}).body.id;
+        on_exit {
+            try {
+                rest.restDel(base + "/" + id);
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "chroma",
+                "collection": id,
+                "url": ENV.CHROMA_URL,
+                "options": {"dimension": 3},
+            });
+        runScenario(store, "ch-" + get_random_string(6));
     }
 
     pgvectorTest() {
