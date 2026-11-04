@@ -189,9 +189,6 @@ provider.deleteCachedContent(cache.name);
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
     - initial release
-    - the \c gcp_endpoint_location and \c gcp_model_locations connection and provider options state the location a
-      custom endpoint serves and the location each model must be processed in; a request that would be processed
-      elsewhere is refused (@ref VertexAiRestClient::checkLocationOptions())
 */
 
 #! Contains all public definitions in the VertexAiRestClient module
