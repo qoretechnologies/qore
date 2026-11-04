@@ -15,6 +15,9 @@ struct QoreTypeParamInstantiation;
 #include <limits>
 #include <pthread.h>
 #include <thread>
+#ifdef __linux__
+#include <sys/resource.h>
+#endif
 
 #if defined(__aarch64__)
 #include <qore/macros-aarch64.h>
@@ -81,6 +84,37 @@ static void check() {
     assert(!xsink);
 }
 
+#ifdef __linux__
+// Returns the size that the initial thread's stack can grow to below its top, from the OS: the stack resource limit
+// bounds the whole stack mapping, which also holds the arguments and the environment above the top; 0 if the stack
+// has no resource limit
+static size_t linuxPrimaryStackGrowth(size_t top) {
+    rlimit rl;
+    assert(!getrlimit(RLIMIT_STACK, &rl));
+    if (rl.rlim_cur == RLIM_INFINITY) {
+        return 0;
+    }
+    FILE* maps = fopen("/proc/self/maps", "r");
+    assert(maps);
+    size_t mapping_end = 0;
+    char line[512];
+    unsigned lines = 0;
+    ExceptionSink xsink;
+    while (!mapping_end && fgets(line, sizeof line, maps)) {
+        unsigned long start, end;
+        if (sscanf(line, "%lx-%lx", &start, &end) == 2 && top - 1 >= start && top - 1 < end) {
+            mapping_end = end;
+        }
+        if (!(++lines % 100)) {
+            assert(!qore_check_cancel(&xsink, "reading the memory mappings"));
+        }
+    }
+    fclose(maps);
+    assert(mapping_end >= top && mapping_end - top < rl.rlim_cur);
+    return rl.rlim_cur - (mapping_end - top);
+}
+#endif
+
 static void checkPrimaryLimit() {
 #if defined(STACK_DIRECTION_DOWN) && (defined(__APPLE__) || defined(__linux__))
     // Compare with the OS bounds, not the stack position where Qore initialized.
@@ -97,6 +131,10 @@ static void checkPrimaryLimit() {
     assert(!pthread_attr_getstack(&attr, &base, &size));
     assert(!pthread_attr_destroy(&attr));
     top = reinterpret_cast<size_t>(base) + size;
+    // glibc reports the size that the stack can grow to, musl only the part mapped so far
+    if (size_t growth = linuxPrimaryStackGrowth(top)) {
+        size = growth;
+    }
 #endif
     assert(top && size);
     ExceptionSink xsink;

@@ -656,6 +656,8 @@ public:
             // save this thread's stack size as the default stack size can change
             size_t stack_guard = QORE_STACK_GUARD;
             // on Linux the initial thread's stack is extended automatically, so we put a large number here
+            // the size from the stack resource limit, if the stack has one (see primaryStackGrowth())
+            [[maybe_unused]] size_t primary_rlimit = 0;
             if (tid == initial_thread) {
 #ifdef _Q_WINDOWS
                 // windows uses a 1MB stack size for the main thread
@@ -670,6 +672,7 @@ public:
                 if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur
                         && rl.rlim_cur != RLIM_INFINITY) {
                     stack_size = rl.rlim_cur;
+                    primary_rlimit = stack_size;
                     printd(5, "rlimit: stack size: %lld bytes\n", (int64)rl.rlim_cur);
                 } else
 #endif
@@ -733,8 +736,9 @@ public:
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
 
             if (tid == initial_thread) {
-                // the limit above is left as it is; the real bounds are only used when the stack size is enforced
-                // later by enforcePrimaryStackSize()
+                // where the size that the stack can grow to is known (Linux), the limit is anchored to the real end of
+                // the stack; elsewhere the limit above is left as it is, and the real bounds are only used when the
+                // stack size is enforced later by enforcePrimaryStackSize()
                 primary_stack_top = stack_start;
                 primary_stack_size = stack_size;
 #ifdef QORE_HAVE_GET_STACK_SIZE
@@ -746,10 +750,25 @@ public:
 #else
                     primary_stack_top = real_base;
 #endif
-                    // the size reported for a stack that grows on demand can be only the part mapped so far (musl
-                    // reports the mapped size of the initial thread's stack), so the size from the resource limit
-                    // above is used when it is larger
-                    if (real_size > primary_stack_size) {
+                    size_t growth = primaryStackGrowth(primary_stack_top, real_size, primary_rlimit);
+                    if (growth) {
+#if defined(__linux__) && defined(STACK_DIRECTION_DOWN)
+                        // The stack resource limit bounds the whole stack mapping, including the arguments and the
+                        // environment above the top of the stack: the stack ends that much less than the limit below
+                        // the top.  The limit is anchored to the real end of the stack, as for the other threads,
+                        // instead of to the stack position where this ThreadData is created: from there, a limit as
+                        // large as the resource limit lay beyond the end of the stack by the size of the arguments,
+                        // the environment and the frames above that position, and a process started with a large
+                        // environment (more than the stack guard) crashed on a stack overflow in its primary thread
+                        // instead of raising STACK-LIMIT-EXCEEDED.
+                        stack_size = growth;
+                        stack_limit = primary_stack_top - (growth > stack_guard ? growth - stack_guard : 0);
+#endif
+                        primary_stack_size = growth;
+                    } else if (real_size > primary_stack_size) {
+                        // the size reported for a stack that grows on demand can be only the part mapped so far
+                        // (musl reports the mapped size of the initial thread's stack), so the size from the
+                        // resource limit above is used when it is larger
                         primary_stack_size = real_size;
                     }
                 }
@@ -765,6 +784,69 @@ public:
     }
 
 #ifdef QORE_MANAGE_STACK
+    //! Returns the size that the initial thread's stack can grow to below its top, or 0 if it cannot be determined
+    /** @param top the top of the stack, as the thread library reports it
+        @param reported_size the size of the stack that the thread library reports
+        @param rlimit the stack resource limit, or 0 if the stack has none
+
+        On Linux, the resource limit bounds the whole stack mapping (the kernel does not let the mapping grow
+        beyond it), and the mapping holds the arguments, the environment and the auxiliary vector above the top of
+        the stack, so the stack itself can only grow to the limit less their size.  glibc reports exactly that size
+        for the initial thread (from the mapping and the resource limit, and less if another mapping is closer),
+        while musl reports only the part of the stack that is mapped so far, so there the end of the mapping is
+        read from /proc/self/maps.  Elsewhere, and if the stack has no resource limit, 0 is returned: the caller
+        then uses the larger of the resource limit (or the default size) and the size reported.
+    */
+    DLLLOCAL static size_t primaryStackGrowth([[maybe_unused]] size_t top, [[maybe_unused]] size_t reported_size,
+            [[maybe_unused]] size_t rlimit) {
+#if defined(__linux__) && defined(STACK_DIRECTION_DOWN)
+        if (syscall(SYS_gettid) != getpid()) {
+            // Qore was initialized in another thread than the process's initial thread (by a program that embeds
+            // it): that thread's stack has a fixed size, which the thread library reports
+            return reported_size;
+        }
+        if (!rlimit) {
+            return 0;
+        }
+#ifdef __GLIBC__
+        return reported_size <= rlimit ? reported_size : 0;
+#else
+        size_t mapping_end = getMappingEnd(top - 1);
+        if (!mapping_end || mapping_end < top || mapping_end - top >= rlimit) {
+            return 0;
+        }
+        return rlimit - (mapping_end - top);
+#endif
+#else
+        return 0;
+#endif
+    }
+
+#if defined(__linux__) && !defined(__GLIBC__)
+    //! Returns the end of the memory mapping of this process that contains the given address, or 0 if not found
+    /** Reads /proc/self/maps, whose lines start with "<start>-<end> " in hexadecimal; called once per process, for
+        the initial thread, so the number of lines is bounded by the mappings made before Qore is initialized
+    */
+    DLLLOCAL static size_t getMappingEnd(size_t addr) {
+        FILE* maps = fopen("/proc/self/maps", "re");
+        if (!maps) {
+            return 0;
+        }
+        ON_BLOCK_EXIT(fclose, maps);
+        char line[512];
+        while (fgets(line, sizeof line, maps)) {
+            unsigned long start, end;
+            if (sscanf(line, "%lx-%lx", &start, &end) == 2 && addr >= start && addr < end) {
+                return end;
+            }
+            // a line longer than the buffer: skip the rest of it
+            while (!strchr(line, '\n') && fgets(line, sizeof line, maps)) {
+            }
+        }
+        return 0;
+    }
+#endif
+
     //! Returns the stack size of the thread less the stack guard, or 0 if the stack is no larger than the guard
     DLLLOCAL size_t getUsableStackSize() const {
         return stack_size > QORE_STACK_GUARD ? stack_size - QORE_STACK_GUARD : 0;

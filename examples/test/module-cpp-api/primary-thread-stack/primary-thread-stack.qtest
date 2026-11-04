@@ -35,7 +35,9 @@ hashdecl StackSizeCase {
     Each scenario runs in the primary thread of a process of its own (primary-thread-stack-worker.q), as a wrong
     stack limit leaves the primary thread unable to run any more code, and in each execution mode.  The worker calls
     the C++ API as the jni module does, and its results are checked against the real stack size of the primary
-    thread: the stack resource limit, or 8 MB if the stack has no limit, as %Qore assumes.
+    thread, which the worker reports: the size that the OS lets the stack grow to (cpp_api_primary_stack_growth();
+    on Linux, the stack resource limit less the arguments and the environment above the top of the stack, which the
+    limit also bounds), or 8 MB if the stack has no limit, as %Qore assumes.
 */
 class PrimaryThreadStackTest inherits QUnit::Test {
     public {
@@ -75,7 +77,7 @@ class PrimaryThreadStackTest inherits QUnit::Test {
         #! the soft stack resource limit of the process, which the workers inherit; -1 if the stack has no limit
         int rlimit;
 
-        #! the real stack size of the primary thread
+        #! the stack size of the primary thread from its resource limit, from which the maximum sizes are derived
         int real_size;
 
         #! the qore executable that runs the workers
@@ -110,8 +112,8 @@ class PrimaryThreadStackTest inherits QUnit::Test {
     }
 
     #! the stack size of the primary thread is the enforced maximum stack size less the protected stack
-    /** The maximum sizes are all smaller than the real stack, so the stack size does not depend on how the platform
-        reports the real stack; with no maximum, it is the real stack size
+    /** A maximum is capped at the real stack size, which on Linux is less than the resource limit by the size of the
+        arguments and the environment; with no maximum, the stack size is the real stack size
     */
     sizeTest() {
         list<hash<StackSizeCase>> cases = (
@@ -130,13 +132,14 @@ class PrimaryThreadStackTest inherits QUnit::Test {
         }
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<string, string> r = runWorker(mode, "sizes", args);
+            int growth = r.GROWTH.toInt();
             foreach hash<StackSizeCase> c in (cases) {
                 string label = sprintf("%s (%s)", c.label, mode);
                 int size = r{"SIZE " + $#}.toInt();
                 if (c.max_size) {
-                    assertEq(c.max_size - c.protected_size, size, label);
+                    assertEq(min(c.max_size, growth) - c.protected_size, size, label);
                 } else if (rlimit >= 0) {
-                    assertEq(rlimit, size, label + ": the stack resource limit");
+                    assertEq(growth, size, label + ": the size that the stack resource limit lets the stack grow to");
                 } else {
                     # the platform can report a stack with no limit as larger than the size that Qore assumes
                     assertGe(UnlimitedStackSize, size, label + ": a stack with no resource limit");
@@ -147,9 +150,9 @@ class PrimaryThreadStackTest inherits QUnit::Test {
 
     #! the stack limit of the primary thread lies at the end of the stack that a JVM lets it use, less the guard
     limitTest() {
-        int size = real_size - JvmRlimitReserve - JvmProtectedSize;
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<string, string> r = runWorker(mode, "limit", getJvmArgs());
+            int size = min(real_size - JvmRlimitReserve, r.GROWTH.toInt()) - JvmProtectedSize;
             assertEq(size, r.SIZE.toInt(), mode + ": the stack size that a JVM lets the primary thread use");
             int to_limit = r{"TO-LIMIT"}.toInt();
             assertLt(size, to_limit, mode + ": the stack guard lies within the stack");
@@ -219,7 +222,11 @@ class PrimaryThreadStackTest inherits QUnit::Test {
             rv.out));
         assertEq(0, rv.rc, label + ": exit status");
         assertEq("1", results.TID, label + ": the scenario ran in the primary thread");
-        assertEq(real_size, results.INITIAL.toInt(), label + ": the stack size before it was enforced");
+        # the stack resource limit bounds the stack, less the arguments and the environment above it on Linux
+        int growth = results.GROWTH.toInt();
+        assertEq(True, growth > 0 ? growth <= real_size : rlimit < 0, label + ": the stack growth reported");
+        assertEq(growth > 0 ? growth : real_size, results.INITIAL.toInt(),
+            label + ": the stack size before it was enforced");
         ExecModeHarness::check_native(rv, ExecModeHarness::NativeCheck::Jit);
         return results;
     }

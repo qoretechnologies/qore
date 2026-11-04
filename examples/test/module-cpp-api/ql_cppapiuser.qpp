@@ -1275,6 +1275,68 @@ int cpp_api_stack_rlimit() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
     return rl.rlim_cur == RLIM_INFINITY ? -1 : static_cast<int64>(rl.rlim_cur);
 }
 
+//! returns the size that the stack of the process's initial thread can grow to below its top, as the OS bounds it
+/** Must be called in the initial thread.  On Linux, the stack resource limit bounds the whole stack mapping, which
+    also holds the arguments, the environment and the auxiliary vector above the top of the stack, so the stack can
+    grow to the limit less their size; this reads the end of the mapping from /proc/self/maps.  Elsewhere, it is the
+    stack resource limit.
+
+    @return the size in bytes; -1 means no limit
+
+    @throw STACK-RLIMIT-ERROR getrlimit() failed, or the stack mapping could not be found
+*/
+int cpp_api_primary_stack_growth() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_STACK, &rl)) {
+        xsink->raiseErrnoException("STACK-RLIMIT-ERROR", errno, "getrlimit() failed");
+        return QoreValue();
+    }
+    if (rl.rlim_cur == RLIM_INFINITY) {
+        return -1;
+    }
+#ifdef __linux__
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr)) {
+        xsink->raiseException("STACK-RLIMIT-ERROR", "pthread_getattr_np() failed");
+        return QoreValue();
+    }
+    void* base = nullptr;
+    size_t size = 0;
+    int rc = pthread_attr_getstack(&attr, &base, &size);
+    pthread_attr_destroy(&attr);
+    if (rc) {
+        xsink->raiseException("STACK-RLIMIT-ERROR", "pthread_attr_getstack() failed");
+        return QoreValue();
+    }
+    size_t top = reinterpret_cast<size_t>(base) + size;
+    FILE* maps = fopen("/proc/self/maps", "re");
+    if (!maps) {
+        xsink->raiseErrnoException("STACK-RLIMIT-ERROR", errno, "cannot open /proc/self/maps");
+        return QoreValue();
+    }
+    ON_BLOCK_EXIT(fclose, maps);
+    size_t mapping_end = 0;
+    char line[512];
+    unsigned lines = 0;
+    while (!mapping_end && fgets(line, sizeof line, maps)) {
+        unsigned long start, end;
+        if (sscanf(line, "%lx-%lx", &start, &end) == 2 && top - 1 >= start && top - 1 < end) {
+            mapping_end = end;
+        }
+        if (!(++lines % 100) && qore_check_cancel(xsink, "reading the memory mappings")) {
+            return QoreValue();
+        }
+    }
+    if (!mapping_end || mapping_end - top >= rl.rlim_cur) {
+        xsink->raiseException("STACK-RLIMIT-ERROR", "the stack mapping of the initial thread was not found");
+        return QoreValue();
+    }
+    return static_cast<int64>(rl.rlim_cur - (mapping_end - top));
+#else
+    return static_cast<int64>(rl.rlim_cur);
+#endif
+}
+
 //! returns the number of bytes of stack that the current thread has used since %Qore started managing it
 /** @return the value of q_thread_stack_used(): the distance from the stack position of the thread when its %Qore
     thread data was created to the current stack position; 0 if the stack is not managed
