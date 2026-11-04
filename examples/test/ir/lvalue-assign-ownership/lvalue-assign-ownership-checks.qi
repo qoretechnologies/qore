@@ -69,6 +69,20 @@ public class Tracked {
 public class GraphRoot {
     public {
         list<auto> nodes = ();
+        hash<auto> named = {};
+    }
+
+    #! adds new nodes that refer to this root while a closure binds a local holding one of its nodes
+    /** The frame releases its locals in reverse declaration order, so every call in it is an invoke, which ends its
+        block: the new node is used in the block after the one creating it.
+    */
+    addNodesHeld(string key) {
+        GraphNode first = nodes[0];
+        named{key} = new GraphNode(self);
+        # the closure is a temporary of the value assigned
+        named{key + "-cb"} = new GraphNode(auto sub () { return first; });
+        nodes += new GraphNode(self);
+        push nodes, new GraphNode(self);
     }
 
     #! appends a new node that refers to this root to the list of nodes of this root, with += or push
@@ -401,6 +415,30 @@ int sub append_scans() {
     return rv;
 }
 
+#! the objects that the scans enter while new nodes are linked into a graph by a frame with exception edges
+/** As append_scans(), from a method whose calls are invokes (see GraphRoot::addNodesHeld()): the new nodes are
+    handed over as well.
+*/
+int sub invoke_frame_scans() {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return 0;
+    }
+    GraphRoot root();
+    root.addNode(False);
+    # the first call makes the scans that link the closure's frame into the graph
+    root.addNodesHeld("init");
+    int start = call_function("dbg_get_scan_object_count");
+    for (int i = 0; i < 32; ++i) {
+        root.addNodesHeld("k" + i);
+    }
+    int rv = call_function("dbg_get_scan_object_count") - start;
+    foreach GraphNode node in (root.nodes) {
+        node.root = NOTHING;
+    }
+    remove root.named;
+    return rv;
+}
+
 #! Returns the result of every check
 public hash<string, auto> sub get_results() {
     return {
@@ -423,6 +461,7 @@ public hash<string, auto> sub get_results() {
         "self-member-appends": self_member_appends(),
         "append-cycles": append_cycles(),
         "append-scans": append_scans(),
+        "invoke-frame-scans": invoke_frame_scans(),
     };
 }
 }
