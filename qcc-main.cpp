@@ -2954,7 +2954,11 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         uint16_t num_locals = 0, num_globals = 0, num_exprs = 0, num_stmts = 0;
         uint16_t num_regex = 0, num_body_locals = 0;
-        uint8_t has_unsupported = 0, num_lv_paths = 0;
+        uint8_t has_unsupported = 0;
+        // the LValuePath count is a u8 before QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+        uint32_t num_lv_paths = 0;
+        uint8_t legacy_num_lv_paths = 0;
+        const bool wide_lv_path_count = reader.getHeader().version >= QORE_AOT_WIDE_LV_PATH_COUNT_VERSION;
         if (!dump_read_u16(p, entry_end, num_locals)
                 || !dump_read_u16(p, entry_end, num_globals)
                 || !dump_read_u16(p, entry_end, num_exprs)
@@ -2962,7 +2966,9 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
                 || !dump_read_u16(p, entry_end, num_regex)
                 || !dump_read_u16(p, entry_end, num_body_locals)
                 || !dump_read_u8(p, entry_end, has_unsupported)
-                || !dump_read_u8(p, entry_end, num_lv_paths)) {
+                || (wide_lv_path_count
+                    ? !dump_read_u32(p, entry_end, num_lv_paths)
+                    : !dump_read_u8(p, entry_end, legacy_num_lv_paths))) {
             ++summary.malformed_entries;
             p = entry_start + 4 + entry_size;
             continue;
@@ -2974,6 +2980,9 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
         summary.stmt_slots += num_stmts;
         summary.regex_slots += num_regex;
         summary.body_locals += num_body_locals;
+        if (!wide_lv_path_count) {
+            num_lv_paths = legacy_num_lv_paths;
+        }
         summary.lv_path_slots += num_lv_paths;
         if (has_unsupported) {
             ++summary.unsupported_functions;
@@ -9448,10 +9457,13 @@ static bool collect_blob_top_level_local_uses(const QoreAOTBinaryReader& reader,
         const char* fname = nullptr;
         uint16_t num_locals = 0;
         // function name, then the local, global, expression, statement, regex and body-local slot counts,
-        // the unsupported-expression flag and the LValuePath count
+        // the unsupported-expression flag and the LValuePath count (a u8 before
+        // QORE_AOT_WIDE_LV_PATH_COUNT_VERSION)
+        const size_t lv_path_count_size = reader.getHeader().version >= QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+            ? sizeof(uint32_t) : sizeof(uint8_t);
         if (!dump_skip_string_ref(reader, p, entry_end, &fname)
                 || !dump_read_u16(p, entry_end, num_locals)
-                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t))) {
+                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + sizeof(uint8_t) + lv_path_count_size)) {
             error = "malformed SLOT_MAPS entry " + std::to_string(f) + " in '" + object + "'";
             return false;
         }

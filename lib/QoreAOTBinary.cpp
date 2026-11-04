@@ -13766,16 +13766,39 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             return true;
         };
 
-        // Function header
+        // Function header: a count wider than its field would be read back as a different count, and the entries
+        // beyond it as the fields that follow them
+        auto writeHeaderCountU16 = [&writer, &func, &error](size_t count, const char* table_name) -> bool {
+            if (count > std::numeric_limits<uint16_t>::max()) {
+                error = "too many ";
+                error += table_name;
+                error += " in function '";
+                error += func.name;
+                error += "': ";
+                error += std::to_string(count);
+                error += " exceeds the u16 wire format";
+                return false;
+            }
+            writer.writeU16(static_cast<uint16_t>(count));
+            return true;
+        };
         writer.writeStringRef(func.name.c_str());
-        writer.writeU16(static_cast<uint16_t>(func.num_locals));
-        writer.writeU16(static_cast<uint16_t>(func.num_globals));
-        writer.writeU16(static_cast<uint16_t>(func.num_exprs));
-        writer.writeU16(static_cast<uint16_t>(func.num_stmts));
-        writer.writeU16(static_cast<uint16_t>(func.slot_ids.regex_cases.size()));
-        writer.writeU16(static_cast<uint16_t>(func.slot_ids.body_locals.size()));
+        if (!writeHeaderCountU16(func.num_locals, "local slots")
+                || !writeHeaderCountU16(func.num_globals, "global slots")
+                || !writeHeaderCountU16(func.num_exprs, "expression slots")
+                || !writeHeaderCountU16(func.num_stmts, "statement slots")
+                || !writeHeaderCountU16(func.slot_ids.regex_cases.size(), "regex case slots")
+                || !writeHeaderCountU16(func.slot_ids.body_locals.size(), "body locals")) {
+            return false;
+        }
         writer.writeU8(func.slot_ids.has_unsupported_exprs ? 1 : 0);
-        writer.writeU8(static_cast<uint8_t>(func.num_lv_path_insts)); // was: padding byte
+        // the number of LValuePath entries written after the regex cases; a u32 from
+        // QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+        if (func.slot_ids.lv_path_insts.size() > std::numeric_limits<uint32_t>::max()) {
+            error = "too many LValuePath instructions in function '" + func.name + "'";
+            return false;
+        }
+        writer.writeU32(static_cast<uint32_t>(func.slot_ids.lv_path_insts.size()));
         traceEntryOffset("after header");
 
         // Local slot entries (in slot order)

@@ -3442,9 +3442,12 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
-    uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    // a u8 before QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+    uint32_t num_lv_path_insts = reader.getHeader().version >= QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+        ? QoreAOTBinaryReader::readU32(ptr)
+        : QoreAOTBinaryReader::readU8(ptr);
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
-    printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
+    printd(5, "AOT buildCtx '%s': num_lv_path=%u (from binary)\n", name, num_lv_path_insts);
     QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
     const char* trace_slot_reg_env = trace_slot_reg_env_holder.c_str();
     const bool trace_slot_reg = trace_slot_reg_env
@@ -3481,6 +3484,13 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (trace_slot_reg) {
             fprintf(stderr, "[aot-slot-reg] slot count mismatch for '%s'\n", name);
         }
+        return nullptr;
+    }
+    // each LValuePath entry has at least 10 bytes: its opcode, five operation bytes, the reference flag, the
+    // pattern flag and the step count
+    if (static_cast<size_t>(num_lv_path_insts) * 10 > static_cast<size_t>((entry_end ? entry_end : end) - ptr)) {
+        setBuildError("the LValuePath instruction count " + std::to_string(num_lv_path_insts)
+            + " exceeds the slot map entry");
         return nullptr;
     }
 
@@ -6304,7 +6314,7 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Deserialize LValuePath instructions
     if (num_lv_path_insts > 0) {
-        for (int i = 0; i < num_lv_path_insts; ++i) {
+        for (uint32_t i = 0; i < num_lv_path_insts; ++i) {
             uint16_t opcode = QoreAOTBinaryReader::readU16(ptr);
             auto pi = std::make_unique<QoreIRLValuePathInstruction>(
                 static_cast<QoreIROpcode>(opcode));
@@ -8524,8 +8534,10 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
         return nullptr;
     }
     const uint8_t* entry_end = ptr + entry_size;
-    // name_ref + six slot counts + unsupported/lvalue-path bytes
-    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2) {
+    // name_ref + six slot counts + the unsupported byte + the lvalue-path count (a u8 before
+    // QORE_AOT_WIDE_LV_PATH_COUNT_VERSION)
+    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 1
+            + (reader.getHeader().version >= QORE_AOT_WIDE_LV_PATH_COUNT_VERSION ? sizeof(uint32_t) : 1)) {
         error = "serialized function slot entry has a truncated header";
         return nullptr;
     }

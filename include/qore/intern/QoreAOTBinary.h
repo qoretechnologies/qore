@@ -340,7 +340,14 @@ constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //!      five operands), and old/current ListAppendElement (417, two/three operands). New map opcodes
 //!      use 419/420 here; compatibility-only two-operand append uses 421. Older performance files
 //!      with maximum 410 retain snapshots. Existing v22 opcode assignments remain unchanged.
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
+//! v23: the LValuePath instruction count in the header of a SLOT_MAPS function record is a u32, not a u8.  The u8
+//!      kept only the low 8 bits of the count, so a function with 256 or more LValuePath instructions (such as
+//!      256 `remove` statements) was read back with fewer entries than its code refers to, and the bytes of the
+//!      unread entries were parsed as the fields that follow them.  A v9-v22 record has the u8 count.
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 23;
+//! First format version whose SLOT_MAPS function records hold their LValuePath instruction count as a u32 (see
+//! v23 above).
+constexpr uint16_t QORE_AOT_WIDE_LV_PATH_COUNT_VERSION = 23;
 constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 22;
 constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 22;
 constexpr size_t QORE_AOT_CLOSURE_ENTRY_BYTES = 40;
