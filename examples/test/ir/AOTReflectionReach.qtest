@@ -11,8 +11,8 @@
 /** In a program that allows the debugger, a function keeps its locals private and its native entry only if its
     activation cannot run a reflection builtin (design/aot-reflection-visible-locals.md).  Each caller in the fixture
     holds only an int local, which reflection replaces through a different path: two user calls down, a call by name,
-    a builtin's callback, a destructor run by a release, and a closure.  Compiled code must match the interpreter;
-    a function that cannot reach reflection keeps its native entry.
+    a builtin's callback, a destructor run by the release of a local or of a member, and a closure.  Compiled code
+    must match the interpreter; a function that cannot reach reflection keeps its native entry.
 */
 class ReflectionReachTest inherits QUnit::Test {
     private {
@@ -24,7 +24,7 @@ class ReflectionReachTest inherits QUnit::Test {
     public {
         #! the interpreter's output for the fixture
         const Expected = "twoLevels: 42@3\nbyName: 43@2\nbuiltinCallback: 44:[1, 2]\ndestructorRelease: 45\n"
-            "closureCall: 46\nreflectionFree: 135\n";
+            "memberRelease: 45\nclosureCall: 46\nreflectionFree: 135\n";
     }
 
     constructor() : Test("Reflection reach in compiled debugger programs", "1.0", \ARGV) {

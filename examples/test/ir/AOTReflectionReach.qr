@@ -78,6 +78,26 @@ string sub destructorRelease() {
     return sprintf("%d", secret);
 }
 
+# a destructor run by replacing the value of a member, which the caller set to an object: the member is not a local
+# of the method, which creates no object and calls nothing, and the result of the update is a scalar
+class Holder {
+    public {
+        auto member = 0;
+    }
+
+    string bump() {
+        int secret = 5;
+        ++member;
+        return sprintf("%d", secret);
+    }
+}
+
+string sub memberRelease() {
+    Holder holder();
+    holder.member = new Reflector();
+    return holder.bump();
+}
+
 # a closure
 string sub closureCall() {
     int secret = 5;
@@ -99,5 +119,6 @@ printf("twoLevels: %s\n", twoLevels());
 printf("byName: %s\n", byName());
 printf("builtinCallback: %s\n", builtinCallback());
 printf("destructorRelease: %s\n", destructorRelease());
+printf("memberRelease: %s\n", memberRelease());
 printf("closureCall: %s\n", closureCall());
 printf("reflectionFree: %d\n", reflectionFree(10));

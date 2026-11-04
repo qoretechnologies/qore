@@ -159,10 +159,15 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
     design/aot-reflection-visible-locals.md.
     @param func the function, lowered for a program that allows the debugger
     @param callees receives the exact user variants called, whose own effect decides the function's
+    @param lvalue_release_reflects whether an update of a member, a static, a global or a captured variable that may
+    release an object counts as possibly reflecting (its result is a scalar, so the other rules miss it): always for
+    the IR and JIT tiers, which keep the parameters and the body locals of a reflection-free frame private; for AOT
+    only when the analyzed frame has body locals, since its native entries publish and reload the parameters around
+    such an update (AOTEffectMemberEntry, with and without its effect entry), but its body locals stay private
     @return true if the function may reflect by itself; then \a callees is incomplete
 */
 DLLLOCAL bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
-    std::vector<const AbstractQoreFunctionVariant*>& callees);
+    std::vector<const AbstractQoreFunctionVariant*>& callees, bool lvalue_release_reflects = true);
 
 //! Returns the parameters that the function may access after an instruction that may reflect
 /** A reflection builtin run by a callee, a callback or a destructor can replace a parameter of the function's frame

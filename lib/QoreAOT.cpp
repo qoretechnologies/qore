@@ -3146,7 +3146,10 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 */
 static bool aotFunctionMayReflect(const QoreIRFunction& ir) {
     std::vector<const AbstractQoreFunctionVariant*> worklist;
-    if (qore_ir_function_may_reflect_locally(ir, worklist)) {
+    // a destructor run by an update of a member, a static or a global variable can reach the frame's private body
+    // locals, also when a callee runs the update; the native entries publish and reload the parameters
+    const bool lvalue_release_reflects = !ir.all_body_locals.empty();
+    if (qore_ir_function_may_reflect_locally(ir, worklist, lvalue_release_reflects)) {
         return true;
     }
     struct DepthGuard {
@@ -3185,7 +3188,7 @@ static bool aotFunctionMayReflect(const QoreIRFunction& ir) {
             return true;
         }
         std::unique_ptr<QoreIRFunction> callee_holder(callee_ir);
-        if (qore_ir_function_may_reflect_locally(*callee_ir, worklist)) {
+        if (qore_ir_function_may_reflect_locally(*callee_ir, worklist, lvalue_release_reflects)) {
             return true;
         }
     }

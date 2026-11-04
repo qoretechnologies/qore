@@ -18576,13 +18576,33 @@ static bool qore_ir_builtin_may_reflect(const QoreFunction* func, const Abstract
     return !strncmp(name, "call_", 5) || strstr(name, "thread_data") || strstr(name, "thread_resource");
 }
 
+//! Returns true if an lvalue path operation can release a value that may hold an object, outside the locals of the
+//! function
+/** Assigning to an lvalue, and incrementing, removing or otherwise changing its value, releases the value it
+    replaces, and the destructor of an object released runs user code.  The locals of the function are covered by the
+    function-level rule of qore_ir_function_may_reflect_locally() (a local whose type may hold an object), and so is
+    everything reached through one; a member, a static or a global variable, or a closure-captured variable, is not
+    a local of this function, so its declared type decides; a member (whose type the path does not carry) or a root
+    of unknown type is treated as possibly holding an object.
+*/
+static bool qore_ir_lvalue_path_may_release_object(const QoreIRLValuePathInstruction* inst) {
+    if (inst->path.empty()) {
+        return true;
+    }
+    const LVPathStep& root = inst->path.front();
+    if (root.kind == LVPathStepKind::LocalVar) {
+        return false;
+    }
+    return !root.type_info || qore_ir_type_may_hold_object(root.type_info);
+}
+
 //! Returns true if one instruction may run a reflection builtin, apart from the exact user variants it calls
 /** The local part of qore_ir_function_may_reflect_locally() for one instruction; the exact user variants called are
     added to \a callees.  Not covered here: the function-level rules (opaque AST local access, and locals that can
     hold an object, whose release can run a destructor wherever the local is replaced or goes out of scope).
 */
 static bool qore_ir_instruction_may_reflect_locally(const QoreIRFunction& func, const QoreIRInstruction* inst,
-        std::vector<const AbstractQoreFunctionVariant*>& callees) {
+        std::vector<const AbstractQoreFunctionVariant*>& callees, bool lvalue_release_reflects) {
     // a constructed list or hash holds only its operands, which are checked as the results they are, and the
     // invocation holds a reference to self for its whole duration, so releasing a loaded self runs nothing
     const bool self_load = inst->opcode == QoreIROpcode::LoadLocal
@@ -18656,6 +18676,21 @@ static bool qore_ir_instruction_may_reflect_locally(const QoreIRFunction& func, 
         case QoreIROpcode::StoreThreadLocal:
         case QoreIROpcode::StoreClosure:
             return true;
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary:
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                // an invoked operation is evaluated through its expression tree, which can contain calls
+                if (static_cast<const QoreIRInvokeInstruction*>(inst)->expr.hasNode()) {
+                    return true;
+                }
+            } else if (lvalue_release_reflects && qore_ir_lvalue_path_may_release_object(
+                    static_cast<const QoreIRLValuePathInstruction*>(inst))) {
+                return true;
+            }
+            break;
         default:
             if (inst->opcode == QoreIROpcode::Invoke) {
                 // an invoked call is resolved from its instruction above; any other invoked operation is
@@ -18672,7 +18707,7 @@ static bool qore_ir_instruction_may_reflect_locally(const QoreIRFunction& func, 
 
 // documented in QoreIRAnalysis.h
 bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
-        std::vector<const AbstractQoreFunctionVariant*>& callees) {
+        std::vector<const AbstractQoreFunctionVariant*>& callees, bool lvalue_release_reflects) {
     if (func.has_opaque_ast_local_access) {
         return true;
     }
@@ -18704,7 +18739,7 @@ bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
             if (!inst) {
                 continue;
             }
-            if (qore_ir_instruction_may_reflect_locally(func, inst, callees)) {
+            if (qore_ir_instruction_may_reflect_locally(func, inst, callees, lvalue_release_reflects)) {
                 return true;
             }
         }
@@ -18853,7 +18888,9 @@ bool qore_ir_get_params_read_after_reflection(const QoreIRFunction& func,
         }
         callees.clear();
         // an exact user callee is followed only by the group analysis: here it may reflect
-        return qore_ir_instruction_may_reflect_locally(func, inst, callees) || !callees.empty()
+        // the AOT native entries publish and reload the parameters around a release of a member, a static or a
+        // global variable (see qore_ir_function_may_reflect_locally())
+        return qore_ir_instruction_may_reflect_locally(func, inst, callees, false) || !callees.empty()
             || (object_locals && !qore_ir_instruction_is_local_free_scalar_op(inst));
     };
     // A parameter is replaced by reflection only while an instruction that may reflect runs; it matters only if the
