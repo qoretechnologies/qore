@@ -55,6 +55,9 @@ class RuntimeConfig;
 #define QORE_STACK_GUARD (1024 * 8)
 #endif // QORE_STACK_GUARD
 
+//! The additional stack guard of the primary thread (issue #4392)
+#define QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD (64 * 1024)
+
 class Operator;
 class Context;
 class CVNode;

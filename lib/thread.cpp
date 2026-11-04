@@ -176,8 +176,6 @@ const pthread_mutexattr_t* qore_recursive_mutex_attr() {
 QoreThreadLock stack_lck;
 // 8MB default thread stack size
 #define STACK_SIZE (8 * 1024 * 1024)
-// issue #4392: the additional stack guard of the primary thread
-#define QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD (64 * 1024)
 
 // default size and limit for qore threads; to be set in init_qore_threads()
 size_t qore_thread_stack_size = 0;
@@ -741,9 +739,10 @@ public:
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
 
             if (tid == initial_thread) {
-                // where the size that the stack can grow to is known (Linux), the limit is anchored to the real end of
-                // the stack; elsewhere the limit above is left as it is, and the real bounds are only used when the
-                // stack size is enforced later by enforcePrimaryStackSize()
+                // where the size that the stack can grow to is known (Linux) or the stack has a fixed size that the
+                // thread library reports (macOS), the limit is anchored to the real end of the stack; elsewhere the
+                // limit above is left as it is, and the real bounds are only used when the stack size is enforced
+                // later by enforcePrimaryStackSize()
                 primary_stack_top = stack_start;
                 primary_stack_size = stack_size;
 #ifdef QORE_HAVE_GET_STACK_SIZE
@@ -776,6 +775,20 @@ public:
                         // resource limit above is used when it is larger
                         primary_stack_size = real_size;
                     }
+#if defined(__APPLE__) && defined(STACK_DIRECTION_DOWN)
+                    // Darwin maps the initial thread's stack with its full size when the process starts (the stack
+                    // resource limit then), and reports its real bounds, as it does for any other thread, including
+                    // a thread that is the initial thread of the library because a program that embeds Qore
+                    // initialized it there.  The limit is anchored to the real end of the stack, as for the other
+                    // threads: derived from the stack position where this ThreadData is created, it lay below the end
+                    // of the stack by the stack used before (the program's frames and those of the dynamic loader and
+                    // of the C runtime), which silently consumed the stack guard, and by the whole difference when
+                    // the thread's stack is smaller than the stack resource limit taken as its size above.
+                    assert(!growth);
+                    stack_size = real_size;
+                    stack_limit = real_base + (real_size > stack_guard ? stack_guard : real_size);
+                    primary_stack_size = real_size;
+#endif
                 }
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
             }

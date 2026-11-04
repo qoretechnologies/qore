@@ -1556,6 +1556,9 @@
     - on Linux, the stack limit of the primary thread is anchored to the real end of its stack: the stack resource
       limit also bounds the arguments and the environment above the stack, so a process started with a large
       environment crashed on a stack overflow in its primary thread instead of raising \c STACK-LIMIT-EXCEEDED
+    - on macOS, the stack limit of the primary thread is anchored to the real end of its stack: the stack used before
+      Qore was initialized reduced the stack guard, so a deep recursion could crash instead of raising
+      \c STACK-LIMIT-EXCEEDED
     - a closure releases its captured variables in the order they were declared, not by address
     - malformed UTF-8, UTF-16 and UTF-32 input raises \c ENCODING-CONVERSION-ERROR on every platform, also through
       streams and with the macOS iconv

@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../NativeFixture.qm
+
+%exec-class PrimaryStackLimitTest
+
+#! The stack limit of the primary thread is anchored to the real end of its stack
+/** The fixture initializes the library in the primary thread of a process after using 256KB of its stack, more than
+    the thread's stack guard: a limit derived from the stack position where the library was initialized instead of
+    from the real end of the stack lies that much lower, so the guard is reduced or gone, and runaway recursion
+    crashes the process instead of raising STACK-LIMIT-EXCEEDED.
+*/
+public class PrimaryStackLimitTest inherits QUnit::Test {
+    constructor() : Test("PrimaryStackLimitTest", "1.0") {
+        addTestCase("primary thread stack limit", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        if (!inlist(Qore::PlatformOS, ("Darwin", "Linux"))) {
+            testSkip(sprintf("the fixture reads the real stack bounds only on Darwin and Linux, not on %y",
+                Qore::PlatformOS));
+        }
+        string root = realpath(get_script_dir() + "/../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-primary-stack-limit-");
+        string exe = dir.path + "/primary-stack-limit";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-g", "-O2", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/primary_stack_limit.cpp", "-L" + libdir, "-Wl,-rpath," + libdir, "-lqore",
+                "-o", exe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        # the primary thread's stack has the size of the stack resource limit: 8MB, as on most systems
+        output = backquote("ulimit -S -s 8192 2>/dev/null; LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH="
+            + quote(libdir) + " " + quote(exe) + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertEq("primary-stack-limit: ok\n", output);
+    }
+}
