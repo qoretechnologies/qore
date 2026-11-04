@@ -97,6 +97,7 @@ public:
     static bool bypassClearCancellationChecks(llvm::Module& module, std::string& error);
 
     //! Guard immediate-scalar cleanup in AOT native callback/method callers after the main LLVM pipeline.
+    //! A caller whose native callback/method calls are all outside loops has only the cleanups in its loops guarded.
     //! @param module lowered module with finalized debug information
     //! @param error receives a cancellation or LLVM-verification diagnostic on failure
     //! @return false on cancellation or invalid generated IR; error receives the diagnostic

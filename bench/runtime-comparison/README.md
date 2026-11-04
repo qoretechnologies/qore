@@ -919,11 +919,19 @@ LLVM cleanup guards for immediate int48, bool, NOTHING and inline floating-point
 values in AOT functions containing typed native callback or unary integer/float
 native method calls. Other
 functions are unchanged: broad guard insertion regressed direct-call and
-dispatch-control loops. The enabled
+dispatch-control loops. A selected function whose native calls are all outside
+loops, such as a test method or a module initializer, runs them and its cleanups
+at most once per call: only the cleanups in its loops are guarded. Guarding all
+of them multiplied the blocks of large functions and the super-linear backend
+work (qcc of `DataProvider.qtest`: 138 vs 77 billion instructions). A function
+with a native call in a loop keeps every guard, since the cleanups around a loop
+also change how the loop itself is register-allocated (removing them added up to
+2.5% instructions to unchanged kernel loops). The enabled
 pass runs after the normal optimizer and only simplifies locally afterward;
 inserting these guards before the full pipeline caused excessive code growth.
 Opaque references, heap numbers and other representations retain the original
-release operation. `QORE_IR_OPT_STATS=1` reports the number of inserted guards.
+release operation. `QORE_IR_OPT_STATS=1` reports the number of inserted guards
+and, as `scalar-cleanup-cold-unguarded`, the cleanups left unguarded outside loops.
 This trades additional native code for fewer runtime cleanup calls; compare
 code size and compilation time as well as steady-state performance.
 

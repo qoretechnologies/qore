@@ -1322,7 +1322,12 @@ compilation for comparison. No callback ABI or runtime eligibility is changed.
 After the main LLVM optimization pipeline, native scalar callback and unary-integer
 method callers receive inline int48, bool and NOTHING cleanup guards. Other functions are
 left unchanged: a broader pass regressed direct-call and dispatch-control
-loops. Only local instruction/CFG simplification follows, avoiding the
+loops. A caller whose native calls are all outside loops (a test method, a module initializer)
+has only the cleanups in its loops guarded: its other cleanups run at most once per call, and
+guarding them all doubled the compile cost of large test programs (qcc of `DataProvider.qtest`
+138 vs 77 billion instructions; develop 60). A caller with a native call in a loop keeps every
+guard: removing the guards around an unchanged loop changed its register allocation and added
+up to 2.5% instructions to the kernels. Only local instruction/CFG simplification follows, avoiding the
 substantial code growth observed when the full inliner
 and loop unroller processed these guards. Heap-backed and opaque values keep
 the original release helper, ordering and exception sink. This targets AOT,

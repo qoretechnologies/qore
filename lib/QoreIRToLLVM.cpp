@@ -48,6 +48,7 @@
 
 #include <qore/QorePluginLLVM.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Dominators.h>
@@ -1710,9 +1711,10 @@ size_t QoreIRToLLVM::pruneNoopDecrefs(llvm::Module& module) {
 // live cleanup intervals whose scalar no-op edges can preserve a boundary witness.
 static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& error,
         size_t& guards, bool include_float,
-        const std::unordered_set<llvm::CallInst*>* selected = nullptr) {
+        const std::unordered_set<llvm::CallInst*>* selected = nullptr, size_t* cold_skipped = nullptr) {
     std::vector<llvm::CallInst*> calls;
-    bool has_native_scalar_call = false;
+    // the native scalar callback/method calls that select the function
+    std::vector<llvm::CallInst*> scalar_calls;
     size_t checked = 0;
     for (llvm::BasicBlock& block : *function) {
         for (llvm::Instruction& inst : block) {
@@ -1726,11 +1728,11 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
             }
             llvm::StringRef name = call->getCalledFunction()->getName();
             if (name.starts_with("qore_rt_try_funcref_")) {
-                has_native_scalar_call = true;
+                scalar_calls.push_back(call);
             } else if ((name == "qore_rt_try_method_int_unary_v1" || name == "qore_rt_try_method_float_unary_v1"
                     || name == "qore_rt_try_method_int_unary_v2" || name == "qore_rt_try_method_float_unary_v2")
                     && !q_env_is_set("QORE_DISABLE_LLVM_METHOD_DECREF_GUARD")) {
-                has_native_scalar_call = true;
+                scalar_calls.push_back(call);
             }
             if ((name == "qore_rt_decref" || name == "qore_rt_decref_nothrow"
                     || (selected && name == "qore_rt_incref")) && (!selected || selected->count(call))) {
@@ -1741,8 +1743,32 @@ static bool qore_ir_guard_scalar_decrefs(llvm::Function* function, std::string& 
     // Native scalar callback/method results merge with owned generic fallbacks, leaving
     // cleanup traffic on the common scalar edge. Target those callers: guarding
     // arbitrary functions grew cold cleanup code and regressed direct-call loops.
-    if (!has_native_scalar_call && !selected) {
+    if (scalar_calls.empty() && !selected) {
         return true;
+    }
+    // A guard saves one helper call each time its cleanup runs and costs code in every case.  A function
+    // whose native scalar calls are all outside loops, such as a test method or a module initializer
+    // that makes one, runs them and the cleanups after them at most once per call: guarding all of its
+    // cleanups multiplied the blocks of the large ones, and with them the super-linear backend work
+    // (register allocation, live intervals), without a measurable return.  Such a function keeps only the
+    // guards of its loops.  A function that calls one in a loop is a native scalar loop and keeps them
+    // all: the cleanups around the loop also change how the loop itself is allocated.
+    if (!selected && !calls.empty()) {
+        llvm::DominatorTree dom(*function);
+        llvm::LoopInfo loops(dom);
+        const bool scalar_loop = std::any_of(scalar_calls.begin(), scalar_calls.end(),
+            [&loops](llvm::CallInst* call) {
+                return loops.getLoopFor(call->getParent()) != nullptr;
+            });
+        if (!scalar_loop) {
+            const size_t before = calls.size();
+            calls.erase(std::remove_if(calls.begin(), calls.end(), [&loops](llvm::CallInst* call) {
+                return !loops.getLoopFor(call->getParent());
+            }), calls.end());
+            if (cold_skipped) {
+                *cold_skipped += before - calls.size();
+            }
+        }
     }
     // Reverse order avoids repeatedly moving a long block suffix when it contains many cleanup calls.
     checked = 0;
@@ -2505,7 +2531,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
     if (q_env_is_set("QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD")) {
         return true;
     }
-    size_t guards = 0, checked = 0;
+    size_t guards = 0, checked = 0, cold_skipped = 0;
     const bool include_float = !q_env_is_set("QORE_DISABLE_LLVM_FLOAT_DECREF_GUARD");
     std::vector<llvm::Function*> changed;
     for (llvm::Function& function : module) {
@@ -2517,7 +2543,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
             continue;
         }
         size_t before = guards;
-        if (!qore_ir_guard_scalar_decrefs(&function, error, guards, include_float)) {
+        if (!qore_ir_guard_scalar_decrefs(&function, error, guards, include_float, nullptr, &cold_skipped)) {
             return false;
         }
         if (guards != before) {
@@ -2551,6 +2577,7 @@ bool QoreIRToLLVM::guardScalarDecrefs(llvm::Module& module, std::string& error) 
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-guards=%zu\n", guards);
         fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-float-guards=%zu\n", include_float ? guards : 0);
+        fprintf(stderr, "IR-OPT-LLVM: scalar-cleanup-cold-unguarded=%zu\n", cold_skipped);
     }
     return qore_ir_verify_changed_functions(changed, error);
 }
