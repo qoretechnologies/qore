@@ -2,10 +2,11 @@
  * SPDX-License-Identifier: MIT
  */
 //! Runs the work of a native test fixture in a foreign thread with a stack as large as a Qore thread's
-/** A fixture whose foreign thread parses Qore code cannot use the C library's default thread stack (for example with
-    std::thread): parsing needs QORE_STACK_GUARD (80KB on aarch64 and x86_64) plus QORE_PARSE_STACK_RESERVE (64KB)
-    above the bottom of the stack and raises "the code is nested too deeply to be parsed within the stack of this
-    thread" with less, even for code that is not nested at all, and musl's default thread stack is only 128KB.
+/** The fixtures parse large generated code and run it in their foreign thread, so what they check must not depend on
+    the C library's default thread stack (for example with std::thread), which differs widely: musl's is 128KB,
+    glibc's the stack resource limit (usually 8MB).  With musl's, the 80KB stack guard and the 64KB parse reserve of
+    earlier versions left no stack to parse any code ("the code is nested too deeply to be parsed within the stack of
+    this thread"); the worker gets the stack of a thread that Qore starts instead.
 */
 #ifndef QORE_TEST_IR_FIXTURE_WORKER_THREAD_H
 #define QORE_TEST_IR_FIXTURE_WORKER_THREAD_H

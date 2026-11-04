@@ -34,12 +34,13 @@
 
 #define STACK_DIRECTION_DOWN 1
 
-// Stack guard must be larger than the thread startup overhead (the stack consumed
-// between the actual thread stack top and the point where stack_start is set in
-// ThreadData).  Measured overhead in debug builds: ~52KB (due to thread init,
-// module loading, etc.), so 80KB provides ~28KB margin for check_stack to detect
-// overflow before hitting the OS guard page.
-#define QORE_STACK_GUARD (80 * 1024)
+// The stack guard: the stack kept free below a thread's stack limit for the code that runs between two stack checks
+// and after a check fails (raising and unwinding STACK-LIMIT-EXCEEDED).  The limit is anchored to the real end of the
+// stack, so the guard does not have to cover the stack used before a thread's ThreadData is created.  The worst case
+// measured (2026, Linux glibc and musl, macOS; debug and release builds) is 21.8KB, for compiling a regular expression
+// at the limit; with a signal frame delivered there (AT_MINSIGSTKSZ: 4.6KB on aarch64, 3.3KB on x86_64), 26.4KB.
+// 40KB leaves about 50% margin.
+#define QORE_STACK_GUARD (40 * 1024)
 
 #ifdef __GNUC__
 #define HAVE_CHECK_STACK_POS

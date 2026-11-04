@@ -358,11 +358,16 @@ private:
 DLLLOCAL int parse_init_value(QoreValue& val, QoreParseContext& parse_context);
 
 //! The stack that parse initialization keeps free above the thread's stack limit
-/** Parse initialization recurses with the nesting of the code; each check leaves room for a few levels of nesting
+/** Parse initialization recurses with the nesting of the code and checks the stack at every level, and the stack
+    that it uses below the point where a check fails (up to 3.6KB measured, including raising the parse error) is
+    held by the stack guard (QORE_STACK_GUARD), as for the code that runs between the stack checks of execution, so
+    parsing stops at the thread's stack limit itself.  A reserve keeps that much stack of a thread from parsing: with a
+    64KB reserve and an 80KB guard, a thread with a 128KB stack (musl's default thread stack) could not parse any
+    code.
 */
-constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
+constexpr size_t QORE_PARSE_STACK_RESERVE = 0;
 
-//! Raises a parse error and returns -1 if the thread's stack has reached QORE_PARSE_STACK_RESERVE, otherwise 0
+//! Raises a parse error and returns -1 if the stack has reached its limit plus QORE_PARSE_STACK_RESERVE, otherwise 0
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
