@@ -419,6 +419,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the debugger ends a program with a thread that waits", \terminateBlockedTest());
         addTestCase("the debugger ends a program whose thread runs", \terminateRunningTest());
         addTestCase("the debugger ends a program whose thread ends first", \terminateEndedThreadTest());
+        addTestCase("the programs of a debugger have the type of their list", \allProgramsTypeTest());
         addTestCase("debugging ends while a thread reaches a stop", \endDebuggingStoppingTest());
         addTestCase("debugging ends while a program starts", \endDebuggingStartingTest());
         addTestCase("debugging ends after the debugger ended a stopped program", \endDebuggingTerminatedTest());
@@ -1487,6 +1488,17 @@ int x = 1;
         assertEq("THREAD-CANCELLED", rv.ex.err);
         assertRegex("the debugger ended the program$", rv.ex.desc);
         assertFalse(exists rv.ex.next, sprintf("%y", rv.ex.next));
+    }
+
+    # the elements of the list are ProgramControl objects, so operators that copy the list with its type can use it
+    allProgramsTypeTest() {
+        DebuggedProgram p(dpc);
+        on_exit p.cleanup();
+        list<auto> found = select dpc.getAllPrograms(), $1.getProgramId() == p.pgmId;
+        assertEq(1, found.size());
+        list<ProgramControl> programs = dpc.getAllPrograms();
+        assertTrue(programs.size() >= 1);
+        assertEq("ProgramControl", programs[0].className());
     }
 
     # a thread that reaches a stop while debugging ends, as when qdbg quits, does not stop: shutdown() resumes only the
