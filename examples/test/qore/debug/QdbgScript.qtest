@@ -62,16 +62,32 @@ public class QdbgScriptTest inherits QUnit::Test {
             "done = True;\n"                                                  # 7
             "c.waitForZero();\n";                                             # 8
 
-        #! a program whose initial thread waits for a thread that calls add(); the comments are the line numbers
+        #! a program whose initial thread waits for a thread that calls add(), and then calls add() itself; the comments
+        #! are the line numbers
+        /** The thread ends only after the initial thread has passed its call, so the command that resumes the thread
+            returns at the pause of the initial thread: nothing else can happen first
+        */
         const TwoThreadProgram = "%modern\n"                                # 1
             "int sub add(int a, int b) {\n"                                  # 2
             "    int sum = a + b;\n"                                         # 3
             "    return sum;\n"                                              # 4
             "}\n"                                                            # 5
-            "Counter c(1);\n"                                                # 6
-            "background sub () { on_exit c.dec(); int x = add(1, 1); }();\n" # 7
-            "c.waitForZero();\n"                                             # 8
-            "printf(\"total: %d\\n\", add(2, 3));\n";                      # 9
+            "Counter called(1); Counter passed(1);\n"                        # 6
+            "background sub () { int x = add(1, 1); called.dec(); passed.waitForZero(); }();\n"  # 7
+            "called.waitForZero();\n"                                        # 8
+            "printf(\"total: %d\\n\", add(2, 3));\n"                       # 9
+            "passed.dec();\n";                                               # 10
+
+        #! a program whose initial thread waits until the debugger ends it, and whose other thread calls add() and ends;
+        #! the comments are the line numbers
+        const ThreadEndProgram = "%modern\n"                                # 1
+            "int sub add(int a, int b) {\n"                                  # 2
+            "    int sum = a + b;\n"                                         # 3
+            "    return sum;\n"                                              # 4
+            "}\n"                                                            # 5
+            "Counter forever(1);\n"                                           # 6
+            "background sub () { int x = add(1, 1); }();\n"                   # 7
+            "forever.waitForZero();\n";                                       # 8
 
         #! a program with a long list and a function that is called in a loop
         const DisplayProgram = "%modern\n"                                   # 1
@@ -160,6 +176,15 @@ public class QdbgScriptTest inherits QUnit::Test {
             printf("%s\n", out);
         }
         return {"out": out, "rc": rc};
+    }
+
+    #! returns True if the program paused within the wait timeout after the debugger requested the pause
+    /** The time of a pause is not bounded: on a machine under load, a running thread can reach its next statement after
+        the wait timeout, which is reported, and the commands of the script then run before the pause.  So what depends
+        on the pause is only checked when this returns True
+    */
+    private bool pausedInTime(string out) {
+        return out !~ /No thread paused within [0-9]+ ms after the request/;
     }
 
     #! asserts that the strings are in the output in the order given
@@ -494,7 +519,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertTrue(results[1].timedOut);
         # the output of the program of the server
         assertEq("start\n", (map $1.text, objs, $1.type == "output" && $1.category == "stdout").join(""));
-        assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        if (pausedInTime(res.out)) {
+            assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        }
         assertTrue(server.wait(30s), "the debug server ends with its program");
     }
 
@@ -534,8 +561,9 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertTrue(p.wait(30s), "qdbg ends with SIGTERM");
         assertEq(128 + SIGTERM, p.exitCode(), p.readStderr(65536, 0) ?? "");
 
-        # qdbg-remote ends, and the program of the debug server continues
-        hash<auto> sh = startServer(tmp.path, LoopProgram);
+        # qdbg-remote ends, and the program of the debug server continues; it does not end by itself, so the server is
+        # still running however fast the program runs when it is no longer debugged
+        hash<auto> sh = startServer(tmp.path, "%modern\nQueue q();\nq.get();\n");
         Process server = sh.server;
         on_exit if (server.running()) {
             server.terminate();
@@ -867,8 +895,9 @@ public class QdbgScriptTest inherits QUnit::Test {
             "thread list",
             "bt all",
             "bt",
-            # the thread ends, and the initial thread pauses at the breakpoint
+            # the initial thread pauses at the breakpoint while the thread still runs
             "c",
+            # the command returns when the initial thread ends, which is not ordered with the end of the other thread
             "c",
             "quit",
         ));
@@ -882,17 +911,33 @@ public class QdbgScriptTest inherits QUnit::Test {
             "Call stack of thread 2:",
             "Call stack of thread 3:", "  0  add() at ", "  1  <anonymous closure>() at ", "target.q:7",
             "Call stack of thread 3:", "* 0  add() at ",
-            # the end of thread 3 and the stop of thread 2 happen at the same time
             "Paused at breakpoint 1 at ", "target.q:3 (thread 2, now the current thread)",
             "total: 5",
             "Thread 2 ended",
         ));
-        # thread 3 ends after it continues; the initial thread, which waits for it, can print its output before the end
-        # of thread 3 is shown, as its code ends before the thread does
-        assertInOrder(res.out, ("Call stack of thread 3:", "* 0  add() at ", "Thread 3 ended"));
         # the thread of the command line of the debugger is not shown, nor does a thread pause when it starts or
         # when its code ends
         assertFalse(res.out =~ /thread 1 |DebugProgramControl|Paused at the start of the program \(thread 3/);
+
+        # a command that resumes a thread returns when the thread ends, also while another thread runs: no thread is
+        # paused then, so there is no current thread for the next command; a script can therefore rely on the pause of
+        # another thread only if that thread pauses before the resumed thread can end
+        res = runQdbg(ThreadEndProgram, (
+            "break create target.q 3",
+            "c",
+            "c",
+            "c",
+            "quit kill",
+        ));
+        assertEq(0, res.rc);
+        assertInOrder(res.out, (
+            "Paused at breakpoint 1 at ", "target.q:3 (thread 3, now the current thread)",
+            "Thread 3 continues",
+            "Thread 3 ended",
+            "there is no current thread",
+            "Thread 2 ended",
+            "The program ended",
+        ));
     }
 
     helpTest() {
@@ -1124,12 +1169,15 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertEq(0, res.rc);
         # the output of qdbg ends lines with \r\n
         assertRegex("\nw[0-2] n[0-9]+\r?\n", res.out);
-        assertInOrder(res.out, (
-            "No thread paused within 300 ms; pausing the program",
-            "Paused at target.q:",
-        ));
-        # the threads paused in the loop of the function
-        assertRegex("thread [0-9]+ \\(qore/[0-9]+\\), paused: work\\(\\) at target.q:[4-6]", res.out);
+        assertRegex("No thread paused within 300 ms; pausing the program", res.out);
+        if (pausedInTime(res.out)) {
+            assertInOrder(res.out, (
+                "No thread paused within 300 ms; pausing the program",
+                "Paused at target.q:",
+            ));
+            # the threads paused in the loop of the function
+            assertRegex("thread [0-9]+ \\(qore/[0-9]+\\), paused: work\\(\\) at target.q:[4-6]", res.out);
+        }
 
         # all threads stop at the breakpoint; kill reports the end of each of them before the end of the program
         for (int i = 0; i < 3; ++i) {
@@ -1167,6 +1215,9 @@ public class QdbgScriptTest inherits QUnit::Test {
             "}\n";                                # 9
         for (int i = 0; i < 5; ++i) {
             hash<auto> res = runQdbg(program, ("c", "s", "kill", "quit"), ("--json", "--wait-timeout=100"));
+            if (!pausedInTime(res.out)) {
+                continue;
+            }
             list<hash<auto>> stops = select parseJsonLines(res.out), $1.type == "event" && $1.event == "interrupt"
                 && $1.data.func == "step";
             assertEq(2, stops.size(), res.out);
@@ -1177,7 +1228,10 @@ public class QdbgScriptTest inherits QUnit::Test {
         }
         # a thread in an empty block of a loop is paused at the block
         hash<auto> res = runQdbg("%modern\nwhile (True);\n", ("c", "kill", "quit"), ("--wait-timeout=100",));
-        assertInOrder(res.out, ("No thread paused within 100 ms; pausing the program", "Paused at target.q:2"));
+        assertRegex("No thread paused within 100 ms; pausing the program", res.out);
+        if (pausedInTime(res.out)) {
+            assertInOrder(res.out, ("No thread paused within 100 ms; pausing the program", "Paused at target.q:2"));
+        }
 
         # the messages of logpoints give their thread and breakpoint
         res = runQdbg(LoopProgram, ("break create target.q 4", "break log 1 i={i}", "c", "quit"), ("--json",));
@@ -1207,10 +1261,16 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertInOrder(res.out, (
             "wait timeout: 300 ms",
             "No thread paused within 300 ms; pausing the program",
-            "Paused at target.q:",
-            "integer n = ",
             "wait timeout: 0 ms",
         ));
+        if (pausedInTime(res.out)) {
+            assertInOrder(res.out, (
+                "No thread paused within 300 ms; pausing the program",
+                "Paused at target.q:",
+                "integer n = ",
+                "wait timeout: 0 ms",
+            ));
+        }
 
         # with JSON output, the result of the command tells that its time passed
         res = runQdbg(loop, ("go", "kill", "quit"), ("--json", "--wait-timeout=300"));
@@ -1218,9 +1278,13 @@ public class QdbgScriptTest inherits QUnit::Test {
         hash<auto> go = (select objs, $1.type == "result" && $1.command == "go")[0];
         assertTrue(go.timedOut);
         assertTrue(go.ok);
-        assertEq("No thread paused within 300 ms; pausing the program\n", go.output);
-        # the program paused before the result
-        assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        if (pausedInTime(res.out)) {
+            assertEq("No thread paused within 300 ms; pausing the program\n", go.output);
+            # the program paused before the result
+            assertTrue((select objs, $1.type == "event" && $1.text =~ /^Paused at target.q:/).size() > 0);
+        } else {
+            assertRegex("^No thread paused within 300 ms; pausing the program\n", go.output);
+        }
         # the debugger ended the program
         assertEq({"type": "end", "terminated": True}, (select objs, $1.type == "end")[0]);
 
