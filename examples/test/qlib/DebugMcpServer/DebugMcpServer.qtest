@@ -55,7 +55,21 @@ public class DebugMcpServerTest inherits QUnit::Test {
             "}\n"                                                            # 8
             "background work(1);\n"                                          # 9
             "background work(2);\n"                                          # 10
-            "work(0);\n";                                                    # 11
+            "Counter forever(1);\n"                                          # 11
+            # the initial thread cannot pause, so each pause is in the function
+            "forever.waitForZero();\n";                                      # 12
+
+        #! a program whose line 3 runs one time for each line that a report gives, and more
+        const LogProgram = "%modern\n"                                      # 1
+            "for (int i = 0; i < " + (DebugMcpSession::MaxOutputLines + 10) + "; ++i) {\n"  # 2
+            "    int j = i;\n"                                               # 3
+            "}\n"                                                            # 4
+            "int k = 0;\n"                                                   # 5
+            "++k;\n";                                                        # 6
+
+        #! the time that a tool waits for a pause of a running thread: only a limit for a failure, as the thread pauses
+        #! at its next statement, however long that takes on a machine under load
+        const PauseBound = 60000;
 
         string qore_exe = DebugMcpServerTest::getQoreExecutable();
         string qdbg_mcp = normalize_dir(get_script_dir() + "/../../../../bin/qdbg-mcp");
@@ -468,7 +482,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         McpClient::McpClient c = s.client;
         call(c, "qore_debug_launch", {"script": path});
         # no thread pauses: the program is paused after the time
-        hash<auto> r = call(c, "qore_debug_continue", {"timeout_ms": 300});
+        hash<auto> r = call(c, "qore_debug_continue", {"timeout_ms": 300, "pause_timeout_ms": PauseBound});
         assertTrue(r.timedOut);
         assertRegex("No thread paused within 300 ms; pausing the program", r.text);
         assertTrue(r.state.paused);
@@ -480,7 +494,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertEq("integer", (select r.variables, $1.name == "n")[0].type);
         assertFalse(r.hasKey("framesOmitted"));
         # without the details
-        r = call(c, "qore_debug_continue", {"timeout_ms": 100, "details": False});
+        r = call(c, "qore_debug_continue", {"timeout_ms": 100, "pause_timeout_ms": PauseBound, "details": False});
         assertTrue(r.timedOut);
         assertFalse(r.hasKey("frames") || r.hasKey("variables"));
         r = call(c, "qore_debug_variables");
@@ -519,7 +533,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         path = writeProgram(tmp.path, "%modern\nsub f(int d) {\n    if (d > 0) {\n        f(d - 1);\n    }\n"
             "    while (True) {\n        ++d;\n    }\n}\nf(30);\n", "deep.q");
         call(c, "qore_debug_launch", {"script": path});
-        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
+        r = call(c, "qore_debug_continue", {"timeout_ms": 200, "pause_timeout_ms": PauseBound});
         assertTrue(r.timedOut);
         assertEq(DebugMcpSession::MaxDetailFrames, r.frames.size());
         # 31 calls of f() and the top-level code
@@ -541,7 +555,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         hash<auto> r = call(c, "qore_debug_set_breakpoint", {"location": "target.q 6", "log_message": "w{w} n{n}"});
         assertTrue(r.ok, r.error);
         assertEq(1, r.events.size(), sprintf("%y", r.events));
-        r = call(c, "qore_debug_continue", {"timeout_ms": 500});
+        r = call(c, "qore_debug_continue", {"timeout_ms": 300, "pause_timeout_ms": PauseBound});
         assertTrue(r.timedOut);
         # the stops of the requested pause, in the function of the threads
         list<hash<auto>> pauses = select r.events, $1.reason == "pause";
@@ -549,13 +563,6 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertEq("work", pauses[0].function);
         # the threads were paused although they are logging
         assertTrue(r.state.paused, sprintf("%y", r - "logOutput"));
-        # each message tells its thread
-        assertRegex("\n\\[thread [0-9]+\\] w[0-2] n[0-9]+\n", r.logOutput);
-        assertFalse(r.programOutput =~ /w[0-2] n/);
-        # the last lines of the messages are reported
-        assertEq(DebugMcpSession::MaxOutputLines + 1, r.logOutput.split("\n").size());
-        assertRegex("^\\[[0-9]+ earlier lines are omitted\\]\n", r.logOutput);
-        assertGt(0, r.logOutputOmitted);
 
         # the paused thread is in the loop of a function
         r = call(c, "qore_debug_stack");
@@ -567,13 +574,35 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertEq({"session": False}, r.state);
         assertEq(3, (select r.events, $1.reason == "thread end").size(), sprintf("%y", r.events));
 
-        # a logpoint that logs the same message in a loop gives one line with the number of its messages
-        path = writeProgram(tmp.path, LoopProgram, "loop.q");
+        # the messages of a logpoint up to a breakpoint: each tells its thread and none is lost; they are not the output
+        # of the program, and the last lines are reported
+        path = writeProgram(tmp.path, LogProgram, "log.q");
         call(c, "qore_debug_launch", {"script": path});
-        r = call(c, "qore_debug_set_breakpoint", {"location": "loop.q 4", "log_message": "loop"});
+        r = call(c, "qore_debug_set_breakpoint", {"location": "log.q 3", "log_message": "i={i}"});
         assertTrue(r.ok, r.error);
-        r = call(c, "qore_debug_continue", {"timeout_ms": 200});
-        assertRegex("^\\[thread [0-9]+\\] loop \\(x[0-9]+\\)\n$", r.logOutput);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "log.q 6"});
+        assertTrue(r.ok, r.error);
+        r = call(c, "qore_debug_continue");
+        assertTrue(r.state.paused, sprintf("%y", r - "logOutput"));
+        assertFalse(r.programOutput =~ /i=/);
+        list<string> lines = r.logOutput.split("\n");
+        assertEq(DebugMcpSession::MaxOutputLines + 1, lines.size());
+        assertEq("[10 earlier lines are omitted]", lines[0]);
+        assertEq(10, r.logOutputOmitted);
+        assertRegex("^\\[thread [0-9]+\\] i=10$", lines[1]);
+        assertRegex("^\\[thread [0-9]+\\] i=" + (DebugMcpSession::MaxOutputLines + 9) + "$", lines.last());
+        call(c, "qore_debug_terminate");
+
+        # a logpoint that logs the same message in a loop gives one line with the number of its messages
+        path = writeProgram(tmp.path, "%modern\nfor (int i = 0; i < 60; ++i) {\n    int j = i;\n}\nint k = 0;\n++k;\n",
+            "same.q");
+        call(c, "qore_debug_launch", {"script": path});
+        r = call(c, "qore_debug_set_breakpoint", {"location": "same.q 3", "log_message": "loop"});
+        assertTrue(r.ok, r.error);
+        r = call(c, "qore_debug_set_breakpoint", {"location": "same.q 6"});
+        assertTrue(r.ok, r.error);
+        r = call(c, "qore_debug_continue");
+        assertRegex("^\\[thread [0-9]+\\] loop \\(x60\\)$", r.logOutput);
         assertFalse(r.hasKey("logOutputOmitted"));
         call(c, "qore_debug_terminate");
 

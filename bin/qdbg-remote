@@ -160,6 +160,7 @@ class DebugWrapper {
             "no_color": "no-color",
             "json": "json",
             "wait_timeout": "wait-timeout=i",
+            "pause_timeout": "pause-timeout=i",
         );
         DebugCommandLineRemote dcl;
         Logger logger;
@@ -362,6 +363,8 @@ class DebugWrapper {
             "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
             "                               when the input is not a terminal; then the program is paused (default: no\n"
             "                               limit)\n"
+            "  --pause-timeout=ms           the time that such a command waits for that pause (default: as long as\n"
+            "                               --wait-timeout)\n"
             "\n"
             "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
             "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"

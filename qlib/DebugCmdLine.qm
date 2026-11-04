@@ -60,7 +60,8 @@ module DebugCmdLine {
     - added the \c options \c waittimeout command and the \c wait_timeout option of
       @ref DebugCmdLine::DebugCommandLine::init() "init()": a command that resumes a thread waits for a thread to
       pause only as long, and then the program is paused (see
-      @ref DebugCmdLine::DebugCommandLine::waitTimeout "waitTimeout")
+      @ref DebugCmdLine::DebugCommandLine::waitTimeout "waitTimeout"), and the \c pause_timeout option for the time
+      that it waits for that pause (see @ref DebugCmdLine::DebugCommandLine::pauseTimeout "pauseTimeout")
     - an exception that matches a common pitfall of %Qore, such as a variable that was declared but not assigned or a
       call reference to a deleted object, is shown with a hint when a thread stops at it, and a local variable that
       was declared but not assigned is shown as such with its declared type
@@ -163,11 +164,20 @@ public namespace DebugCmdLine {
             bool jsonOutput = False;
             #! The maximum time in milliseconds that a command that resumes a thread waits for a thread to pause; 0
             #! waits until a thread pauses or the program ends; see the \c options \c waittimeout command
-            /** When the time passes, the program is paused, and the command waits again as long for the pause
+            /** When the time passes, the program is paused, and the command waits for the pause; see pauseTimeout
 
                 @since DebugCmdLine 0.1.3
             */
             int waitTimeout = 0;
+
+            #! the time in milliseconds that a command waits for the pause that it requests after waitTimeout
+            /** 0 means as long as waitTimeout.  A running thread pauses at its next statement, however long that takes
+                on a machine under load, and a thread that waits, as for a lock or I/O, pauses only when it continues, so this time limits the wait for
+                such a thread; it is independent of how long a command gives a program before it pauses it
+
+                @since DebugCmdLine 0.1.3
+            */
+            int pauseTimeout = 0;
         }
 
         public {
@@ -3129,7 +3139,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             bool paused;
             {
                 AutoLock al(stopLock);
-                paused = waitForStopIntern();
+                paused = waitForStopIntern(waitTimeout);
             }
             if (!paused) {
                 pauseAfterTimeout();
@@ -3141,14 +3151,14 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
 
         #! Waits for the stop that is expected, as long as the wait timeout at most; returns @ref False if the time
         #! passed, and the stop is no longer expected; stopLock must be held
-        private bool waitForStopIntern() {
-            if (!waitTimeout) {
+        private bool waitForStopIntern(int timeout_ms) {
+            if (!timeout_ms) {
                 while (stopPending) {
                     stopCond.wait(stopLock);
                 }
                 return True;
             }
-            int deadline = clock_getmicros() + waitTimeout * 1000;
+            int deadline = clock_getmicros() + timeout_ms * 1000;
             while (stopPending) {
                 int remaining = deadline - clock_getmicros();
                 if (remaining <= 0) {
@@ -3171,16 +3181,17 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             printfImpl("%s\n", tc.warning(sprintf("No thread paused within %d ms; pausing the program",
                 waitTimeout)));
             expectStop();
+            int pause_timeout = pauseTimeout ?: waitTimeout;
             bool paused;
             {
                 on_error cancelStop();
                 doCommand({"cmd": "program/" + pgm_id + "/stop"}, False);
                 AutoLock al(stopLock);
-                paused = waitForStopIntern();
+                paused = waitForStopIntern(pause_timeout);
             }
             if (!paused) {
                 printfImpl("%s\n", tc.warning(sprintf("No thread paused within %d ms after the request; a thread "
-                    "that waits, as for a lock or I/O, pauses when it continues", waitTimeout)));
+                    "that waits, as for a lock or I/O, pauses when it continues", pause_timeout)));
             }
         }
 
@@ -3783,10 +3794,11 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
 
         #! Initializes the debugger with the options of its command line
         /** @param opt the options: \c json for JSON output (see jsonOutput), \c wait_timeout for the time that a
-            command that resumes a thread waits for it to pause (see waitTimeout), and \c color and \c no_color, which
-            always or never show colors
+            command that resumes a thread waits for it to pause (see waitTimeout), \c pause_timeout for the time that it
+            waits for the pause that it then requests (see pauseTimeout), and \c color and \c no_color, which always or
+            never show colors
 
-            @throw GETOPT-ERROR the wait timeout is negative
+            @throw GETOPT-ERROR the wait timeout or the pause timeout is negative
         */
         public init(hash<auto> opt) {
             # the text of JSON output has no colors
@@ -3803,6 +3815,12 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     throw "GETOPT-ERROR", sprintf("the wait timeout cannot be negative: %d", opt.wait_timeout);
                 }
                 waitTimeout = opt.wait_timeout;
+            }
+            if (exists opt.pause_timeout) {
+                if (opt.pause_timeout < 0) {
+                    throw "GETOPT-ERROR", sprintf("the pause timeout cannot be negative: %d", opt.pause_timeout);
+                }
+                pauseTimeout = opt.pause_timeout;
             }
         }
 

@@ -260,8 +260,8 @@ exception filter uncaught
     - \c message and \c error: text that is printed outside of a command, and an error of the debug server
 
     With \c --wait-timeout, a command that resumes a thread waits for a thread to pause as many milliseconds at most;
-    then the program is paused, and the command waits as long again for the pause.  A thread that waits, as for a lock
-    or I/O, pauses only when it continues; \c kill ends the program also then.
+    then the program is paused, and the command waits as long again for the pause, or as long as \c --pause-timeout
+    says.  A thread that waits, as for a lock or I/O, pauses only when it continues; \c kill ends the program also then.
     @code{.sh}
 printf 'break create 3\ngo\nlocals\ngo\nquit\n' | qdbg --json --wait-timeout=5000 myfile.q
     @endcode
