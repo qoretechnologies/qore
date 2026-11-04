@@ -181,6 +181,12 @@
     one of these descriptors must be given it explicitly, for example as its standard input or output.  See
     @ref file_close_on_exec.
 
+    @par SIGHUP Ends a Process Without a Handler
+    A program with no \c SIGHUP handler now ends on a hangup, with exit code 129; before, the signal had no effect.  The
+    exception is a program started with \c SIGHUP ignored, for example under \c nohup, which still ignores it; the same
+    now holds for \c SIGTERM.  A program that needs to survive a hangup should set a handler with
+    @ref Qore::set_signal_handler() "set_signal_handler()".  See @ref signal_handling.
+
     @par The Signal Thread No Longer Takes SIGCHLD
     The signal handling thread does not wait for \c SIGCHLD, so components that watch their children through it (ex:
     the \c process module on macOS) receive it.  See @ref signal_thread_sigchld.

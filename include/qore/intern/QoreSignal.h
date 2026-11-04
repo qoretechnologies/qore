@@ -197,6 +197,9 @@ public:
    //! the signals the signal thread waits for by default (without a Qore-language handler)
    sigset_t default_wait_mask;
 
+   //! the signals that were ignored when their handler was set; they are ignored again when it is removed
+   sigset_t ignored_with_handler;
+
    //! the signals reserved by the library itself at initialization (see setMask())
    sig_map_t sys_fmap;
 

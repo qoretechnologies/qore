@@ -43,6 +43,15 @@ QoreSignalManager QSM;
 // SIGINT handler
 struct sigaction sa_int;
 
+// True if the process was started with the signal ignored, as SIGHUP with nohup: it stays ignored (see init())
+static bool sighup_ignored_at_start = false;
+static bool sigterm_ignored_at_start = false;
+
+//! Returns True if the signal was ignored when the process started
+static bool wasIgnoredAtStart(int sig, const struct sigaction& sa) {
+    return sa.sa_handler == SIG_IGN && (sig == SIGHUP || sig == SIGTERM);
+}
+
 static int qore_sigmask(int how, const sigset_t* set, sigset_t* oset) {
     return pthread_sigmask(how, set, oset);
 }
@@ -93,6 +102,7 @@ QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false
     //printd(5, "QoreSignalManager::QoreSignalManager() QORE_SIGNAL_MAX: %d\n", QORE_SIGNAL_MAX);
     sigemptyset(&mask);
     sigemptyset(&default_wait_mask);
+    sigemptyset(&ignored_with_handler);
     // initilize handlers
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
         handlers[i].init();
@@ -153,6 +163,15 @@ void QoreSignalManager::init(bool disable_signal_mask) {
     // get SIGINT handler
     sigaction(SIGINT, &sa, &sa_int);
     sigaction(SIGINT, &sa_int, nullptr);
+
+    // a signal that ends the process without a handler stays ignored if it was ignored when the process started
+    struct sigaction sa_start;
+    if (!sigaction(SIGHUP, nullptr, &sa_start)) {
+        sighup_ignored_at_start = wasIgnoredAtStart(SIGHUP, sa_start);
+    }
+    if (!sigaction(SIGTERM, nullptr, &sa_start)) {
+        sigterm_ignored_at_start = wasIgnoredAtStart(SIGTERM, sa_start);
+    }
 
     if (!disable_signal_mask) {
         setMask(mask);
@@ -571,8 +590,12 @@ void QoreSignalManager::signal_handler_thread() {
                         sl.lock();
                         handler_running = false;
                     }
-                } else if (sig == SIGTERM /*|| sig == SIGHUP*/) {
-                    qore_exit_process(128 + sig);
+                } else if (sig == SIGTERM || sig == SIGHUP) {
+                    // ends the process, with or without a handler that was removed, unless the process was started
+                    // with the signal ignored, as with nohup
+                    if (!(sig == SIGTERM ? sigterm_ignored_at_start : sighup_ignored_at_start)) {
+                        qore_exit_process(128 + sig);
+                    }
                 } else if (sigismember(&default_wait_mask, sig) != 1) {
                     // only on macOS: a signal that the thread waits for only to run its disposition, which it does as
                     // it runs outside of the wait; see getWaitMask()
@@ -732,6 +755,17 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             if (!thread_running && start_signal_thread(xsink))
                 return -1;
 
+            // a handler must get a signal that the process inherited as ignored, as SIGHUP with nohup: macOS discards
+            // an ignored signal when it is sent, also if a thread waits for it; SIGPIPE stays ignored in any case
+            struct sigaction sa_old;
+            if (sig != SIGPIPE && !sigaction(sig, nullptr, &sa_old) && sa_old.sa_handler == SIG_IGN) {
+                struct sigaction sa_dfl;
+                sa_dfl.sa_handler = SIG_DFL;
+                sigemptyset(&sa_dfl.sa_mask);
+                sa_dfl.sa_flags = SA_RESTART;
+                sigaction(sig, &sa_dfl, nullptr);
+                sigaddset(&ignored_with_handler, sig);
+            }
             //printd(5, "setting handler for signal %d, pgm: %p\n", sig, pgm);
             qore_program_private::addSignal(*pgm, sig);
             // Reset status in case a prior take() left a stale SH_Delete state
@@ -798,6 +832,14 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
         if (sigismember(&default_wait_mask, sig) != 1) {
             sigdelset(&mask, sig);
             reload();
+        }
+        if (sigismember(&ignored_with_handler, sig) == 1) {
+            struct sigaction sa_ign;
+            sa_ign.sa_handler = SIG_IGN;
+            sigemptyset(&sa_ign.sa_mask);
+            sa_ign.sa_flags = SA_RESTART;
+            sigaction(sig, &sa_ign, nullptr);
+            sigdelset(&ignored_with_handler, sig);
         }
 
         //printd(5, "removing handler for signal %d\n", sig);
