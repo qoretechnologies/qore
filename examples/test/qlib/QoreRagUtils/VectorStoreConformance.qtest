@@ -114,6 +114,9 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
         if (ENV.OPENSEARCH_URL.val()) {
             addTestCase("OpenSearch", \opensearchTest());
         }
+        if (ENV.MILVUS_URL.val()) {
+            addTestCase("Milvus", \milvusTest());
+        }
         set_return_value(main());
     }
 
@@ -177,6 +180,50 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
                 "options": {"dimension": 3, "refresh": "true"},
             });
         runScenario(store, "os-" + get_random_string(6));
+    }
+
+    milvusTest() {
+        string name = "conformance_" + get_random_string(8).lwr();
+        string token = ENV.MILVUS_TOKEN ?? "root:Milvus";
+        RestClientIo::RestClientIo rest({"url": ENV.MILVUS_URL, "data": "json",
+            "headers": {"Authorization": "Bearer " + token}});
+        # Milvus reports errors in the response body with a 200 status
+        code check = sub (hash<auto> response, string what) {
+            if (response.body.code != 0) {
+                throw "MILVUS-TEST-ERROR", sprintf("%s failed: %y", what, response.body);
+            }
+        };
+        try {
+            check(rest.restPost("/v2/vectordb/collections/list", {}), "listing collections");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("Milvus is not reachable at %y: %s", ENV.MILVUS_URL, ex.desc));
+        }
+        # a quick-setup collection: VarChar primary key "id", COSINE vector field "vector", dynamic fields on, loaded
+        check(rest.restPost("/v2/vectordb/collections/create", {
+            "collectionName": name,
+            "dimension": 3,
+            "metricType": "COSINE",
+            "idType": "VarChar",
+            "autoID": False,
+            "primaryFieldName": "id",
+            "vectorFieldName": "vector",
+            # Strong consistency: Milvus REST reads see the collection's level, and the scenario reads right after writes
+            "params": {"max_length": 64, "enableDynamicField": True, "consistencyLevel": "Strong"},
+        }), "creating the collection");
+        on_exit {
+            try {
+                rest.restPost("/v2/vectordb/collections/drop", {"collectionName": name});
+            } catch () {
+            }
+        }
+        QoreRagUtils::AbstractVectorStore store = QoreRagUtils::RagProviderRegistry::createVectorStore(
+            <QoreRagUtils::VectorStoreConfig>{
+                "backend": "milvus",
+                "collection": name,
+                "url": ENV.MILVUS_URL,
+                "options": {"api_key": token, "dimension": 3},
+            });
+        runScenario(store, "mv-" + get_random_string(6));
     }
 
     pgvectorTest() {
