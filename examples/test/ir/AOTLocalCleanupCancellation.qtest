@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %requires ../LlvmConfig.qm
 %exec-class LocalCleanupCancellationTest
 
@@ -45,13 +46,13 @@ class LocalCleanupCancellationTest inherits QUnit::Test {
         string llvm_include = trim(run((llvm_config, "--includedir")));
         string llvm_lib = trim(run((llvm_config, "--libdir")));
         list<string> llvm_link = split(" ", trim(run((llvm_config, "--libs", "--system-libs"))));
-        # Internal headers also need the build's dependency paths (CPATH for
-        # nonstandard prefixes, as in NativeLeafContext). -O2 folds the null
+        # Internal headers also need the build's dependency paths (NativeFixture). -O2 folds the null
         # return-type argument in the inline private fast-entry setter; its
         # general type-query implementation is intentionally not exported.
         list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O2", "-g", "-DHAVE_UNIX_CONFIG_H",
-            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
-            "-I" + llvm_include, get_script_dir() + "/aot_local_cleanup_cancellation.cpp",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + ("-I" + llvm_include, get_script_dir() + "/aot_local_cleanup_cancellation.cpp",
             "-L" + libdir, "-L" + llvm_lib, "-Wl,-rpath," + libdir,
             "-Wl,-rpath," + llvm_lib, "-lqore") + llvm_link + ("-o", executable);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);

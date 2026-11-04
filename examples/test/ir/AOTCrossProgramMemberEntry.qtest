@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class CrossProgramMemberEntryTest
 
 class CrossProgramMemberEntryTest inherits QUnit::Test {
@@ -85,8 +86,9 @@ printf(\"cross-program-member-source: ok\\n\");
         foreach string kind in (("int", "float", "effect")) {
             string probe = dir.path + "/" + kind + "-probe";
             list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread",
-                "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include",
-                "-I" + libdir, get_script_dir() + "/cross_program_member_entry.cpp", "-L" + libdir,
+                "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+                + native_fixture_include_args(libdir)
+                + (get_script_dir() + "/cross_program_member_entry.cpp", "-L" + libdir,
                 "-Wl,-rpath," + libdir, "-lqore", "-o", probe);
             if (kind == "float") { push args, "-DPROBE_FLOAT=1"; }
             if (kind == "effect") { push args, "-DPROBE_EFFECT=1"; }

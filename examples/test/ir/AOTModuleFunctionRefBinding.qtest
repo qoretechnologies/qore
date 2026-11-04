@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class ModuleFunctionRefBindingTest
 
 class ModuleFunctionRefBindingTest inherits QUnit::Test {
@@ -95,8 +96,9 @@ if (ModuleRefBinding::applyInside(fn, 7) != 248) { throw \"MODULE-CROSS-RESULT\"
         assertEq(expected, run((qore, "--exec-mode=ir", host), dir.path + "/source"));
         string probe = dir.path + "/probe";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread",
-            "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include",
-            "-I" + libdir, get_script_dir() + "/module_function_ref_binding.cpp", "-L" + libdir,
+            "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/module_function_ref_binding.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", probe);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         if (target) { push args, target[0]; }

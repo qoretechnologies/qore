@@ -2591,6 +2591,20 @@ endif (WIN32 OR MINGW OR MSYS)
 
 # Include CMAKE_BINARY_DIR first so QPP-generated files take precedence over autotools-generated ones
 target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+# The include directories that code including the library's internal headers needs (one per line), for the tests
+# that build C++ fixtures against this build (examples/test/NativeFixture.qm): the internal headers include the
+# headers of libqore's dependencies, which can be outside the compiler's default search path (OpenSSL from MacPorts
+# or Homebrew, LLVM).  The compiler's own include directories are left out: given with -I, they would precede the
+# C++ library's headers, whose #include_next of the C headers then fails.
+get_target_property(_qore_internal_include_dirs libqore INTERFACE_INCLUDE_DIRECTORIES)
+list(REMOVE_DUPLICATES _qore_internal_include_dirs)
+set(_qore_internal_include_content "")
+foreach (_dir IN LISTS _qore_internal_include_dirs)
+    if (NOT _dir IN_LIST CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
+        string(APPEND _qore_internal_include_content "${_dir}\n")
+    endif ()
+endforeach ()
+file(WRITE "${CMAKE_BINARY_DIR}/qore-internal-include-dirs.txt" "${_qore_internal_include_content}")
 
 set(QORE_LIBS ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
 

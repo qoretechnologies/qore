@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class AOTPcLocationLifetimeTest
 
 class AOTPcLocationLifetimeTest inherits QUnit::Test {
@@ -37,8 +38,9 @@ class AOTPcLocationLifetimeTest inherits QUnit::Test {
         string executable = dir.path + "/location-test";
         string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " ";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
-            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
-            get_script_dir() + "/aot_pc_location_lifetime.cpp", "-L" + libdir,
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/aot_pc_location_lifetime.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         if (target) {

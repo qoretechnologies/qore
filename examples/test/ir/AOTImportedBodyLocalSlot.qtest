@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class ImportedBodyLocalSlotTest
 
 class ImportedBodyLocalSlotTest inherits QUnit::Test {
@@ -45,8 +46,9 @@ class ImportedBodyLocalSlotTest inherits QUnit::Test {
         write(source, "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\n%modern\nmodule ImportedBodySlots { version = \"1.0\"; desc = \"Imported body slot diagnostic\"; author = \"Qore\"; license = \"MIT\"; }\npublic namespace ImportedBodySlots {\n    public class Item { public { int marker; } constructor(int marker) { self.marker = marker; } }\n    public int sub run(code<int(int)> callback, int depth) {\n        auto slot_auto = depth;\n        list<int> slot_list = ();\n        for (int i = 0; i <= depth; ++i) { push slot_list, depth; }\n        slot_list[0] += 17;\n        Item slot_object = new Item(depth);\n        int result = callback(depth);\n        if (depth) { result += run(callback, depth - 1); }\n        result += callback(depth);\n        if (slot_auto != depth || slot_list[0] != depth + 17 || slot_object.marker != depth) {\n            throw \"SLOT-RESTORATION\", \"recursive local changed\";\n        }\n        return result;\n    }\n}\n");
         string probe = dir.path + "/probe";
         run((ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread", "-DHAVE_UNIX_CONFIG_H",
-            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
-            get_script_dir() + "/imported_body_local_slot.cpp", "-L" + libdir,
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/imported_body_local_slot.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", probe), dir.path);
         bool enabled = !ENV.QORE_TEST_EXPECT_IMPORTED_BODY_SLOT_REJECTION;
         foreach string level in (("-O0", "-O3")) {

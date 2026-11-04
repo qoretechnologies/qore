@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class NativeLeafContextTest
 
 class NativeLeafContextTest inherits QUnit::Test {
@@ -120,11 +121,11 @@ class NativeLeafContextTest inherits QUnit::Test {
         string executable = dir.path + "/guard-test";
         string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
             + " ";
-        # The internal-header fixture needs the build's dependency include paths;
-        # use the compiler's CPATH when dependencies are outside its default search.
+        # The internal-header fixture needs the build's dependency include paths (NativeFixture).
         list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
-            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
-            get_script_dir() + "/native_leaf_context.cpp", "-L" + libdir,
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/native_leaf_context.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         if (target) {

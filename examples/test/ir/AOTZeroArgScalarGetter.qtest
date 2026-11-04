@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class ZeroArgScalarGetterTest
 
 class ZeroArgScalarGetterTest inherits QUnit::Test {
@@ -191,8 +192,9 @@ class ZeroArgScalarGetterTest inherits QUnit::Test {
         string root = get_script_dir() + "/../../..";
         string executable = dir.path + "/native";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
-            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
-            get_script_dir() + "/aot_zero_arg_scalar_getter.cpp", "-L" + libdir,
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/aot_zero_arg_scalar_getter.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         if (target) { push args, target[0]; }

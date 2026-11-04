@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../NativeFixture.qm
 %exec-class ClosureDeferredContextTest
 
 class ClosureDeferredContextTest inherits QUnit::Test {
@@ -29,8 +30,9 @@ class ClosureDeferredContextTest inherits QUnit::Test {
         string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " ";
         string exe = dir.path + "/fixture";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
-            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir,
-            get_script_dir() + "/closure_deferred_context.cpp", "-L" + libdir,
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/closure_deferred_context.cpp", "-L" + libdir,
             "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         if (target) { push args, target[0]; }
