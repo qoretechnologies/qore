@@ -15529,6 +15529,12 @@ static QoreValue f_dbg_call_at_next_debugger_gate(const QoreListNode* params, Ru
     @param names the call names of the location (as in CallStackInfo::function)
     @param callers the call names of the caller's frame, or an empty list for any caller
     @param timeout_ms the maximum time to wait for a thread to publish a matching location
+    @param on_armed if given, called without arguments once the hook is armed, before waiting: it can let the thread to
+    be parked go on (with a Counter, for example), which then parks at the next matching location that it publishes
+    for certain, also if the location is published only once
+    @param on_parked if given, called with the hash returned while the thread is still parked with the location
+    published: for example, to cancel the thread, which then sees the request at its first cancellation check point
+    in the frame
 
     @return a hash: \c tid: the TID of the thread parked, \c kind: \c "native-leaf" (a native leaf call with a
     deferred context), \c "native" (another native call), or \c "ordinary", the kind of call that published the
@@ -15537,12 +15543,16 @@ static QoreValue f_dbg_call_at_next_debugger_gate(const QoreListNode* params, Ru
 
     @throw DBG-STACK-PARK-TIMEOUT no other thread published a matching location within the timeout
     @throw DBG-STACK-PARK-ERROR another thread is already waiting in this function, or invalid arguments
+
+    A callback that raises an exception ends the call with it, and the parked thread, if any, goes on.
 */
 static QoreValue f_dbg_read_stacks_at_frame(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreListNode* names = get_param_value(params, 0).get<const QoreListNode>();
     const QoreListNode* callers = get_param_value(params, 1).get<const QoreListNode>();
     int64 timeout_ms = get_param_value(params, 2).getAsBigInt();
-    return qore_dbg_read_stacks_at_frame(names, callers, timeout_ms, xsink);
+    const ResolvedCallReferenceNode* on_armed = get_param_value(params, 3).get<const ResolvedCallReferenceNode>();
+    const ResolvedCallReferenceNode* on_parked = get_param_value(params, 4).get<const ResolvedCallReferenceNode>();
+    return qore_dbg_read_stacks_at_frame(names, callers, timeout_ms, on_armed, on_parked, xsink);
 }
 
 //! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
@@ -18603,8 +18613,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_read_stacks_at_frame", f_dbg_read_stacks_at_frame, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        hashTypeInfo, 3, listTypeInfo, QORE_PARAM_NO_ARG, "names", listTypeInfo, QORE_PARAM_NO_ARG, "callers",
-        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+        hashTypeInfo, 5, listTypeInfo, QORE_PARAM_NO_ARG, "names", listTypeInfo, QORE_PARAM_NO_ARG, "callers",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms", codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "on_armed",
+        codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "on_parked");
     qns.addBuiltinVariant("dbg_call_at_next_debugger_gate", f_dbg_call_at_next_debugger_gate, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,

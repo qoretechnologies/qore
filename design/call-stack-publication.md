@@ -170,6 +170,15 @@ DEBUG builds only.  It is not made for the location of an external module (`upda
 see the known limitation above), whose virtual methods cannot be called when it is pushed.
 `examples/test/ir/AOT*FrameReaders.qr` and `concurrent-call-stacks.qtest` use it.
 
+Two optional callbacks make a frame that is published only once observable without polling: `on_armed` runs once the
+hook is armed, before the caller waits, and can let the thread go on (a `Counter` that the thread waits for), so the
+thread parks at its next matching location for certain; `on_parked` runs with the result while the thread is still
+parked, and can act on the thread in the frame (cancel it, so that it sees the request at its first cancellation
+check point in the frame).  The callbacks run without the hook's lock; one that raises an exception ends the call with
+it, and a thread parked goes on.  `AOTCallbackBodyTarget`, `AOTDirectRuntimeConfig`,
+`AOTIntegerCallbackSpecialization` and `AOTSharedCallbackInline` use them to cancel a thread in a native callback
+target's loop.
+
 ## Thread teardown
 
 A walker holds the thread list lock (`QoreThreadList::lck`) while it walks, and that is what keeps each listed

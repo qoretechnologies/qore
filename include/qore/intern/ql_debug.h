@@ -188,13 +188,18 @@ DLLLOCAL extern std::atomic<qore_dbg_debugger_gate_hook_t> qore_dbg_debugger_gat
     if callers is not empty, whose caller frame has one of those call names) waits right after the location is
     published until the stacks have been read; implemented in lib/thread.cpp.  See dbg_read_stacks_at_frame().
 
+    @param on_armed if not nullptr, called without arguments right after the hook is armed, before waiting: it can let
+    the thread to be parked go on, which then parks at its next matching location for certain
+    @param on_parked if not nullptr, called with the hash returned while the thread is still parked
+
     @return a hash: \c tid: the TID of the thread parked, \c kind: \c "native-leaf", \c "native" or
     \c "ordinary", the kind of call that published the location, \c stacks: the result of
-    get_all_thread_call_stacks() read while that thread was parked; nullptr with an exception raised on error or if no
-    thread published a matching location within the timeout
+    get_all_thread_call_stacks() read while that thread was parked; nullptr with an exception raised on error, if a
+    callback raised one, or if no thread published a matching location within the timeout
 */
 DLLLOCAL QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const QoreListNode* callers,
-    int64 timeout_ms, ExceptionSink* xsink);
+    int64 timeout_ms, const ResolvedCallReferenceNode* on_armed, const ResolvedCallReferenceNode* on_parked,
+    ExceptionSink* xsink);
 #endif
 
 #endif

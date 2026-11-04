@@ -2710,8 +2710,22 @@ static int dbg_stack_park_names(const QoreListNode* list, const char* param, std
     return 0;
 }
 
+//! Releases the thread parked for dbg_read_stacks_at_frame(), or disarms the hook if none is; called with the lock held
+static void dbg_stack_park_end_locked() {
+    if (dbg_stack_park.parked) {
+        dbg_stack_park.released_generation = dbg_stack_park.generation;
+        dbg_stack_park.parked = false;
+        dbg_stack_park.cond.notify_all();
+    } else {
+        // no thread can park any more: a thread checks the flag with the lock held
+        dbg_stack_park_armed.store(false, std::memory_order_relaxed);
+    }
+    dbg_stack_park.reader = nullptr;
+}
+
 QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const QoreListNode* callers,
-        int64 timeout_ms, ExceptionSink* xsink) {
+        int64 timeout_ms, const ResolvedCallReferenceNode* on_armed, const ResolvedCallReferenceNode* on_parked,
+        ExceptionSink* xsink) {
     std::vector<std::string> name_vec;
     std::vector<std::string> caller_vec;
     if (dbg_stack_park_names(names, "names", name_vec, xsink)
@@ -2724,6 +2738,8 @@ QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const Qor
     }
     int tid;
     StackPushKind kind;
+    // set once this call has armed the hook, which it must then end on every path
+    bool armed_here = false;
     try {
         std::unique_lock<std::mutex> lock(dbg_stack_park.m);
         if (dbg_stack_park_armed.load(std::memory_order_relaxed) || dbg_stack_park.parked) {
@@ -2736,11 +2752,23 @@ QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const Qor
         dbg_stack_park.reader = thread_data.get();
         ++dbg_stack_park.generation;
         dbg_stack_park_armed.store(true, std::memory_order_relaxed);
+        armed_here = true;
+        if (on_armed) {
+            // the code runs without the lock, so that it can let the thread to be parked go on: a thread that
+            // publishes a matching location meanwhile parks, and the wait below finds it parked
+            lock.unlock();
+            {
+                ValueHolder armed_rv(on_armed->invoke(nullptr, xsink), xsink);
+            }
+            lock.lock();
+            if (*xsink) {
+                dbg_stack_park_end_locked();
+                return nullptr;
+            }
+        }
         if (!dbg_stack_park.cond.wait_for(lock, std::chrono::milliseconds(timeout_ms > 0 ? timeout_ms : 0),
                 [] () { return dbg_stack_park.parked; })) {
-            // no thread can park any more: a thread checks the flag with the lock held
-            dbg_stack_park_armed.store(false, std::memory_order_relaxed);
-            dbg_stack_park.reader = nullptr;
+            dbg_stack_park_end_locked();
             xsink->raiseException("DBG-STACK-PARK-TIMEOUT", "no other thread published a call stack location "
                 "with a requested name within %lld ms", timeout_ms);
             return nullptr;
@@ -2748,6 +2776,16 @@ QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const Qor
         tid = dbg_stack_park.parked_tid;
         kind = dbg_stack_park.parked_kind;
     } catch (const std::exception& e) {
+        if (armed_here) {
+            // the lock was released when the exception left its scope
+            try {
+                std::lock_guard<std::mutex> lock(dbg_stack_park.m);
+                dbg_stack_park_end_locked();
+            } catch (const std::exception&) {
+                // the lock is never in invalid use here
+                assert(false);
+            }
+        }
         xsink->raiseException("DBG-STACK-PARK-ERROR", "cannot wait for a thread to park: %s", e.what());
         return nullptr;
     }
@@ -2758,10 +2796,7 @@ QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const Qor
         DLLLOCAL ~ParkReleaseHelper() {
             try {
                 std::lock_guard<std::mutex> lock(dbg_stack_park.m);
-                dbg_stack_park.released_generation = dbg_stack_park.generation;
-                dbg_stack_park.parked = false;
-                dbg_stack_park.reader = nullptr;
-                dbg_stack_park.cond.notify_all();
+                dbg_stack_park_end_locked();
             } catch (const std::exception&) {
                 // the lock is never in invalid use here
                 assert(false);
@@ -2776,6 +2811,15 @@ QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const Qor
     rv->setKeyValue("kind", new QoreStringNode(kind == StackPushKind::NativeLeaf ? "native-leaf"
         : (kind == StackPushKind::Native ? "native" : "ordinary")), xsink);
     rv->setKeyValue("stacks", stacks.release(), xsink);
+    if (on_parked) {
+        // the code runs while the thread is still parked with the location published
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+        args->push(rv->refSelf(), xsink);
+        ValueHolder parked_rv(on_parked->invoke(*args, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
     return rv.release();
 }
 #endif

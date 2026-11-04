@@ -51,6 +51,8 @@ public class ConcurrentCallStacksTest inherits QUnit::Test {
         addTestCase("Stacks are read while a calling thread is parked in a frame it published",
             \stacksReadAtPublishedFrame());
         addTestCase("Reading stacks at a frame rejects invalid requests and times out", \stacksReadAtFrameErrors());
+        addTestCase("Reading stacks at a frame runs callbacks when armed and while parked",
+            \stacksReadAtFrameCallbacks());
         set_return_value(main());
     }
 
@@ -214,6 +216,89 @@ public class ConcurrentCallStacksTest inherits QUnit::Test {
             assertEq("ConcurrentCallStacksTest::chainInner", parked.stacks{parked.tid}[0].function);
         }
         done.waitForZero();
+    }
+
+    #! A frame published only once is read for certain, and the callbacks run when armed and while it is parked
+    /** The thread calls the chain once, after on_armed has let it go on, so it parks in the frame for certain; on_parked
+        runs while it is parked.  A callback that raises an exception ends the call with it, leaves no state behind, and
+        a parked thread goes on.
+    */
+    stacksReadAtFrameCallbacks() {
+        if (!exists_function("dbg_read_stacks_at_frame")) {
+            testSkip("dbg_read_stacks_at_frame() is only available in DEBUG builds");
+        }
+        # a frame that the thread publishes only once, after the hook is armed
+        {
+            Counter go(1);
+            Counter done(1);
+            int tid = background sub () {
+                on_exit done.dec();
+                go.waitForZero();
+                chainOuter();
+            }();
+            *list<string> functions_while_parked;
+            int armed_calls = 0;
+            *hash<auto> parked_arg;
+            hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("ConcurrentCallStacksTest::chainInner",),
+                (), 60000,
+                sub () { ++armed_calls; go.dec(); },
+                sub (hash<auto> read) {
+                    parked_arg = read;
+                    functions_while_parked = map $1.function, get_all_thread_call_stacks(){tid};
+                });
+            done.waitForZero();
+            assertEq(1, armed_calls, "on_armed runs once");
+            assertEq(tid, parked.tid, "the thread let go on is parked");
+            assertEq("ConcurrentCallStacksTest::chainInner", parked.stacks{tid}[0].function);
+            assertEq(parked.tid, parked_arg.tid, "on_parked gets the result");
+            assertEq("ConcurrentCallStacksTest::chainInner", functions_while_parked[0],
+                "on_parked runs while the thread is parked in the frame");
+        }
+        # an exception raised by on_armed ends the call; no thread was parked
+        {
+            Counter go(1);
+            Counter done(1);
+            background sub () {
+                on_exit done.dec();
+                go.waitForZero();
+                chainOuter();
+            }();
+            assertThrows("ARMED-ERROR", \call_function(), ("dbg_read_stacks_at_frame",
+                ("ConcurrentCallStacksTest::chainInner",), (), 60000, sub () { throw "ARMED-ERROR"; }));
+            # the hook is disarmed: the thread runs the chain without parking
+            go.dec();
+            done.waitForZero();
+        }
+        # an exception raised by on_parked ends the call, and the parked thread goes on
+        {
+            Counter go(1);
+            Counter done(1);
+            int tid = background sub () {
+                on_exit done.dec();
+                go.waitForZero();
+                chainOuter();
+            }();
+            int parked_tid;
+            assertThrows("PARKED-ERROR", \call_function(), ("dbg_read_stacks_at_frame",
+                ("ConcurrentCallStacksTest::chainInner",), (), 60000, sub () { go.dec(); },
+                sub (hash<auto> read) { parked_tid = read.tid; throw "PARKED-ERROR"; }));
+            done.waitForZero();
+            assertEq(tid, parked_tid, "the thread was parked when on_parked raised the exception");
+        }
+        # no state is left behind: a further call parks a thread let go on
+        {
+            Counter go(1);
+            Counter done(1);
+            int tid = background sub () {
+                on_exit done.dec();
+                go.waitForZero();
+                chainOuter();
+            }();
+            hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("ConcurrentCallStacksTest::chainInner",),
+                (), 60000, sub () { go.dec(); });
+            done.waitForZero();
+            assertEq(tid, parked.tid);
+        }
     }
 
     private resetCounts() {

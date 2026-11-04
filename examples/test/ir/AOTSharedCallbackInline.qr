@@ -27,7 +27,8 @@ float sub bodyDivide(float input) {
 }
 float sub bodyWait(float input) {
     float value = input;
-    for (int i = 0; i < 100000000; ++i) { value += 0.25; }
+    # runs until the thread is cancelled
+    for (int i = 0; i < 9223372036854775807; ++i) { value += 0.25; }
     return value;
 }
 float sub bodyHofUnary(float seed, int count, code<float(float)> callback) {
@@ -95,38 +96,57 @@ catch (hash<ExceptionInfo> ex) {
 expect(True, caught);
 # Reusing the same callback consumer after an exception must remain valid.
 expect(6.0, bodyKnownDivide(2.0));
-# Observe the target's frame before interrupting, so cancellation cannot pass
-# merely by stopping the worker before the private callback entry is reached.
+# Cancel the worker in the frame of the target, whose loop ends only when the thread is cancelled.  A DEBUG build parks
+# the worker right after it has published the target's frame (dbg_read_stacks_at_frame()) and cancels it there, so the
+# request is seen in the target's loop for certain, not before the private callback entry is reached, and the
+# cancellation must come from that frame; a release build cancels the worker once it runs the call, and checks the
+# outcome only.
+bool parking = exists_function("dbg_read_stacks_at_frame");
 for (int attempt = 0; attempt < 2; ++attempt) {
+    Counter running(1);
+    Counter go(1);
     Counter done(1);
     string outcome;
     bool recovered = False;
+    bool in_target = False;
     int tid = background (sub () {
         on_exit done.dec();
-        try { if (attempt) { bodyDirectWait(); } else { bodyKnownWait(); } outcome = "not cancelled"; }
-        catch (hash<ExceptionInfo> ex) {
+        try {
+            running.dec();
+            go.waitForZero();
+            if (attempt) { bodyDirectWait(); } else { bodyKnownWait(); }
+            outcome = "not cancelled";
+        } catch (hash<ExceptionInfo> ex) {
             clear_thread_cancel();
             outcome = ex.err;
+            in_target = boolean(select ex.callstack, $1.function == "bodyWait");
             recovered = bodyKnownDivide(2.0) == 6.0;
         }
     })();
+    bool delivered = False;
     bool observed = False;
-    int deadline = clock_get_monotonic_us() + 10000000;
-    while (!observed && clock_get_monotonic_us() < deadline) {
-        foreach hash<CallStackInfo> frame in (get_all_thread_call_stacks(){string(tid)} ?? ()) {
-            if (frame.function == "bodyWait") { observed = True; break; }
-        }
-        if (!observed) { usleep(1000); }
+    if (parking) {
+        # the worker goes on once the hook is armed, and is cancelled while it is parked in the target's frame
+        hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("bodyWait",), (), 60000,
+            sub () { go.dec(); },
+            sub (hash<auto> stacks_read) { delivered = cancel_thread(tid, "native callback entry-state test"); });
+        observed = parked.tid == tid && parked.stacks{string(tid)}[0].function == "bodyWait";
+    } else {
+        running.waitForZero();
+        go.dec();
+        delivered = cancel_thread(tid, "native callback entry-state test");
     }
-    bool delivered = cancel_thread(tid, "native callback entry-state test");
     if (done.waitForZero(60s)) {
-        # End the entire test process, including its worker, on a failed poll.
+        # End the entire test process, including its worker, if the cancellation is not seen.
         printf("callback cancellation did not complete\n");
         exit(1);
     }
-    expect(True, observed);
     expect(True, delivered);
     expect("THREAD-CANCELLED", outcome);
     expect(True, recovered);
+    if (parking) {
+        expect(True, observed);
+        expect(True, in_target);
+    }
 }
 printf("callback-body-target: ok\n");
