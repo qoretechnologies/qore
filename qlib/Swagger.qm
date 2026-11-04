@@ -4717,8 +4717,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param require_items if @ref True, require \c items for array types
         @param location the location of the schema in its document, if known; a reference is identified by the
         schema it refers to, and a schema with the same name and content as one parsed before is that schema,
-        with its location; see @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity()
-        "getSchemaIdentity()"
+        with its location; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"
 
         @return the resolved or cached schema object, or a newly parsed object
 

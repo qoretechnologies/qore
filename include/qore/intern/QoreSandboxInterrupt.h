@@ -5,6 +5,8 @@
 #ifndef _QORE_SANDBOX_INTERRUPT_H
 #define _QORE_SANDBOX_INTERRUPT_H
 
+#include "qore/common.h"
+
 #include <atomic>
 #include <cstdint>
 
