@@ -21382,9 +21382,9 @@ __attribute__((noinline)) static int64_t qore_rt_resume_effect_member_int(QoreOb
             sig->selfid->instantiateSelf(object);
             slots.self = true;
         }
-        ValueHolder argument(QoreValue(arg), xsink);
-        sig->lv[0]->instantiate(*argument);
-        argument.release();
+        // the local takes the argument's value: a large integer's node, which the local's integer storage
+        // releases at once, must not be touched again
+        sig->lv[0]->instantiate(QoreValue(arg));
         slots.param = true;
         execJITWithDeopt(uvb, name, [&](ExceptionSink* xs, bool&) {
             return resume(completed, ctx, xs);
