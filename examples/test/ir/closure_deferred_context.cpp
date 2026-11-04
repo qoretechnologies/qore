@@ -155,6 +155,22 @@ struct ClosureProbe {
 };
 thread_local ClosureProbe* ClosureProbe::current = nullptr;
 
+// Reports any exception in the sink before the assertion that it is empty fails,
+// so a failing fixture shows what was raised.
+static void checkNoException(ExceptionSink& xsink, const char* action) {
+    if (!xsink) {
+        return;
+    }
+    QoreValue err = xsink.getExceptionErr();
+    QoreValue desc = xsink.getExceptionDesc();
+    const QoreStringNode* err_str = err.getType() == NT_STRING ? err.get<const QoreStringNode>() : nullptr;
+    const QoreStringNode* desc_str = desc.getType() == NT_STRING ? desc.get<const QoreStringNode>() : nullptr;
+    std::fprintf(stderr, "%s raised %s: %s\n", action, err_str ? err_str->c_str() : "<non-string error>",
+        desc_str ? desc_str->c_str() : "<non-string description>");
+    std::fflush(stderr);
+    assert(!xsink);
+}
+
 static void sameContext(const RuntimeConfig& before) {
     RuntimeConfig after = *qore_rt_get_fast_runtime_config();
     assert(before.getProgram() == after.getProgram());
@@ -311,7 +327,7 @@ static void check(unsigned helper_version) {
         ProgramRuntimeExternalParseContextHelper parse(*program);
         assert(parse);
         program->parse(source.c_str(), "closure-context-padded", &xsink);
-        assert(!xsink);
+        checkNoException(xsink, "parsing the padded callers");
     }
     ValueHolder snapshot(program->callFunction("closureContextOwnedObject", nullptr, &xsink), &xsink);
     assert(!xsink && snapshot->getType() == NT_LIST && snapshot->get<QoreListNode>()->size() == 2);
