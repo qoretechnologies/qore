@@ -4,7 +4,7 @@
 %modern
 
 hashdecl ForwardFloatMethodFrameReadResult {
-    int seen;
+    #! frames read that are not as expected
     list<string> errors;
 }
 
@@ -57,7 +57,6 @@ sub forwardFloatMethodReader(Counter readers, Counter done, Queue results) {
         done.dec();
     }
     hash<ForwardFloatMethodFrameReadResult> result();
-    result.seen = 0;
     result.errors = ();
     for (int i = 0; i < 400; ++i) {
         hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
@@ -96,7 +95,6 @@ sub forwardFloatMethodReader(Counter readers, Counter done, Queue results) {
                 if (frame.function == "ForwardFloatReaderA::next" || frame.function == "ForwardFloatReaderB::next"
                         || frame.function == "next" || frame.function == "ForwardFloatReaderA::forward"
                         || frame.function == "forward") {
-                    ++result.seen;
                     if (frame.type != "user" || frame.file.empty() || frame.line < 0
                             || frame.endline < frame.line) {
                         result.errors += sprintf("invalid native frame: %y", frame);
@@ -109,8 +107,33 @@ sub forwardFloatMethodReader(Counter readers, Counter done, Queue results) {
     results.push(result);
 }
 
+#! Returns the stack of a caller read while it is in the leaf frame of a forwarded call
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub forwardFloatMethodParkedStack() {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame",
+        ("ForwardFloatReaderA::next", "ForwardFloatReaderB::next", "next"),
+        ("ForwardFloatReaderA::forward", "forward"), 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    foreach hash<CallStackInfo> frame in (stack[0..1]) {
+        if (frame.type != "user" || frame.file.empty() || frame.line < 0 || frame.endline < frame.line) {
+            throw "NATIVE-METHOD-FRAME-TEST", sprintf("invalid parked native frame: %y", stack);
+        }
+    }
+    if ((stack[2].function != "forwardFloatMethodReaderBatch"
+                && stack[2].function != "forwardFloatGenericMethodReaderBatch")
+            || !(select stack, $1.function == "forwardFloatMethodReaderCaller")) {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("forwarding caller lost its caller: %y", stack);
+    }
+    return stack;
+}
+
 Counter started(4);
-Counter readers(2);
+# the concurrent readers and the parked read below
+Counter readers(3);
 Counter callers_done(4);
 Counter readers_done(2);
 Queue failures();
@@ -122,17 +145,21 @@ started.waitForZero();
 for (int i = 0; i < 2; ++i) {
     background forwardFloatMethodReader(readers, readers_done, results);
 }
+{
+    on_exit readers.dec();
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        forwardFloatMethodParkedStack();
+    }
+}
 readers_done.waitForZero();
 callers_done.waitForZero();
-int seen = 0;
 for (int i = 0; i < 2; ++i) {
     hash<ForwardFloatMethodFrameReadResult> result = results.get(10000);
-    seen += result.seen;
     if (result.errors) {
         throw "NATIVE-METHOD-FRAME-TEST", result.errors.join("\n");
     }
 }
-if (!seen || failures.size()) {
-    throw "NATIVE-METHOD-FRAME-TEST", sprintf("observed %d leaf frames; %d caller failures", seen, failures.size());
+if (failures.size()) {
+    throw "NATIVE-METHOD-FRAME-TEST", sprintf("%d caller failures", failures.size());
 }
 printf("float-forward-frame-readers: ok\n");

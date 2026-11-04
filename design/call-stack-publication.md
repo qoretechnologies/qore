@@ -149,6 +149,27 @@ For the same reason, no virtual function or data member may be added to `QoreSta
 derived from it (`QoreExternalStackLocation` and its subclasses): a module compiled against the previous header
 would have no vtable slot or member at the new position, and the library calling or reading it would crash.
 
+## What a walk observes
+
+A walk reads the stack as it is at the walker's load of `current_stack_location`, and a thread that pops a location
+during the walk waits until the walk has finished, with the restored location already published.  With the heavy
+barrier, the walker's flag store and its load are separated by the `membarrier()` system call, which takes far longer
+than a short call: every thread that keeps calling reaches its next pop in that time, sees the flag and waits, so the
+walk observes each such thread just after a pop, never inside a short leaf frame.  Without the heavy barrier (macOS,
+or `membarrier` unavailable) the load follows the store at once, and a walk samples a running thread at a random
+point.  Both are correct snapshots; a frame is published for the whole of its call either way.  A concurrent reader
+therefore cannot count on observing a leaf frame: on Linux the native fast paths (whose leaf frames last a few
+nanoseconds) were seen in no sample at all.
+
+Tests that must observe a frame use `dbg_read_stacks_at_frame()` (DEBUG builds only, `QDOM_DEBUG_HOOK`): the first
+other thread that publishes a location with one of the requested call names (and, optionally, called by a frame with
+one of the requested names) parks right after publishing it, and the caller of the function reads every thread's stack
+while it is parked; the result reports which kind of call published the frame (`native-leaf`, `native` or
+`ordinary`).  The check is made in the publishing functions of `lib/thread.cpp` behind one relaxed load of a flag, in
+DEBUG builds only.  It is not made for the location of an external module (`update_get_runtime_external_stack_location()`,
+see the known limitation above), whose virtual methods cannot be called when it is pushed.
+`examples/test/ir/AOT*FrameReaders.qr` and `concurrent-call-stacks.qtest` use it.
+
 ## Thread teardown
 
 A walker holds the thread list lock (`QoreThreadList::lck`) while it walks, and that is what keeps each listed

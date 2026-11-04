@@ -849,7 +849,8 @@ const AbstractStatement* QoreExternalStackLocation::getStatement() const {
 class qore_external_runtime_stack_location_helper_priv : public QoreProgramStackLocationHelper {
 public:
     DLLLOCAL qore_external_runtime_stack_location_helper_priv(QoreExternalStackLocation& stack_loc)
-            : QoreProgramStackLocationHelper(&stack_loc, stack_loc.priv->stmt, stack_loc.priv->pgm) {
+            : QoreProgramStackLocationHelper(&stack_loc, stack_loc.priv->stmt, stack_loc.priv->pgm,
+                ExternalLocation()) {
     }
 
     DLLLOCAL qore_external_runtime_stack_location_helper_priv(

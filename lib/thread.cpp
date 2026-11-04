@@ -60,6 +60,7 @@
 #include "qore/intern/Variable.h"
 #include "qore/intern/QoreSandboxInterrupt.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/ql_debug.h"
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
@@ -92,7 +93,11 @@
 #include <sys/resource.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <cassert>
 #include <cerrno>
 #include <map>
@@ -2576,17 +2581,204 @@ static void stack_walk_barrier() {
 #endif
 }
 
+//! What published a location on a thread's call stack, as reported by dbg_read_stacks_at_frame()
+enum class StackPushKind : uint8_t {
+    //! an ordinary call or a JIT/IR frame
+    Ordinary,
+    //! a native (JIT or AOT) call that publishes its frame without a runtime helper (QoreNativeCallStackLocation,
+    //! RuntimeConfigNativeCallHelper)
+    Native,
+    //! a native leaf call with a deferred context (RuntimeConfigNativeLeafCallHelper, including a forwarding pair)
+    NativeLeaf,
+    //! a location of an external module (QoreExternalRuntimeStackLocationHelper), which can be published before it
+    //! is fully constructed (see design/call-stack-publication.md), so its virtual methods must not be called then
+    External,
+};
+
+#ifdef DEBUG
+//! The state of dbg_read_stacks_at_frame()
+/** A reader arms it with a set of call names, and the first other thread that then publishes a location with one of
+    those names parks right after publishing it, until the reader has read every thread's call stack.  A walk of the
+    stack of a thread that keeps calling observes the state after that thread's next pop (see
+    QoreThreadList::walkCallStack()), so this is how a test observes a short leaf frame for certain.
+*/
+namespace {
+class DbgStackParkState {
+public:
+    std::mutex m;
+    std::condition_variable cond;
+    //! the call names that park a thread, and the call names of the caller frame required (empty: any caller)
+    std::vector<std::string> names;
+    std::vector<std::string> callers;
+    //! the thread that reads the stacks, which never parks
+    const ThreadData* reader = nullptr;
+    //! incremented each time a reader arms the hook
+    uint64_t generation = 0;
+    //! the generation whose parked thread has been released
+    uint64_t released_generation = 0;
+    //! set while a thread is parked
+    bool parked = false;
+    int parked_tid = 0;
+    StackPushKind parked_kind = StackPushKind::Ordinary;
+
+    //! returns true if the location matches; called with the lock held
+    bool matches(const QoreStackLocation* stack_loc) const {
+        if (std::find(names.begin(), names.end(), stack_loc->getCallName()) == names.end()) {
+            return false;
+        }
+        if (callers.empty()) {
+            return true;
+        }
+        const QoreStackLocation* caller = stack_loc->getNext();
+        return caller && std::find(callers.begin(), callers.end(), caller->getCallName()) != callers.end();
+    }
+};
+}
+
+static DbgStackParkState dbg_stack_park;
+//! Set while dbg_read_stacks_at_frame() waits for a thread to park; checked on every push in DEBUG builds only
+static std::atomic<bool> dbg_stack_park_armed{false};
+
+//! Parks this thread if it has just published a location that dbg_read_stacks_at_frame() waits for
+/** Called from the push paths of native code, which must not throw: a failure of the standard library's locking
+    (which raises only for invalid use) leaves the thread unparked, and the reader times out.
+*/
+static __attribute__((noinline, cold)) void dbg_stack_location_published(ThreadData* td,
+        const QoreStackLocation* stack_loc, StackPushKind kind) noexcept {
+    try {
+        std::unique_lock<std::mutex> lock(dbg_stack_park.m);
+        if (!dbg_stack_park_armed.load(std::memory_order_relaxed) || td == dbg_stack_park.reader
+                || !dbg_stack_park.matches(stack_loc)) {
+            return;
+        }
+        dbg_stack_park_armed.store(false, std::memory_order_relaxed);
+        dbg_stack_park.parked = true;
+        dbg_stack_park.parked_tid = td->tid;
+        dbg_stack_park.parked_kind = kind;
+        uint64_t generation = dbg_stack_park.generation;
+        dbg_stack_park.cond.notify_all();
+        // the location stays published while this thread waits, holding no lock that a reader of the call stacks
+        // needs
+        dbg_stack_park.cond.wait(lock, [generation] () {
+            return dbg_stack_park.released_generation >= generation;
+        });
+    } catch (const std::exception&) {
+        assert(false);
+    }
+}
+#endif
+
 // Publishes a location pushed on this thread's call stack
 /* A push needs no handshake with a thread walking this stack: the new location is linked to the current one before
    it is published, with release ordering, so a walk either starts below it or sees it fully linked.  A location a walk
    can reach is only ever freed by a pop, and publish_popped_stack_location() makes a pop wait for the walk.
 */
-static const QoreStackLocation* publish_pushed_stack_location(ThreadData* td, QoreStackLocation* stack_loc) {
+template <StackPushKind Kind = StackPushKind::Ordinary>
+static __attribute__((always_inline)) inline const QoreStackLocation* publish_pushed_stack_location(ThreadData* td,
+        QoreStackLocation* stack_loc) {
     const QoreStackLocation* rv = td->current_stack_location.load(std::memory_order_relaxed);
     stack_loc->setNext(rv);
     td->current_stack_location.store(stack_loc, std::memory_order_release);
+#ifdef DEBUG
+    if constexpr (Kind != StackPushKind::External) {
+        if (dbg_stack_park_armed.load(std::memory_order_relaxed)) {
+            dbg_stack_location_published(td, stack_loc, Kind);
+        }
+    }
+#endif
     return rv;
 }
+
+#ifdef DEBUG
+//! Adds the strings of a list to a vector; returns -1 with an exception raised if an element is not a string
+static int dbg_stack_park_names(const QoreListNode* list, const char* param, std::vector<std::string>& names,
+        ExceptionSink* xsink) {
+    names.clear();
+    if (!list) {
+        return 0;
+    }
+    ConstListIterator i(list);
+    while (i.next()) {
+        QoreValue v = i.getValue();
+        if (v.getType() != NT_STRING) {
+            xsink->raiseException("DBG-STACK-PARK-ERROR", "element %zu of the %s list is type '%s'; expecting "
+                "'string'", i.index(), param, v.getFullTypeName());
+            return -1;
+        }
+        names.push_back(v.get<const QoreStringNode>()->c_str());
+    }
+    return 0;
+}
+
+QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const QoreListNode* callers,
+        int64 timeout_ms, ExceptionSink* xsink) {
+    std::vector<std::string> name_vec;
+    std::vector<std::string> caller_vec;
+    if (dbg_stack_park_names(names, "names", name_vec, xsink)
+            || dbg_stack_park_names(callers, "callers", caller_vec, xsink)) {
+        return nullptr;
+    }
+    if (name_vec.empty()) {
+        xsink->raiseException("DBG-STACK-PARK-ERROR", "no call names given");
+        return nullptr;
+    }
+    int tid;
+    StackPushKind kind;
+    try {
+        std::unique_lock<std::mutex> lock(dbg_stack_park.m);
+        if (dbg_stack_park_armed.load(std::memory_order_relaxed) || dbg_stack_park.parked) {
+            xsink->raiseException("DBG-STACK-PARK-ERROR", "another thread is already reading stacks in "
+                "dbg_read_stacks_at_frame()");
+            return nullptr;
+        }
+        dbg_stack_park.names.swap(name_vec);
+        dbg_stack_park.callers.swap(caller_vec);
+        dbg_stack_park.reader = thread_data.get();
+        ++dbg_stack_park.generation;
+        dbg_stack_park_armed.store(true, std::memory_order_relaxed);
+        if (!dbg_stack_park.cond.wait_for(lock, std::chrono::milliseconds(timeout_ms > 0 ? timeout_ms : 0),
+                [] () { return dbg_stack_park.parked; })) {
+            // no thread can park any more: a thread checks the flag with the lock held
+            dbg_stack_park_armed.store(false, std::memory_order_relaxed);
+            dbg_stack_park.reader = nullptr;
+            xsink->raiseException("DBG-STACK-PARK-TIMEOUT", "no other thread published a call stack location "
+                "with a requested name within %lld ms", timeout_ms);
+            return nullptr;
+        }
+        tid = dbg_stack_park.parked_tid;
+        kind = dbg_stack_park.parked_kind;
+    } catch (const std::exception& e) {
+        xsink->raiseException("DBG-STACK-PARK-ERROR", "cannot wait for a thread to park: %s", e.what());
+        return nullptr;
+    }
+
+    // releases the parked thread on every path out of this function
+    class ParkReleaseHelper {
+    public:
+        DLLLOCAL ~ParkReleaseHelper() {
+            try {
+                std::lock_guard<std::mutex> lock(dbg_stack_park.m);
+                dbg_stack_park.released_generation = dbg_stack_park.generation;
+                dbg_stack_park.parked = false;
+                dbg_stack_park.reader = nullptr;
+                dbg_stack_park.cond.notify_all();
+            } catch (const std::exception&) {
+                // the lock is never in invalid use here
+                assert(false);
+            }
+        }
+    } release_helper;
+
+    // read while the thread is parked with the location published
+    ReferenceHolder<QoreHashNode> stacks(getAllCallStacks(), xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("tid", tid, xsink);
+    rv->setKeyValue("kind", new QoreStringNode(kind == StackPushKind::NativeLeaf ? "native-leaf"
+        : (kind == StackPushKind::Native ? "native" : "ordinary")), xsink);
+    rv->setKeyValue("stacks", stacks.release(), xsink);
+    return rv.release();
+}
+#endif
 
 // Publishes a location restored on this thread's call stack, and waits for any walk that may still read the one
 // replaced
@@ -2827,7 +3019,7 @@ __attribute__((always_inline)) RuntimeConfigNativeCallHelper::RuntimeConfigNativ
     td->call_program_context = pgm;
     td->closure_rt_env = nullptr;
     call_loc = old_loc ? old_loc : parse_loc;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::Native>(td, stack_loc);
     if (swapped) {
         td->runtime_statement = nullptr;
         td->runtime_loc = parse_loc;
@@ -2867,7 +3059,7 @@ __attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::enterReus
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
     td->runtime_statement = nullptr;
     const QoreProgramLocation* body_loc = cache.uvb->getAOTBodyLocation();
     td->runtime_loc = body_loc ? body_loc : cache.parse_loc;
@@ -2895,7 +3087,7 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
     td->runtime_statement = nullptr;
     const QoreProgramLocation* body_loc = cache.uvb->getAOTBodyLocation();
     td->runtime_loc = body_loc ? body_loc : cache.parse_loc;
@@ -2919,7 +3111,7 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
     td->runtime_statement = nullptr;
     const QoreProgramLocation* body_loc = cache.native_scalar_uvb->getAOTBodyLocation();
     td->runtime_loc = body_loc ? body_loc : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
@@ -2977,6 +3169,11 @@ __attribute__((always_inline)) RuntimeConfigNativeMethodFramePairHelper::Runtime
     td->runtime_statement = nullptr;
     td->runtime_loc = inner_body;
     td->current_stack_location.store(inner_frame, std::memory_order_release);
+#ifdef DEBUG
+    if (dbg_stack_park_armed.load(std::memory_order_relaxed)) {
+        dbg_stack_location_published(td, inner_frame, StackPushKind::NativeLeaf);
+    }
+#endif
 }
 
 __attribute__((always_inline)) RuntimeConfigNativeMethodFramePairHelper::~RuntimeConfigNativeMethodFramePairHelper() {
@@ -3015,7 +3212,7 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
     td->runtime_statement = nullptr;
     const QoreProgramLocation* body_loc = context.uvb->getAOTBodyLocation();
     td->runtime_loc = body_loc ? body_loc : parse_loc;
@@ -3034,7 +3231,7 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
     td->runtime_statement = nullptr;
     const QoreProgramLocation* body_loc = uvb->getAOTBodyLocation();
     td->runtime_loc = body_loc ? body_loc : uvb->getUserSignature()->getParseLocation();
@@ -3052,7 +3249,7 @@ __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigN
     old_stmt = td->runtime_statement;
     old_loc = td->runtime_loc;
     td->native_leaf_context = this;
-    old_stack = publish_pushed_stack_location(td, stack_loc);
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
     td->runtime_statement = nullptr;
     const QoreProgramLocation* body_loc = context.uvb->getAOTBodyLocation();
     td->runtime_loc = body_loc ? body_loc : context.uvb->getUserSignature()->getParseLocation();
@@ -3337,6 +3534,16 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     return publish_pushed_stack_location(td, stack_loc);
 }
 
+const QoreStackLocation* update_get_runtime_external_stack_location(QoreStackLocation* stack_loc,
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm) {
+    ThreadData* td = thread_data.get();
+
+    current_pgm = td->current_pgm;
+    current_stmt = td->runtime_statement;
+
+    return publish_pushed_stack_location<StackPushKind::External>(td, stack_loc);
+}
+
 const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
         const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
@@ -3368,7 +3575,7 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     runtime_loc = td->runtime_loc;
     frame_loc = call_loc ? call_loc : runtime_loc;
 
-    const QoreStackLocation* prev = publish_pushed_stack_location(td, stack_loc);
+    const QoreStackLocation* prev = publish_pushed_stack_location<StackPushKind::Native>(td, stack_loc);
     if (callee_loc) {
         td->runtime_statement = nullptr;
         td->runtime_loc = callee_loc;

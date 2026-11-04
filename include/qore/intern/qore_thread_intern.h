@@ -334,6 +334,12 @@ DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
 */
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm = nullptr);
+//! As update_get_runtime_stack_location(), for the location of an external module
+/** Such a location is pushed by QoreExternalRuntimeStackLocationHelper before the module's class is constructed (see
+    design/call-stack-publication.md), so no virtual method of it may be called when it is pushed.
+*/
+DLLLOCAL const QoreStackLocation* update_get_runtime_external_stack_location(QoreStackLocation* stack_loc,
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm);
 //! As update_get_runtime_stack_location(), and also sets the runtime location to the builtin location
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc,
@@ -1023,6 +1029,15 @@ public:
     }
 
 protected:
+    //! Tag of the constructor for the location of an external module
+    struct ExternalLocation {};
+
+    //! Pushes the location of an external module, which may not be fully constructed yet
+    DLLLOCAL QoreProgramStackLocationHelper(QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt,
+            QoreProgram*& current_pgm, ExternalLocation) :
+        stack_loc(update_get_runtime_external_stack_location(stack_loc, current_stmt, current_pgm)) {
+    }
+
     const QoreStackLocation* stack_loc;
 };
 

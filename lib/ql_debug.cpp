@@ -15379,6 +15379,32 @@ static QoreValue f_dbg_call_at_next_debugger_gate(const QoreListNode* params, Ru
     return QoreValue();
 }
 
+//! Debug-only: reads every thread's call stack while another thread is parked in a frame that it has just published
+/** The first other thread that then publishes a call stack location with one of the given call names (and, if
+    \a callers is not empty, called by a frame with one of those call names) waits right after publishing it until the
+    stacks have been read, so that a test can observe a frame that is far too short for a concurrent reader to see
+    (a walk of the stack of a thread that keeps calling observes that thread after its next pop; see
+    QoreThreadList::walkCallStack()).  Only one thread can wait in this function at a time.  DEBUG builds only.
+
+    @param names the call names of the location (as in CallStackInfo::function)
+    @param callers the call names of the caller's frame, or an empty list for any caller
+    @param timeout_ms the maximum time to wait for a thread to publish a matching location
+
+    @return a hash: \c tid: the TID of the thread parked, \c kind: \c "native-leaf" (a native leaf call with a
+    deferred context), \c "native" (another native call), or \c "ordinary", the kind of call that published the
+    location, \c stacks: every thread's call stack (as returned by get_all_thread_call_stacks()) read while the
+    thread was parked
+
+    @throw DBG-STACK-PARK-TIMEOUT no other thread published a matching location within the timeout
+    @throw DBG-STACK-PARK-ERROR another thread is already waiting in this function, or invalid arguments
+*/
+static QoreValue f_dbg_read_stacks_at_frame(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreListNode* names = get_param_value(params, 0).get<const QoreListNode>();
+    const QoreListNode* callers = get_param_value(params, 1).get<const QoreListNode>();
+    int64 timeout_ms = get_param_value(params, 2).getAsBigInt();
+    return qore_dbg_read_stacks_at_frame(names, callers, timeout_ms, xsink);
+}
+
 //! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
 //! that the holder sees at each read or write of the description that a file stream makes without waiting
 /** The second holder is a duplicate of the descriptor (the same file description, as an inherited standard input
@@ -18432,6 +18458,9 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_read_stacks_at_frame", f_dbg_read_stacks_at_frame, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 3, listTypeInfo, QORE_PARAM_NO_ARG, "names", listTypeInfo, QORE_PARAM_NO_ARG, "callers",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_call_at_next_debugger_gate", f_dbg_call_at_next_debugger_gate, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,

@@ -48,6 +48,9 @@ public class ConcurrentCallStacksTest inherits QUnit::Test {
         addTestCase("A parked thread's stack is read from another thread", \parkedThreadStack());
         addTestCase("Stacks are read while their threads call functions", \stacksReadWhileCalling());
         addTestCase("Stacks are read while threads are created and exit", \stacksReadWhileThreadsExit());
+        addTestCase("Stacks are read while a calling thread is parked in a frame it published",
+            \stacksReadAtPublishedFrame());
+        addTestCase("Reading stacks at a frame rejects invalid requests and times out", \stacksReadAtFrameErrors());
         set_return_value(main());
     }
 
@@ -132,6 +135,85 @@ public class ConcurrentCallStacksTest inherits QUnit::Test {
         churners_done.waitForZero();
 
         assertEq((), errors, "every stack read is well formed while threads exit");
+    }
+
+    #! A thread that keeps calling is parked right after it publishes a frame, and the stacks are read in it
+    /** A walk of the stack of such a thread observes it after its next pop, so a short frame is seen only by chance;
+        dbg_read_stacks_at_frame() (DEBUG builds only) parks the thread with the frame published while the stacks are
+        read.
+    */
+    stacksReadAtPublishedFrame() {
+        if (!exists_function("dbg_read_stacks_at_frame")) {
+            testSkip("dbg_read_stacks_at_frame() is only available in DEBUG builds");
+        }
+        resetCounts();
+        Counter started(Callers);
+        Counter readers_running(1);
+        Counter callers_done(Callers);
+        for (int i = 0; i < Callers; ++i) {
+            background callerLoop(started, readers_running, callers_done);
+        }
+        started.waitForZero();
+        list<hash<auto>> results = ();
+        {
+            on_exit readers_running.dec();
+            # each read parks one of the callers; the innermost frame is a leaf, called by the middle one
+            for (int i = 0; i < 20; ++i) {
+                results += call_function("dbg_read_stacks_at_frame", ("ConcurrentCallStacksTest::chainInner",),
+                    ("ConcurrentCallStacksTest::chainMiddle",), 60000);
+            }
+        }
+        callers_done.waitForZero();
+
+        foreach hash<auto> parked in (results) {
+            assertEq(True, caller_tids{parked.tid}, "a caller thread is parked");
+            assertEq(True, ("ordinary", "native", "native-leaf").contains(parked.kind), "kind " + parked.kind);
+            *list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+            list<string> functions = map $1.function, stack;
+            assertEq(("ConcurrentCallStacksTest::chainInner", "ConcurrentCallStacksTest::chainMiddle",
+                "ConcurrentCallStacksTest::chainOuter", "ConcurrentCallStacksTest::callerLoop"), functions[0..3],
+                "the parked frame is the innermost one");
+            assertEq(NOTHING, checkCallerStack(stack), "the parked stack is well formed");
+            # every other caller's stack is read as well
+            foreach string tid in (keys caller_tids) {
+                assertEq(True, exists parked.stacks{tid}, "caller " + tid + " stack read");
+            }
+        }
+    }
+
+    #! Invalid requests raise an exception, and a frame that no thread publishes times out
+    stacksReadAtFrameErrors() {
+        if (!exists_function("dbg_read_stacks_at_frame")) {
+            testSkip("dbg_read_stacks_at_frame() is only available in DEBUG builds");
+        }
+        assertThrows("DBG-STACK-PARK-ERROR", "no call names", \call_function(), ("dbg_read_stacks_at_frame",
+            (), (), 1));
+        assertThrows("DBG-STACK-PARK-ERROR", "element 1 of the names list", \call_function(),
+            ("dbg_read_stacks_at_frame", ("chainInner", 1), (), 1));
+        assertThrows("DBG-STACK-PARK-ERROR", "element 0 of the callers list", \call_function(),
+            ("dbg_read_stacks_at_frame", ("chainInner",), (True,), 1));
+        # no thread runs a function with this name
+        assertThrows("DBG-STACK-PARK-TIMEOUT", \call_function(), ("dbg_read_stacks_at_frame",
+            ("ConcurrentCallStacksTest::noSuchFunction",), (), 1));
+        # a frame published with another caller does not park a thread either
+        Counter running(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            while (running.getCount()) {
+                chainOuter();
+            }
+        }();
+        {
+            on_exit running.dec();
+            assertThrows("DBG-STACK-PARK-TIMEOUT", \call_function(), ("dbg_read_stacks_at_frame",
+                ("ConcurrentCallStacksTest::chainInner",), ("ConcurrentCallStacksTest::chainOuter",), 100));
+            # the timed-out requests left no state behind
+            hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("ConcurrentCallStacksTest::chainInner",),
+                (), 60000);
+            assertEq("ConcurrentCallStacksTest::chainInner", parked.stacks{parked.tid}[0].function);
+        }
+        done.waitForZero();
     }
 
     private resetCounts() {

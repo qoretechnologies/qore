@@ -112,7 +112,8 @@ class NativeMethodEntryTest inherits QUnit::Test {
                 string ir = run((qcc, level, "--strip-source", "-o", executable, source),
                     prefix + "QORE_DUMP_LLVM_IR=1 ");
                 assertRegex("call void @qore_rt_bind_method_int_unary_v1[^\n]*NativeReaderB", ir);
-                assertEq(expected, run((executable,), "QORE_TEST_FORWARD_FRAME_LOC=1 "), prefix + level);
+                assertEq(expected, run((executable,), "QORE_TEST_FORWARD_FRAME_LOC=1 QORE_TEST_NATIVE_FRAME=1 "),
+                    prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
                     "fallback " + prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),

@@ -4,7 +4,7 @@
 %modern
 
 hashdecl NativeMethodFrameReadResult {
-    int seen;
+    #! frames read that are not as expected
     list<string> errors;
 }
 
@@ -57,7 +57,6 @@ sub nativeMethodReader(Counter readers, Counter done, Queue results) {
         done.dec();
     }
     hash<NativeMethodFrameReadResult> result();
-    result.seen = 0;
     result.errors = ();
     bool precise_forward_loc = !!ENV.QORE_TEST_FORWARD_FRAME_LOC;
     for (int i = 0; i < 400; ++i) {
@@ -86,7 +85,6 @@ sub nativeMethodReader(Counter readers, Counter done, Queue results) {
                 }
                 if (frame.function == "NativeReaderA::next" || frame.function == "NativeReaderB::next"
                         || frame.function == "next") {
-                    ++result.seen;
                     if (frame.type != "user" || frame.file.empty() || frame.line < 0
                             || frame.endline < frame.line) {
                         result.errors += sprintf("invalid native frame: %y", frame);
@@ -109,8 +107,36 @@ sub nativeMethodReader(Counter readers, Counter done, Queue results) {
     results.push(result);
 }
 
+#! Returns the stack of a caller read while it is in a leaf frame called by one of the given frames
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub nativeMethodParkedStack(list<string> callers) {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame",
+        ("NativeReaderA::next", "NativeReaderB::next", "next"), callers, 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    hash<CallStackInfo> leaf = stack[0];
+    if (leaf.type != "user" || leaf.file.empty() || leaf.line < 0 || leaf.endline < leaf.line
+            || !callers.contains(stack[1].function) || !(select stack, $1.function == "nativeMethodReaderCaller")) {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("invalid parked native frame: %y", stack);
+    }
+    # the warmed AOT shortcut publishes the forwarded leaf with a deferred context, at the exact call site
+    bool forwarded = stack[1].function == "NativeReaderA::forward";
+    if (ENV.QORE_TEST_FORWARD_FRAME_LOC && forwarded && (parked.kind != "native-leaf" || leaf.line != 13)) {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("incorrect forwarded %y frame: %y", parked.kind, leaf);
+    }
+    # native code publishes the frames of the calls it makes itself
+    if (ENV.QORE_TEST_NATIVE_FRAME && parked.kind == "ordinary") {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("leaf frame published by an ordinary call: %y", stack);
+    }
+    return stack;
+}
+
 Counter started(4);
-Counter readers(2);
+# the concurrent readers and the parked reads below
+Counter readers(3);
 Counter callers_done(4);
 Counter readers_done(2);
 Queue failures();
@@ -122,17 +148,22 @@ started.waitForZero();
 for (int i = 0; i < 2; ++i) {
     background nativeMethodReader(readers, readers_done, results);
 }
+{
+    on_exit readers.dec();
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        nativeMethodParkedStack(("nativeMethodReaderBatch",));
+        nativeMethodParkedStack(("NativeReaderA::forward", "forward"));
+    }
+}
 readers_done.waitForZero();
 callers_done.waitForZero();
-int seen = 0;
 for (int i = 0; i < 2; ++i) {
     hash<NativeMethodFrameReadResult> result = results.get(10000);
-    seen += result.seen;
     if (result.errors) {
         throw "NATIVE-METHOD-FRAME-TEST", result.errors.join("\n");
     }
 }
-if (!seen || failures.size()) {
-    throw "NATIVE-METHOD-FRAME-TEST", sprintf("observed %d leaf frames; %d caller failures", seen, failures.size());
+if (failures.size()) {
+    throw "NATIVE-METHOD-FRAME-TEST", sprintf("%d caller failures", failures.size());
 }
 printf("native-method-frame-readers: ok\n");

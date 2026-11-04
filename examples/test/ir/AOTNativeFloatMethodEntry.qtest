@@ -151,7 +151,9 @@ class NativeFloatMethodEntryTest inherits QUnit::Test {
                             "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
                             "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
                             "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ")) {
-                        assertEq(expected, run(args, runtime), prefix + level + runtime + generic);
+                        # the default entry publishes the frames of the calls that native code makes
+                        assertEq(expected, run(args, runtime ? runtime : "QORE_TEST_NATIVE_FRAME=1 "),
+                            prefix + level + runtime + generic);
                     }
                 }
             }
