@@ -118,6 +118,39 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(1, text.count(f"{built}:"))
         self.assertNotIn(str(installed), text)
 
+    def test_install_removes_depfiles_beside_installed_modules(self):
+        """A depfile and its fingerprints describe the built module; none is left beside an installed copy"""
+        (self.source / "qlib" / "Split").mkdir()
+        (self.source / "qlib" / "Split" / "Split.qm").write_text("%modern\n")
+        cmakelists = self.source / "CMakeLists.txt"
+        cmakelists.write_text(cmakelists.read_text().replace(
+            'qore_user_module("qlib/Probe.qm")',
+            'set(QORE_AOT_MODULES_DIR lib/aot)\nqore_user_module("qlib/Probe.qm")\nqore_user_module("qlib/Split")'))
+        self.set_deps()
+        prefix = self.root / "prefix"
+        result = subprocess.run([CMAKE, "-G", "Unix Makefiles", "-S", str(self.source), "-B", str(self.build),
+                                 f"-DCMAKE_INSTALL_PREFIX={prefix}"],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        result = subprocess.run([CMAKE, "--build", str(self.build)], capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        # where the module's AOT rule publishes each qmod, as the first install shows
+        result = subprocess.run([CMAKE, "--install", str(self.build)], capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        qmods = sorted(prefix.rglob("*.qmod"))
+        self.assertEqual(["Probe.qmod", "Split.qmod"], sorted(qmod.name for qmod in qmods))
+        orphans = []
+        for qmod in qmods:
+            for suffix in (".d", ".d.fingerprints"):
+                orphan = qmod.with_name(qmod.name + suffix)
+                orphan.write_text(f"{qmod}: {self.source}\n")
+                orphans.append(orphan)
+        result = subprocess.run([CMAKE, "--install", str(self.build)], capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual([], [str(orphan) for orphan in orphans if orphan.exists()])
+        # the modules themselves stay
+        self.assertEqual([], [str(qmod) for qmod in qmods if not qmod.is_file()])
+
 
 if __name__ == "__main__":
     unittest.main()
