@@ -1,0 +1,187 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AOTConstantInvoke.qm fixture module for AOTDeserializedConstantJITTier.qtest
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Every constant below except Plain has an initializer that runs code, so the compiler keeps it as a named
+# constant; inside a try block or a foreach loop, each read of one is an invoke.  The reads are made from three
+# kinds of code: AOT native method bodies, closures that a method creates, and closures that run on the IR tier
+# from the IR the module carries (the module's init closure and the closures it registers, and closures held in a
+# constant), which the JIT later compiles from the deserialized IR.  The static members are initialized from
+# those constants and by static method calls.
+
+%modern
+
+module AOTConstantInvoke {
+    version = "1.0";
+    desc = "constants and static members initialized by code, read from every kind of AOT module code";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # the registered closures run from the module's IR, not as native bodies
+        Registry::add("init-try", string sub () {
+            try {
+                return Cls::describe(Cls::Made, Cls::MadeRef(), Cls::Num, Cls::Pair, Cls::Derived, Cls::RefHash,
+                    Cls::sv, Cls::si, Cls::cref, Cls::MadeRef);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        });
+        Registry::add("init-foreach", string sub () {
+            list<string> parts;
+            foreach string k in (keys Cls::Made) {
+                parts += k + "=" + Cls::Made{k};
+            }
+            foreach int n in (Cls::Pair) {
+                parts += n.toString();
+            }
+            return parts.join(",");
+        });
+        # an exception raised after the reads in the try block reaches its handler
+        Registry::add("init-catch", string sub () {
+            try {
+                if (Cls::Made.made) {
+                    throw "AOT-CONSTANT-INVOKE-ERROR", sprintf("%d/%d", Cls::Num, Cls::Pair[1]);
+                }
+                return "not thrown";
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err + ":" + ex.desc;
+            }
+        });
+        Registry::add("init-plain", string sub () {
+            return Cls::describe(Cls::Made, Cls::MadeRef(), Cls::Num, Cls::Pair, Cls::Derived, Cls::RefHash,
+                Cls::sv, Cls::si, Cls::cref, Cls::MadeRef);
+        });
+    };
+}
+
+#! the fixture's namespace
+public namespace AOTConstantInvoke {
+#! holds the closures the module's init closure registers
+public class Registry {
+    private {
+        static hash<string, code> closures;
+    }
+
+    #! registers a closure
+    static add(string name, code c) {
+        Registry::closures{name} = c;
+    }
+
+    #! calls a registered closure
+    static string call(string name) {
+        return Registry::closures{name}();
+    }
+}
+
+#! constants and static members initialized by code
+public class Cls {
+    public {
+        #! a constant initialized by a static method call
+        const Made = Cls::make();
+        #! a constant holding a call reference to a static method
+        const MadeRef = \Cls::make();
+        #! a scalar constant initialized by a static method call
+        const Num = Cls::num();
+        #! a container constant initialized by static method calls
+        const Pair = (Cls::num(), Cls::num() + 1);
+        #! a literal constant
+        const Plain = {"a": 1};
+        #! a constant computed from other constants
+        const Derived = Plain + {"b": Num};
+        #! a container constant holding a call reference to a static method
+        const RefHash = {"m": \Cls::make()};
+        #! closures held in a constant run on the IR tier
+        const Readers = {
+            "const-try": string sub () {
+                try {
+                    return Cls::describe(Cls::Made, Cls::MadeRef(), Cls::Num, Cls::Pair, Cls::Derived,
+                        Cls::RefHash, Cls::sv, Cls::si, Cls::cref, Cls::MadeRef);
+                } catch (hash<ExceptionInfo> ex) {
+                    return ex.err;
+                }
+            },
+            "const-plain": string sub () {
+                return Cls::describe(Cls::Made, Cls::MadeRef(), Cls::Num, Cls::Pair, Cls::Derived, Cls::RefHash,
+                    Cls::sv, Cls::si, Cls::cref, Cls::MadeRef);
+            },
+        };
+
+        #! a static member whose initializer reads constants and calls a static method
+        static hash<auto> sv = {"made": Made, "n": Cls::num(), "plain": Plain};
+        #! a static member initialized from a constant initialized by a static method call
+        static int si = Num + 1;
+        #! a static member initialized from a call reference constant
+        static code cref = MadeRef;
+    }
+
+    #! returns a hash
+    static hash<auto> make() {
+        return {"made": True, "n": 1};
+    }
+
+    #! returns an integer
+    static int num() {
+        return 41;
+    }
+
+    #! formats the values read, calling the call references among them
+    static string describe(hash<auto> made, hash<auto> made_call, int num, list<auto> pair, hash<auto> derived,
+            hash<auto> ref_hash, hash<auto> sv, int si, code cref, code made_ref) {
+        return sprintf("%y|%y|%d|%y|%y|%y|%y|%d|%y|%y", made, made_call, num, pair, derived, ref_hash.m(), sv, si,
+            cref(), made_ref());
+    }
+
+    #! reads every value in a native method body inside a try block
+    static string readNativeTry() {
+        try {
+            return Cls::describe(Made, MadeRef(), Num, Pair, Derived, RefHash, sv, si, cref, MadeRef);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! reads every value in a native method body
+    static string readNativePlain() {
+        return Cls::describe(Made, MadeRef(), Num, Pair, Derived, RefHash, sv, si, cref, MadeRef);
+    }
+
+    #! returns a closure that reads every value inside a try block
+    static code closureTry() {
+        return string sub () {
+            try {
+                return Cls::describe(Made, MadeRef(), Num, Pair, Derived, RefHash, sv, si, cref, MadeRef);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        };
+    }
+
+    #! returns a closure that reads every value
+    static code closurePlain() {
+        return string sub () {
+            return Cls::describe(Made, MadeRef(), Num, Pair, Derived, RefHash, sv, si, cref, MadeRef);
+        };
+    }
+}
+}
