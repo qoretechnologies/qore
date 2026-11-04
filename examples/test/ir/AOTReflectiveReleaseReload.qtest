@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ReflectiveReleaseReloadTest
+
+#! Tests that a frame reads a local that a destructor replaced by reflection after an update released an object
+/** In a program that allows the debugger, the destructor of an object released by an assignment, a removal, a
+    compound assignment, a splice, an extract, a pop or a shift, or an element store, of a global, a class static, a
+    local, a member, or a variable referred to by a reference, can replace a local of the updating frame by name
+    (set_local_var_value()).  The frame must then be reflective, and every tier must read the replaced value after the
+    update, as the AST interpreter does (design/aot-reflection-visible-locals.md); a store that cannot release an object
+    keeps the native entry of its function.
+*/
+class ReflectiveReleaseReloadTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/AOTReflectiveReleaseReload.qr";
+    }
+
+    public {
+        #! the cases of the fixture, each of which must report the replaced value
+        const Cases = (
+            "globalAssign", "globalDelete", "globalRemove", "globalRemoveUsed", "globalCompound", "globalHashMinus",
+            "globalSplice", "globalExtract", "globalPop", "globalShift", "globalHashElement",
+            "globalHashElementDelete", "globalHashElementRemove", "globalListElement", "globalParam",
+            "staticAssign", "staticDelete", "staticRemove", "staticCompound", "staticHashMinus", "staticSplice",
+            "staticExtract", "staticPop", "staticShift", "staticHashElement", "staticListElement", "staticParam",
+            "refAssign", "refDelete", "refRemove", "refCompound", "refHashMinus", "refSplice", "refExtract",
+            "refPop", "refShift", "refHashElement", "refListElement", "refStatic", "refUntyped",
+            "localAssign", "localDelete", "localRemove", "localHashElement", "localListElement", "localPop",
+            "localScope",
+            "memberAssign", "memberDelete", "memberHashElement", "memberParam",
+        );
+
+        #! the functions whose stores cannot release an object
+        const ScalarStores = ("typedHashStore", "typedListStore", "scalarLocalStore");
+    }
+
+    constructor() : Test("Reflective reload after a release", "1.0", \ARGV) {
+        addTestCase("the interpreter's results", \checkInterpreter());
+        addTestCase("the IR and JIT tiers", \checkTiers());
+        addTestCase("AOT", \checkAot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    #! the output that every case reports the replaced value gives
+    private static string expected() {
+        return (foldl $1 + $2, (map sprintf("%s: 45\n", $1), Cases)) + "scalarStores: 45 45 45\n";
+    }
+
+    private checkInterpreter() {
+        assertEq(expected(), run((qore, "--exec-mode=ast", source)));
+    }
+
+    private checkTiers() {
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected(), run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+    }
+
+    private checkAot() {
+        TmpDir dir("qore-aot-reflective-release-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertEq(expected(), run((executable,)), prefix + level);
+                foreach string name in (ScalarStores) {
+                    assertRegex("(?s)define [^\n]*@" + name + "_[^\n]*_fast_", ir,
+                        "a store that cannot release an object keeps the native entry " + name + " " + prefix + level);
+                }
+            }
+        }
+    }
+}

@@ -159,11 +159,13 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
     design/aot-reflection-visible-locals.md.
     @param func the function, lowered for a program that allows the debugger
     @param callees receives the exact user variants called, whose own effect decides the function's
-    @param lvalue_release_reflects whether an update of a member, a static, a global or a captured variable that may
-    release an object counts as possibly reflecting (its result is a scalar, so the other rules miss it): always for
-    the IR and JIT tiers, which keep the parameters and the body locals of a reflection-free frame private; for AOT
-    only when the analyzed frame has body locals, since its native entries publish and reload the parameters around
-    such an update (AOTEffectMemberEntry, with and without its effect entry), but its body locals stay private
+    @param lvalue_release_reflects whether an update of a member that may release an object counts as possibly
+    reflecting (its result is a scalar, so the other rules miss it): always for the IR and JIT tiers, which keep the
+    parameters and the body locals of a reflection-free frame private; for AOT only when the analyzed frame has body
+    locals, since its native method entries publish and reload the parameters around such an update
+    (AOTEffectMemberEntry, with and without its effect entry), but its body locals stay private.  An update of a
+    static, a global or a captured variable, or a write through a reference, that may release an object always counts:
+    no entry reloads the parameters around it
     @return true if the function may reflect by itself; then \a callees is incomplete
 */
 DLLLOCAL bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
@@ -186,6 +188,27 @@ DLLLOCAL bool qore_ir_get_params_read_after_reflection(const QoreIRFunction& fun
 //! @param ti the type; nullptr means any type
 //! @param depth the nesting depth of complex container types already examined
 DLLLOCAL bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
+
+//! Returns true if assigning a variable of the type can release a value that can be or hold an object
+/** As qore_ir_type_may_hold_object(), except that for a reference, the type that it refers to decides: a write through
+    a reference replaces the value of the variable that it refers to, while releasing the reference itself releases
+    no object.
+    @param ti the declared type of the variable; nullptr means any type
+*/
+DLLLOCAL bool qore_ir_lvalue_type_may_hold_object(const QoreTypeInfo* ti);
+
+//! Returns true if an instruction can release a value that may hold an object when it changes an lvalue
+/** An assignment, a compound assignment, a removal, an element store, a scope exit of a local, or another update of a
+    variable releases the value it replaces or removes, and the destructor of an object released runs user code, which
+    can replace a local of the frame by name (set_local_var_value(), see design/aot-reflection-visible-locals.md).  The
+    declared type of the variable decides (a reference: the type that it refers to); a member, whose type the
+    instruction does not carry, or a variable of unknown type, may hold an object.  A value that the instruction
+    removes and returns is released with the temporaries of its statement, or right away if it is not used.
+
+    In a frame whose locals reflection can replace (QoreIRFunction::reflective_frame), the execution tiers reload the
+    frame's locals from the runtime stack after such an instruction, as after a call.
+*/
+DLLLOCAL bool qore_ir_instruction_may_release_object(const QoreIRInstruction* inst);
 
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the

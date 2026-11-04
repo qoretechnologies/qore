@@ -102,11 +102,32 @@ visible) before code generation.  This ordering change is the main implementatio
   (`qore_ir_lvalue_path_may_release_object()`; a member's type is not carried by the path, so a member update always
   may).  Without it, a method that only incremented an `auto` member holding an object was lowered reflection-free, and
   `set_local_var_value()` in the destructor failed with `UNKNOWN-VARIABLE` or its replacement was lost
-  (AOTReflectionReach `memberRelease`).  The IR and JIT tiers apply the rule always; AOT only to a frame with body
-  locals (`aotFunctionMayReflect()`), because its native entries publish and reload the parameters around such an
-  update, which keeps the effect-member entries of methods like `int next(int value) { ++calls; ... }` in debugger
+  (AOTReflectionReach `memberRelease`).  The IR and JIT tiers apply the rule always; AOT, for a member update, only to
+  a frame with body locals (`aotFunctionMayReflect()`), because its native method entries publish and reload the
+  parameters around such an update, which keeps the effect-member entries of methods like `int next(int value) { ++calls; ... }` in debugger
   programs (AOTEffectMemberEntry checks their reentry with and without the effect entry), while the body locals of a
   reflection-free AOT frame stay private.
+- A reference local or parameter counts as a local that can hold an object when the type that it refers to can
+  (`qore_ir_lvalue_type_may_hold_object()`): a write through it (`r = 1`, `delete r`, `r -= "a"`) replaces the value
+  of the variable referred to.  Releasing the reference itself releases no object, so the other uses of
+  `qore_ir_type_may_hold_object()` (cleanup anchors, temporaries) are unchanged.  An update of a static, a global or a
+  captured variable, a non-local element store and an lvalue expression instruction with a non-local base count in
+  every AOT frame too: only the native method entries reload the parameters, and only around a member update
+  (AOTReflectiveReleaseReload `staticParam`).
+- Making the frame reflective is not enough: the tiers cache the values of the locals that are on the runtime stack
+  (the IR interpreter's slot cache, the allocas of native code) and reloaded them only after calls.  A destructor run
+  by an update that releases an object, or by the release of a temporary, replaced a local on the runtime stack while
+  the frame kept reading its cached value (`int secret = 5; g = 1;` read 5 after the destructor of the object in `g`
+  assigned 45, in the IR tier for an update of any kind, and in the JIT and AOT for a plain assignment of a global, an
+  update of a local, a write through a reference, and a scope exit).  In a reflective frame, the locals are now
+  reloaded after an instruction that can release an object when it changes an lvalue
+  (`qore_ir_instruction_may_release_object()`: assignments, compound assignments, removals, element stores, scope
+  exits, by the declared type of the variable or of the target of a reference), as after a call: the IR interpreter
+  invalidates its caches before the next instruction, and native code bumps the reload epoch
+  (`QoreIRToLLVM::lowerInstruction()`).  A release of temporaries does the same: in the interpreter when a value
+  released is an object or a container, in native code when the scope has temporaries to release.  A frame that is
+  not reflective, and a store whose old value cannot hold an object, are unchanged (AOTReflectiveReleaseReload's
+  scalar stores keep their native entries).
 - `QoreIRFunction::reflection_free` is set before lowering; `QoreIRLowering::localsMayBeReflected()` applies the
   block re-activation and `push` rules only without it, and on_exit/on_error handler bodies inherit it.
 - The IR tiers (`UserVariantBase::lowerIRFunction()`) re-lower a function that neither reflects by itself nor calls a
@@ -137,6 +158,15 @@ visible) before code generation.  This ordering change is the main implementatio
 - The 20 debugger-fixture tests pass with their existing structural assertions where the asserted function is
   reflection-free, and assert the conservative path where it is not.
 - No change for programs without `%allow-debugger` (structural IR identical before and after).
+- AOTReflectiveReleaseReload: a destructor run by each kind of update (assignment, `delete`, `remove`, compound
+  assignment, splice, extract, pop, shift, hash and list element stores) of a global, a static, a local, a member and
+  a variable referred to by a reference replaces a local or a parameter of the updating frame, and every tier and AOT
+  variant reads the new value; stores of values that cannot hold an object keep their native entries.
+
+Known, separate from the above: a destructor run while the lock of a global or static is held (`r -= "a"` with `r` a
+reference to it) deadlocks in `get_local_vars()` on a frame whose reference refers to that variable, in every tier
+including the AST interpreter; and the AST interpreter releases the value of a `?:` condition right away, where the
+compiled tiers release it with the statement's temporaries.
 
 ## Limits
 

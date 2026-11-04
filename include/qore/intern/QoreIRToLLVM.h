@@ -1469,6 +1469,9 @@ private:
 
     bool lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
             llvm::Module& module, std::string& error);
+    //! Lowers a single instruction for lowerInstruction(), which reloads the locals after it where needed
+    bool lowerInstructionBody(const QoreIRInstruction* inst, llvm::Function* llvm_func,
+            llvm::Module& module, std::string& error);
 
     //! Reject AOT codegen that would execute serialized expression trees.
     bool checkNoAotExecutableExprFallback(llvm::Function* llvm_func, std::string& error) const;

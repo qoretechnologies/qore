@@ -2061,6 +2061,22 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     return true;
 }
 
+//! Returns true if releasing the value can release an object, whose destructor runs user code
+static bool interpreterValueMayHoldObject(const QoreValue& value) {
+    if (!value.hasNode()) {
+        return false;
+    }
+    switch (value.getType()) {
+        case NT_STRING:
+        case NT_BINARY:
+        case NT_NUMBER:
+        case NT_DATE:
+            return false;
+        default:
+            return true;
+    }
+}
+
 static bool interpreterEffectSummaryDisabled() {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_EFFECT_SUMMARY");
     const bool disabled = disabled_env.get();
@@ -7207,6 +7223,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
+    // A destructor run by the release of a value that may hold an object can replace a local of a frame that
+    // reflection can reach by name (set_local_var_value()), as a callee can: in such a frame, the caches of the locals
+    // on the runtime stack are invalidated after an instruction that can release one when it changes an lvalue
+    // (qore_ir_instruction_may_release_object()), and after the release of a temporary that is or can hold an object,
+    // before the next instruction runs (see design/aot-reflection-visible-locals.md)
+    const bool reflective_frame = func.reflective_frame;
+    bool reflective_release_pending = false;
+    auto noteReleasedTemp = [&](const QoreValue& value) {
+        if (reflective_frame && !reflective_release_pending && interpreterValueMayHoldObject(value)) {
+            reflective_release_pending = true;
+        }
+    };
+
     // keep_mark: release only the temps registered after the mark's sentinel and keep the mark, as a branch to an
     // exception handler in this frame does: the scope an instruction records can belong to a statement that is still
     // running once the handler has - a try, or a loop - whose own DiscardTemps must find its mark then.  A mark left
@@ -7252,6 +7281,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanup_log->push_back(slot.getTypeName());
                 }
             }
+            noteReleasedTemp(slot);
             slot.discard(eff_xsink);
             slot = QoreValue();
             weak_load_temp_slots.erase(id);
@@ -7539,6 +7569,18 @@ next_instruction:
                 getOpcodeName(static_cast<int>(inst->opcode)), static_cast<int>(inst->opcode),
                 inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
         };
+
+        if (reflective_frame) {
+            // the previous instruction may have released an object, whose destructor may have replaced locals of
+            // this frame on the runtime stack
+            if (reflective_release_pending) {
+                reflective_release_pending = false;
+                invalidateExternalCaches();
+            }
+            if (qore_ir_instruction_may_release_object(inst)) {
+                reflective_release_pending = true;
+            }
+        }
 
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
@@ -12755,6 +12797,7 @@ load_local_done:
                     removeAllCleanupEntries(cleanup, id);
                     QoreValue v = values[id];
                     values[id] = QoreValue();
+                    noteReleasedTemp(v);
                     v.discard(xsink);
                 }
                 // no exception check: the instruction also runs on the path of an exception, which stays raised; an

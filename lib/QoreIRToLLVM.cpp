@@ -5651,11 +5651,15 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
+    // a temporary released can be an object, whose destructor can replace a local of a frame that reflection can reach
+    // (see lowerInstruction())
+    bool released = false;
     for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
         llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
         if (persistent_cleanup_allocas.count(alloca_ptr)) {
             continue;
         }
+        released = true;
         llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             alloca_ptr);
@@ -5663,6 +5667,7 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     }
 
     if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
+        released = true;
         llvm::BasicBlock* cur = builder->GetInsertBlock();
         for (size_t i = pending_ssa_cleanup.size(); i > mark.pending_ssa_count; --i) {
             const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
@@ -5680,6 +5685,10 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
             }
         }
         pending_ssa_cleanup.resize(mark.pending_ssa_count);
+    }
+
+    if (released && current_ir_func && current_ir_func->reflective_frame) {
+        reloadAllLocalsFromRuntime(module, builder->GetInsertBlock()->getParent());
     }
 
     if (statement_end) {
@@ -19488,6 +19497,22 @@ bool QoreIRToLLVM::lowerKeptDebuggerCall(const QoreIRInstruction* inst, llvm::Fu
 }
 
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
+        llvm::Module& module, std::string& error) {
+    if (!lowerInstructionBody(inst, llvm_func, module, error)) {
+        return false;
+    }
+    // In a frame that reflection can reach, a destructor run by the release of a value that may hold an object can
+    // replace a local by name on the runtime stack (set_local_var_value()), as a callee can: the locals are reloaded
+    // after an instruction that can release one when it changes an lvalue, as after a call (see
+    // qore_ir_instruction_may_release_object() and design/aot-reflection-visible-locals.md)
+    if (current_ir_func && current_ir_func->reflective_frame && qore_ir_instruction_may_release_object(inst)
+            && !qoreGetTerminator(builder->GetInsertBlock())) {
+        reloadAllLocalsFromRuntime(module, llvm_func);
+    }
+    return true;
+}
+
+bool QoreIRToLLVM::lowerInstructionBody(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     // a call that an optimization folded or discarded, or a consumer of such a call, kept for an attached debugger
     if (inst->debugger_alternative
@@ -38966,6 +38991,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* old_val = builder->CreateLoad(i64_type, slot);
             builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
             builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            // the temporary can be an object (see emitDiscardTemps())
+            if (current_ir_func && current_ir_func->reflective_frame) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
             // no exception check: the instruction also runs on the path of an exception, which stays raised (see
             // the interpreter)
             return true;

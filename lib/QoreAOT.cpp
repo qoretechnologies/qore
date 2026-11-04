@@ -3146,8 +3146,9 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 */
 static bool aotFunctionMayReflect(const QoreIRFunction& ir) {
     std::vector<const AbstractQoreFunctionVariant*> worklist;
-    // a destructor run by an update of a member, a static or a global variable can reach the frame's private body
-    // locals, also when a callee runs the update; the native entries publish and reload the parameters
+    // a destructor run by an update of a member can reach the frame's private body locals, also when a callee runs
+    // the update; the native method entries publish and reload the parameters around it.  An update of a static or a
+    // global variable reflects in any frame (see qore_ir_function_may_reflect_locally())
     const bool lvalue_release_reflects = !ir.all_body_locals.empty();
     if (qore_ir_function_may_reflect_locally(ir, worklist, lvalue_release_reflects)) {
         return true;
