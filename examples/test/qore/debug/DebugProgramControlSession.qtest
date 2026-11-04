@@ -25,7 +25,7 @@ int sub add(int a, int b) {
 }
 hash<auto> h = {\"name\": \"invoice\", \"lines\": (1, 2, 3)};
 int total = add(2, 3);
-printf(\"%d %y\\n\", total, h);
+our string output = sprintf(\"%d %y\\n\", total, h);
 ";
 
 const TargetLabel = "dpc-target.q";
@@ -39,7 +39,7 @@ A a = new B();
 code cl = int sub (int y) { return y - 1; };
 int r = g(g(1)) + a.m(1) + cl(5);
 r = r > 0 ? r : g(3);
-printf(\"%d\\n\", r);
+our string output = sprintf(\"%d\\n\", r);
 ";
 
 #! a program whose thread waits forever while the initial thread stops at line 6
@@ -76,7 +76,7 @@ int total = 0;
 for (int i = 0; i < 5; ++i) {
     total += i;
 }
-printf(\"%d\\n\", total);
+our string output = sprintf(\"%d\\n\", total);
 ";
 
 #! a program whose line 4 calls g() twice: in h(), which is called first, and with the value of h()
@@ -84,14 +84,14 @@ const StepInScript = "%modern
 int sub g(int x) { return x + 1; }
 int sub h(int x) { return g(x) * 2; }
 int r = g(h(1));
-printf(\"%d\\n\", r);
+our string output = sprintf(\"%d\\n\", r);
 ";
 
 #! a program with a line of two statements; the second statement of line 3 starts at column 19
 const ColumnScript = "%modern
 int sub add(int a, int b) { return a + b; }
 int x = add(1, 2); int y = add(x, 4);
-printf(\"%d\\n\", y);
+our string output = sprintf(\"%d\\n\", y);
 ";
 
 #! a program with exceptions that are caught in different ways, and one that is not caught
@@ -123,7 +123,7 @@ int sub f(string s) {
 int sub g() {
     return f(1) + f(\"ab\");
 }
-printf(\"%d\\n\", g());
+our string output = sprintf(\"%d\\n\", g());
 ";
 
 #! a command line that sends no commands, for its parsing of commands
@@ -159,10 +159,20 @@ class TestDebugProgramControl inherits DebugProgramControl {
 
         #! gives the commands sent to stopped threads their unique IDs
         Sequence uids();
+
+        #! if set, called when terminateProgram() has marked the program, before it cancels the threads
+        *code terminatingHook;
     }
 
     constructor() : DebugProgramControl("DebugProgramControlTest") {
         registerConnection(CX);
+    }
+
+    int setProgramTerminating(ProgramControl pgm) {
+        if (terminatingHook) {
+            terminatingHook();
+        }
+        return DebugProgram::setProgramTerminating(pgm);
     }
 
     public nothing sendDataImpl(hash<auto> cx, auto data) {
@@ -375,6 +385,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the debugger ends a stopped program", \terminateStoppedTest());
         addTestCase("the debugger ends a program with a thread that waits", \terminateBlockedTest());
         addTestCase("the debugger ends a program whose thread runs", \terminateRunningTest());
+        addTestCase("the debugger ends a program whose thread ends first", \terminateEndedThreadTest());
         set_return_value(main());
     }
 
@@ -1400,6 +1411,46 @@ try {
         assertEq("THREAD-CANCELLED", rv.ex.err);
         assertRegex("the debugger ended the program$", rv.ex.desc);
         assertFalse(rv.ex.hasKey("next") && exists rv.ex.next, sprintf("%y", rv.ex.next));
+    }
+
+    # a thread that sees that the program is ending can reach its detach before terminateProgram() cancels the threads;
+    # the thread is then not cancelled, so that its stop at the detach is not ended and it can be resumed
+    terminateEndedThreadTest() {
+        DebuggedProgram p(dpc, "%modern
+our Counter started(1);
+our Counter release(1);
+started.dec();
+release.waitForZero();
+int x = 1;
+");
+        on_exit p.cleanup();
+        p.breakAt(4);
+        p.breakAt(6);
+        hash<auto> e = p.runToStop();
+        assertEq(("step", 4), (e.func, e.line));
+        Counter started = p.pgm.getGlobalVariable("started");
+        Counter release = p.pgm.getGlobalVariable("release");
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        # the thread has left its stop when it has run the statement of the stop
+        dpc.go(p.tid);
+        started.waitForZero();
+        # the program is marked when the hook runs: the thread stops at its detach before the threads are cancelled
+        *hash<auto> detach;
+        dpc.terminatingHook = sub () {
+            release.dec();
+            detach = dpc.getInterrupt(p.pgmId);
+        };
+        on_exit dpc.terminatingHook = NOTHING;
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        assertEq(("detach", p.tid), (detach.func, detach.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err);
+        assertRegex("the debugger ended the program$", rv.ex.desc);
+        assertFalse(exists rv.ex.next, sprintf("%y", rv.ex.next));
     }
 
     # without a client, a thread that starts does not stop, as nobody could resume it

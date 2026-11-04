@@ -216,7 +216,9 @@ public namespace DebugProgramControl {
             hash<string, bool> startedPrograms = {};
             #! the programs that the debugger ends, by program ID; see terminateProgram()
             hash<string, bool> terminatingPrograms = {};
-            #! serializes the access to startedPrograms and terminatingPrograms
+            #! the threads that have ended the code of a program, by program ID and TID; see threadEnds()
+            hash<string, hash<string, bool>> endedThreads = {};
+            #! serializes the access to startedPrograms, terminatingPrograms and endedThreads
             Mutex startedLock();
 
             #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
@@ -573,15 +575,19 @@ public namespace DebugProgramControl {
             # the threads that end with the cancellation end without an error
             setProgramTerminating(pgm);
             # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
-            # debugger; it ends when it continues (see handleInterrupt())
-            foreach int tid in (pgm.getThreadList()) {
-                if (tid == gettid() || inlist(tid, stopped)) {
-                    continue;
-                }
-                try {
-                    cancel_thread(tid, TerminateReason);
-                } catch (hash<ExceptionInfo> ex) {
-                    # a thread that has ended
+            # debugger; it ends when it continues (see handleInterrupt()); the lock makes checking and cancelling a
+            # thread atomic against a thread that ends its code (see threadEnds())
+            {
+                AutoLock al(startedLock);
+                foreach int tid in (pgm.getThreadList()) {
+                    if (tid == gettid() || inlist(tid, stopped) || endedThreads{pgm_id}{tid}) {
+                        continue;
+                    }
+                    try {
+                        cancel_thread(tid, TerminateReason);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a thread that has ended
+                    }
                 }
             }
             breakProgram(pgm);
@@ -2223,6 +2229,7 @@ public namespace DebugProgramControl {
                 AutoLock al(startedLock);
                 remove startedPrograms{program.getProgramId()};
                 remove terminatingPrograms{program.getProgramId()};
+                remove endedThreads{program.getProgramId()};
             }
             # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
             # while it takes that lock
@@ -2249,19 +2256,20 @@ public namespace DebugProgramControl {
             # detach are reported as for any thread that ends, so that the clients know when the program has ended
             # (see terminateProgram())
             bool ends = func == "exit" || func == "detach";
-            # a thread that ends its code is still cancelled if the debugger ended it while it waited, as for a lock, so
-            # the flag is read without startedLock, whose lock is a cancellation point; reading a member is atomic
-            if (ends ? boolean(terminatingPrograms{pgm.getProgramId()}) : isTerminating(pgm.getProgramId())) {
-                if (!ends) {
+            if (ends) {
+                threadEnds(pgm.getProgramId(), tid);
+            } else {
+                if (func == "attach") {
+                    # a thread that enters the program again, or a new thread with the TID of one that has ended
+                    threadStarts(pgm.getProgramId(), tid);
+                }
+                if (isTerminating(pgm.getProgramId())) {
                     # a thread that raises an exception, as the THREAD-CANCELLED exception that ends it, ends with it
                     if (func == "exception") {
                         return;
                     }
                     throw "THREAD-CANCELLED", TerminateReason;
                 }
-                # a thread that the debugger cancelled has ended its code; it is no longer cancelled, so that it can
-                # wait for the debugger
-                clear_thread_cancel();
             }
             # a thread that leaves the program has no more stops to give a returned value or to pause at a block; the
             # locks are cancellation points, so they are taken when the thread is no longer cancelled
@@ -2806,6 +2814,32 @@ public namespace DebugProgramControl {
             if (!ends && isTerminating(ctx.pgmId)) {
                 throw "THREAD-CANCELLED", TerminateReason;
             }
+        }
+
+        #! Registers a thread that has ended the code of a program, so that the debugger no longer cancels it
+        /** A thread can reach the end of its code before terminateProgram() cancels it, as it also ends when it sees
+            that the program is ending.  A cancellation after that point would end the debugger's handling of the end of
+            the thread, so the registration and the check in terminateProgram() are made under the same lock: a thread is
+            either cancelled before this method, which clears the cancellation so that the thread can wait for the
+            debugger, or it is never cancelled.  The programs are marked before any thread is cancelled, so the flag is
+            set here if a cancellation of the debugger is pending.
+
+            The lock is taken with the cancellation deferred, as it is a cancellation point.
+        */
+        private:internal threadEnds(int pgm_id, int tid) {
+            defer_thread_cancel(sub () {
+                AutoLock al(startedLock);
+                endedThreads{pgm_id}{tid} = True;
+                if (terminatingPrograms{pgm_id}) {
+                    clear_thread_cancel();
+                }
+            });
+        }
+
+        #! Registers a thread that runs the code of a program; see threadEnds()
+        private:internal threadStarts(int pgm_id, int tid) {
+            AutoLock al(startedLock);
+            remove endedThreads{pgm_id}{tid};
         }
 
         #! Returns True for the first thread of a program that attaches, which starts the program
