@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover the two incoming files and merge evidence. [Evidence](results-merge-c0bc.json).
+All 62 audit-changes checks cover the two incoming files and merge evidence. Evidence (`results-merge-c0bc.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|Existing Qore module only; no new module, registration, QPP class or layout.

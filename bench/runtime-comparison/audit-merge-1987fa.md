@@ -6,7 +6,7 @@ Merge develop `1987fa82fa` into performance head `2562efdcbf`. The upstream call
 
 Function references capture fast-call eligibility once: a reference with creation provenance retains ordinary context-establishing dispatch. Branch-only closure entries establish provenance; prepared native methods and direct field shortcuts reject tagged receivers and use the normal fallback. The same-Program callback regression creates a reference under one manager, replaces the Program manager, and checks both retained restrictions and live policy changes.
 
-[Recorded qualification](results-merge-1987fa.json) includes the Release build, selected call/cancellation/stack/declaration tests, provenance execution in five modes and IR/AOT references. Debug-only and Linux-only assertions are outside this Release/macOS coverage. No new performance, full-suite, sanitizer or cross-platform claim is made. System installation is a subsequent separately verified operation.
+Recorded qualification (`results-merge-1987fa.json`) includes the Release build, selected call/cancellation/stack/declaration tests, provenance execution in five modes and IR/AOT references. Debug-only and Linux-only assertions are outside this Release/macOS coverage. No new performance, full-suite, sanitizer or cross-platform claim is made. System installation is a subsequent separately verified operation.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|SandboxProvenanceFixture.qm is test-only, not a shipped qlib module; shipped module registration and layout rules do not apply.

@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover integration of the 15 incoming commits, preservation of the performance branch, and the generated-fixture conflict resolution. This is selected integration qualification, not a full-suite or independent re-audit of earlier changes. The known socket failure predates this merge and is not marked as a passing test. [Evidence](results-merge-a9df.json).
+All 62 audit-changes checks cover integration of the 15 incoming commits, preservation of the performance branch, and the generated-fixture conflict resolution. This is selected integration qualification, not a full-suite or independent re-audit of earlier changes. The known socket failure predates this merge and is not marked as a passing test. Evidence (`results-merge-a9df.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped .qm/QPP class or module registration. LoaderWarnings.qm is an examples/test helper loaded locally, not an installed library module; shipped-module catalog/layout rules do not apply.

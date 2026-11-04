@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Merge `7e7de64fbd` into performance head `4e5be43486`. All 62 audit-changes checks considered. [Evidence](results-merge-7e7de.json).
+Merge `7e7de64fbd` into performance head `4e5be43486`. All 62 audit-changes checks considered. Evidence (`results-merge-7e7de.json`).
 
 The merge has no conflicts. Local audit corrections move two test module-path directives, add one missing `%modern`, convert 22 documentation tables with cell text preserved, document schema factory arguments, type seven test callbacks, and cache repeated selection of one catalog translation bucket. The catalog correction preserves majority/tie selection and ordering; no timing benefit is claimed for it.
 

@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover manual merge resolutions, compatibility additions and evidence relative to Git AUTO_MERGE. The 30 incoming upstream commits are adopted and checked by selected integration tests; this is not a new independent audit of every inherited upstream implementation. [Evidence](results-merge-eb6a.json).
+All 62 audit-changes checks cover manual merge resolutions, compatibility additions and evidence relative to Git AUTO_MERGE. The 30 incoming upstream commits are adopted and checked by selected integration tests; this is not a new independent audit of every inherited upstream implementation. Evidence (`results-merge-eb6a.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new distributed module, QPP class or Qore test is authored by the merge resolution; the modified native fixture is C++. Inherited upstream files are covered by the selected integration plan, not a new independent audit of every upstream implementation.

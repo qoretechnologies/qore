@@ -8,7 +8,7 @@ The optimized Release build and 39 selected fixture runs passed; 8,760 QUnit ass
 
 Audit-changes: 32 Pass / 30 N/A / 0 Fail across all 62 checks, before committing.
 
-[Process records and evidence](results-merge-8620ef2e2a-macos-arm64.json).
+Process records and evidence (`results-merge-8620ef2e2a-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped Qore module or separated module implementation; new .qm files are private test fixtures.

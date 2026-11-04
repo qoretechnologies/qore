@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover the compiler/test change, documentation and evidence. [Results](results-aot-module-call-specialization-macos-arm64.json).
+All 62 audit-changes checks cover the compiler/test change, documentation and evidence. Results (`results-aot-module-call-specialization-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new distributed module, QPP class, registration or layout; the generated module is temporary test data.

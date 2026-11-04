@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Merge `cf838e51a4` into performance head `6176d53066`. All 62 audit-changes checks considered. [Evidence](results-merge-cf838.json).
+Merge `cf838e51a4` into performance head `6176d53066`. All 62 audit-changes checks considered. Evidence (`results-merge-cf838.json`).
 
 The header conflict preserves the branch's early environment declarations and adopts develop's I/O declarations. Test headers were corrected. The incoming schema reference file failed on both builds: frozen parent sources and merged sources/native modules produce identical complete 276-action results, also reproduced with source modules on Linux. The 156 differing reference entries are refreshed from the verified parent; the cause of the original reference-generation discrepancy is unknown.
 

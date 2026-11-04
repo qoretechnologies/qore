@@ -6,7 +6,7 @@ Merge develop `f3f91cda6c` into performance head `788d04f094`. The incoming enum
 
 The reference-dereference conflict retains the branch's pointer classification and stable-local helper, while the common result helper now retains enum declarations. The lvalue conflict retains the branch's first-temporary optimization and the incoming enum release behavior. The branch's class-local fallback and the weak/opaque owned-result helpers also retain enum payloads. The added regression covers reference copies and weak/opaque assignments after the original Program has been destroyed.
 
-[Recorded qualification](results-merge-f3f91.json) includes the optimized all-target rebuild, enum tests in five execution modes, schema and selected call/lifetime regressions, and IR/AOT reference results. Native modules using earlier enum ownership headers must be rebuilt. System installation is a separate verified operation. No new timing or performance comparison is claimed for this merge.
+Recorded qualification (`results-merge-f3f91.json`) includes the optimized all-target rebuild, enum tests in five execution modes, schema and selected call/lifetime regressions, and IR/AOT reference results. Native modules using earlier enum ownership headers must be rebuilt. System installation is a separate verified operation. No new timing or performance comparison is claimed for this merge.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped module, separated class or QPP class; existing GeminiBodyShape and VertexAiRestClient modules retain their registration.

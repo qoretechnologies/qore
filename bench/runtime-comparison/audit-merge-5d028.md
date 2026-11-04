@@ -4,7 +4,7 @@ Copyright 2026 Qore Technologies, s.r.o.
 
 Merge develop `5d028a187e` into performance head `4d276d7720`. Upstream fixes compiled weak-reference reads and replaces noisy timing assertions with debug counters or structural checks. The one conflict in `lib/thread.cpp` retains the performance branch's shared fast cancellation implementation and adds the upstream DEBUG-only counter inside that shared routine, covering both entry paths.
 
-[Recorded qualification](results-merge-5d028.json) contains the optimized Release build, selected weak-reference/container/cancellation/callback/declaration tests and IR/AOT references. Debug-only checks are reported as skips; no Debug, full-suite, cross-platform or new performance claim is made here. System installation is a subsequent separately verified operation.
+Recorded qualification (`results-merge-5d028.json`) contains the optimized Release build, selected weak-reference/container/cancellation/callback/declaration tests and IR/AOT references. Debug-only checks are reported as skips; no Debug, full-suite, cross-platform or new performance claim is made here. System installation is a subsequent separately verified operation.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped module. WeakContainerReadChecks.qm is an AOT regression fixture reusing test data with %include; shipped module registration/layout/doc requirements do not apply.

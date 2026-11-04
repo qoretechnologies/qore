@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover lib/JITRuntime.cpp, documentation and benchmark evidence. Baseline is merged performance commit `08979af265`, including develop through `a9df2443b6`; it is not pure develop. [Raw results and provenance](results-native-frame-named-macos-arm64.json).
+All 62 audit-changes checks cover lib/JITRuntime.cpp, documentation and benchmark evidence. Baseline is merged performance commit `08979af265`, including develop through `a9df2443b6`; it is not pure develop. Raw results and provenance (`results-native-frame-named-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, QPP class, directive, registration or layout change.

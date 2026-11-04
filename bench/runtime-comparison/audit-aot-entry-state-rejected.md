@@ -4,7 +4,7 @@ Copyright 2026 Qore Technologies, s.r.o.
 
 Only documentation and experimental records are committed. Production and test changes were reverted to merge `b7e3956cf6`. The local development binaries last built during the experiment are not claimed to be rebuilt from the reverted source; the separately verified system installation remains the validated merge.
 
-[Raw report](results-aot-entry-state-rejected-macos-arm64.json) preserves both failed performance gates, all measured windows, qualification and the annotation-only rejection. No new Java or pure-develop comparison, confirmation run, broad timing, or performance ceiling is claimed.
+Raw report (`results-aot-entry-state-rejected-macos-arm64.json`) preserves both failed performance gates, all measured windows, qualification and the annotation-only rejection. No new Java or pure-develop comparison, confirmation run, broad timing, or performance ceiling is claimed.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|Documentation and recorded experimental evidence only; all production and test edits were reverted to the previously qualified merge.

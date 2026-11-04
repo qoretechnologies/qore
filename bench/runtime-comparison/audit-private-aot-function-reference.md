@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover the compiler/test patch, documentation and evidence. [Evidence](results-private-aot-function-reference.json).
+All 62 audit-changes checks cover the compiler/test patch, documentation and evidence. Evidence (`results-private-aot-function-reference.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new distributed module, QPP class, registration or module layout; the module in the test is temporary fixture data.

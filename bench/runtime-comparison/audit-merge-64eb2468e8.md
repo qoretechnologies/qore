@@ -6,7 +6,7 @@ The upstream async-I/O shutdown test now flushes callback releases before stoppi
 
 Four runs on the existing Debug build pass in AST, IR, JIT and tiered execution: four executed cases and eight assertions, no skips. Native compilation traces are checked for JIT/tiered. The validation copy changes only the module search path to select Debug qmods; global source aliases are untouched. No new runtime build, sanitizer, full-suite or timing claim.
 
-[Raw evidence](results-merge-64eb2468e8-macos-arm64.json). All 62 audit-changes checks were reviewed before committing.
+Raw evidence (`results-merge-64eb2468e8-macos-arm64.json`). All 62 audit-changes checks were reviewed before committing.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped module, QPP class, module structure or registration.

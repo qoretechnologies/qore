@@ -6,7 +6,7 @@ The local audit-changes skill contains 62 checks: {'N/A': 46, 'Pass': 16}. All a
 
 Release/Debug each passed 51 selected fixture runs, including 48 QUnit runs and three standalone fixtures. QUnit assertions: 23,861 Release / 23,951 Debug. Native assertions: 11,756. IR/AOT references: 2,220. Eight Linux RSS skips per build are not passes. All 252 qmods per build were rebuilt; 253 source aliases restored to Release. This is selected coverage, not a full-suite, sanitizer, or cross-platform result.
 
-[Evidence and raw process records](results-merge-0cab75f39e-macos-arm64.json).
+Evidence and raw process records (`results-merge-0cab75f39e-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped Qore module; existing module structure is unchanged.

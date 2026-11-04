@@ -6,7 +6,7 @@ Merge origin/develop `54a6a86070` into `c48d3e35dc`. All 62 checks applied to th
 
 The overlap in opcode 409 is resolved without renumbering this branch's snapshots. Reader translation uses both format version and declared maximum opcode; older performance artifacts keep their snapshot meaning. Eight serializer/reader round trips exercise the distinction. Native weak-reference reads use the new cache accessor; raw storage remains available for ownership operations. Apple internal runtime tests and the static AOT link recipe now include the frameworks required by module loading.
 
-All-target Release build and selected regressions passed; no merge timing, Debug, sanitizer, full-suite or cross-platform claim. Earlier failed compile/link/fixture attempts remain in the [evidence](results-merge-54a6.json).
+All-target Release build and selected regressions passed; no merge timing, Debug, sanitizer, full-suite or cross-platform claim. Earlier failed compile/link/fixture attempts remain in the evidence (`results-merge-54a6.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No shipped module or QPP class added by the integration; four new upstream .qm files are test fixtures, not installable modules. Existing module registrations and layouts are retained.

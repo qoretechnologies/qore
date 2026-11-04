@@ -4,7 +4,7 @@ Copyright 2026 Qore Technologies, s.r.o.
 
 Merge develop `a154e90942` into performance head `eb535d98b2`, with no conflicts. The incoming #5518 follow-up preserves the larger resource-limit/default primary stack size when the OS reports only the currently mapped initial stack. Only `lib/thread.cpp` changes in upstream.
 
-[Recorded qualification](results-merge-a154.json) contains the Release build, selected stack/callback/AOT fixtures and IR/AOT reference checks. The two preceding performance optimizations remain qualified. This integration run makes no new performance claim and does not reproduce the Linux/musl or JVM-host case on macOS. System installation is a subsequent separately verified operation.
+Recorded qualification (`results-merge-a154.json`) contains the Release build, selected stack/callback/AOT fixtures and IR/AOT reference checks. The two preceding performance optimizations remain qualified. This integration run makes no new performance claim and does not reproduce the Linux/musl or JVM-host case on macOS. System installation is a subsequent separately verified operation.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No Qore module changes or module registration/directive/layout changes.

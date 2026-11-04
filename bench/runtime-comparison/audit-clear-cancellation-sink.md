@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Applied `/Users/david/.codex/skills/audit-changes/SKILL.md` to the three compiler files, three fixtures and documentation/evidence. Every check is assessed below. [Full evidence](results-clear-cancellation-sink-macos-arm64.json).
+Applied `/Users/david/.codex/skills/audit-changes/SKILL.md` to the three compiler files, three fixtures and documentation/evidence. Every check is assessed below. Full evidence (`results-clear-cancellation-sink-macos-arm64.json`).
 
 |!Number|!Check|!Status|!Evidence
 |1|Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, QPP class, DataProvider registration or JNI integration.

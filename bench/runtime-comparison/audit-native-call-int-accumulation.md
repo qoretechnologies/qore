@@ -10,7 +10,7 @@ Optimized five-fork confirmation: wide closure accumulation 28.619360 to 13.5702
 
 Independent publication replay verifies raw process completion, output hashes, samples, job order, layout/aggregate medians, 7367 dependency records, 13 dependency manifests, source hashes and all 12 phases. Published evidence SHA256: `785016e1a4f89090e3422d6c66a59dead5bfd5fbfe0457a6c1685599aa2d486a`. Reviewer SHA256: `5fc9f6078b53c1645dec6d45802920d66df2df1c8cd839e0091024033062cf26`.
 
-[Full measurements and limits](RESULTS.md#native-integer-callback-results-in-compound-addition-2026-10-27); [raw evidence](results-native-call-int-accumulation-macos-arm64.json). Shared-host whole-kernel ns/item; no new Java/develop ratio, isolated physical call latency, global performance ceiling, complete-project suite, sanitizer/Linux or external binary-module claim.
+[Full measurements and limits](RESULTS.md#native-integer-callback-results-in-compound-addition-2026-10-27); raw evidence (`results-native-call-int-accumulation-macos-arm64.json`). Shared-host whole-kernel ns/item; no new Java/develop ratio, isolated physical call latency, global performance ceiling, complete-project suite, sanitizer/Linux or external binary-module claim.
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped Qore module or QPP class.

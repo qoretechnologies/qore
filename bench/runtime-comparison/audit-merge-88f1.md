@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover the 18 incoming files and local fixture corrections: three callback type annotations and a valid enum deletion fixture. [Evidence](results-merge-88f1.json).
+All 62 audit-changes checks cover the 18 incoming files and local fixture corrections: three callback type annotations and a valid enum deletion fixture. Evidence (`results-merge-88f1.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module or QPP class; StabilityAi .qc changes only document existing throw behavior.

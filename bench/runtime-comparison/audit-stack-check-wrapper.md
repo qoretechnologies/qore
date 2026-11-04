@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover lib/JITRuntime.cpp, lib/thread.cpp, examples/test/ir/native_leaf_context.cpp, documentation and evidence. [Results and provenance](results-stack-check-wrapper-macos-arm64.json).
+All 62 audit-changes checks cover lib/JITRuntime.cpp, lib/thread.cpp, examples/test/ir/native_leaf_context.cpp, documentation and evidence. Results and provenance (`results-stack-check-wrapper-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, QPP class, directive, registration or module-layout change.

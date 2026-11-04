@@ -2,6 +2,8 @@
 
 Copyright (c) 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT.
 
+**Raw result files:** the per-run `results-*.json` files named in these documents (every sample, source hash and experiment patch) are not part of the repository; the findings and the numbers they support are recorded here. `run.py` writes the raw data of a new run under `build/bench-runtime-comparison/`.
+
 This suite compares Qore IR, Qore AOT, Java interpreted execution (`-Xint`), and
 warmed HotSpot execution. It is intended to locate optimization opportunities,
 not produce a single language ranking. Running the suite does not modify
@@ -578,7 +580,7 @@ once at runtime, not toggled during measurement.
 
 The early-native-admission and explicit integer-entry measurements are in
 [RESULTS](RESULTS.md#early-native-admission-and-explicit-integer-method-entry-2026-10-11)
-and [the full evidence](results-native-method-admission-macos-arm64.json).
+and the full evidence (`results-native-method-admission-macos-arm64.json`).
 The nested context-using workload improves roughly 4–6% across repeated runs;
 its remaining cost is still about 66x the retained Java workload. This does not
 establish a general call speedup or Java parity.
@@ -1109,7 +1111,7 @@ The IR name keeps precedence, misses still construct the ordinary name, and
 `execJITWithDeopt` still copies it into an owned diagnostic frame. This removes
 temporary string work without changing dispatch checks, frame-reader lifetime,
 ABI or runtime identity. See the [measurements](RESULTS.md#generic-method-name-reuse-2026-10-10)
-and [evidence](results-generic-method-name-macos-arm64.json), including identical-
+and evidence (`results-generic-method-name-macos-arm64.json`), including identical-
 executable controls, mixed native-call results and the remaining Java gap.
 
 Generic AOT method-cache hits also reuse static user-method eligibility and an
@@ -1123,7 +1125,7 @@ Both switches act at runtime cache construction. The internal PIC layout changes
 AOT runtime identity: rebuild artifacts instead of swapping old/new runtimes
 under the same executable. Same-executable controls use one candidate runtime.
 See [results](RESULTS.md#generic-method-binding-proofs-2026-10-10) and
-[evidence](results-generic-method-binding-macos-arm64.json) for the repeated
+evidence (`results-generic-method-binding-macos-arm64.json`) for the repeated
 10–12% fallback reduction, code-size/stack growth, and adverse controls.
 
 Pre-resolved AOT object calls now reuse the same bounded dispatch cache without
@@ -1136,7 +1138,7 @@ There is no exported ABI, header layout or AOT runtime-identity change.
 Hot native-dispatch and key-building helpers remain inline to avoid slowing
 existing boxed calls when the additional call site is introduced. See the
 [results](RESULTS.md#resolved-aot-method-entries-2026-10-10) and
-[evidence](results-resolved-method-entry-macos-arm64.json): the nested-call
+evidence (`results-resolved-method-entry-macos-arm64.json`): the nested-call
 workload improves about 15%, with small adverse control medians retained. This
 does not eliminate generic outer-call setup or establish Java parity.
 
@@ -1155,7 +1157,7 @@ header changes AOT runtime identity, so baseline comparisons compile separate
 executables; same-runtime controls compile with the switch off/on. Do not run a
 new artifact against the old runtime by bypassing its identity check.
 See the [measurements](RESULTS.md#stable-untyped-parameter-loads-2026-10-10) and
-[full evidence](results-stable-untyped-load-macos-arm64.json), including rejected
+full evidence (`results-stable-untyped-load-macos-arm64.json`), including rejected
 experiments and adverse controls. This is an AOT optimization, not an IR speedup
 or Java-parity claim.
 
@@ -1165,13 +1167,13 @@ executable before/after measurements show a repeated polymorphic-kernel benefit,
 not Java parity or an isolated virtual-call cost. Receiver-local ownership and
 cleanup remain included. Raw normalized samples, exact binary identities and
 separate profile observations are in
-[the evidence](results-object-admission-macos-arm64.json).
+the evidence (`results-object-admission-macos-arm64.json`).
 
 The [empty-result-holder follow-up](RESULTS.md#empty-class-result-holder-2026-10-09)
 removes replacement cleanup only for a proven-NOTHING initializer output. Three
 identical-executable comparisons show modest 1.37–1.80% polymorphic median gains,
 with overlapping fork ranges; RAII cleanup and both object references remain.
-See [normalized evidence](results-class-holder-macos-arm64.json) for all controls,
+See normalized evidence (`results-class-holder-macos-arm64.json`) for all controls,
 binary identities and validation. This does not establish Java parity.
 
 `QORE_DISABLE_AOT_SCALAR_RETURN_GUARD=1` disables the exact-immediate scalar
@@ -1183,7 +1185,7 @@ cleanup. This is AOT-only. The compiler change updates runtime identity despite
 an unchanged exported ABI, so compile baseline/candidate artifacts separately
 against their matching runtimes. See the
 [results](RESULTS.md#aot-exact-immediate-scalar-returns-2026-10-11) and
-[evidence](results-scalar-return-guard-macos-arm64.json): the nested workload
+evidence (`results-scalar-return-guard-macos-arm64.json`): the nested workload
 improves repeatedly by about 9-10%, but remains far from Java. Adverse boxed-float
 and monomorphic comparisons are retained; this is not a zero-regression claim.
 
@@ -1199,7 +1201,7 @@ are published only after their map is attached. No-debug bodies keep eager locat
 
 The internal context layout/runtime identity changes: rebuild AOT artifacts against
 the matching runtime. See the [results](RESULTS.md#receiver-aware-forwarding-entry-2026-10-11)
-and [evidence](results-receiver-entry-macos-arm64.json): the nested workload gains
+and evidence (`results-receiver-entry-macos-arm64.json`): the nested workload gains
 10-12%, but remains about 53x Java. An integer-callback slowdown repeats at 1.09%
 against the frozen baseline; all adverse controls are retained.
 
@@ -1213,7 +1215,7 @@ the generic fast method wrapper used by both IR and AOT. No ABI change is introd
 so one AOT executable can be reused with the saved compatible before/after libraries.
 An additional same-binary control toggles only this flag for the before processes.
 See the [measurements](RESULTS.md#exact-scalar-returns-in-the-method-wrapper-2026-10-11)
-and [verified evidence](results-method-return-guard-macos-arm64.json).
+and verified evidence (`results-method-return-guard-macos-arm64.json`).
 
 `QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1` disables the runtime forwarding-leaf
 shortcut (presence, sampled on first use). The compiler publishes the sole call
@@ -1239,7 +1241,7 @@ compile baseline/candidate AOT artifacts separately against their matching
 runtimes. The disable flag supports an additional same-binary/artifact control.
 
 See the [forwarding measurements](RESULTS.md#preflighted-same-program-forwarding-leaves-2026-10-11)
-and [verified evidence/audit](results-forward-leaf-preflight-macos-arm64.json).
+and verified evidence/audit (`results-forward-leaf-preflight-macos-arm64.json`).
 
 `QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1` disables only entry from the typed native
 method helper into forwarding preflight (presence sampled on first use). The
@@ -1252,7 +1254,7 @@ native routing, not the additional removal of the old allocating configuration
 copy; the full change requires a frozen before/after library comparison.
 
 See the [native-forwarding measurements](RESULTS.md#native-forwarding-continuation-and-borrowed-configuration-2026-10-11)
-and [verified evidence/audit](results-native-forward-entry-macos-arm64.json).
+and verified evidence/audit (`results-native-forward-entry-macos-arm64.json`).
 
 `QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1` retains per-call defining-class
 access normalization in forwarding preflight (presence sampled on first use).
@@ -1267,7 +1269,7 @@ separate AOT artifacts compiled against their matching runtimes. The flag gives
 an additional same-binary control for reusing the normalized context.
 
 See [cached forwarding context measurements](RESULTS.md#cached-forwarding-class-context-2026-10-11)
-and [verified evidence/audit](results-forward-access-context-macos-arm64.json).
+and verified evidence/audit (`results-forward-access-context-macos-arm64.json`).
 
 `QORE_DISABLE_AOT_SCALAR_LOCAL_STORE=1` disables the runtime shortcut for normal
 AOT assignments that replace an already assigned scalar in an ordinary `auto`
@@ -1313,7 +1315,7 @@ require separate matching before/after compilation. A runtime on/off comparison
 isolates prepared lookup, not all code-generation or cleanup changes.
 
 See [prepared auto-slot measurements and compile-time controls](RESULTS.md#prepared-ordinary-auto-aot-body-slots-2026-10-12),
-[all verified samples](results-aot-auto-local-slot-macos-arm64.json), and the
+all verified samples (`results-aot-auto-local-slot-macos-arm64.json`), and the
 [62-check audit](FOLLOWUP-AUDIT.md#prepared-ordinary-auto-aot-body-slots-audit-2026-10-12).
 Boxed-call gains repeat, but list-construction and native-float adverse results
 remain explicit; this is not a universal speedup or a Java-parity claim.
@@ -1341,7 +1343,7 @@ require matching, separately compiled before/after artifacts. This changes AOT
 lowering and its store helpers; no IR/JIT speedup or Java parity is claimed.
 
 See [declaration-preparation measurements and matched Java comparison](RESULTS.md#prepared-aot-auto-store-declaration-admission-2026-10-12),
-[all six matrices](results-aot-auto-declaration-macos-arm64.json), and the
+all six matrices (`results-aot-auto-declaration-macos-arm64.json`), and the
 [62-check audit](FOLLOWUP-AUDIT.md#prepared-aot-auto-store-declaration-admission-audit-2026-10-12).
 Boxed-call gains repeat; short-invocation results and adverse native, indirect,
 member-update and list controls remain explicit.
@@ -1372,7 +1374,7 @@ before/after artifacts. This is AOT-specific code generation; an IR/JIT speedup
 has not been measured for this change.
 
 See [prepared-reload measurements and matched Java comparison](RESULTS.md#prepared-runtime-backed-aot-local-reloads-2026-10-12)
-and [verified evidence/audit](results-aot-prepared-local-reload-macos-arm64.json).
+and verified evidence/audit (`results-aot-prepared-local-reload-macos-arm64.json`).
 
 `QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD=1` independently disables exact live scalar
 reuse in prepared AOT reloads. At compilation it selects the existing v1 reload
@@ -1392,17 +1394,17 @@ destructor, logical frame or cancellation point is removed. This is an AOT
 code-generation path; no IR/JIT benefit is implied.
 
 See [exact live scalar reload measurements](RESULTS.md#exact-live-scalar-reuse-in-aot-reloads-2026-10-13)
-and [verified evidence/audit](results-aot-scalar-local-reload-macos-arm64.json).
+and verified evidence/audit (`results-aot-scalar-local-reload-macos-arm64.json`).
 The measured reload-heavy gains have an explicit native-integer regression;
 this is not a universal speedup.
 
-See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and [verified evidence/audit](results-aot-scalar-local-store-macos-arm64.json).
+See [AOT scalar-store measurements](RESULTS.md#aot-scalar-local-replacement-2026-10-11) and verified evidence/audit (`results-aot-scalar-local-store-macos-arm64.json`).
 
 See [direct primitive-store measurements and longer confirmation](RESULTS.md#direct-aot-primitive-local-replacement-2026-10-12),
-[all verified samples](results-aot-direct-scalar-store-macos-arm64.json), and the
+all verified samples (`results-aot-direct-scalar-store-macos-arm64.json`), and the
 [62-check audit](FOLLOWUP-AUDIT.md#direct-aot-primitive-local-replacement-audit-2026-10-12).
 
-See [native scalar-key measurements](RESULTS.md#aot-native-scalar-dispatch-key-2026-10-11) and [verified evidence/audit](results-native-scalar-key-macos-arm64.json).
+See [native scalar-key measurements](RESULTS.md#aot-native-scalar-dispatch-key-2026-10-11) and verified evidence/audit (`results-native-scalar-key-macos-arm64.json`).
 
 ## Optimized reporting policy and mixed workloads
 
@@ -1557,7 +1559,7 @@ fresh Java measurements; these are incremental branch results, not pure develop.
 
 The [latest optimized cumulative checkpoint](RESULTS.md#optimized-module-checkpoint-after-finite-callback-coercion-omission-2026-10-28) compares branch 8276756a7a with pure develop 62a415e603 across 78 Qore workloads and 45 fresh Java counterparts. It includes mixed workloads and documents whole-kernel units, inlining controls and Program transitions. The dedicated short finite-callback experiment has a separate preceding-branch baseline.
 
-The native constant-callback rewrite removes private two-target zero-argument constant callback objects before LLVM lowering and restores the original IR for metadata/debugging. `QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1` restores the previous compiler path. The [optimized comparison](results-finite-constant-callback-macos-arm64.json) records 73–78% less time for short targets, about 9.6% less for long constant-callback loops, fresh Java results, broader tradeoffs and 1578 verified timing jobs. See [RESULTS.md](RESULTS.md) and the [62-check audit](audit-finite-constant-callback.md).
+The native constant-callback rewrite removes private two-target zero-argument constant callback objects before LLVM lowering and restores the original IR for metadata/debugging. `QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1` restores the previous compiler path. The optimized comparison (`results-finite-constant-callback-macos-arm64.json`) records 73–78% less time for short targets, about 9.6% less for long constant-callback loops, fresh Java results, broader tradeoffs and 1578 verified timing jobs. See [RESULTS.md](RESULTS.md) and the [62-check audit](audit-finite-constant-callback.md).
 
 
 Prepared reload, auto and class body-local handles also work inside imported
@@ -1573,10 +1575,10 @@ recompilation is required for this helper-only change. See the
 for imported calls, list mutation, mixed workloads, retained costs and attribution.
 
 
-`QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT=1` restores eager object/class and empty-marker setup for pure native method-v2/v3 retries after a normal Program transition. It is a runtime presence flag, sampled once; empty and `0` values also disable the optimization. The common `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT` control restores this setup too. No recompilation is needed. The new path borrows invocation/Program-owned metadata, retains the caller Program in the logical frame, and materializes context before a failing stack guard constructs its exception. Full Program transitions, live admission, diagnostics and ownership remain. See [optimized results](results-cross-program-deferred-context-macos-arm64.json) for gains and retained costs.
+`QORE_DISABLE_AOT_CROSS_PROGRAM_DEFERRED_CONTEXT=1` restores eager object/class and empty-marker setup for pure native method-v2/v3 retries after a normal Program transition. It is a runtime presence flag, sampled once; empty and `0` values also disable the optimization. The common `QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT` control restores this setup too. No recompilation is needed. The new path borrows invocation/Program-owned metadata, retains the caller Program in the logical frame, and materializes context before a failing stack guard constructs its exception. Full Program transitions, live admission, diagnostics and ownership remain. See optimized results (`results-cross-program-deferred-context-macos-arm64.json`) for gains and retained costs.
 
 
-Cross-Program native scalar/member retries share one live `RuntimeConfig&` with their call-option guard after the complete ordinary Program transition. The reference remains invocation/thread-owned; live admission and fallback checks remain. Same-Program typed entries and the generated AOT contract are unchanged. This runtime-only experiment uses identical AOT artifacts across frozen optimized libraries; see the [complete comparison](results-cross-program-shared-context-macos-arm64.json) for gains, frame growth and retained control costs.
+Cross-Program native scalar/member retries share one live `RuntimeConfig&` with their call-option guard after the complete ordinary Program transition. The reference remains invocation/thread-owned; live admission and fallback checks remain. Same-Program typed entries and the generated AOT contract are unchanged. This runtime-only experiment uses identical AOT artifacts across frozen optimized libraries; see the complete comparison (`results-cross-program-shared-context-macos-arm64.json`) for gains, frame growth and retained control costs.
 
 
 `QORE_DISABLE_AOT_RECEIVER_FLOAT_FORWARD=1` disables the AOT proof and runtime shortcut
@@ -1591,7 +1593,7 @@ The optimized matched-toolchain comparison uses fresh before/after artifacts acr
 layouts. The floating forwarding kernel improves 80.99% in confirmation, with two-call
 floating +2.52%, field +1.03% and closure +1.83% controls retained as part of the tradeoff.
 See the [complete results](RESULTS.md#floating-point-aot-forwarding-2026-10-30),
-[evidence](results-scalar-forwarding-macos-arm64.json), and
+evidence (`results-scalar-forwarding-macos-arm64.json`), and
 [audit](audit-scalar-forwarding.md). This is a narrow whole-kernel improvement; the new
 probe has no qualified Java equivalent and does not establish an overall application gain.
 
@@ -1620,60 +1622,60 @@ The [matched forwarding comparison](RESULTS.md#matched-forwarding-comparison-wit
 The [post-polymorphic optimized checkpoint](RESULTS.md#optimized-checkpoint-after-polymorphic-scalar-inlining-2026-10-30) compares39workloads with develop and32Java rows, including29fresh ordinary-C2 counterparts alongside original boundary controls. All885processes/2655windows are retained.
 
 
-[Scalar override guard hoisting](RESULTS.md#scalar-override-guard-hoisting-2026-10-30) moves immutable target admission out of AOT loops and shares live receiver classification. Both optimized campaigns and slower controls are retained in the [evidence](results-scalar-override-guard-macos-arm64.json) and [audit](audit-scalar-override-guard.md).
+[Scalar override guard hoisting](RESULTS.md#scalar-override-guard-hoisting-2026-10-30) moves immutable target admission out of AOT loops and shares live receiver classification. Both optimized campaigns and slower controls are retained in the evidence (`results-scalar-override-guard-macos-arm64.json`) and [audit](audit-scalar-override-guard.md).
 
 
-[Develop debugger integration](RESULTS.md#develop-debugger-merge-and-native-admission-2026-10-31) preserves native call admission while recording every AOT debug statement. Optimized before/after results and qualification are in the [evidence](results-guard-develop-merge-macos-arm64.json) and [audit](audit-guard-develop-merge.md).
+[Develop debugger integration](RESULTS.md#develop-debugger-merge-and-native-admission-2026-10-31) preserves native call admission while recording every AOT debug statement. Optimized before/after results and qualification are in the evidence (`results-guard-develop-merge-macos-arm64.json`) and [audit](audit-guard-develop-merge.md).
 
 
 [Develop annotation followup](RESULTS.md#develop-annotation-followup-2026-10-31): optimized merge checkpoint, shared JIT/AOT summary validation and [62-item audit](audit-guard-develop-followup.md).
 
 
-[Retained receiver classification](RESULTS.md#retained-receiver-classification-2026-10-31): bounded entry admission with live identity/deletion checks; optimized [evidence](results-pinned-override-macos-arm64.json) and [audit](audit-pinned-override.md).
+[Retained receiver classification](RESULTS.md#retained-receiver-classification-2026-10-31): bounded entry admission with live identity/deletion checks; optimized evidence (`results-pinned-override-macos-arm64.json`) and [audit](audit-pinned-override.md).
 
 
-[Retained receiver base-class checks](RESULTS.md#retained-receiver-base-class-checks-2026-10-31): shared status views and cached base admission; optimized [evidence](results-pinned-base-macos-arm64.json) and [audit](audit-pinned-base.md).
+[Retained receiver base-class checks](RESULTS.md#retained-receiver-base-class-checks-2026-10-31): shared status views and cached base admission; optimized evidence (`results-pinned-base-macos-arm64.json`) and [audit](audit-pinned-base.md).
 
 
 The [post-pinned-base optimized checkpoint](RESULTS.md#optimized-checkpoint-after-retained-receiver-classification-2026-10-31) compares 39 workloads with develop and 32 Java rows, including 29 fresh ordinary-C2 counterparts alongside original boundary controls. All 885 processes / 2,655 windows are retained.
 
 
-[Retained receiver metadata PHIs](RESULTS.md#retained-receiver-metadata-phis-2026-10-31): selected-snapshot identity with live validity; optimized [evidence](results-pinned-phi-macos-arm64.json) and [audit](audit-pinned-phi.md).
+[Retained receiver metadata PHIs](RESULTS.md#retained-receiver-metadata-phis-2026-10-31): selected-snapshot identity with live validity; optimized evidence (`results-pinned-phi-macos-arm64.json`) and [audit](audit-pinned-phi.md).
 
 
-[Rejected class-local receiver snapshot PHIs](RESULTS.md#rejected-class-local-receiver-snapshot-phis-2026-10-31): reduced comparison count did not justify repeated broader costs; optimized [evidence](results-pinned-borrow-phi-macos-arm64.json) and [audit](audit-pinned-borrow-phi.md).
+[Rejected class-local receiver snapshot PHIs](RESULTS.md#rejected-class-local-receiver-snapshot-phis-2026-10-31): reduced comparison count did not justify repeated broader costs; optimized evidence (`results-pinned-borrow-phi-macos-arm64.json`) and [audit](audit-pinned-borrow-phi.md).
 
-[Rejected uniform AOT function alignment](RESULTS.md#rejected-uniform-aot-function-alignment-2026-10-31): all four policies and fixed-policy confirmation, with [evidence](results-aot-function-alignment-macos-arm64.json) and [audit](audit-aot-function-alignment.md).
+[Rejected uniform AOT function alignment](RESULTS.md#rejected-uniform-aot-function-alignment-2026-10-31): all four policies and fixed-policy confirmation, with evidence (`results-aot-function-alignment-macos-arm64.json`) and [audit](audit-aot-function-alignment.md).
 
 
-[Receiver-local provenance](RESULTS.md#receiver-local-provenance-2026-10-31): same-block assignment hints reuse retained receiver metadata with actual-value and live deletion guards. Optimized [evidence](results-pinned-local-receiver-macos-arm64.json) and [audit](audit-pinned-local-receiver.md).
+[Receiver-local provenance](RESULTS.md#receiver-local-provenance-2026-10-31): same-block assignment hints reuse retained receiver metadata with actual-value and live deletion guards. Optimized evidence (`results-pinned-local-receiver-macos-arm64.json`) and [audit](audit-pinned-local-receiver.md).
 
 
 The [post-local-receiver optimized checkpoint](RESULTS.md#optimized-checkpoint-after-receiver-local-optimization-2026-10-31) compares 39 workloads with develop and 32 Java rows, including 29 fresh ordinary-C2 counterparts alongside original boundary controls. All 885 processes / 2,655 windows are retained.
 
-[Rejected inline scalar assignment coercion omission](RESULTS.md#rejected-inline-scalar-assignment-coercion-omission-2026-10-31): repeated list-mutation gains and adverse indirect-call controls, with [evidence](results-inline-scalar-coerce-rejected-macos-arm64.json) and [62-item audit](audit-inline-scalar-coerce-rejected.md). The cancellation regression now exercises both early analysis and late cleanup checkpoints.
+[Rejected inline scalar assignment coercion omission](RESULTS.md#rejected-inline-scalar-assignment-coercion-omission-2026-10-31): repeated list-mutation gains and adverse indirect-call controls, with evidence (`results-inline-scalar-coerce-rejected-macos-arm64.json`) and [62-item audit](audit-inline-scalar-coerce-rejected.md). The cancellation regression now exercises both early analysis and late cleanup checkpoints.
 
-[Unary floating callback result initialization](RESULTS.md#unary-floating-callback-result-initialization-2026-10-31): a runtime-only unary floating improvement after rejecting integer and zero-argument extensions, with [all six measured epochs](results-deferred-float-unary-macos-arm64.json) and [62-item audit](audit-deferred-float-unary.md). Existing v9 AOT artifacts can benefit; measured controls and shared-host limits remain explicit.
+[Unary floating callback result initialization](RESULTS.md#unary-floating-callback-result-initialization-2026-10-31): a runtime-only unary floating improvement after rejecting integer and zero-argument extensions, with all six measured epochs (`results-deferred-float-unary-macos-arm64.json`) and [62-item audit](audit-deferred-float-unary.md). Existing v9 AOT artifacts can benefit; measured controls and shared-host limits remain explicit.
 
-[Native floating conversion in fast AOT method entries](RESULTS.md#native-floating-conversion-in-fast-aot-method-entries-2026-10-31): AArch64 method-result conversion with a target-aware semantic proof, rejected broader scopes and all control costs. See the [evidence](results-fast-method-float-to-int-macos-arm64.json) and [62-item audit](audit-fast-method-float-to-int.md).
-
-
-Cleanup-pointer annotation experiment: [results](results-coerce-cleanup-rejection-macos-arm64.json), [audit](audit-coerce-cleanup-rejection.md). Rejected after 468 optimized processes / 1404 windows: paired indirect/wide callbacks regress 10.59%/5.99%; production code restored. Cold-status scalar ABI remains compile-only.
+[Native floating conversion in fast AOT method entries](RESULTS.md#native-floating-conversion-in-fast-aot-method-entries-2026-10-31): AArch64 method-result conversion with a target-aware semantic proof, rejected broader scopes and all control costs. See the evidence (`results-fast-method-float-to-int-macos-arm64.json`) and [62-item audit](audit-fast-method-float-to-int.md).
 
 
-Clean callback completion experiment: [results](results-clean-status-rejection-macos-arm64.json), [audit](audit-clean-status-rejection.md). Two variants rejected after 612 optimized processes / 1836 windows; the revised ordinary/wide/native-integer-result kernels regress 7.59%/10.12%/6.75%. Runtime source restored; a stale specialization test is corrected.
+Cleanup-pointer annotation experiment: results (`results-coerce-cleanup-rejection-macos-arm64.json`), [audit](audit-coerce-cleanup-rejection.md). Rejected after 468 optimized processes / 1404 windows: paired indirect/wide callbacks regress 10.59%/5.99%; production code restored. Cold-status scalar ABI remains compile-only.
 
 
-Callback cache pointer snapshots: [results](results-callback-cache-snapshot-rejection-macos-arm64.json), [audit](audit-callback-cache-snapshot-rejection.md). Rejected after 864 optimized processes / 2592 windows: ordinary/wide callbacks regress 7.20%/9.89% in the broader paired pass despite gains in some callback forms. Runtime restored exactly.
+Clean callback completion experiment: results (`results-clean-status-rejection-macos-arm64.json`), [audit](audit-clean-status-rejection.md). Two variants rejected after 612 optimized processes / 1836 windows; the revised ordinary/wide/native-integer-result kernels regress 7.59%/10.12%/6.75%. Runtime source restored; a stale specialization test is corrected.
 
 
-Floating callback load variants: [results](results-floating-callback-load-rejection-macos-arm64.json), [audit](audit-floating-callback-load-rejection.md). Two narrower variants rejected after 504 optimized processes / 1512 windows; floating target regressions persist despite one fewer instruction. Runtime restored; next investigate prepared-list ownership and reload work.
+Callback cache pointer snapshots: results (`results-callback-cache-snapshot-rejection-macos-arm64.json`), [audit](audit-callback-cache-snapshot-rejection.md). Rejected after 864 optimized processes / 2592 windows: ordinary/wide callbacks regress 7.20%/9.89% in the broader paired pass despite gains in some callback forms. Runtime restored exactly.
 
 
-Cleared AOT reload trackers: [results](results-cleared-reload-trackers-rejection-macos-arm64.json), [audit](audit-cleared-reload-trackers-rejection.md). Rejected after 900 optimized processes / 2700 windows: imported mutation improves 1.50%, local mutation 0.14%, while indirect/wide/integer-result callbacks regress 4.59%/2.62%/3.29% in the broader paired pass. Validated runtime restored exactly.
+Floating callback load variants: results (`results-floating-callback-load-rejection-macos-arm64.json`), [audit](audit-floating-callback-load-rejection.md). Two narrower variants rejected after 504 optimized processes / 1512 windows; floating target regressions persist despite one fewer instruction. Runtime restored; next investigate prepared-list ownership and reload work.
 
 
-Fused indexed update/reload: [results](results-fused-indexed-reload-rejection-macos-arm64.json), [audit](audit-fused-indexed-reload-rejection.md). Two variants rejected after 1116 optimized processes/3348 windows. The broader pair run gives local mutation -1.16%, imported +0.30%, indirect +4.85%, wide +4.97%; production runtime code restored exactly.
+Cleared AOT reload trackers: results (`results-cleared-reload-trackers-rejection-macos-arm64.json`), [audit](audit-cleared-reload-trackers-rejection.md). Rejected after 900 optimized processes / 2700 windows: imported mutation improves 1.50%, local mutation 0.14%, while indirect/wide/integer-result callbacks regress 4.59%/2.62%/3.29% in the broader paired pass. Validated runtime restored exactly.
 
 
-Guarded integer-list publication: [results](results-same-list-publication-macos-arm64.json), [audit](audit-same-list-publication.md). Retained after 1044 optimized processes/3132 measured windows: broad local/imported mutation improves 19.3%/19.8%, mixed callback pipeline 15.5%; short workloads also improve.
+Fused indexed update/reload: results (`results-fused-indexed-reload-rejection-macos-arm64.json`), [audit](audit-fused-indexed-reload-rejection.md). Two variants rejected after 1116 optimized processes/3348 windows. The broader pair run gives local mutation -1.16%, imported +0.30%, indirect +4.85%, wide +4.97%; production runtime code restored exactly.
+
+
+Guarded integer-list publication: results (`results-same-list-publication-macos-arm64.json`), [audit](audit-same-list-publication.md). Retained after 1044 optimized processes/3132 measured windows: broad local/imported mutation improves 19.3%/19.8%, mixed callback pipeline 15.5%; short workloads also improve.

@@ -1487,7 +1487,7 @@ count claim. Builds, tests and profiling were separate from timing.
 
 The recursive JIT capture finding recorded earlier remains out of scope.
 A second baseline finding is preserved with a complete reproducer in
-[the evidence](results-callback-cleanup-macos-arm64.json): nested direct-call
+the evidence (`results-callback-cleanup-macos-arm64.json`): nested direct-call
 exceptions report lines 4/7/10 under baseline and final AOT O0/O3 instead of
 AST's 4/4/4. This is separate from the fixed parallel-map failure and is not
 claimed fixed.
@@ -3628,7 +3628,7 @@ Compiler diff:
 Test diff:
 `d127d292249824908b0c371aa198abf1eb0ef9958056ee403c62c50a049c8dfb`.
 Runtime text: 13873068 → 13873380 bytes (+312). Exact diffs, hashes, all samples
-and limitations are in [sanitized evidence](results-assigned-method-macos-arm64.json).
+and limitations are in sanitized evidence (`results-assigned-method-macos-arm64.json`).
 Existing native artifacts need recompilation to change their code generation.
 The broader performance goal remains active.
 
@@ -3751,7 +3751,7 @@ Runtime diff:
 `e87f7d6840e007714899cd68adad9c6078a049dedd94d487b5808b14659018a2`.
 Runtime text: 13873380 → 13873616 bytes (+236). Exact source/test diffs,
 hashes, all samples, settings and limitations are in
-[sanitized evidence](results-plain-function-context-macos-arm64.json).
+sanitized evidence (`results-plain-function-context-macos-arm64.json`).
 The receiver-initializer optimization resumes from this corrected baseline;
 the broader performance goal remains active.
 
@@ -3883,7 +3883,7 @@ Debug library:
 Compiler diff:
 `4881ef2b8e1925996405bf0b4dc0eab9bcfce9f5f521450ee3c39b601a5fef4f`.
 Runtime text: 13873616 → 13873796 bytes (+180). Exact diffs, hashes and all
-measurements are in [sanitized evidence](results-checked-class-store-macos-arm64.json).
+measurements are in sanitized evidence (`results-checked-class-store-macos-arm64.json`).
 The primary polymorphic workload remains about 72.1 times Java, with the
 partial-devirtualization comparison caveat; wide callbacks remain about 4.89
 times Java. No Java parity or universal speedup is claimed. The next structural
@@ -4010,7 +4010,7 @@ The final target repeat improves 26.04%; its disabled-entry control is +0.27%
 with overlapping ranges. The earlier 28.22% pilot is explicitly a different
 candidate. All 133 jobs / 665 samples, startup samples, settings/completeness,
 uniqueness and recomputed medians are retained and validated in
-[the evidence](results-native-method-entry-macos-arm64.json).
+the evidence (`results-native-method-entry-macos-arm64.json`).
 Unrelated wide-control improvements persist when disabled and are not attributed;
 IR/hash ranges overlap. Java polymorphic time is still about 53.74 times lower
 in this workload, with the partial-devirtualization caveat.
@@ -4135,7 +4135,7 @@ three cases / 284 assertions in each final rerun. Standalone runtime syntax
 passes with 79 existing warnings; 11 harness tests pass, and old v2/v3 AOT
 artifacts reproduce all 225/270 reference records byte-for-byte.
 
-[Evidence](results-method-admission-macos-arm64.json) retains the full diffs,
+Evidence (`results-method-admission-macos-arm64.json`) retains the full diffs,
 all 133 jobs / 665 samples, startup samples, hashes and validation rows.
 Every measured mode passed 270 reference checks; all job combinations, sample
 counts, finite positive values and recomputed medians were checked. Identical
@@ -4263,7 +4263,7 @@ native EH, split codegen and concurrent publication/readers.
 
 Standalone runtime/thread syntax passes with 79/65 existing warnings; 11 harness
 tests pass, and old v2/v3 AOT artifacts reproduce 225/270 records byte-for-byte.
-[Evidence](results-native-method-context-macos-arm64.json) retains all 133 jobs /
+Evidence (`results-native-method-context-macos-arm64.json`) retains all 133 jobs /
 665 samples and startup samples, exact diffs/hashes and validation rows.
 Job combinations, positive values, counts and recomputed medians were checked;
 identical AOT hashes match across each runtime pair.
@@ -4310,7 +4310,7 @@ reference, reassigned or cleanup-reentrant storage.
 
 ### Evidence and limits
 
-[Evidence](results-class-store-result-macos-arm64.json) includes all 161 jobs /
+Evidence (`results-class-store-result-macos-arm64.json`) includes all 161 jobs /
 805 samples, exact diffs/hashes and test rows. Pilot/primary target changes are
 −4.64% / −3.72% with separated fork ranges. First disabled control is +2.31%;
 the repeated control is −0.72%; both ranges overlap. The unrelated wide control
@@ -4427,7 +4427,7 @@ The only shared new state is an immutable function-static presence control,
 
 ### Evidence, rejected alternative and limits
 
-[Evidence](results-fresh-class-store-macos-arm64.json) retains 227 jobs / 1135 samples.
+Evidence (`results-fresh-class-store-macos-arm64.json`) retains 227 jobs / 1135 samples.
 The enabled target improves 10.13%/10.67% in pilot/primary with separated ranges.
 Disabled target control is -2.04% with overlap: this supports the specialization
 but does not isolate the entire gain or exclude layout/host variation.
@@ -4547,7 +4547,7 @@ metadata/TLS overhead and retained measured 64-byte entry alignment. This adds
 The earlier 7% disabled penalty and 18.65% float regression remain in evidence,
 not relabeled as final behavior.
 
-[Complete evidence](results-dynamic-closure-entry-macos-arm64.json) contains
+Complete evidence (`results-dynamic-closure-entry-macos-arm64.json`) contains
 970 jobs/4850 samples, exact variants and all raw per-fork timing windows.
 Final closure improvements43.44%/76.01% repeat at 44.66%/76.36% at 4096.
 Final disabled ranges all overlap. Polymorphic+1.47%/+0.63% and float slow forks
@@ -4643,7 +4643,7 @@ three native promotions on the saved premerge requested-IR runtime and none on
 the merged runtime. Historical pure-IR interpretation is corrected in README
 and RESULTS; no diagnostic timing is used as performance evidence.
 
-[Evidence](results-dynamic-closure-merge-macos-arm64.json) retains exact parent/
+Evidence (`results-dynamic-closure-merge-macos-arm64.json`) retains exact parent/
 library identities, diagnostic trace and scoped checklist. No full upstream
 suite, unrelated qlib-module, sanitizer/race detector or Linux claim is made.
 
@@ -4724,7 +4724,7 @@ companion and caller continuation, without weakening dispatch, ownership,
 observable-frame or fallback return semantics. The general-array prototype is
 superseded by the full-key unary-integer lookup. Both candidates' results,
 including adverse controls, are retained in
-[the measurement evidence](results-polymorphic-continuation-macos-arm64.json).
+the measurement evidence (`results-polymorphic-continuation-macos-arm64.json`).
 The final disabled polymorphic median remains 1.48% unfavorable with overlapping
 ranges; this is not a claim of zero incidental layout cost. Enabled primary and
 repeat improve 8.27% and 9.67%, respectively.
@@ -4819,7 +4819,7 @@ that initial failure is retained, not treated as a successful test. The new
 CMake target required a fresh make invocation after automatic regeneration.
 No sanitizer/full-suite or post-merge performance claim is made.
 
-[Integration evidence](results-polymorphic-continuation-merge-macos-arm64.json)
+Integration evidence (`results-polymorphic-continuation-merge-macos-arm64.json`)
 records parents, build hashes and individual test/check results. The prior
 performance measurements remain scoped to `c911af9ae`; rebuild and save the new
 merged baseline before further optimizations.
@@ -4905,7 +4905,7 @@ The before/after target improves 8.65% and 6.19%; the disabled path regresses
 ranges overlap. Release/debug each pass 24 selected files; this is not full-suite,
 sanitizer or cross-platform qualification. All 175 jobs / 875 windows and their
 recomputed summaries are retained in
-[the evidence](results-class-node-store-macos-arm64.json).
+the evidence (`results-class-node-store-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module or QPP class.
@@ -4981,7 +4981,7 @@ There were no conflicts or changes to the optimization sources. Full audit:
 Standalone Debug syntax checks and release/debug builds pass. Each build passes
 five focused QUnit files (9 cases / 1384 assertions); the debug async-I/O C++
 wrapper passes 1 case / 2 assertions and old AOT retains 300 records.
-[Integration evidence](results-class-node-store-merge-macos-arm64.json) records
+Integration evidence (`results-class-node-store-merge-macos-arm64.json`) records
 hashes and scope. No full non-SCU build or postmerge timing is claimed.
 
 |!Check|!Status|!Evidence
@@ -5059,7 +5059,7 @@ Release/debug each pass 24 files (46 cases / 2574 assertions plus six standalone
 scripts); all benchmark modes and old AOT pass 300 records, and 11 harness tests
 pass. Repeated baseline target gains are 5.25%; same-library flag control shows
 3.80%. Adverse and disabled-path results are retained in
-[the evidence](results-class-strong-store-macos-arm64.json).
+the evidence (`results-class-strong-store-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module or QPP class; module registration/layout checks do not apply.
@@ -5135,7 +5135,7 @@ documentation-table references; DataProvider guides are not applicable.
 
 Validation and before/after details are in
 [RESULTS.md](RESULTS.md#exact-receiver-identity-after-reflective-writes-2026-10-08)
-and [machine-readable evidence](results-exact-receiver-identity-macos-arm64.json).
+and machine-readable evidence (`results-exact-receiver-identity-macos-arm64.json`).
 Baseline AOT dispatch failure is reproduced and fixed. The separate baseline
 IR/JIT/tiered frame-reflection failure is explicitly documented, not counted as
 a pass. The new test uses AST reference output plus the complete AOT matrix.
@@ -5213,7 +5213,7 @@ DataProvider guides are not applicable. This audit covers the new required-class
 and loop freshness repair, not a claim that the whole IR/AOT compiler is defect-free.
 
 See [results](RESULTS.md#guarded-class-parameter-caches-2026-10-08) and
-[full evidence](results-class-param-cache-macos-arm64.json). Adverse timings and
+full evidence (`results-class-param-cache-macos-arm64.json`). Adverse timings and
 reproduced pre-existing optional/fast-frame visibility failures remain explicit.
 
 |!Check|!Status|!Findings
@@ -5287,7 +5287,7 @@ nullable-call benchmark and documentation/evidence. Applied all 62 `audit-change
 checks: **18 Pass, 44 N/A, 0 Fail**. Required module structure, sandboxing, cancellation
 and documentation-table references remain applicable and were read; no DataProvider
 change. See [results](RESULTS.md#optional-class-freshness-2026-10-08) and
-[full evidence](results-optional-class-freshness-macos-arm64.json).
+full evidence (`results-optional-class-freshness-macos-arm64.json`).
 
 |!Check|!Status|!Findings
 |Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, QPP class, module registration or layout change.
@@ -5954,7 +5954,7 @@ the runtime helper, native regression and measurement/design documentation.
 All 62 checks: **14 Pass, 48 N/A, 0 Fail**. Retain the measured monomorphic
 benefit; no general polymorphic or startup gain is claimed. Full source/binary
 identity, samples and checklist are also in
-[the evidence](results-receiver-validity-macos-arm64.json).
+the evidence (`results-receiver-validity-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No module, QPP class, namespace, registration or module-layout change.
@@ -6867,7 +6867,7 @@ Precommit merged libraries: release
 `01b61050e6de5f84684ff23444ba61b3ae6efcd83de2a4c0ac78beefcb1f1e47`, debug
 `02c3b5be07d6085da2e32da454b2de26851684841e442ffafe42d6edc0c7c3a9`.
 Runtime identity: `3e3c2b2a81c19d6615833a0a97d45a135bc8697d48aa83c8db7f5a8e272cbb6d`.
-[Integration and profile evidence](results-class-local-slot-merge-macos-arm64.json)
+Integration and profile evidence (`results-class-local-slot-merge-macos-arm64.json`)
 records exact identities, reference metadata and log hashes. No post-merge
 performance gain, full upstream qualification, sanitizer or cross-architecture
 claim is made.
@@ -6985,7 +6985,7 @@ typed-polymorphic benefit. Expression repeats are effectively unchanged; every
 control range overlaps and small positive arithmetic/dispatch changes remain
 visible. Range overlap is not a significance test. No Java-parity or general-call
 claim. See [results](RESULTS.md#compact-native-method-diagnostic-frame-2026-10-10)
-and [complete evidence](results-compact-native-method-frame-macos-arm64.json).
+and complete evidence (`results-compact-native-method-frame-macos-arm64.json`).
 Strict Qore table conversion and `git diff --check` pass.
 
 All 62 checks: 19 Pass, 43 N/A, 0 Fail.
@@ -7080,7 +7080,7 @@ HTTP/3 streaming. Debug native unit coverage adds one case/two assertions,
 including zero native failures. Fresh release IR/AOT/Java-interpreter/JIT and
 debug IR/AOT reference modes each pass 345 checks. No Linux cgroup integration,
 full suite, sanitizer, cross-platform or post-merge speedup claim is made.
-[Merge evidence](results-compact-native-method-merge-macos-arm64.json) records
+Merge evidence (`results-compact-native-method-merge-macos-arm64.json`) records
 the exact precommit library identities and all validation artifact hashes.
 
 Next execution plan:
@@ -7199,7 +7199,7 @@ All 240 jobs/1200 windows were independently revalidated. Retain only the
 remains explicitly recorded. No full-suite, sanitizer, cross-platform, general
 call, startup, IR timing or Java-parity qualification is claimed.
 See [results](RESULTS.md#exact-class-definition-lookup-2026-10-10) and
-[complete evidence](results-class-definition-identity-macos-arm64.json).
+complete evidence (`results-class-definition-identity-macos-arm64.json`).
 
 All 62 checks: 19 Pass, 43 N/A, 0 Fail.
 
@@ -7293,7 +7293,7 @@ callback fork are retained; arithmetic medians are slightly higher with overlap.
 No general-call gain, full-suite/sanitizer coverage, IR timing, startup gain,
 cross-architecture result or Java parity is claimed. See
 [results](RESULTS.md#empty-class-local-node-initialization-2026-10-10) and
-[complete evidence](results-initial-class-node-macos-arm64.json).
+complete evidence (`results-initial-class-node-macos-arm64.json`).
 
 All 62 checks: 19 Pass, 43 N/A, 0 Fail.
 
@@ -7378,7 +7378,7 @@ All production, test and positive documentation edits are removed in the final t
 
 Validation and raw-data details are in
 [RESULTS.md](RESULTS.md#fused-method-admission-rejected-2026-10-10) and
-[the complete evidence](results-fused-method-admission-rejected-macos-arm64.json).
+the complete evidence (`results-fused-method-admission-rejected-macos-arm64.json`).
 Both five-fork runs contain every combination and all 1000 raw timing windows;
 all ranges overlap. Candidate and restored validation are reported separately.
 The initial helper-name assertion diagnostic is retained and explained.
@@ -7470,7 +7470,7 @@ QoreLlmUtils, GeminiRestClient, HttpServerUtil, HttpServer, QUnit and FsUtil qmo
 targets and their dependencies were built before their respective test runs.
 Fresh reference grids pass 345 checks in each of six modes. No full-suite,
 sanitizer, cross-architecture or post-merge speedup claim.
-[Source, binary, qmod and validation evidence](results-performance-merge-c20f41a3d-macos-arm64.json).
+Source, binary, qmod and validation evidence (`results-performance-merge-c20f41a3d-macos-arm64.json`).
 
 The merged baseline is the starting point for the next ownership/cleanup and
 native-frame experiments. Earlier rejected-candidate measurements must not be
@@ -7563,7 +7563,7 @@ Restored debug passes 109 focused native checks and the native-unit driver
 (one case/two assertions). No full-suite, sanitizer, cross-architecture or
 retained speedup claim. The warning-strict recursive-closure fixture's target
 alignment and all initial setup diagnostics are disclosed in
-[the evidence](results-local-discard-rejected-macos-arm64.json).
+the evidence (`results-local-discard-rejected-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, separated Qore source, QPP class or module registration.
@@ -7659,7 +7659,7 @@ checks in each of four release and two debug modes. Debug native-unit driver
 passes one case/two assertions, and focused native checks pass 109/109.
 Required design guidance and strict documentation-table checks were applied.
 No full-suite, sanitizer, cross-architecture or post-merge speedup claim.
-[Integration and artifact evidence](results-performance-merge-e119ab12c-macos-arm64.json).
+Integration and artifact evidence (`results-performance-merge-e119ab12c-macos-arm64.json`).
 
 The next experiment starts from this qualified merge: limit any unboxed cleanup
 specialization to admitted strong-object class-local slots, preserve original
@@ -7763,7 +7763,7 @@ rebuilt before tests. The warning-strict recursive-closure fixture retains its
 previously established macOS object/link alignment; timing settings are unchanged.
 No full-suite, sanitizer, cross-architecture or Java-parity claim.
 
-[Complete evidence](results-strong-class-clear-macos-arm64.json) and
+Complete evidence (`results-strong-class-clear-macos-arm64.json`) and
 [measurement discussion](RESULTS.md#strong-object-aot-class-local-cleanup-2026-10-10).
 
 |!Check|!Status|!Evidence
@@ -7863,7 +7863,7 @@ and native dispatch as substantial remaining costs. No full-suite, sanitizer
 or cross-architecture claim.
 
 [Measurements](RESULTS.md#prepared-aot-class-local-declaration-metadata-2026-10-10)
-and [complete evidence](results-class-local-prepare-macos-arm64.json).
+and complete evidence (`results-class-local-prepare-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated source, QPP class or registration.
@@ -7958,7 +7958,7 @@ matches the accepted baseline; the rebuilt binaries were not timed here.
 No full-suite, sanitizer, cross-architecture, fresh Java or parity claim.
 
 [Measurements](RESULTS.md#caller-reserved-native-method-frame-storage-rejected-2026-10-10)
-and [complete evidence](results-native-method-frame-storage-rejected-macos-arm64.json).
+and complete evidence (`results-native-method-frame-storage-rejected-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No Qore module, separated source, QPP class or registration is retained.
@@ -8055,7 +8055,7 @@ changed language-documentation templates pass strict qpp processing.
 
 Binaries embed d976c5f07 plus the merged source and audit adjustments, not the
 future merge commit. Full source/library/tool/reference/log hashes are in the
-[evidence record](results-performance-merge-5c31ca5c-macos-arm64.json). No timing,
+evidence record (`results-performance-merge-5c31ca5c-macos-arm64.json`). No timing,
 full-suite, sanitizer or cross-architecture claim. New optimization measurements
 must use this merged baseline. The public UnicodeCharacterIterator preserves
 its ABI with documented repeated stateful conversion; internal iterators retain
@@ -8152,7 +8152,7 @@ next additive float-native-method experiment, with integer ABI compatibility
 and all live runtime guards/observer semantics preserved.
 
 [Results and execution plan](RESULTS.md#floating-method-baseline-and-next-optimization-2026-10-10)
-and [complete evidence](results-float-method-baseline-macos-arm64.json).
+and complete evidence (`results-float-method-baseline-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No module, separated source, QPP class or registration change.
@@ -8242,7 +8242,7 @@ every adverse control and mixed short-invocation result; no Java parity, isolate
 call-latency, IR improvement, full-suite, sanitizer or cross-architecture claim.
 
 [Measured results and next steps](RESULTS.md#native-floating-method-continuations-2026-10-10)
-and [complete evidence](results-native-float-method-macos-arm64.json).
+and complete evidence (`results-native-float-method-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No module, separated source, QPP class or registration change.
@@ -8333,7 +8333,7 @@ revision contributes 186 jobs / 930 windows. No full-suite, sanitizer,
 cross-architecture, single-iteration, IR-speedup or Java-parity claim is made.
 
 [Results and next experiments](RESULTS.md#generic-floating-method-dispatch-2026-10-10)
-and [complete evidence](results-generic-float-method-macos-arm64.json).
+and complete evidence (`results-generic-float-method-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No module, separated source, QPP class or registration change.
@@ -8419,7 +8419,7 @@ small measured cost, retained alongside other adverse controls. No universal
 speedup, Java parity, new IR speedup, full-suite, sanitizer or cross-platform claim.
 
 [Results and next work](RESULTS.md#native-name-method-calls-with-boxed-results-2026-10-10)
-and [complete evidence](results-boxed-result-method-macos-arm64.json).
+and complete evidence (`results-boxed-result-method-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, registration or QPP class.
@@ -8500,7 +8500,7 @@ references per mode, 15 harness tests, 146 native debug checks and independent
 validation of all 360 jobs / 1800 measurement windows.
 
 [Results and next work](RESULTS.md#native-call-result-conversions-2026-10-10) and
-[complete evidence](results-native-call-conversion-macos-arm64.json).
+complete evidence (`results-native-call-conversion-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, registration or QPP class.
@@ -8716,7 +8716,7 @@ Applied audit-changes to the compiler/runtime optimization, regression tests and
 measurement documentation. All 62 checks: **18 Pass, 44 N/A, 0 Fail**. The four
 reviewed guides are unchanged. Qualification, all experimental trials, adverse
 controls and pre-existing diagnostic limitations are retained in
-[the evidence](results-stable-untyped-load-macos-arm64.json).
+the evidence (`results-stable-untyped-load-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, module registration or QPP class; no optimization release note required.
@@ -8788,7 +8788,7 @@ Applied audit-changes to runtime name reuse, diagnostic regression tests and
 measurement documentation. All 62 checks: **15 Pass, 47 N/A, 0 Fail**. The
 four previously reviewed guides are unchanged. There is no new ABI, cache
 layout or borrowed-frame lifetime. All controls are retained in
-[the evidence](results-generic-method-name-macos-arm64.json).
+the evidence (`results-generic-method-name-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, module registration or QPP class. No optimization release note required.
@@ -8861,7 +8861,7 @@ and measurement documentation. All 62 checks: **16 Pass, 46 N/A, 0 Fail**.
 The four previously reviewed guides are unchanged. Internal PIC layout and
 RUID change; body/readiness, context, ownership and diagnostics remain live.
 Code growth and adverse controls remain explicit in the
-[evidence](results-generic-method-binding-macos-arm64.json).
+evidence (`results-generic-method-binding-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, registration or QPP class. No optimization release note required.
@@ -9027,7 +9027,7 @@ Applied audit-changes to pre-resolved dispatch caching, hot-helper inlining,
 regression tests and measurement documentation. All 62 checks: **15 Pass,
 47 N/A, 0 Fail**. No exported ABI, header layout or runtime identity change.
 The four reviewed guides are unchanged. Rejected experiments and small
-adverse controls remain in the [evidence](results-resolved-method-entry-macos-arm64.json).
+adverse controls remain in the evidence (`results-resolved-method-entry-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, registration or QPP class. No optimization release note required.
@@ -9193,7 +9193,7 @@ existing explicit-context integer companions, strengthened fixtures and evidence
 All 62 checks: **18 Pass, 44 N/A, 0 Fail**. No exported ABI, header layout,
 compiler or runtime identity change. The initial obsolete test expectation,
 earlier regressions, all 397 jobs / 1985 windows and next plan are retained in
-[the evidence](results-native-method-admission-macos-arm64.json).
+the evidence (`results-native-method-admission-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, registration, layout or QPP class. No optimization release note required.
@@ -9266,7 +9266,7 @@ Applied audit-changes to the exact-immediate scalar return guard, two new
 test sources and measured evidence. All 62 checks: **15 Pass, 47 N/A, 0 Fail**.
 No exported ABI/header change; compiler changes do update AOT runtime identity.
 All 319 jobs / 1595 windows and baseline IR limitations are retained in
-[the evidence](results-scalar-return-guard-macos-arm64.json).
+the evidence (`results-scalar-return-guard-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, separated module source, registration, layout or QPP class. No optimization release note required.
@@ -9347,7 +9347,7 @@ debug: 43 files, 450 reported cases, 30075 assertions, 1 standalones and 1 skips
 Both builds pass 495 reference checks per IR/AOT mode; debug passes 153
 native checks. The affected qmods and YAML binary module were rebuilt.
 This is integration validation, not new performance timing.
-[Evidence and next plan](results-merge-dc4204b-macos-arm64.json).
+Evidence and next plan (`results-merge-dc4204b-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module or QPP class. Existing module structure/registrations retained. New UnicodeByteOrderInfo is registered in the existing Qore namespace and public hashdecl declarations; imported release notes retained.
@@ -9427,7 +9427,7 @@ fixture passes 190 assertions each. All 153 debug native checks and 15 runner
 checks pass. Final nested timings improve 10.27-12.10%, while the integer-callback
 baseline repeat is 1.09% adverse. The latter is retained as a tradeoff.
 [Results](RESULTS.md#receiver-aware-forwarding-entry-2026-10-11) and
-[verified evidence](results-receiver-entry-macos-arm64.json) distinguish the
+verified evidence (`results-receiver-entry-macos-arm64.json`) distinguish the
 earlier diagnostic-defective prototype from the qualified final candidate.
 
 |!Check|!Status|!Evidence
@@ -9509,7 +9509,7 @@ Both IR/AOT 495-check grids and 153 debug native checks pass. The new offline
 fixture contributes 1432 assertions per build. Live DB and cloud integration are not
 claimed. No new timing claim; pre-merge measurements remain tied to their frozen binaries.
 
-[Verified evidence](results-merge-8417bde-macos-arm64.json).
+Verified evidence (`results-merge-8417bde-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new production module, module layout/registration or QPP class. Existing modules keep their registrations and imported release notes.
@@ -9586,7 +9586,7 @@ release: 103 files, 383 cases, 27460 assertions, 15 standalones, 1 skipped cases
 debug: 103 files, 390 cases, 27559 assertions, 15 standalones, 0 skipped cases.
 The new fixture passes 86 assertions per build and against the frozen baseline.
 All 153 debug native checks, 15 runner tests and 495 checks per reference mode pass.
-[Verified timings and limitations](results-method-return-guard-macos-arm64.json).
+Verified timings and limitations (`results-method-return-guard-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, module registration/layout, separated module source or QPP class. No optimization release notes added.
@@ -9665,7 +9665,7 @@ debug: 103 files, 390 cases, 27612 assertions, 15 standalones, 0 skipped cases; 
 Receiver-entry driver: 230 assertions/build; native-context driver: 252/build.
 All 153 debug native checks, 15 runner tests and 495 references per mode pass.
 Failures found during fixture development and their fixes are retained in the evidence.
-[Measurements, identities and limitations](results-forward-leaf-preflight-macos-arm64.json).
+Measurements, identities and limitations (`results-forward-leaf-preflight-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, registration/layout, separated module source or QPP class. No optimization release notes.
@@ -9750,7 +9750,7 @@ release: 103 files, 383 cases, 27557 assertions, 15 standalones, 1 skipped cases
 debug: 103 files, 390 cases, 27656 assertions, 15 standalones, 0 skipped cases; seven additional exception/stack fixtures passed.
 Native-context driver: 276 assertions/build; receiver-entry driver: 250/build.
 153 debug native checks, 15 runner tests and 495 references per execution mode pass.
-[Full identities, measurements and limitations](results-native-forward-entry-macos-arm64.json).
+Full identities, measurements and limitations (`results-native-forward-entry-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in doxygen/lang/120_modules.dox.tmpl (for modules in the Qore repo; N/A for external module repos)|N/A|No new module, module registration/layout, separated module source or QPP class. No optimization release notes.
@@ -9891,7 +9891,7 @@ debug: original 103 files, 390 cases, 27688 assertions, 15 standalones, 0 skips;
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new user-controlled format, raw buffer, credential or unbounded index. Existing validated slot/PIC bounds retained; standard checklist review only, this is performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 103 selected files plus the expanded 300-assertion native fixture and seven exception fixtures. Receiver driver has 270 assertions. Direct private hit/miss, hierarchy invalidation, full-width values, cold context restoration and concurrent readers covered. 153 debug native checks, 15 harness tests, 495 references/mode pass. Not full-suite/sanitizer/cross-platform qualification.
 
-[Full verified evidence](results-forward-access-context-macos-arm64.json).
+Full verified evidence (`results-forward-access-context-macos-arm64.json`).
 
 
 ## AOT scalar-local store audit (2026-10-11)
@@ -9965,7 +9965,7 @@ debug: 104 files, 391 cases, 27777 assertions, 15 standalones, 0 skips; seven ad
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new raw buffer, credential or user-controlled format string. Generated context index assertions remain; fixture shell arguments are quoted. Standard audit checklist only; this is performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 104 selected files plus seven exception/stack fixtures, including ordinary local reflection, ownership, closures/references, weak/opaque values, block reuse, type filters and call readers. Native checks prove actual positive admission and side-effect-free misses (205 total); 15 harness tests and 495 checks/mode pass. Baseline reflection defects remain separately documented. Not full-suite, sanitizer or cross-platform qualification.
 
-[Full verified evidence](results-aot-scalar-local-store-macos-arm64.json).
+Full verified evidence (`results-aot-scalar-local-store-macos-arm64.json`).
 
 
 ## AOT native scalar-key audit (2026-10-11)
@@ -10039,7 +10039,7 @@ debug: 104 files, 391 cases, 27789 assertions, 15 standalones, 0 skips; seven ad
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new raw buffer, credential or user-controlled format string. Existing slot and bounded PIC checks remain; integer key is never dereferenced. This is the standard audit checklist for performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 104 selected files plus seven exception/stack fixtures. Expanded native driver has 312 assertions including actual hits/misses, enum-first and int-to-float keys, disabled proof, wrong companions, context restoration and cross-Program behavior. 205 debug native checks, 15 harness tests and 495 references/mode pass. Not full-suite, sanitizer or cross-platform qualification.
 
-[Full verified evidence](results-native-scalar-key-macos-arm64.json).
+Full verified evidence (`results-native-scalar-key-macos-arm64.json`).
 
 
 ## Boxed-method benchmark controls audit (2026-10-11)
@@ -10112,7 +10112,7 @@ non-leaf controls; Java keeps DONT_INLINE on every corresponding target.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new raw buffer, credential, format string or external input channel; existing literal CHECK format retained. Standard performance-change checklist.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|16 harness tests pass. Each of IR, AOT, Java interpreted and Java JIT passes 540 integer references, including 0/1/17/1024/4096 counts and boundary seeds. LLVM verifies six field-read targets lack native method companions while corresponding leaf targets retain v3 companions; boxed callers retain ordinary dispatch.
 
-[Verified reference and codegen evidence](results-boxed-method-controls-macos-arm64.json).
+Verified reference and codegen evidence (`results-boxed-method-controls-macos-arm64.json`).
 
 
 ## AOT boxed-argument and matched-fallback audit (2026-10-11)
@@ -10186,7 +10186,7 @@ debug: 104 files, 392 cases, 29411 assertions, 15 standalones, 0 skips; seven ad
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Existing bounded slot/PIC contracts remain. No credentials, user-controlled format string or unchecked variable-size buffer added. This is the standard checklist applied to performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 104 selected files and seven extra exception/stack fixtures. Boxed-call tests have 3153 assertions, native contract driver 378, and floating method suite 1110. Also 205 debug native checks, 16 harness tests and 540 references per mode. Initial obsolete-codegen failures and the unfixed baseline reflection defect remain in evidence. No full-suite, sanitizer or cross-platform claim.
 
-[Full verified evidence](results-boxed-argument-macos-arm64.json).
+Full verified evidence (`results-boxed-argument-macos-arm64.json`).
 
 
 ## AOT scalar-member companion audit (2026-10-11)
@@ -10267,7 +10267,7 @@ were independently aggregated; the final measured release binary is unchanged.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|Bounded proof/PIC accesses and existing hash/lock protocols; no unchecked raw buffer, credentials or user-controlled format string. This is the standard checklist for performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug: 105 selected files each, 29967/30066 assertions; seven extra exception/stack fixtures each. New member suite 607, native context 426, boxed-call 3153 assertions per build. 205 debug native checks, 17 harness tests, 555 reference checks per IR/AOT/Java mode. Edge encodings, fallback, actual native hits, private/inherited shadowing, foreign threads, debugger/frame readers and concurrent member replacement covered. No full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements, historical trials and qualification](results-scalar-member-macos-arm64.json).
+Verified measurements, historical trials and qualification (`results-scalar-member-macos-arm64.json`).
 
 
 ## AOT compile-time internal-member storage context audit (2026-10-11)
@@ -10347,7 +10347,7 @@ sources and measured release binary were independently verified before recording
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No raw buffer, format string, credential or unbounded array change. This is the standard audit checklist applied to performance work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 105 selected files, 30363/30462 assertions, plus seven exception/stack fixtures. Member suite 825 and native context driver 604 assertions per build; 205 debug native checks, 17 harness tests and 555 references per IR/AOT/Java mode. Tests cover actual native hits, internal shadowing, special scalar encodings, fallback, writers, foreign threads, stack overflow and context restoration. No full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements, baseline profiles and qualification](results-scalar-member-context-macos-arm64.json).
+Verified measurements, baseline profiles and qualification (`results-scalar-member-context-macos-arm64.json`).
 
 
 ## Runtime-backed boxed AOT local freshness audit (2026-10-11)
@@ -10428,7 +10428,7 @@ and all measurement/qualification records were verified before recording this au
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No buffer, user-controlled format string, credentials or unchecked array access added. This is the standard checklist applied to AOT performance/correctness work.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|AST oracle reproduces six baseline failures; assignment controls distinguish the rejected first prototype. Final release/debug qualification passes 106 selected files each plus seven exception/stack fixtures, 205 debug native checks, 17 harness tests and 555 references per mode. New 1150-assertion regression verifies actual native entries, return/throw, special values, ownership, EH, split compilation and fallback controls. No full-suite/sanitizer/cross-platform claim.
 
-[Verified correctness cost and qualification](results-aot-runtime-local-reload-macos-arm64.json).
+Verified correctness cost and qualification (`results-aot-runtime-local-reload-macos-arm64.json`).
 
 
 ## AOT inline local-cache freshness guard audit (2026-10-11)
@@ -10513,7 +10513,7 @@ identities bind qualification to both timing experiments.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new buffer, user-controlled format string or unchecked array access. Audit caught inherited database settings in the private timing metadata; committed evidence uses an explicit environment-key allowlist and retains only the full-environment fingerprint and withheld key names. No credential values exported.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|106 selected files pass per release/debug build, plus seven exception/stack fixtures, 205 debug native checks, 17 harness tests and 555 references per mode. The 1440-assertion regression checks native entries and guard presence/absence at -O0/-O3, return/throw, ownership, special values, parameter writes, EH, split compilation and fallbacks. All 795 timing windows replayed; no full-suite/sanitizer/cross-platform claim.
 
-[Verified timing controls and qualification](results-aot-inline-reload-guard-macos-arm64.json).
+Verified timing controls and qualification (`results-aot-inline-reload-guard-macos-arm64.json`).
 
 
 ## AOT object-valued auto-parameter cache audit (2026-10-11)
@@ -10603,7 +10603,7 @@ regressions pass again after restoration.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new buffer, unchecked array access or user-controlled format string. Measurement environment values use explicit safe-key allowlists; published evidence excludes inherited connection values.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|107 selected files per release/debug build plus seven exception/stack fixtures, 205 debug native checks, 17 harness checks and 555 references per mode. New 1106-assertion regression checks ordinary/private admission, stripped O0/O3, EH, split compilation, reflective changes, aliases, deletion, scalar/container fallback and controls. All 2276 measured windows replayed. No full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements, controls and qualification](results-aot-object-param-cache-macos-arm64.json).
+Verified measurements, controls and qualification (`results-aot-object-param-cache-macos-arm64.json`).
 
 
 ## Entry-scope reporting correction audit (2026-10-11)
@@ -10773,7 +10773,7 @@ Debug: 110 selected files, 402 cases, 33626 assertions, 15 standalones, 0 skippe
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new unbounded buffer, unchecked index or user-controlled format string. Result records expose only allowlisted environment paths/controls plus full-environment hashes; no inherited connection values are published.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 110 selected files, seven exception fixtures, reference/native checks; 205 debug native checks, 17 harness tests, 555 references per IR/AOT/Java mode. New 192-assertion wrapper covers AST/IR/JIT/tiered, stripped O0/O3, EH/split/no-debug, access/storage/representation boundaries, references, deletion, reentrant destruction and concurrency. All 13 owned qmod aliases restored and four regressions rerun. No full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements, controls and qualification](results-aot-call-member-runtime-macos-arm64.json).
+Verified measurements, controls and qualification (`results-aot-call-member-runtime-macos-arm64.json`).
 
 
 ## AOT member-update prefix and cold-continuation audit (2026-10-12)
@@ -10866,7 +10866,7 @@ Final verified measurements SHA-256: e861f91b34a91a2ed0bcca7f07d59d789c1d905050c
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled format string or unbounded buffer; descriptor counts, IR operands and helper inputs are validated. Published environment values use explicit allowlists; inherited environment is represented only by a hash, not exposed values.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Release/debug each pass 111 selected files, seven exception/stack fixtures and IR/AOT reference checks; 205 debug native checks, 17 harness tests and 555 references per IR/AOT/Java mode. Expanded effect fixture passes 452 assertions; real native-entry fixture passes 652. Coverage includes exact partial resumes, wide ownership, reentrant parameter replacement, error frames, cross-Program fallback, debugger/foreign-thread readers, concurrency and cancellation. Thirteen owned release qmod aliases restored, unrelated aliases unchanged, five smoke fixtures rerun. Not full-suite/sanitizer/cross-platform coverage.
 
-[Verified measurements, adverse controls and qualification](results-aot-effect-member-prefix-macos-arm64.json).
+Verified measurements, adverse controls and qualification (`results-aot-effect-member-prefix-macos-arm64.json`).
 
 
 ## Direct AOT primitive local replacement audit (2026-10-12)
@@ -10967,7 +10967,7 @@ debug runs it. Value/representation checks still run; no leak-check claim.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No new index arithmetic, buffer or user-controlled format string. Measurement environment values are explicitly allowlisted; inherited connection data is represented only by an environment hash.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Both builds pass 112 selected integration files and seven exception/stack fixtures; 257 debug native checks, 17 harness tests and 555 references per IR/AOT/Java mode. Scalar fixture covers primitive transitions, types, signed zero, infinities, NaNs, integer boundaries and ownership/reference/fallback cases at AST/IR/JIT/tiered and AOT O0/O3/EH/split/no-debug. Native tests verify both storage modes directly, including exact bits and rejection without mutation. All13 owned release qmods restored with unrelated aliases unchanged, six release smoke fixtures rerun. Pre-existing block-map reflection limitation remains explicit; no full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements and qualification](results-aot-direct-scalar-store-macos-arm64.json).
+Verified measurements and qualification (`results-aot-direct-scalar-store-macos-arm64.json`).
 
 ## Prepared ordinary-auto AOT body slots audit (2026-10-12)
 
@@ -11039,7 +11039,7 @@ documented adverse controls; this is not a universal speedup or Java-parity clai
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled format strings, unbounded buffer or new unchecked user index. Internal compiled helpers retain trusted index contracts. New private evidence allowlists environment values and hashes the full environment; DB connection data is unset for qualification/profile/new Java driver.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Independent qualification verifies 114 files/build (release 34417/debug 34516 assertions),385 native checks,17 harness tests, seven exception/stack fixtures/build,555 IR/AOT and restored Java references, and eight release smokes. Recursion before parent overwrite, block growth, fallback, reflection, reentry/unwind and deterministic compiler cancellation/reuse are covered. All 13 owned release qmods restored, unrelated links unchanged. Explicit skips and incomplete baseline reflection maps remain; no full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements and qualification](results-aot-auto-local-slot-macos-arm64.json).
+Verified measurements and qualification (`results-aot-auto-local-slot-macos-arm64.json`).
 
 ## Prepared runtime-backed AOT local reloads audit (2026-10-12)
 
@@ -11111,7 +11111,7 @@ this is not a universal speedup or Java-parity claim.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled format, new buffer or unchecked user index. Internal prepared-pointer lifetime is compiler-proven. Evidence records allowlisted environment values and hashes only; DB connection data is unset for owned jobs.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Selected114 files/build pass with35301 release/35400 debug assertions,483 native checks,17 harness checks, seven exception/stack fixtures/build and555 references per mode. Getter/compiler controls, recursion, block growth/clearing, reflection, live references, node ownership, deferred cleanup reentry/failure and fallbacks are covered. All39 release qmods restored; unrelated aliases unchanged. No full-suite/sanitizer/cross-platform claim.
 
-[Verified measurements and qualification](results-aot-prepared-local-reload-macos-arm64.json).
+Verified measurements and qualification (`results-aot-prepared-local-reload-macos-arm64.json`).
 
 ## Prepared AOT auto-store declaration admission audit (2026-10-12)
 
@@ -11184,7 +11184,7 @@ This is not a universal speedup or Java-parity claim.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled format, new buffer, credential or unchecked user index. Non-null prepared-pointer identity/lifetime is compiler-proven; getter rejects invalid indices. Evidence retains only allowlisted environment values and hashes; DB connection data is unset for owned jobs.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Selected114 files/build pass with36057 release/36156 debug assertions,642 native checks,17 harness tests, seven exception/stack fixtures/build and555 references/mode. Forced prepared stores test exact bits, all live-state misses, node ownership, recursion/block growth and declaration rejection; O0/O3/EH/split/no-debug and independent controls remain. All57 release qmods restored; unrelated aliases unchanged. No full-suite/sanitizer/leak/cross-platform claim.
 
-[Verified measurements and qualification](results-aot-auto-declaration-macos-arm64.json).
+Verified measurements and qualification (`results-aot-auto-declaration-macos-arm64.json`).
 
 ## Exact live scalar reuse in AOT reloads audit (2026-10-13)
 
@@ -11257,13 +11257,13 @@ This is not a universal speedup or Java-parity claim.
 |61. Security: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code|Pass|No user-controlled format, new buffer, credential or unchecked user index. Prepared-pointer identity/lifetime is compiler-proven and getter bounds-checked. Evidence prints only allowlisted environment fields/hashes; database connection data is stripped from owned jobs.
 |62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)|Pass|Selected 114 files/build pass with 36695 release/36794 debug assertions, 795 native checks, 17 harness tests, seven exception/stack fixtures/build and 555 references/mode. Forced scalar reuse and generic/v1/v2 fallback cover exact bits, ownership, reentry and failures; O0/O3/EH/split/no-debug and independent controls pass. All 61 release qmods restored; unrelated aliases unchanged. Not full-suite/sanitizer/leak/cross-platform qualification.
 
-[Verified measurements and qualification](results-aot-scalar-local-reload-macos-arm64.json).
+Verified measurements and qualification (`results-aot-scalar-local-reload-macos-arm64.json`).
 
 ## Develop integration through 8c4350a87 (2026-10-23)
 
 Scope: the seven incoming develop commits, automatic integration, native socket-fixture setup correction, and qualification evidence. Applied `/Users/david/.codex/skills/audit-changes/SKILL.md`. All 62 checks: 21 Pass, 41 N/A. The known SocketSpecificBind cross-process failure in both builds and skipped external-service cases remain explicit limitations. This does not claim that the entire test suite passes.
 
-[Raw validation and audit evidence](results-merge-8c4350a87-macos-arm64.json).
+Raw validation and audit evidence (`results-merge-8c4350a87-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|Only one new test-only .qm, not a shipped module; no new qlib module requires catalog/build registration.

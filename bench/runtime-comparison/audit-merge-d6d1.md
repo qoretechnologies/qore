@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Merge develop `d6d1ef3caf` into performance head `aed29e373e`, including #5517 and #5518. [Recorded qualification](results-merge-d6d1.json).
+Merge develop `d6d1ef3caf` into performance head `aed29e373e`, including #5517 and #5518. Recorded qualification (`results-merge-d6d1.json`).
 
 The merge has no conflicts. Local corrections replace two accidental BEL bytes in Doxygen text, add missing design copyright and a JVM usage example, and extend the native stack regression to compare enforced limits against OS stack bounds. The test also checks that previously acquired fast-call limit pointers observe enforcement changes at O0 and O3.
 

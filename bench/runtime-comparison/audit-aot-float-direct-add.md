@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks reviewed before commit. [Evidence](results-aot-float-direct-add-macos-arm64.json).
+All 62 audit-changes checks reviewed before commit. Evidence (`results-aot-float-direct-add-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped module, QPP class, module layout or build registration.

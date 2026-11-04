@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover the two production files, documentation and benchmark evidence. Baseline is performance commit `196f148ced`, not pure develop. [Raw results and provenance](results-native-frame-cache-macos-arm64.json).
+All 62 audit-changes checks cover the two production files, documentation and benchmark evidence. Baseline is performance commit `196f148ced`, not pure develop. Raw results and provenance (`results-native-frame-cache-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new Qore module, QPP class, module directive, registration or layout change.

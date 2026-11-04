@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-Merge origin/develop `7ecf4fcbab` into `b933fda977` cleanly. Gemini alternative enum shaping, UTC build-helper timestamps and provenance fixtures are validated against the optimized build. No performance timing claim for this merge. [Evidence](results-merge-7ecf4.json).
+Merge origin/develop `7ecf4fcbab` into `b933fda977` cleanly. Gemini alternative enum shaping, UTC build-helper timestamps and provenance fixtures are validated against the optimized build. No performance timing claim for this merge. Evidence (`results-merge-7ecf4.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|No new shipped module, QPP class, registration or module layout change.

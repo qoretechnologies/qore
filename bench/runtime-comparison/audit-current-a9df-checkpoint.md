@@ -2,7 +2,7 @@
 
 Copyright 2026 Qore Technologies, s.r.o.
 
-All 62 audit-changes checks cover the checkpoint documentation and evidence. No production implementation change. [Evidence](results-current-a9df-macos-arm64.json).
+All 62 audit-changes checks cover the checkpoint documentation and evidence. No production implementation change. Evidence (`results-current-a9df-macos-arm64.json`).
 
 |!Check|!Status|!Evidence
 |1. Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)|N/A|Documentation and benchmark evidence only; no production C++, Qore module, QPP class, test fixture, DataProvider registration or dependency change.
