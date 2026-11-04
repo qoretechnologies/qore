@@ -290,7 +290,12 @@ public class DebugMcpServerTest inherits QUnit::Test {
         hash<auto> h = startTool(qdbg_mcp, args ?? (), dir, token ? {"QDBG_MCP_TOKEN": token} : NOTHING);
         *string url = (h.line =~ x/listening on (http:\/\/[^\s]+)/)[0];
         assertTrue(exists url, h.line);
-        McpClient::McpClient c(url, token ? {"headers": {"Authorization": "Bearer " + token}} : NOTHING);
+        # the time of a request only limits a failure, as PauseBound does, however slowly a machine under load runs it
+        hash<auto> opts = {"timeout": 300000, "streamable_read_timeout": 300s};
+        if (token) {
+            opts.headers = {"Authorization": "Bearer " + token};
+        }
+        McpClient::McpClient c(url, opts);
         c.initialize(<McpClientInfo>{"name": "DebugMcpServerTest", "version": "1.0"});
         return {"process": h.process, "client": c, "url": url};
     }
@@ -557,8 +562,9 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertEq(1, r.events.size(), sprintf("%y", r.events));
         r = call(c, "qore_debug_continue", {"timeout_ms": 300, "pause_timeout_ms": PauseBound});
         assertTrue(r.timedOut);
-        # the stops of the requested pause, in the function of the threads
-        list<hash<auto>> pauses = select r.events, $1.reason == "pause";
+        # the stops of the requested pause, in the function of the threads; a thread that enters the function then stops
+        # at its start
+        list<hash<auto>> pauses = select r.events, $1.reason == "pause" || $1.reason == "function entry";
         assertGt(0, pauses.size(), sprintf("%y", r.events));
         assertEq("work", pauses[0].function);
         # the threads were paused although they are logging
@@ -582,7 +588,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertTrue(r.ok, r.error);
         r = call(c, "qore_debug_set_breakpoint", {"location": "log.q 6"});
         assertTrue(r.ok, r.error);
-        r = call(c, "qore_debug_continue");
+        r = call(c, "qore_debug_continue", {"timeout_ms": PauseBound});
         assertTrue(r.state.paused, sprintf("%y", r - "logOutput"));
         assertFalse(r.programOutput =~ /i=/);
         list<string> lines = r.logOutput.split("\n");
@@ -601,7 +607,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         assertTrue(r.ok, r.error);
         r = call(c, "qore_debug_set_breakpoint", {"location": "same.q 6"});
         assertTrue(r.ok, r.error);
-        r = call(c, "qore_debug_continue");
+        r = call(c, "qore_debug_continue", {"timeout_ms": PauseBound});
         assertRegex("^\\[thread [0-9]+\\] loop \\(x60\\)$", r.logOutput);
         assertFalse(r.hasKey("logOutputOmitted"));
         call(c, "qore_debug_terminate");

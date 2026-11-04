@@ -282,6 +282,17 @@ class SignalTest inherits QUnit::Test {
         assertRegex("events: finished destroyed; next callback: " + SIGUSR1 + "\n", out);
     }
 
+    #! returns True if this process was started with the signal ignored, as a test run under nohup is
+    private static bool startedWithSignalIgnored(int sig) {
+        if (is_file("/proc/self/status")) {
+            *list<string> m = (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/SigIgn:\s*([0-9a-fA-F]+)/);
+            return boolean(hextoint(m[0]) & (1 << (sig - 1)));
+        }
+        # macOS has no such file, and its ps does not tell; a child inherits what this process ignores, and perl shows it
+        return trim(backquote(sprintf("perl -e 'print $SIG{%s} // \"\"' 2>/dev/null",
+            SignalToName{sig}.substr(3)))) == "IGNORE";
+    }
+
     #! runs DispositionScript and returns its output and its exit code, with 128 plus the signal that ended it
     private hash<auto> runDisposition(TmpFile script, int sig, string mode, string expected = "ends", string start = "") {
         string cmd = start;
@@ -310,10 +321,13 @@ class SignalTest inherits QUnit::Test {
         # a signal that ends the process, with and without a handler that was removed: by its default action, or for
         # SIGTERM and SIGHUP with the exit code of the signal thread
         foreach int sig in (SIGTERM, SIGHUP, SIGUSR1, SIGUSR2) {
-            foreach string mode in ("never", "unset", "removed") {
-                hash<auto> res = runDisposition(script, sig, mode);
-                assertEq(128 + sig, res.rc, sprintf("%s %s: %y", SignalToName{sig}, mode, res.out));
-                assertFalse(res.out =~ /alive/, sprintf("%s %s", SignalToName{sig}, mode));
+            # a shell cannot reset a signal that it inherited as ignored; those cases are checked below in any case
+            if (!SignalTest::startedWithSignalIgnored(sig)) {
+                foreach string mode in ("never", "unset", "removed") {
+                    hash<auto> res = runDisposition(script, sig, mode);
+                    assertEq(128 + sig, res.rc, sprintf("%s %s: %y", SignalToName{sig}, mode, res.out));
+                    assertFalse(res.out =~ /alive/, sprintf("%s %s", SignalToName{sig}, mode));
+                }
             }
             # negative: a handler that is set again handles the signal
             hash<auto> res = runDisposition(script, sig, "readded");
