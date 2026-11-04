@@ -24,10 +24,21 @@ Two kinds of `.qmod` are checked (`qore_build_aot_module_is_stale()`):
 
 A regular `.qmod` without a dependency file next to it is **not checked**:
 
-- an installed module: the install rules remove an installed `<qmod>.d` (`cmake/QoreMacros.cmake`), so installed and
+- an installed module: the install rules remove an installed `<qmod>.d` and `<qmod>.d.fingerprints`
+  (`cmake/QoreMacros.cmake`), so installed and
   packaged trees are unchanged, and the check costs one `stat()` of the missing dependency file per load;
 - a module compiled by hand with `qcc --compile-module` (or `qore --compile-module`) without `--depfile`: it is used
   even if its source has changed since; rebuild it, or compile it with `--depfile` to have it checked.
+
+A dependency file is **used only for the module that its rule names**: its target (the `-o` path qcc wrote it for)
+must resolve to the module that is checked, the regular file itself or, for a link, the module the link resolves
+to; a relative target is taken relative to the directory of the dependency file.  A dependency file whose target is
+another file, or that has no rule or a rule without a target, is ignored as if there were none (a debug build says so
+at debug level 1).  A dependency file describes the build of one file: copying a build tree's `qlib-qmod` to an
+installation with `cp -a` or `rsync -a` copies its dependency files too, with the modification times of the build,
+and the copies then named the build's modules, whose sources changed with every later commit, so the installed
+copies were loaded from their sources with a warning.  The install rules also remove an installed
+`<qmod>.d.fingerprints`, which is never read without its dependency file.
 
 A modification-time rule is not used for a regular file without a dependency file: a checkout, a copy or a package
 extraction gives files new modification times without changing them (see below), and there is no fingerprint to

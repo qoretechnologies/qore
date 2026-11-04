@@ -2504,9 +2504,11 @@ FUNCTION (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_di
             set(_qore_aot_published_qmod "${_qore_aot_qmod_dir}/${_name}.qmod")
         endif()
     endif()
-    set(_qore_aot_candidates "${_name}.qmod" "${_name}.qmod.d")
+    # a depfile and its fingerprints describe the built module; installed beside a copy, they are stale
+    set(_qore_aot_candidates "${_name}.qmod" "${_name}.qmod.d" "${_name}.qmod.d.fingerprints")
     if (${_is_dir})
-        list(APPEND _qore_aot_candidates "${_name}/${_name}.qmod" "${_name}/${_name}.qmod.d")
+        list(APPEND _qore_aot_candidates "${_name}/${_name}.qmod" "${_name}/${_name}.qmod.d"
+            "${_name}/${_name}.qmod.d.fingerprints")
     endif()
     set(_qore_aot_stale_source_qmods "")
     set(_qore_aot_published_source_qmods "")
@@ -3072,8 +3074,23 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod")
     endif()
-    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod.d")
+    # A depfile (<qmod>.d) and the fingerprints beside it describe the module in the build tree; a copy of them
+    # beside an installed module is never current, so none is left in an install directory (the module loader
+    # also uses a depfile only when it names the module it is loaded beside; see qore_build_aot_module_is_stale())
+    foreach (_qmod_depfile_suffix .d .d.fingerprints)
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod${_qmod_depfile_suffix}")
+        if (${_is_dir})
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(_qmod_stale_install_paths "${QORE_USER_MODULES_DIR}"
+                "${_name}/${_name}.qmod${_qmod_depfile_suffix}")
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(_qmod_stale_install_paths "${_qmod_install_dir}"
+                "${_name}/${_name}.qmod${_qmod_depfile_suffix}")
+        endif()
+        if (NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+                _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod${_qmod_depfile_suffix}")
+        endif()
+    endforeach()
     if (${_is_dir})
         # Remove stale artifacts from older layouts.  Flat qmods shadow split
         # qmods within one module path entry, and old share-installed qmods can
@@ -3083,11 +3100,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
                 _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod")
         endif()
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod.d")
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod")
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod.d")
         install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
             COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         # Atomic stage-and-rename publish (new inode) so rebuilding under a live

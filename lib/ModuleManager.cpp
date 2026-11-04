@@ -494,13 +494,17 @@ static bool qore_module_source_changed(const std::string& path, const QoreAOTMod
     return hash != fingerprint.hash;
 }
 
-//! Returns the prerequisites of a Make-style dependency file written by qcc (\c --depfile)
+//! Returns the target and the prerequisites of a Make-style dependency file written by qcc (\c --depfile)
 /** The file has one rule, <tt>target: prerequisite...</tt>; a space or backslash in a path is escaped with a
     backslash, and a backslash before a line break continues the rule
 
-    @return false if the file cannot be read or has no rule
+    @param path the dependency file
+    @param target set to the target of the rule, without its escapes
+    @param deps set to the prerequisites of the rule, without their escapes
+
+    @return false if the file cannot be read, or has no rule or a rule without a target
 */
-static bool qore_read_module_depfile(const std::string& path, std::vector<std::string>& deps) {
+static bool qore_read_module_depfile(const std::string& path, std::string& target, std::vector<std::string>& deps) {
     FILE* fp = fopen(path.c_str(), "rb");
     if (!fp) {
         return false;
@@ -524,15 +528,39 @@ static bool qore_read_module_depfile(const std::string& path, std::vector<std::s
     }
 
     // the target ends at the first colon that is not escaped
+    target.clear();
     size_t i = 0;
     for (; i < content.size(); ++i) {
-        if (content[i] == '\\' && i + 1 < content.size()) {
+        char c = content[i];
+        if (c == '\\' && i + 1 < content.size()) {
+            char n = content[i + 1];
             ++i;
-        } else if (content[i] == ':') {
+            if (n == '\n' || n == '\r') {
+                // a target is on one line
+                return false;
+            }
+            target += n;
+        } else if (c == ':') {
+            break;
+        } else if (c == '\n' || c == '\r') {
+            // a line without a colon is no rule
+            return false;
+        } else if (c != ' ' && c != '\t') {
+            target += c;
+        } else if (!target.empty()) {
+            // an unescaped blank ends the target; only blanks may follow it before the colon
+            size_t j = i;
+            while (j < content.size() && (content[j] == ' ' || content[j] == '\t')) {
+                ++j;
+            }
+            if (j == content.size() || content[j] != ':') {
+                return false;
+            }
+            i = j;
             break;
         }
     }
-    if (i == content.size()) {
+    if (i == content.size() || target.empty()) {
         return false;
     }
     std::string dep;
@@ -720,6 +748,37 @@ bool qore_aot_read_module_source_fingerprints(const std::string& path,
     return true;
 }
 
+#ifndef _Q_WINDOWS
+//! Returns true if the target of a module dependency file is the given module
+/** @param depfile the path of the dependency file
+    @param depfile_target the target of its rule; a relative target is relative to the directory of \a depfile
+    @param module the module, as a path whose symbolic links are resolved
+
+    @return true if both resolve to the same file
+*/
+static bool qore_module_depfile_names_module(const std::string& depfile, const std::string& depfile_target,
+        const std::string& module) {
+    std::string path = depfile_target;
+    if (path[0] != QORE_DIR_SEP) {
+        size_t sep = depfile.rfind(QORE_DIR_SEP);
+        path = (sep == std::string::npos ? std::string(".") : depfile.substr(0, sep)) + QORE_DIR_SEP_STR + path;
+    }
+    char* resolved = realpath(path.c_str(), nullptr);
+    if (!resolved) {
+        return false;
+    }
+    char* resolved_module = realpath(module.c_str(), nullptr);
+    if (!resolved_module) {
+        free(resolved);
+        return false;
+    }
+    bool rv = !strcmp(resolved, resolved_module);
+    free(resolved);
+    free(resolved_module);
+    return rv;
+}
+#endif
+
 //! Returns true if a source of an AOT module of a build tree has changed since the module was compiled
 /** A build tree links the AOT modules it builds into the source \c qlib directory (\c QORE_AOT_LINK_SOURCE_MODULES),
     where the in-tree tests find them before the module sources, and the test runner puts the directory of the built
@@ -728,7 +787,9 @@ bool qore_aot_read_module_source_fingerprints(const std::string& path,
     and a module that is a regular file is checked if qcc wrote a dependency file next to it
     (<tt>\<module\>.d</tt>), as the build of a tree does.  An installed module has no dependency file (the install
     rules remove it, see QoreMacros.cmake), so it is never checked; nor is a module compiled with
-    <tt>qcc --compile-module</tt> without <tt>--depfile</tt>.
+    <tt>qcc --compile-module</tt> without <tt>--depfile</tt>.  A dependency file is used only if the target of its rule
+    is the module checked (for a link, the module it resolves to): a dependency file copied next to another module,
+    with a build tree copied to an installation, is not that module's and is ignored, as if there were none.
 
     The sources are the files listed in the dependency file that qcc wrote next to the module it links to, or next to
     the module itself (<tt>\<module\>.d</tt>), which include the sources of the modules it depends on.  A source has changed if its
@@ -812,8 +873,23 @@ static bool qore_build_aot_module_is_stale(const char* qmod_path, const std::str
         }
     }
 
+    // A dependency file describes the module that is its rule's target, and only that one: a copy next to another
+    // module (a build tree's qlib-qmod copied to an installation with cp -a or rsync -a, which also keep the
+    // modification times) names the module it was written for, whose sources have changed since the copy was
+    // made, and must not make the copy look out of date.  So the dependency file is used only when its target is
+    // the module checked here: the module itself, or for a link the module that it resolves to.  A relative target
+    // is taken relative to the directory of the dependency file.  One that does not name it is not used, as if
+    // there were none; the target of a file that cannot be read, or of one without a rule, is not compared.
     std::vector<std::string> deps;
-    if (qore_read_module_depfile(depfile, deps)) {
+    std::string depfile_target;
+    bool use_depfile = qore_read_module_depfile(depfile, depfile_target, deps);
+    if (use_depfile && !qore_module_depfile_names_module(depfile, depfile_target, target)) {
+        printd(1, "qore_build_aot_module_is_stale() '%s': ignoring dependency file '%s', whose target '%s' is "
+            "another module\n", qmod_path, depfile.c_str(), depfile_target.c_str());
+        use_depfile = false;
+        deps.clear();
+    }
+    if (use_depfile) {
         // the size, modification time and content hash of each source when the module was compiled, as qcc recorded
         // them next to the dependency file; without them, or for a source without one, a source that is newer than
         // the module has changed
