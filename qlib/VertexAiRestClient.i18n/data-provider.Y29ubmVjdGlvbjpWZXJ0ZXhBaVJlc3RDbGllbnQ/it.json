@@ -23,6 +23,30 @@
           "source": "Vertex AI chat model name",
           "message": "Nome del modello di chat di Vertex AI"
         },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.desc": {
+          "source": "Model names mapped to the Vertex AI location their requests must be processed in, for data residency.\n\nA request for a listed model is refused unless its location is the connection's `gcp_region`, so a model is never processed outside the location configured for it; use one connection per location.\n\nExample value: `{\"gemini-2.5-pro\": \"europe-west4\"}`",
+          "message": "Nomi dei modelli associati alla posizione Vertex AI in cui devono essere elaborate le loro richieste, per la residenza dei dati.\n\nUna richiesta per un modello elencato viene rifiutata se la sua posizione non è la `gcp_region` della connessione, così un modello non viene mai elaborato al di fuori della posizione configurata per esso; usare una connessione per ogni posizione.\n\nValore di esempio: `{\"gemini-2.5-pro\": \"europe-west4\"}`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.display_name": {
+          "source": "Model Locations",
+          "message": "Posizioni dei modelli"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.short_desc": {
+          "source": "The location each listed model must be processed in",
+          "message": "La posizione in cui deve essere elaborato ciascun modello elencato"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.desc": {
+          "source": "The Vertex AI location that a custom connection URL, such as a private endpoint or a proxy, serves.\n\nIt must be the connection's `gcp_region`, so requests are processed in the location the connection names. Leave it unset when the connection uses the region's public endpoint.\n\nExample value: `europe-west4`",
+          "message": "La posizione Vertex AI servita da un URL di connessione personalizzato, come un endpoint privato o un proxy.\n\nDeve essere la `gcp_region` della connessione, in modo che le richieste vengano elaborate nella posizione indicata dalla connessione. Lasciarla vuota quando la connessione usa l'endpoint pubblico della regione.\n\nValore di esempio: `europe-west4`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.display_name": {
+          "source": "Endpoint Location",
+          "message": "Posizione dell'endpoint"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.short_desc": {
+          "source": "The location a custom connection URL serves",
+          "message": "La posizione servita da un URL di connessione personalizzato"
+        },
         "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.desc": {
           "source": "GCP project ID (required)",
           "message": "ID progetto GCP (obbligatorio)"

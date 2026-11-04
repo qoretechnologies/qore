@@ -23,6 +23,30 @@
           "source": "Vertex AI chat model name",
           "message": "Vertex AI 채팅 모델 이름"
         },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.desc": {
+          "source": "Model names mapped to the Vertex AI location their requests must be processed in, for data residency.\n\nA request for a listed model is refused unless its location is the connection's `gcp_region`, so a model is never processed outside the location configured for it; use one connection per location.\n\nExample value: `{\"gemini-2.5-pro\": \"europe-west4\"}`",
+          "message": "데이터 레지던시를 위해 모델 이름을 해당 요청이 처리되어야 하는 Vertex AI 위치에 매핑합니다.\n\n나열된 모델에 대한 요청은 그 위치가 연결의 `gcp_region`이 아니면 거부되므로, 모델이 설정된 위치 밖에서 처리되는 일은 없습니다. 위치마다 연결을 하나씩 사용하세요.\n\n예시 값: `{\"gemini-2.5-pro\": \"europe-west4\"}`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.display_name": {
+          "source": "Model Locations",
+          "message": "모델 위치"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.short_desc": {
+          "source": "The location each listed model must be processed in",
+          "message": "나열된 각 모델이 처리되어야 하는 위치"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.desc": {
+          "source": "The Vertex AI location that a custom connection URL, such as a private endpoint or a proxy, serves.\n\nIt must be the connection's `gcp_region`, so requests are processed in the location the connection names. Leave it unset when the connection uses the region's public endpoint.\n\nExample value: `europe-west4`",
+          "message": "비공개 엔드포인트나 프록시 같은 사용자 지정 연결 URL이 제공하는 Vertex AI 위치입니다.\n\n요청이 연결에 지정된 위치에서 처리되도록 연결의 `gcp_region`과 같아야 합니다. 연결이 리전의 공개 엔드포인트를 사용하는 경우에는 설정하지 마세요.\n\n예시 값: `europe-west4`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.display_name": {
+          "source": "Endpoint Location",
+          "message": "엔드포인트 위치"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.short_desc": {
+          "source": "The location a custom connection URL serves",
+          "message": "사용자 지정 연결 URL이 제공하는 위치"
+        },
         "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.desc": {
           "source": "GCP project ID (required)",
           "message": "GCP 프로젝트 ID (필수)"

@@ -23,6 +23,30 @@
           "source": "Vertex AI chat model name",
           "message": "Назва моделі чату Vertex AI"
         },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.desc": {
+          "source": "Model names mapped to the Vertex AI location their requests must be processed in, for data residency.\n\nA request for a listed model is refused unless its location is the connection's `gcp_region`, so a model is never processed outside the location configured for it; use one connection per location.\n\nExample value: `{\"gemini-2.5-pro\": \"europe-west4\"}`",
+          "message": "Назви моделей, зіставлені з розташуванням Vertex AI, у якому мають оброблятися їхні запити, для резидентності даних.\n\nЗапит до вказаної моделі відхиляється, якщо її розташування не є `gcp_region` підключення, тож модель ніколи не обробляється поза налаштованим для неї розташуванням; використовуйте окреме підключення для кожного розташування.\n\nПриклад значення: `{\"gemini-2.5-pro\": \"europe-west4\"}`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.display_name": {
+          "source": "Model Locations",
+          "message": "Розташування моделей"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX21vZGVsX2xvY2F0aW9ucw.short_desc": {
+          "source": "The location each listed model must be processed in",
+          "message": "Розташування, у якому має оброблятися кожна вказана модель"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.desc": {
+          "source": "The Vertex AI location that a custom connection URL, such as a private endpoint or a proxy, serves.\n\nIt must be the connection's `gcp_region`, so requests are processed in the location the connection names. Leave it unset when the connection uses the region's public endpoint.\n\nExample value: `europe-west4`",
+          "message": "Розташування Vertex AI, яке обслуговує власна URL-адреса підключення, наприклад приватна кінцева точка або проксі.\n\nВоно має збігатися з `gcp_region` підключення, щоб запити оброблялися в розташуванні, яке вказує підключення. Не задавайте його, якщо підключення використовує публічну кінцеву точку регіону.\n\nПриклад значення: `europe-west4`"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.display_name": {
+          "source": "Endpoint Location",
+          "message": "Розташування кінцевої точки"
+        },
+        "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX2VuZHBvaW50X2xvY2F0aW9u.short_desc": {
+          "source": "The location a custom connection URL serves",
+          "message": "Розташування, яке обслуговує власна URL-адреса підключення"
+        },
         "connection.VmVydGV4QWlSZXN0Q2xpZW50.scheme.VmVydGV4QWlSZXN0Q29ubmVjdGlvbg.option.Z2NwX3Byb2plY3RfaWQ.desc": {
           "source": "GCP project ID (required)",
           "message": "ID проекту GCP (обов’язково)"
