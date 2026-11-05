@@ -39,8 +39,8 @@
 # without one.
 
 # c-ares: DNS resolution, when the system has no c-ares >= this version
-qore_third_party_source(c-ares 1.34.8
-    SHA256 c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78
+qore_third_party_source(c-ares 1.34.9
+    SHA256 9364b70a12eb59a06830fb488d9357f90100dff0d98b23ea3593a183d43e6f2f
     URL "https://github.com/c-ares/c-ares/releases/download/v{version}/c-ares-{version}.tar.gz")
 
 # nghttp2: HTTP/2, when the system has no nghttp2 >= this version
