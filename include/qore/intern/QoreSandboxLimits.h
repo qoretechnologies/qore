@@ -40,8 +40,17 @@ class QoreSandboxManager;
 class ExceptionSink;
 class QoreSandboxCallBudget;
 
-//! Returns the static budget that marks a call whose limit cannot be enforced (see QoreSandboxBudgetStack)
-DLLLOCAL QoreSandboxCallBudget* qore_sandbox_lost_budget();
+//! a per-call limit: the wall-time limit (see QoreSandboxManager::setWallTimeLimit())
+constexpr unsigned QSB_LIMIT_WALL_TIME = (1u << 0);
+//! a per-call limit: the stack size limit (see QoreSandboxManager::setMaxStackSize())
+constexpr unsigned QSB_LIMIT_STACK = (1u << 1);
+
+//! Returns the static budget that marks a continuation of a call whose limits cannot be enforced
+/** @param kinds the limits that cannot be enforced (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_STACK); not 0
+
+    See QoreSandboxBudgetStack: a call whose budget could not be recorded fails closed.
+*/
+DLLLOCAL QoreSandboxCallBudget* qore_sandbox_lost_budget(unsigned kinds);
 
 //! The budget of one call into a sandbox with a wall-time or stack limit
 /** Created when a thread enters a sandbox manager with a per-call limit that has no budget on the thread yet, and
@@ -103,7 +112,7 @@ public:
 private:
     friend class QoreSandboxWatchdog;
     friend class QoreSandboxBudgetStack;
-    friend QoreSandboxCallBudget* qore_sandbox_lost_budget();
+    friend QoreSandboxCallBudget* qore_sandbox_lost_budget(unsigned kinds);
 
     //! the reference count
     std::atomic<int> refs{1};
@@ -124,9 +133,17 @@ private:
     std::multimap<int64, QoreSandboxCallBudget*>::iterator pos;
     //! true while the budget is in the watchdog's deadline map; guarded by the watchdog lock
     bool scheduled = false;
+    //! for a static budget marking a call whose limits cannot be enforced: those limits; 0 for any other budget
+    unsigned lost_kinds = 0;
 
-    //! creates the static budget that marks a call whose limit cannot be enforced
-    DLLLOCAL QoreSandboxCallBudget();
+    //! creates the static budget that marks a call whose limits (\a kinds) cannot be enforced
+    DLLLOCAL QoreSandboxCallBudget(unsigned kinds);
+
+    //! Returns the limits of the budget (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_STACK)
+    DLLLOCAL unsigned getKinds() const {
+        return lost_kinds ? lost_kinds : ((limit_ms > 0 ? QSB_LIMIT_WALL_TIME : 0)
+            | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0));
+    }
 
     DLLLOCAL ~QoreSandboxCallBudget();
 };
@@ -141,8 +158,9 @@ DLLLOCAL void qore_sandbox_budgets_deref(QoreSandboxBudgetList& budgets);
 /** Each frame records the helper that attached it (the owner) and is removed by that helper.  See "What a call is"
     in design/sandbox-resource-limits.md.
 
-    If a frame cannot be recorded (memory or the watchdog thread cannot be allocated), the call fails closed: the
-    thread is treated as limited (\c SANDBOX-ERROR at every cancellation point) until the helper that failed leaves.
+    If a frame cannot be recorded (memory or the watchdog thread cannot be allocated), the call fails closed until the
+    helper that failed leaves: \c SANDBOX-ERROR, naming the limits that cannot be enforced, is raised at every
+    cancellation point and, if the call has a stack limit, at the next stack check.
 */
 class QoreSandboxBudgetStack {
 public:
@@ -187,6 +205,26 @@ public:
     */
     DLLLOCAL int64 findStackLimit(size_t limit) const;
 
+    //! Returns true if the current call's limits cannot be enforced (see the class documentation)
+    DLLLOCAL bool isLost() const {
+        return lost_owner;
+    }
+
+    //! Returns true if the current call's stack limit cannot be enforced, so its stack was closed
+    DLLLOCAL bool isStackLost() const {
+        return lost_stack_closed;
+    }
+
+    //! Raises the exception for a budget returned by findExpired(): \c SANDBOX-TIMEOUT, or \c SANDBOX-ERROR naming
+    //! the limits that cannot be enforced
+    DLLLOCAL void raise(const QoreSandboxCallBudget* budget, ExceptionSink* xsink, const char* operation) const;
+
+    //! Raises \c SANDBOX-ERROR naming the limits of the call that cannot be enforced; the call must be lost
+    DLLLOCAL void raiseLost(ExceptionSink* xsink, const char* operation) const;
+
+    //! Raises \c STACK-LIMIT-EXCEEDED for the sandbox stack limit in bytes, with the limit in the exception argument
+    DLLLOCAL static void raiseStackLimit(ExceptionSink* xsink, int64 bytes);
+
 private:
     struct Frame {
         QoreSandboxCallBudget* budget;
@@ -199,6 +237,16 @@ private:
     std::vector<Frame> frames;
     //! the helper whose frame could not be recorded, or nullptr; see the class documentation
     const void* lost_owner = nullptr;
+    //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_STACK)
+    unsigned lost_kinds = 0;
+    //! the wall-time limit of the lost call, or 0 if it is not known (a continuation of a lost call)
+    int64 lost_limit_ms = 0;
+    //! the stack limit of the lost call, or 0 if it is not known (a continuation of a lost call)
+    int64 lost_stack_bytes = 0;
+    //! the thread's stack limit address before a lost call with a stack limit closed it, see lose()
+    size_t lost_saved_stack_limit = 0;
+    //! true if lose() closed the thread's stack
+    bool lost_stack_closed = false;
 
     DLLLOCAL bool hasBudgetFor(const QoreSandboxManager* sm) const;
     DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 stack_bytes, const void* owner);
@@ -206,15 +254,15 @@ private:
     DLLLOCAL void pushFrame(QoreSandboxCallBudget* budget, const void* owner);
     //! Pops the top frame and restores the stack limit; returns its budget (the reference passes to the caller)
     DLLLOCAL QoreSandboxCallBudget* popFrame();
-    DLLLOCAL void lose(int tid, const void* owner);
+    //! Fails the call closed: \a kinds are the limits that cannot be enforced, the values 0 if they are not known
+    DLLLOCAL void lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 stack_bytes);
     DLLLOCAL void leaveIntern(int tid, const void* owner);
 };
 
-//! Raises the exception of an expired budget found with QoreSandboxBudgetStack::findExpired()
-/** \c SANDBOX-TIMEOUT for an expired wall-time limit, \c SANDBOX-ERROR for a call whose limit could not be enforced
-*/
-DLLLOCAL void qore_sandbox_raise_limit(const QoreSandboxCallBudget* budget, ExceptionSink* xsink,
-        const char* operation);
+#ifdef DEBUG
+//! Makes the next \a count budget recordings fail as if no memory could be allocated (debug builds, for tests)
+DLLLOCAL void qore_sandbox_dbg_fail_next_budgets(int count);
+#endif
 
 //! Tightens the current thread's stack limit to \a bytes from the current stack position if that is tighter
 /** Defined in thread.cpp, which owns the thread's stack guard (check_stack())

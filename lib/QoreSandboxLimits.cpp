@@ -271,11 +271,36 @@ public:
 QoreSandboxWatchdogForkHandler sandbox_watchdog_fork_handler;
 }
 
-QoreSandboxCallBudget* qore_sandbox_lost_budget() {
-    // never freed: it is referenced like any other budget, and its count never drops to zero
-    static QoreSandboxCallBudget* lost = new QoreSandboxCallBudget;
-    return lost;
+QoreSandboxCallBudget* qore_sandbox_lost_budget(unsigned kinds) {
+    assert(kinds && !(kinds & ~(QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK)));
+    // never freed: they are referenced like any other budget, and their counts never drop to zero
+    static QoreSandboxCallBudget* lost[] = {
+        new QoreSandboxCallBudget(QSB_LIMIT_WALL_TIME),
+        new QoreSandboxCallBudget(QSB_LIMIT_STACK),
+        new QoreSandboxCallBudget(QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK),
+    };
+    return lost[kinds - 1];
 }
+
+#ifdef DEBUG
+//! the number of budget recordings that fail as if no memory could be allocated; see qore_sandbox_dbg_fail_budget()
+static std::atomic<int> sandbox_dbg_fail_budgets{0};
+
+void qore_sandbox_dbg_fail_next_budgets(int count) {
+    sandbox_dbg_fail_budgets.store(count > 0 ? count : 0);
+}
+
+//! Returns true if a budget recording must fail (debug builds, for tests)
+static bool qore_sandbox_dbg_fail_budget() {
+    int count = sandbox_dbg_fail_budgets.load();
+    while (count > 0) {
+        if (sandbox_dbg_fail_budgets.compare_exchange_weak(count, count - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
 
 void qore_sandbox_watchdog_stop() {
     sandbox_watchdog.stop();
@@ -293,8 +318,9 @@ QoreSandboxCallBudget::QoreSandboxCallBudget(QoreSandboxManager* manager, int64 
     manager->ref();
 }
 
-QoreSandboxCallBudget::QoreSandboxCallBudget() : manager(nullptr), limit_ms(0), stack_bytes(0), deadline_us(0),
-        expired(true) {
+QoreSandboxCallBudget::QoreSandboxCallBudget(unsigned kinds) : manager(nullptr), limit_ms(0), stack_bytes(0),
+        deadline_us(0), expired(true), lost_kinds(kinds) {
+    assert(kinds);
 }
 
 QoreSandboxCallBudget::~QoreSandboxCallBudget() {
@@ -394,23 +420,30 @@ QoreSandboxCallBudget* QoreSandboxBudgetStack::popFrame() {
 
 void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 stack_bytes,
         const void* owner) {
+    unsigned kinds = (limit_ms > 0 ? QSB_LIMIT_WALL_TIME : 0) | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0);
+#ifdef DEBUG
+    if (qore_sandbox_dbg_fail_budget()) {
+        lose(tid, owner, kinds, limit_ms, stack_bytes);
+        return;
+    }
+#endif
     QoreSandboxCallBudget* budget;
     try {
         budget = new QoreSandboxCallBudget(sm, limit_ms, stack_bytes);
     } catch (std::bad_alloc&) {
-        lose(tid, owner);
+        lose(tid, owner, kinds, limit_ms, stack_bytes);
         return;
     }
     try {
         pushFrame(budget, owner);
     } catch (std::bad_alloc&) {
         budget->deref();
-        lose(tid, owner);
+        lose(tid, owner, kinds, limit_ms, stack_bytes);
         return;
     }
     if (budget->isTimed() && sandbox_watchdog.add(budget, tid)) {
         popFrame()->deref();
-        lose(tid, owner);
+        lose(tid, owner, kinds, limit_ms, stack_bytes);
     }
 }
 
@@ -419,20 +452,27 @@ void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budget
         return;
     }
     for (QoreSandboxCallBudget* budget : budgets) {
-        if (budget == qore_sandbox_lost_budget()) {
-            lose(tid, owner);
+        if (budget->lost_kinds) {
+            // a continuation of a call whose limits cannot be enforced; their values are not known here
+            lose(tid, owner, budget->lost_kinds, 0, 0);
             return;
         }
+#ifdef DEBUG
+        if (qore_sandbox_dbg_fail_budget()) {
+            lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->stack_bytes);
+            return;
+        }
+#endif
         try {
             pushFrame(budget, owner);
         } catch (std::bad_alloc&) {
-            lose(tid, owner);
+            lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->stack_bytes);
             return;
         }
         budget->ref();
         if (budget->isTimed() && sandbox_watchdog.attach(budget, tid)) {
             popFrame()->deref();
-            lose(tid, owner);
+            lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->stack_bytes);
             return;
         }
         // checked after the TID was added under the watchdog lock: either the watchdog copied the TID and sets the
@@ -443,16 +483,32 @@ void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budget
     }
 }
 
-void QoreSandboxBudgetStack::lose(int tid, const void* owner) {
+void QoreSandboxBudgetStack::lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 stack_bytes) {
     assert(!lost_owner);
+    assert(kinds);
     lost_owner = owner;
+    lost_kinds = kinds;
+    lost_limit_ms = limit_ms;
+    lost_stack_bytes = stack_bytes;
+    // a call with a stack limit that is not enforced must not recurse: the next stack check fails
+    if (kinds & QSB_LIMIT_STACK) {
+        lost_stack_closed = qore_sandbox_tighten_stack(1, lost_saved_stack_limit) != 0;
+    }
+    // the next cancellation point fails
     thread_list.requestSandboxLimit({tid});
 }
 
 void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
     bool limited = false;
     if (lost_owner == owner) {
+        // the lost call is left first: it was the last one entered
+        if (lost_stack_closed) {
+            qore_sandbox_restore_stack(lost_saved_stack_limit);
+            lost_stack_closed = false;
+        }
         lost_owner = nullptr;
+        lost_kinds = 0;
+        lost_limit_ms = lost_stack_bytes = 0;
         limited = true;
     }
     while (!frames.empty() && frames.back().owner == owner) {
@@ -475,8 +531,9 @@ void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
 void QoreSandboxBudgetStack::capture(QoreSandboxBudgetList& out) const {
     if (lost_owner) {
         // the static budget is referenced like any other, so that dereferencing the list never frees it
-        out.push_back(qore_sandbox_lost_budget());
-        qore_sandbox_lost_budget()->ref();
+        QoreSandboxCallBudget* lost = qore_sandbox_lost_budget(lost_kinds);
+        out.push_back(lost);
+        lost->ref();
         return;
     }
     out.reserve(out.size() + frames.size());
@@ -488,7 +545,7 @@ void QoreSandboxBudgetStack::capture(QoreSandboxBudgetList& out) const {
 
 const QoreSandboxCallBudget* QoreSandboxBudgetStack::findExpired() const {
     if (lost_owner) {
-        return qore_sandbox_lost_budget();
+        return qore_sandbox_lost_budget(lost_kinds);
     }
     for (const Frame& frame : frames) {
         if (frame.budget->isExpired()) {
@@ -507,13 +564,54 @@ int64 QoreSandboxBudgetStack::findStackLimit(size_t limit) const {
     return 0;
 }
 
-void qore_sandbox_raise_limit(const QoreSandboxCallBudget* budget, ExceptionSink* xsink, const char* operation) {
+void QoreSandboxBudgetStack::raise(const QoreSandboxCallBudget* budget, ExceptionSink* xsink,
+        const char* operation) const {
     assert(budget);
-    if (budget == qore_sandbox_lost_budget()) {
-        xsink->raiseException("SANDBOX-ERROR", "%s: the sandbox limits cannot be enforced for this call: the "
-            "resources to track them could not be allocated", operation);
+    if (budget->lost_kinds) {
+        raiseLost(xsink, operation);
         return;
     }
-    xsink->raiseException("SANDBOX-TIMEOUT", "%s: the sandbox wall time limit of " QLLD " ms was exceeded",
-        operation, budget->getLimitMs());
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("wall_time_limit", budget->limit_ms, xsink);
+    xsink->raiseExceptionArg("SANDBOX-TIMEOUT", arg.release(), new QoreStringNodeMaker("%s: the sandbox wall time "
+        "limit of " QLLD " ms was exceeded", operation, budget->limit_ms));
+}
+
+void QoreSandboxBudgetStack::raiseLost(ExceptionSink* xsink, const char* operation) const {
+    assert(lost_owner && lost_kinds);
+    // the exception names exactly the limits that cannot be enforced, with their values where they are known; the
+    // argument has the keys of the configuration (SandboxConfigInfo), with no value where it is not known
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    QoreStringNodeMaker* desc = new QoreStringNodeMaker("%s: ", operation);
+    SimpleRefHolder<QoreStringNode> holder(desc);
+    if (lost_kinds & QSB_LIMIT_WALL_TIME) {
+        desc->concat("the sandbox wall time limit");
+        if (lost_limit_ms) {
+            desc->sprintf(" of " QLLD " ms", lost_limit_ms);
+            arg->setKeyValue("wall_time_limit", lost_limit_ms, xsink);
+        } else {
+            arg->setKeyValue("wall_time_limit", QoreValue(), xsink);
+        }
+    }
+    if (lost_kinds & QSB_LIMIT_STACK) {
+        desc->concat((lost_kinds & QSB_LIMIT_WALL_TIME) ? " and the sandbox stack size limit"
+            : "the sandbox stack size limit");
+        if (lost_stack_bytes) {
+            desc->sprintf(" of " QLLD " bytes", lost_stack_bytes);
+            arg->setKeyValue("max_stack_size", lost_stack_bytes, xsink);
+        } else {
+            arg->setKeyValue("max_stack_size", QoreValue(), xsink);
+        }
+    }
+    bool both = (lost_kinds & QSB_LIMIT_WALL_TIME) && (lost_kinds & QSB_LIMIT_STACK);
+    desc->sprintf(" cannot be enforced for this call: the resources to track %s could not be allocated",
+        both ? "them" : "it");
+    xsink->raiseExceptionArg("SANDBOX-ERROR", arg.release(), holder.release());
+}
+
+void QoreSandboxBudgetStack::raiseStackLimit(ExceptionSink* xsink, int64 bytes) {
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("max_stack_size", bytes, xsink);
+    xsink->raiseExceptionArg("STACK-LIMIT-EXCEEDED", arg.release(), new QoreStringNodeMaker("this thread's stack has "
+        "exceeded the sandbox stack size limit of " QLLD " bytes", bytes));
 }

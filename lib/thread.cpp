@@ -1718,10 +1718,14 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #else
     if (td->stack_limit < pos) {
 #endif
-        // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack())
+        // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack()), or closed the stack
+        // because its limits cannot be enforced
+        if (td->sandbox_budgets.isStackLost()) {
+            td->sandbox_budgets.raiseLost(xsink, "call");
+            return -1;
+        }
         if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
-            xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the sandbox stack size "
-                "limit of " QLLD " bytes", sandbox_bytes);
+            QoreSandboxBudgetStack::raiseStackLimit(xsink, sandbox_bytes);
             return -1;
         }
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
@@ -6739,7 +6743,7 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     if ((bits & QCR_SANDBOX_LIMIT) && td) {
         if (const QoreSandboxCallBudget* budget = td->sandbox_budgets.findExpired()) {
             if (xsink) {
-                qore_sandbox_raise_limit(budget, xsink, operation);
+                td->sandbox_budgets.raise(budget, xsink, operation);
             }
             return true;
         }

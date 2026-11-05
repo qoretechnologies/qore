@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
@@ -16127,6 +16128,17 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 }
 #endif
 
+#ifdef DEBUG
+//! Makes the next count sandbox call budget recordings fail as if no memory could be allocated
+/** Tests the fail-closed path of the sandbox limits (see design/sandbox-resource-limits.md)
+*/
+static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_sandbox_dbg_fail_next_budgets(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+#endif
+
 //! functional domain for debug and unit-test hooks
 /** These builtins reach into process-global state and library internals, so they must only be
     callable by trusted (unsandboxed) code; tagging them keeps %Qore's sandboxing controls effective
@@ -16145,6 +16157,9 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

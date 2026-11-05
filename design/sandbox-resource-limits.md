@@ -142,10 +142,27 @@ budgets have expired, the outermost one is reported.
 ### Failing closed
 
 A frame that cannot be recorded (no memory for the budget or the frame, or the watchdog thread cannot be started)
-must not let the call run without its limit. The stack records the helper that failed (`lost_owner`) and sets the
-limit bit; until that helper leaves, every cancellation point raises `SANDBOX-ERROR` ("the sandbox limits cannot be
-enforced for this call"), and nothing further is recorded. A continuation captured meanwhile carries a
-static sentinel budget (`qore_sandbox_lost_budget()`) that has the same effect on the threads it starts.
+must not let the call run without its limits. The stack records the helper that failed (`lost_owner`), the limits
+of the call (`lost_kinds`: `QSB_LIMIT_WALL_TIME`, `QSB_LIMIT_STACK`) and their values, and sets the limit bit; with
+a stack limit it also closes the thread's stack guard at the current position (restored when the helper leaves),
+because recursion reaches no cancellation point. Until the helper leaves, every cancellation point (and with a stack
+limit, the next stack check) raises `SANDBOX-ERROR` naming exactly the limits that cannot be enforced:
+
+```
+<operation>: the sandbox wall time limit of 300 ms and the sandbox stack size limit of 262144 bytes cannot be
+enforced for this call: the resources to track them could not be allocated
+arg: {"wall_time_limit": 300, "max_stack_size": 262144}
+```
+
+Nothing further is recorded meanwhile. A continuation captured meanwhile carries one of three static sentinel
+budgets (`qore_sandbox_lost_budget(kinds)`, one per combination of limits), so the threads it starts fail the same
+way; the values are not known there, so the description omits them and the `arg` keys have no value.
+
+`SANDBOX-TIMEOUT` and the sandbox `STACK-LIMIT-EXCEEDED` carry the same kind of `arg` (`{"wall_time_limit": ms}`,
+`{"max_stack_size": bytes}`), so code can tell which limit ended a call without parsing the description.
+
+The debug-only builtin `dbg_sandbox_fail_next_budgets(count)` makes the next budget recordings fail, which tests
+every fail-closed path deterministically (`testFailClosed()` in `sandbox-limits.qtest`).
 
 ### Limitations (documented)
 

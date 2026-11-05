@@ -232,6 +232,22 @@ sub recurse_in_background(Queue result) {
         }
     }();
 }
+# starts a thread that spins and reports the exception that ends it
+sub report_in_background(Queue result) {
+    background sub () {
+        try {
+            spin_while();
+            result.push(NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex);
+        }
+    }();
+}
+# calls the trusted code, then starts a thread that spins and reports the exception that ends it
+sub call_then_report_in_background(code c, Queue result) {
+    c();
+    report_in_background(result);
+}
 class Spinner {
     int spin() {
         return spin_while();
@@ -256,6 +272,7 @@ code sub get_closure() {
 
     constructor() : QUnit::Test("SandboxLimitsTest", "1.0", \ARGV) {
         addTestCase("stack limit API", \testStackApi());
+        addTestCase("a call whose limits cannot be tracked fails naming those limits", \testFailClosed());
         addTestCase("the stack limit bounds recursion", \testStackRecursion());
         addTestCase("a re-entry does not restart the stack measurement", \testStackReentry());
         addTestCase("the stack limit applies to threads the call starts and to nested sandboxes",
@@ -299,6 +316,7 @@ code sub get_closure() {
         } catch (hash<ExceptionInfo> ex) {
             assertEq("SANDBOX-TIMEOUT", ex.err, sprintf("%s(): %s: %s", func, ex.err, ex.desc));
             assertRegex(sprintf(TimeoutDesc, limit), ex.desc, func + "() description");
+            assertEq({"wall_time_limit": limit}, ex.arg, func + "() exception argument");
         }
         int elapsed = (clock_get_monotonic_us() - start) / 1000;
         assertGe(limit, elapsed, func + "() cannot time out before its deadline");
@@ -359,7 +377,14 @@ code sub get_closure() {
 
     testStackRecursion() {
         Program p = sandboxed(stackLimited());
-        assertThrows("STACK-LIMIT-EXCEEDED", sprintf(StackDesc, StackLimit), \p.callFunction(), ("recurse", 0));
+        try {
+            p.callFunction("recurse", 0);
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("STACK-LIMIT-EXCEEDED", ex.err);
+            assertRegex(sprintf(StackDesc, StackLimit), ex.desc);
+            assertEq({"max_stack_size": StackLimit}, ex.arg, "the exception argument names the limit");
+        }
         # recursion within the limit is allowed
         int depth = p.callFunction("max_depth", 0);
         assertGe(10, depth, "a moderate depth is allowed");
@@ -398,6 +423,81 @@ code sub get_closure() {
             assertEq("STACK-LIMIT-EXCEEDED", ex.err);
             assertRegex(sprintf(StackDesc, StackLimit), ex.desc, "the outer limit in the inner sandbox");
         }
+    }
+
+    #! calls a function after making the next budget recording fail, and returns the exception it raised
+    private hash<ExceptionInfo> failClosed(Program p, string func, softlist<auto> args = ()) {
+        call_function("dbg_sandbox_fail_next_budgets", 1);
+        on_exit call_function("dbg_sandbox_fail_next_budgets", 0);
+        try {
+            p.callFunctionArgs(func, args);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", func + "() returned";
+    }
+
+    testFailClosed() {
+        # the hook that makes a budget recording fail exists in debug builds only
+        try {
+            call_function("dbg_sandbox_fail_next_budgets", 0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("dbg_sandbox_fail_next_budgets() is only available in debug builds");
+            }
+            rethrow;
+        }
+        string tail = " cannot be enforced for this call: the resources to track %s could not be allocated";
+
+        # a wall time limit: the next cancellation point fails
+        Program p = sandboxed(limited());
+        hash<ExceptionInfo> ex = failClosed(p, "spin_while");
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox wall time limit of " + Limit + " ms" + sprintf(tail, "it"), ex.desc);
+        assertEq({"wall_time_limit": Limit}, ex.arg);
+        # the failure ends with the call
+        assertEq("done", p.callFunction("quick"), "the next call is not affected");
+
+        # a stack limit: recursion, which has no cancellation point, fails at its next call
+        p = sandboxed(stackLimited());
+        ex = failClosed(p, "recurse", 0);
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox stack size limit of " + StackLimit + " bytes" + sprintf(tail, "it"), ex.desc);
+        assertEq({"max_stack_size": StackLimit}, ex.arg);
+        assertGe(10, p.callFunction("max_depth", 0), "the next call has its stack again");
+
+        # both limits
+        SandboxManager sm = limited();
+        sm.setMaxStackSize(StackLimit);
+        p = sandboxed(sm);
+        ex = failClosed(p, "spin_while");
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox wall time limit of " + Limit + " ms and the sandbox stack size limit of "
+            + StackLimit + " bytes" + sprintf(tail, "them"), ex.desc);
+        assertEq({"wall_time_limit": Limit, "max_stack_size": StackLimit}, ex.arg);
+
+        # a thread that continues a call and cannot record its budget
+        p = sandboxed(limited(120000));
+        Queue result();
+        code arm = sub () { call_function("dbg_sandbox_fail_next_budgets", 1); };
+        p.callFunction("call_then_report_in_background", arm, result);
+        ex = result.get();
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox wall time limit of 120000 ms" + sprintf(tail, "it"), ex.desc);
+        assertEq({"wall_time_limit": 120000}, ex.arg);
+
+        # a thread started by a call that failed closed: the limits are known, their values are not
+        p = sandboxed(limited());
+        call_function("dbg_sandbox_fail_next_budgets", 1);
+        {
+            on_exit call_function("dbg_sandbox_fail_next_budgets", 0);
+            # the call returns before it reaches a cancellation point
+            p.callFunction("report_in_background", result);
+        }
+        ex = result.get();
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox wall time limit" + sprintf(tail, "it"), ex.desc);
+        assertEq({"wall_time_limit": NOTHING}, ex.arg);
     }
 
     testBusyLoops() {

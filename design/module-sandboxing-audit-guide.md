@@ -844,7 +844,7 @@ These are lower risk but should still be addressed for defense in depth:
 | `NETWORK-ACCESS-DENIED` | Network | Connection blocked by policy |
 | `PROGRAM-INTERRUPTED` | Interrupt | Operation interrupted by request |
 | `SANDBOX-TIMEOUT` | Resources | The wall time limit of the sandbox call that the thread runs was exceeded; raised by `qore_check_cancel()` like the interrupt, so a module that checks for cancellation needs no change (see [sandbox-resource-limits.md](sandbox-resource-limits.md)) |
-| `SANDBOX-ERROR` | Resources | A call's limits could not be enforced (no resources to track them) |
+| `SANDBOX-ERROR` | Resources | The limits of a call named in the exception (and in its `arg` hash) could not be enforced (no resources to track them) |
 | `STACK-LIMIT-EXCEEDED` | Resources | The thread's stack guard was reached; with a sandbox stack limit, the guard of the sandbox call (see [sandbox-resource-limits.md](sandbox-resource-limits.md)) |
 | `THREAD-CREATION-FAILURE` | Resources | Thread creation would exceed the thread limit |
 | `SANDBOX-PATH-ERROR` | Filesystem | Path canonicalization failed |
