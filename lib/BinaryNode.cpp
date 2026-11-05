@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreSandboxMemory.h"
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
@@ -46,8 +47,9 @@ BinaryNode::BinaryNode(void* p, size_t size) : SimpleValueQoreNode(NT_BINARY) {
 }
 
 BinaryNode::~BinaryNode() {
+    // released even without a buffer: a reallocation that failed has freed it, but not its charge
+    qore_sb_binary_free_check(this, len);
     if (ptr) {
-        qore_sb_binary_free_check(this, len);
         free(ptr);
     }
 }
@@ -57,8 +59,8 @@ void BinaryNode::clear() {
     // NOTE: we check and then free & update to avoid writing to memory
     // to avoid cache flushing on SMP systems (as used in the Linux
     // kernel for example)
+    qore_sb_binary_free_check(this, len);
     if (ptr) {
-        qore_sb_binary_free_check(this, len);
         free(ptr);
         if (len) {
             len = 0;
@@ -111,13 +113,27 @@ const void* BinaryNode::getPtr() const {
 }
 
 int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
+    // the end of the write cannot be represented: no buffer can hold it
+    if (size > SIZE_MAX - pos) {
+        return -1;
+    }
     if ((pos + size) > len) {
         // resize buffer
         ptr = q_realloc(ptr, pos + size);
         if (!ptr) {
+            // q_realloc() has freed the old buffer: the node is empty, and its charge is released
+            qore_sb_binary_free_check(this, len);
+            len = 0;
             return -1;
         }
         qore_sb_binary_resize_check(this, len, pos + size);
+        // a gap between the old end and the position written becomes part of the value: it must not expose
+        // uninitialized memory
+        if (pos > len) {
+            memset(static_cast<char*>(ptr) + len, 0, pos - len);
+        }
+        // the data written is part of the value
+        len = pos + size;
     }
     memcpy((char*)ptr + pos, nptr, size);
     return 0;

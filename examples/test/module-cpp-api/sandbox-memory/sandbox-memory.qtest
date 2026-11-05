@@ -40,6 +40,7 @@ class SandboxMemoryApiTest inherits QUnit::Test {
         addTestCase("memory allocated in a sandbox call is charged until it is freed", \testCharged());
         addTestCase("an allocation beyond the limit is refused", \testRefused());
         addTestCase("memory allocated outside a sandbox call is not charged", \testUnsandboxed());
+        addTestCase("BinaryNode::writeTo() extends the value and its charge", \testBinaryWriteTo());
         set_return_value(main());
     }
 
@@ -82,5 +83,24 @@ class SandboxMemoryApiTest inherits QUnit::Test {
         sb_mem_resize(h, Limit * 3);
         sb_mem_free(h);
         assertEq(0, sm.getMemoryUsage());
+    }
+
+    testBinaryWriteTo() {
+        # each write extends the value (before the fix, the length was never updated and the value stayed empty)
+        assertEq(binary("abcdefghi"), cpp_api_binary_write_to(("abc", "def", "ghi")));
+        assertEq(binary(), cpp_api_binary_write_to(()));
+        # a write beyond the end fills the gap with zero bytes; a write inside the value does not change its size
+        assertEq(<6162630000007879>, cpp_api_binary_write_at(6, "xy"));
+        assertEq(<61787a>, cpp_api_binary_write_at(1, "xz"));
+        # a write whose end cannot be represented is refused
+        assertThrows("BINARY-WRITE-ERROR", \cpp_api_binary_write_at(), (-1, "xy"));
+
+        # in a sandbox call, the growth is charged, and freeing the value releases all of it
+        string part = strmul("x", 100000);
+        binary b = p.callFunction("call", binary sub () { return cpp_api_binary_write_to((part, part, part)); });
+        assertEq(300000, b.size());
+        assertGe(300000, sm.getMemoryUsage(), "the written data is charged");
+        remove b;
+        assertEq(0, sm.getMemoryUsage(), "freeing the value releases its charge");
     }
 }

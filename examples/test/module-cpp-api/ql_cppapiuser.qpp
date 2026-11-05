@@ -1533,6 +1533,39 @@ string cpp_api_nothing_variant(*softlist<*string> l) [flags=CONSTANT] {
 }
 
 
+//! Builds binary data with BinaryNode::writeTo(), writing each string after the previous one
+/** @param parts the strings to write; each write extends the value
+
+    @return the binary data written
+*/
+binary cpp_api_binary_write_to(list<string> parts) [flags=RET_VALUE_ONLY] {
+    SimpleRefHolder<BinaryNode> b(new BinaryNode);
+    size_t pos = 0;
+    ConstListIterator i(parts);
+    while (i.next()) {
+        const QoreStringNode* str = i.getValue().get<const QoreStringNode>();
+        if (b->writeTo(pos, str->c_str(), str->size())) {
+            return xsink->raiseException("BINARY-WRITE-ERROR", "BinaryNode::writeTo() failed at position %zu", pos);
+        }
+        pos += str->size();
+    }
+    return b.release();
+}
+
+//! Writes \c "abc" with BinaryNode::writeTo() and then the given string at the given position
+/** @param pos the position to write \a str at; beyond the end of the value, the gap is filled with zero bytes
+    @param str the string to write
+
+    @return the binary data written
+*/
+binary cpp_api_binary_write_at(int pos, string str) [flags=RET_VALUE_ONLY] {
+    SimpleRefHolder<BinaryNode> b(new BinaryNode);
+    if (b->writeTo(0, "abc", 3) || b->writeTo(static_cast<size_t>(pos), str->c_str(), str->size())) {
+        return xsink->raiseException("BINARY-WRITE-ERROR", "BinaryNode::writeTo() failed at position " QLLD, pos);
+    }
+    return b.release();
+}
+
 //! Allocates memory with q_sb_malloc() and keeps it; returns a handle for sb_mem_resize() and sb_mem_free()
 /** The memory counts against the memory limit of the sandbox call that the current thread runs.
 

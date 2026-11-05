@@ -1403,6 +1403,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the C++ API function \c BinaryNode::writeTo() did not extend the size of the value when it wrote past its end,
+      so the data written there was not part of the value; it now does, and fills a gap with zero bytes
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date
