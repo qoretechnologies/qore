@@ -228,6 +228,11 @@ class TestHandler {
 
     restoreThreadLocalData(*hash<auto> data) {
     }
+
+    #! the per-message hook that the operation calls before WebSocketConnection::gotMessage() (see
+    #! WebSocketHandler::messageReceived()); without it the message would not be delivered
+    messageReceived(object conn, auto msg) {
+    }
 }
 
 class HttpWebSocketDrainerLifetimeTest inherits QUnit::Test {
