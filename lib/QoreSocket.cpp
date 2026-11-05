@@ -56,6 +56,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/HttpFastRoutes.h"
+#include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -19051,6 +19052,11 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
     if (!routes) {
         return 0;
     }
+
+#ifndef NDEBUG
+    // debug builds: Qore code and blocking waits assert if reached from here
+    FastRouteScope fast_route_scope;
+#endif
 
     // this glue only reads the parsed header; the decision is made by the interpreter-free core
     std::string method, path, version, content_length, connection, tmp;

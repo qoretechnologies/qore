@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
@@ -6643,8 +6644,16 @@ void QoreThreadList::wakeCondWaiter(int tid) {
     cond_waker.queue(entry, tid, te.waiting_on, te.waiting_mutex);
 }
 
+#ifndef NDEBUG
+namespace qore_fast_route_guard {
+    thread_local int depth = 0;
+}
+#endif
+
 int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
         const char* operation) {
+    // a fast route must never block
+    QORE_ASSERT_NOT_IN_FAST_ROUTE();
     // a request made before the wait
     if (qore_check_cancel(xsink, operation)) {
         return QORE_COND_RESULT_INTERRUPTED;
