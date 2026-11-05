@@ -33,6 +33,7 @@
 %requires Logger
 %requires HttpServer
 %requires RestHandler
+%requires JsonRpcHandler
 %requires json
 
 %exec-class RestHandlerLogMaskingTest
@@ -120,8 +121,69 @@ class CustomMaskRestHandler inherits RestHandler {
     }
 }
 
+#! Counts the values masked for log messages
+class CountingRestHandler inherits RestHandler {
+    public {
+        Counter calls();
+    }
+
+    constructor(Logger logger) : RestHandler(logger) {
+    }
+
+    string maskData(string msg) {
+        calls.inc();
+        return RestHandler::maskData(msg);
+    }
+}
+
+#! Counts the values masked for log messages
+class CountingJsonRpcHandler inherits JsonRpcHandler {
+    public {
+        Counter calls();
+    }
+
+    constructor(Logger logger) : JsonRpcHandler(logger, new PermissiveAuthenticator(), ()) {
+    }
+
+    auto maskValue(auto value) {
+        calls.inc();
+        return JsonRpcHandler::maskValue(value);
+    }
+}
+
+#! Logs by itself, with no logger, so the default must prepare messages
+class NoLoggerRestHandler inherits RestHandler {
+    public {
+        list<string> messages = ();
+    }
+
+    logDebug(string fmt, ...) {
+        push messages, vsprintf(fmt, argv);
+    }
+}
+
+#! Has no logger and says that nothing will be logged
+class NoLoggerSilentRestHandler inherits CountingRestHandler {
+    constructor() : CountingRestHandler(new Logger("unused", LoggerLevel::getLevelAll())) {
+        setLogger();
+    }
+
+    bool isLogDebugEnabled() {
+        return False;
+    }
+
+    bool isLogTraceEnabled() {
+        return False;
+    }
+}
+
 public class RestHandlerLogMaskingTest inherits QUnit::Test {
     constructor() : Test("RestHandlerLogMaskingTest", "1.0") {
+        addTestCase("no masking with levels off", \testLevelsOff());
+        addTestCase("masking at DEBUG", \testDebugOn());
+        addTestCase("handlers with no logger", \testNoLogger());
+        addTestCase("JSON-RPC masking follows the level", \testJsonRpc());
+        addTestCase("server masks bodies only if logging", \testServerInfoOff());
         addTestCase("a request and a response dispatched to a subclass", \testSubclassDispatch());
         addTestCase("a request and a response dispatched to the class itself", \testDirectDispatch());
         addTestCase("an unknown subclass", \testUnknownSubclass());
@@ -131,6 +193,98 @@ public class RestHandlerLogMaskingTest inherits QUnit::Test {
         addTestCase("a subclass's maskData() is used", \testCustomMask());
         addTestCase("trace messages off", \testTraceOff());
         set_return_value(main());
+    }
+
+    #! makes requests to the given handler through a real server; requests have ended when this returns
+    private serve(AbstractHttpRequestHandler handler, string regex, code requests, *code mask, *int server_level) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevel(server_level ?? LoggerLevel::ERROR)),
+        });
+        on_exit server.stop();
+        if (mask) {
+            server.setMaskCode(mask);
+        }
+        server.setHandler("h", regex, NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d", port)});
+        requests(client);
+        client.disconnect();
+        server.stop();
+    }
+
+    private CountingRestHandler countingHandler(int level, CapturingAppender appender) {
+        Logger logger("capture", LoggerLevel::getLevel(level));
+        logger.addAppender(appender);
+        CountingRestHandler rest(logger);
+        rest.addClass(new RootRestClass());
+        return rest;
+    }
+
+    testLevelsOff() {
+        CapturingAppender appender();
+        CountingRestHandler rest = countingHandler(LoggerLevel::INFO, appender);
+        foreach string path in ("/root", "/root/sub", "/root/other") {
+            serve(rest, "^root", sub (HTTPClient client) { post(client, path); });
+        }
+        assertEq(0, rest.calls.getCount(), "maskData() calls with DEBUG and TRACE off");
+    }
+
+    testDebugOn() {
+        CapturingAppender appender();
+        CountingRestHandler rest = countingHandler(LoggerLevel::DEBUG, appender);
+        serve(rest, "^root", sub (HTTPClient client) { post(client, "/root/sub"); });
+        assertGt(0, rest.calls.getCount());
+        string log = foldl $1 + "\n" + $2, appender.messages;
+        assertRegex("dispatching to subclass", log);
+        testRequestPublic(log);
+        checkNoSecrets(log);
+    }
+
+    testNoLogger() {
+        NoLoggerRestHandler rest();
+        rest.addClass(new RootRestClass());
+        assertTrue(rest.isLogDebugEnabled());
+        assertTrue(rest.isLogTraceEnabled());
+        serve(rest, "^root", sub (HTTPClient client) { post(client, "/root/sub"); });
+        string log = foldl $1 + "\n" + $2, rest.messages;
+        assertRegex("dispatching to subclass", log);
+        testRequestPublic(log);
+        checkNoSecrets(log);
+
+        NoLoggerSilentRestHandler silent();
+        silent.addClass(new RootRestClass());
+        serve(silent, "^root", sub (HTTPClient client) { post(client, "/root/sub"); });
+        assertEq(0, silent.calls.getCount());
+    }
+
+    private int jsonRpcCalls(int level) {
+        CountingJsonRpcHandler handler(new Logger("capture", LoggerLevel::getLevel(level)));
+        serve(handler, "^JSON", sub (HTTPClient client) {
+            hash<auto> info;
+            client.send(make_json({"jsonrpc": "2.0", "method": "system.describe", "id": 1}), "POST", "/JSON",
+                {"Content-Type": "application/json"}, False, \info);
+        });
+        return handler.calls.getCount();
+    }
+
+    testJsonRpc() {
+        assertEq(0, jsonRpcCalls(LoggerLevel::INFO));
+        assertGt(0, jsonRpcCalls(LoggerLevel::DEBUG));
+    }
+
+    testServerInfoOff() {
+        list<string> masked = ();
+        Mutex lck();
+        CapturingAppender appender();
+        serve(countingHandler(LoggerLevel::INFO, appender), "^root", sub (HTTPClient client) {
+            post(client, "/root");
+        }, string sub (string msg) {
+            lck.lock();
+            on_exit lck.unlock();
+            push masked, msg;
+            return msg;
+        });
+        assertEq((), (select masked, $1 =~ /public-request-user/));
     }
 
     #! returns all log messages produced by the requests made by the given closure

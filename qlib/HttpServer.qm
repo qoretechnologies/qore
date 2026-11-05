@@ -220,6 +220,8 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::http_mask_value() "http_mask_value()", and a binary body sent is logged only by its size
     - fixed @ref HttpServer::HttpServer::setListenerLogOptions() "setListenerLogOptions()": logging response bodies
       was set by @ref HttpServer::LLO_RECV_BODY "LLO_RECV_BODY" instead of @ref HttpServer::LLO_SEND_BODY "LLO_SEND_BODY"
+    - request and response log messages are masked and formatted only if they will be logged; added
+      @ref HttpServer::HttpServer::isLogInfoEnabled() "HttpServer::isLogInfoEnabled()"
     - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
       have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
       (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
@@ -2587,6 +2589,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         dhandlers.removeHandler(name, force_immediate);
     }
 
+    #! Returns @ref True if the arguments of messages for @ref log() should be prepared
+    /** Reimplement in a subclass that reimplements @ref log() and can tell that the message will not be logged.
+
+        This implementation returns @ref True if a logger allowing informational messages is set, or if no logger is
+        set, as a subclass can reimplement @ref log() without one.
+
+        @since HttpServer 1.7
+    */
+    bool isLogInfoEnabled() {
+        return !logger || logger.isEnabledFor(LoggerLevel::INFO);
+    }
+
     #! called to log information to the registered log code
     log(string fmt, ...) {
         logger.logArgs(LoggerLevel::INFO, "HttpServer: " + fmt, argv);
@@ -3655,8 +3669,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         else
             str += ", <no content-type>";
 
-        log("no handler for %s (from %s) hdr: %y", str, cx."peer-info".address_desc,
-            http_mask_value(hdr));
+        if (isLogInfoEnabled()) {
+            log("no handler for %s (from %s) hdr: %y", str, cx."peer-info".address_desc, http_mask_value(hdr));
+        }
         return new hash<HttpResponseInfo>({
             "code" : 501,
             "body" : sprintf("no handler has been registered for %s", str),
@@ -5628,7 +5643,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         log_send_body = flag;
     }
 
+    # Returns True if informational messages of this listener will be logged
+    private bool isLogInfoEnabled() {
+        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : serv.isLogInfoEnabled();
+    }
+
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
+        # INVARIANT: arguments of a log message are masked and formatted only if it will be logged
+        if (!isLogInfoEnabled()) {
+            return;
+        }
         if (body) {
             string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
             string lstr = sprintf("cid %d src %y: %s %s %s body (%db): ", cx.id, cx."peer-info".address_desc,
@@ -6015,6 +6039,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     logResponse(hash<auto> cx, int status_code, *data body, *hash<auto> hdr) {
+        if (!isLogInfoEnabled()) {
+            return;
+        }
         # do log msg
         string lstr = getResponseLogString(cx, status_code, body, hdr);
         log("%s", lstr);
@@ -6026,6 +6053,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     logResponse(hash<auto> cx, int code, InputStream body, *hash<auto> hdr) {
+        if (!isLogInfoEnabled()) {
+            return;
+        }
         # do log msg
         string http_ver = cx."header-info".http3 ? "HTTP/3"
             : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";

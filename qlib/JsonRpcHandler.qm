@@ -95,7 +95,8 @@ http.waitStop();
 
     @subsection jsonrpchandler_2_0_2 JsonRpcHandler v2.0.2
     - fixed logging sensitive data: a logged request is masked as with
-      @ref HttpServer::http_mask_value() "http_mask_value()"
+      @ref HttpServer::http_mask_value() "http_mask_value()", and only if it will be logged
+    - added @ref JsonRpcHandler::JsonRpcHandler::isLogDebugEnabled() "JsonRpcHandler::isLogDebugEnabled()"
 
     @subsection jsonrpchandler_2_0_1 JsonRpcHandler v2.0.1
     - the query of a \c GET request is split into its parameters before their names and values are URL-decoded, as
@@ -336,6 +337,21 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         return keys mi;
     }
 
+    #! Returns @ref True if the arguments of debug log messages should be prepared
+    /** Reimplement in a subclass that reimplements \c debug() and can tell that the message will not be logged.
+
+        This implementation returns @ref True if a logger allowing debug messages is set, or if no logger is set, as a
+        subclass can reimplement \c debug() without one.
+
+        @note a handler with no logger that does not reimplement this method pays for masking and formatting every
+        request, although nothing is logged; set a logger or reimplement this method
+
+        @since JsonRpcHandler 2.0.2
+    */
+    bool isLogDebugEnabled() {
+        return !getLogger() || isDebugEnabled();
+    }
+
     #! turns on or off debugging; when debugging is enabled more verbose error messages are reported
     setDebug(bool dbg = True) {
         debug_flag = dbg;
@@ -554,7 +570,10 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
                         throw ex.err, ex.desc, JRE_ParseError;
                     }
                 }
-                debug("JSON-RPC REQ: %N", http_mask_value(req));
+                # INVARIANT: arguments of a log message are masked and formatted only if it will be logged
+                if (isLogDebugEnabled()) {
+                    debug("JSON-RPC REQ: %N", maskValue(req));
+                }
                 int t = req.typeCode();
                 if (t == NT_LIST) {
                     return processBatchMessage(cx, req);
