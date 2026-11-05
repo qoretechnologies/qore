@@ -34,6 +34,7 @@
 #ifndef QORE_QORE_STRING_PRIVATE_H
 #define QORE_QORE_STRING_PRIVATE_H
 
+#include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/qore_encoding_private.h"
 
 #include <utility>
@@ -98,6 +99,9 @@ public:
     // the CoW convention (ref>1 strings must not be mutated in place).
     const AbstractQoreNode* owning_node = nullptr;
 
+    //! the sandbox memory charge of buf (see design/sandbox-resource-limits.md); synced with allocated
+    QoreSandboxChargeRecord sb;
+
     DLLLOCAL qore_string_private() {
     }
 
@@ -105,6 +109,7 @@ public:
         allocated = p.len + STR_CLASS_EXTRA;
         allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
         buf = (char*)malloc(sizeof(char) * allocated);
+        sb.sync(allocated);
         len = p.len;
         if (len)
             memcpy(buf, p.effective_buf(), len);
@@ -113,6 +118,7 @@ public:
     }
 
     DLLLOCAL ~qore_string_private() {
+        sb.release();
         if (buf) {
             free(buf);
         }
@@ -168,6 +174,7 @@ public:
             allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
             buf = (char*)realloc(buf, allocated * sizeof(char));
+            sb.sync(allocated);
         }
     }
 
@@ -588,6 +595,7 @@ public:
         std::swap(buf, other.buf);
         std::swap(len, other.len);
         std::swap(allocated, other.allocated);
+        sb.swap(other.sb);
     }
 
     //! Returns the length of the string in characters
@@ -1016,6 +1024,7 @@ public:
         allocated = STR_CLASS_BLOCK;
         len = 1;
         buf = (char*)malloc(sizeof(char) * allocated);
+        sb.sync(allocated);
         buf[0] = c;
         buf[1] = '\0';
     }
@@ -1078,6 +1087,7 @@ public:
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
             // resize buffer
             buf = (char*)realloc(buf, allocated * sizeof(char));
+            sb.sync(allocated);
         }
         // set free buffer size
         qore_offset_t free = allocated - len;
@@ -1094,6 +1104,7 @@ public:
             allocated += STR_CLASS_EXTRA;
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
             buf = (char*)realloc(buf, sizeof(char) * allocated);
+            sb.sync(allocated);
             *(buf + len) = '\0';
             return -1;
         }
@@ -1113,6 +1124,7 @@ public:
             allocated = len + i + STR_CLASS_EXTRA;
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
             buf = (char*)realloc(buf, sizeof(char) * allocated);
+            sb.sync(allocated);
             *(buf + len) = '\0';
             return -1;
         }
@@ -1288,6 +1300,7 @@ public:
         }
         buf = aux;
         allocated = requested_size;
+        sb.sync(allocated);
         return 0;
     }
 
@@ -1412,6 +1425,7 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     }
 
     p->allocated = p->len + 1;
+    p->sb.sync(p->allocated);
     T* rv = new T();
     qore_string_private::adopt(*rv, p);
     return rv;

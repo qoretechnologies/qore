@@ -101,6 +101,8 @@ hashdecl SandboxConfigInfo {
     int cpu_time_limit;
     //! Stack size limit of each call into the sandbox in bytes (0 = unlimited)
     int max_stack_size;
+    //! Memory limit of the sandbox in bytes (0 = unlimited)
+    int memory_limit;
     //! Whether an interrupt has been requested
     bool interrupt_requested;
 }
@@ -151,6 +153,7 @@ const QSEC_NET_ALL = QSEC_NET_ALL;
 
     - A limit on the number of threads that sandboxed code runs at once
     - Wall-clock time, CPU time and stack size limits for each call into the sandbox
+    - A limit on the memory held by the data that sandboxed code creates
     - Safe interruption of sandboxed code
 
     @par Example:
@@ -290,6 +293,56 @@ int SandboxManager::getCPUTimeLimit() {
     return sm->getCPUTimeLimit();
 }
 
+//! Sets the memory limit of the sandbox
+/** @param max_memory_bytes the limit in bytes; 0 = unlimited
+
+    The limit applies to the memory held by the values (strings, lists, hashes, objects, binary data) that code
+    governed by the sandbox created and that are still alive, wherever they are now: data passed out of the sandbox
+    stays charged to it until it is freed.  Memory allocated inside third-party libraries or by the interpreter itself
+    is not counted.  With nested sandboxes, the memory is also charged to every enclosing sandbox call with a memory
+    limit.
+
+    When the memory in use exceeds the limit, the thread that exceeded it raises \c SANDBOX-MEMORY-LIMIT at its next
+    cancellation point, and again at every cancellation point until the memory in use is below the limit, so code
+    that catches the exception and frees memory can go on.  See @ref sandbox_memory_limit for details.
+
+    @par Example:
+    @code{.py}
+sm.setMemoryLimit(max_memory_bytes: 10 * 1024 * 1024);  # 10MB
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setMemoryLimit(int max_memory_bytes) [flags=NAMED_ARGS] {
+    if (max_memory_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the memory limit cannot be negative; got: " QLLD,
+            max_memory_bytes);
+        return QoreValue();
+    }
+    sm->setMemoryLimit(max_memory_bytes);
+}
+
+//! Gets the memory limit of the sandbox
+/** @return the limit in bytes, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getMemoryLimit() {
+    return sm->getMemoryLimit();
+}
+
+//! Returns the memory currently charged to the sandbox
+/** @return the memory in bytes held by live data that sandboxed code created, including what threads running calls
+    into the sandbox have reserved for their next allocations
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getMemoryUsage() {
+    return sm->getMemoryUsage();
+}
+
 //! Sets the stack size that each call into the sandbox may use
 /** @param max_stack_bytes the limit in bytes; 0 = unlimited
 
@@ -377,6 +430,7 @@ hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
     - Wall time limit per call: 5000ms (see setWallTimeLimit())
     - CPU time limit per call: 1000ms (see setCPUTimeLimit())
     - Stack size limit per call: 1MB (see setMaxStackSize())
+    - Memory limit: 10MB (see setMemoryLimit())
     - Max threads: 1
 
     @par Example:
@@ -399,6 +453,7 @@ static SandboxManager SandboxManager::createLockdown() {
     - Wall time limit per call: 30000ms (see setWallTimeLimit())
     - CPU time limit per call: 10000ms (see setCPUTimeLimit())
     - Stack size limit per call: 2MB (see setMaxStackSize())
+    - Memory limit: 100MB (see setMemoryLimit())
     - Max threads: 4
 
     @par Example:

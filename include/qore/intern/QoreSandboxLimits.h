@@ -37,6 +37,8 @@
 #include <map>
 #include <vector>
 
+#include "qore/intern/QoreSandboxMemory.h"
+
 class QoreSandboxManager;
 class ExceptionSink;
 class QoreSandboxCallBudget;
@@ -47,8 +49,10 @@ constexpr unsigned QSB_LIMIT_WALL_TIME = (1u << 0);
 constexpr unsigned QSB_LIMIT_STACK = (1u << 1);
 //! a per-call limit: the CPU time limit (see QoreSandboxManager::setCPUTimeLimit())
 constexpr unsigned QSB_LIMIT_CPU_TIME = (1u << 2);
-//! all per-call limits
-constexpr unsigned QSB_LIMIT_ALL = QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK | QSB_LIMIT_CPU_TIME;
+//! a limit charged by a call: the memory limit of its sandbox (see QoreSandboxManager::setMemoryLimit())
+constexpr unsigned QSB_LIMIT_MEMORY = (1u << 3);
+//! all limits that a call can enforce
+constexpr unsigned QSB_LIMIT_ALL = QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK | QSB_LIMIT_CPU_TIME | QSB_LIMIT_MEMORY;
 
 //! The CPU clock of a thread, which other threads can read; see QoreSandboxCallBudget
 /** Linux and the BSDs: pthread_getcpuclockid(); macOS: the thread's Mach port and thread_info().  Where neither is
@@ -98,9 +102,11 @@ public:
         @param limit_ms the wall-time limit in milliseconds, or 0 for none
         @param cpu_limit_ms the CPU-time limit in milliseconds, or 0 for none
         @param stack_bytes the stack limit in bytes, or 0 for none
+        @param memory_limit the memory limit of the sandbox in bytes when the call started, or 0 for none
+        @param charge the charge of the call's memory (the budget takes over its reference), or nullptr
     */
     DLLLOCAL QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 cpu_limit_ms,
-            int64 stack_bytes);
+            int64 stack_bytes, int64 memory_limit = 0, QoreSandboxCharge* charge = nullptr);
 
     DLLLOCAL QoreSandboxCallBudget(const QoreSandboxCallBudget&) = delete;
     DLLLOCAL QoreSandboxCallBudget& operator=(const QoreSandboxCallBudget&) = delete;
@@ -160,6 +166,10 @@ private:
     int64 cpu_limit_ms;
     //! the stack limit in bytes, 0 for none
     int64 stack_bytes;
+    //! the memory limit of the sandbox in bytes when the call started, 0 for none
+    int64 memory_limit;
+    //! the charge of the call's memory (referenced), or nullptr if the call has no memory limit of its own
+    QoreSandboxCharge* charge;
     //! the monotonic deadline (q_get_monotonic_us())
     int64 deadline_us;
     //! true once the deadline has passed or the CPU time is used up; set under the watchdog lock
@@ -194,10 +204,12 @@ private:
     //! creates the static budget that marks a call whose limits (\a kinds) cannot be enforced
     DLLLOCAL QoreSandboxCallBudget(unsigned kinds);
 
-    //! Returns the limits of the budget (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)
+    //! Returns the limits of the budget (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK,
+    //! @ref QSB_LIMIT_MEMORY)
     DLLLOCAL unsigned getKinds() const {
         return lost_kinds ? lost_kinds : ((limit_ms > 0 ? QSB_LIMIT_WALL_TIME : 0)
-            | (cpu_limit_ms > 0 ? QSB_LIMIT_CPU_TIME : 0) | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0));
+            | (cpu_limit_ms > 0 ? QSB_LIMIT_CPU_TIME : 0) | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0)
+            | (charge ? QSB_LIMIT_MEMORY : 0));
     }
 
     DLLLOCAL ~QoreSandboxCallBudget();
@@ -291,6 +303,10 @@ private:
         size_t saved_stack_limit;
         //! the stack limit address the frame set, or 0 if it did not change the limit
         size_t applied_stack_limit;
+        //! the thread's memory charge before the frame was pushed, if the frame set one
+        QoreSandboxCharge* saved_charge;
+        //! true if the frame made its budget's charge the thread's charge
+        bool charge_set;
     };
     std::vector<Frame> frames;
     //! the helper whose frame could not be recorded, or nullptr; see the class documentation
@@ -303,6 +319,8 @@ private:
     int64 lost_cpu_limit_ms = 0;
     //! the stack limit of the lost call, or 0 if it is not known (a continuation of a lost call)
     int64 lost_stack_bytes = 0;
+    //! the memory limit of the lost call, or 0 if it is not known (a continuation of a lost call)
+    int64 lost_memory_limit = 0;
     //! the thread's stack limit address before a lost call with a stack limit closed it, see lose()
     size_t lost_saved_stack_limit = 0;
     //! true if lose() closed the thread's stack
@@ -310,14 +328,14 @@ private:
 
     DLLLOCAL bool hasBudgetFor(const QoreSandboxManager* sm) const;
     DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 cpu_limit_ms, int64 stack_bytes,
-            const void* owner);
+            int64 memory_limit, const void* owner);
     //! Pushes a frame for a referenced budget and applies its stack limit; may throw std::bad_alloc (nothing changed)
     DLLLOCAL void pushFrame(QoreSandboxCallBudget* budget, const void* owner);
     //! Pops the top frame and restores the stack limit; returns its budget (the reference passes to the caller)
     DLLLOCAL QoreSandboxCallBudget* popFrame();
     //! Fails the call closed: \a kinds are the limits that cannot be enforced, the values 0 if they are not known
     DLLLOCAL void lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 cpu_limit_ms,
-            int64 stack_bytes);
+            int64 stack_bytes, int64 memory_limit);
 
     //! Fails the call of a budget closed
     DLLLOCAL void lose(int tid, const void* owner, const QoreSandboxCallBudget* budget);

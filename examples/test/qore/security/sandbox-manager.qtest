@@ -110,20 +110,20 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq(0, sm.getMaxThreads(), "Max threads set to 0 (unlimited)");
     }
 
-    # only enforced resource limits exist: the thread, wall time, CPU time and stack limits (see
-    # sandbox-limits.qtest); the memory limit does not exist until it is enforced (issue #5581), and the recursion
-    # limit is replaced by the stack limit
+    # only enforced resource limits exist: the thread, wall time, CPU time, stack and memory limits (see
+    # sandbox-limits.qtest, issue #5581); the recursion limit is replaced by the stack limit
     testOnlyEnforcedLimits() {
         SandboxManager sm();
-        foreach string method in ("setMemoryLimit", "getMemoryLimit", "setMaxRecursionDepth", "getMaxRecursionDepth") {
+        foreach string method in ("setMaxRecursionDepth", "getMaxRecursionDepth") {
             assertFalse(sm.hasCallableMethod(method), method + "() does not exist");
         }
         foreach string method in ("setMaxThreads", "getMaxThreads", "setWallTimeLimit", "getWallTimeLimit",
-                "setCPUTimeLimit", "getCPUTimeLimit", "setMaxStackSize", "getMaxStackSize") {
+                "setCPUTimeLimit", "getCPUTimeLimit", "setMaxStackSize", "getMaxStackSize", "setMemoryLimit",
+                "getMemoryLimit", "getMemoryUsage") {
             assertTrue(sm.hasCallableMethod(method), method + "() exists");
         }
         assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "cpu_time_limit", "max_stack_size",
-            "interrupt_requested"), keys sm.getConfiguration(),
+            "memory_limit", "interrupt_requested"), keys sm.getConfiguration(),
             "the configuration has the enforced resource limits only");
     }
 

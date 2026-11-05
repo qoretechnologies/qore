@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxMemoryApiTest
+
+#! Tests the sandbox-aware allocation API for binary modules: q_sb_malloc(), q_sb_realloc() and q_sb_free()
+/** Memory that a module allocates with these functions for code running in a sandbox call counts against the
+    sandbox's memory limit like the memory of %Qore values, and is released when it is freed, on any thread (issue
+    #5581; see design/sandbox-resource-limits.md).
+*/
+class SandboxMemoryApiTest inherits QUnit::Test {
+    public {
+        #! the memory limit of the sandbox
+        const Limit = 1024 * 1024;
+    }
+
+    private {
+        SandboxManager sm;
+        Program p;
+    }
+
+    constructor() : QUnit::Test("SandboxMemoryApiTest", "1.0", \ARGV) {
+        sm = new SandboxManager();
+        sm.setMemoryLimit(Limit);
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        # the module functions are called by trusted code that the sandboxed code calls, which runs in its call
+        p.parse("%modern\nauto sub call(code c) { return c(); }", "sandboxed");
+
+        addTestCase("memory allocated in a sandbox call is charged until it is freed", \testCharged());
+        addTestCase("an allocation beyond the limit is refused", \testRefused());
+        addTestCase("memory allocated outside a sandbox call is not charged", \testUnsandboxed());
+        set_return_value(main());
+    }
+
+    testCharged() {
+        int h = p.callFunction("call", int sub () { return sb_mem_alloc(300000); });
+        assertGe(300000, sm.getMemoryUsage(), "the buffer is charged");
+        # resized by the host, outside the call: the change is charged to the call that allocated it
+        sb_mem_resize(h, 600000);
+        assertGe(600000, sm.getMemoryUsage(), "the growth is charged");
+        sb_mem_resize(h, 100000);
+        assertLt(300000, sm.getMemoryUsage(), "the shrinking is released");
+        # freed by the host
+        sb_mem_free(h);
+        assertEq(0, sm.getMemoryUsage(), "freeing the buffer releases it");
+
+        # resized to 0 in a call: freed
+        h = p.callFunction("call", int sub () { return sb_mem_alloc(200000); });
+        p.callFunction("call", sub () { sb_mem_resize(h, 0); });
+        assertEq(0, sm.getMemoryUsage(), "a buffer resized to 0 is freed");
+    }
+
+    testRefused() {
+        assertThrows("SANDBOX-MEMORY-LIMIT", "would exceed the sandbox memory limit",
+            \p.callFunction(), ("call", int sub () { return sb_mem_alloc(Limit * 2); }));
+        assertEq(0, sm.getMemoryUsage(), "nothing was allocated");
+
+        # growth beyond the limit is refused; the buffer is unchanged
+        int h = p.callFunction("call", int sub () { return sb_mem_alloc(100000); });
+        int used = sm.getMemoryUsage();
+        assertThrows("SANDBOX-MEMORY-LIMIT", "would exceed the sandbox memory limit",
+            \p.callFunction(), ("call", sub () { sb_mem_resize(h, Limit * 2); }));
+        assertEq(used, sm.getMemoryUsage(), "the buffer is unchanged");
+        sb_mem_free(h);
+        assertEq(0, sm.getMemoryUsage());
+    }
+
+    testUnsandboxed() {
+        int h = sb_mem_alloc(Limit * 2);
+        assertEq(0, sm.getMemoryUsage(), "not charged");
+        sb_mem_resize(h, Limit * 3);
+        sb_mem_free(h);
+        assertEq(0, sm.getMemoryUsage());
+    }
+}

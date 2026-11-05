@@ -137,7 +137,7 @@ Program p(opts);
     - @ref sandbox_network "Network access control" with IP range and hostname filtering
     - @ref sandbox_resources "resource limits": a thread limit, and a @ref sandbox_resource_limits "wall time limit",
       a @ref sandbox_cpu_limit "CPU time limit" and a @ref sandbox_stack_limit "stack size limit" for each call into
-      the sandbox
+      the sandbox, and a @ref sandbox_memory_limit "memory limit" for the data it creates
     - @ref sandbox_interrupt "Safe code interruption" for stopping runaway code
 
     @subsection sandbox_manager_usage Basic Usage
@@ -532,9 +532,10 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @section sandbox_resources Resource Limits
 
     A SandboxManager limits the number of threads that sandboxed code runs at once, which prevents it from
-    exhausting the process's threads, and the wall-clock time, CPU time and stack size of each call into the sandbox
-    (see @ref sandbox_resource_limits, @ref sandbox_cpu_limit and @ref sandbox_stack_limit); unlike a parse option, a
-    limit restricts the feature rather than disabling it.
+    exhausting the process's threads, the wall-clock time, CPU time and stack size of each call into the sandbox
+    (see @ref sandbox_resource_limits, @ref sandbox_cpu_limit and @ref sandbox_stack_limit), and the memory held by the
+    data that sandboxed code creates (see @ref sandbox_memory_limit); unlike a parse option, a limit restricts the
+    feature rather than disabling it.
     All sandboxed code can also be stopped at any time with
     @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" (see @ref sandbox_interrupt), and the stack
     used by each thread is bounded as for all %Qore code.
@@ -550,6 +551,9 @@ sm.setWallTimeLimit(5000);
 
 # use at most 1 second of CPU time
 sm.setCPUTimeLimit(1000);
+
+# and keep at most 10MB of data
+sm.setMemoryLimit(10 * 1024 * 1024);
 
 # and use at most 1MB of stack
 sm.setMaxStackSize(1024 * 1024);
@@ -625,7 +629,7 @@ try {
       instead of running without them: at its next cancellation point, and, if it has a stack limit, at its next
       call.  The exception names the limits that cannot be enforced, and its \c arg hash has a key for each of them
       as in @ref Qore::SandboxConfigInfo "SandboxConfigInfo" (\c wall_time_limit, \c cpu_time_limit,
-      \c max_stack_size) with its
+      \c max_stack_size, \c memory_limit) with its
       value (no value for a thread that continues such a call, where it is not known).
 
     @subsection sandbox_cpu_limit CPU Time Limit
@@ -654,6 +658,44 @@ sm.setCPUTimeLimit(1000);  # 1 second of CPU time per call
     @note The CPU time limit needs a per-thread CPU clock (\c pthread_getcpuclockid() on Linux and the BSDs, the
     Mach thread API on macOS).  On a platform without one, a call into a sandbox with a CPU time limit fails with
     \c SANDBOX-ERROR instead of running without the limit.
+
+    @subsection sandbox_memory_limit Memory Limit
+
+    @ref Qore::SandboxManager::setMemoryLimit() "SandboxManager::setMemoryLimit()" limits the memory held by the
+    %Qore values that code governed by the sandbox created and that are still alive: the buffers of strings, lists
+    and binary data, the members of hashes and objects, and buffers that binary modules allocate for the code with
+    \c q_sb_malloc().  Unlike the other limits, it is not per call: it applies to the sandbox's data as a whole, across
+    all calls and threads, and
+    @ref Qore::SandboxManager::getMemoryUsage() "SandboxManager::getMemoryUsage()" returns the memory charged to it.
+
+    - <b>Data passed out stays charged.</b>  A value that sandboxed code returns or hands to other code is charged to
+      the sandbox until it is freed, wherever it is freed, so the sandbox cannot get around its limit by handing data
+      to the host.  If other code grows such a value, the growth is charged to the sandbox as well; data that other
+      code created and passes to the sandbox is not charged unless the sandbox grows it.
+    - <b>Nested sandboxes.</b>  The memory is charged to the sandbox of the call that created it and to every
+      enclosing sandbox call with a memory limit, so an inner sandbox cannot use more memory than its caller has.
+    - <b>What is not counted.</b>  Memory allocated inside third-party libraries, by modules that do not use
+      \c q_sb_malloc(), or by the interpreter itself (code, caches, stacks).
+
+    When the memory in use exceeds the limit, the thread that exceeded it raises a \c SANDBOX-MEMORY-LIMIT exception
+    (with <tt>arg = {"memory_limit": </tt><em>bytes</em><tt>}</tt>) at its next
+    @ref sandbox_interrupt_check_points "check point", and again at every check point until the memory in use is below
+    the limit.  Unlike a timeout, it can therefore be handled: code that catches the exception and frees memory (or
+    lets the data that the failed operation created go) can go on.  An allocation itself never fails because of the
+    limit; operations that know a large size in advance, such as @ref Qore::strmul() "strmul()" and
+    @ref Qore::range() "range()", check it first and raise the exception instead of allocating.
+
+    @code{.py}
+SandboxManager sm();
+sm.setMemoryLimit(10 * 1024 * 1024);  # 10MB
+    @endcode
+
+    @note
+    - The limit can be exceeded by at most one operation plus the memory that threads running calls into the sandbox
+      have reserved for their next allocations, which is a small part of the limit near the limit.
+    - A call charges memory if the sandbox has a memory limit when the call starts; a change of a non-zero limit
+      takes effect at once.
+    - Hash members are charged with an estimate of their size (the member, its key and its index entries).
 
     @subsection sandbox_stack_limit Stack Size Limit
 
@@ -757,6 +799,7 @@ SandboxManager sm = SandboxManager::createLockdown();
 # - Wall time limit per call: 5 seconds
 # - CPU time limit per call: 1 second
 # - Stack size limit per call: 1MB
+# - Memory limit: 10MB
 # - Max threads: 1
     @endcode
 
@@ -771,6 +814,7 @@ SandboxManager sm = SandboxManager::createWebSafe();
 # - Wall time limit per call: 30 seconds
 # - CPU time limit per call: 10 seconds
 # - Stack size limit per call: 2MB
+# - Memory limit: 100MB
 # - Max threads: 4
     @endcode
 
@@ -823,6 +867,7 @@ hash<auto> net_config = sm.getNetworkConfiguration();
     |\c SANDBOX-TIMEOUT|SandboxManager|The @ref sandbox_resource_limits "wall time limit" or the @ref sandbox_cpu_limit "CPU time limit" of a call was exceeded
     |\c SANDBOX-ERROR|SandboxManager|The limits of a call named in the exception could not be enforced (no resources to track them)
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
+    |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality

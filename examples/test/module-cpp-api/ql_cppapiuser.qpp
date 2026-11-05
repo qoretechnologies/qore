@@ -26,6 +26,7 @@
 
 #include "cppapiuser-module.h"
 #include <qore/OutputStream.h>
+#include <qore/QoreSandboxManager.h>
 
 #include <alloca.h>
 #include <atomic>
@@ -36,6 +37,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <future>
+#include <map>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -127,6 +129,11 @@ public:
 private:
     int fds[2];
 };
+
+// the buffers allocated with sb_mem_alloc(), by handle
+static std::mutex sb_mem_lock;
+static std::map<int64, void*> sb_mem_buffers;
+static int64 sb_mem_next = 0;
 
 // returns the time remaining until a deadline for poll(): -1 for no timeout, 0 if it has passed
 int remaining_ms(int timeout_ms, int64 deadline_us) {
@@ -1523,6 +1530,71 @@ string cpp_api_nothing_variant(*object o) [flags=CONSTANT] {
 */
 string cpp_api_nothing_variant(*softlist<*string> l) [flags=CONSTANT] {
     return new QoreStringNode("*softlist");
+}
+
+
+//! Allocates memory with q_sb_malloc() and keeps it; returns a handle for sb_mem_resize() and sb_mem_free()
+/** The memory counts against the memory limit of the sandbox call that the current thread runs.
+
+    @param size the number of bytes to allocate
+
+    @return the handle of the buffer
+
+    @throw SANDBOX-MEMORY-LIMIT the request does not fit the memory limit of the sandbox
+*/
+int sb_mem_alloc(int size) {
+    void* p = q_sb_malloc(static_cast<size_t>(size), xsink);
+    if (!p) {
+        if (!*xsink) {
+            xsink->raiseException("SB-MEM-ERROR", "q_sb_malloc(" QLLD ") returned no memory", size);
+        }
+        return QoreValue();
+    }
+    memset(p, 1, static_cast<size_t>(size));
+    std::lock_guard<std::mutex> lock(sb_mem_lock);
+    sb_mem_buffers[++sb_mem_next] = p;
+    return sb_mem_next;
+}
+
+//! Resizes a buffer allocated with sb_mem_alloc() with q_sb_realloc()
+/** @param handle the handle of the buffer
+    @param size the new size; 0 frees the buffer
+
+    @throw SANDBOX-MEMORY-LIMIT the growth does not fit the memory limit of the sandbox (the buffer is unchanged)
+*/
+nothing sb_mem_resize(int handle, int size) {
+    std::lock_guard<std::mutex> lock(sb_mem_lock);
+    auto i = sb_mem_buffers.find(handle);
+    if (i == sb_mem_buffers.end()) {
+        xsink->raiseException("SB-MEM-ERROR", "unknown handle " QLLD, handle);
+        return QoreValue();
+    }
+    void* p = q_sb_realloc(i->second, static_cast<size_t>(size), xsink);
+    if (!size) {
+        sb_mem_buffers.erase(i);
+    } else if (p) {
+        i->second = p;
+    }
+    return QoreValue();
+}
+
+//! Frees a buffer allocated with sb_mem_alloc() with q_sb_free()
+/** @param handle the handle of the buffer
+*/
+nothing sb_mem_free(int handle) {
+    void* p = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(sb_mem_lock);
+        auto i = sb_mem_buffers.find(handle);
+        if (i == sb_mem_buffers.end()) {
+            xsink->raiseException("SB-MEM-ERROR", "unknown handle " QLLD, handle);
+            return QoreValue();
+        }
+        p = i->second;
+        sb_mem_buffers.erase(i);
+    }
+    q_sb_free(p);
+    return QoreValue();
 }
 
 ///@}

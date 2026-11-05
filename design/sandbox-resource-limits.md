@@ -15,7 +15,7 @@ enforcement, in four phases:
 | 1 | wall time per call, plus interrupt reason codes | `SANDBOX-TIMEOUT` | implemented |
 | 2 | stack size per call | `STACK-LIMIT-EXCEEDED` | implemented |
 | 3 | CPU time per call | `SANDBOX-TIMEOUT` | implemented |
-| 4 | memory, then the `q_sb_*` allocation API | `SANDBOX-MEMORY-LIMIT` | planned |
+| 4 | memory, then the `q_sb_*` allocation API | `SANDBOX-MEMORY-LIMIT` | implemented |
 
 It builds on [cooperative-cancellation.md](cooperative-cancellation.md) (how a request reaches a running or blocked
 thread), [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md) (which threads a sandbox governs) and
@@ -292,18 +292,109 @@ every fail-closed path deterministically (`testFailClosed()` in `sandbox-limits.
 
 ## Phase 4: memory
 
-As proposed in the issue, with the decisions above:
+### API
 
-- an **account** per limited manager, separate from the manager and referenced by every charged storage, so it
-  outlives the manager and the Program while bytes are charged to it;
-- the current account cached in `ThreadData`, updated by the same seams that maintain the call budgets;
-- per-thread borrowed chunks (`fetch_add` on the account), shrinking near the limit;
-- the charged account recorded in the private storage of strings, lists, hashes and binaries; release on free from
-  any thread;
-- nested managers: the thread's chunk is drawn from every ancestor account with a limit;
-- an over-limit bit in `interrupt_flags` (raised as `SANDBOX-MEMORY-LIMIT` at the next cancellation point), cleared
-  when usage drops; checks before allocation where an `ExceptionSink` is available;
-- `q_sb_malloc()`, `q_sb_realloc()`, `q_sb_free()` for modules.
+| C++ (`QoreSandboxManager`) | Qore (`SandboxManager`) | Notes |
+|---|---|---|
+| `setMemoryLimit(int64 bytes)` | `setMemoryLimit(int max_memory_bytes)` | 0 = unlimited; negative: `SANDBOX-CONFIG-ERROR` in Qore, 0 in C++ |
+| `getMemoryLimit()` | `getMemoryLimit()` | tightest constituent limit for a composite manager |
+| `getMemoryUsage()` | `getMemoryUsage()` | the bytes charged to the sandbox, including what threads have borrowed |
+| — | `SandboxConfigInfo::memory_limit` | |
+| `createLockdown()` / `createWebSafe()` | same | 10 MB / 100 MB (the values the removed presets documented) |
+| `q_sb_malloc(size, xsink)`, `q_sb_realloc(ptr, size, xsink)`, `q_sb_free(ptr)` | — | exported functions for modules; 16-byte header |
+
+Unlike the time and stack limits, the memory limit is **per sandbox**, not per call: it bounds the sandbox's live
+data across calls and threads.
+
+### Objects (`include/qore/intern/QoreSandboxMemory.h`, `lib/QoreSandboxMemory.cpp`)
+
+```
+QoreSandboxMemoryAccount   one per QoreSandboxManager (created with it); atomic used and limit; referenced by the
+                           manager and by every charge, so it outlives the manager while data is charged to it
+QoreSandboxCharge          one per call into a sandbox with a memory limit: the accounts it charges (its own and
+                           those of the enclosing call's charge, innermost first, referenced); one atomic word with
+                           references (frames, captured continuations; units of 2^44) and charged bytes; whoever
+                           takes it to zero deletes it, so data keeps its charge alive after the call ended
+QoreSandboxMemTls          thread_local {charge, balance}: the thread's current charge and the bytes it has borrowed
+QoreSandboxChargeRecord    {charge, charged} in the private data of each piece of storage
+```
+
+- The call budget of phases 1-3 gets the charge (`QoreSandboxCallBudget::charge`); a budget is created if the
+  manager has any limit, now including a memory limit. A frame whose budget has a charge makes it the thread's current
+  charge and restores the previous one when it is popped (returning the borrowed balance), so continuations (threads,
+  pool tasks, async I/O) charge the call that started them, and a re-entry keeps the charge.
+- An inner sandbox without a memory limit of its own creates no charge: the thread keeps charging the outer call.
+
+### Charging
+
+- **Storage records what it charged** (`QoreSandboxChargeRecord`): `sync(size)` is called wherever the size of the
+  storage changes, `release()` when it is freed or its buffer leaves it (`giveBuffer()`), `swap()` when buffers are
+  swapped. Releases always use the recorded size, so a growth site that is not synced only makes accounting less
+  precise; it can never unbalance an account or leave a dangling charge. Empty storage never records a charge.
+- **Adoption:** storage without a charge that is synced with a non-zero size while the thread has a current charge is
+  charged in full to that charge (the sandbox pays for a value it grew, even if the host created it). Storage with a
+  charge charges every change to its own charge, whichever thread makes it (the host growing a string the sandbox
+  returned charges the sandbox).
+- **Where:** `qore_string_private` (`sb`, synced with `allocated` at every allocation site), `qore_list_private`
+  (synced with `allocated * sizeof(QoreValue)`), `qore_hash_private` (an estimate per member: the member, its key
+  and its list and map nodes, kept in `sb_bytes` always and synced on add, remove and clear; objects are hashes),
+  `BinaryNode` (no private data and a public layout: a sparse table `node -> {charge, size}` under a leaf mutex,
+  consulted only while the thread has a charge or charged binaries exist, `qore_sb_binary_count`).
+- **Fast path:** `qore_sb_charge()` / `qore_sb_release()` against the thread's own charge only adjust the
+  thread-local balance. A refill borrows `missing + chunk` (256 KB, shrinking to an eighth of the smallest remaining
+  limit near a limit) with one `fetch_add` on the charge and each account; a release beyond 512 KB of balance returns
+  all but 256 KB. Charging another charge (data of another call, or a thread outside any call) goes to the atomics
+  directly. Code outside a sandbox call with a memory limit pays a thread-local load and a null check, and only where
+  storage is (re)allocated, not on every append. The TLS uses the default model: libqore is `dlopen()`ed, and musl
+  rejects initial-exec TLS there.
+- **Nested:** a charge lists the accounts of every enclosing call with a memory limit, and charges/releases all of
+  them; the inner and outer usage both rise and both fall when the data is freed, on any thread.
+
+### Enforcement
+
+- A refill that takes an account over its limit sets the thread's `QCR_SANDBOX_LIMIT` bit (the same bit as the time
+  limits). At the next cancellation point, `qore_check_cancel()` (after the expired-budget check) returns the
+  thread's balance and checks the accounts of its charge: if one is over its limit it raises
+  `SANDBOX-MEMORY-LIMIT` (`<operation>: the sandbox memory limit of N bytes was exceeded (U bytes in use)`,
+  `arg: {"memory_limit": N}`), otherwise it clears the bit. The bit is therefore cleared once usage is below the limit
+  again: code that catches the exception and frees memory can go on (`clearSandboxLimit()` also checks memory).
+- Where the size of a large allocation is known in advance with an `ExceptionSink`, `qore_sb_check_alloc()` raises
+  `SANDBOX-MEMORY-LIMIT` before allocating: `strmul()`, `range()`, `q_sb_malloc()`, `q_sb_realloc()`.
+- The allocator never fails because of a limit. Overshoot: one operation plus the balances threads have borrowed.
+- Fail-closed (phase 1-3 mechanism): a charge that cannot be allocated fails the call with `SANDBOX-ERROR` naming
+  the memory limit (`QSB_LIMIT_MEMORY`).
+
+### Benchmark (Release builds, 2026-11-05)
+
+Hot loops in a `Program` (minimum of 5 runs, 4 rounds each; a `Program` created at runtime runs in the default
+tiered mode): `develop` (3c7407bc10) against this branch without a sandbox, and this branch in a sandbox with a 4 GB
+memory limit (accounting active).
+
+| Loop | develop | branch, no sandbox | branch, memory-limited sandbox |
+|---|---|---|---|
+| `s += "x"` (100k) | 10-11 ms | 10-11 ms | 11-12 ms |
+| `string s = "abcdefgh" + i` (1M) | 340-366 ms | 333-354 ms | 353-378 ms |
+| `l += i` (2M) | 298-338 ms | 290-306 ms | 303-318 ms |
+| `h{"k" + i} = i` (500k) | 371-395 ms | 373-389 ms | 381-393 ms |
+| `b += binary("abcd")` (2M) | 312-339 ms | 293-312 ms | 323-340 ms |
+
+Without a sandbox the branch is within the noise of `develop`. With accounting active the cost is a few percent,
+about 10% for binary appends (the sparse table's mutex at each reallocation, the price of not changing the public
+layout of `BinaryNode`).
+
+Found on the way, not related to this work: `s += "x"` on a local string in a function is quadratic on `develop`
+(about 5 us per append at 400k appends, 2.6x the time for 2x the appends at 10k-20k), in all execution modes.
+
+### Tests
+
+- `sandbox-limits.qtest`: API and presets; string, list, hash, binary and object growth stopped (usage back to 0 after
+  each call); `strmul()` / `range()` refused in advance; data returned to the host stays charged and is released when
+  the host frees it, growth by the host is charged, host data passed in is not; recovery after catching the
+  exception and freeing; a thread started by the call; an inner sandbox without a limit, with a higher one and with a
+  lower one (charged to both, released from both); an account that outlives its manager and Program.
+- `module-cpp-api/sandbox-memory/sandbox-memory.qtest`: `q_sb_malloc()` / `q_sb_realloc()` / `q_sb_free()` through
+  the `cppapiuser` test module: charged in a call, resized and freed by the host, refused beyond the limit (and the
+  buffer unchanged), not charged outside a sandbox call.
 
 ## Documentation
 

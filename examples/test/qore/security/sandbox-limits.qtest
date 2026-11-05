@@ -37,6 +37,12 @@ class SandboxLimitsTest inherits QUnit::Test {
         #! the description of the CPU time exception for the given limit
         const CpuDesc = "the sandbox CPU time limit of %d ms was exceeded";
 
+        #! the memory limit used by the tests, in bytes
+        const MemoryLimit = 1024 * 1024;
+
+        #! the description of the memory exception for the given limit
+        const MemoryDesc = "the sandbox memory limit of %d bytes was exceeded";
+
         #! the stack limit used by the tests, in bytes
         const StackLimit = 256 * 1024;
 
@@ -288,6 +294,93 @@ list<int> sub cpu_across_tasks(Qore::Thread::ThreadPool pool, int iterations) {
     });
     return (q.get(), q.get());
 }
+# appends to a string until the memory limit stops it
+string sub grow_string() {
+    string s;
+    while (True) {
+        s += \"0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz\";
+    }
+    return s;
+}
+# adds to a list until the memory limit stops it
+list<auto> sub grow_list() {
+    list<auto> l = ();
+    for (int i = 0; ; ++i) {
+        l += i;
+    }
+    return l;
+}
+# adds to a hash until the memory limit stops it
+hash<auto> sub grow_hash() {
+    hash<auto> h = {};
+    for (int i = 0; ; ++i) {
+        h{\"key-\" + i} = i;
+    }
+    return h;
+}
+# appends to binary data until the memory limit stops it
+binary sub grow_binary() {
+    binary b;
+    while (True) {
+        b += binary(\"0123456789abcdefghijklmnopqrstuvwxyz\");
+    }
+    return b;
+}
+# creates objects until the memory limit stops it
+list<auto> sub grow_objects() {
+    list<auto> l = ();
+    while (True) {
+        l += new Spinner();
+    }
+    return l;
+}
+# returns a string of the given size
+string sub make_string(int n) {
+    return strmul(\"x\", n);
+}
+# returns a list of the given size
+list<auto> sub make_list(int n) {
+    return range(n - 1);
+}
+# returns a huge string
+string sub huge_string() {
+    return strmul(\"x\", 1024 * 1024 * 1024);
+}
+# returns a huge list
+list<auto> sub huge_list() {
+    return range(1024 * 1024 * 1024);
+}
+# exceeds the limit, catches the exception, frees the memory and goes on
+string sub recover() {
+    string s;
+    try {
+        while (True) {
+            s += \"0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz\";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"SANDBOX-MEMORY-LIMIT\") {
+            rethrow;
+        }
+        # the exception is raised again until the memory in use is below the limit
+        s = \"\";
+    }
+    # the loop's cancellation checks pass again
+    string t;
+    for (int i = 0; i < 100; ++i) {
+        t += \"x\";
+    }
+    return \"recovered \" + t.size();
+}
+# grows a string in a new thread; reports the exception that ends it
+sub grow_in_background(Queue result) {
+    background sub () {
+        try {
+            grow_string();
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    }();
+}
 class Spinner {
     int spin() {
         return spin_while();
@@ -311,6 +404,13 @@ code sub get_closure() {
     }
 
     constructor() : QUnit::Test("SandboxLimitsTest", "1.0", \ARGV) {
+        addTestCase("memory limit API", \testMemoryApi());
+        addTestCase("the memory limit stops growing data", \testMemoryGrowth());
+        addTestCase("a large allocation is refused in advance", \testMemoryPreCheck());
+        addTestCase("data passed out stays charged until it is freed", \testMemoryPassedOut());
+        addTestCase("code that frees memory recovers from the memory limit", \testMemoryRecover());
+        addTestCase("the memory limit with threads and nested sandboxes", \testMemoryNested());
+        addTestCase("the memory account outlives its manager", \testMemoryOutlivesManager());
         addTestCase("CPU time limit API", \testCpuApi());
         addTestCase("the CPU time limit stops busy code", \testCpuLoop());
         addTestCase("waiting uses no CPU time", \testCpuWaiting());
@@ -375,7 +475,7 @@ code sub get_closure() {
         assertEq(1500, sm.getWallTimeLimit());
         assertEq(1500, sm.getConfiguration().wall_time_limit, "configuration key");
         assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "cpu_time_limit", "max_stack_size",
-            "interrupt_requested"), keys sm.getConfiguration(), "configuration keys");
+            "memory_limit", "interrupt_requested"), keys sm.getConfiguration(), "configuration keys");
         sm.setWallTimeLimit(max_wall_time_ms: 2500);
         assertEq(2500, sm.getWallTimeLimit(), "named argument");
 
@@ -392,6 +492,152 @@ code sub get_closure() {
 
         assertEq(5000, SandboxManager::createLockdown().getWallTimeLimit(), "lockdown preset");
         assertEq(30000, SandboxManager::createWebSafe().getWallTimeLimit(), "web-safe preset");
+    }
+
+    #! returns a sandbox manager with the given memory limit
+    private SandboxManager memoryLimited(int bytes = MemoryLimit) {
+        SandboxManager sm();
+        sm.setMemoryLimit(bytes);
+        return sm;
+    }
+
+    #! calls a function that must exceed the memory limit and checks the exception
+    private expectMemoryLimit(Program p, string func, softlist<auto> args = (), int limit = MemoryLimit) {
+        try {
+            p.callFunctionArgs(func, args);
+            fail(func + "() returned");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SANDBOX-MEMORY-LIMIT", ex.err, sprintf("%s(): %s: %s", func, ex.err, ex.desc));
+            assertEq({"memory_limit": limit}, ex.arg, func + "() exception argument");
+        }
+    }
+
+    testMemoryApi() {
+        SandboxManager sm();
+        assertEq(0, sm.getMemoryLimit(), "no limit by default");
+        assertEq(0, sm.getMemoryUsage(), "no memory in use");
+        sm.setMemoryLimit(1500000);
+        assertEq(1500000, sm.getMemoryLimit());
+        assertEq(1500000, sm.getConfiguration().memory_limit, "configuration key");
+        sm.setMemoryLimit(max_memory_bytes: 2500000);
+        assertEq(2500000, sm.getMemoryLimit(), "named argument");
+        SandboxManager copy = sm.copy();
+        assertEq(2500000, copy.getMemoryLimit(), "copy() copies the limit");
+        sm.setMemoryLimit(0);
+        assertEq(0, sm.getMemoryLimit(), "0 removes the limit");
+        assertEq(2500000, copy.getMemoryLimit(), "the copy is independent");
+        assertThrows("SANDBOX-CONFIG-ERROR", "cannot be negative", \sm.setMemoryLimit(), -1);
+        assertEq(0, sm.getMemoryLimit(), "a rejected value does not change the limit");
+        assertEq(10 * 1024 * 1024, SandboxManager::createLockdown().getMemoryLimit(), "lockdown preset");
+        assertEq(100 * 1024 * 1024, SandboxManager::createWebSafe().getMemoryLimit(), "web-safe preset");
+    }
+
+    testMemoryGrowth() {
+        SandboxManager sm = memoryLimited();
+        Program p = sandboxed(sm);
+        foreach string func in ("grow_string", "grow_list", "grow_hash", "grow_binary", "grow_objects") {
+            expectMemoryLimit(p, func);
+            # the memory was freed when the exception left the call
+            assertEq(0, sm.getMemoryUsage(), func + "(): nothing is charged after the call");
+        }
+        assertEq("done", p.callFunction("quick"), "the next call is not affected");
+    }
+
+    testMemoryPreCheck() {
+        SandboxManager sm = memoryLimited();
+        Program p = sandboxed(sm);
+        foreach string func in ("huge_string", "huge_list") {
+            try {
+                p.callFunction(func);
+                fail(func + "() returned");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("SANDBOX-MEMORY-LIMIT", ex.err, ex.desc);
+                assertRegex("would exceed the sandbox memory limit of " + MemoryLimit + " bytes", ex.desc);
+                assertEq({"memory_limit": MemoryLimit}, ex.arg);
+            }
+        }
+        assertEq(0, sm.getMemoryUsage(), "nothing was allocated");
+    }
+
+    testMemoryPassedOut() {
+        SandboxManager sm = memoryLimited(16 * 1024 * 1024);
+        Program p = sandboxed(sm);
+        string str = p.callFunction("make_string", 300000);
+        int used = sm.getMemoryUsage();
+        assertGe(300000, used, "a string returned to the host stays charged");
+        list<auto> l = p.callFunction("make_list", 10000);
+        assertGt(used, sm.getMemoryUsage(), "and so does a list");
+        remove l;
+        assertEq(used, sm.getMemoryUsage(), "freeing the list releases its memory");
+        # the host grows the sandbox's string: the growth is charged to the sandbox as well
+        str += strmul("y", 300000);
+        assertGe(600000, sm.getMemoryUsage(), "growth of the data by the host is charged to the sandbox");
+        remove str;
+        assertEq(0, sm.getMemoryUsage(), "freeing the data on the host releases it");
+
+        # data the host created and passes to the sandbox is not charged
+        string host_data = strmul("z", 200000);
+        assertEq(200000, p.callFunction("call", int sub () { return host_data.size(); }));
+        assertEq(0, sm.getMemoryUsage(), "host data is not charged");
+    }
+
+    testMemoryRecover() {
+        SandboxManager sm = memoryLimited();
+        Program p = sandboxed(sm);
+        assertEq("recovered 100", p.callFunction("recover"));
+        assertEq(0, sm.getMemoryUsage());
+    }
+
+    testMemoryNested() {
+        # the threads of a call share the sandbox's limit
+        SandboxManager sm = memoryLimited();
+        Program p = sandboxed(sm);
+        Queue result();
+        p.callFunction("grow_in_background", result);
+        assertEq("SANDBOX-MEMORY-LIMIT", result.get(), "a thread started by the call");
+
+        # an inner sandbox without a memory limit is charged to the outer call
+        Program outer = sandboxed(memoryLimited());
+        SandboxManager inner_sm();
+        Program inner = sandboxed(inner_sm);
+        code call_inner = auto sub () { return inner.callFunction("grow_string"); };
+        expectMemoryLimit(outer, "call", call_inner);
+
+        # an inner sandbox with a higher limit of its own: the outer limit applies as well
+        inner_sm.setMemoryLimit(64 * 1024 * 1024);
+        expectMemoryLimit(outer, "call", call_inner);
+        assertEq(0, inner_sm.getMemoryUsage(), "the inner account was released");
+
+        # an inner sandbox with a lower limit: the inner limit applies, and the memory is charged to both
+        SandboxManager outer_sm = memoryLimited(64 * 1024 * 1024);
+        outer = sandboxed(outer_sm);
+        inner_sm.setMemoryLimit(MemoryLimit);
+        code make_inner = auto sub () { return inner.callFunction("make_string", 300000); };
+        string str = outer.callFunction("call", make_inner);
+        assertGe(300000, inner_sm.getMemoryUsage(), "charged to the inner sandbox");
+        assertGe(300000, outer_sm.getMemoryUsage(), "and to the outer sandbox");
+        remove str;
+        assertEq(0, inner_sm.getMemoryUsage(), "released from the inner sandbox");
+        assertEq(0, outer_sm.getMemoryUsage(), "and from the outer sandbox");
+        try {
+            outer.callFunction("call", call_inner);
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SANDBOX-MEMORY-LIMIT", ex.err, ex.desc);
+            assertEq({"memory_limit": MemoryLimit}, ex.arg, "the inner limit");
+        }
+    }
+
+    testMemoryOutlivesManager() {
+        string str;
+        {
+            SandboxManager sm = memoryLimited(16 * 1024 * 1024);
+            Program p = sandboxed(sm);
+            str = p.callFunction("make_string", 100000);
+        }
+        # the Program and its manager are gone; the data is still charged to the account, which is freed with it
+        assertEq(100000, str.size());
+        remove str;
     }
 
     #! returns a sandbox manager with the given CPU time limit

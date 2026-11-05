@@ -413,6 +413,9 @@ public:
     */
     DLLLOCAL void requestSandboxLimit(const std::vector<int>& tids);
 
+    //! Sets the sandbox limit bit of one thread and wakes it if it is blocked; acquires lck; never throws
+    DLLLOCAL void requestSandboxLimit(int tid);
+
     //! Clears the current thread's sandbox limit bit unless one of its budgets has expired; acquires lck
     /** The budgets are checked under lck: the watchdog sets a budget's expired flag before it takes lck to set the
         bits, so a budget expiring concurrently is either seen here or sets the bit again afterwards.

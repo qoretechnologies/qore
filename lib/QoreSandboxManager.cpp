@@ -36,6 +36,7 @@
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QoreSandboxMemory.h"
 
 #include <cassert>
 #include <cctype>
@@ -1038,10 +1039,12 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 
 QoreSandboxManager::QoreSandboxManager()
     : max_threads(0), interrupt_flags(0), wall_time_limit(0), cpu_time_limit(0), max_stack_size(0),
-    active_threads(0) {
+    mem_account(new QoreSandboxMemoryAccount), active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
+    // the account lives on while data charged to it is alive
+    mem_account->deref();
 }
 
 QoreFilesystemSecurityManager& QoreSandboxManager::filesystem() {
@@ -1097,6 +1100,19 @@ void QoreSandboxManager::setCPUTimeLimit(int64 ms) {
 
 int64 QoreSandboxManager::getCPUTimeLimit() const {
     return sandbox_intersection_limit<int64>(this, cpu_time_limit.load(), &QoreSandboxManager::getCPUTimeLimit);
+}
+
+void QoreSandboxManager::setMemoryLimit(int64 bytes) {
+    mem_account->limit.store(bytes > 0 ? bytes : 0, std::memory_order_relaxed);
+}
+
+int64 QoreSandboxManager::getMemoryLimit() const {
+    return sandbox_intersection_limit<int64>(this, mem_account->limit.load(std::memory_order_relaxed),
+        &QoreSandboxManager::getMemoryLimit);
+}
+
+int64 QoreSandboxManager::getMemoryUsage() const {
+    return mem_account->used.load(std::memory_order_relaxed);
 }
 
 void QoreSandboxManager::setMaxStackSize(int64 bytes) {
@@ -1252,6 +1268,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("wall_time_limit", wall_time_limit.load(), xsink);
     config->setKeyValue("cpu_time_limit", cpu_time_limit.load(), xsink);
     config->setKeyValue("max_stack_size", max_stack_size.load(), xsink);
+    config->setKeyValue("memory_limit", static_cast<int64>(mem_account->limit.load()), xsink);
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
 
@@ -1338,6 +1355,7 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->wall_time_limit = wall_time_limit.load();
     result->cpu_time_limit = cpu_time_limit.load();
     result->max_stack_size = max_stack_size.load();
+    result->mem_account->limit.store(mem_account->limit.load());
     // Don't copy interrupt state
 
     return result;
@@ -1362,6 +1380,9 @@ QoreSandboxManager* QoreSandboxManager::createLockdown() {
     // 1MB of stack per call
     sm->setMaxStackSize(1024 * 1024);
 
+    // 10MB of data
+    sm->setMemoryLimit(10 * 1024 * 1024);
+
     return sm;
 }
 
@@ -1384,6 +1405,9 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 
     // 2MB of stack per call
     sm->setMaxStackSize(2 * 1024 * 1024);
+
+    // 100MB of data
+    sm->setMemoryLimit(100 * 1024 * 1024);
 
     return sm;
 }

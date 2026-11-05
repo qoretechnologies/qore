@@ -6105,10 +6105,19 @@ void QoreThreadList::requestSandboxLimit(const std::vector<int>& tids) {
     }
 }
 
+void QoreThreadList::requestSandboxLimit(int tid) {
+    assert(tid > 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    entry[tid].cancel_requested.fetch_or(QCR_SANDBOX_LIMIT, std::memory_order_seq_cst);
+    wakeCondWaiter(tid);
+    signalWaitingFd(tid);
+}
+
 bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& budgets) {
     assert(tid > 0 && tid < MAX_QORE_THREADS);
     AutoLocker al(lck);
-    if (budgets.findExpired()) {
+    // only the thread itself flags a memory limit, so that needs no lock, but it is checked here as well
+    if (budgets.findExpired() || qore_sb_find_over_limit()) {
         return false;
     }
     entry[tid].clearCancelState(QCR_SANDBOX_LIMIT);
@@ -6752,6 +6761,13 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         if (const QoreSandboxCallBudget* budget = td->sandbox_budgets.findExpired()) {
             if (xsink) {
                 td->sandbox_budgets.raise(budget, xsink, operation);
+            }
+            return true;
+        }
+        // a memory limit: raised until the memory in use is below the limit again
+        if (const QoreSandboxMemoryAccount* account = qore_sb_find_over_limit()) {
+            if (xsink) {
+                qore_sb_raise_memory_limit(account, xsink, operation);
             }
             return true;
         }

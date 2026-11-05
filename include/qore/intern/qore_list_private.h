@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "qore/intern/qore_container_free.h"
+#include "qore/intern/QoreSandboxMemory.h"
 
 typedef ReferenceHolder<QoreListNode> safe_qorelist_t;
 
@@ -52,6 +53,8 @@ struct qore_list_private {
     QoreReferenceCounter weakRefs;
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
     size_t eval_result_size = 0;
+    //! the sandbox memory charge of entry (see design/sandbox-resource-limits.md); synced with allocated
+    QoreSandboxChargeRecord sb;
     bool finalized : 1;
     bool vlist : 1;
     bool valid : 1;
@@ -62,6 +65,7 @@ struct qore_list_private {
     DLLLOCAL ~qore_list_private() {
         assert(!length);
 
+        sb.release();
         if (entry) {
             free(entry);
         }
@@ -559,6 +563,7 @@ struct qore_list_private {
             size_t d = num >> 2;
             allocated = num + (d < LIST_PAD ? LIST_PAD : d);
             entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
+            sb.sync(sizeof(QoreValue) * allocated);
         }
     }
 
@@ -574,6 +579,7 @@ struct qore_list_private {
                 size_t d = num >> 2;
                 allocated = num + (d < LIST_PAD ? LIST_PAD : d);
                 entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
+                sb.sync(sizeof(QoreValue) * allocated);
             }
             zeroEntries(length, num);
         }
