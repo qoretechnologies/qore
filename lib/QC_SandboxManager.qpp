@@ -95,6 +95,8 @@ hashdecl SandboxConfigInfo {
     hash<NetworkSecurityConfigInfo> network;
     //! Maximum number of threads (0 = unlimited)
     int max_threads;
+    //! Wall-clock time limit of each call into the sandbox in milliseconds (0 = unlimited)
+    int wall_time_limit;
     //! Whether an interrupt has been requested
     bool interrupt_requested;
 }
@@ -144,12 +146,14 @@ const QSEC_NET_ALL = QSEC_NET_ALL;
     sandboxing features including:
 
     - A limit on the number of threads that sandboxed code runs at once
+    - A wall-clock time limit for each call into the sandbox
     - Safe interruption of sandboxed code
 
     @par Example:
     @code{.py}
 SandboxManager sm();
 sm.setMaxThreads(4);
+sm.setWallTimeLimit(5000);  # 5 seconds per call
     @endcode
 
     @since Qore 3.0
@@ -199,6 +203,51 @@ int SandboxManager::getMaxThreads() {
     return sm->getMaxThreads();
 }
 
+//! Sets the wall-clock time limit of each call into the sandbox
+/** @param max_wall_time_ms the limit in milliseconds; 0 = unlimited
+
+    A call starts when a thread enters code governed by this sandbox from code that it does not govern: for example
+    @ref Qore::Program::run() "Program::run()", @ref Qore::Program::callFunction() "Program::callFunction()" or a
+    method call on an object of a Program that has this sandbox manager, or a call of a closure or method of an object
+    created under this sandbox.  A thread that is already running a call of this sandbox does not start a new one when
+    it re-enters the sandbox.  Threads, thread pool tasks and asynchronous I/O operations that the call starts share
+    its deadline.
+
+    When the deadline passes, the threads of the call raise a \c SANDBOX-TIMEOUT exception at their next cancellation
+    point, and a thread blocked in an interruptible wait (@ref Qore::sleep() "sleep()", locks, queues, I/O) wakes at
+    once.  The exception is raised again at every cancellation point until the thread leaves the call, so code in the
+    sandbox cannot catch it and continue, and @ref Qore::clear_thread_cancel() "clear_thread_cancel()" does not clear
+    it.  Other calls into the same sandbox are not affected.  Changing the limit affects calls that start afterwards.
+
+    See @ref sandbox_resource_limits for the limitations.
+
+    @par Example:
+    @code{.py}
+sm.setWallTimeLimit(max_wall_time_ms: 5000);  # 5 seconds per call
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setWallTimeLimit(int max_wall_time_ms) [flags=NAMED_ARGS] {
+    if (max_wall_time_ms < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the wall time limit cannot be negative; got: " QLLD,
+            max_wall_time_ms);
+        return QoreValue();
+    }
+    sm->setWallTimeLimit(max_wall_time_ms);
+}
+
+//! Gets the wall-clock time limit of each call into the sandbox
+/** @return the limit in milliseconds, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getWallTimeLimit() {
+    return sm->getWallTimeLimit();
+}
+
 //! Requests graceful interruption of sandboxed code
 /** This sets an interrupt flag that is checked at various points
     during execution. Interrupted code receives a PROGRAM-INTERRUPTED exception.
@@ -242,11 +291,8 @@ hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
     Lockdown mode settings:
     - No filesystem access (empty allow list)
     - No network access (empty allow list)
-    - Memory limit: 10MB
-    - CPU time limit: 1000ms
-    - Wall time limit: 5000ms
+    - Wall time limit per call: 5000ms (see setWallTimeLimit())
     - Max threads: 1
-    - Max recursion: 100
 
     @par Example:
     @code{.py}
@@ -265,11 +311,8 @@ static SandboxManager SandboxManager::createLockdown() {
     Web-safe mode settings:
     - No filesystem access
     - Network allowed but private networks blocked
-    - Memory limit: 100MB
-    - CPU time limit: 10000ms
-    - Wall time limit: 30000ms
+    - Wall time limit per call: 30000ms (see setWallTimeLimit())
     - Max threads: 4
-    - Max recursion: 200
 
     @par Example:
     @code{.py}

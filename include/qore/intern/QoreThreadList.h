@@ -37,6 +37,7 @@
 #include <qore/qore_thread.h>
 
 #include <atomic>
+#include <vector>
 #include <pthread.h>
 #include <sys/types.h>
 
@@ -68,6 +69,7 @@ static_assert(!(QTF_NO_SANDBOX_INHERIT & (QTF_NO_STACK_GUARD | QTF_EXTERNAL_LIFE
 #endif
 
 class ThreadData;
+class QoreSandboxBudgetStack;
 class QoreStringNode;
 class QoreCondition;
 
@@ -96,6 +98,15 @@ public:
    DLLLOCAL ~tid_node();
 };
 
+//! cancellation request bit: an explicit request with cancel_thread() / qore_cancel_thread(); raises THREAD-CANCELLED
+constexpr unsigned QCR_THREAD_CANCEL = (1u << 0);
+//! cancellation request bit: a sandbox call budget of the thread has expired; raises SANDBOX-TIMEOUT
+/** Cannot be cleared with clear_thread_cancel(); see design/sandbox-resource-limits.md
+*/
+constexpr unsigned QCR_SANDBOX_LIMIT = (1u << 1);
+//! all cancellation request bits
+constexpr unsigned QCR_ALL = QCR_THREAD_CANCEL | QCR_SANDBOX_LIMIT;
+
 // this structure holds all thread data that can be addressed with the qore tid
 class ThreadEntry {
 public:
@@ -105,8 +116,12 @@ public:
     unsigned char status;
     bool joined; // if set to true then pthread_detach should not be called on exit
 
-    //! per-thread cooperative cancellation flag (set by cancel_thread(), checked at cancellation points)
-    std::atomic<bool> cancel_requested{false};
+    //! per-thread cooperative cancellation request bits (@ref QCR_THREAD_CANCEL, @ref QCR_SANDBOX_LIMIT), checked at
+    //! cancellation points
+    /** Any set bit wakes a cancellable wait and makes the next cancellation point evaluate the request; see "Reason
+        codes" in design/sandbox-resource-limits.md.
+    */
+    std::atomic<unsigned> cancel_requested{0};
 
     //! optional cancellation reason string
     QoreStringNode* cancel_reason = nullptr;
@@ -189,12 +204,14 @@ public:
     /** The lock serializes the reason string against a concurrent cancelThread() call, which would
         otherwise be able to replace (and deref) it between the read and the deref here.
     */
-    DLLLOCAL void clearCancelState() {
-        cancel_requested.store(false, std::memory_order_release);
-        cancel_scope_pgm_id.store(0, std::memory_order_release);
-        if (cancel_reason) {
-            cancel_reason->deref();
-            cancel_reason = nullptr;
+    DLLLOCAL void clearCancelState(unsigned bits = QCR_ALL) {
+        cancel_requested.fetch_and(~bits, std::memory_order_release);
+        if (bits & QCR_THREAD_CANCEL) {
+            cancel_scope_pgm_id.store(0, std::memory_order_release);
+            if (cancel_reason) {
+                cancel_reason->deref();
+                cancel_reason = nullptr;
+            }
         }
     }
 
@@ -380,8 +397,32 @@ public:
         negligible at the rate cancellation points are traversed.
     */
     DLLLOCAL bool isCancelRequested(int tid) const {
-        return tid >= 0 && tid < MAX_QORE_THREADS && entry[tid].cancel_requested.load(std::memory_order_seq_cst);
+        return getCancelBits(tid);
     }
+
+    //! Returns the pending cancellation request bits of the given thread (lock-free); see isCancelRequested()
+    DLLLOCAL unsigned getCancelBits(int tid) const {
+        return (tid >= 0 && tid < MAX_QORE_THREADS) ? entry[tid].cancel_requested.load(std::memory_order_seq_cst)
+            : 0;
+    }
+
+    //! Sets the sandbox limit bit of the given threads and wakes them if they are blocked; acquires lck
+    /** Called by the sandbox watchdog when a call budget expires (see design/sandbox-resource-limits.md); a TID
+        whose thread has meanwhile left the call (or ended) gets a spurious bit, which the thread clears at its next
+        cancellation point (see clearSandboxLimit())
+    */
+    DLLLOCAL void requestSandboxLimit(const std::vector<int>& tids);
+
+    //! Clears the current thread's sandbox limit bit unless one of its budgets has expired; acquires lck
+    /** The budgets are checked under lck: the watchdog sets a budget's expired flag before it takes lck to set the
+        bits, so a budget expiring concurrently is either seen here or sets the bit again afterwards.
+
+        @param tid the current thread's TID
+        @param budgets the current thread's call budgets
+
+        @return true if the bit was cleared, false if it stays set
+    */
+    DLLLOCAL bool clearSandboxLimit(int tid, const QoreSandboxBudgetStack& budgets);
 
     //! Registers the condition and mutex the current thread is about to block on in a cancellable wait
     /** The caller holds \a m and must check for a cancellation request after this returns and before it blocks,
@@ -531,7 +572,7 @@ public:
 protected:
     //! Clears all cancellation state for the given thread; lck must be held
     DLLLOCAL void clearCancelIntern(int tid) {
-        entry[tid].clearCancelState();
+        entry[tid].clearCancelState(QCR_THREAD_CANCEL);
     }
 
     // lock for reading the thread list

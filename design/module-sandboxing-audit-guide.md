@@ -610,7 +610,7 @@ ssize_t blockingRead(int fd, void* buf, size_t len, int timeout_ms,
     struct pollfd pfd = {fd, POLLIN, 0};
     int rc = qore_cancellable_poll(&pfd, 1, timeout_ms, xsink, "reading");
     if (rc == QORE_POLL_CANCELLED) {
-        return -1;  // THREAD-CANCELLED or PROGRAM-INTERRUPTED raised
+        return -1;  // THREAD-CANCELLED, SANDBOX-TIMEOUT or PROGRAM-INTERRUPTED raised
     }
     if (rc < 0) {
         return -1;  // poll() failed; errno is set
@@ -843,6 +843,8 @@ These are lower risk but should still be addressed for defense in depth:
 | `FILESYSTEM-ACCESS-DENIED` | Filesystem | Path access blocked by policy |
 | `NETWORK-ACCESS-DENIED` | Network | Connection blocked by policy |
 | `PROGRAM-INTERRUPTED` | Interrupt | Operation interrupted by request |
+| `SANDBOX-TIMEOUT` | Resources | The wall time limit of the sandbox call that the thread runs was exceeded; raised by `qore_check_cancel()` like the interrupt, so a module that checks for cancellation needs no change (see [sandbox-resource-limits.md](sandbox-resource-limits.md)) |
+| `SANDBOX-ERROR` | Resources | A call's wall time limit could not be enforced (no resources to track it) |
 | `THREAD-CREATION-FAILURE` | Resources | Thread creation would exceed the thread limit |
 | `SANDBOX-PATH-ERROR` | Filesystem | Path canonicalization failed |
 

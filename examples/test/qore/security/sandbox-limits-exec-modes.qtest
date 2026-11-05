@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The sandbox wall time limit (issue #5581) stops sandboxed code in every execution mode: the loops of the AST and IR
+# interpreters, native code compiled by the JIT compiler, and AOT-compiled module code called from a sandbox.  Each
+# mode reaches the same cancellation check (qore_check_cancel(), from native code through qore_rt_check_cancel()).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SandboxLimitsExecModesTest
+
+class SandboxLimitsExecModesTest inherits QUnit::Test {
+    public {
+        #! the loops run in the sandbox
+        const Loops = ("spin_while", "spin_for", "spin_foreach", "spin_do");
+
+        #! the script: calls each loop once so that it ends (which compiles it), and then so that it never ends
+        const Script = "%modern
+%no-child-restrictions
+const SandboxCode = \"
+%modern
+int sub spin_while(bool forever) {
+    int i = 0;
+    while (forever || i < 10) {
+        ++i;
+    }
+    return i;
+}
+int sub spin_for(bool forever) {
+    int i;
+    for (i = 0; forever || i < 10; ++i) {
+    }
+    return i;
+}
+int sub spin_foreach(bool forever) {
+    int n = 0;
+    foreach int i in (xrange(0, forever ? MAXINT : 10)) {
+        n += i;
+    }
+    return n;
+}
+int sub spin_do(bool forever) {
+    int i = 0;
+    do {
+        ++i;
+    } while (forever || i < 10);
+    return i;
+}
+auto sub call(code c, auto arg) {
+    return c(arg);
+}
+\";
+SandboxManager sm();
+sm.setWallTimeLimit(200);
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+# a Program created at runtime does not take the execution mode of the command line
+p.setExecMode({\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED}{shift ARGV});
+p.setSandboxManager(sm);
+p.parse(SandboxCode, \"sandboxed\");
+foreach string f in (ARGV) {
+    p.callFunction(f, False);
+    try {
+        p.callFunction(f, True);
+        printf(\"%s: no error\\n\", f);
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s: %s\\n\", f, ex.err);
+    }
+}
+";
+
+        #! the AOT module: a loop compiled to native code ahead of time
+        const ModuleCode = "%modern
+module SandboxSpin {
+    version = \"1.0\";
+    desc = \"a loop for the sandbox limit test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace SandboxSpin {
+public int sub spin(bool forever) {
+    int i = 0;
+    while (forever || i < 10) {
+        ++i;
+    }
+    return i;
+}
+}
+";
+
+        #! the script that calls the AOT module from the sandbox
+        const AotScript = "%modern
+%no-child-restrictions
+%requires SandboxSpin
+SandboxManager sm();
+sm.setWallTimeLimit(200);
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+p.setSandboxManager(sm);
+p.parse(\"%modern\nauto sub call(code c, auto arg) { return c(arg); }\", \"sandboxed\");
+printf(\"aot: %d\\n\", p.callFunction(\"call\", \\SandboxSpin::spin(), False));
+try {
+    p.callFunction(\"call\", \\SandboxSpin::spin(), True);
+    printf(\"aot: no error\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"aot: %s\\n\", ex.err);
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-sandbox-limits-");
+    }
+
+    constructor() : QUnit::Test("SandboxLimitsExecModesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the wall time limit stops loops in every execution mode", \testExecModes());
+        addTestCase("the wall time limit stops AOT-compiled code", \testAot());
+        set_return_value(main());
+    }
+
+    private string env(*string module_dir) {
+        string module_path = module_dir ?? "";
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += (module_path ? ":" : "") + ENV.QORE_MODULE_DIR;
+        }
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s", libqore_dir,
+            libqore_dir, libqore_dir, module_path);
+    }
+
+    testExecModes() {
+        string script_path = tmp.path + "/limits.q";
+        File f();
+        f.open2(script_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        string expected = foldl $1 + $2, (map sprintf("%s: SANDBOX-TIMEOUT\n", $1), Loops);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s %s %s", env(), qore_bin, mode, script_path, mode, Loops.join(" ")));
+            assertEq(expected, r.out, mode);
+            assertEq(0, r.rc, mode + " exit code");
+            # the loops ran as native code with JIT execution; tiered execution compiles a function at its third
+            # call, which the script does not make
+            ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+            if (mode == "jit") {
+                foreach string loop in (Loops) {
+                    assertTrue((select r.trace, $1 =~ /'/ && $1.find(loop) >= 0).size() > 0,
+                        sprintf("%s was compiled to native code; trace: %y", loop, r.trace));
+                }
+            }
+        }
+    }
+
+    testAot() {
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = src_dir + "/SandboxSpin.qm";
+        string qmod_path = qmod_dir + "/SandboxSpin.qmod";
+        File f();
+        f.open2(qm_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleCode);
+        f.close();
+        string out = backquote(sprintf("%s %s -b --compile-module --output %s %s 2>&1", env(), qore_bin, qmod_path,
+            qm_path));
+        if (!is_file(qmod_path)) {
+            # a build without the AOT compiler
+            if (out =~ /not (supported|available)|LLVM/i) {
+                testSkip("AOT compilation is not available: " + out);
+            }
+            fail("cannot compile the AOT module: " + out);
+        }
+
+        string script_path = tmp.path + "/aot.q";
+        f.open2(script_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(AotScript);
+        f.close();
+        # only the AOT module is in the module path, so its source cannot be loaded instead
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+            "--exec-mode=ast %s", env(qmod_dir), qore_bin, script_path));
+        assertEq("aot: 10\naot: SANDBOX-TIMEOUT\n", r.out);
+        assertEq((), r.loader_warnings, "the AOT module was loaded");
+    }
+}

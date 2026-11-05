@@ -55,6 +55,7 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QoreSandboxLimits.h"
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
@@ -525,6 +526,9 @@ public:
     // QoreInheritedSandboxHelper and design/thread-sandbox-inheritance.md)
     const QoreSandboxContext* inherited_sandbox_context = nullptr;
     const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+    // the budgets of the sandbox calls with a time limit that the thread is running (see
+    // design/sandbox-resource-limits.md); only used by the thread itself
+    QoreSandboxBudgetStack sandbox_budgets;
     const QoreSandboxProvenanceHelper* trusted_policy_boundary = nullptr;
     unsigned trusted_policy_depth = 0;
 
@@ -913,6 +917,10 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     // started and before it began running (see QoreThreadList::cancelThread()), and is kept
     if (status == QTS_RESERVED) {
         clearCancelState();
+    } else {
+        // a new thread has no call budget yet; a limit bit set for a previous thread with this TID is stale (an
+        // inherited expired budget sets it again when it is attached)
+        clearCancelState(QCR_SANDBOX_LIMIT);
     }
     ptid = n_ptid;
     // The native reaper owns external-lifecycle threads until pthread_join() completes.
@@ -3288,6 +3296,8 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
             td->tlpd->dbgDetach(nullptr);
         }
     }
+    // the call budgets started when the Program was entered end with the call
+    td->sandbox_budgets.leave(td->tid, this);
     td->current_pgm = old_pgm;
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
@@ -3345,6 +3355,15 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     td->current_pgm_ctx = this;
     sync_runtime_config_program(td);
     save_frameCount = td->tlpd->lvstack.getFrameCount();
+
+    // entering a Program with a sandbox manager starts a call budget if the manager has a time limit and the thread
+    // is not already running a call of it (see design/sandbox-resource-limits.md)
+    {
+        ReferenceHolder<QoreSandboxManager> sm(pp->getSandboxManagerRef(), nullptr);
+        if (sm) {
+            td->sandbox_budgets.enter(td->tid, *sm, this);
+        }
+    }
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p tlpd:%p savefc:%d oldfc:%d "
         "init_tlpd:%d\n", this, td->tlpd, save_frameCount, old_frameCount, init_tlpd
@@ -3684,8 +3703,11 @@ int qore_push_sandbox_policy_barrier() {
     return 0;
 }
 
-QoreSandboxContext::QoreSandboxContext() {
+QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     ThreadData* td = thread_data.get();
+    if (capture_budgets && td) {
+        td->sandbox_budgets.capture(budgets);
+    }
     ReferenceHolder<QoreSandboxManager> current(find_thread_sandbox_manager_ref_intern(&pgm_id), nullptr);
     assert(!current || pgm_id);
     ReferenceHolder<QoreSandboxManager> policy(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
@@ -3713,6 +3735,7 @@ QoreSandboxContext::QoreSandboxContext() {
 }
 
 QoreSandboxContext::~QoreSandboxContext() {
+    qore_sandbox_budgets_deref(budgets);
     if (manager) {
         manager->deref(nullptr);
     }
@@ -3730,7 +3753,7 @@ QoreSandboxContext::~QoreSandboxContext() {
 QoreSandboxContext* qore_capture_sandbox_provenance() {
     // Check before allocating: the common unsandboxed object/callback needs no context storage.
     ReferenceHolder<QoreSandboxManager> manager(qore_find_thread_sandbox_manager_ref(), nullptr);
-    return manager ? new QoreSandboxContext : nullptr;
+    return manager ? new QoreSandboxContext(false) : nullptr;
 }
 
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
@@ -3752,6 +3775,14 @@ void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
         return;
     }
     td->sandbox_provenance = this;
+    // code created under a sandbox with a time limit runs as a new call of that sandbox unless the thread is
+    // already running one
+    if (captured->manager) {
+        td->sandbox_budgets.enter(td->tid, captured->manager, this);
+    }
+    if (captured->provenance_manager) {
+        td->sandbox_budgets.enter(td->tid, captured->provenance_manager, this);
+    }
 }
 
 QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const QoreObject* object) {
@@ -3778,6 +3809,7 @@ QoreSandboxProvenanceHelper::~QoreSandboxProvenanceHelper() {
     if (context) {
         ThreadData* td = thread_data.get();
         assert(td && td->sandbox_provenance == this);
+        td->sandbox_budgets.leave(td->tid, this);
         td->sandbox_provenance = previous;
         context->deref();
     }
@@ -3804,12 +3836,16 @@ QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx
         old_ctx = td->sandbox_context;
         td->sandbox_context = &ctx;
         active = true;
+        // the operation continues the call that started it, under the same budgets
+        td->sandbox_budgets.attach(td->tid, ctx.budgets, this);
     }
 }
 
 QoreSandboxContextHelper::~QoreSandboxContextHelper() {
     if (active) {
-        thread_data.get()->sandbox_context = old_ctx;
+        ThreadData* td = thread_data.get();
+        td->sandbox_budgets.leave(td->tid, this);
+        td->sandbox_context = old_ctx;
     }
 }
 
@@ -3854,6 +3890,8 @@ QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext*
         old_ctx = td->inherited_sandbox_context;
         td->inherited_sandbox_context = ctx;
         active = true;
+        // the thread continues the call that started it, under the same budgets
+        td->sandbox_budgets.attach(td->tid, ctx->budgets, this);
     }
 }
 
@@ -3863,7 +3901,9 @@ QoreInheritedSandboxHelper::~QoreInheritedSandboxHelper() {
 
 void QoreInheritedSandboxHelper::reset() {
     if (active) {
-        thread_data.get()->inherited_sandbox_context = old_ctx;
+        ThreadData* td = thread_data.get();
+        td->sandbox_budgets.leave(td->tid, this);
+        td->inherited_sandbox_context = old_ctx;
         active = false;
     }
 }
@@ -3894,12 +3934,16 @@ QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& cap
         old_ctx = td->inherited_sandbox_context;
         td->inherited_sandbox_context = capture.isSandboxed() ? capture.ctx : nullptr;
         active = true;
+        // the task continues the call that submitted it, under the same budgets
+        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this);
     }
 }
 
 QoreSandboxCaptureHelper::~QoreSandboxCaptureHelper() {
     if (active) {
-        thread_data.get()->inherited_sandbox_context = old_ctx;
+        ThreadData* td = thread_data.get();
+        td->sandbox_budgets.leave(td->tid, this);
+        td->inherited_sandbox_context = old_ctx;
     }
 }
 
@@ -4446,6 +4490,8 @@ void qore_exit_process(int rc) {
         // The reaper has no Qore TID either. With all external workers joined,
         // stop it before static destruction reaches its condition variable.
         qore_stop_external_thread_reaper();
+        // the sandbox watchdog wakes threads through the condition waker, so it is stopped first
+        qore_sandbox_watchdog_stop();
         // as is the condition waker; no other thread can be waiting any more
         qore_stop_cond_waker();
         // in a child process whose modules use libraries with exit-time code that is not safe after fork(), the
@@ -5984,13 +6030,37 @@ int QoreThreadList::cancelThread(int tid, const char* reason, qore_program_id_t 
     entry[tid].cancel_scope_pgm_id.store(scope_pgm_id, std::memory_order_release);
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
-    entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
+    entry[tid].cancel_requested.fetch_or(QCR_THREAD_CANCEL, std::memory_order_seq_cst);
     // wake the target if it's blocked (or about to block) in a cancellable condition wait
     wakeCondWaiter(tid);
     // wake the target if it's blocked in qore_cancellable_poll(); the waiter clears waiting_fd under
     // lck before it drains or closes the channel
     signalWaitingFd(tid);
     return 0;
+}
+
+void QoreThreadList::requestSandboxLimit(const std::vector<int>& tids) {
+    if (tids.empty()) {
+        return;
+    }
+    AutoLocker al(lck);
+    for (int tid : tids) {
+        assert(tid > 0 && tid < MAX_QORE_THREADS);
+        // seq_cst pairs with the waiter side exactly as in cancelThread()
+        entry[tid].cancel_requested.fetch_or(QCR_SANDBOX_LIMIT, std::memory_order_seq_cst);
+        wakeCondWaiter(tid);
+        signalWaitingFd(tid);
+    }
+}
+
+bool QoreThreadList::clearSandboxLimit(int tid, const QoreSandboxBudgetStack& budgets) {
+    assert(tid > 0 && tid < MAX_QORE_THREADS);
+    AutoLocker al(lck);
+    if (budgets.findExpired()) {
+        return false;
+    }
+    entry[tid].clearCancelState(QCR_SANDBOX_LIMIT);
+    return true;
 }
 
 void QoreThreadList::signalWaitingFd(int tid) {
@@ -6624,7 +6694,19 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     // NOTE: when destroying objects in the static namespace this can run after the thread data has
     // been destroyed, in which case q_gettid() reports TID 0, which is never cancel-requested
     int tid = td ? td->tid : 0;
-    if (thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid)) {
+    unsigned bits = thread_list.getCancelBits(tid);
+    // an expired sandbox call budget first: it cannot be cleared by the thread and ends the whole call
+    if ((bits & QCR_SANDBOX_LIMIT) && td) {
+        if (const QoreSandboxCallBudget* budget = td->sandbox_budgets.findExpired()) {
+            if (xsink) {
+                qore_sandbox_raise_limit(budget, xsink, operation);
+            }
+            return true;
+        }
+        // the thread has left the call since the bit was set (or the TID was reused): the bit is stale
+        thread_list.clearSandboxLimit(tid, td->sandbox_budgets);
+    }
+    if ((bits & QCR_THREAD_CANCEL) && check_cancel_in_scope(tid)) {
         if (xsink) {
             // hold a reference while formatting; a concurrent cancelThread() call would otherwise
             // be able to replace and free the string between the read and its use
@@ -6966,5 +7048,6 @@ int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const char* operat
 
 bool qore_is_thread_cancel_requested() {
     int tid = q_gettid();
-    return thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid);
+    // an explicit request only: a sandbox limit is reported by the exception that qore_check_cancel() raises
+    return (thread_list.getCancelBits(tid) & QCR_THREAD_CANCEL) && check_cancel_in_scope(tid);
 }

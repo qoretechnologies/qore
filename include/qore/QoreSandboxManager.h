@@ -532,6 +532,32 @@ public:
     //! Gets the max threads limit
     DLLEXPORT int getMaxThreads() const;
 
+    //! Sets the wall-clock time limit of each call into the sandbox in milliseconds
+    /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
+
+        A call starts when a thread enters code governed by this sandbox from code it does not govern: when a Program
+        with this manager attached becomes current (QoreProgram::run(), QoreProgram::callFunction(), callbacks and
+        method calls into the Program) or when code created under this sandbox (objects and call references with
+        sandbox provenance) is run from outside it.  A thread that is already running a call of this sandbox does not
+        start a new one when it re-enters it.  Work that the call continues on other threads (threads it starts,
+        thread pool tasks, async I/O operations) shares the call's deadline.
+
+        When the deadline passes, the threads of the call raise \c SANDBOX-TIMEOUT at their next cancellation point;
+        a thread blocked in a cancellable wait wakes at once.  The exception is raised again at every cancellation
+        point until the thread leaves the call, and clearing the thread's cancellation request does not clear it.
+        Other calls into the same sandbox are not affected.
+
+        Changing the limit affects calls that start afterwards.
+
+        @see design/sandbox-resource-limits.md
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setWallTimeLimit(int64 ms);
+
+    //! Gets the wall-clock time limit of each call into the sandbox in milliseconds; 0 = unlimited
+    DLLEXPORT int64 getWallTimeLimit() const;
+
     //! Requests graceful interruption of sandboxed code
     /** This sets an interrupt flag that is checked at various points
         during execution (statement boundaries, blocking operations).
@@ -661,11 +687,8 @@ public:
         Lockdown mode:
         - No filesystem access (empty allow list)
         - No network access (empty allow list)
-        - Memory limit: 10MB
-        - CPU time limit: 1000ms
-        - Wall time limit: 5000ms
+        - Wall time limit per call: 5000ms
         - Max threads: 1
-        - Max recursion: 100
     */
     DLLEXPORT static QoreSandboxManager* createLockdown();
 
@@ -675,11 +698,8 @@ public:
         Web-safe mode:
         - No filesystem access
         - Network allowed but private networks blocked
-        - Memory limit: 100MB
-        - CPU time limit: 10000ms
-        - Wall time limit: 30000ms
+        - Wall time limit per call: 30000ms
         - Max threads: 4
-        - Max recursion: 200
     */
     DLLEXPORT static QoreSandboxManager* createWebSafe();
 
@@ -695,8 +715,14 @@ private:
     //! Maximum threads (0 = unlimited)
     std::atomic<int> max_threads;
 
-    //! Interrupt flag
-    std::atomic<bool> interrupt_requested;
+    //! Interrupt reason bit: requestInterrupt() was called; raises \c PROGRAM-INTERRUPTED
+    static constexpr unsigned QSB_INTR_REQUESTED = (1u << 0);
+
+    //! Interrupt reason bits (@ref QSB_INTR_REQUESTED); see "Reason codes" in design/sandbox-resource-limits.md
+    std::atomic<unsigned> interrupt_flags;
+
+    //! The wall-clock time limit of each call in milliseconds (0 = unlimited)
+    std::atomic<int64> wall_time_limit;
 
     //! Mutex for cancel callbacks
     mutable std::mutex cancel_mutex;

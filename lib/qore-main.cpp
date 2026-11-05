@@ -33,6 +33,7 @@
 #include <qore/DBI.h>
 #include <qore/QoreHttpClientObject.h>
 
+#include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/EncryptionTransforms.h"
@@ -437,6 +438,8 @@ void qore_cleanup() {
     // module TLS callbacks. Use the internal, non-interruptible counter wait.
     tp_thread_counter.waitForZero();
     qore_stop_external_thread_reaper();
+    // the sandbox watchdog wakes threads through the condition waker, so it is stopped first
+    qore_sandbox_watchdog_stop();
     // no thread can be waiting any more
     qore_stop_cond_waker();
 

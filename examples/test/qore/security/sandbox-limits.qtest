@@ -1,0 +1,464 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# SandboxManager resource limits (issue #5581): the wall-clock time limit of each call into a sandbox.
+#
+# A call starts when a thread enters code governed by the sandbox from code it does not govern; work the call
+# continues on other threads shares its deadline; when the deadline passes, the threads of the call raise
+# SANDBOX-TIMEOUT at their next cancellation point until they leave the call.  See
+# design/sandbox-resource-limits.md.
+#
+# Every call that is expected to time out runs code that never ends on its own (a busy loop or a wait with no
+# timeout), so the test never depends on how fast the machine is: a missing timeout hangs the test instead of
+# passing it.  The only timing assertions are lower bounds: a call cannot end before its deadline.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+
+%exec-class SandboxLimitsTest
+
+class SandboxLimitsTest inherits QUnit::Test {
+    public {
+        #! the limit used by most tests, in milliseconds
+        const Limit = 300;
+
+        #! the description of the exception for the given limit
+        const TimeoutDesc = "the sandbox wall time limit of %d ms was exceeded";
+
+        #! the sandboxed code
+        const SandboxCode = "
+%modern
+int sub spin_while() {
+    int i = 0;
+    while (True) {
+        ++i;
+    }
+    return i;
+}
+int sub spin_for() {
+    int i;
+    for (i = 0; ; ++i) {
+    }
+    return i;
+}
+int sub spin_foreach() {
+    int n = 0;
+    foreach int i in (xrange(0, MAXINT)) {
+        n += i;
+    }
+    return n;
+}
+int sub spin_do() {
+    int i = 0;
+    do {
+        ++i;
+    } while (True);
+    return i;
+}
+int sub spin_recursive(int depth) {
+    if (depth) {
+        return spin_recursive(depth - 1);
+    }
+    return spin_while();
+}
+sub do_sleep() {
+    sleep(3600);
+}
+sub queue_get() {
+    Queue q();
+    q.get();
+}
+sub counter_wait() {
+    Counter c(1);
+    c.waitForZero();
+}
+sub condition_wait() {
+    Mutex m();
+    Condition c();
+    m.lock();
+    on_exit m.unlock();
+    c.wait(m);
+}
+sub mutex_lock(Mutex m) {
+    m.lock();
+}
+string sub quick() {
+    return \"done\";
+}
+string sub nap(int ms) {
+    usleep(ms * 1000);
+    return \"rested\";
+}
+# signals the host and then spins
+int sub signal_and_spin(Queue started) {
+    started.push(True);
+    return spin_while();
+}
+# returns the value pushed by the host
+auto sub wait_for(Queue q) {
+    return q.get();
+}
+# catches the timeout and tries to go on
+int sub catch_and_continue(reference<int> catches) {
+    try {
+        spin_while();
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"SANDBOX-TIMEOUT\") {
+            rethrow;
+        }
+        ++catches;
+        # clearing the thread's cancellation request does not clear a sandbox limit
+        clear_thread_cancel();
+        # cancellation deferral is for cleanup code: a deferred cleanup runs to its end
+        defer_thread_cancel(sub () {
+            for (int i = 0; i < 10; ++i) {
+                ++catches;
+            }
+        });
+    }
+    # the timeout is raised again at the next cancellation point
+    return spin_while();
+}
+# re-enters the sandbox through trusted code, after spending most of the limit
+int sub reenter(code callback, int ms) {
+    usleep(ms * 1000);
+    return callback();
+}
+# calls the trusted code
+auto sub call(code c) {
+    return c();
+}
+# calls the trusted code and returns the error it raised
+string sub call_catch(code c) {
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return \"no error\";
+}
+# starts a thread that spins and reports the exception that ends it
+sub spin_in_background(Queue result) {
+    background sub () {
+        try {
+            spin_while();
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    }();
+}
+# submits a task that spins and reports the exception that ends it
+sub spin_in_task(Queue result) {
+    AsyncIoController::submitTask(sub () {
+        try {
+            spin_while();
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    });
+}
+# submits a task to a thread pool that spins and reports the exception that ends it
+sub spin_in_pool(Qore::Thread::ThreadPool pool, Queue result) {
+    pool.submit(sub () {
+        try {
+            spin_while();
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    });
+}
+# starts threads that spin and report the exception that ends them; returns the number of threads started, which is
+# less than n if the call timed out while it was starting them
+int sub spin_threads(int n, Queue result) {
+    int started = 0;
+    try {
+        for (; started < n; ++started) {
+            background sub () {
+                try {
+                    spin_while();
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(ex.err);
+                }
+            }();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"SANDBOX-TIMEOUT\") {
+            rethrow;
+        }
+    }
+    return started;
+}
+class Spinner {
+    int spin() {
+        return spin_while();
+    }
+    string quick() {
+        return \"object done\";
+    }
+}
+Spinner sub get_spinner() {
+    return new Spinner();
+}
+code sub get_closure() {
+    return auto sub (bool forever) {
+        if (forever) {
+            return spin_while();
+        }
+        return \"closure done\";
+    };
+}
+";
+    }
+
+    constructor() : QUnit::Test("SandboxLimitsTest", "1.0", \ARGV) {
+        addTestCase("wall time limit API", \testApi());
+        addTestCase("busy loops end at the deadline", \testBusyLoops());
+        addTestCase("blocked waits end at the deadline", \testBlockedWaits());
+        addTestCase("each call has its own deadline", \testPerCall());
+        addTestCase("the timeout cannot be caught and ignored", \testCatchAndContinue());
+        addTestCase("a re-entry keeps the original deadline", \testReentry());
+        addTestCase("work started by the call shares its deadline", \testContinuations());
+        addTestCase("a timeout ends only the call that exceeded its limit", \testConcurrentCalls());
+        addTestCase("all threads of a call end at the deadline", \testManyThreads());
+        addTestCase("nested sandboxes", \testNested());
+        addTestCase("code created in the sandbox runs as a new call", \testProvenance());
+        addTestCase("no limit, no timeout", \testNoLimit());
+        set_return_value(main());
+    }
+
+    #! returns a Program with the given sandbox manager and the sandboxed code
+    private Program sandboxed(SandboxManager sm) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(SandboxCode, "sandboxed");
+        return p;
+    }
+
+    #! returns a sandbox manager with the given wall time limit
+    private SandboxManager limited(int ms = Limit) {
+        SandboxManager sm();
+        sm.setWallTimeLimit(ms);
+        return sm;
+    }
+
+    #! calls a function that must time out, checks the exception and the elapsed time, and returns the elapsed time
+    private int expectTimeout(Program p, string func, softlist<auto> args = (), int limit = Limit) {
+        int start = clock_get_monotonic_us();
+        try {
+            p.callFunctionArgs(func, args);
+            fail(sprintf("%s() returned instead of timing out", func));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SANDBOX-TIMEOUT", ex.err, sprintf("%s(): %s: %s", func, ex.err, ex.desc));
+            assertRegex(sprintf(TimeoutDesc, limit), ex.desc, func + "() description");
+        }
+        int elapsed = (clock_get_monotonic_us() - start) / 1000;
+        assertGe(limit, elapsed, func + "() cannot time out before its deadline");
+        return elapsed;
+    }
+
+    testApi() {
+        SandboxManager sm();
+        assertEq(0, sm.getWallTimeLimit(), "no limit by default");
+        sm.setWallTimeLimit(1500);
+        assertEq(1500, sm.getWallTimeLimit());
+        assertEq(1500, sm.getConfiguration().wall_time_limit, "configuration key");
+        assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "interrupt_requested"),
+            keys sm.getConfiguration(), "configuration keys");
+        sm.setWallTimeLimit(max_wall_time_ms: 2500);
+        assertEq(2500, sm.getWallTimeLimit(), "named argument");
+
+        SandboxManager copy = sm.copy();
+        assertEq(2500, copy.getWallTimeLimit(), "copy() copies the limit");
+        sm.setWallTimeLimit(10);
+        assertEq(2500, copy.getWallTimeLimit(), "the copy is independent");
+
+        sm.setWallTimeLimit(0);
+        assertEq(0, sm.getWallTimeLimit(), "0 removes the limit");
+
+        assertThrows("SANDBOX-CONFIG-ERROR", "cannot be negative", \sm.setWallTimeLimit(), -1);
+        assertEq(0, sm.getWallTimeLimit(), "a rejected value does not change the limit");
+
+        assertEq(5000, SandboxManager::createLockdown().getWallTimeLimit(), "lockdown preset");
+        assertEq(30000, SandboxManager::createWebSafe().getWallTimeLimit(), "web-safe preset");
+    }
+
+    testBusyLoops() {
+        Program p = sandboxed(limited());
+        foreach string func in ("spin_while", "spin_for", "spin_foreach", "spin_do") {
+            expectTimeout(p, func);
+        }
+        expectTimeout(p, "spin_recursive", 50);
+    }
+
+    testBlockedWaits() {
+        Program p = sandboxed(limited());
+        foreach string func in ("do_sleep", "queue_get", "counter_wait", "condition_wait") {
+            expectTimeout(p, func);
+        }
+        # a lock held by another thread
+        Mutex m();
+        Queue locked();
+        Queue release();
+        background sub () {
+            m.lock();
+            on_exit m.unlock();
+            locked.push(True);
+            release.get();
+        }();
+        locked.get();
+        on_exit release.push(True);
+        expectTimeout(p, "mutex_lock", m);
+    }
+
+    testPerCall() {
+        # each call gets the whole limit: three calls that each use more than a third of it all complete
+        Program p = sandboxed(limited(1500));
+        for (int i = 0; i < 3; ++i) {
+            assertEq("rested", p.callFunction("nap", 600), "call " + i);
+        }
+        # a call after a timed-out call is not affected by it
+        expectTimeout(p, "spin_while", NOTHING, 1500);
+        assertEq("done", p.callFunction("quick"), "a call after a timeout");
+        # nor is the host thread, which left the call
+        assertFalse(thread_cancelled(), "the host thread is not cancelled");
+        int n = 0;
+        for (int i = 0; i < 1000; ++i) {
+            ++n;
+        }
+        usleep(1);
+        assertEq(1000, n, "the host continues after the timeout");
+    }
+
+    testCatchAndContinue() {
+        Program p = sandboxed(limited());
+        int catches = 0;
+        int start = clock_get_monotonic_us();
+        try {
+            p.callFunction("catch_and_continue", \catches);
+            fail("catch_and_continue() returned");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SANDBOX-TIMEOUT", ex.err, ex.desc);
+        }
+        assertGe(Limit, (clock_get_monotonic_us() - start) / 1000);
+        # the first catch, then the deferred cleanup's loop, whose checks are deferred
+        assertEq(11, catches, "the timeout was caught once, and the deferred cleanup ran to its end");
+    }
+
+    testReentry() {
+        # the sandbox re-enters itself through trusted code, which first raises the limit to two minutes: a call
+        # that started then would have the long limit, so only the original deadline can end the re-entered loop
+        SandboxManager sm = limited();
+        Program p = sandboxed(sm);
+        code callback = auto sub () {
+            sm.setWallTimeLimit(120000);
+            return p.callFunction("spin_while");
+        };
+        expectTimeout(p, "reenter", (callback, 0));
+    }
+
+    testContinuations() {
+        Program p = sandboxed(limited());
+        Queue result();
+        # the calls return at once; the work they started ends at their deadlines
+        p.callFunction("spin_in_background", result);
+        assertEq("SANDBOX-TIMEOUT", result.get(), "a background thread shares the deadline");
+        p.callFunction("spin_in_task", result);
+        assertEq("SANDBOX-TIMEOUT", result.get(), "an async I/O task shares the deadline");
+        # a pool owned by the host: its worker serves the sandbox's task under the sandbox's call budget
+        Qore::Thread::ThreadPool pool(1);
+        on_exit pool.stopWait();
+        p.callFunction("spin_in_pool", pool, result);
+        assertEq("SANDBOX-TIMEOUT", result.get(), "a thread pool task shares the deadline");
+    }
+
+    testConcurrentCalls() {
+        SandboxManager sm = limited();
+        Program p = sandboxed(sm);
+        # the first call spins with the short limit
+        Queue started();
+        Queue first();
+        background sub () {
+            try {
+                p.callFunction("signal_and_spin", started);
+                first.push("no error");
+            } catch (hash<ExceptionInfo> ex) {
+                first.push(ex.err);
+            }
+        }();
+        started.get();
+        # the second call starts with a long limit (a limit applies to the calls that start after it is set), and
+        # waits until the first one has timed out
+        sm.setWallTimeLimit(120000);
+        Queue go();
+        Queue second();
+        background sub () {
+            try {
+                second.push(p.callFunction("wait_for", go));
+            } catch (hash<ExceptionInfo> ex) {
+                second.push(ex.err);
+            }
+        }();
+        assertEq("SANDBOX-TIMEOUT", first.get(), "the first call timed out");
+        go.push("second done");
+        assertEq("second done", second.get(), "the second call was not affected");
+    }
+
+    testManyThreads() {
+        Program p = sandboxed(limited());
+        Queue result();
+        int started = p.callFunction("spin_threads", 8, result);
+        assertGe(1, started, "threads were started");
+        for (int i = 0; i < started; ++i) {
+            assertEq("SANDBOX-TIMEOUT", result.get(), "thread " + i);
+        }
+    }
+
+    testNested() {
+        # the outer deadline stops code running in an inner sandbox that has no limit of its own
+        Program outer = sandboxed(limited());
+        Program inner = sandboxed(new SandboxManager());
+        code call_inner = auto sub () { return inner.callFunction("spin_while"); };
+        expectTimeout(outer, "call", call_inner);
+
+        # an inner limit applies on its own; once the inner call has ended, the outer call goes on
+        Program outer2 = sandboxed(limited(120000));
+        Program inner2 = sandboxed(limited());
+        code call_inner2 = auto sub () { return inner2.callFunction("spin_while"); };
+        assertEq("SANDBOX-TIMEOUT", outer2.callFunction("call_catch", call_inner2),
+            "the inner call timed out and the outer call continued");
+        assertEq("done", outer2.callFunction("quick"));
+    }
+
+    testProvenance() {
+        Program p = sandboxed(limited());
+        code closure = p.callFunction("get_closure");
+        object spinner = p.callFunction("get_spinner");
+        # let the deadline of the calls that created them pass
+        expectTimeout(p, "spin_while");
+        # a call from the host is a new call: it has its own deadline, and the expired one does not apply
+        assertEq("closure done", closure(False), "the closure runs as a new call");
+        assertEq("object done", spinner.quick(), "the method runs as a new call");
+        int start = clock_get_monotonic_us();
+        assertThrows("SANDBOX-TIMEOUT", NOTHING, closure, True);
+        assertGe(Limit, (clock_get_monotonic_us() - start) / 1000, "the closure got a deadline of its own");
+        assertThrows("SANDBOX-TIMEOUT", \spinner.spin());
+    }
+
+    testNoLimit() {
+        # a manager without a limit, a limit removed with 0, and a Program without a manager
+        SandboxManager removed = limited();
+        removed.setWallTimeLimit(0);
+        Program unmanaged(PO_NO_CHILD_PO_RESTRICTIONS);
+        unmanaged.parse(SandboxCode, "unmanaged");
+        foreach Program p in (sandboxed(new SandboxManager()), sandboxed(removed), unmanaged) {
+            # a call that takes longer than the limits used elsewhere
+            assertEq("rested", p.callFunction("nap", Limit * 2));
+        }
+    }
+}

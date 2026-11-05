@@ -42,6 +42,8 @@ class RuntimeConfig;
 #include <map>
 #include <memory>
 
+#include "qore/intern/QoreSandboxLimits.h"
+
 #ifndef QORE_THREAD_STACK_SIZE
 #define QORE_THREAD_STACK_SIZE 1024*512
 #endif
@@ -525,7 +527,12 @@ DLLLOCAL int qore_push_sandbox_policy_barrier();
 class QoreSandboxContext : public QoreReferenceCounter {
 public:
     //! Captures the sandbox managers that govern the current thread
-    DLLLOCAL QoreSandboxContext();
+    /** @param capture_budgets true for a continuation of the current call on another thread (a thread it starts, a
+        pool task, an async I/O operation), which shares the call budgets of the thread (see
+        design/sandbox-resource-limits.md); false for sandbox provenance, where code created under a sandbox runs
+        later as a new call with budgets of its own
+    */
+    DLLLOCAL QoreSandboxContext(bool capture_budgets = true);
 
     DLLLOCAL ~QoreSandboxContext();
 
@@ -546,6 +553,8 @@ public:
     //! Provenance is additive even when an ordinary inherited sandbox is shadowed by a nearer Program.
     QoreSandboxManager* provenance_manager = nullptr;
     QoreSandboxManager* provenance_policy_manager = nullptr;
+    //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
+    QoreSandboxBudgetList budgets;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists

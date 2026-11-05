@@ -1037,7 +1037,7 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 //------------------------------------------------------------------------------
 
 QoreSandboxManager::QoreSandboxManager()
-    : max_threads(0), interrupt_requested(false), active_threads(0) {
+    : max_threads(0), interrupt_flags(0), wall_time_limit(0), active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
@@ -1080,6 +1080,14 @@ void QoreSandboxManager::setMaxThreads(int count) {
 
 int QoreSandboxManager::getMaxThreads() const {
     return sandbox_intersection_limit<int>(this, max_threads.load(), &QoreSandboxManager::getMaxThreads);
+}
+
+void QoreSandboxManager::setWallTimeLimit(int64 ms) {
+    wall_time_limit = ms > 0 ? ms : 0;
+}
+
+int64 QoreSandboxManager::getWallTimeLimit() const {
+    return sandbox_intersection_limit<int64>(this, wall_time_limit.load(), &QoreSandboxManager::getWallTimeLimit);
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
@@ -1126,7 +1134,7 @@ void QoreSandboxManager::releaseThreadSlot() {
 void QoreSandboxManager::requestInterrupt() {
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check interrupt) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
-    interrupt_requested.store(true, std::memory_order_seq_cst);
+    interrupt_flags.fetch_or(QSB_INTR_REQUESTED, std::memory_order_seq_cst);
 
     // Wake any threads currently blocked in QoreCondition::waitWithInterrupt — they re-check their
     // cancel/interrupt state on wakeup.  We don't filter by program (no back-ref from manager to
@@ -1156,7 +1164,7 @@ void QoreSandboxManager::requestInterrupt() {
 }
 
 void QoreSandboxManager::clearInterrupt() {
-    interrupt_requested.store(false, std::memory_order_seq_cst);
+    interrupt_flags.fetch_and(~QSB_INTR_REQUESTED, std::memory_order_seq_cst);
 }
 
 bool QoreSandboxManager::isInterruptRequested() const {
@@ -1167,7 +1175,7 @@ bool QoreSandboxManager::isInterruptRequested() const {
             }
         }
     }
-    return interrupt_requested.load(std::memory_order_seq_cst);
+    return interrupt_flags.load(std::memory_order_seq_cst) & QSB_INTR_REQUESTED;
 }
 
 void QoreSandboxManager::registerCancelCallback(void* context, cancel_callback_t callback) {
@@ -1224,7 +1232,9 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("network", net_mgr.getConfiguration(xsink), xsink);
 
     config->setKeyValue("max_threads", max_threads.load(), xsink);
-    config->setKeyValue("interrupt_requested", interrupt_requested.load(), xsink);
+    config->setKeyValue("wall_time_limit", wall_time_limit.load(), xsink);
+    config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
+        xsink);
 
     return config.release();
 }
@@ -1306,6 +1316,7 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
 
     // Copy the thread limit; the copy governs no threads yet
     result->max_threads = max_threads.load();
+    result->wall_time_limit = wall_time_limit.load();
     // Don't copy interrupt state
 
     return result;
@@ -1323,6 +1334,9 @@ QoreSandboxManager* QoreSandboxManager::createLockdown() {
     // one thread started by the sandboxed code at a time
     sm->setMaxThreads(1);
 
+    // 5 seconds per call
+    sm->setWallTimeLimit(5000);
+
     return sm;
 }
 
@@ -1338,6 +1352,9 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 
     // up to 4 threads
     sm->setMaxThreads(4);
+
+    // 30 seconds per call
+    sm->setWallTimeLimit(30000);
 
     return sm;
 }

@@ -1767,6 +1767,7 @@ set(LIBQORE_CPP_SRC
     lib/HttpClientEventSink.cpp
     lib/NegotiatingConnectionPollOp.cpp
     lib/QoreSandboxManager.cpp
+    lib/QoreSandboxLimits.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
     lib/qore_git_revision.cpp
@@ -2123,6 +2124,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/HttpClientEventSink.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/NegotiatingConnectionPollOp.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxLimits.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTimeZoneManager.cpp\"

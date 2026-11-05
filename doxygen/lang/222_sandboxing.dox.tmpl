@@ -135,7 +135,8 @@ Program p(opts);
 
     - @ref sandbox_filesystem "Filesystem access control" with allow/deny path lists
     - @ref sandbox_network "Network access control" with IP range and hostname filtering
-    - a @ref sandbox_resources "thread limit"
+    - @ref sandbox_resources "resource limits": a thread limit and a @ref sandbox_resource_limits "wall time limit"
+      for each call into the sandbox
     - @ref sandbox_interrupt "Safe code interruption" for stopping runaway code
 
     @subsection sandbox_manager_usage Basic Usage
@@ -530,8 +531,9 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @section sandbox_resources Resource Limits
 
     A SandboxManager limits the number of threads that sandboxed code runs at once, which prevents it from
-    exhausting the process's threads; unlike a parse option, the limit restricts the feature rather than disabling
-    it.  Code that runs for too long is stopped with
+    exhausting the process's threads, and the wall-clock time of each call into the sandbox (see
+    @ref sandbox_resource_limits); unlike a parse option, a limit restricts the feature rather than disabling it.
+    All sandboxed code can also be stopped at any time with
     @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" (see @ref sandbox_interrupt), and the stack
     used by each thread is bounded as for all %Qore code.
 
@@ -540,6 +542,9 @@ SandboxManager sm();
 
 # Thread limit - prevents fork bombs
 sm.setMaxThreads(4);
+
+# Each call into the sandbox may run for at most 5 seconds
+sm.setWallTimeLimit(5000);
     @endcode
 
     Starting a thread beyond the limit raises \c THREAD-CREATION-FAILURE.
@@ -555,6 +560,60 @@ sm.setMaxThreads(4);
     or retries a connection only to an address that the sandbox allows.
     @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" limits the number of such threads
     running at once; starting another one raises \c THREAD-CREATION-FAILURE.
+
+    @subsection sandbox_resource_limits Wall Time Limit
+
+    @ref Qore::SandboxManager::setWallTimeLimit() "SandboxManager::setWallTimeLimit()" limits the wall-clock time
+    of each <b>call</b> into the sandbox.  A call starts when a thread enters code governed by the sandbox from code
+    that it does not govern:
+    - @ref Qore::Program::run() "Program::run()", @ref Qore::Program::callFunction() "Program::callFunction()",
+      a method call on an object of the sandboxed Program, or any other entry into a Program that has the
+      sandbox manager
+    - a call of a closure, call reference or object method created under the sandbox, made from outside it (for
+      example by the host, after the call that created it has returned)
+
+    A thread that is already running a call of the sandbox does not start a new one when it re-enters the sandbox
+    (for example when sandboxed code calls trusted code that calls back into the sandbox), so the deadline cannot be
+    extended.  Work that the call starts shares its deadline: threads started with the
+    @ref background "background" operator, @ref Qore::call_async() "call_async()",
+    @ref Qore::parallel_map() "parallel_map()" and @ref Qore::parallel_foreach() "parallel_foreach()",
+    @ref Qore::Thread::ThreadPool "ThreadPool" tasks, and asynchronous I/O operations and tasks.  With nested
+    sandboxes, the deadline of every enclosing call stays in force in the inner sandbox.
+
+    When the deadline passes, every thread of the call raises a \c SANDBOX-TIMEOUT exception at its next
+    @ref sandbox_interrupt_check_points "check point", and a thread blocked at a check point wakes at once.  The
+    exception is raised again at every check point until the thread leaves the call, so sandboxed code cannot catch
+    it and go on, and @ref Qore::clear_thread_cancel() "clear_thread_cancel()" does not clear it.  Other calls into
+    the same sandbox are not affected, and the caller of the call that timed out continues normally.
+
+    @code{.py}
+SandboxManager sm();
+sm.setWallTimeLimit(5000);
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(sm);
+p.parse(untrusted_code, "user_script");
+
+try {
+    p.callFunction("main");
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "SANDBOX-TIMEOUT") {
+        # main() ran for more than 5 seconds
+    }
+}
+    @endcode
+
+    Changing the limit affects calls that start afterwards.
+
+    @note
+    - Native code that does not reach a check point, such as a long regular expression match, a sort of a very
+      large list, or a blocking call into a library that is not interruptible, is stopped when it returns, as with
+      @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()".  A database query that a driver can cancel
+      when the sandbox is interrupted is not cancelled by a timeout; the timeout is raised when the query returns.
+    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" defers a timeout like any other cancellation, so that
+      cleanup code can finish; do not give sandboxed code the \c THREAD_CONTROL functional domain
+      (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") if it must not be able to postpone its timeout.
+    - If the resources to track a call's deadline cannot be allocated, the call fails with \c SANDBOX-ERROR
+      instead of running without its limit.
 
     @section sandbox_interrupt Safe Code Interruption
 
@@ -632,6 +691,7 @@ sm.clearInterrupt();
 SandboxManager sm = SandboxManager::createLockdown();
 # - No filesystem access
 # - No network access
+# - Wall time limit per call: 5 seconds
 # - Max threads: 1
     @endcode
 
@@ -643,6 +703,7 @@ SandboxManager sm = SandboxManager::createLockdown();
 SandboxManager sm = SandboxManager::createWebSafe();
 # - No filesystem access
 # - Network allowed but private networks blocked (SSRF prevention)
+# - Wall time limit per call: 30 seconds
 # - Max threads: 4
     @endcode
 
@@ -692,6 +753,9 @@ hash<auto> net_config = sm.getNetworkConfiguration();
     |\c FILESYSTEM-ACCESS-DENIED|SandboxManager|Filesystem access blocked by security policy
     |\c NETWORK-ACCESS-DENIED|SandboxManager|Network connection blocked by security policy
     |\c PROGRAM-INTERRUPTED|SandboxManager|Execution interrupted via requestInterrupt()
+    |\c SANDBOX-TIMEOUT|SandboxManager|The @ref sandbox_resource_limits "wall time limit" of a call was exceeded
+    |\c SANDBOX-ERROR|SandboxManager|A call's wall time limit could not be enforced (no resources to track it)
+    |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 
