@@ -77,10 +77,10 @@ class TemporaryLifetimeTest inherits QUnit::Test {
         assertEq("+if state(if)=alive ~if if alive", r."24 if");
         # the value of an operand that an operator consumes is released when the operator returns, after the operands
         # evaluated after it, while a chain's receiver lives until the end of the statement
-        assertEq("+ternary-cond log(then) ~ternary-cond log(after)", r."63 condition of a ternary operator");
-        assertEq("+and-left +and-right ~and-right ~and-left log(after)", r."64 operands of a logical and");
+        assertEq("+ternary-cond log(then) ~ternary-cond log(after)", r."65 condition of a ternary operator");
+        assertEq("+and-left +and-right ~and-right ~and-left log(after)", r."66 operands of a logical and");
         assertEq("+chain-cond getName(chain-cond) log(then) log(after) ~chain-cond",
-            r."71 chain as the condition of a ternary operator");
+            r."73 chain as the condition of a ternary operator");
         # the temporaries of a return statement are released before the on_exit handler and the local variables
         assertEq("+local +ret state(ret)=alive ~ret on_exit ~local log(alive)", r."27 return");
         # an exception releases the temporaries that its statement holds, and only those, in the reverse order of their
