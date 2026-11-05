@@ -365,9 +365,10 @@ static std::shared_ptr<const HttpFastRouteSpec> fast_route_parse_spec(const Qore
     no @c Expect or @c Upgrade header, is HTTP/1.1 (with a keep-alive connection, or with @c Connection: close, in
     which case the response has @c Connection: close and the connection is closed after it), and has no further
     request already received.  Anything else takes the normal path.  The first request of a connection is covered as
-    well as the later ones.  A request over HTTP/2 is answered when its headers have been received, with the same
-    rules (a request with a body, or with a @c Connection header, takes the normal path); a request over HTTP/3 takes
-    the normal path.
+    well as the later ones.  A request over HTTP/2 or HTTP/3 is answered when its headers have been received, with
+    the same rules (a request with a body, or with a @c Connection header, takes the normal path).  The routes of a
+    listening socket are also those of the sessions of a QUIC listener when the routes are attached to its UDP socket,
+    which @ref HttpServer::HttpServer::addFastRoute() "HttpServer::addFastRoute()" does.
 
     @par Example:
     @code{.py}

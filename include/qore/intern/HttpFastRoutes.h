@@ -418,10 +418,10 @@ public:
     DLLLOCAL std::shared_ptr<const std::string> match(const HttpFastRequestView& req, int64_t epoch_s,
             HttpFastFallback& fallback, bool* close_after = nullptr);
 
-    //! Answers an HTTP/2 request if a route qualifies
-    /** The request is a \c GET without a body (\c END_STREAM was on its \c HEADERS frame).  The eligibility rules are
+    //! Answers an HTTP/2 or HTTP/3 request if a route qualifies
+    /** The request is a \c GET without a body (\c END_STREAM, or \c FIN, was on its \c HEADERS frame).  The eligibility rules are
         those of match(); \c http_version is not checked and the request must not have a \c Connection header
-        (connection-specific headers are not allowed in HTTP/2).
+        (connection-specific headers are not allowed in HTTP/2 and HTTP/3).
 
         @param req the request
         @param fallback set to the reason if the request is not answered

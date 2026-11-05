@@ -276,8 +276,16 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
   and a `Connection` header (illegal in HTTP/2) takes the normal path.  Plain `h2c` and TLS use the same session.
   Responses are flow controlled by nghttp2 as any other, so a 64 KiB response needs no special handling.  The stream
   and connection are unaffected for requests that do not qualify.
-- HTTP/3 (phase 3, not implemented): the same hook belongs in the QUIC session when the request `HEADERS` of a stream
-  without a body have been decoded; the core needs no change
+- HTTP/3 (implemented, phase 3): the same hook in `QuicSession::serveFastRoute()`, called from
+  `h3EndHeadersCallback()` for a server session when the request ended with `FIN` on its `HEADERS` (no body); it uses
+  the same `HttpFastRoutes::matchH2()` (there is no version check and no `Connection` header in HTTP/3 either) and
+  submits the response with the session's `submitResponse()`.  The stream is marked `fast_served`, skipped by
+  `takeHeadersReadyStreamCopy()` and erased when it closes.  The routes come from the UDP socket of the QUIC listener:
+  `HttpServer` attaches them to the socket when the listener is added, and to the sockets of the existing QUIC
+  listeners when the first route is created; a session takes the routes object of its socket when it is created, so
+  routes added to the table later apply to existing sessions, but a session created before the first route of the
+  server exists does not answer from routes until its connection is replaced by a new one (routes are normally
+  registered at start-up).
 - HTTP/1.0, WebSocket upgrade, SSE and anything with a body: normal path
 
 ## Phases
@@ -288,7 +296,7 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 |1.5 (done)|Fast request parsing: a strict parser in the interpreter-free core (`HttpFastRequest.h/.cpp`) that reads the raw header bytes straight into the `HttpFastRequestView`, before any Qore hash is built; it accepts only a conservative subset and everything else takes the existing parser|differential and fuzz tests show that whatever the fast parser accepts, the normal parser accepts with the same method, path and headers; keep-alive CPU per request falls from 50 - 60 us towards 10 - 15 us
 |2a (done for plain TCP)|The first request of a connection is read by the fused idle + read header operation, which answers it from a route; see "Phase 2 design".  The per-accept reverse lookup is already opt-in (`peer_hostname_lookup`)|a new connection's first request is also served without a hand-off
 |2b|Only if 2a leaves a measured gap: connections owned by C++ until a request needs the handler|measured
-|3|HTTP/2 (done) and HTTP/3 (open)|same tests over h2 and h3
+|3|HTTP/2 and HTTP/3 (done)|same tests over h2 and h3
 |4|`Connection: close` handling (done); only if measured and justified: prefix routes, further blocks|each addition reviewed for boundedness
 
 Phase 1.5 comes before phase 2 because phase 2 reads the first request of a connection in the `read_header` operation,
@@ -527,17 +535,8 @@ phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at mos
   9110 says (a `HEAD` response has the headers of the `GET` response, including its `Content-Length`).  A route that
   copied that would copy what looks like a defect of the normal path, and one that did what the RFC says would differ
   from it, so `HEAD` waits until the normal path's behavior is settled.
-- HTTP/3 requests are not answered by a route.  The hook belongs in `QuicSession::h3EndHeadersCallback()` for a server
-  session when the request ends with `FIN` on its `HEADERS`; the session needs the routes (the shared
-  `HttpFastRoutes` object of the QUIC listener, captured when the session is created: the socket pointer that
-  `QuicSession` keeps is cleared after initialization), the fast-served stream must be skipped by
-  `takeHeadersReadyStreamCopy()` and erased when the stream closes, and the test needs an HTTP/3 client
-
-- (fixed) the normal path did not answer the second of two pipelined requests that arrived in one send: the idle
-  check of a connection looked at the descriptor (and at OpenSSL's buffer), not at the bytes that the header read had
-  already taken into the socket's own buffer, so the request waited until more data arrived.
-  `QoreSocketObject::checkIdleDataForAsyncPollLocked()` now reports buffered bytes first.  A route still does not answer
-  a request when another is already buffered
+- an HTTP/3 session created before the server has any fast route does not answer from routes for as long as it lives
+  (see Protocols); fixing it needs the session to refer to the socket's routes holder instead of a copy of the pointer
 - bypassing the handler chain changes what an operator can rely on (logging, auth, tracing): mitigated by `public`,
   counters and documentation; whether a sampled access log is worth adding is open
 - a response too large for the socket buffer stays in the operation's send phase until the reader drains it; the

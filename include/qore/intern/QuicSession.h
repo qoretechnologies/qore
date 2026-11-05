@@ -103,6 +103,9 @@ struct QuicStreamInfo {
         peer sent its complete message body.
     */
     bool fin_received = false;
+    //! true if a fast route answered the request on the I/O thread (see QuicSession::serveFastRoute()): the stream
+    //! is never dispatched or reported to Qore, and it is erased when it closes
+    bool fast_served = false;
     std::string error_message;  //!< non-empty if stream terminated with error
     //! true if the peer did not process the request on this client stream
     /** The peer reset the stream with H3_REQUEST_REJECTED (RFC 9114 section 4.1.1); the request can be sent again on
@@ -212,6 +215,7 @@ struct QuicStreamingBodyData {
 };
 
 class qore_socket_private;
+class HttpFastRoutes;
 
 //! Result from processTimerAndWrite() — coalesces timer check + packet generation
 struct QuicTimerWriteResult {
@@ -1285,6 +1289,17 @@ private:
                    QoreSSLPrivateKey* client_pk = nullptr);
 
     //! Initialize server-side connection
+    //! Answers a request with a fast route of the listening socket, if one qualifies (see
+    //! design/http-server-fast-routes.md)
+    /** Called from h3EndHeadersCallback() for a server session when the request ended with \c FIN on its \c HEADERS
+        (no body), with the session lock held.  Nothing here runs Qore code or blocks: the decision is made by the
+        interpreter-free core and the response is submitted to nghttp3, which sends it with the next write.
+
+        @param stream the stream of the request
+        @return true if the request was answered (the stream must not be dispatched)
+    */
+    DLLLOCAL bool serveFastRoute(QuicStreamInfo& stream);
+
     DLLLOCAL int initServer(qore_socket_private* sock, ExceptionSink* xsink,
                    const ngtcp2_pkt_hd* initial_hdr,
                    QoreSSLCertificate* cert, QoreSSLPrivateKey* pk,
@@ -1679,6 +1694,9 @@ private:
     SSL* ssl_ = nullptr;                            //!< OpenSSL connection
     ngtcp2_crypto_conn_ref conn_ref_{};              //!< TLS<->ngtcp2 connection reference
     qore_socket_private* sock_ = nullptr;           //!< associated socket
+    //! the fast routes of the listening socket, taken when a server session is created (the socket pointer above is
+    //! cleared after initialization); routes added to the listener's table later apply, a table attached later does not
+    std::shared_ptr<HttpFastRoutes> fast_routes_;
     bool is_server_ = false;                        //!< true if server-side session
     //! True once ngtcp2 asked a server to drop this connection (NGTCP2_ERR_RETRY / NGTCP2_ERR_DROP_CONN)
     /** Set when the first client Initial does not start the ClientHello (the client's first

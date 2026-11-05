@@ -35,6 +35,8 @@
 #include <qore/QoreSSLPrivateKey.h>
 
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/HttpFastRoutes.h"
 
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -1106,6 +1108,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     sock_ = sock;
     is_server_ = true;
     dispatcher_ = dispatcher;
+    if (sock) {
+        fast_routes_ = sock->getFastRoutes();
+    }
 
     // Store addresses for path construction
     if (local_addrlen > sizeof(local_addr_) || remote_addrlen > sizeof(remote_addr_)) {
@@ -3428,10 +3433,63 @@ void QuicSession::takeResponseHeaderEvents(const std::unordered_set<int64_t>& st
     pending_header_events_ = std::move(keep);
 }
 
+bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
+    if (!fast_routes_) {
+        return false;
+    }
+
+#ifndef NDEBUG
+    // debug builds: Qore code and blocking waits assert if reached from here
+    FastRouteScope fast_route_scope;
+#endif
+
+    // the request as the core sees it: a view of the stream's strings (which outlive the call)
+    HttpFastRequestView view;
+    view.method = stream.method;
+    view.path = stream.path;
+    view.http_version = "3";
+    auto find = [&stream](const char* name) -> const std::vector<std::string>* {
+        auto i = stream.headers.find(name);
+        return i == stream.headers.end() ? nullptr : &i->second;
+    };
+    if (const std::vector<std::string>* v = find("content-length")) {
+        if (v->size() != 1) {
+            // repeated: not a request for a fast route
+            return false;
+        }
+        view.content_length = std::string_view((*v)[0]);
+    }
+    if (const std::vector<std::string>* v = find("connection")) {
+        view.connection = v->empty() ? std::string_view() : std::string_view((*v)[0]);
+    }
+    view.has_transfer_encoding = find("transfer-encoding") != nullptr;
+    view.has_expect = find("expect") != nullptr;
+    view.has_upgrade = find("upgrade") != nullptr || find("http2-settings") != nullptr;
+
+    HttpFastFallback why;
+    std::shared_ptr<const HttpFastResponse> response = fast_routes_->matchH2(view, why);
+    if (!response) {
+        return false;
+    }
+
+    int us;
+    int64 epoch_s = q_epoch_us(us);
+    const std::string& body = response->getBody();
+    ExceptionSink xs;
+    if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s), body.data(),
+            body.size(), &xs) || xs) {
+        // the stream could not be answered here: the normal path takes it (the exception is dropped)
+        xs.clear();
+        return false;
+    }
+    stream.fast_served = true;
+    return true;
+}
+
 std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [id, info] : streams_) {
-        if (info->headers_complete && !info->dispatched) {
+        if (info->headers_complete && !info->dispatched && !info->fast_served) {
             // Copy stream info for the caller (headers, method, path, etc.)
             auto copy = std::make_unique<QuicStreamInfo>(*info);
             // Clear body on the COPY: any DATA that arrived with HEADERS stays
@@ -4293,6 +4351,14 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         // Wake controller-backed waitForStreamDrain() poll operations for this stream.
         session->notifyStreamDrain();
 
+        // a stream that a fast route answered was never reported to Qore: nothing waits for it, and it is erased
+        {
+            auto fit = session->streams_.find(stream_id);
+            if (fit != session->streams_.end() && fit->second->fast_served) {
+                session->streams_.erase(fit);
+            }
+        }
+
         // Mark stream complete if it wasn't already (e.g. peer reset before
         // h3EndStreamCallback fired).  Without this, the stream would remain
         // in streams_ forever and callers waiting for it would hang.
@@ -5001,6 +5067,12 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         // sits for 30 s and then triggers cleanupQuicStream + an unsolicited
         // fin=1 on the tunnel, dropping the WebSocket after the first wave
         // of traffic.
+        // a request without a body that a fast route of the listener answers is not dispatched
+        if (session->is_server_ && fin && !stream->is_connect && session->serveFastRoute(*stream)) {
+            stream->fin_received = true;
+            return 0;
+        }
+
         if (stream->is_connect && !stream->connect_protocol.empty()) {
             stream->headers_complete = true;
             session->completed_streams_.push(stream_id);

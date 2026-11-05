@@ -963,8 +963,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # the fast routes of the listeners (see addFastRoute()), created by the first route
         *HttpFastRoutes fast_routes;
 
-        # guards fast_routes
+        # guards fast_routes and quic_udp_sockets
         Mutex fast_routes_lock();
+
+        # the UDP sockets of the QUIC listeners by listener ID, which the fast routes are attached to (the sessions of
+        # the listener are created from them)
+        hash<string, Socket> quic_udp_sockets;
 
         # if True then verbose exception info will be logged
         bool debug;
@@ -1752,6 +1756,22 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         c.add();
         on_error c.done();
 
+        # the fast routes of the server, if any, are answered for the HTTP/3 requests of the listener's sessions; the
+        # socket is kept so that routes created later are attached to it as well
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            quic_udp_sockets{string(lid)} = udp_sock;
+            if (fast_routes) {
+                udp_sock.setHttpFastRoutes(fast_routes);
+            }
+        }
+        on_error {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            remove quic_udp_sockets{string(lid)};
+        }
+
         # Register with the async I/O controller
         if (!asyncIo) {
             throw "HTTP3-ERROR", "async I/O controller not initialized";
@@ -2064,6 +2084,11 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             int quic_lid = remove quic_listener_map{lid};
             remove quic_port_map{lid};
             remove quic_alt_svc_max_age{lid};
+            {
+                fast_routes_lock.lock();
+                on_exit fast_routes_lock.unlock();
+                remove quic_udp_sockets{string(quic_lid)};
+            }
             updateAltSvcHeader();
             # Stop the QUIC listener if it still exists.
             # NOTE: stop() triggers the QUIC listener's own listenerStopped()
@@ -2912,8 +2937,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         Every request of a connection is covered, the first one included.  The route is answered without the handler
         chain, and so without authentication, logging or request preprocessing: \c public must be \c True.
 
-        An HTTP/2 request is answered the same way, when its headers have been received (a request with a body takes the
-        normal path); an HTTP/3 request takes the normal path.
+        An HTTP/2 or HTTP/3 request is answered the same way, when its headers have been received (a request with a body
+        takes the normal path).  An HTTP/3 session answers from routes if the server had a route when the session was
+        created.
 
         The server's configured response headers (and the \c Server header) are added to each response, so that it has
         the headers that the normal path sends; the per-listener \c Alt-Svc header that the normal path adds for a
@@ -3002,6 +3028,20 @@ ready.set(1);
                 llist = listeners;
             }
             map $1.setHttpFastRoutes(routes), llist.iterator();
+            # the sockets of the QUIC listeners (their sessions are created from them)
+            list<Socket> usocks;
+            {
+                fast_routes_lock.lock();
+                on_exit fast_routes_lock.unlock();
+                usocks = quic_udp_sockets.values();
+            }
+            foreach Socket usock in (usocks) {
+                try {
+                    usock.setHttpFastRoutes(routes);
+                } catch (hash<ExceptionInfo> ex) {
+                    # a listener that is being stopped
+                }
+            }
         }
         return routes;
     }
