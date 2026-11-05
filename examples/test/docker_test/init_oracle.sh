@@ -14,22 +14,22 @@ if [ -n "$DOCKER_ORACLE" ]; then
 )" >> /usr/lib/oracle/tnsnames.ora
 
     # setup environment
-    echo export ORACLE_SID=omqsid >> /tmp/env.sh
-    echo export ORACLE_PDB=OMQPDB >> /tmp/env.sh
-    echo export ORACLE_PWD=omq >> /tmp/env.sh
-    echo export SYS_OMQ_DB_STRING=oracle:pdbadmin/omq@oracle >> /tmp/env.sh
-    echo export QORE_DB_CONNSTR_ORACLE=oracle:omq/omq@oracle >> /tmp/env.sh
+    echo export ORACLE_SID=qoresid >> /tmp/env.sh
+    echo export ORACLE_PDB=QOREPDB >> /tmp/env.sh
+    echo export ORACLE_PWD=qore >> /tmp/env.sh
+    echo export QORE_DB_CONNSTR_ORACLE_SYS=oracle:pdbadmin/qore@oracle >> /tmp/env.sh
+    echo export QORE_DB_CONNSTR_ORACLE=oracle:qore/qore@oracle >> /tmp/env.sh
 
     . /tmp/env.sh
     set +e
     waited=0
     echo "Waiting for Oracle DB to start."
     while true; do
-        out=`qore -ne "Datasource d(\"${SYS_OMQ_DB_STRING}\"); auto x=d.getServerVersion();" 2>&1`
+        out=`qore -ne "Datasource d(\"${QORE_DB_CONNSTR_ORACLE_SYS}\"); auto x=d.getServerVersion();" 2>&1`
         status=$?
         if [ "$status" = "0" ]; then
             echo && echo "Oracle DB started."
-            echo "Waiting 10 seconds to let startup scripts prepare OMQ user and tablespaces."
+            echo "Waiting 10 seconds to let startup scripts prepare the test user and tablespaces."
             sleep 10 && break
         elif [ $waited -eq 60 ]; then
             echo && echo "Waited too long for Oracle DB to start. Aborting build."
