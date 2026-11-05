@@ -495,7 +495,7 @@ private:
     DLLLOCAL std::shared_ptr<const table_t> snapshot() const;
 
     //! Selects the response for a request; the shared part of match() and matchH2()
-    DLLLOCAL std::shared_ptr<const HttpFastResponse> select(const HttpFastRequestView& req,
+    DLLLOCAL std::shared_ptr<const HttpFastResponse> chooseRoute(const HttpFastRequestView& req,
             HttpFastFallback& fallback, bool* close_after, bool h2);
 
     mutable std::mutex lock;

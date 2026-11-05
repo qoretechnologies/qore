@@ -1180,9 +1180,9 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassStaticMethodVariantCount("Socket", "parseServerSentEvent", ("event_text",));
         assertNamedClassStaticMethodVariantCount("Socket", "poll", ("items", "timeout_ms"));
         assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponse",
-            ("status_code", "status_description", "http_version", "headers", "body"));
+            ("status_code", "status_description", "http_version", "headers", "body", "head"));
         assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseAndReadHeader",
-            ("status_code", "status_description", "http_version", "headers", "body", "idle_timeout"));
+            ("status_code", "status_description", "http_version", "headers", "body", "idle_timeout", "head"));
         assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseWithStreamAndReadHeader",
             ("status_code", "status_description", "http_version", "headers", "body", "content_length",
                 "idle_timeout"));

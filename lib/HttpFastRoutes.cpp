@@ -512,7 +512,7 @@ size_t HttpFastRoutes::size() const {
     return snapshot()->size();
 }
 
-std::shared_ptr<const HttpFastResponse> HttpFastRoutes::select(const HttpFastRequestView& req,
+std::shared_ptr<const HttpFastResponse> HttpFastRoutes::chooseRoute(const HttpFastRequestView& req,
         HttpFastFallback& fallback, bool* close_after, bool h2) {
     if (close_after) {
         *close_after = false;
@@ -597,7 +597,7 @@ std::shared_ptr<const HttpFastResponse> HttpFastRoutes::select(const HttpFastReq
 std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestView& req, int64_t epoch_s,
         HttpFastFallback& fallback, bool* close_after,
         const std::shared_ptr<const HttpFastExtraHeaders>& extra) {
-    std::shared_ptr<const HttpFastResponse> response = select(req, fallback, close_after, false);
+    std::shared_ptr<const HttpFastResponse> response = chooseRoute(req, fallback, close_after, false);
     if (!response) {
         return nullptr;
     }
@@ -606,7 +606,7 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
 
 std::shared_ptr<const HttpFastResponse> HttpFastRoutes::matchH2(const HttpFastRequestView& req,
         HttpFastFallback& fallback) {
-    return select(req, fallback, nullptr, true);
+    return chooseRoute(req, fallback, nullptr, true);
 }
 
 std::vector<std::pair<std::string, uint64_t>> HttpFastRoutes::getRouteHits() const {
