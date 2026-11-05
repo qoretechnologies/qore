@@ -155,9 +155,10 @@ class DeepNestingTest inherits QUnit::Test {
             assertDepthError(sub () { JsonSchema schema(deepSchema); });
             assertDepthError(sub () { JsonSchema schema(deepJson); });
 
-            # compilation recurses for each level of the schema; the stack limit may end it for 1000 levels
+            # compilation recurses for each level of the schema; the stack limit may end it for 500 levels, which are
+            # 999 levels of nested values (a hash and a list each), inside the 1024 levels a schema may have
             try {
-                JsonSchema schema(nestedSchema(1000));
+                JsonSchema schema(nestedSchema(500));
                 assertTrue(schema.validate(1));
             } catch (hash<ExceptionInfo> ex) {
                 assertEq("STACK-LIMIT-EXCEEDED", ex.err);
