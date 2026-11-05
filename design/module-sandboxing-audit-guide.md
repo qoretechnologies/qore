@@ -484,14 +484,32 @@ if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host, addr, len, QSE
 
 ### 3.1 How It Works
 
-The thread limit is the only resource limit; the Qore runtime enforces it, but modules can bypass it:
+The Qore runtime enforces these limits (see [sandbox-resource-limits.md](sandbox-resource-limits.md)); a module
+can bypass them unless it follows the rules in the last column:
 
 | Limit | Enforcement Point | Module Responsibility |
 |-------|-------------------|----------------------|
-| Threads (`max_threads`) | Thread creation | Use Qore's threading APIs |
+| Threads (`max_threads`) | Thread creation | Use Qore's threading APIs (`q_start_thread()`) |
+| Wall time / CPU time per call (`wall_time_limit`, `cpu_time_limit`) | Cancellation points (`qore_check_cancel()`, cancellable waits) | Check for cancellation in long loops; wait interruptibly |
+| Stack per call (`max_stack_size`) | Stack checks at calls (`check_stack()`, `q_check_stack()`) | Call `q_check_stack()` in native recursion |
+| Memory (`memory_limit`) | Growth of Qore values; `q_sb_*` allocations | Allocate large buffers for the caller with `q_sb_malloc()` / `q_sb_realloc()` / `q_sb_free()`; build results as Qore values |
 
-Code that runs too long is stopped by an interrupt (`requestInterrupt()`), which a module honors by waiting
-interruptibly (see the interrupt sections of this guide).
+The memory of Qore values (strings, lists, hashes, objects, binary data) that a module creates for sandboxed code
+is counted automatically, so readers that produce large results as Qore values need no change. A module's own large
+buffers (decompression windows, model tensors, parse buffers) are only counted if it allocates them with
+`q_sb_malloc()`, which charges the sandbox call the current thread runs and, with an `ExceptionSink`, raises
+`SANDBOX-MEMORY-LIMIT` instead of allocating a request that does not fit:
+
+```cpp
+void* buf = q_sb_malloc(size, xsink);   // nullptr + SANDBOX-MEMORY-LIMIT if it would exceed the limit
+if (!buf) {
+    return -1;
+}
+// ... resize with q_sb_realloc(buf, new_size, xsink), free with q_sb_free(buf) on any thread
+```
+
+Code that runs too long is stopped by the time limits or by an interrupt (`requestInterrupt()`), which a module
+honors by checking for cancellation and waiting interruptibly (see the interrupt sections of this guide).
 
 ### 3.2 Audit Checklist - Resource Consumption
 
@@ -502,6 +520,8 @@ interruptibly (see the interrupt sections of this guide).
 | Tight loops that never check for an interrupt | Cannot be interrupted |
 | `sleep()`, blocking syscalls | Cannot be interrupted unless the wait is interruptible |
 | `pthread_create` | May bypass thread limits |
+| Large `malloc()` / `realloc()` buffers for a caller | Not counted against the memory limit; use `q_sb_malloc()` |
+| Native recursion over untrusted data | May exhaust the stack; call `q_check_stack()` |
 
 #### Qore-Language Modules
 
@@ -610,7 +630,7 @@ ssize_t blockingRead(int fd, void* buf, size_t len, int timeout_ms,
     struct pollfd pfd = {fd, POLLIN, 0};
     int rc = qore_cancellable_poll(&pfd, 1, timeout_ms, xsink, "reading");
     if (rc == QORE_POLL_CANCELLED) {
-        return -1;  // THREAD-CANCELLED or PROGRAM-INTERRUPTED raised
+        return -1;  // THREAD-CANCELLED, SANDBOX-TIMEOUT or PROGRAM-INTERRUPTED raised
     }
     if (rc < 0) {
         return -1;  // poll() failed; errno is set
@@ -843,6 +863,10 @@ These are lower risk but should still be addressed for defense in depth:
 | `FILESYSTEM-ACCESS-DENIED` | Filesystem | Path access blocked by policy |
 | `NETWORK-ACCESS-DENIED` | Network | Connection blocked by policy |
 | `PROGRAM-INTERRUPTED` | Interrupt | Operation interrupted by request |
+| `SANDBOX-TIMEOUT` | Resources | The wall time or CPU time limit of the sandbox call that the thread runs was exceeded; raised by `qore_check_cancel()` like the interrupt, so a module that checks for cancellation needs no change (see [sandbox-resource-limits.md](sandbox-resource-limits.md)) |
+| `SANDBOX-MEMORY-LIMIT` | Resources | The memory limit of the sandbox was exceeded; raised by `qore_check_cancel()` after a value grew beyond it, or by `q_sb_malloc()` / `q_sb_realloc()` before allocating |
+| `SANDBOX-ERROR` | Resources | The limits of a call named in the exception (and in its `arg` hash) could not be enforced (no resources to track them) |
+| `STACK-LIMIT-EXCEEDED` | Resources | The thread's stack guard was reached; with a sandbox stack limit, the guard of the sandbox call (see [sandbox-resource-limits.md](sandbox-resource-limits.md)) |
 | `THREAD-CREATION-FAILURE` | Resources | Thread creation would exceed the thread limit |
 | `SANDBOX-PATH-ERROR` | Filesystem | Path canonicalization failed |
 

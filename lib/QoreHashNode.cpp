@@ -56,6 +56,7 @@ static const char* qore_hash_type_name = "hash";
 // because object destructors need to be run...
 qore_hash_private::~qore_hash_private() {
     assert(member_list.empty());
+    sb.release();
     if (hashdecl) {
         typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hashdecl))->deref();
     }

@@ -40,6 +40,7 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/QoreSandboxLimits.h"
 
 #include <cerrno>
 #include <csignal>
@@ -1088,6 +1089,11 @@ int fork() [dom=PROCESS] {
    // release signal handler lock
    QSM.postFork(!pid, xsink);
 #endif
+
+   // calls with a time limit in progress in the forking thread stay bounded in the child
+   if (!pid) {
+      qore_sandbox_watchdog_after_fork();
+   }
 
    return pid;
 #else

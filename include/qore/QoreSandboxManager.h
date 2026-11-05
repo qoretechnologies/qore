@@ -52,6 +52,7 @@ class QoreString;
 class QoreHashNode;
 class QoreProgram;
 class ResolvedCallReferenceNode;
+class QoreSandboxMemoryAccount;
 
 //! @defgroup sandbox_fs_access_modes Filesystem Access Mode Constants
 //! Constants for specifying filesystem access modes in sandboxing
@@ -532,6 +533,116 @@ public:
     //! Gets the max threads limit
     DLLEXPORT int getMaxThreads() const;
 
+    //! Sets the wall-clock time limit of each call into the sandbox in milliseconds
+    /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
+
+        A call starts when a thread enters code governed by this sandbox from code it does not govern: when a Program
+        with this manager attached becomes current (QoreProgram::run(), QoreProgram::callFunction(), callbacks and
+        method calls into the Program) or when code created under this sandbox (objects and call references with
+        sandbox provenance) is run from outside it.  A thread that is already running a call of this sandbox does not
+        start a new one when it re-enters it.  Work that the call continues on other threads (threads it starts,
+        thread pool tasks, async I/O operations) shares the call's deadline.
+
+        When the deadline passes, the threads of the call raise \c SANDBOX-TIMEOUT at their next cancellation point;
+        a thread blocked in a cancellable wait wakes at once.  The exception is raised again at every cancellation
+        point until the thread leaves the call, and clearing the thread's cancellation request does not clear it.
+        Other calls into the same sandbox are not affected.
+
+        Changing the limit affects calls that start afterwards.
+
+        @see design/sandbox-resource-limits.md
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setWallTimeLimit(int64 ms);
+
+    //! Gets the wall-clock time limit of each call into the sandbox in milliseconds; 0 = unlimited
+    DLLEXPORT int64 getWallTimeLimit() const;
+
+    //! Sets the CPU time limit of each call into the sandbox in milliseconds
+    /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
+
+        The limit applies to the CPU time used by all threads of a call together (see setWallTimeLimit() for what a
+        call is and which threads continue it): the thread that entered the sandbox, threads the call starts, and
+        thread pool tasks and async I/O operations that run for it, each from the moment it starts working for the
+        call.  Time spent waiting (sleeping, blocked on a lock or on I/O) does not count.
+
+        When the CPU time is used up, the threads of the call raise \c SANDBOX-TIMEOUT at their next cancellation
+        point, as with the wall-time limit; the exception names the CPU time limit.  The CPU time is measured by the
+        sandbox watchdog at the earliest point it could be used up (the remaining time divided by the number of the
+        call's threads, at least 1 ms apart), so the call can exceed its limit by up to about 1 ms per thread plus
+        the time to the next cancellation point.
+
+        Where the platform has no per-thread CPU clock (\c pthread_getcpuclockid() or the Mach thread API), a call
+        with a CPU time limit fails with \c SANDBOX-ERROR instead of running without it.  Changing the limit affects
+        calls that start afterwards.
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setCPUTimeLimit(int64 ms);
+
+    //! Gets the CPU time limit of each call into the sandbox in milliseconds; 0 = unlimited
+    DLLEXPORT int64 getCPUTimeLimit() const;
+
+    //! Sets the stack size that each call into the sandbox may use, in bytes
+    /** @param bytes the limit in bytes; 0 (or a negative value) = unlimited
+
+        The stack is measured from the stack position where the call starts (see setWallTimeLimit() for what a call
+        is); a thread that continues the call (a thread it starts, a pool task) measures from where it starts the
+        work.  A re-entry into the sandbox does not start a new measurement.  The thread's own stack guard still
+        applies: the sandbox limit can only make it tighter.
+
+        Exceeding the limit raises \c STACK-LIMIT-EXCEEDED at the next stack check (every function and method call in
+        all execution modes), which bounds recursion in sandboxed code.  Changing the limit affects calls that start
+        afterwards.
+
+        @note Only enforced on platforms where %Qore checks the stack (\c QORE_MANAGE_STACK)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setMaxStackSize(int64 bytes);
+
+    //! Gets the stack size that each call into the sandbox may use, in bytes; 0 = unlimited
+    DLLEXPORT int64 getMaxStackSize() const;
+
+    //! Sets the memory limit of the sandbox in bytes
+    /** @param bytes the limit in bytes; 0 (or a negative value) = unlimited
+
+        The limit applies to the memory held by %Qore values (strings, lists, hashes, objects, binary data, and buffers
+        that modules allocate with q_sb_malloc()) that code governed by the sandbox created and that are still alive,
+        wherever they are now: data passed out of the sandbox stays charged to it until it is freed.  It does not
+        count allocations made inside third-party libraries or by the interpreter itself.  With nested sandboxes, the
+        memory is charged to every enclosing sandbox call with a memory limit as well.
+
+        A call into the sandbox (see setWallTimeLimit()) charges the memory of the storage it creates if the sandbox
+        has a memory limit when the call starts; a change of a non-zero limit takes effect at once.
+
+        When the memory in use exceeds the limit, the thread that exceeded it raises \c SANDBOX-MEMORY-LIMIT at its
+        next cancellation point, and again at every cancellation point until the memory in use is below the limit
+        (code that catches the exception and frees memory can therefore go on).  An allocation never fails because of
+        the limit; operations that know the size of a large allocation in advance check it first and raise
+        \c SANDBOX-MEMORY-LIMIT instead of allocating.  The limit can be exceeded by at most one operation plus the
+        memory that threads have reserved for their allocations (a small part of the limit near the limit).
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setMemoryLimit(int64 bytes);
+
+    //! Gets the memory limit of the sandbox in bytes; 0 = unlimited
+    DLLEXPORT int64 getMemoryLimit() const;
+
+    //! Returns the memory in bytes currently charged to the sandbox (see setMemoryLimit())
+    /** Includes the memory that threads running calls into the sandbox have reserved for their allocations
+
+        @since Qore 3.0
+    */
+    DLLEXPORT int64 getMemoryUsage() const;
+
+    //! Returns the memory account of the sandbox; for internal use
+    DLLLOCAL QoreSandboxMemoryAccount* getMemoryAccount() const {
+        return mem_account;
+    }
+
     //! Requests graceful interruption of sandboxed code
     /** This sets an interrupt flag that is checked at various points
         during execution (statement boundaries, blocking operations).
@@ -661,11 +772,11 @@ public:
         Lockdown mode:
         - No filesystem access (empty allow list)
         - No network access (empty allow list)
+        - Wall time limit per call: 5000ms
+        - CPU time limit per call: 1000ms
+        - Stack size limit per call: 1MB
         - Memory limit: 10MB
-        - CPU time limit: 1000ms
-        - Wall time limit: 5000ms
         - Max threads: 1
-        - Max recursion: 100
     */
     DLLEXPORT static QoreSandboxManager* createLockdown();
 
@@ -675,11 +786,11 @@ public:
         Web-safe mode:
         - No filesystem access
         - Network allowed but private networks blocked
+        - Wall time limit per call: 30000ms
+        - CPU time limit per call: 10000ms
+        - Stack size limit per call: 2MB
         - Memory limit: 100MB
-        - CPU time limit: 10000ms
-        - Wall time limit: 30000ms
         - Max threads: 4
-        - Max recursion: 200
     */
     DLLEXPORT static QoreSandboxManager* createWebSafe();
 
@@ -695,8 +806,23 @@ private:
     //! Maximum threads (0 = unlimited)
     std::atomic<int> max_threads;
 
-    //! Interrupt flag
-    std::atomic<bool> interrupt_requested;
+    //! Interrupt reason bit: requestInterrupt() was called; raises \c PROGRAM-INTERRUPTED
+    static constexpr unsigned QSB_INTR_REQUESTED = (1u << 0);
+
+    //! Interrupt reason bits (@ref QSB_INTR_REQUESTED); see "Reason codes" in design/sandbox-resource-limits.md
+    std::atomic<unsigned> interrupt_flags;
+
+    //! The wall-clock time limit of each call in milliseconds (0 = unlimited)
+    std::atomic<int64> wall_time_limit;
+
+    //! The CPU time limit of each call in milliseconds (0 = unlimited)
+    std::atomic<int64> cpu_time_limit;
+
+    //! The stack size limit of each call in bytes (0 = unlimited)
+    std::atomic<int64> max_stack_size;
+
+    //! The memory account of the sandbox, which holds its memory limit; referenced
+    QoreSandboxMemoryAccount* mem_account;
 
     //! Mutex for cancel callbacks
     mutable std::mutex cancel_mutex;
@@ -1004,5 +1130,41 @@ private:
     %Qore itself no longer uses this constant.
 */
 #define QORE_IO_POLL_INTERVAL_MS 500
+
+//! Allocates memory that counts against the memory limit of the sandbox the calling code runs in
+/** For modules that allocate large buffers for sandboxed code (compression, parsers, machine learning, ...): the
+    memory is charged to the sandbox call the current thread runs, like the memory of %Qore values (see
+    QoreSandboxManager::setMemoryLimit()), and released when it is freed with q_sb_free(), on any thread.  Outside a
+    sandbox call with a memory limit it is a plain allocation.
+
+    The memory must be freed with q_sb_free() and resized with q_sb_realloc() (it has a 16-byte header; the pointer
+    returned has the alignment of malloc()).
+
+    @param size the number of bytes to allocate
+    @param xsink if not null, the request is checked against the memory limit first, and \c SANDBOX-MEMORY-LIMIT is
+    raised instead of allocating if it does not fit; an allocation failure raises an out-of-memory error
+
+    @return the memory, or nullptr if the request does not fit the limit or cannot be allocated (or \a size is 0)
+
+    @since Qore 3.0
+*/
+DLLEXPORT void* q_sb_malloc(size_t size, ExceptionSink* xsink);
+
+//! Resizes memory allocated with q_sb_malloc(); the change in size is charged or released
+/** @param ptr the memory, or nullptr to allocate
+    @param size the new size; 0 frees the memory and returns nullptr
+    @param xsink if not null, growth is checked against the memory limit first, and \c SANDBOX-MEMORY-LIMIT is raised
+    (and \a ptr left unchanged) if it does not fit; an allocation failure raises an out-of-memory error
+
+    @return the resized memory, or nullptr on error, in which case \a ptr is still valid
+
+    @since Qore 3.0
+*/
+DLLEXPORT void* q_sb_realloc(void* ptr, size_t size, ExceptionSink* xsink);
+
+//! Frees memory allocated with q_sb_malloc() or q_sb_realloc() and releases its charge; nullptr is ignored
+/** @since Qore 3.0
+*/
+DLLEXPORT void q_sb_free(void* ptr);
 
 #endif // _QORE_QORE_SANDBOX_MANAGER_H

@@ -143,15 +143,17 @@ public:
     DLLEXPORT void append(const BinaryNode &b);
 
     //! writes the given data to the given location in the object
-    /** resizes the object if necessary
+    /** resizes the object if necessary: data written past the end extends the value, and a gap between the end and
+        \a pos is filled with zero bytes
 
         @param pos the byte position where to start writing
         @param nptr the data to copy to the object
         @param size the number of bytes to copy to the object
 
-        @return -1 if the resize failed (out of memory), 0 if OK
+        @return -1 if the resize failed (out of memory; the object is then empty) or \a pos + \a size cannot be
+        represented (the object is unchanged), 0 if OK
 
-        @since %Qore 1.12
+        @since %Qore 1.12; since %Qore 3.0 a write past the end extends the size of the value
     */
     DLLEXPORT int writeTo(size_t pos, const void* nptr, size_t size);
 

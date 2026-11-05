@@ -9,6 +9,11 @@ Qore provides cooperative cancellation at two levels:
 | **Program interrupt** | All threads in a program | Sandbox controller via `SandboxManager::requestInterrupt()` | `PROGRAM-INTERRUPTED` |
 | **Thread cancellation** | One specific thread | Any thread in scope (see [Program Scope](#program-scope-who-can-cancel-whom)) via `cancel_thread(tid)` | `THREAD-CANCELLED` |
 
+A third reason uses the per-thread path: when the deadline of a sandbox call with a wall time limit passes, the
+threads of that call raise `SANDBOX-TIMEOUT`.  The per-thread request is a bit set (`QCR_THREAD_CANCEL`,
+`QCR_SANDBOX_LIMIT`); `clear_thread_cancel()` clears only the explicit request.  See
+[sandbox-resource-limits.md](sandbox-resource-limits.md).
+
 Both levels are checked at the same **cancellation points** through a single C++ function. This document covers the architecture, the C++ and Qore APIs, and the implementation guide for binary modules.
 
 ### Use Cases

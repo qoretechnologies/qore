@@ -95,6 +95,14 @@ hashdecl SandboxConfigInfo {
     hash<NetworkSecurityConfigInfo> network;
     //! Maximum number of threads (0 = unlimited)
     int max_threads;
+    //! Wall-clock time limit of each call into the sandbox in milliseconds (0 = unlimited)
+    int wall_time_limit;
+    //! CPU time limit of each call into the sandbox in milliseconds (0 = unlimited)
+    int cpu_time_limit;
+    //! Stack size limit of each call into the sandbox in bytes (0 = unlimited)
+    int max_stack_size;
+    //! Memory limit of the sandbox in bytes (0 = unlimited)
+    int memory_limit;
     //! Whether an interrupt has been requested
     bool interrupt_requested;
 }
@@ -144,12 +152,15 @@ const QSEC_NET_ALL = QSEC_NET_ALL;
     sandboxing features including:
 
     - A limit on the number of threads that sandboxed code runs at once
+    - Wall-clock time, CPU time and stack size limits for each call into the sandbox
+    - A limit on the memory held by the data that sandboxed code creates
     - Safe interruption of sandboxed code
 
     @par Example:
     @code{.py}
 SandboxManager sm();
 sm.setMaxThreads(4);
+sm.setWallTimeLimit(5000);  # 5 seconds per call
     @endcode
 
     @since Qore 3.0
@@ -199,6 +210,180 @@ int SandboxManager::getMaxThreads() {
     return sm->getMaxThreads();
 }
 
+//! Sets the wall-clock time limit of each call into the sandbox
+/** @param max_wall_time_ms the limit in milliseconds; 0 = unlimited
+
+    A call starts when a thread enters code governed by this sandbox from code that it does not govern: for example
+    @ref Qore::Program::run() "Program::run()", @ref Qore::Program::callFunction() "Program::callFunction()" or a
+    method call on an object of a Program that has this sandbox manager, or a call of a closure or method of an object
+    created under this sandbox.  A thread that is already running a call of this sandbox does not start a new one when
+    it re-enters the sandbox.  Threads, thread pool tasks and asynchronous I/O operations that the call starts share
+    its deadline.
+
+    When the deadline passes, the threads of the call raise a \c SANDBOX-TIMEOUT exception at their next cancellation
+    point, and a thread blocked in an interruptible wait (@ref Qore::sleep() "sleep()", locks, queues, I/O) wakes at
+    once.  The exception is raised again at every cancellation point until the thread leaves the call, so code in the
+    sandbox cannot catch it and continue, and @ref Qore::clear_thread_cancel() "clear_thread_cancel()" does not clear
+    it.  Other calls into the same sandbox are not affected.  Changing the limit affects calls that start afterwards.
+
+    See @ref sandbox_resource_limits for the limitations.
+
+    @par Example:
+    @code{.py}
+sm.setWallTimeLimit(max_wall_time_ms: 5000);  # 5 seconds per call
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setWallTimeLimit(int max_wall_time_ms) [flags=NAMED_ARGS] {
+    if (max_wall_time_ms < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the wall time limit cannot be negative; got: " QLLD,
+            max_wall_time_ms);
+        return QoreValue();
+    }
+    sm->setWallTimeLimit(max_wall_time_ms);
+}
+
+//! Gets the wall-clock time limit of each call into the sandbox
+/** @return the limit in milliseconds, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getWallTimeLimit() {
+    return sm->getWallTimeLimit();
+}
+
+//! Sets the CPU time limit of each call into the sandbox
+/** @param max_cpu_time_ms the limit in milliseconds; 0 = unlimited
+
+    The limit applies to the CPU time used by all threads of a call together (see setWallTimeLimit() for what a call
+    is): the thread that entered the sandbox, threads that the call starts, and thread pool tasks and asynchronous
+    I/O operations that run for it.  Time spent waiting (sleeping, blocked on a lock, a queue or I/O) does not count.
+
+    When the CPU time is used up, the threads of the call raise a \c SANDBOX-TIMEOUT exception naming the CPU time
+    limit at their next cancellation point, as with the wall time limit.  See @ref sandbox_cpu_limit for how it is
+    measured and the platforms where it is enforced.
+
+    @par Example:
+    @code{.py}
+sm.setCPUTimeLimit(max_cpu_time_ms: 1000);  # 1 second of CPU time per call
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setCPUTimeLimit(int max_cpu_time_ms) [flags=NAMED_ARGS] {
+    if (max_cpu_time_ms < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the CPU time limit cannot be negative; got: " QLLD,
+            max_cpu_time_ms);
+        return QoreValue();
+    }
+    sm->setCPUTimeLimit(max_cpu_time_ms);
+}
+
+//! Gets the CPU time limit of each call into the sandbox
+/** @return the limit in milliseconds, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getCPUTimeLimit() {
+    return sm->getCPUTimeLimit();
+}
+
+//! Sets the memory limit of the sandbox
+/** @param max_memory_bytes the limit in bytes; 0 = unlimited
+
+    The limit applies to the memory held by the values (strings, lists, hashes, objects, binary data) that code
+    governed by the sandbox created and that are still alive, wherever they are now: data passed out of the sandbox
+    stays charged to it until it is freed.  Memory allocated inside third-party libraries or by the interpreter itself
+    is not counted.  With nested sandboxes, the memory is also charged to every enclosing sandbox call with a memory
+    limit.
+
+    When the memory in use exceeds the limit, the thread that exceeded it raises \c SANDBOX-MEMORY-LIMIT at its next
+    cancellation point, and again at every cancellation point until the memory in use is below the limit, so code
+    that catches the exception and frees memory can go on.  See @ref sandbox_memory_limit for details.
+
+    @par Example:
+    @code{.py}
+sm.setMemoryLimit(max_memory_bytes: 10 * 1024 * 1024);  # 10MB
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setMemoryLimit(int max_memory_bytes) [flags=NAMED_ARGS] {
+    if (max_memory_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the memory limit cannot be negative; got: " QLLD,
+            max_memory_bytes);
+        return QoreValue();
+    }
+    sm->setMemoryLimit(max_memory_bytes);
+}
+
+//! Gets the memory limit of the sandbox
+/** @return the limit in bytes, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getMemoryLimit() {
+    return sm->getMemoryLimit();
+}
+
+//! Returns the memory currently charged to the sandbox
+/** @return the memory in bytes held by live data that sandboxed code created, including what threads running calls
+    into the sandbox have reserved for their next allocations
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getMemoryUsage() {
+    return sm->getMemoryUsage();
+}
+
+//! Sets the stack size that each call into the sandbox may use
+/** @param max_stack_bytes the limit in bytes; 0 = unlimited
+
+    The stack is measured from the stack position where the call starts (see setWallTimeLimit() for what a call is);
+    a thread that continues the call, such as a thread that the call starts or a thread pool task, measures from where
+    it starts the work.  A re-entry into the sandbox does not start a new measurement.  The thread's own stack limit
+    still applies: the sandbox limit can only make it tighter.
+
+    Exceeding the limit raises \c STACK-LIMIT-EXCEEDED at the next stack check, which is made at every function and
+    method call in all execution modes, so the limit bounds the recursion of sandboxed code.  Changing the limit
+    affects calls that start afterwards.
+
+    See @ref sandbox_stack_limit for details.
+
+    @par Example:
+    @code{.py}
+sm.setMaxStackSize(max_stack_bytes: 1024 * 1024);  # 1MB per call
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setMaxStackSize(int max_stack_bytes) [flags=NAMED_ARGS] {
+    if (max_stack_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the stack size limit cannot be negative; got: " QLLD,
+            max_stack_bytes);
+        return QoreValue();
+    }
+    sm->setMaxStackSize(max_stack_bytes);
+}
+
+//! Gets the stack size that each call into the sandbox may use
+/** @return the limit in bytes, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getMaxStackSize() {
+    return sm->getMaxStackSize();
+}
+
 //! Requests graceful interruption of sandboxed code
 /** This sets an interrupt flag that is checked at various points
     during execution. Interrupted code receives a PROGRAM-INTERRUPTED exception.
@@ -242,11 +427,11 @@ hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
     Lockdown mode settings:
     - No filesystem access (empty allow list)
     - No network access (empty allow list)
-    - Memory limit: 10MB
-    - CPU time limit: 1000ms
-    - Wall time limit: 5000ms
+    - Wall time limit per call: 5000ms (see setWallTimeLimit())
+    - CPU time limit per call: 1000ms (see setCPUTimeLimit())
+    - Stack size limit per call: 1MB (see setMaxStackSize())
+    - Memory limit: 10MB (see setMemoryLimit())
     - Max threads: 1
-    - Max recursion: 100
 
     @par Example:
     @code{.py}
@@ -265,11 +450,11 @@ static SandboxManager SandboxManager::createLockdown() {
     Web-safe mode settings:
     - No filesystem access
     - Network allowed but private networks blocked
-    - Memory limit: 100MB
-    - CPU time limit: 10000ms
-    - Wall time limit: 30000ms
+    - Wall time limit per call: 30000ms (see setWallTimeLimit())
+    - CPU time limit per call: 10000ms (see setCPUTimeLimit())
+    - Stack size limit per call: 2MB (see setMaxStackSize())
+    - Memory limit: 100MB (see setMemoryLimit())
     - Max threads: 4
-    - Max recursion: 200
 
     @par Example:
     @code{.py}

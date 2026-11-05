@@ -41,7 +41,7 @@
 
     <i>Sandboxing and execution control:</i>
     - @ref sandboxing "sandboxing" with @ref Qore::SandboxManager "SandboxManager": filesystem, network
-      (including SSRF prevention), thread-limit and interrupt controls
+      (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
 
     <i>Networking and I/O:</i>
     - all I/O runs through the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController"), so a
@@ -485,6 +485,11 @@
     see @ref csvutil_rfc4180.
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Waiting for a Thread to Terminate
+    @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
+    list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
+    (<a href="https://github.com/qoretechnologies/qore/issues/5575">issue 5575</a>).
+
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module
     parse option mask, which strips restrictions from what modules inherit from their loader or adds restrictions to
@@ -593,8 +598,12 @@
     - HTTP/2 and HTTP/3 with fully asynchronous I/O, used by @ref Qore::HTTPClient "HTTPClient" without code changes
       and controlled with @ref Qore::HTTPClient::setHttp2Mode() "setHttp2Mode()" and
       @ref Qore::HTTPClient::setHttp3Mode() "setHttp3Mode()"; see also @ref httpclientiointro "HttpClientIo"
-    - @ref Qore::SandboxManager "SandboxManager" for filesystem, network and thread limits and safe interruption of
-      running code; see @ref sandboxing (<a href="https://github.com/qoretechnologies/qore/issues/5000">issue 5000</a>)
+    - @ref Qore::SandboxManager "SandboxManager" for filesystem, network, thread and
+      per-call @ref sandbox_resource_limits "wall time", @ref sandbox_cpu_limit "CPU time" and
+      @ref sandbox_stack_limit "stack size" limits, a @ref sandbox_memory_limit "memory limit" and safe interruption of
+      running code; see
+      @ref sandboxing (<a href="https://github.com/qoretechnologies/qore/issues/5000">issue 5000</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/5581">issue 5581</a>)
     - @ref thread_cancellation "cooperative thread cancellation" with @ref Qore::cancel_thread() "cancel_thread()"
     - threading primitives @ref Qore::Thread::Future "Future", @ref Qore::Thread::Channel "Channel",
       @ref Qore::Thread::WaitGroup "WaitGroup", @ref Qore::Thread::Semaphore "Semaphore",
@@ -1394,6 +1403,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the C++ API function \c BinaryNode::writeTo() did not extend the size of the value when it wrote past its end,
+      so the data written there was not part of the value; it now does, and fills a gap with zero bytes
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date

@@ -250,9 +250,63 @@ int num = num_threads();
     @endcode
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
+
+    @note a thread whose work has ended is counted until its teardown is complete, which is after any
+    @ref on_exit code has run; use @ref thread_join() to wait until a thread is gone (see the teardown order there)
 */
 int num_threads() [flags=RET_VALUE_ONLY;dom=THREAD_INFO] {
     return thread_list.getNumThreads();
+}
+
+//! Waits until the background thread with the given TID has terminated
+/** A thread has terminated when it has left the list returned by @ref thread_list() and is no longer counted by
+    @ref num_threads(); use this function when code must know that a thread started with the @ref background
+    "background" operator is gone, for example to get a deterministic thread count or to shut down without leaving a
+    thread behind.
+
+    @par Teardown order
+    When the function of a background thread returns, in this order:
+    -# user @ref on_exit "on_exit" code and thread resource cleanup run (a Counter, Queue or Condition signalled
+       from there wakes its waiters at this point, while the thread still exists)
+    -# the thread no longer counts for its Program, so Program destruction and
+       @ref Qore::Program::waitForTermination() can proceed
+    -# thread-local data and cleanup functions are released
+    -# the thread is removed from the list returned by @ref thread_list() and no longer counted by
+       @ref num_threads(); this is when @ref thread_join() returns
+    .
+    Only this function waits for the last step.
+
+    @param tid the TID of the thread to wait for, as returned by the @ref background "background" operator
+    @param limit the maximum time to wait; an integer is interpreted as milliseconds, a relative date/time value
+    literally; @ref nothing or 0 waits without a limit, and a negative value only checks whether the thread has
+    terminated
+
+    @return @ref True "True" if the thread has terminated (also if no thread with the TID is running, including a
+    TID that has been given to a new thread since the one waited for terminated), or @ref False "False" if
+    \a limit passed first
+
+    @par Example:
+    @code{.py}
+int tid = background run_helper();
+# ... signal the helper to stop ...
+thread_join(tid);
+assert(!thread_list().find(tid));
+    @endcode
+
+    @throw THREAD-JOIN-ERROR the TID is the TID of the calling thread
+
+    @note the function can be interrupted by thread cancellation or a Program interrupt like other blocking
+    operations
+
+    @since %Qore 3.0
+*/
+bool thread_join(int tid, *timeout limit) [dom=THREAD_CONTROL] {
+    int64 ms = limit == 0 ? -1 : (limit < 0 ? 0 : limit);
+    int rc = thread_list.joinThread(tid, ms, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return !rc;
 }
 
 //! Returns a list of all current thread IDs
@@ -266,6 +320,9 @@ list<int> l = thread_list();
     @endcode
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
+
+    @note a thread whose work has ended stays in the list until its teardown is complete, which is after any
+    @ref on_exit code has run; use @ref thread_join() to wait until a thread is gone (see the teardown order there)
 */
 list<int> thread_list() [flags=RET_VALUE_ONLY;dom=THREAD_INFO] {
     return get_thread_list();

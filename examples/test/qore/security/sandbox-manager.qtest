@@ -18,7 +18,7 @@ class SandboxManagerTest inherits QUnit::Test {
     constructor() : QUnit::Test("SandboxManagerTest", "1.0", \ARGV) {
         addTestCase("SandboxManager creation test", \testCreation());
         addTestCase("Max threads test", \testMaxThreads());
-        addTestCase("Only the thread limit is a resource limit", \testOnlyThreadLimit());
+        addTestCase("Only enforced resource limits exist", \testOnlyEnforcedLimits());
         addTestCase("Interrupt mechanism test", \testInterrupt());
         addTestCase("Configuration hash test", \testConfiguration());
         addTestCase("Copy test", \testCopy());
@@ -110,16 +110,21 @@ class SandboxManagerTest inherits QUnit::Test {
         assertEq(0, sm.getMaxThreads(), "Max threads set to 0 (unlimited)");
     }
 
-    # the thread limit is the only resource limit: there are no memory, CPU time, wall time or recursion limits
-    testOnlyThreadLimit() {
+    # only enforced resource limits exist: the thread, wall time, CPU time, stack and memory limits (see
+    # sandbox-limits.qtest, issue #5581); the recursion limit is replaced by the stack limit
+    testOnlyEnforcedLimits() {
         SandboxManager sm();
-        foreach string method in ("setMemoryLimit", "getMemoryLimit", "setCPUTimeLimit", "getCPUTimeLimit",
-                "setWallTimeLimit", "getWallTimeLimit", "setMaxRecursionDepth", "getMaxRecursionDepth") {
+        foreach string method in ("setMaxRecursionDepth", "getMaxRecursionDepth") {
             assertFalse(sm.hasCallableMethod(method), method + "() does not exist");
         }
-        assertTrue(sm.hasCallableMethod("setMaxThreads"), "setMaxThreads() exists");
-        assertEq(("filesystem", "network", "max_threads", "interrupt_requested"), keys sm.getConfiguration(),
-            "the configuration has the thread limit as its only resource limit");
+        foreach string method in ("setMaxThreads", "getMaxThreads", "setWallTimeLimit", "getWallTimeLimit",
+                "setCPUTimeLimit", "getCPUTimeLimit", "setMaxStackSize", "getMaxStackSize", "setMemoryLimit",
+                "getMemoryLimit", "getMemoryUsage") {
+            assertTrue(sm.hasCallableMethod(method), method + "() exists");
+        }
+        assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "cpu_time_limit", "max_stack_size",
+            "memory_limit", "interrupt_requested"), keys sm.getConfiguration(),
+            "the configuration has the enforced resource limits only");
     }
 
     testInterrupt() {

@@ -33,6 +33,7 @@
 
 #define _QORE_QOREHASHNODEINTERN_H
 
+#include "qore/intern/QoreSandboxMemory.h"
 #include <list>
 
 // to maintain the order of inserts
@@ -130,8 +131,40 @@ public:
     bool is_obj = false;
 #endif
     bool valid = true;
+    //! the estimated memory of the members (see sbMemberSize()); always kept, so that it is right when charged
+    size_t sb_bytes = 0;
+    //! the sandbox memory charge of the members (see design/sandbox-resource-limits.md); synced with sb_bytes
+    QoreSandboxChargeRecord sb;
 
     DLLLOCAL qore_hash_private() {
+    }
+
+    //! the estimated memory of a member: the member, its key and its node in the member list and in the key map
+    DLLLOCAL static size_t sbMemberSize(const HashMember* m) {
+        return sizeof(HashMember) + m->key.size() + 4 * sizeof(void*) + 2 * sizeof(void*) + sizeof(qhlist_t::iterator);
+    }
+
+    //! Accounts a member that was added
+    DLLLOCAL void sbAdd(const HashMember* m) {
+        sb_bytes += sbMemberSize(m);
+        if (sb.charge || qore_sb_mem.charge) {
+            sb.sync(sb_bytes);
+        }
+    }
+
+    //! Accounts a member that is removed
+    DLLLOCAL void sbRemove(const HashMember* m) {
+        size_t size = sbMemberSize(m);
+        sb_bytes = size > sb_bytes ? 0 : sb_bytes - size;
+        if (sb.charge) {
+            sb.sync(sb_bytes);
+        }
+    }
+
+    //! Accounts the removal of all members
+    DLLLOCAL void sbClear() {
+        sb_bytes = 0;
+        sb.release();
     }
 
     // hashes should always be empty by the time they are deleted
@@ -305,6 +338,7 @@ public:
         HashMember* om = new HashMember(key);
         assert(om->val.isNothing());
         member_list.push_back(om);
+        sbAdd(om);
 
         // add to the map
         qhlist_t::iterator i = member_list.end();
@@ -325,6 +359,7 @@ public:
         HashMember* om = *i;
 
         member_list.erase(i);
+        sbRemove(om);
 
         // free om memory
         delete om;
@@ -592,6 +627,7 @@ public:
         member_list.clear();
         hm.clear();
         obj_count = 0;
+        sbClear();
     }
 
     //! Frees all members of a hash whose last reference was released, and marks it as freed
@@ -626,6 +662,7 @@ public:
         assert(p->member_list.empty());
         p->hm.clear();
         p->obj_count = 0;
+        p->sbClear();
         p->valid = false;
         h.weakDeref();
     }

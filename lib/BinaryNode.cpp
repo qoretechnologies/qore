@@ -29,16 +29,26 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreSandboxMemory.h"
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+
+// the sandbox memory charge of the buffer is kept in a sparse table (see qore_sb_binary_resize()), since the class
+// has no private data
 
 BinaryNode::BinaryNode(void* p, size_t size) : SimpleValueQoreNode(NT_BINARY) {
     ptr = p;
     len = size;
+    if (p) {
+        qore_sb_binary_resize_check(this, 0, size);
+    }
 }
 
 BinaryNode::~BinaryNode() {
+    // released even without a buffer: a reallocation that failed has freed it, but not its charge
+    qore_sb_binary_free_check(this, len);
     if (ptr) {
         free(ptr);
     }
@@ -49,6 +59,7 @@ void BinaryNode::clear() {
     // NOTE: we check and then free & update to avoid writing to memory
     // to avoid cache flushing on SMP systems (as used in the Linux
     // kernel for example)
+    qore_sb_binary_free_check(this, len);
     if (ptr) {
         free(ptr);
         if (len) {
@@ -102,12 +113,27 @@ const void* BinaryNode::getPtr() const {
 }
 
 int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
+    // the end of the write cannot be represented: no buffer can hold it
+    if (size > SIZE_MAX - pos) {
+        return -1;
+    }
     if ((pos + size) > len) {
         // resize buffer
         ptr = q_realloc(ptr, pos + size);
         if (!ptr) {
+            // q_realloc() has freed the old buffer: the node is empty, and its charge is released
+            qore_sb_binary_free_check(this, len);
+            len = 0;
             return -1;
         }
+        qore_sb_binary_resize_check(this, len, pos + size);
+        // a gap between the old end and the position written becomes part of the value: it must not expose
+        // uninitialized memory
+        if (pos > len) {
+            memset(static_cast<char*>(ptr) + len, 0, pos - len);
+        }
+        // the data written is part of the value
+        len = pos + size;
     }
     memcpy((char*)ptr + pos, nptr, size);
     return 0;
@@ -126,6 +152,7 @@ void BinaryNode::append(const void* nptr, size_t size) {
     }
     memcpy((char*)ptr + len, nptr, size);
     len += size;
+    qore_sb_binary_resize_check(this, len - size, len);
 }
 
 void BinaryNode::append(const BinaryNode* b) {
@@ -147,9 +174,14 @@ void BinaryNode::prepend(const void* nptr, size_t size) {
     // copy new memory to beginning
     memcpy((char*)ptr, nptr, size);
     len += size;
+    qore_sb_binary_resize_check(this, len - size, len);
 }
 
 void* BinaryNode::giveBuffer() {
+    // the buffer leaves the node, and with it its sandbox charge
+    if (ptr) {
+        qore_sb_binary_free_check(this, len);
+    }
     void* p = ptr;
     ptr = nullptr;
     len = 0;
@@ -203,11 +235,14 @@ const char *BinaryNode::getTypeName() const {
 
 int BinaryNode::preallocate(size_t size) {
     //printd(5, "BinaryNode::preallocate(%zu) this: %p ptr: %p len: %zu\n", size, this, ptr, len);
+    size_t old_len = len;
     ptr = q_realloc(ptr, size);
     if (ptr) {
         len = size;
+        qore_sb_binary_resize_check(this, old_len, size);
         return 0;
     }
+    qore_sb_binary_free_check(this, old_len);
     len = 0;
     return -1;
 }
@@ -323,7 +358,11 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* 
     memcpy((char*)ptr + offset, data, data_len);
 
     // calculate new length
+    size_t old_len = len;
     len = len - length + data_len;
+    if (len > old_len) {
+        qore_sb_binary_resize_check(this, old_len, len);
+    }
 }
 
 int BinaryNode::substr(BinaryNode& b, qore_offset_t offset) const {

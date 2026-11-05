@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    WebSocketHandler::messageReceived() per-message hook test.  The hook is called once for each
+    inbound text and binary message, before the connection's gotMessage(), inside the handler's
+    saveThreadLocalData() / restoreThreadLocalData() bracket; an exception from it drops the message
+    and does not close the connection.  Tested over HTTP/1.1 (ws://) and HTTP/2 (wss://).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketMessageReceivedTest
+
+#! the connection records each message delivered to it
+class HookWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        cast<HookWsHandler>(handler).record("got", msg);
+    }
+
+    gotMessage(binary msg) {
+        cast<HookWsHandler>(handler).record("got", msg);
+    }
+}
+
+#! the handler records the hook calls; the messages "THROW" and "REFUSE" make the hook fail or stop the connection
+class HookWsHandler inherits WebSocketHandler {
+    public {
+        #! the events in the order they happened
+        Queue events();
+    }
+
+    private {
+        Mutex lck();
+        #! TIDs of the threads that are inside the saveThreadLocalData() / restoreThreadLocalData() bracket
+        hash<string, bool> in_bracket;
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new HookWsConnection(self);
+    }
+
+    *hash<auto> saveThreadLocalData() {
+        AutoLock al(lck);
+        in_bracket{gettid().toString()} = True;
+        return {"tid": gettid()};
+    }
+
+    restoreThreadLocalData(*hash<auto> data) {
+        AutoLock al(lck);
+        remove in_bracket{data.tid.toString()};
+    }
+
+    record(string what, data msg) {
+        bool bracket;
+        {
+            AutoLock al(lck);
+            bracket = in_bracket{gettid().toString()} ?? False;
+        }
+        events.push({"what": what, "msg": msg, "bracket": bracket});
+    }
+
+    messageReceived(WebSocketConnection conn, data msg) {
+        record("hook", msg);
+        if (msg === "THROW") {
+            throw "HOOK-ERROR", "the hook refuses the message";
+        }
+        if (msg === "REFUSE") {
+            conn.stop();
+            throw "HOOK-REFUSED", "the connection is refused";
+        }
+    }
+}
+
+#! a handler that does not override the hook
+class PlainWsHandler inherits WebSocketHandler {
+    public {
+        Queue events();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new PlainWsConnection(self);
+    }
+}
+
+class PlainWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        cast<PlainWsHandler>(handler).events.push(msg);
+    }
+}
+
+class WebSocketMessageReceivedTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    private {
+        Logger mLogger;
+    }
+
+    constructor() : Test("WebSocketMessageReceivedTest", "1.0") {
+        addTestCase("HTTP/1.1 hook tests", \http1Tests());
+        addTestCase("HTTP/2 hook tests", \http2Tests());
+        addTestCase("default hook does nothing", \defaultHookTest());
+        mLogger = new Logger("ws-message-received-test", LoggerLevel::getLevelError());
+        mLogger.addAppender(new StdoutAppender());
+        set_return_value(main());
+    }
+
+    http1Tests() {
+        runHookTests(False);
+    }
+
+    http2Tests() {
+        runHookTests(True);
+    }
+
+    private HttpServer startServer(AbstractHttpSocketHandler handler, bool tls, reference<int> port) {
+        HttpServer hs(<HttpServerOptionInfo>{"logger": mLogger, "debug": True});
+        hs.setDefaultHandler("ws-handler", handler);
+        hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
+        if (tls) {
+            lopts.cert = new SSLCertificate(TestCertificates::CertPem);
+            lopts.key = new SSLPrivateKey(TestCertificates::KeyPem);
+        }
+        port = hs.addListener(lopts).port;
+        hs.waitForAsyncIo();
+        return hs;
+    }
+
+    private runHookTests(bool h2) {
+        HookWsHandler h({"logger": mLogger});
+        int port;
+        HttpServer hs = startServer(h, h2, \port);
+        on_exit hs.stop();
+
+        Queue closed();
+        hash<auto> copts = {
+            "url": (h2 ? "wss" : "ws") + "://localhost:" + port,
+            "logger": mLogger,
+            "timeout": 30000,
+        };
+        if (h2) {
+            copts += {"http_version": "2.0", "ssl_verify_cert": False};
+        }
+        WebSocketClient wsc(sub (*data msg) { if (!exists msg) { closed.push(True); } }, copts);
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        # a text message: the hook is called once, before gotMessage(), inside the thread-data bracket
+        wsc.send("text-1");
+        hash<auto> e = h.events.get(Timeout);
+        assertEq("hook", e.what, "hook runs first for a text message");
+        assertEq("text-1", e.msg);
+        assertTrue(e.bracket, "hook runs inside saveThreadLocalData()/restoreThreadLocalData()");
+        e = h.events.get(Timeout);
+        assertEq("got", e.what, "gotMessage() runs after the hook");
+        assertEq("text-1", e.msg);
+        assertTrue(e.bracket, "gotMessage() runs in the same bracket");
+
+        # a binary message arrives as binary
+        binary b = binary("\x01\x02\x03");
+        wsc.send(b);
+        e = h.events.get(Timeout);
+        assertEq("hook", e.what, "hook runs first for a binary message");
+        assertEq(Type::Binary, e.msg.type());
+        assertEq(b, e.msg);
+        e = h.events.get(Timeout);
+        assertEq("got", e.what);
+        assertEq(b, e.msg);
+
+        # an exception from the hook drops the message but does not close the connection
+        wsc.send("THROW");
+        e = h.events.get(Timeout);
+        assertEq("hook", e.what);
+        assertEq("THROW", e.msg);
+        wsc.send("after-throw");
+        e = h.events.get(Timeout);
+        assertEq("hook", e.what, "the next message still reaches the hook");
+        assertEq("after-throw", e.msg);
+        e = h.events.get(Timeout);
+        assertEq("got", e.what, "the next message is delivered; the THROW message was not");
+        assertEq("after-throw", e.msg);
+        assertEq(0, h.events.size(), "no further events: THROW was never delivered to gotMessage()");
+
+        # the hook can refuse the connection by stopping it; the message is then not delivered either
+        wsc.send("REFUSE");
+        e = h.events.get(Timeout);
+        assertEq("hook", e.what);
+        assertEq("REFUSE", e.msg);
+        assertTrue(closed.get(Timeout), "the connection was closed by the hook");
+        assertEq(0, h.events.size(), "the refused message was not delivered to gotMessage()");
+    }
+
+    defaultHookTest() {
+        PlainWsHandler h({"logger": mLogger});
+        int port;
+        HttpServer hs = startServer(h, False, \port);
+        on_exit hs.stop();
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + port, "logger": mLogger});
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        wsc.send("plain");
+        assertEq("plain", h.events.get(Timeout), "a handler that does not override the hook delivers as before");
+    }
+}

@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/ql_list.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreSandboxMemory.h"
 
 ResolvedCallReferenceNode* getCallReference(const QoreString* str, ExceptionSink* xsink) {
    // ensure string is in default encoding
@@ -68,6 +69,16 @@ QoreListNode* range_intern(int64 start, int64 stop, int64 step, ExceptionSink* x
     }
 
     bool broken_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_RANGE);
+    // a large range is checked against the sandbox memory limit before it is built
+    {
+        uint64_t span = start < stop ? static_cast<uint64_t>(stop) - static_cast<uint64_t>(start)
+            : static_cast<uint64_t>(start) - static_cast<uint64_t>(stop);
+        uint64_t count = span / static_cast<uint64_t>(step) + 1;
+        size_t bytes = count > SIZE_MAX / sizeof(QoreValue) ? SIZE_MAX : count * sizeof(QoreValue);
+        if (qore_sb_check_alloc(bytes, xsink, "range()")) {
+            return nullptr;
+        }
+    }
     ReferenceHolder<QoreListNode> l(new QoreListNode(bigIntTypeInfo), xsink);
     if (start < stop) {
         if (broken_range) {

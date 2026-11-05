@@ -5334,6 +5334,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     // SSL-buffered data within one extra event loop pass.
     std::unordered_set<std::string> ssl_deferred_hashes;
 
+    // the events of each poll; kept from one iteration to the next, so that a poll does not allocate them
+    std::vector<QoreEventInfo> poll_events;
+
     while (true) {
         // Process commands
         if (processCommands(t, xsink)) {
@@ -6583,8 +6586,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         ASYNC_IO_TRACE("poll: timeout_ms=%d deadline=%lld registered_fds=%d cache_size=%d\n",
             timeout_ms, (long long)poll_deadline_us,
             (int)t.registered_fds.size(), (int)t.cache.size());
-        std::vector<QoreEventInfo> events;
-        int count = t.loop->poll(events, timeout_ms, xsink);
+        int count = t.loop->poll(poll_events, timeout_ms, xsink);
         if (*xsink) {
             QoreStringValueHelper err(xsink->getExceptionErr());
             QoreStringValueHelper desc(xsink->getExceptionDesc());
@@ -6617,10 +6619,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         if (count > 0) {
             bool has_timer_events = false;
             for (int i = 0; i < count; ++i) {
-                if (events[i].events & QORE_EV_TIMER) {
+                if (poll_events[i].events & QORE_EV_TIMER) {
                     has_timer_events = true;
 #if defined(__linux__) && defined(HAVE_IO_URING)
-                } else if (events[i].events & QORE_EV_IOURING) {
+                } else if (poll_events[i].events & QORE_EV_IOURING) {
                     // io_uring completions — I/O thread only
                     QoreIoUring* uring = t.loop->getIoUring();
                     if (uring) {
@@ -6659,17 +6661,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         }
                     }
 #endif
-                } else if (events[i].fd >= 0) {
+                } else if (poll_events[i].fd >= 0) {
                     // each event is for one registration of the descriptor (I/O thread only, no lock): an
                     // operation's extra fd, or a socket
-                    int event_mask = events[i].events & (QORE_EV_READ | QORE_EV_WRITE | QORE_EV_ERROR);
-                    uint64_t key = events[i].key;
+                    int event_mask = poll_events[i].events & (QORE_EV_READ | QORE_EV_WRITE | QORE_EV_ERROR);
+                    uint64_t key = poll_events[i].key;
                     if (key & ExtraRegKeyBit) {
                         uint64_t op_id = key & ~ExtraRegKeyBit;
                         if (t.cache.findId(op_id)) {
                             ready_key_events[op_id] |= event_mask;
                         } else {
-                            removeOrphanRegistration(t, events[i].fd, key);
+                            removeOrphanRegistration(t, poll_events[i].fd, key);
                         }
                     } else if (key) {
                         // key 0 is the thread's notifier (QoreEventLoop::add()); the keys of sockets start at 1
@@ -6677,7 +6679,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         if (hit != t.key_hashes.end() && socketHasOperation(t, hit->second)) {
                             ready_socket_events[hit->second] |= event_mask;
                         } else {
-                            removeOrphanRegistration(t, events[i].fd, key);
+                            removeOrphanRegistration(t, poll_events[i].fd, key);
                         }
                     }
                 }
@@ -6686,8 +6688,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             if (has_timer_events) {
                 AutoLocker al(m);
                 for (int i = 0; i < count; ++i) {
-                    if (events[i].events & QORE_EV_TIMER) {
-                        int64_t tid_val = events[i].timer_id;
+                    if (poll_events[i].events & QORE_EV_TIMER) {
+                        int64_t tid_val = poll_events[i].timer_id;
                         auto it = timer_info_map.find(tid_val);
                         if (it != timer_info_map.end()) {
                             timer_events.push_back({tid_val, it->second.udata, it->second.owner,

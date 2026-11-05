@@ -306,6 +306,19 @@ loop.removeRegistration(fd, op_key, xsink);
     DLLLOCAL void dbgSetBeforeRemove(std::function<void(int)> hook) {
         dbg_before_remove = std::move(hook);
     }
+
+    //! Debug-only: the storage of the buffer that poll() reads the system's events into; see poll_buf
+    /** Lets a test check that a poll reuses the buffer instead of allocating one; see
+        ut_event_loop_poll_buffer_reuse() in the C++ unit tests.
+    */
+    DLLLOCAL const void* dbgPollBufferData() const {
+        return poll_buf.data();
+    }
+
+    //! Debug-only: the number of entries of the buffer that poll() reads the system's events into
+    DLLLOCAL size_t dbgPollBufferSize() const {
+        return poll_buf.size();
+    }
 #endif
 
 private:
@@ -348,6 +361,31 @@ private:
     //! Scratch buffer for expandRegistrations()
     std::vector<QoreEventInfo> expand_buf;
 
+    //! The buffer that poll() reads the system's events into, kept from one poll to the next
+    /** A poll that allocated and cleared its buffer, and a hash table to combine the events of each descriptor, cost
+        an idle I/O thread more than its wait (issue: qorus#820); the buffer is now only resized when the number of
+        registrations needs a larger one, or is far smaller than it (see sizePollBuffer())
+    */
+#ifdef DARWIN
+    std::vector<struct kevent> poll_buf;
+    //! The events of the named pipes of a poll, kept from one poll to the next; see waitWithFifos()
+    std::vector<QoreEventInfo> fifo_events_buf;
+    //! The descriptors that waitWithFifos() waits for, kept from one poll to the next
+    std::vector<struct pollfd> fifo_pfds_buf;
+#elif defined(__linux__)
+    std::vector<struct epoll_event> poll_buf;
+#else
+    std::vector<struct pollfd> poll_buf;
+#endif
+
+    //! The smallest size that @ref poll_buf is given or shrunk to
+    static constexpr size_t POLL_BUF_MIN = 64;
+
+    //! Sizes @ref poll_buf for @p needed entries: grows it when it is too small, and shrinks it when it is far larger
+    /** @return 0 for success, -1 if memory cannot be allocated (exception raised)
+    */
+    DLLLOCAL int sizePollBuffer(size_t needed, ExceptionSink* xsink);
+
     //! Timer entry for the sorted timer set
     struct TimerEntry {
         int64_t deadline_us;    //!< Absolute deadline (usec since epoch)
@@ -387,12 +425,11 @@ private:
     size_t fifo_count = 0;
 
     //! Waits up to @p wait_us microseconds (-1 for no limit) for the kqueue and the named pipes
-    /** @return the number of kqueue events in @p kevents, or -1 on error (exception raised); the events of the named
-        pipes are appended to @p fifo_events, and a named pipe found closed is dropped, as kqueue drops a closed
+    /** @return the number of kqueue events in @ref poll_buf, or -1 on error (exception raised); the events of the
+        named pipes are in @ref fifo_events_buf, and a named pipe found closed is dropped, as kqueue drops a closed
         descriptor
     */
-    DLLLOCAL int waitWithFifos(int64_t wait_us, std::vector<struct kevent>& kevents,
-            std::vector<QoreEventInfo>& fifo_events, ExceptionSink* xsink);
+    DLLLOCAL int waitWithFifos(int64_t wait_us, ExceptionSink* xsink);
 #elif defined(__linux__)
     int event_fd = -1;  //!< epoll file descriptor
 #if defined(HAVE_IO_URING)

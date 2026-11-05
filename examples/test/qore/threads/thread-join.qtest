@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Tests for thread_join(): waiting until a background thread has left the thread list.  The tests do not sleep or
+    retry: every wait is on thread_join() itself or on a Queue/Counter that is signalled explicitly.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class ThreadJoinTest
+
+public class ThreadJoinTest inherits QUnit::Test {
+    constructor() : Test("ThreadJoinTest", "1.0") {
+        addTestCase("joined thread is gone", \testJoinedThreadIsGone());
+        addTestCase("join an ended thread", \testJoinEndedThread());
+        addTestCase("join an unknown TID", \testJoinUnknownTid());
+        addTestCase("join times out while the thread runs", \testJoinTimeout());
+        addTestCase("negative limit only checks", \testNegativeLimit());
+        addTestCase("relative date limit", \testDateLimit());
+        addTestCase("join self", \testJoinSelf());
+        addTestCase("many threads started and joined", \testManyThreads());
+        addTestCase("several threads join the same thread", \testMultipleJoiners());
+        addTestCase("join is cancelled", \testJoinCancelled());
+        addTestCase("join sees the end after on_exit signals", \testAfterOnExitSignal());
+        set_return_value(main());
+    }
+
+    private bool listed(int tid) {
+        return elements (select thread_list(), $1 == tid) > 0;
+    }
+
+    #! starts a thread that blocks on the queue; returns once the thread is running
+    private int startBlocked(Queue q) {
+        Queue started();
+        int tid = background sub() { started.push(1); q.get(); }();
+        started.get();
+        return tid;
+    }
+
+    testJoinedThreadIsGone() {
+        int baseline = num_threads();
+        Queue q();
+        int tid = startBlocked(q);
+        assertEq(baseline + 1, num_threads());
+        assertTrue(listed(tid), "running thread is listed");
+        q.push(1);
+        assertTrue(thread_join(tid), "join returns True");
+        assertEq(baseline, num_threads(), "num_threads() is back to its baseline");
+        assertFalse(listed(tid), "joined thread is not listed");
+    }
+
+    testJoinEndedThread() {
+        int tid = background sub() {}();
+        assertTrue(thread_join(tid));
+        # joining a thread that has already ended returns at once
+        assertTrue(thread_join(tid), "second join of an ended thread");
+        assertTrue(thread_join(tid, 1ms), "second join with a limit");
+        assertTrue(thread_join(tid, -1), "second join with a negative limit");
+    }
+
+    testJoinUnknownTid() {
+        assertTrue(thread_join(0), "TID 0 is not a running thread");
+        assertTrue(thread_join(-5), "negative TID");
+        assertTrue(thread_join(100000000), "TID beyond the maximum");
+    }
+
+    testJoinTimeout() {
+        Queue q();
+        int tid = startBlocked(q);
+        assertFalse(thread_join(tid, 50ms), "the limit expires while the thread is blocked");
+        assertFalse(thread_join(tid, 20), "an integer limit is in milliseconds");
+        assertTrue(listed(tid), "the thread is still running");
+        q.push(1);
+        assertTrue(thread_join(tid, 30s), "the thread ends before a long limit");
+    }
+
+    testNegativeLimit() {
+        Queue q();
+        int tid = background q.get();
+        assertFalse(thread_join(tid, -1), "a negative limit checks at once");
+        q.push(1);
+        assertTrue(thread_join(tid));
+    }
+
+    testDateLimit() {
+        Queue q();
+        int tid = background q.get();
+        assertFalse(thread_join(tid, 30ms), "relative date limit expires");
+        q.push(1);
+        assertTrue(thread_join(tid, 10s));
+    }
+
+    testJoinSelf() {
+        assertThrows("THREAD-JOIN-ERROR", \thread_join(), gettid());
+        # the same in a background thread
+        Queue q();
+        int tid = background sub() {
+            try {
+                thread_join(gettid());
+                q.push("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        assertEq("THREAD-JOIN-ERROR", q.get());
+        assertTrue(thread_join(tid));
+    }
+
+    testManyThreads() {
+        int baseline = num_threads();
+        # the intermittent case: the thread count must return to the baseline every time, with no waiting but join
+        for (int i = 0; i < 100; ++i) {
+            Counter c(1);
+            int tid = background sub() { on_exit c.dec(); }();
+            c.waitForZero();
+            assertTrue(thread_join(tid));
+            assertEq(baseline, num_threads(), "iteration " + i);
+        }
+        assertEq(baseline, num_threads());
+    }
+
+    testMultipleJoiners() {
+        int baseline = num_threads();
+        Queue q();
+        int target = background q.get();
+        Queue results();
+        list<int> joiners;
+        for (int i = 0; i < 4; ++i) {
+            joiners += background results.push(thread_join(target, 60s));
+        }
+        q.push(1);
+        for (int i = 0; i < 4; ++i) {
+            assertTrue(results.get(), "joiner " + i);
+        }
+        map thread_join($1), joiners;
+        assertEq(baseline, num_threads());
+    }
+
+    testJoinCancelled() {
+        Queue block();
+        int target = startBlocked(block);
+        Queue ready();
+        Queue res();
+        int joiner = background sub() {
+            ready.push(1);
+            try {
+                thread_join(target);
+                res.push("joined");
+            } catch (hash<ExceptionInfo> ex) {
+                res.push(ex.err);
+            }
+        }();
+        ready.get();
+        # a cancellation request is honored whether the joiner has blocked yet or not
+        cancel_thread(joiner);
+        assertEq("THREAD-CANCELLED", res.get());
+        assertTrue(thread_join(joiner));
+        assertTrue(listed(target), "the target is unaffected");
+        block.push(1);
+        assertTrue(thread_join(target));
+    }
+
+    testAfterOnExitSignal() {
+        # a Counter signalled from on_exit ends its wait before the thread has left the list; thread_join() does not
+        int baseline = num_threads();
+        for (int i = 0; i < 20; ++i) {
+            Counter c(1);
+            int tid = background sub() { on_exit c.dec(); }();
+            c.waitForZero();
+            thread_join(tid);
+            assertFalse(listed(tid));
+        }
+        assertEq(baseline, num_threads());
+    }
+}

@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ql_string.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
@@ -2525,6 +2526,16 @@ string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_O
 
    if (count < 0)
       return xsink->raiseException("STRMUL-ERROR", "Multiple argument has to be >= 0; value: " QLLD, count);
+
+   // the result is checked against the sandbox memory limit before it is built
+   {
+      size_t unit = str->size();
+      size_t bytes = unit && static_cast<uint64_t>(count) > SIZE_MAX / unit ? SIZE_MAX
+         : unit * static_cast<size_t>(count);
+      if (qore_sb_check_alloc(bytes, xsink, "strmul()")) {
+         return QoreValue();
+      }
+   }
 
    // the result is in the encoding of the string; the bytes of the string are repeated
    QoreStringNodeHolder ret(new QoreStringNode(str->getEncoding()));

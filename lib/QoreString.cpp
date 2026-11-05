@@ -2032,6 +2032,7 @@ QoreString::QoreString() : priv(new qore_string_private) {
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
     priv->buf = (char*)malloc(priv->allocated * sizeof(char));
+    priv->sb.sync(priv->allocated);
     priv->buf[0] = '\0';
     priv->encoding = QCS_DEFAULT;
 }
@@ -2041,6 +2042,7 @@ QoreString::QoreString(const char* str) : priv(new qore_string_private) {
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
     priv->buf = (char*)malloc(priv->allocated * sizeof(char));
+    priv->sb.sync(priv->allocated);
     if (str) {
         while (str[priv->len]) {
             priv->check_char(priv->len);
@@ -2060,6 +2062,7 @@ QoreString::QoreString(const char* str, const QoreEncoding* new_qore_encoding) :
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
     priv->buf = (char*)malloc(priv->allocated * sizeof(char));
+    priv->sb.sync(priv->allocated);
     if (str) {
         while (str[priv->len]) {
             priv->check_char(priv->len);
@@ -2077,6 +2080,7 @@ QoreString::QoreString(const char* str, const QoreEncoding* new_qore_encoding) :
 QoreString::QoreString(const std::string& str, const QoreEncoding* new_encoding) : priv(new qore_string_private) {
     priv->allocated = str.size() + 1 + STR_CLASS_BLOCK;
     priv->buf = (char*)malloc(priv->allocated * sizeof(char));
+    priv->sb.sync(priv->allocated);
     memcpy(priv->buf, str.c_str(), str.size() + 1);
     priv->len = str.size();
     priv->encoding = new_encoding;
@@ -2086,6 +2090,7 @@ QoreString::QoreString(const QoreEncoding* new_qore_encoding) : priv(new qore_st
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
     priv->buf = (char*)malloc(priv->allocated * sizeof(char));
+    priv->sb.sync(priv->allocated);
     priv->buf[0] = '\0';
     priv->encoding = new_qore_encoding;
 }
@@ -2094,6 +2099,7 @@ QoreString::QoreString(const char* str, size_t size, const QoreEncoding* new_qor
     priv->len = size;
     priv->allocated = size + STR_CLASS_EXTRA;
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     memcpy(priv->buf, str, size);
     priv->buf[size] = '\0';
     priv->encoding = new_qore_encoding;
@@ -2111,6 +2117,7 @@ QoreString::QoreString(const QoreString* str, size_t size) : priv(new qore_strin
     priv->len = size;
     priv->allocated = size + STR_CLASS_EXTRA;
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     if (size)
         memcpy(priv->buf, str->priv->effective_buf(), size);
     priv->buf[size] = '\0';
@@ -2121,6 +2128,7 @@ QoreString::QoreString(char c) : priv(new qore_string_private) {
     priv->len = 1;
     priv->allocated = STR_CLASS_BLOCK;
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     priv->buf[0] = c;
     priv->buf[1] = '\0';
     priv->encoding = QCS_DEFAULT;
@@ -2129,6 +2137,7 @@ QoreString::QoreString(char c) : priv(new qore_string_private) {
 QoreString::QoreString(int64 i) : priv(new qore_string_private) {
     priv->allocated = MAX_BIGINT_STRING_LEN + 1;
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     priv->len = ::snprintf(priv->buf, MAX_BIGINT_STRING_LEN, QLLD, i);
     // terminate string just in case
     priv->buf[MAX_BIGINT_STRING_LEN] = '\0';
@@ -2138,6 +2147,7 @@ QoreString::QoreString(int64 i) : priv(new qore_string_private) {
 QoreString::QoreString(bool b) : priv(new qore_string_private) {
     priv->allocated = 2;
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     priv->buf[0] = b ? '1' : '0';
     priv->buf[1] = 0;
     priv->len = 1;
@@ -2147,6 +2157,7 @@ QoreString::QoreString(bool b) : priv(new qore_string_private) {
 QoreString::QoreString(double f) : priv(new qore_string_private) {
     priv->allocated = MAX_FLOAT_STRING_LEN + 1;
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     priv->len = ::snprintf(priv->buf, MAX_FLOAT_STRING_LEN, "%.9g", f);
     // snprintf() always terminates the string
     priv->encoding = QCS_DEFAULT;
@@ -2162,6 +2173,7 @@ QoreString::QoreString(const DateTime *d) : QoreString() {
 QoreString::QoreString(const BinaryNode *b) : priv(new qore_string_private) {
     priv->allocated = b->size() + (b->size() * 4) / 10 + 10; // estimate for base64 encoding
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     priv->buf[0] = '\0';
     priv->len = 0;
     priv->encoding = QCS_DEFAULT;
@@ -2171,6 +2183,7 @@ QoreString::QoreString(const BinaryNode *b) : priv(new qore_string_private) {
 QoreString::QoreString(const BinaryNode *b, size_t maxlinelen) : priv(new qore_string_private) {
     priv->allocated = b->size() + (b->size() * 4) / 10 + 10; // estimate for base64 encoding
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->sb.sync(priv->allocated);
     priv->buf[0] = '\0';
     priv->len = 0;
     priv->encoding = QCS_DEFAULT;
@@ -2182,6 +2195,7 @@ QoreString::QoreString(char* nbuf, size_t nlen, size_t nallocated, const QoreEnc
     priv->buf = nbuf;
     priv->len = nlen;
     priv->allocated = nallocated;
+    priv->sb.sync(priv->allocated);
     if (nallocated == nlen) {
         priv->check_char(nlen);
         priv->buf[nlen] = '\0';
@@ -2520,6 +2534,7 @@ void QoreString::take(char* str) {
         priv->allocated = 0;
         priv->len = 0;
     }
+    priv->sb.sync(priv->allocated);
 }
 
 void QoreString::take(char* str, const QoreEncoding* new_qore_encoding) {
@@ -2538,6 +2553,7 @@ void QoreString::take(char* str, size_t size) {
     priv->buf = str;
     priv->len = size;
     priv->allocated = size + 1;
+    priv->sb.sync(priv->allocated);
 }
 
 void QoreString::take(char* str, size_t size, const QoreEncoding* enc) {
@@ -2550,6 +2566,7 @@ void QoreString::take(char* str, size_t size, const QoreEncoding* enc) {
     priv->buf = str;
     priv->len = size;
     priv->allocated = size + 1;
+    priv->sb.sync(priv->allocated);
 
     priv->encoding = enc;
 }
@@ -2564,6 +2581,7 @@ void QoreString::takeAndTerminate(char* str, size_t size) {
     priv->buf = str;
     priv->len = size;
     priv->allocated = size + 1;
+    priv->sb.sync(priv->allocated);
     priv->check_char(size);
     priv->buf[size] = '\0';
 }
@@ -2585,6 +2603,8 @@ char* QoreString::giveBuffer() {
         priv->materialize();
     }
     char* rv = priv->buf;
+    // the buffer leaves the string, and with it its sandbox charge
+    priv->sb.release();
     priv->buf = 0;
     priv->len = 0;
     priv->allocated = 0;
@@ -2681,6 +2701,7 @@ void QoreString::set(char* nbuf, size_t nlen, size_t nallocated, const QoreEncod
     priv->buf = nbuf;
     priv->len = nlen;
     priv->allocated = nallocated;
+    priv->sb.sync(priv->allocated);
     if (nallocated == nlen) {
         priv->check_char(nlen);
         priv->buf[nlen] = '\0';
@@ -2934,6 +2955,7 @@ int QoreString::regexSubstInPlace(QoreString& match, QoreString& subst, int opts
     priv->buf = rv->giveBuffer();
     priv->len = len;
     priv->allocated = allocated;
+    priv->sb.sync(priv->allocated);
     priv->encoding = enc;
     return 0;
 }
@@ -3752,6 +3774,7 @@ void qore_string_private::materialize() {
     }
     buf[len] = '\0';
     allocated = new_alloc;
+    sb.sync(allocated);
     dec_view_parent();
 }
 
