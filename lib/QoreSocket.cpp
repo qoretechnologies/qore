@@ -18952,7 +18952,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink);
+            int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
             if (*xsink || idle_rc < 0) {
                 phase = Phase::Closed;
                 qore_socket_close_from_controller(sock->priv->socket);
@@ -19534,7 +19534,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                     set_non_block = false;
                     return nullptr;
                 }
-                int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink);
+                int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
                 if (*xsink || idle_rc < 0) {
                     phase = Phase::Closed;
                     qore_socket_close_from_controller(sock->priv->socket);

@@ -5476,12 +5476,12 @@ int QoreSocketObject::checkIdleData(ExceptionSink* xsink) {
     return qore_socket_object_exec_check_idle_data(this, xsink);
 }
 
-int QoreSocketObject::checkIdleDataForAsyncPoll(ExceptionSink* xsink) {
+int QoreSocketObject::checkIdleDataForAsyncPoll(ExceptionSink* xsink, bool buffered_is_data) {
     AutoLocker al(priv->m);
-    return checkIdleDataForAsyncPollLocked(xsink);
+    return checkIdleDataForAsyncPollLocked(xsink, buffered_is_data);
 }
 
-int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
+int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data) {
     assert(priv->m.trylock());
 
     qore_socket_private* p = qore_socket_private::get(*priv->socket);
@@ -5489,8 +5489,9 @@ int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
         return -1;
     }
     // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
-    // that sent its next request before the response to the previous one (pipelining) has it here
-    if (p->buflen > 0) {
+    // that sent its next request before the response to the previous one (pipelining) has it here; for a server only
+    // (an HTTP client may have bytes there that it does not use, such as a body that a server sent to a HEAD request)
+    if (buffered_is_data && p->buflen > 0) {
         return 1;
     }
     if (p->ssl) {
