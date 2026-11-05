@@ -349,6 +349,8 @@ m.mapData(input1);           # output record hash date_begin = start_date = time
 
 
     @section mapperv1_8 Mapper v1.8
+    - a mapper field type that refuses a missing value raises \c TYPE-VALUE-ERROR instead of \c RUNTIME-TYPE-ERROR, as
+      the types of the DataProvider module do
     - fixed the documented \c trunc_all option (see @ref mapperoptions), which the mapper rejected with \c MAP-ERROR
     - fixed @ref Mapper::Mapper::mapBulk() "Mapper::mapBulk()" to accept a record set whose values all have the same
       type, such as a literal <tt>{"a": ("x", "y")}</tt>; adding a constant value from the second argument raised
@@ -3372,7 +3374,7 @@ public class AnythingDataType inherits AbstractDataProviderType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to the type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to the type
     */
     auto acceptsValue(auto value) {
         if (value === "" && options."string.empty_to_nothing") {
@@ -3440,11 +3442,11 @@ public class SomethingDataType inherits AnythingDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to the type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to the type
     */
     auto acceptsValue(auto value) {
         if (!exists value) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y cannot accept \"nothing\"", getName());
+            throw "TYPE-VALUE-ERROR", sprintf("type %y cannot accept \"nothing\"", getName());
         }
         return value;
     }

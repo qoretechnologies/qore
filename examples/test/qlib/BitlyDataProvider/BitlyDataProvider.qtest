@@ -286,7 +286,7 @@ public class BitlyDataProviderTest inherits QUnit::Test {
         assertEq("https://example.com/p", lu.acceptsValue("https://example.com/p"),
             "an absolute long_url is accepted");
         # intentional rejection: Bitly cannot shorten a scheme-less value
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             lu.acceptsValue("www.example.com");
         }, NOTHING, "a scheme-less long_url is rejected");
 
@@ -294,7 +294,7 @@ public class BitlyDataProviderTest inherits QUnit::Test {
         AbstractDataProviderType dom = req.getFields().domain.getType();
         assertEq("hostname", dom.getTag("qore.external_name"), "the domain request field is a hostname");
         assertEq("bit.ly", dom.acceptsValue("bit.ly"), "a bare short domain is accepted");
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             dom.acceptsValue("https://bit.ly");
         }, NOTHING, "a scheme-bearing value is rejected for a bare-domain field");
     }

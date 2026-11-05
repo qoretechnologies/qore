@@ -341,7 +341,7 @@ class ExpressionTypesTest inherits QUnit::Test {
         assertEq(Type::Int, number.acceptsValue(1).type());
         assertEq(Type::Float, number.acceptsValue(1.5).type());
         assertEq(Type::Number, number.acceptsValue(1.5n).type());
-        assertThrows("RUNTIME-TYPE-ERROR", \number.acceptsValue(), ({"a": 1},));
+        assertThrows("TYPE-VALUE-ERROR", \number.acceptsValue(), ({"a": 1},));
 
         AbstractDataProviderType data = DataProviderSignatureDataType.type;
         assertEq("data", data.getName());

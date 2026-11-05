@@ -47,13 +47,21 @@ public class HashDeclDataType inherits QoreDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         if (!exists value) {
             return QoreDataType::acceptsValue(value);
         }
-        return hd.doCast(value);
+        try {
+            return hd.doCast(value);
+        } catch (hash<ExceptionInfo> ex) {
+            # the only thing checked here is the value given by the caller; see QoreDataType::acceptsValue()
+            if (ex.err != "RUNTIME-TYPE-ERROR") {
+                rethrow;
+            }
+            rethrow "TYPE-VALUE-ERROR", ex.desc, ex.arg;
+        }
     }
 
     #! Returns True if this type can be assigned from values of the argument type

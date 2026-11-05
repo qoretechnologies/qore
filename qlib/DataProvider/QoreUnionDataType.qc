@@ -322,7 +322,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
     #! Returns the value if the value can be assigned to any alternative type
     /** @param value value to validate
         @return the value accepted by the first matching alternative
-        @throw RUNTIME-TYPE-ERROR no alternative accepts \a value
+        @throw TYPE-VALUE-ERROR no alternative accepts \a value
         @since DataProvider 3.5.1
     */
     auto acceptsValue(auto value) {
@@ -332,12 +332,12 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
             }
             # the discriminator selects the only alternative that can accept the value
             if (value.typeCode() != NT_HASH || value{constraints.discriminator}.typeCode() != NT_STRING) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("type %y expects a hash with string discriminator %y",
+                throw "TYPE-VALUE-ERROR", sprintf("type %y expects a hash with string discriminator %y",
                     getName(), constraints.discriminator);
             }
             *int index = constraints.discriminator_mapping{value{constraints.discriminator}};
             if (!exists index) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept discriminator %y value %y; expected "
+                throw "TYPE-VALUE-ERROR", sprintf("type %y does not accept discriminator %y value %y; expected "
                     "one of %y", getName(), constraints.discriminator, value{constraints.discriminator},
                     keys constraints.discriminator_mapping);
             }
@@ -360,7 +360,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         }
 
         string value_type = exists value ? value.type() : "nothing";
-        throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match union type %y%s",
+        throw "TYPE-VALUE-ERROR", sprintf("value of type %y does not match union type %y%s",
             value_type, getName(), last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
     }
 
@@ -392,7 +392,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
 
         @return the value as accepted by the only alternative accepting it
 
-        @throw RUNTIME-TYPE-ERROR no alternative or more than one alternative accepts the value
+        @throw TYPE-VALUE-ERROR no alternative or more than one alternative accepts the value
 
         @since DataProvider 3.8
     */
@@ -423,10 +423,10 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         }
         string value_type = exists value ? value.type() : "nothing";
         if (matched) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y matches more than one alternative of union type %y, "
+            throw "TYPE-VALUE-ERROR", sprintf("value of type %y matches more than one alternative of union type %y, "
                 "which accepts exactly one: %y", value_type, getName(), matched);
         }
-        throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match union type %y%s", value_type, getName(),
+        throw "TYPE-VALUE-ERROR", sprintf("value of type %y does not match union type %y%s", value_type, getName(),
             last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
     }
 

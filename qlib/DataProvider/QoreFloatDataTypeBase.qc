@@ -51,7 +51,7 @@ public class QoreFloatDataTypeBase inherits QoreDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         # try to convert from a string
@@ -63,7 +63,7 @@ public class QoreFloatDataTypeBase inherits QoreDataType {
                 if (options."number.format") {
                     value = parse_float(value, options."number.format");
                 } else if (value !~ /^([-+])?[0-9]+(\.[0-9]+)?+$/) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("value %y cannot be parsed by type %y; the input data "
+                    throw "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y; the input data "
                         "contains non-numeric text", value, getName());
                 } else {
                     value = float(value);

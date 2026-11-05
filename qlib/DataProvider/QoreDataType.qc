@@ -192,7 +192,7 @@ public class QoreDataType inherits AbstractDataProviderType {
     #! creates the type
     /** @param info the type definition
 
-        @throw RUNTIME-TYPE-ERROR an allowed value or element choice in \a info is a string with a NUL character,
+        @throw TYPE-VALUE-ERROR an allowed value or element choice in \a info is a string with a NUL character,
         which cannot be a key of the set of allowed values
     */
     constructor(hash<QoreTypeInfo> info) : AbstractDataProviderType(info.path) {
@@ -328,18 +328,27 @@ public class QoreDataType inherits AbstractDataProviderType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         if (blacklist_type_hash && blacklist_type_hash{value.typeCode()}) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
+            throw "TYPE-VALUE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
         # Only use default value when value is truly missing, not when NULL is explicitly passed
         if (!exists value && exists default_value) {
             return default_value;
         }
-        value = type.acceptsValue(value);
+        try {
+            value = type.acceptsValue(value);
+        } catch (hash<ExceptionInfo> ex) {
+            # the only thing checked here is the value given by the caller, so this is a refused value and not a type
+            # error in the code; see AbstractDataProviderType::getValueErrorCode()
+            if (ex.err != "RUNTIME-TYPE-ERROR") {
+                rethrow;
+            }
+            rethrow "TYPE-VALUE-ERROR", ex.desc, ex.arg;
+        }
         string name = type.getName();
         # no value, or null, which an optional type accepts, is not one of its choices
         if (allowed_values && !allowed_values_creatable && exists value && value.typeCode() != NT_NULL) {

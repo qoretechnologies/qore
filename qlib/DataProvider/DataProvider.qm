@@ -1631,6 +1631,15 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_11 DataProvider v3.11
+    - fixed @ref DataProvider::FileDataType::acceptsValue() "FileDataType::acceptsValue()" for a hash holding only
+      binary values, such as a literal <tt>{"content": binary("x")}</tt>: encoding the content raised
+      \c RUNTIME-TYPE-ERROR instead of checking the value
+    - a value that a data type refuses is reported with \c TYPE-VALUE-ERROR in every data type, and an option value
+      with \c OPTION-VALUE-ERROR, instead of \c RUNTIME-TYPE-ERROR, so that a caller's data can be told apart from a
+      type error in the code; \c RUNTIME-TYPE-ERROR from a type now means that the check itself failed, and a field
+      of a hash type reports such an error, \c RUNTIME-OVERLOAD-ERROR and \c STACK-LIMIT-EXCEEDED with their own code
+      instead of as a refused value (@ref DataProvider::AbstractDataProviderType::getValueErrorCode()
+      "AbstractDataProviderType::getValueErrorCode()")
     - added catalog change listeners
       (@ref DataProvider::DataProviderActionCatalog::addCatalogChangeListener() "DataProviderActionCatalog::addCatalogChangeListener()",
       @ref DataProvider::DataProviderCatalogChangeListener "DataProviderCatalogChangeListener"): a listener is

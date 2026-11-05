@@ -605,7 +605,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         foreach hash<auto> invalid in ({"stream": True}, {"thinking": {"type": "bogus"}}, {"seed": 42},
             {"user": "obsolete"}, {"frequency_penalty": 1}, {"response_format": {"type": "json_schema"}},
             {"messages": ({"role": "invalid", "content": "x"},)}, {"messages": "text"}) {
-            assertThrows("RUNTIME-TYPE-ERROR", sub () { chat.doRequest(chatRequest() + invalid); });
+            assertThrows("TYPE-VALUE-ERROR", sub () { chat.doRequest(chatRequest() + invalid); });
         }
         foreach hash<auto> part in ({"type": "text"}, {"type": "image_url"},
             {"type": "file"}, {"type": "file", "file_id": "file-a", "file_data": "data:image/png;base64,abc"}) {

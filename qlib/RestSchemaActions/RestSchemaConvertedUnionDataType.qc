@@ -48,7 +48,7 @@ public class RestSchemaConvertedUnionDataType inherits QoreUnionDataType {
     #! Validates the action-facing value and its wire representation
     /** @param value the supplied action value
         @return the validated action value
-        @throw RUNTIME-TYPE-ERROR the action value or its wire representation violates the contract
+        @throw TYPE-VALUE-ERROR the action value or its wire representation violates the contract
         @throw REST-SCHEMA-CODEC-ERROR a codec cannot convert the value
     */
     auto acceptsValue(auto value) {

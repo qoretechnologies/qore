@@ -144,6 +144,8 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - a value that a schema type refuses is reported with \c TYPE-VALUE-ERROR instead of \c RUNTIME-TYPE-ERROR, as by
+      the types of the DataProvider module
     - a path that differs from another only by a trailing slash, such as Pipedrive's \c /oauth/token and
       \c /oauth/token/, is a path of its own instead of making the schema fail to load with
       \c INVALID-PATH-COMPONENT; a URI path with or without the trailing slash still matches the path declared only
@@ -4071,14 +4073,14 @@ public class SwaggerHashDataType inherits HashDataType {
 
         @return the value as the type accepts it
 
-        @throw RUNTIME-TYPE-ERROR the value has a read-only property, or is not accepted by the type
+        @throw TYPE-VALUE-ERROR the value has a read-only property, or is not accepted by the type
     */
     auto acceptsValue(auto value) {
         if (value.typeCode() == NT_HASH) {
             foreach hash<auto> i in (response_fields) {
                 string name = i.field.getName();
                 if (value.hasKey(name)) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("Type %y: property %y is read-only and cannot be included "
+                    throw "TYPE-VALUE-ERROR", sprintf("Type %y: property %y is read-only and cannot be included "
                         "in a request", getName(), name);
                 }
             }

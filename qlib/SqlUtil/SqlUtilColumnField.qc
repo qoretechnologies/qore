@@ -47,7 +47,7 @@ public class SqlUtilColumnField inherits QoreDataField {
             # check that the value can be assigned to the type
             QoreDataField::setDefaultValue(default_value);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "RUNTIME-TYPE-ERROR") {
+            if (ex.err != "TYPE-VALUE-ERROR") {
                 rethrow;
             }
         }

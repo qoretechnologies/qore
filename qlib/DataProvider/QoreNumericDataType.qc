@@ -48,7 +48,7 @@ public class QoreNumericDataType inherits QoreDataType {
         @return the value unchanged if it is an integer, a float or a number; any other value is accepted or
         rejected as the \c number type accepts or rejects it
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         switch (value.typeCode()) {

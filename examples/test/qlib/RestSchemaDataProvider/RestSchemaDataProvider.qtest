@@ -91,7 +91,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
                     # Skip - external API is unavailable
                 } else if (ex.err == "SCHEMA-VALIDATION-ERROR") {
                     assertTrue(ex.desc =~ /enumerated values.*x/);
-                } else if (ex.err == "RUNTIME-TYPE-ERROR") {
+                } else if (ex.err == "TYPE-VALUE-ERROR") {
                     # the request type enforces the schema's enumeration before the request is sent
                     assertTrue(ex.desc =~ /does not accept value "x"; accepted values:/);
                 } else {
@@ -573,14 +573,14 @@ paths:
 
             # Invalid data - matches neither (missing required fields)
             hash birdData = {"petType": "bird"};
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \bodyType.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any oneOf schema", \bodyType.acceptsValue(),
                 birdData);
 
             # Invalid data - matches neither: strict schema validation rejects "meow" as an undeclared property of
             # the dog schema and "bark" as an undeclared property of the cat schema, so a hybrid object satisfies
             # neither alternative
             hash hybridData = {"petType": "hybrid", "bark": True, "meow": True};
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \bodyType.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any oneOf schema", \bodyType.acceptsValue(),
                 hybridData);
         }
 
@@ -628,7 +628,7 @@ paths:
             # an object with only "petType" satisfies both overlapping alternatives, so oneOf must reject it as
             # matching more than one schema
             hash ambiguousData = {"petType": "ambiguous"};
-            assertThrows("RUNTIME-TYPE-ERROR", "matches multiple oneOf schemas", \bodyType.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "matches multiple oneOf schemas", \bodyType.acceptsValue(),
                 ambiguousData);
         }
 
@@ -684,12 +684,12 @@ paths:
             # Invalid data - strict schema validation rejects "id" as an undeclared property of the name schema and
             # "name" as an undeclared property of the id schema, so an object with both satisfies neither alternative
             hash bothData = {"name": "John", "id": 123};
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf schema", \bodyType.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any anyOf schema", \bodyType.acceptsValue(),
                 bothData);
 
             # Invalid data - matches neither
             hash neitherData = {"other": "value"};
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf schema", \bodyType.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any anyOf schema", \bodyType.acceptsValue(),
                 neitherData);
         }
 
@@ -785,7 +785,7 @@ paths:
 
             # Invalid data - has the forbidden property
             hash forbiddenData = {"value": "allowed", "forbidden": "not allowed"};
-            assertThrows("RUNTIME-TYPE-ERROR", "'not' schema", \bodyType.acceptsValue(), forbiddenData);
+            assertThrows("TYPE-VALUE-ERROR", "'not' schema", \bodyType.acceptsValue(), forbiddenData);
         }
 
         # Test readOnly type validation
@@ -828,7 +828,7 @@ paths:
 
             # Invalid data - readOnly field in request
             hash invalidData = {"id": 123, "name": "John"};
-            assertThrows("RUNTIME-TYPE-ERROR", "read-only", \bodyType.acceptsValue(), invalidData);
+            assertThrows("TYPE-VALUE-ERROR", "read-only", \bodyType.acceptsValue(), invalidData);
         }
 
         # Test writeOnly type validation
