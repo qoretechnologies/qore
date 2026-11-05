@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class EffectPrefix {
+    public { auto first = 0; auto second = 20; }
+    private:internal { auto delta = 17; }
+    int next(int value) {
+        ++first;
+        second--;
+        return (value * 33 + delta) & 65535;
+    }
+    setDelta(auto value) { delta = value; }
+}
+class EffectInherited inherits EffectPrefix {
+    private:internal { int delta = 91; }
+}
+class EffectReadReference {
+    public { int first = 0; int second = 20; }
+    private { reference<int> delta; }
+    constructor(reference<int> target) { delta = \target; }
+    int next(int value) {
+        ++first;
+        --second;
+        return (value * 33 + delta) & 65535;
+    }
+}
+# Reading a member before an update must not be admitted by the prefix proof.
+class EffectLate {
+    public { int first = 0; int second = 20; int delta = 17; }
+    int next(int value) { int saved = delta; ++first; --second; return (value * 33 + saved) & 65535; }
+}
+class EffectTarget { public { int number = 17; } }
+class EffectReturnInvalid {
+    public { auto first = 0; auto second = 20; auto delta = 17; }
+    int next(int value) { ++first; --second; return value + delta; }
+}
+class EffectReentryDrop {
+    public { static int drops = 0; }
+    private { auto owner; int replacement; bool fail; }
+    constructor(auto input, int replacement, bool fail) {
+        owner = input; self.replacement = replacement; self.fail = fail;
+    }
+    destructor() {
+        # Generic conversion must unlock the owner before releasing this node,
+        # and the resumed method must expose and reload its actual parameter.
+        expectEffect(1, owner.first);
+        set_local_var_value(1, "value", replacement);
+        ++EffectReentryDrop::drops;
+        if (fail) { throw "EFFECT-REENTRY", "after replacing the parameter"; }
+    }
+}
+# A body local keeps this method on the ordinary entry even with the optimization enabled.
+class EffectOrdinary {
+    public { auto first = 0; auto second = 20; int delta = 17; }
+    int next(int value) {
+        ++first;
+        --second;
+        int saved = delta;
+        return (value * 33 + saved) & 65535;
+    }
+}
+
+auto sub invokeEffect(auto receiver, int value) { return receiver.next(value); }
+sub expectEffect(auto expected, auto actual) {
+    if (expected != actual) {
+        throw "EFFECT-ENTRY-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+sub main() {
+    int target = 17;
+    foreach auto receiver in ((new EffectPrefix(), new EffectInherited(), new EffectReadReference(\target),
+            new EffectLate())) {
+        for (int i = 0; i < 80; ++i) {
+            receiver.first = 0;
+            receiver.second = 20;
+            expectEffect((i * 33 + 17) & 65535, invokeEffect(receiver, i));
+            expectEffect(1, receiver.first);
+            expectEffect(19, receiver.second);
+        }
+    }
+    EffectPrefix receiver();
+    # The first iteration publishes the companion; all later calls hit the same call site.
+    foreach auto first in ((0, 140737488355327, 140737488355328, 1152921504606846976, 0.0)) {
+        foreach auto second in ((20, -140737488355328, -140737488355329, 1152921504606846976, 20.0)) {
+            foreach auto delta in ((17, 17.0, 17n)) {
+                receiver.setDelta(delta);
+                for (int i = 0; i < 24; ++i) {
+                    receiver.first = first;
+                    receiver.second = second;
+                    expectEffect((i * 33 + 17) & 65535, invokeEffect(receiver, i));
+                    expectEffect(first + 1, receiver.first);
+                    expectEffect(second - 1, receiver.second);
+                }
+            }
+        }
+    }
+    foreach auto owner in ((new EffectPrefix(), new EffectOrdinary())) {
+        for (int i = 0; i < 8; ++i) { invokeEffect(owner, i); }
+        foreach int argument in ((1, 1152921504606846976)) {
+            foreach int replacement in ((99, 140737488355328)) {
+                foreach bool fail in ((False, True)) {
+                    for (int late = 0; late < 2; ++late) {
+                        int previous = EffectReentryDrop::drops;
+                        owner.first = late ? 0 : new EffectReentryDrop(owner, replacement, fail);
+                        owner.second = late ? new EffectReentryDrop(owner, replacement, fail) : 20;
+                        bool threw = False;
+                        try { expectEffect((replacement * 33 + 17) & 65535, invokeEffect(owner, argument)); }
+                        catch (hash<ExceptionInfo> ex) {
+                            threw = True;
+                            expectEffect("EFFECT-REENTRY", ex.err);
+                        }
+                        expectEffect(fail, threw);
+                        expectEffect(previous + 1, EffectReentryDrop::drops);
+                        expectEffect(1, owner.first);
+                        expectEffect(late ? -1 : fail ? 20 : 19, owner.second);
+                    }
+                }
+            }
+        }
+    }
+    EffectTarget object();
+    EffectReadReference reader(\object.number);
+    for (int i = 0; i < 24; ++i) { expectEffect(17, invokeEffect(reader, 0)); }
+    reader.first = 0;
+    reader.second = 20;
+    delete object;
+    bool threw = False;
+    try { invokeEffect(reader, 0); }
+    catch (hash<ExceptionInfo> ex) {
+        threw = True;
+        expectEffect("RUNTIME-TYPE-ERROR", ex.err);
+        int frames = 0;
+        foreach hash<CallStackInfo> frame in (ex.callstack) {
+            if (frame.function == "EffectReadReference::next") { ++frames; }
+        }
+        expectEffect(1, frames);
+    }
+    expectEffect(True, threw);
+    expectEffect(1, reader.first);
+    expectEffect(19, reader.second);
+    EffectReturnInvalid invalid();
+    for (int i = 0; i < 16; ++i) { expectEffect(i + 17, invokeEffect(invalid, i)); }
+    invalid.delta = 17.0;
+    foreach int argument in ((1, 1152921504606846976)) {
+        invalid.first = 0;
+        invalid.second = 20;
+        bool failed = False;
+        try { invokeEffect(invalid, argument); }
+        catch (hash<ExceptionInfo> ex) {
+            failed = True;
+            expectEffect("RUNTIME-TYPE-ERROR", ex.err);
+            int frames = 0;
+            foreach hash<CallStackInfo> frame in (ex.callstack) {
+                if (frame.function == "EffectReturnInvalid::next") { ++frames; }
+            }
+            expectEffect(1, frames);
+        }
+        expectEffect(True, failed);
+        expectEffect(1, invalid.first);
+        expectEffect(19, invalid.second);
+    }
+    Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+    foreign.importClass("EffectPrefix");
+    foreign.importClass("EffectInherited");
+    foreign.setExecMode(EM_IR);
+    foreign.parse("%modern\nEffectPrefix sub make() { return new EffectInherited(); }\n"
+        "auto sub invoke(auto receiver, int value) { return receiver.next(value); }\n", "effect-foreign");
+    foreach auto cross_receiver in ((new EffectPrefix(), foreign.callFunction("make"))) {
+        for (int i = 0; i < 24; ++i) {
+            cross_receiver.first = 0;
+            cross_receiver.second = 20;
+            expectEffect((i * 33 + 17) & 65535, invokeEffect(cross_receiver, i));
+            expectEffect((i * 33 + 17) & 65535, foreign.callFunction("invoke", cross_receiver, i));
+            expectEffect(2, cross_receiver.first);
+            expectEffect(18, cross_receiver.second);
+        }
+    }
+    printf("effect-member-entry: ok\n");
+}
+main();

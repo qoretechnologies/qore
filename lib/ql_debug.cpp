@@ -35,11 +35,22 @@
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreJITException.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_list_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/LocalVar.h"
+#include "qore/intern/Variable.h"
+#include "qore/intern/JITRuntime.h"
+#include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QoreAOT.h"
+#include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/UnicodeByteOrder.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 
 #include <map>
@@ -54,6 +65,7 @@
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/ManagedDatasource.h"
+#include "qore/intern/qore_ds_private.h"
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -357,6 +369,2769 @@ static int ut_reserve_closed_port() {
             (long long)(ut_expected_), (long long)(ut_actual_), __LINE__); \
     } \
 } while (0)
+
+//! Numeric snapshots survive statement drains and release exactly once on every frame exit.
+static void ut_ir_scalar_snapshot(UnitTestCounters& c) {
+    for (bool floating : {false, true}) {
+        ExceptionSink xsink;
+        ValueHolder input(floating ? QoreValue(-4.4942328371557898e307)
+            : QoreValue(std::numeric_limits<int64_t>::min()), &xsink);
+        UT_ASSERT(c, input->hasNode(), "snapshot fixture uses a boxed numeric value");
+        if (!input->hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = input->getInternalNode();
+        for (int mode = 0; mode < 3; ++mode) {
+            QoreIRFunction func("scalar_snapshot_ownership");
+            auto* block = func.createBlock("entry");
+            auto mark = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushTempMark);
+            mark->temp_scope_id = 1;
+            block->instructions.push_back(std::move(mark));
+            auto load = std::make_unique<QoreIRInstruction>(QoreIROpcode::LoadArg);
+            load->result = func.createValue();
+            QoreIRValue source = load->result;
+            block->instructions.push_back(std::move(load));
+            auto snapshot = std::make_unique<QoreIRInstruction>(
+                floating ? QoreIROpcode::SnapshotFloat : QoreIROpcode::SnapshotInt);
+            snapshot->operands = {source};
+            snapshot->result = func.createValue();
+            QoreIRValue result = snapshot->result;
+            func.max_value_id = result.id;
+            block->instructions.push_back(std::move(snapshot));
+            auto drain = std::make_unique<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
+            drain->temp_scope_id = 1;
+            block->instructions.push_back(std::move(drain));
+            if (mode == 2) {
+                // A malformed numeric snapshot raises without leaking the preceding valid one.
+                auto invalid = std::make_unique<QoreIRInstruction>(
+                    floating ? QoreIROpcode::SnapshotInt : QoreIROpcode::SnapshotFloat);
+                invalid->operands = {result};
+                invalid->result = func.createValue();
+                func.max_value_id = invalid->result.id;
+                block->instructions.push_back(std::move(invalid));
+            }
+            auto ret = std::make_unique<QoreIRReturnInstruction>();
+            if (!mode) {
+                ret->opcode = QoreIROpcode::Return;
+                ret->has_value = true;
+                ret->value = result;
+                ret->operands = {result};
+            }
+            block->instructions.push_back(std::move(ret));
+            std::vector<QoreValue> args{*input}; // borrowed from input
+            for (int repeat = 0; repeat < 2; ++repeat) {
+                QoreValue returned;
+                bool ok = QoreIRInterpreter::execute(func, returned, &xsink, nullptr, &args);
+                UT_ASSERT_EQ(c, mode != 2, ok, "snapshot exit status");
+                UT_ASSERT_EQ(c, mode == 2, bool(xsink), "snapshot exception status");
+                if (!mode) {
+                    UT_ASSERT(c, returned.getInternalNode() == node, "return preserves the boxed numeric value");
+                    UT_ASSERT_EQ(c, 2, node->reference_count(), "only input and return own the snapshot value");
+                } else {
+                    UT_ASSERT(c, returned.isNothing(), "non-value exit has no result");
+                }
+                returned.discard(nullptr);
+                xsink.clear();
+                UT_ASSERT_EQ(c, 1, node->reference_count(), "snapshot frame and pool retain no numeric reference");
+            }
+        }
+    }
+}
+
+//! A final release may reenter and delete the variable whose value is being released.
+class UtLocalDiscardString : public QoreStringNode {
+public:
+    UtLocalDiscardString(VarValueBase*& owner, UnitTestCounters& counters)
+        : QoreStringNode("local discard reentry"), owner(owner), counters(counters) {
+    }
+
+    ~UtLocalDiscardString() override {
+        UT_ASSERT(counters, owner->block_cleared, "block is cleared before the final release");
+        UT_ASSERT(counters, !owner->val.assigned, "slot is unassigned before the final release");
+        ExceptionSink xsink;
+        owner->del(&xsink);
+        UT_ASSERT(counters, !xsink, "reentrant deletion of the cleared slot is a no-op");
+        delete owner;
+        owner = nullptr;
+    }
+
+private:
+    VarValueBase*& owner;
+    UnitTestCounters& counters;
+};
+
+// Copyright 2026 Qore Technologies, s.r.o.
+//! Program transitions must update the canonical snapshot even when the supplied live view is a copy.
+static void ut_program_context_snapshot(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgramHelper caller(PO_MODERN, xsink);
+    QoreProgramHelper callee(PO_MODERN, xsink);
+    QoreProgramHelper nested(PO_MODERN, xsink);
+    QoreExternalProgramContextHelper caller_context(&xsink, *caller);
+    UT_ASSERT(c, !xsink, "Program snapshot fixture enters its caller");
+    if (xsink) {
+        return;
+    }
+    RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+    ThreadLocalProgramData* caller_tlpd = canonical.getThreadLocalProgramData();
+    QoreProgramLocation location("program-context-snapshot-unit", 17, 17);
+    RuntimeConfigLocationHelper location_guard(canonical, &location);
+    UT_ASSERT(c, caller_tlpd && canonical.getProgram() == *caller,
+        "caller has a canonical Program and local-data snapshot");
+    UT_ASSERT(c, (*caller)->getThreadCount() == 1 && !(*callee)->getThreadCount()
+        && !(*nested)->getThreadCount(), "only the caller has an active Program entry");
+    for (bool copied_view : {false, true}) {
+        for (bool replace_impl : {false, true}) {
+            for (bool null_location : {false, true}) {
+                for (bool pending_exception : {false, true}) {
+                    RuntimeConfig copy(canonical);
+                    copy.setProgram(*nested);
+                    copy.setThreadLocalProgramData(nullptr);
+                    RuntimeConfig& input = copied_view ? copy : canonical;
+                    canonical.setLocation(&location);
+                    {
+                        ProgramThreadCountContextHelper context(input, &xsink, *callee, true);
+                        UT_ASSERT(c, !xsink, "explicit Program entry succeeds");
+                        if (xsink) {
+                            return;
+                        }
+                        UT_ASSERT(c, canonical.getProgram() == *callee && getProgram() == *callee,
+                            "entry updates canonical snapshot and live Program");
+                        ThreadLocalProgramData* callee_tlpd = get_thread_local_program_data();
+                        UT_ASSERT(c, callee_tlpd && canonical.getThreadLocalProgramData() == callee_tlpd,
+                            "entry installs the callee local-data snapshot");
+                        UT_ASSERT(c, (*caller)->getThreadCount() == 1 && (*callee)->getThreadCount() == 1,
+                            "cross-Program entry preserves the caller and counts the callee");
+                        {
+                            ProgramThreadCountContextHelper nested_context(&xsink, *nested, true);
+                            UT_ASSERT(c, !xsink && canonical.getProgram() == *nested && getProgram() == *nested,
+                                "nested generic entry updates the canonical Program");
+                            UT_ASSERT(c, canonical.getThreadLocalProgramData() == get_thread_local_program_data(),
+                                "nested entry installs its own local-data snapshot");
+                            UT_ASSERT_EQ(c, 1u, (*nested)->getThreadCount(), "nested entry is counted");
+                            {
+                                ProgramThreadCountContextHelper reentry(input, &xsink, *caller, true);
+                                UT_ASSERT(c, !xsink && (*caller)->getThreadCount() == 2
+                                    && (*nested)->getThreadCount() == 1,
+                                    "reentering an ancestor counts a distinct Program entry");
+                            }
+                            UT_ASSERT(c, (*caller)->getThreadCount() == 1 && (*nested)->getThreadCount() == 1,
+                                "ancestor exit releases only its own entry");
+                        }
+                        UT_ASSERT(c, canonical.getProgram() == *callee && getProgram() == *callee,
+                            "nested exit restores the callee Program");
+                        UT_ASSERT(c, canonical.getThreadLocalProgramData() == callee_tlpd
+                            && get_thread_local_program_data() == callee_tlpd,
+                            "nested exit restores the callee local-data snapshot");
+                        UT_ASSERT_EQ(c, 0u, (*nested)->getThreadCount(), "nested exit balances its entry");
+                        if (replace_impl) {
+                            RuntimeConfig replacement(canonical);
+                            canonical = std::move(replacement);
+                        }
+                        canonical.setLocation(null_location ? nullptr : &location);
+                        if (pending_exception) {
+                            xsink.raiseException("PROGRAM-SNAPSHOT-TEST", "pending exception during restoration");
+                        }
+                    }
+                    // Do not refresh the RuntimeConfig here: that would mask an incorrect restoration.
+                    UT_ASSERT(c, canonical.getProgram() == *caller && getProgram() == *caller,
+                        "exit restores the caller through the current canonical implementation");
+                    UT_ASSERT(c, canonical.getThreadLocalProgramData() == caller_tlpd
+                        && get_thread_local_program_data() == caller_tlpd,
+                        "exit restores the caller local-data snapshot");
+                    UT_ASSERT(c, (*caller)->getThreadCount() == 1 && !(*callee)->getThreadCount(),
+                        "cross-Program exit balances the callee and retains the caller entry");
+                    UT_ASSERT(c, canonical.getLocation() == (null_location ? &loc_builtin : &location),
+                        "exit initializes a null location and preserves a nonnull location");
+                    UT_ASSERT(c, copy.getProgram() == *nested && !copy.getThreadLocalProgramData(),
+                        "the independent copied snapshot is never used as the canonical snapshot");
+                    UT_ASSERT_EQ(c, pending_exception, bool(xsink), "restoration preserves the pending exception");
+                    if (pending_exception && xsink) {
+                        UT_ASSERT(c, xsink.getExceptionErr().get<const QoreStringNode>()->equal("PROGRAM-SNAPSHOT-TEST"),
+                            "restoration keeps the original exception");
+                    }
+                    xsink.clear();
+                }
+            }
+        }
+    }
+    // No-op helpers must not initialize or replace snapshot fields as a side effect.
+    canonical.setLocation(nullptr);
+    canonical.setProgram(*nested);
+    canonical.setThreadLocalProgramData(nullptr);
+    {
+        ProgramThreadCountContextHelper inactive;
+        ProgramThreadCountContextHelper null_context(canonical, &xsink, nullptr, true);
+        ProgramThreadCountContextHelper same_context(canonical, &xsink, *caller, true);
+    }
+    UT_ASSERT(c, !xsink && canonical.getProgram() == *nested && !canonical.getThreadLocalProgramData()
+        && !canonical.getLocation(), "default, null and same-Program scopes leave snapshots untouched");
+    UT_ASSERT(c, getProgram() == *caller && get_thread_local_program_data() == caller_tlpd,
+        "no-op scopes retain the live caller context");
+    UT_ASSERT_EQ(c, 1u, (*caller)->getThreadCount(), "no-op scopes do not change Program entry counts");
+    canonical.setProgram(*caller);
+    canonical.setThreadLocalProgramData(caller_tlpd);
+}
+
+//! The thread's canonical RuntimeConfig keeps its thread-local storage when it is assigned or moved from.
+/** Its thread-local destructor runs before the exit handlers of the main thread destroy the static namespace, whose
+    objects still use it: if it owned a heap state, that state would be freed and then written to.
+*/
+static void ut_runtime_config_thread_storage(UnitTestCounters& c) {
+    RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+    UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical), "the canonical RuntimeConfig is a thread-storage view");
+    const int saved_element = canonical.getElement();
+    const QoreProgramLocation* saved_loc = canonical.getLocation();
+    {
+        RuntimeConfig moved(std::move(canonical));
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getLocation() == saved_loc,
+            "moving from the canonical RuntimeConfig leaves its state in place");
+        UT_ASSERT(c, moved.getLocation() == saved_loc, "a RuntimeConfig moved from the canonical one has its state");
+    }
+    UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getLocation() == saved_loc,
+        "destroying a RuntimeConfig moved from the canonical one leaves its state in place");
+    {
+        RuntimeConfig replacement(canonical);
+        UT_ASSERT(c, !RuntimeConfigNativeAccess::isView(replacement), "a copy owns its state");
+        replacement.setElement(saved_element + 1);
+        canonical = std::move(replacement);
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getElement() == saved_element + 1,
+            "move-assigning to the canonical RuntimeConfig assigns its thread storage");
+        UT_ASSERT(c, !replacement.getElement() && !RuntimeConfigNativeAccess::isView(replacement),
+            "the state moved to the canonical RuntimeConfig is released");
+        RuntimeConfig copy(canonical);
+        copy.setElement(saved_element + 2);
+        canonical = copy;
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getElement() == saved_element + 2
+            && copy.getElement() == saved_element + 2,
+            "copy-assigning to the canonical RuntimeConfig assigns its thread storage");
+        RuntimeConfig empty;
+        RuntimeConfig emptied(std::move(empty));
+        // a moved-from RuntimeConfig has no state; assigning it resets the thread storage
+        RuntimeConfig saved(canonical);
+        canonical = empty;
+        UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && !canonical.getLocation()
+            && !canonical.getElement(), "assigning an empty RuntimeConfig resets the thread storage");
+        canonical = saved;
+    }
+    UT_ASSERT(c, RuntimeConfigNativeAccess::isView(canonical) && canonical.getLocation() == saved_loc,
+        "the canonical RuntimeConfig keeps its location");
+    // an owned RuntimeConfig still transfers its state on a move
+    {
+        RuntimeConfig owner;
+        owner.setElement(7);
+        RuntimeConfig target(std::move(owner));
+        UT_ASSERT(c, !RuntimeConfigNativeAccess::isView(target) && target.getElement() == 7
+            && !owner.getElement(), "moving an owned RuntimeConfig transfers its state");
+        RuntimeConfig assigned;
+        assigned = std::move(target);
+        UT_ASSERT(c, assigned.getElement() == 7 && !target.getElement(),
+            "move-assigning an owned RuntimeConfig transfers its state");
+    }
+    canonical.setElement(saved_element);
+}
+
+//! A location scope leaves the thread's live parse options alone unless it sets them.
+/** The parse options field of a RuntimeConfig is a snapshot that only AST execution keeps up to date: with compiled
+    code and the IR interpreter it can hold the options of another Program, or none at all.  A location scope that
+    wrote it to the thread would change the policy of the code running there, for example disabling negative offsets
+    for every following native indexed read.
+*/
+static void ut_runtime_location_helper_live_options(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    const QoreParseOptions live = runtime_get_parse_options();
+    const QoreParseOptions saved_snapshot = rc.getParseOptions();
+    const QoreProgramLocation* saved_loc = rc.getLocation();
+    const AbstractStatement* saved_stmt = rc.getStatement();
+    const QoreProgramLocation* live_loc = get_runtime_location();
+    const AbstractStatement* live_stmt = get_runtime_statement();
+    // a stale snapshot that differs from the live options in an option the scope does not set
+    const QoreParseOptions stale = live ^ PO_NEGATIVE_OFFSETS;
+    QoreProgramLocation location("runtime-location-helper-unit", 23, 23);
+    for (bool with_sink : {false, true}) {
+        rc.setParseOptions(stale);
+        {
+            RuntimeConfigLocationHelper scope(rc, &location, nullptr, false, QoreParseOptions(),
+                with_sink ? &xsink : nullptr);
+            UT_ASSERT(c, !xsink, "a location scope raises no exception");
+            UT_ASSERT(c, get_runtime_location() == &location && rc.getLocation() == &location,
+                "a location scope sets the live and snapshot location");
+            UT_ASSERT(c, runtime_get_parse_options() == live,
+                "a location scope without parse options keeps the live options, not the snapshot");
+            UT_ASSERT(c, rc.getParseOptions() == stale, "a location scope without parse options keeps the snapshot");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == live,
+            "leaving a location scope without parse options keeps the live options");
+        UT_ASSERT(c, get_runtime_location() == live_loc && get_runtime_statement() == live_stmt,
+            "leaving a location scope restores the live location and statement");
+        UT_ASSERT(c, rc.getLocation() == saved_loc && rc.getStatement() == saved_stmt,
+            "leaving a location scope restores the snapshot location and statement");
+        // an active runtime override survives a location scope
+        {
+            QoreCallParseOptionsOverride override_po;
+            override_po.mask = PO_NEGATIVE_OFFSETS;
+            override_po.value = (live & PO_NEGATIVE_OFFSETS) ? QoreParseOptions() : PO_NEGATIVE_OFFSETS;
+            override_po.replace = PO_NEGATIVE_OFFSETS;
+            RuntimeParseOptionsOverrideHelper policy(override_po);
+            const QoreParseOptions overridden = runtime_get_parse_options();
+            UT_ASSERT(c, overridden == stale, "the override changes the live negative-offset policy");
+            rc.setParseOptions(live);
+            {
+                RuntimeConfigLocationHelper scope(rc, &location, nullptr, false, QoreParseOptions(),
+                    with_sink ? &xsink : nullptr);
+                UT_ASSERT(c, runtime_get_parse_options() == overridden,
+                    "a location scope keeps the live options of an active override");
+            }
+            UT_ASSERT(c, runtime_get_parse_options() == overridden,
+                "leaving a location scope keeps the live options of an active override");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == live, "the override restores the live options");
+        // a scope that sets the parse options restores the live options, not the snapshot
+        rc.setParseOptions(stale);
+        {
+            RuntimeConfigLocationHelper scope(rc, &location, nullptr, true, stale, with_sink ? &xsink : nullptr);
+            UT_ASSERT(c, runtime_get_parse_options() == stale && rc.getParseOptions() == stale,
+                "a location scope with parse options sets the live and snapshot options");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == live,
+            "leaving a location scope with parse options restores the live options");
+        UT_ASSERT(c, rc.getParseOptions() == stale,
+            "leaving a location scope with parse options restores the snapshot options");
+        UT_ASSERT(c, get_runtime_location() == live_loc && get_runtime_statement() == live_stmt,
+            "leaving a location scope with parse options restores the live location and statement");
+    }
+    rc.setParseOptions(saved_snapshot);
+    UT_ASSERT(c, !xsink, "location scope checks leave a clean sink");
+}
+
+//! Explicit context scopes restore both policy and the Program owning inherited restrictions.
+static void ut_native_call_options(UnitTestCounters& c) {
+    // IDs are never reused, so leave the monotonic counter advanced for the following callback/closure fixtures.
+    qore_program_private::setNextProgramId(qore_program_id_t{1} << 40);
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN | PO_IN_MODULE | PO_NO_NETWORK, xsink);
+    QoreProgramHelper other(PO_MODERN, xsink);
+    QoreExternalProgramContextHelper program_context(&xsink, *program);
+    UT_ASSERT(c, !xsink, "native call policy fixture enters its Program");
+    UT_ASSERT(c, program->getProgramId() > UINT32_MAX && other->getProgramId() > UINT32_MAX,
+        "native policy fixtures preserve actual Program IDs above 32 bits");
+    if (xsink) {
+        return;
+    }
+    RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+    const QoreParseOptions original = runtime_get_parse_options();
+    const QoreParseOptions original_effective = runtime_get_effective_program_parse_options();
+    const QoreParseOptions original_own = runtime_get_own_program_state_parse_options(original_effective);
+    qore_program_id_t original_app = 0;
+    const bool original_has_app = runtime_get_module_caller_app(original_app);
+    for (bool copied_view : {false, true}) {
+        RuntimeConfig copy(canonical);
+        copy.setProgram(*other);
+        copy.setParseOptions(QoreParseOptions());
+        RuntimeConfig& rc = copied_view ? copy : canonical;
+        {
+            // The descriptor records module identity independently of the copied
+            // compatibility snapshot. The live thread still executes in program.
+            auto o = qore_get_module_call_runtime_po_override(*program, PO_NO_THREAD_CONTROL, *other);
+            RuntimeParseOptionsOverrideHelper outer(rc, o);
+            qore_program_id_t app = 0;
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "explicit module scope retains the actual caller application");
+            QoreParseOptions effective = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
+            UT_ASSERT(c, effective == runtime_get_effective_program_parse_options(),
+                "explicit context reads live effective options despite stale snapshot fields");
+            UT_ASSERT(c, (effective & PO_NO_THREAD_CONTROL) && (effective & PO_NO_NETWORK),
+                "module call retains its own and inherited restrictions");
+            QoreParseOptions own = runtime_get_own_program_state_parse_options(effective);
+            UT_ASSERT(c, !(own & PO_NO_THREAD_CONTROL) && (own & PO_NO_NETWORK),
+                "own-state access removes only inherited restrictions");
+            {
+                RuntimeParseOptionsOverrideHelper nested(rc, PO_NO_THREAD_CONTROL, PO_NO_THREAD_CONTROL);
+                UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == effective,
+                    "ordinary nested override clears inherited module identity");
+                UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                    "ordinary nested override clears the caller application");
+            }
+            UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == own,
+                "nested override restores inherited restrictions and module identity");
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "nested override restores the caller application");
+            {
+                LoadTimeParseOptionsHelper load(PO_MODERN);
+                UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == effective,
+                    "load-time context clears inherited module identity");
+                UT_ASSERT(c, !runtime_get_module_caller_app(app), "load-time context clears caller application");
+            }
+            UT_ASSERT(c, runtime_get_own_program_state_parse_options(effective) == own,
+                "load-time scope restores inherited restrictions and module identity");
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "load-time scope restores caller application");
+            {
+                ProgramThreadCountContextHelper foreign(rc, &xsink, *other, true);
+                UT_ASSERT(c, !xsink && runtime_get_own_program_state_parse_options(effective) == effective,
+                    "another Program cannot use the module's own-state allowance");
+                UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                    "another Program cannot use the module's caller application");
+            }
+            UT_ASSERT(c, !xsink && runtime_get_own_program_state_parse_options(effective) == own,
+                "returning to the module restores its own-state allowance");
+            UT_ASSERT(c, runtime_get_module_caller_app(app) && app == other->getProgramId(),
+                "returning to the module restores its caller application");
+        }
+        UT_ASSERT(c, runtime_get_parse_options() == original
+            && runtime_get_effective_program_parse_options() == original_effective
+            && runtime_get_own_program_state_parse_options(original_effective) == original_own,
+            "explicit policy scope restores the complete caller state");
+        qore_program_id_t app = 0;
+        UT_ASSERT(c, runtime_get_module_caller_app(app) == original_has_app && app == original_app,
+            "explicit policy scope restores the original caller application");
+    }
+}
+
+//! Reusable callback policy is installed only on materialization and restored across reuse.
+static void ut_native_callback_policy(UnitTestCounters& c) {
+    for (bool module : {false, true}) {
+        ExceptionSink xsink;
+        QoreProgramHelper program(PO_MODERN | PO_NO_NETWORK | (module ? PO_IN_MODULE : 0), xsink);
+        QoreProgramHelper other(PO_MODERN | PO_NO_FILESYSTEM, xsink);
+        {
+            ProgramRuntimeExternalParseContextHelper parse(*program);
+            UT_ASSERT(c, parse, "callback policy fixture has parse context");
+            program->parse("%modern\nint sub identity(int x) { return x; }\n"
+                "code<int(int)> sub make() { return \\identity(); }\n", "native-callback-policy-unit", &xsink);
+        }
+        UT_ASSERT(c, !xsink, "callback policy fixture parses");
+        if (xsink) {
+            return;
+        }
+        QoreExternalProgramContextHelper owner_context(&xsink, *program);
+        ValueHolder value(program->callFunction("make", nullptr, &xsink), &xsink);
+        auto* ref = value->getType() == NT_FUNCREF
+            ? dynamic_cast<FunctionCallReferenceNode*>(value->getInternalNode()) : nullptr;
+        UT_ASSERT(c, !xsink && ref, "callback policy fixture returns a named function reference");
+        if (xsink || !ref) {
+            return;
+        }
+        const auto* uvb = ref->getFastCallMetadata().uvb;
+        UT_ASSERT(c, uvb && uvb->pgm == *program, "callback keeps its defining Program");
+        if (!uvb) {
+            return;
+        }
+        for (bool imported : {false, true}) {
+            QoreProgram* exec = imported ? *other : *program;
+            ProgramThreadCountContextHelper exec_context(&xsink, exec, true);
+            RuntimeConfig& canonical = RuntimeConfigNativeAccess::getCurrent();
+            for (bool copied_view : {false, true}) {
+                RuntimeConfig copy(canonical);
+                copy.setProgram(imported ? *program : *other);
+                copy.setParseOptions(QoreParseOptions());
+                RuntimeConfig& rc = copied_view ? copy : canonical;
+                QorePreparedFunctionRefV3 cache{};
+                cache.uvb = uvb;
+                cache.pgm = exec;
+                cache.parse_loc = uvb->getUserSignature()->getParseLocation();
+                struct Frame : QoreStackLocation {
+                    const QorePreparedFunctionRefV3& cache;
+                    const std::string name = "native callback policy unit";
+                    const QoreProgramLocation* loc = nullptr;
+                    RuntimeConfigNativeCallbackContext context;
+                    RuntimeConfigReusableNativeLeafCallHelper helper;
+                    Frame(RuntimeConfig& rc, const QorePreparedFunctionRefV3& cache)
+                        : cache(cache), context(cache), helper(rc, context) {}
+                    QoreProgram* getProgram() const override { return cache.pgm; }
+                    const AbstractStatement* getStatement() const override { return cache.uvb->getStatementBlock(); }
+                    const std::string& getCallName() const override { return name; }
+                    qore_call_t getCallType() const override { return CT_USER; }
+                    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+                    struct Scope {
+                        Frame& frame;
+                        explicit Scope(Frame& frame) : frame(frame) {
+                            frame.helper.enter(&frame, frame.loc, frame.cache);
+                        }
+                        ~Scope() { frame.helper.leave(); }
+                    };
+                } frame(rc, cache);
+                for (bool materialize : {false, true, true, false}) {
+                    // Use a distinguishable enclosing identity to detect both
+                    // same-owner preservation and module/imported replacement.
+                    QoreCallParseOptionsOverride enclosing;
+                    enclosing.mask = get_user_variant_runtime_po_override_mask();
+                    enclosing.value = PO_NO_THREAD_CONTROL;
+                    enclosing.replace = PO_NO_NETWORK;
+                    enclosing.caller_restrictions = PO_NO_THREAD_CONTROL;
+                    enclosing.module_pgm = *other;
+                    enclosing.app_pgm_id = other->getProgramId();
+                    RuntimeParseOptionsOverrideHelper caller_policy(rc, enclosing);
+                    const auto old_po = runtime_get_parse_options();
+                    const auto old_effective = runtime_get_effective_program_parse_options();
+                    const auto old_foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *other);
+                    const auto old_own = runtime_get_own_program_state_parse_options(old_effective);
+                    qore_program_id_t old_app = 0;
+                    const bool old_has_app = runtime_get_module_caller_app(old_app);
+                    {
+                        Frame::Scope active(frame);
+                        UT_ASSERT(c, runtime_get_parse_options() == old_po
+                            && runtime_get_own_program_state_parse_options(old_effective) == old_own,
+                            "successful reusable callback leaves enclosing policy unchanged");
+                        qore_program_id_t app = 0;
+                        UT_ASSERT(c, runtime_get_module_caller_app(app) == old_has_app && app == old_app,
+                            "deferred callback leaves caller application unchanged");
+                        if (materialize) {
+                            frame.helper.materialize();
+                            const auto body = runtime_get_parse_options();
+                            const auto own = runtime_get_own_program_state_parse_options(body);
+                            UT_ASSERT(c, bool(body & PO_NO_NETWORK) == (module || imported),
+                                "materialized callback replaces or preserves the enclosing option replacement");
+                            const auto foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *other);
+                            UT_ASSERT(c, bool(foreign & PO_NO_FILESYSTEM) == !module,
+                                "materialized module callback replaces the foreign Program's I/O options");
+                            // A non-module body executing in another Program uses
+                            // that Program's options. Module bodies additionally
+                            // inherit the caller's active restrictions.
+                            UT_ASSERT(c, bool(body & PO_NO_THREAD_CONTROL) == (module || !imported),
+                                "materialized callback uses its execution and module caller policy");
+                            UT_ASSERT(c, !(body & PO_ALLOW_INJECTION), "materialization does not grant injection");
+                            UT_ASSERT(c, bool(own & PO_NO_THREAD_CONTROL) == (module ? imported : !imported),
+                                "own-module allowance preserves the established non-module execution policy");
+                            app = 0;
+                            UT_ASSERT(c, runtime_get_module_caller_app(app) == (module && !imported)
+                                && app == (module && !imported ? other->getProgramId() : 0),
+                                "materialized callback carries the application only in its owning module");
+                            frame.helper.materialize();
+                            UT_ASSERT(c, runtime_get_parse_options() == body
+                                && runtime_get_own_program_state_parse_options(body) == own,
+                                "callback materialization is idempotent");
+                            {
+                                RuntimeParseOptionsOverrideHelper nested(rc, PO_NO_THREAD_CONTROL,
+                                    PO_NO_THREAD_CONTROL);
+                                UT_ASSERT(c, runtime_get_own_program_state_parse_options(body) == body,
+                                    "nested ordinary override clears inherited module identity");
+                                UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                                    "nested callback override clears caller application");
+                            }
+                            UT_ASSERT(c, runtime_get_own_program_state_parse_options(body) == own,
+                                "nested scope restores callback identity");
+                            app = 0;
+                            UT_ASSERT(c, runtime_get_module_caller_app(app) == (module && !imported)
+                                && app == (module && !imported ? other->getProgramId() : 0),
+                                "nested scope restores callback application after repeated materialization");
+                        }
+                    }
+                    UT_ASSERT(c, runtime_get_parse_options() == old_po
+                        && runtime_get_effective_program_parse_options() == old_effective
+                        && RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *other) == old_foreign
+                        && runtime_get_own_program_state_parse_options(old_effective) == old_own,
+                        "callback reuse restores all caller policy fields");
+                    qore_program_id_t app = 0;
+                    UT_ASSERT(c, runtime_get_module_caller_app(app) == old_has_app && app == old_app
+                        && runtime_get_module_call_app_id(exec) == other->getProgramId(),
+                        "callback reuse restores both visible and enclosing application identity");
+                }
+            }
+            UT_ASSERT(c, !xsink, "callback policy tests leave no exception");
+        }
+    }
+}
+
+// Exercise partial materialization without adding a production accessor or
+// changing the live deferred chain to manufacture the intermediate state.
+class RuntimeConfigNativeMethodFramePairTestAccess {
+public:
+    static void materialize(RuntimeConfigNativeMethodFramePairHelper& pair, bool outer_only) {
+        if (outer_only) {
+            pair.outer.materialize();
+        } else {
+            pair.inner.materialize();
+        }
+    }
+};
+
+static void ut_native_method_frame_pair(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN, xsink);
+    UT_ASSERT(c, !xsink, "frame pair fixture program is created");
+    if (xsink) {
+        return;
+    }
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        UT_ASSERT(c, parse, "frame pair fixture has a parse context");
+        if (!parse) {
+            return;
+        }
+        program->parse("%modern\n"
+            "class PairCaller { int step(int value) { return value; } }\n"
+            "class PairTarget {\n"
+            " int step(int value) { return value + 1; }\n"
+            " int forward(int value) { return self.step(value); }\n"
+            "}\n"
+            "list<auto> sub owners() { PairCaller p(); PairTarget t(); return (p, t); }\n",
+            "native-method-frame-pair-unit", &xsink);
+    }
+    UT_ASSERT(c, !xsink, "frame pair fixture parses");
+    if (xsink) {
+        return;
+    }
+    QoreExternalProgramContextHelper program_context(&xsink, *program);
+    UT_ASSERT(c, !xsink, "frame pair fixture enters its runtime context");
+    if (xsink) {
+        return;
+    }
+    ValueHolder owners(program->callFunction("owners", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && owners->getType() == NT_LIST && owners->get<QoreListNode>()->size() == 2,
+        "frame pair receivers are retained");
+    if (xsink || owners->getType() != NT_LIST || owners->get<QoreListNode>()->size() != 2) {
+        return;
+    }
+    QoreValue caller_value = owners->get<QoreListNode>()->retrieveEntry(0);
+    QoreValue target_value = owners->get<QoreListNode>()->retrieveEntry(1);
+    UT_ASSERT(c, caller_value.getType() == NT_OBJECT && target_value.getType() == NT_OBJECT,
+        "frame pair receivers are objects");
+    if (caller_value.getType() != NT_OBJECT || target_value.getType() != NT_OBJECT) {
+        return;
+    }
+    QoreObject* caller = caller_value.get<QoreObject>();
+    QoreObject* target = target_value.get<QoreObject>();
+    QoreAOTMethodDispatchCacheEntry parent_cache, outer_cache, inner_cache;
+    auto initialize = [&](QoreAOTMethodDispatchCacheEntry& cache, QoreObject* object, const char* name) {
+        const QoreMethod* method = object->getClass()->findMethod(name);
+        UT_ASSERT(c, method, "frame pair method resolves");
+        if (!method) {
+            return false;
+        }
+        cache.native_scalar_uvb = qore_method_private::get(*method)->getFunction()->first()->getUserVariantBase();
+        UT_ASSERT(c, cache.native_scalar_uvb, "frame pair method has a user body");
+        if (!cache.native_scalar_uvb) {
+            return false;
+        }
+        cache.native_scalar_program = *program;
+        cache.native_scalar_class_ctx = qore_class_private::get(*object->getClass());
+        cache.call_name = std::string(object->getClassName()) + "::" + name;
+        return true;
+    };
+    if (!initialize(parent_cache, caller, "step") || !initialize(outer_cache, target, "forward")
+            || !initialize(inner_cache, target, "step")) {
+        return;
+    }
+    struct Frame : QoreStackLocation {
+        const QoreAOTMethodDispatchCacheEntry& cache;
+        const QoreProgramLocation* loc = nullptr;
+        explicit Frame(const QoreAOTMethodDispatchCacheEntry& cache) : cache(cache) {}
+        QoreProgram* getProgram() const override { return cache.native_scalar_program; }
+        const AbstractStatement* getStatement() const override { return cache.native_scalar_uvb->getStatementBlock(); }
+        const std::string& getCallName() const override { return cache.call_name; }
+        qore_call_t getCallType() const override { return CT_USER; }
+        const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+    };
+    struct ParentFrame : Frame {
+        RuntimeConfigNativeMethodContext context;
+        RuntimeConfigNativeLeafCallHelperFor<true> helper;
+        ParentFrame(RuntimeConfig& rc, QoreObject* object, const QoreAOTMethodDispatchCacheEntry& cache,
+                ExceptionSink* xsink)
+                : Frame(cache), context(rc, object, cache), helper(rc, this, loc, context, xsink) {}
+    };
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    const auto* original_stack = get_runtime_stack_location();
+    const auto* original_loc = get_runtime_location();
+    const auto* original_stmt = get_runtime_statement();
+    QoreObject* original_object;
+    const qore_class_private* original_class;
+    runtime_get_object_and_class(original_object, original_class);
+    QoreObject* original_rc_object = rc.getObject();
+    const auto* original_rc_class = rc.getClass();
+    QoreProgramLocation inner_call("native-method-frame-pair-unit", 41, 41);
+#ifdef QORE_MANAGE_STACK
+    constexpr int materialization_modes = 4;
+#else
+    constexpr int materialization_modes = 3;
+#endif
+    for (bool with_parent : {false, true}) {
+        for (int materialize = 0; materialize < materialization_modes; ++materialize) {
+            for (bool unwind : {false, true}) {
+                std::unique_ptr<ParentFrame> parent;
+                if (with_parent) {
+                    parent = std::make_unique<ParentFrame>(rc, caller, parent_cache, &xsink);
+                }
+                const auto* previous = get_runtime_stack_location();
+                const auto* previous_loc = get_runtime_location();
+                const auto* previous_stmt = get_runtime_statement();
+                try {
+                    Frame outer(outer_cache), inner(inner_cache);
+                    RuntimeConfigNativeMethodContext outer_context(rc, target, outer_cache);
+                    RuntimeConfigNativeMethodContext inner_context(rc, target, inner_cache);
+                    RuntimeConfigNativeMethodFramePairHelper pair(rc, &outer, outer.loc, outer_context,
+                        &inner, inner.loc, inner_context, &inner_call);
+                    UT_ASSERT(c, get_runtime_stack_location() == &inner && inner.getNext() == &outer
+                        && outer.getNext() == previous, "both frames are linked above the previous stack");
+                    UT_ASSERT(c, inner.loc == &inner_call && outer.loc == (previous_loc ? previous_loc
+                        : outer_cache.native_scalar_uvb->getUserSignature()->getParseLocation()),
+                        "pair preserves the explicit inner call site and original outer site");
+                    UT_ASSERT(c, runtime_get_stack_object() == original_object && runtime_get_class() == original_class,
+                        "unmaterialized pair leaves live object/class unchanged");
+#ifdef QORE_MANAGE_STACK
+                    if (materialize == 3) {
+                        {
+                            QoreElidedStackHelper limit(SIZE_MAX);
+                            UT_ASSERT(c, RuntimeConfigNativeAccess::checkStack(rc, &xsink) && xsink,
+                                "native stack guard rejects exhaustion with the pair active");
+                        }
+                        UT_ASSERT(c, QoreStringDataHelper(xsink.getExceptionErr()) == "STACK-LIMIT-EXCEEDED",
+                            "pair retains the stack-limit exception");
+                        ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                        QoreValue stack = info ? info->getKeyValue("callstack") : QoreValue();
+                        UT_ASSERT(c, stack.getType() == NT_LIST && stack.get<QoreListNode>()->size() >= 2,
+                            "stack-limit exception records both pair frames");
+                        if (stack.getType() == NT_LIST && stack.get<QoreListNode>()->size() >= 2) {
+                            QoreValue leaf = stack.get<QoreListNode>()->retrieveEntry(0);
+                            QoreValue forward = stack.get<QoreListNode>()->retrieveEntry(1);
+                            UT_ASSERT(c, leaf.getType() == NT_HASH && forward.getType() == NT_HASH,
+                                "both exception frame records are hashes");
+                            if (leaf.getType() == NT_HASH && forward.getType() == NT_HASH) {
+                                UT_ASSERT(c, QoreStringDataHelper(leaf.get<QoreHashNode>()->getKeyValue("function"))
+                                        == "PairTarget::step"
+                                    && QoreStringDataHelper(forward.get<QoreHashNode>()->getKeyValue("function"))
+                                        == "PairTarget::forward"
+                                    && leaf.get<QoreHashNode>()->getKeyValue("line").getAsBigInt() == 41,
+                                    "stack exception preserves inner/outer order and the explicit call site");
+                            }
+                        }
+                        xsink.clear();
+                    }
+#endif
+                    if (materialize) {
+                        RuntimeConfigNativeMethodFramePairTestAccess::materialize(pair, materialize == 1);
+                        RuntimeConfigNativeMethodFramePairTestAccess::materialize(pair, materialize == 1);
+                        UT_ASSERT(c, runtime_get_stack_object() == target
+                            && runtime_get_class() == inner_cache.native_scalar_class_ctx,
+                            "materialization installs the target object/class");
+                        UT_ASSERT(c, rc.getObject() == target && rc.getClass() == inner_cache.native_scalar_class_ctx,
+                            "materialization installs the target snapshot view");
+                    }
+                    if (unwind) {
+                        throw 7;
+                    }
+                } catch (int value) {
+                    UT_ASSERT(c, unwind && value == 7, "pair restores during C++ unwinding");
+                }
+                UT_ASSERT(c, get_runtime_stack_location() == previous && get_runtime_location() == previous_loc
+                    && get_runtime_statement() == previous_stmt, "pair restores the previous stack and location");
+                bool parent_materialized = with_parent && materialize;
+                UT_ASSERT(c, runtime_get_stack_object() == (parent_materialized ? caller : original_object)
+                    && runtime_get_class() == (parent_materialized ? parent_cache.native_scalar_class_ctx : original_class),
+                    "pair restores the enclosing live object/class view");
+                UT_ASSERT(c, rc.getObject() == (parent_materialized ? caller : original_rc_object)
+                    && rc.getClass() == (parent_materialized ? parent_cache.native_scalar_class_ctx : original_rc_class),
+                    "pair restores the enclosing snapshot view");
+                parent.reset();
+                UT_ASSERT(c, get_runtime_stack_location() == original_stack && get_runtime_location() == original_loc
+                    && get_runtime_statement() == original_stmt, "parent restores the original stack and location");
+                UT_ASSERT(c, runtime_get_stack_object() == original_object && runtime_get_class() == original_class
+                    && rc.getObject() == original_rc_object && rc.getClass() == original_rc_class,
+                    "parent restores both original object/class views");
+            }
+        }
+    }
+    UT_ASSERT(c, !xsink, "frame pair lifecycle leaves no exception");
+}
+
+//! Test hidden closure-self TLS without exposing additional runtime APIs to an external fixture.
+static void ut_native_closure_context(UnitTestCounters& c) {
+    // Exercise saved closure policy with IDs that cannot fit in the legacy unsigned fields.
+    qore_program_private::setNextProgramId(qore_program_id_t{1} << 40);
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN, xsink);
+    UT_ASSERT(c, program->getProgramId() > UINT32_MAX, "closure context preserves 64-bit program IDs");
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        UT_ASSERT(c, parse, "closure context fixture has a parse context");
+        program->parse("%modern\n"
+            "class NativeClosureContextOwner {\n"
+            " private { int marker = 927; }\n"
+            " code<int(int)> make() { int delta = 17; return int sub(int x) { return x + delta; }; }\n"
+            "}\n"
+            "list<auto> sub owned() { NativeClosureContextOwner o(); return (o, o.make()); }\n"
+            "code<int(int)> sub deleted() { NativeClosureContextOwner o(); return o.make(); }\n"
+            "code<int(int)> sub plain() { return int sub(int x) { return x + 17; }; }\n",
+            "native-closure-context-unit", &xsink);
+    }
+    UT_ASSERT(c, !xsink, "closure context fixture parses");
+    if (xsink) {
+        return;
+    }
+    QoreExternalProgramContextHelper program_context(&xsink, *program);
+    ValueHolder caller(program->callFunction("owned", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && caller->getType() == NT_LIST, "caller owner is retained");
+    if (xsink || caller->getType() != NT_LIST) {
+        return;
+    }
+    QoreObject* caller_object = caller->get<QoreListNode>()->retrieveEntry(0).get<QoreObject>();
+    const qore_class_private* caller_class = qore_class_private::get(*caller_object->getClass());
+    for (const char* factory : {"plain", "owned", "deleted"}) {
+        ValueHolder owner(program->callFunction(factory, nullptr, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "closure factory succeeds");
+        if (xsink) {
+            return;
+        }
+        QoreValue ref = owner->getType() == NT_LIST ? owner->get<QoreListNode>()->retrieveEntry(1) : *owner;
+        UT_ASSERT(c, ref.getType() == NT_RUNTIME_CLOSURE, "factory supplies a live closure reference");
+        if (ref.getType() != NT_RUNTIME_CLOSURE) {
+            return;
+        }
+        const auto* closure = static_cast<const QoreClosureBase*>(ref.getInternalNode());
+        const auto* uvb = closure->getFunction()->first()->getUserVariantBase();
+        for (bool materialize : {false, true}) {
+            for (bool replace_impl : {false, true}) {
+                RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+                RuntimeConfigNativeObjectHelper caller_context(rc, caller_object, nullptr);
+                QoreClosureSelfContextHelper caller_self(caller_object);
+                // Install a synthetic enclosing module descriptor to check that
+                // this non-module closure clears it and restores it on return.
+                QoreCallParseOptionsOverride caller_options;
+                caller_options.mask = get_user_variant_runtime_po_override_mask();
+                caller_options.value = PO_NO_THREAD_CONTROL;
+                caller_options.caller_restrictions = PO_NO_THREAD_CONTROL;
+                caller_options.module_pgm = *program;
+                caller_options.app_pgm_id = program->getProgramId();
+                RuntimeParseOptionsOverrideHelper caller_policy(rc, caller_options);
+                const QoreParseOptions caller_effective = runtime_get_effective_program_parse_options();
+                const QoreParseOptions caller_own = runtime_get_own_program_state_parse_options(caller_effective);
+                // Deliberately distinct live and compatibility-snapshot views.
+                rc.setObject(nullptr);
+                rc.setClass(caller_class);
+                {
+                    struct Frame : QoreStackLocation {
+                        const UserVariantBase* uvb;
+                        const std::string name = "native closure context unit";
+                        const QoreProgramLocation* loc = nullptr;
+                        RuntimeConfigNativeClosureContext context;
+                        RuntimeConfigNativeClosureCallHelperV2 helper;
+                        Frame(RuntimeConfig& rc, const UserVariantBase* uvb, const QoreClosureBase* closure)
+                            : uvb(uvb), context(rc, closure, uvb), helper(rc, this, loc, context) {}
+                        QoreProgram* getProgram() const override { return uvb->pgm; }
+                        const AbstractStatement* getStatement() const override { return uvb->getStatementBlock(); }
+                        const std::string& getCallName() const override { return name; }
+                        qore_call_t getCallType() const override { return CT_USER; }
+                        const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+                    } frame(rc, uvb, closure);
+                    UT_ASSERT(c, !rc.getObject() && rc.getClass() == caller_class,
+                        "deferred entry leaves snapshot context untouched");
+                    UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
+                        "deferred entry leaves live context untouched");
+                    UT_ASSERT(c, qore_closure_self_context(caller_object), "deferred entry leaves self TLS untouched");
+                    qore_program_id_t app = 0;
+                    UT_ASSERT(c, runtime_get_module_caller_app(app) && app == program->getProgramId(),
+                        "deferred closure leaves enclosing caller application unchanged");
+                    if (materialize) {
+                        frame.helper.materialize();
+                        frame.helper.materialize(); // Idempotence must not overwrite saved caller state.
+                        UT_ASSERT(c, runtime_get_own_program_state_parse_options(caller_effective) == caller_effective,
+                            "materialized non-module closure clears inherited module identity");
+                        UT_ASSERT(c, !runtime_get_module_caller_app(app),
+                            "materialized non-module closure clears enclosing caller application");
+                        UT_ASSERT(c, rc.getObject() == closure->getObject() && rc.getClass() == closure->getClassCtx(),
+                            "materialization installs closure snapshot context");
+                        UT_ASSERT(c, runtime_get_stack_object() == closure->getObject()
+                            && runtime_get_class() == closure->getClassCtx(), "materialization installs live context");
+                        UT_ASSERT(c, qore_closure_self_context(closure->getObject() ? closure->getObject() : caller_object),
+                            "materialization installs self only for an object closure");
+                        if (closure->getObject()) {
+                            ExceptionSink probe_sink;
+                            uint64_t bits = qore_rt_load_self_member("marker", &probe_sink);
+                            QoreValue value;
+                            std::memcpy(&value, &bits, sizeof(value));
+                            ValueHolder marker(value, &probe_sink);
+                            bool deleted = !closure->getObject()->isValid();
+                            UT_ASSERT_EQ(c, deleted, bool(probe_sink), "captured self validity remains enforced");
+                            if (deleted) {
+                                UT_ASSERT(c, probe_sink.getExceptionErr().get<const QoreStringNode>()
+                                    ->equal("OBJECT-ALREADY-DELETED"), "deleted captured self reports the normal error");
+                            } else {
+                                UT_ASSERT_EQ(c, 927, marker->getAsBigInt(), "live self retains private member access");
+                            }
+                            probe_sink.clear();
+                        }
+                    }
+                    if (replace_impl) {
+                        RuntimeConfig replacement(rc);
+                        rc = std::move(replacement);
+                        UT_ASSERT(c, !replacement.getObject() && !replacement.getClass(), "moved-from context is empty");
+                    }
+                }
+                UT_ASSERT(c, !rc.getObject() && rc.getClass() == caller_class,
+                    "closure scope restores the current snapshot implementation independently");
+                UT_ASSERT(c, runtime_get_stack_object() == caller_object && !runtime_get_class(),
+                    "closure scope restores the live caller independently");
+                UT_ASSERT(c, qore_closure_self_context(caller_object), "closure scope restores caller self TLS");
+                UT_ASSERT(c, runtime_get_effective_program_parse_options() == caller_effective
+                    && runtime_get_own_program_state_parse_options(caller_effective) == caller_own,
+                    "closure scope restores caller policy and module identity");
+                qore_program_id_t app = 0;
+                UT_ASSERT(c, runtime_get_module_caller_app(app) && app == program->getProgramId(),
+                    "closure scope restores caller application after repeated materialization and context moves");
+            }
+        }
+    }
+    UT_ASSERT(c, !xsink, "closure context tests leave no exception");
+}
+
+//! Deferred closure policy carries option replacement through materialization and context moves.
+static void ut_native_closure_option_replacement(UnitTestCounters& c) {
+    for (bool module : {false, true}) {
+        ExceptionSink xsink;
+        QoreProgramHelper program(PO_MODERN | PO_NO_NETWORK | (module ? PO_IN_MODULE : 0), xsink);
+        QoreProgramHelper caller(PO_MODERN | PO_NO_FILESYSTEM, xsink);
+        {
+            ProgramRuntimeExternalParseContextHelper parse(*program);
+            UT_ASSERT(c, parse, "closure option fixture has parse context");
+            program->parse("%modern\ncode<int(int)> sub make() { return int sub(int x) { return x; }; }\n",
+                "native-closure-option-replacement-unit", &xsink);
+        }
+        UT_ASSERT(c, !xsink, "closure option fixture parses");
+        if (xsink) {
+            return;
+        }
+        QoreExternalProgramContextHelper active(&xsink, *program);
+        ValueHolder value(program->callFunction("make", nullptr, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && value->getType() == NT_RUNTIME_CLOSURE, "fixture returns a closure");
+        if (xsink || value->getType() != NT_RUNTIME_CLOSURE) {
+            return;
+        }
+        const auto* closure = static_cast<const QoreClosureBase*>(value->getInternalNode());
+        const auto* uvb = closure->getFunction()->first()->getUserVariantBase();
+        for (bool materialize : {false, true}) {
+            RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+            QoreCallParseOptionsOverride enclosing;
+            enclosing.mask = get_user_variant_runtime_po_override_mask();
+            enclosing.value = PO_NO_THREAD_CONTROL;
+            enclosing.replace = PO_NO_NETWORK;
+            RuntimeParseOptionsOverrideHelper outer(rc, enclosing);
+            const auto old_own = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
+            const auto old_foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller);
+            UT_ASSERT(c, !(old_own & PO_NO_NETWORK) && (old_foreign & PO_NO_FILESYSTEM),
+                "enclosing replacement clears only the selected restriction");
+            {
+                struct Frame : QoreStackLocation {
+                    const UserVariantBase* uvb;
+                    const std::string name = "native closure option replacement unit";
+                    const QoreProgramLocation* loc = nullptr;
+                    RuntimeConfigNativeClosureContext context;
+                    RuntimeConfigNativeClosureCallHelperV2 helper;
+                    Frame(RuntimeConfig& rc, const UserVariantBase* uvb, const QoreClosureBase* closure,
+                            QoreProgram* caller)
+                        : uvb(uvb), context(rc, closure, uvb, caller), helper(rc, this, loc, context) {}
+                    QoreProgram* getProgram() const override { return uvb->pgm; }
+                    const AbstractStatement* getStatement() const override { return uvb->getStatementBlock(); }
+                    const std::string& getCallName() const override { return name; }
+                    qore_call_t getCallType() const override { return CT_USER; }
+                    const QoreProgramLocation& getLocation() const override { return loc ? *loc : loc_builtin; }
+                } frame(rc, uvb, closure, *caller);
+                UT_ASSERT(c, RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program) == old_own
+                    && RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller) == old_foreign,
+                    "successful deferred closure leaves option replacement untouched");
+                if (materialize) {
+                    frame.helper.materialize();
+                    frame.helper.materialize();
+                    const auto own = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program);
+                    const auto foreign = RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller);
+                    UT_ASSERT(c, own & PO_NO_NETWORK, "closure materialization replaces the enclosing override");
+                    UT_ASSERT(c, bool(foreign & PO_NO_FILESYSTEM) == !module,
+                        "module closure materialization uses its own I/O options");
+                }
+                RuntimeConfig replacement(rc);
+                rc = std::move(replacement);
+            }
+            UT_ASSERT(c, RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *program) == old_own
+                && RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, *caller) == old_foreign,
+                "closure exit restores option replacement after a RuntimeConfig move");
+        }
+        UT_ASSERT(c, !xsink, "closure option fixture leaves no exception");
+    }
+}
+
+//! Object-count bookkeeping preserves order, flags and borrowed ownership across moves and clears.
+static void ut_lvalue_object_count_records(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    const ObjCountRec inputs[] = {ObjCountRec(*list), ObjCountRec(*hash)};
+    for (size_t count : {size_t(0), size_t(1), size_t(2), size_t(9), size_t(65)}) {
+        ocvec_t records;
+        UT_ASSERT(c, records.empty() && !records.size(), "object-count records start empty");
+        for (size_t i = 0; i < count; ++i) {
+            records.push_back(inputs[i % 2]);
+            // Exercise both snapshot flag values without changing the borrowed containers.
+            records[i].before = (i % 3) == 1;
+        }
+        auto verify = [&](ocvec_t& value) {
+            UT_ASSERT_EQ(c, count, value.size(), "all object-count records survive");
+            UT_ASSERT_EQ(c, count == 0, value.empty(), "object-count emptiness matches size");
+            if (value.size() != count) {
+                return;
+            }
+            for (size_t i = 0; i < count; ++i) {
+                UT_ASSERT(c, value[i].con == inputs[i % 2].con, "container order survives");
+                UT_ASSERT_EQ(c, (i % 3) == 1, value[i].before, "snapshot flag survives");
+            }
+            // The destructor propagates hierarchy differences in reverse order.
+            for (size_t i = count; i > 0; --i) {
+                UT_ASSERT(c, value[i - 1].con == inputs[(i - 1) % 2].con,
+                    "reverse hierarchy indexing preserves every container");
+            }
+        };
+        verify(records);
+        ocvec_t moved(std::move(records));
+        UT_ASSERT(c, records.empty() && !records.size(), "moved-from records are empty");
+        verify(moved);
+        ocvec_t again(std::move(moved));
+        UT_ASSERT(c, moved.empty() && !moved.size(), "move-chain source is empty");
+        verify(again);
+        records.push_back(inputs[1]);
+        UT_ASSERT_EQ(c, 1, records.size(), "moved-from storage can be reused");
+        UT_ASSERT(c, records[0].con == inputs[1].con && !records[0].before,
+            "reused source has only the new snapshot");
+        moved.clear();
+        moved.push_back(inputs[0]);
+        UT_ASSERT_EQ(c, 1, moved.size(), "cleared moved-from storage can be reused");
+        UT_ASSERT(c, moved[0].con == inputs[0].con && !moved[0].before,
+            "move-chain source has only its new snapshot");
+        again.clear();
+        again.clear();
+        UT_ASSERT(c, again.empty() && !again.size(), "repeated clear empties inline and overflow records");
+        again.push_back(inputs[1]);
+        again.push_back(inputs[0]);
+        UT_ASSERT_EQ(c, 2, again.size(), "cleared storage accepts inline and overflow records");
+        UT_ASSERT(c, again[0].con == inputs[1].con && again[1].con == inputs[0].con,
+            "clear and reuse preserves the new order");
+        UT_ASSERT(c, !again[0].before && !again[1].before, "clear and reuse discards old snapshot flags");
+        UT_ASSERT_EQ(c, 1, list->reference_count(), "object-count records borrow lists");
+        UT_ASSERT_EQ(c, 1, hash->reference_count(), "object-count records borrow hashes");
+    }
+    UT_ASSERT(c, !xsink, "object-count bookkeeping tests raise no exception");
+}
+
+//! Public discard preserves the value until its owning release has completed.
+class UtDiscardVisibilityString : public QoreStringNode {
+public:
+    UtDiscardVisibilityString(QoreValue& value, UnitTestCounters& counters)
+        : QoreStringNode("public discard release visibility"), value(value), counters(counters) {
+    }
+
+    ~UtDiscardVisibilityString() override {
+        UT_ASSERT(counters, value.getInternalNode() == this, "discard clears only after the owning release");
+    }
+
+private:
+    QoreValue& value;
+    UnitTestCounters& counters;
+};
+
+//! Runtime and public cleanup must distinguish inline values from every owned representation.
+static void ut_runtime_value_cleanup(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    enum class CleanupMode { Runtime, RuntimeNothrow, PublicDiscard };
+    for (CleanupMode mode : {CleanupMode::Runtime, CleanupMode::RuntimeNothrow, CleanupMode::PublicDiscard}) {
+        auto release = [&](QoreValue value) {
+            if (mode == CleanupMode::PublicDiscard) {
+                value.discard(&xsink);
+                UT_ASSERT_EQ(c, QoreValue().rawBits(), value.rawBits(), "public discard clears the representation");
+            } else if (mode == CleanupMode::RuntimeNothrow) {
+                qore_rt_decref_nothrow(value.rawBits());
+            } else {
+                qore_rt_decref(value.rawBits(), &xsink);
+            }
+        };
+        for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue(false), QoreValue(true),
+                QoreValue(int64_t{0}), QoreValue(int64_t{-17}), QoreValue(int64_t{17}),
+                QoreValue(0.0), QoreValue(-0.0), QoreValue(1.5),
+                QoreValue(std::numeric_limits<double>::infinity()),
+                QoreValue::makeShortString("abc", 3), QoreValue::makeChar(0x1f642)}) {
+            release(value);
+            UT_ASSERT(c, !xsink, "inline runtime cleanup raises no exception");
+        }
+        {
+            ReferenceHolder<QoreStringNode> owner(new QoreStringNode("runtime cleanup node"), &xsink);
+            release(QoreValue(owner->refSelf()));
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases an ordinary node reference");
+        }
+        {
+            ReferenceHolder<QoreHashNode> owner(new QoreHashNode(autoTypeInfo), &xsink);
+            release(QoreValue::makeOpaqueHash(*owner));
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases an opaque hash reference");
+        }
+        {
+            ReferenceHolder<QoreListNode> owner(new QoreListNode(autoTypeInfo), &xsink);
+            release(QoreValue::makeOpaqueList(*owner));
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases an opaque list reference");
+        }
+        {
+            ReferenceHolder<QoreStringNode> owner(new QoreStringNode("runtime cleanup enum"), &xsink);
+            QoreValue value;
+            {
+                QoreEnumDeclHolder decl(new QoreEnumDecl("CleanupEnum", "CleanupEnum", stringTypeInfo));
+                decl->addMember("Member", owner->refSelf());
+                value = QoreValue::makeEnum(decl->findMember("Member"));
+            }
+            UT_ASSERT_EQ(c, 2, owner->reference_count(), "enum value retains its declaration after scope exit");
+            release(value);
+            UT_ASSERT_EQ(c, 1, owner->reference_count(), "runtime cleanup releases the enum declaration");
+        }
+        for (bool floating : {false, true}) {
+            uint64_t escaped_bits = QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST;
+            double escaped;
+            memcpy(&escaped, &escaped_bits, sizeof(escaped));
+            ValueHolder value(floating ? QoreValue(escaped)
+                : QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+            const AbstractQoreNode* node = value->get<const AbstractQoreNode>();
+            UT_ASSERT(c, node, "wide integers and escaped doubles retain node storage");
+            release(value->refSelf());
+            UT_ASSERT_EQ(c, 1, node->reference_count(), "runtime cleanup releases the numeric box reference");
+        }
+    }
+    {
+        ValueHolder value(&xsink);
+        *value = QoreValue(new UtDiscardVisibilityString(*value, c));
+        value->discard(&xsink);
+        UT_ASSERT_EQ(c, QoreValue().rawBits(), value->rawBits(), "public discard clears a final owner");
+    }
+    UT_ASSERT(c, !xsink, "runtime value cleanup leaves no exception");
+}
+
+static void ut_local_discard(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // A deletion must not read the inactive payload for unassigned or inline scalar storage.
+    for (valtype_t type : {QV_Bool, QV_Int, QV_Float, QV_Enum, QV_Value, QV_Node}) {
+        VarValueBase slot("discard", type);
+        slot.del(&xsink);
+        UT_ASSERT(c, slot.block_cleared && !slot.val.assigned, "unassigned deletion stays empty");
+        // An assigned enum owns a non-null declaration reference; exercise it below.
+        if (type == QV_Enum) {
+            continue;
+        }
+        slot.val.v.qv = 0;
+        slot.val.assigned = true;
+        slot.del(&xsink);
+        UT_ASSERT(c, !slot.val.assigned, "deletion clears each storage representation");
+        slot.del(&xsink);
+        UT_ASSERT(c, !xsink, "repeated deletion is harmless");
+    }
+    {
+        ReferenceHolder<QoreStringNode> value(new QoreStringNode("owned enum member"), &xsink);
+        VarValueBase slot("owned enum");
+        {
+            QoreEnumDeclHolder decl(new QoreEnumDecl("DiscardEnum", "DiscardEnum", stringTypeInfo));
+            decl->addMember("Member", value->refSelf());
+            slot.val.assign(QoreValue::makeEnum(decl->findMember("Member")));
+            UT_ASSERT_EQ(c, QV_Enum, slot.val.type, "enum local uses enum storage");
+        }
+        UT_ASSERT_EQ(c, 2, value->reference_count(), "local retains the enum declaration and its member");
+        slot.del(&xsink);
+        UT_ASSERT(c, slot.block_cleared && !slot.val.assigned, "enum deletion clears the local");
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "enum deletion releases the declaration exactly once");
+        slot.del(&xsink);
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "repeated enum deletion releases no reference");
+    }
+    {
+        VarValueBase slot("nothing");
+        slot.val.assign(&Nothing);
+        slot.del(&xsink);
+        UT_ASSERT(c, !slot.val.assigned && !xsink, "the NOTHING singleton is normalized away");
+    }
+    {
+        ReferenceHolder<QoreStringNode> value(new QoreStringNode("owned local node"), &xsink);
+        VarValueBase slot("owned");
+        slot.val.assign(value->refSelf());
+        UT_ASSERT_EQ(c, 2, value->reference_count(), "the owning local has its own reference");
+        slot.del(&xsink);
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "deletion releases exactly the local's reference");
+        slot.del(&xsink);
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "second deletion releases no reference");
+    }
+    {
+        ReferenceHolder<QoreStringNode> value(new QoreStringNode("borrowed local node"), &xsink);
+        VarValueBase slot("borrowed");
+        slot.val.assign(*value);
+        slot.val.static_assignment = true;
+        slot.del(&xsink);
+        UT_ASSERT(c, !slot.val.assigned && !slot.val.static_assignment, "borrowed slot is unassigned");
+        UT_ASSERT_EQ(c, 1, value->reference_count(), "borrowed local does not release its owner's reference");
+    }
+    {
+        auto owner = std::make_unique<VarValueBase>("reentrant");
+        VarValueBase* slot = owner.get();
+        ReferenceHolder<QoreStringNode> value(new UtLocalDiscardString(slot, c), &xsink);
+        slot->val.assign(value.release());
+        owner.release(); // the node's final release deliberately deletes this container
+        slot->del(&xsink);
+        UT_ASSERT(c, !slot, "final release can delete the variable container");
+    }
+    UT_ASSERT(c, !xsink, "local deletion unit checks raise no exception");
+}
+
+//! Exercise scalar-store admission itself, not just results obtainable by fallback.
+static void ut_aot_scalar_local_store_mode(UnitTestCounters& c, bool direct_store, bool prepared,
+        bool prepared_declaration = false) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, const QoreTypeInfo* ti, ExceptionSink& sink) : var(name, ti), xsink(sink) {
+            var.instantiate(QoreValue(1.25));
+        }
+        ~LocalScope() {
+            var.uninstantiate(&xsink);
+        }
+    };
+    LocalScope local("native_scalar_store", autoTypeInfo, xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot && !slot->val.fixed_type, "auto scalar uses an ordinary nonfixed slot");
+    if (!slot) {
+        return;
+    }
+    auto store = [&](LocalVar& var, LocalVarValue* storage, QoreValue value) {
+        if (prepared_declaration) {
+            assert(prepared && storage && var.isAOTScalarStoreDeclaration());
+            // Force the declaration-prepared operation even with its runtime
+            // control disabled; fallback-only success does not test live guards.
+            return storage->tryAssignAOTScalarValue(value, direct_store);
+        }
+        return var.tryAssignAOTScalarValue(value, direct_store, prepared ? storage : nullptr);
+    };
+    for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{7}),
+            QoreValue(-(int64_t{1} << 46)), QoreValue(2.5), QoreValue(-0.0)}) {
+        UT_ASSERT(c, store(local.var, slot, value),
+            "immediate scalar replacement is handled");
+        QoreValue actual = slot->val.getValue();
+        UT_ASSERT_EQ(c, value.getType(), actual.getType(), "scalar store preserves the value type");
+        UT_ASSERT(c, actual.rawBits() == value.rawBits(), "scalar store preserves exact value bits");
+    }
+    if (prepared) {
+        // This fixture borrows a stack array; the ordinary AOT context destructor
+        // owns/frees its locals array, so detach it before that destructor runs.
+        struct BorrowedLocalContext : QoreAOTContext {
+            ~BorrowedLocalContext() {
+                locals = nullptr;
+            }
+        } context;
+        LocalVar* locals[] = {&local.var};
+        context.locals = locals;
+        context.num_locals = 1;
+        RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+        context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+        auto getter = prepared_declaration ? qore_rt_get_auto_local_slot_aot_v2
+            : qore_rt_get_auto_local_slot_aot_v1;
+        UT_ASSERT(c, context.pgm, "prepared-slot getter has a live Program context");
+        UT_ASSERT(c, getter(&context, 0, &rc)
+            == (q_env_is_set("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr : slot),
+            "same-Program getter supplies the actual live slot unless disabled");
+        UT_ASSERT(c, !getter(nullptr, 0, &rc), "absent AOT context is rejected");
+        UT_ASSERT(c, !getter(&context, -1, &rc), "negative slot is rejected");
+        UT_ASSERT(c, !getter(&context, 1, &rc), "past-end slot is rejected");
+        UT_ASSERT(c, !getter(&context, 0, nullptr), "absent context is rejected");
+        if (prepared_declaration) {
+            void* admitted = getter(&context, 0, &rc);
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(int64_t{29}).rawBits(),
+                admitted, &xsink);
+            UT_ASSERT_EQ(c, QoreValue(int64_t{29}).rawBits(), slot->val.getValue().rawBits(),
+                "versioned prepared helper publishes to the real slot");
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(1.5).rawBits(), nullptr, &xsink);
+            UT_ASSERT_EQ(c, QoreValue(1.5).rawBits(), slot->val.getValue().rawBits(),
+                "null prepared admission uses the checked scalar fallback");
+            ReferenceHolder<QoreStringNode> text(new QoreStringNode("prepared declaration fallback"), &xsink);
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(*text).rawBits(), admitted, &xsink);
+            UT_ASSERT_EQ(c, 2, text->reference_count(), "unsupported input gains only the runtime-slot owner");
+            qore_rt_assign_auto_local_slot_aot_v2(&context, 0, QoreValue(2.5).rawBits(), admitted, &xsink);
+            UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary fallback releases the old node once");
+            bool reports_publication = admitted && !q_env_is_set("QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION")
+                && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_LOCAL_STORE")
+                && !q_env_is_set("QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE");
+            for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{37}),
+                    QoreValue(2.75), QoreValue(-0.0)}) {
+                int published = qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                    value.rawBits(), admitted, &xsink);
+                UT_ASSERT_EQ(c, reports_publication ? 1 : 0, published,
+                    "v3 reports only admitted immediate scalar publication");
+                UT_ASSERT_EQ(c, value.rawBits(), slot->val.getValue().rawBits(),
+                    "publication reporting preserves actual runtime storage bits");
+            }
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(int64_t{39}).rawBits(), nullptr, &xsink),
+                "ordinary lookup never supplies a prepared publication witness");
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(*text).rawBits(), admitted, &xsink), "owning input is never a scalar witness");
+            UT_ASSERT_EQ(c, 2, text->reference_count(), "v3 fallback retains exactly the runtime owner");
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(3.25).rawBits(), admitted, &xsink),
+                "releasing a prior owner cannot report non-reentrant publication");
+            UT_ASSERT_EQ(c, 1, text->reference_count(), "v3 ordinary replacement releases the owner once");
+            xsink.raiseException("SCALAR-PUBLICATION-TEST", "pending sink control");
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_auto_local_slot_aot_v3(&context, 0,
+                QoreValue(3.5).rawBits(), admitted, &xsink), "a populated sink cannot publish a witness");
+            bool threw = false;
+            try {
+                qore_rt_assign_auto_local_slot_aot_throwing_v3(&context, 0,
+                    QoreValue(3.75).rawBits(), admitted, &xsink);
+            } catch (const QoreJITException&) {
+                threw = true;
+            }
+            UT_ASSERT(c, threw && xsink, "v3 native EH retains the sink and unwinds");
+            xsink.clear();
+            {
+                LocalScope readonly("native_prepared_readonly", autoTypeInfo, xsink);
+                readonly.var.setReadOnly();
+                locals[0] = &readonly.var;
+                UT_ASSERT(c, !getter(&context, 0, &rc), "v2 getter rejects read-only declaration");
+                UT_ASSERT(c, qore_rt_get_auto_local_slot_aot_v1(&context, 0, &rc)
+                    == (q_env_is_set("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr
+                        : thread_try_find_lvar(&readonly.var)), "v1 getter retains storage-only contract");
+                locals[0] = &local.var;
+            }
+            {
+                LocalScope no_narrow("native_prepared_no_narrow", autoNoNarrowTypeInfo, xsink);
+                locals[0] = &no_narrow.var;
+                UT_ASSERT(c, !getter(&context, 0, &rc), "v2 getter rejects no-narrow declaration");
+                locals[0] = &local.var;
+            }
+        }
+        context.pgm = nullptr;
+        UT_ASSERT(c, getter(&context, 0, &rc)
+            == (q_env_is_set("QORE_DISABLE_AOT_AUTO_LOCAL_SLOT") ? nullptr : slot),
+            "code-owner metadata does not select active invocation storage");
+
+        // Growing and shrinking separately allocated stack blocks must not move
+        // this invocation's slot, even for recursive bindings of the same LocalVar.
+        struct NestedSlots {
+            LocalVar& var;
+            ExceptionSink& xsink;
+            unsigned count = 0;
+            ~NestedSlots() {
+                while (count) {
+                    --count;
+                    var.uninstantiate(&xsink);
+                }
+            }
+        };
+        uint64_t outer_bits = slot->val.getValue().rawBits();
+        {
+            NestedSlots nested{local.var, xsink};
+            static_assert(QORE_THREAD_STACK_BLOCK < 100, "bounded native stack-growth fixture");
+            for (unsigned i = 0; i <= QORE_THREAD_STACK_BLOCK; ++i) {
+                local.var.instantiate(QoreValue(int64_t{41}));
+                ++nested.count;
+            }
+            LocalVarValue* inner = thread_try_find_lvar(&local.var);
+            UT_ASSERT(c, inner && inner != slot, "recursive binding has distinct storage");
+            UT_ASSERT(c, store(local.var, inner, QoreValue(int64_t{42})),
+                "prepared recursive binding is handled");
+            UT_ASSERT_EQ(c, outer_bits, slot->val.getValue().rawBits(), "recursive store leaves outer storage unchanged");
+        }
+        UT_ASSERT(c, thread_try_find_lvar(&local.var) == slot, "outer prepared slot survives block growth and pop");
+        UT_ASSERT(c, store(local.var, slot, QoreValue(3.5)),
+            "outer prepared slot is usable after recursive return");
+        UT_ASSERT(c, slot->val.getValue().rawBits() == QoreValue(3.5).rawBits(),
+            "prepared store publishes exact bits after recursive return");
+    }
+    auto miss = [&](QoreValue value) {
+        uint64_t before = slot->val.getValue().rawBits();
+        UT_ASSERT(c, !store(local.var, slot, value),
+            "unsupported store is not handled");
+        UT_ASSERT_EQ(c, before, slot->val.getValue().rawBits(), "a miss preserves the slot");
+    };
+    for (QoreValue value : {QoreValue(), QoreValue::makeNull(), QoreValue::makeChar('x'),
+            QoreValue::makeShortString("inline", 6)}) {
+        miss(value);
+    }
+    ValueHolder wide_int(QoreValue(INT64_MAX), &xsink);
+    ValueHolder wide_float(QoreValue(-3.0e307), &xsink);
+    UT_ASSERT(c, wide_int->isPointer() && wide_float->isPointer(), "wide inputs really require ownership");
+    miss(*wide_int);
+    miss(*wide_float);
+    slot->finalized = true;
+    miss(QoreValue(3.5));
+    slot->finalized = false;
+    slot->block_cleared = true;
+    miss(QoreValue(3.5));
+    slot->block_cleared = false;
+    slot->val.static_assignment = true;
+    miss(QoreValue(3.5));
+    slot->val.static_assignment = false;
+    slot->val.fixed_type = true;
+    miss(QoreValue(3.5));
+    slot->val.fixed_type = false;
+    {
+        ReferenceHolder<QoreStringNode> text(new QoreStringNode("owned scalar-store control"), &xsink);
+        slot->syncValue(QoreValue(text->refSelf()), &xsink);
+        miss(QoreValue(3.5));
+        UT_ASSERT_EQ(c, 2, text->reference_count(), "miss leaves both node owners unchanged");
+        slot->syncValue(QoreValue(1.25), &xsink);
+        UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary replacement releases the old node once");
+    }
+    slot->val.removeValue(true).discard(&xsink);
+    miss(QoreValue(3.5));
+    UT_ASSERT(c, !slot->val.assigned, "unassigned storage is not initialized by the replacement path");
+    slot->syncValue(QoreValue(1.25), &xsink);
+    local.var.setReadOnly();
+    // Mutating the declaration ends the prepared contract. Legacy entry points
+    // must still check it live; new preparation must reject this declaration.
+    UT_ASSERT(c, !local.var.isAOTScalarStoreDeclaration(), "read-only declaration cannot be prepared");
+    if (!prepared_declaration) {
+        miss(QoreValue(3.5));
+    }
+    {
+        LocalScope typed("native_scalar_typed_control", floatTypeInfo, xsink);
+        UT_ASSERT(c, !typed.var.isAOTScalarStoreDeclaration(), "typed declaration cannot be prepared");
+        UT_ASSERT(c, !typed.var.tryAssignAOTScalarValue(QoreValue(3.5), direct_store,
+            prepared ? thread_try_find_lvar(&typed.var) : nullptr),
+            "typed declaration keeps ordinary binding");
+    }
+    {
+        LocalVar missing("native_scalar_missing", autoTypeInfo);
+        UT_ASSERT(c, !missing.tryAssignAOTScalarValue(QoreValue(3.5), direct_store, nullptr),
+            "uninstantiated slot keeps normal error path");
+    }
+    UT_ASSERT(c, !xsink, "scalar-store admission tests raise no exception");
+}
+
+//! Prove exact typed publication is exercised and every live-state miss is inert.
+static void ut_aot_exact_scalar_local_store(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const QoreTypeInfo* ti, QoreValue value, ExceptionSink& sink)
+            : var("native_exact_scalar", ti), xsink(sink) {
+            var.instantiate(value);
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    };
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    LocalVar* locals[1];
+    context.locals = locals;
+    context.num_locals = 1;
+    for (const QoreTypeInfo* ti : {bigIntTypeInfo, floatTypeInfo, boolTypeInfo}) {
+        QoreValue first = ti == bigIntTypeInfo ? QoreValue(int64_t{7})
+            : ti == floatTypeInfo ? QoreValue(1.25) : QoreValue(false);
+        QoreValue next = ti == bigIntTypeInfo ? QoreValue(-(int64_t{1} << 46))
+            : ti == floatTypeInfo ? QoreValue(-0.0) : QoreValue(true);
+        LocalScope local(ti, first, xsink);
+        locals[0] = &local.var;
+        LocalVarValue* slot = thread_try_find_lvar(&local.var);
+        UT_ASSERT(c, local.var.isAOTExactScalarStoreDeclaration(), "exact scalar declaration selects typed helper");
+        UT_ASSERT(c, slot && slot->val.fixed_type, "exact scalar has fixed runtime storage");
+        if (!slot) {
+            continue;
+        }
+        UT_ASSERT(c, local.var.tryAssignAOTExactScalarValue(next), "exact typed store is handled");
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "typed store preserves exact bits");
+        UT_ASSERT(c, slot->val.fixed_type && slot->val.assigned && !slot->val.static_assignment,
+            "typed store preserves storage flags");
+        auto miss = [&](QoreValue input) {
+            ValueHolder before(slot->val.getValue(), &xsink);
+            UT_ASSERT(c, !local.var.tryAssignAOTExactScalarValue(input), "unsupported typed store is rejected");
+            ValueHolder after(slot->val.getValue(), &xsink);
+            UT_ASSERT_EQ(c, before->rawBits(), after->rawBits(), "typed store miss leaves storage unchanged");
+        };
+        for (QoreValue input : {QoreValue(), QoreValue::makeNull(), QoreValue::makeChar('x'),
+                QoreValue::makeShortString("inline", 6)}) {
+            miss(input);
+        }
+        miss(ti == bigIntTypeInfo ? QoreValue(2.5) : QoreValue(int64_t{11}));
+        ValueHolder wide_int(QoreValue(INT64_MAX), &xsink);
+        ValueHolder wide_float(QoreValue(-3.0e307), &xsink);
+        UT_ASSERT(c, wide_int->isPointer() && wide_float->isPointer(), "wide typed inputs require ownership");
+        miss(*wide_int);
+        miss(*wide_float);
+        slot->finalized = true;
+        miss(first);
+        slot->finalized = false;
+        slot->block_cleared = true;
+        miss(first);
+        slot->block_cleared = false;
+        slot->val.static_assignment = true;
+        miss(first);
+        slot->val.static_assignment = false;
+        slot->val.fixed_type = false;
+        miss(first);
+        slot->val.fixed_type = true;
+        // A declaration alone is not a proof of the live storage representation.
+        valtype_t saved_type = slot->val.type;
+        slot->val.type = QV_Node;
+        slot->val.v.n = nullptr;
+        miss(first);
+        slot->val.type = saved_type;
+        slot->syncValue(first, &xsink);
+        slot->val.removeValue(true).discard(&xsink);
+        miss(next);
+        UT_ASSERT(c, !slot->val.assigned, "replacement never initializes an unassigned typed slot");
+        slot->syncValue(first, &xsink);
+        // The exported wrapper must preserve publication and pending-exception behavior.
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, next.rawBits(), &xsink);
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "AOT wrapper publishes the actual slot");
+        int expected_publication = !q_env_is_set("QORE_DISABLE_AOT_EXACT_SCALAR_STORE")
+            && !q_env_is_set("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD");
+        UT_ASSERT_EQ(c, expected_publication,
+            qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, first.rawBits(), &xsink),
+            "v2 reports only enabled exact scalar publication");
+        UT_ASSERT_EQ(c, first.rawBits(), slot->val.getValue().rawBits(), "v2 publication preserves exact bits");
+        UT_ASSERT_EQ(c, expected_publication,
+            qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, next.rawBits(), &xsink),
+            "v2 replacement reports the same live admission");
+        xsink.raiseException("EXACT-SCALAR-STORE-TEST", "pending sink control");
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, first.rawBits(), &xsink);
+        UT_ASSERT(c, xsink, "typed store preserves a pending exception");
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "pending exception prevents publication");
+        UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, first.rawBits(), &xsink),
+            "pending exception cannot report publication");
+        bool threw = false;
+        try {
+            qore_rt_assign_exact_scalar_local_aot_throwing_v1(&context, 0, first.rawBits(), &xsink);
+        } catch (const QoreJITException&) {
+            threw = true;
+        }
+        UT_ASSERT(c, threw && xsink, "typed store native EH retains the sink and unwinds");
+        threw = false;
+        try {
+            qore_rt_assign_exact_scalar_local_aot_throwing_v2(&context, 0, first.rawBits(), &xsink);
+        } catch (const QoreJITException&) {
+            threw = true;
+        }
+        UT_ASSERT(c, threw && xsink, "publication-result native EH retains the sink and unwinds");
+        UT_ASSERT_EQ(c, next.rawBits(), slot->val.getValue().rawBits(), "neither pending path changes the slot");
+        xsink.clear();
+        if (ti == bigIntTypeInfo) {
+            UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, wide_int->rawBits(), &xsink),
+                "wide scalar input retains ordinary reload");
+            UT_ASSERT_EQ(c, INT64_MAX, slot->val.v.i, "fallback stores the full integer");
+            UT_ASSERT_EQ(c, 1, wide_int->getInternalNode()->reference_count(), "fallback retains input ownership");
+            UT_ASSERT_EQ(c, expected_publication,
+                qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, next.rawBits(), &xsink),
+                "replacing wide primitive storage can report exact immediate publication");
+        }
+        local.var.setReadOnly();
+        miss(first);
+    }
+    for (const QoreTypeInfo* ti : {autoTypeInfo, softBigIntTypeInfo, bigIntOrNothingTypeInfo}) {
+        LocalScope local(ti, QoreValue(int64_t{7}), xsink);
+        UT_ASSERT(c, !local.var.isAOTExactScalarStoreDeclaration(), "non-exact declarations keep the general helper");
+        UT_ASSERT(c, !local.var.tryAssignAOTExactScalarValue(QoreValue(int64_t{9})),
+            "auto, coercing and optional declarations retain ordinary assignment");
+    }
+    LocalVar captured("captured", bigIntTypeInfo), top("top", bigIntTypeInfo), self("self", bigIntTypeInfo);
+    captured.setClosureUse();
+    top.setTopLevel();
+    self.setSelf();
+    LocalVar no_narrow("no_narrow", bigIntTypeInfo), missing("missing", bigIntTypeInfo);
+    no_narrow.setNoNarrowing();
+    for (const LocalVar* var : {&captured, &top, &self, &no_narrow, &missing}) {
+        UT_ASSERT(c, !var->tryAssignAOTExactScalarValue(QoreValue(int64_t{9})),
+            "special declarations and uninstantiated locals retain ordinary fallback");
+    }
+    {
+        LocalScope local(autoTypeInfo, QoreValue(int64_t{7}), xsink);
+        locals[0] = &local.var;
+        ReferenceHolder<QoreStringNode> text(new QoreStringNode("typed helper fallback owner"), &xsink);
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, QoreValue(*text).rawBits(), &xsink);
+        UT_ASSERT_EQ(c, 2, text->reference_count(), "mismatched declaration retains ordinary ownership fallback");
+        qore_rt_assign_exact_scalar_local_aot_v1(&context, 0, QoreValue(int64_t{9}).rawBits(), &xsink);
+        UT_ASSERT_EQ(c, 1, text->reference_count(), "ordinary fallback releases the old node once");
+        UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, QoreValue(*text).rawBits(), &xsink),
+            "owning fallback does not report exact scalar publication");
+        UT_ASSERT_EQ(c, 2, text->reference_count(), "v2 fallback retains the actual slot owner");
+        UT_ASSERT_EQ(c, 0, qore_rt_assign_exact_scalar_local_aot_v2(&context, 0, QoreValue(int64_t{13}).rawBits(), &xsink),
+            "non-exact declaration cannot report publication even for immediate input");
+        UT_ASSERT_EQ(c, 1, text->reference_count(), "v2 fallback releases the old owner once");
+    }
+    UT_ASSERT(c, !xsink, "exact typed scalar tests raise no exception");
+}
+
+static void ut_aot_string_split(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreClass* cls = nullptr;
+    const QoreMethod* method = pseudo_classes_find_method(NT_STRING, "split", cls);
+    UT_ASSERT(c, method && cls, "canonical string split method exists");
+    if (!method || !cls) {
+        return;
+    }
+    const QoreFunction* function = qore_method_private::get(*method)->getFunction();
+    const AbstractQoreFunctionVariant* variant = function->runtimeFindExactVariant(&xsink,
+        type_vec_t{stringTypeInfo, boolTypeInfo, boolTypeInfo}, nullptr);
+    UT_ASSERT(c, variant && !xsink, "canonical split overload resolves exactly");
+    if (!variant || xsink) {
+        xsink.clear();
+        return;
+    }
+    QoreAOTContext ctx;
+    ctx.num_exprs = 1;
+    ctx.allocate();
+    ctx.exprs[0] = QoreValue().rawBits();
+    ctx.call_targets[0].method = method;
+    ctx.call_targets[0].qc = cls;
+    ctx.call_targets[0].variant = variant;
+    ctx.call_targets[0].is_pseudo = true;
+    RuntimeConfig& rc = rc_get_current_ref();
+    const auto* stack = get_runtime_stack_location();
+    const auto* location = get_runtime_location();
+    const auto* return_type = getReturnTypeInfo();
+    auto flags = rc.getRuntimeFlags();
+    QoreObject* object;
+    const qore_class_private* class_ctx;
+    runtime_get_object_and_class(object, class_ctx);
+    QoreObject* rc_object = rc.getObject();
+    const auto* rc_class = rc.getClass();
+    auto restored = [&]() {
+        QoreObject* now_object;
+        const qore_class_private* now_class;
+        runtime_get_object_and_class(now_object, now_class);
+        UT_ASSERT(c, stack == get_runtime_stack_location(), "split restores the published stack");
+        UT_ASSERT(c, location == get_runtime_location(), "split restores the runtime location");
+        UT_ASSERT(c, return_type == getReturnTypeInfo(), "split restores the return type");
+        UT_ASSERT_EQ(c, flags, rc.getRuntimeFlags(), "split restores RuntimeConfig flags");
+        UT_ASSERT(c, object == now_object && class_ctx == now_class, "split restores live object/class context");
+        UT_ASSERT(c, rc_object == rc.getObject() && rc_class == rc.getClass(),
+            "split restores RuntimeConfig object/class context");
+    };
+    auto call = [&](QoreValue base, QoreValue separator) {
+        uint64_t bits = qore_rt_pseudo_string_split_aot_v1(&ctx, 0, base.rawBits(),
+            separator.rawBits(), nullptr, &xsink);
+        QoreValue value;
+        std::memcpy(&value, &bits, sizeof(value));
+        return value;
+    };
+    {
+        ValueHolder result(call(QoreValue::makeShortString("a,b", 3),
+            QoreValue::makeShortString(",", 1)), &xsink);
+        UT_ASSERT(c, !xsink && result->getType() == NT_LIST, "inline split returns a list");
+        if (result->getType() == NT_LIST) {
+            const auto* list = result->get<const QoreListNode>();
+            UT_ASSERT_EQ(c, 2, list->size(), "inline split has two fields");
+            UT_ASSERT(c, QoreStringDataHelper(list->retrieveEntry(0)) == "a"
+                && QoreStringDataHelper(list->retrieveEntry(1)) == "b", "inline split preserves fields");
+        }
+        restored();
+    }
+    {
+        ReferenceHolder<QoreStringNode> base(new QoreStringNode("leftabcdefghright"), &xsink);
+        ReferenceHolder<QoreStringNode> separator(new QoreStringNode("abcdefgh"), &xsink);
+        ValueHolder result(call(QoreValue(*base), QoreValue(*separator)), &xsink);
+        UT_ASSERT(c, !xsink && result->getType() == NT_LIST, "heap split succeeds");
+        UT_ASSERT_EQ(c, 1, base->reference_count(), "split borrows the heap receiver");
+        UT_ASSERT_EQ(c, 1, separator->reference_count(), "split borrows the heap separator");
+        restored();
+    }
+    {
+        ReferenceHolder<QoreStringNode> ascii(new QoreStringNode("a,b", QCS_USASCII), &xsink);
+        ValueHolder result(call(QoreValue(*ascii), QoreValue::makeShortString("日", 3)), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing(), "conversion failure returns no owned result");
+        UT_ASSERT(c, QoreStringDataHelper(xsink.getExceptionErr()) == "ENCODING-CONVERSION-ERROR",
+            "split preserves the conversion error");
+        restored();
+        xsink.clear();
+    }
+    xsink.raiseException("SPLIT-PENDING-TEST", "pending exception control");
+    {
+        ValueHolder result(call(QoreValue::makeShortString("a,b", 3),
+            QoreValue::makeShortString(",", 1)), &xsink);
+        UT_ASSERT(c, result->isNothing()
+            && QoreStringDataHelper(xsink.getExceptionErr()) == "SPLIT-PENDING-TEST",
+            "split preserves a pending sink without returning a result");
+        restored();
+    }
+    xsink.clear();
+#ifdef QORE_MANAGE_STACK
+    {
+        QoreElidedStackHelper limit(SIZE_MAX);
+        ValueHolder result(call(QoreValue::makeShortString("a,b", 3),
+            QoreValue::makeShortString(",", 1)), &xsink);
+        UT_ASSERT(c, result->isNothing()
+            && QoreStringDataHelper(xsink.getExceptionErr()) == "STACK-LIMIT-EXCEEDED",
+            "split retains the physical stack-limit check");
+        restored();
+    }
+    xsink.clear();
+#endif
+}
+
+#ifdef DEBUG
+static void ut_aot_same_list_publication(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    const QoreTypeInfo* ti = qore_get_complex_list_type(bigIntTypeInfo);
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, const QoreTypeInfo* type, QoreValue value, ExceptionSink& sink)
+            : var(name, type), xsink(sink) {
+            var.instantiate(value);
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    };
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    ReferenceHolder<QoreListNode> first(new QoreListNode(bigIntTypeInfo), &xsink);
+    ReferenceHolder<QoreListNode> second(new QoreListNode(bigIntTypeInfo), &xsink);
+    first->push(QoreValue(int64_t{7}), &xsink);
+    second->push(QoreValue(INT64_MAX), &xsink);
+    LocalScope local("same_list", ti, QoreValue(first->refSelf()), xsink);
+    LocalVar* locals[] = {&local.var};
+    context.locals = locals;
+    context.num_locals = 1;
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot && local.var.isAOTIntListStoreDeclaration(), "integer-list body declaration is admitted");
+    if (!slot) {
+        return;
+    }
+    auto publish = [&](QoreListNode* list, void* prepared) {
+        qore_rt_assign_same_list_local_aot_v1(&context, 0, QoreValue(list).rawBits(), prepared, &xsink);
+        UT_ASSERT(c, !xsink, "publication leaves no exception");
+        UT_ASSERT(c, slot->val.assigned && slot->val.type == QV_Node && slot->val.v.n == list,
+            "publication preserves the actual runtime owner");
+    };
+    publish(*first, slot);
+    UT_ASSERT_EQ(c, 2, first->reference_count(), "same-root publication leaves the reference count unchanged");
+    UT_ASSERT(c, qore_list_private::get(**first)->complexTypeInfo == ti, "same-root publication preserves type");
+    xsink.raiseException("SAME-LIST-TEST", "pending publication sink");
+    qore_rt_assign_same_list_local_aot_v1(&context, 0, QoreValue(*second).rawBits(), slot, &xsink);
+    UT_ASSERT(c, xsink && slot->val.v.n == *first, "pending exception prevents replacement");
+    bool threw = false;
+    try {
+        qore_rt_assign_same_list_local_aot_throwing_v1(&context, 0,
+            QoreValue(*second).rawBits(), slot, &xsink);
+    } catch (const QoreJITException&) {
+        threw = true;
+    }
+    UT_ASSERT(c, threw && xsink && slot->val.v.n == *first, "native EH preserves sink and local value");
+    UT_ASSERT_EQ(c, 1, second->reference_count(), "pending publication does not retain its borrowed input");
+    xsink.clear();
+    publish(*second, slot);
+    UT_ASSERT_EQ(c, 1, first->reference_count(), "replacement releases the old runtime owner once");
+    UT_ASSERT_EQ(c, 2, second->reference_count(), "replacement retains its own runtime owner");
+    publish(*first, nullptr);
+    UT_ASSERT_EQ(c, 1, second->reference_count(), "null prepared storage uses ordinary replacement");
+    {
+        LocalScope other("other_list", ti, QoreValue(second->refSelf()), xsink);
+        LocalVarValue* other_slot = thread_try_find_lvar(&other.var);
+        publish(*second, other_slot);
+        UT_ASSERT(c, other_slot && other_slot->val.v.n == *second,
+            "a different local's prepared slot is left untouched");
+        UT_ASSERT_EQ(c, 3, second->reference_count(), "identity mismatch retains only the target's owner");
+    }
+    slot->val.removeValue(true).discard(&xsink);
+    publish(*first, slot);
+    UT_ASSERT_EQ(c, 2, first->reference_count(), "unassigned storage is initialized by ordinary fallback");
+    for (const QoreTypeInfo* excluded : {autoTypeInfo, autoNoNarrowListTypeInfo,
+            qore_get_complex_list_type(floatTypeInfo)}) {
+        LocalVar var("excluded_list", excluded);
+        UT_ASSERT(c, !var.isAOTIntListStoreDeclaration(), "non-integer and no-narrow declarations are excluded");
+    }
+    {
+        LocalScope plain("plain_list", autoNoNarrowListTypeInfo, QoreValue(), xsink);
+        locals[0] = &plain.var;
+        LocalVarValue* plain_slot = thread_try_find_lvar(&plain.var);
+        qore_rt_assign_same_list_local_aot_v1(&context, 0, QoreValue(*first).rawBits(), plain_slot, &xsink);
+        UT_ASSERT(c, !xsink && plain_slot && plain_slot->val.v.n != *first,
+            "no-narrow fallback retains ordinary copying");
+        if (plain_slot && plain_slot->val.v.n && plain_slot->val.v.n->getType() == NT_LIST) {
+            auto* list = static_cast<QoreListNode*>(plain_slot->val.v.n);
+            UT_ASSERT(c, qore_list_private::get(*list)->complexTypeInfo == autoListTypeInfo,
+                "no-narrow fallback strips the destination type");
+        }
+        UT_ASSERT(c, qore_list_private::get(**first)->complexTypeInfo == ti,
+            "no-narrow copying preserves the source type");
+        locals[0] = &local.var;
+    }
+    local.var.setReadOnly();
+    UT_ASSERT(c, !local.var.isAOTIntListStoreDeclaration(), "read-only declarations are excluded");
+    UT_ASSERT(c, !xsink, "same-list publication unit checks leave no exception");
+}
+#endif
+
+static void ut_aot_scalar_local_store(UnitTestCounters& c) {
+#ifdef DEBUG
+    ut_aot_same_list_publication(c);
+#endif
+    ut_aot_exact_scalar_local_store(c);
+    // Exercise direct/generic storage and prepared/looked-up slots against the
+    // same live-slot admission, bit-preservation and ownership assertions.
+    ut_aot_scalar_local_store_mode(c, false, false);
+    ut_aot_scalar_local_store_mode(c, true, false);
+    ut_aot_scalar_local_store_mode(c, false, true);
+    ut_aot_scalar_local_store_mode(c, true, true);
+    ut_aot_scalar_local_store_mode(c, false, true, true);
+    ut_aot_scalar_local_store_mode(c, true, true, true);
+
+    LocalVar captured("captured", autoTypeInfo), top("top", autoTypeInfo), self("self", autoTypeInfo);
+    captured.setClosureUse();
+    top.setTopLevel();
+    self.setSelf();
+    LocalVar no_narrow("no_narrow", autoNoNarrowTypeInfo), untyped("untyped", nullptr);
+    for (const LocalVar* var : {&captured, &top, &self, &no_narrow, &untyped}) {
+        UT_ASSERT(c, !var->isAOTScalarStoreDeclaration(), "special declaration is not prepared");
+    }
+}
+
+//! Observe publication ordering while a reload releases its previous deferred owner.
+class UtReloadDeferredString : public QoreStringNode {
+public:
+    UtReloadDeferredString(UnitTestCounters& counters, LocalVarValue& slot, uint64_t& cache,
+            uint64_t& tracker, uint64_t& deferred, uint64_t& valid_epoch, uint64_t old_tracker,
+            ExceptionSink& xsink, bool fail)
+        : QoreStringNode("reload deferred cleanup"), counters(counters), slot(slot), cache(cache),
+          tracker(tracker), deferred(deferred), valid_epoch(valid_epoch), old_tracker(old_tracker),
+          xsink(xsink), fail(fail) {
+    }
+
+    ~UtReloadDeferredString() override {
+        UT_ASSERT_EQ(counters, QoreValue(int64_t{27}).rawBits(), cache, "cache is published before cleanup");
+        UT_ASSERT_EQ(counters, cache, tracker, "new owning tracker is published before cleanup");
+        UT_ASSERT_EQ(counters, old_tracker, deferred, "old tracker is deferred before cleanup");
+        UT_ASSERT_EQ(counters, 0, valid_epoch, "epoch is not published before cleanup");
+        // The actual slot may change during cleanup. Do not substitute this
+        // later value for the one evaluated before the destructor ran.
+        slot.syncValue(QoreValue(int64_t{73}), &xsink);
+        uint64_t nested_cache = QoreValue().rawBits(), nested_tracker = nested_cache;
+        uint64_t nested_deferred = nested_cache, nested_epoch = 0;
+        qore_rt_reload_prepared_local_if_stale_aot_v1(&slot, &nested_cache, &nested_tracker,
+            &nested_deferred, &nested_epoch, 1, &xsink);
+        UT_ASSERT_EQ(counters, QoreValue(int64_t{73}).rawBits(), nested_cache,
+            "reentrant evaluation sees the current slot");
+        qore_rt_decref(nested_tracker, &xsink);
+        qore_rt_decref(nested_deferred, &xsink);
+        if (fail) {
+            xsink.raiseException("RELOAD-CLEANUP-TEST", "deferred owner cleanup failure");
+        }
+    }
+
+private:
+    UnitTestCounters& counters;
+    LocalVarValue& slot;
+    uint64_t &cache, &tracker, &deferred, &valid_epoch;
+    uint64_t old_tracker;
+    ExceptionSink& xsink;
+    bool fail;
+};
+
+//! Compare live identity acceptance with ordinary ordered class lookup.
+static void ut_aot_first_public_base(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreClassHolder base_owner(new QoreClass("UtPublicBase", "::UtPublicBase"));
+    QoreClass* base = base_owner;
+    // Fresh native definitions have unset signature hashes and cannot compare
+    // structurally equal until committed. Model empty committed definitions.
+    qore_class_private::get(*base)->hash.updateEmpty();
+    QoreClassHolder copy_owner(base->copy());
+    QoreClass* copy = copy_owner;
+    QoreClassHolder child_owner(new QoreClass("UtPublicChild", "::UtPublicChild"));
+    QoreClass* child = child_owner;
+    child->addBuiltinBaseClass(copy);
+    QoreClassHolder deep_owner(new QoreClass("UtPublicDeep", "::UtPublicDeep"));
+    QoreClass* deep = deep_owner;
+    deep->addBuiltinBaseClass(child);
+    QoreClassHolder unrelated_owner(new QoreClass("UtUnrelated", "::UtUnrelated"));
+    QoreClass* unrelated = unrelated_owner;
+    QoreClassHolder second_owner(new QoreClass("UtSecondBase", "::UtSecondBase"));
+    QoreClass* second = second_owner;
+    second->addBuiltinBaseClass(unrelated);
+    second->addBuiltinBaseClass(base);
+    QoreClassHolder equivalent_owner(new QoreClass("UtPublicBase", "::UtPublicBase"));
+    QoreClass* equivalent = equivalent_owner;
+    qore_class_private::get(*equivalent)->hash.updateEmpty();
+    UT_ASSERT(c, qore_class_private::get(*base) != qore_class_private::get(*equivalent)
+        && qore_class_private::get(*base)->equal(*qore_class_private::get(*equivalent)),
+        "distinct definitions are structurally equivalent for the shadow regression");
+    QoreClassHolder shadow_owner(new QoreClass("UtPrivateShadow", "::UtPrivateShadow"));
+    QoreClass* shadow = shadow_owner;
+    shadow->addBuiltinBaseClass(equivalent);
+    shadow->addBuiltinBaseClass(base);
+    qore_class_private::get(*shadow)->scl->front()->access = Private;
+    auto compare = [&](QoreClass* actual, QoreClass* target, bool expected) {
+        ReferenceHolder<QoreObject> object(new QoreObject(actual, getProgram()), &xsink);
+        UT_ASSERT_EQ(c, expected, QoreTypeInfo::acceptsRequiredClassObject(*target, **object),
+            "ordinary live acceptance supplies the reference result");
+        UT_ASSERT_EQ(c, expected, QoreTypeInfo::acceptsRequiredClassObjectFirstPublicBase(*target, **object),
+            "first-public-base acceptance agrees with ordinary lookup");
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "acceptance does not acquire ownership");
+    };
+    for (QoreClass* target : {base, copy}) {
+        for (QoreClass* actual : {base, copy, child, deep, second, equivalent}) {
+            compare(actual, target, true);
+        }
+        compare(unrelated, target, false);
+        compare(shadow, target, false);
+    }
+    // These classes/objects are test-local and unpublished. Change the first
+    // edge between calls to verify that no accepted decision is cached.
+    for (ClassAccess access : {Private, Internal, Public}) {
+        qore_class_private::get(*child)->scl->front()->access = access;
+        compare(child, base, access == Public);
+    }
+    {
+        QoreClassHolder generic_owner(new QoreClass("UtGenericBase", "::UtGenericBase"));
+        QoreClass* generic = generic_owner;
+        generic->addTypeParameter("T");
+        QoreParameterizedClassTypeInfo instantiated(generic, {bigIntTypeInfo}, false);
+        ReferenceHolder<QoreObject> object(new QoreObject(generic, getProgram()), &xsink);
+        for (bool parameterized : {false, true, false}) {
+            object->setInstantiatedTypeInfo(parameterized ? &instantiated : nullptr);
+            for (bool legacy : {false, true}) {
+                qore_class_private::get(*generic)->setLegacyRawGenericCompatibility(legacy, false);
+                bool expected = !parameterized || legacy;
+                UT_ASSERT_EQ(c, expected, QoreTypeInfo::acceptsRequiredClassObject(*generic, **object),
+                    "ordinary raw-class acceptance is live");
+                UT_ASSERT_EQ(c, expected,
+                    QoreTypeInfo::acceptsRequiredClassObjectFirstPublicBase(*generic, **object),
+                    "exact identity cannot bypass the live parameterized-object gate");
+            }
+        }
+    }
+    {
+        struct LocalScope {
+            LocalVar var;
+            ExceptionSink& xsink;
+            LocalScope(const QoreTypeInfo* ti, ExceptionSink& sink)
+                    : var("native_first_public_base", ti), xsink(sink) {
+                var.instantiateIntern(QoreValue(), false);
+            }
+            ~LocalScope() { var.uninstantiate(&xsink); }
+        } local(base->getTypeInfo(), xsink);
+        LocalVarValue* slot = thread_try_find_lvar(&local.var);
+        UT_ASSERT(c, slot && !slot->val.assigned, "fresh class slot is unassigned");
+        if (!slot) {
+            return;
+        }
+        struct BorrowedLocalContext : QoreAOTContext {
+            ~BorrowedLocalContext() { locals = nullptr; }
+        } context;
+        LocalVar* locals[] = {&local.var};
+        context.locals = locals;
+        context.num_locals = 1;
+        context.pgm = getProgram();
+        ReferenceHolder<QoreObject> object(new QoreObject(child, getProgram()), &xsink);
+        auto store = [&](uint64_t value) {
+            return qore_rt_try_assign_pinned_class_local_aot_v4(&context, 0, value, slot, base, &xsink);
+        };
+        uint64_t bits = QoreValue(*object).rawBits();
+        // Force the non-null prepared helper, including in disabled-control
+        // runs, so passing through ordinary fallback alone is insufficient.
+        for (int guard = 0; guard < 5; ++guard) {
+            slot->finalized = guard == 0;
+            slot->val.static_assignment = guard == 1;
+            slot->val.fixed_type = guard == 2;
+            if (guard == 3) {
+                xsink.raiseException("FIRST-PUBLIC-BASE-TEST", "pending exception");
+            }
+            if (guard == 4) {
+                xsink.raiseThreadExit();
+            }
+            UT_ASSERT_EQ(c, 0, store(bits), "live slot state or pending exception rejects initialization");
+            UT_ASSERT(c, !slot->val.assigned, "rejected initialization leaves storage untouched");
+            UT_ASSERT_EQ(c, 1, object->reference_count(), "rejected initialization acquires no reference");
+            slot->finalized = false;
+            slot->val.static_assignment = false;
+            slot->val.fixed_type = false;
+            xsink.clear();
+        }
+        for (QoreValue value : {QoreValue(), QoreValue(int64_t{7})}) {
+            UT_ASSERT_EQ(c, 0, store(value.rawBits()), "non-object representation is rejected");
+        }
+        UT_ASSERT_EQ(c, 1, store(bits), "first public base actually initializes the slot");
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "initialization acquires exactly the slot owner");
+        UT_ASSERT_EQ(c, bits, slot->val.getValue().rawBits(), "published slot retains the exact object");
+        UT_ASSERT_EQ(c, 0, store(bits), "assigned slot cannot be reinitialized");
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "assigned rejection acquires no extra owner");
+        slot->del(&xsink);
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "ordinary cleanup releases exactly the slot owner");
+        xsink.raiseException("FIRST-PUBLIC-BASE-TEST", "pending throwing-helper exception");
+        bool caught = false;
+        try {
+            qore_rt_try_assign_pinned_class_local_aot_throwing_v4(&context, 0, bits, slot, base, &xsink);
+        } catch (const QoreJITException&) {
+            caught = true;
+        }
+        UT_ASSERT(c, caught && xsink && !slot->val.assigned, "throwing wrapper preserves pending failure");
+        xsink.clear();
+        xsink.raiseThreadExit();
+        caught = false;
+        try {
+            qore_rt_try_assign_pinned_class_local_aot_throwing_v4(&context, 0, bits, slot, base, &xsink);
+        } catch (const QoreJITException&) {
+            caught = true;
+        }
+        UT_ASSERT(c, caught && xsink.isThreadExit() && !slot->val.assigned,
+            "throwing wrapper preserves a pending thread exit");
+        xsink.clear();
+        int handled = qore_rt_try_assign_pinned_class_local_aot_v4(&context, 0, bits, slot, nullptr, &xsink);
+        bool enabled = !q_env_is_set("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")
+            && !q_env_is_set("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE")
+            && !q_env_is_set("QORE_DISABLE_AOT_CLASS_STRONG_STORE");
+        UT_ASSERT_EQ(c, enabled ? 1 : 0, handled, "null constraint retains v2 admission and ownership");
+        slot->del(&xsink);
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "fallback cleanup releases any acquired slot owner");
+        // Exercise the shared reference primitive directly, including in Debug.
+        object->refImpl();
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "inline ref retains the object's custom reference handler");
+        object->deref(&xsink);
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "ordinary deref balances inline custom ref");
+        ReferenceHolder<QoreStringNode> string(new QoreStringNode("inline-ref"), &xsink);
+        string->refImpl();
+        UT_ASSERT_EQ(c, 2, string->reference_count(), "inline ref retains ordinary node reference counting");
+        string->deref(&xsink);
+        UT_ASSERT_EQ(c, 1, string->reference_count(), "ordinary deref balances inline node ref");
+        // Flags belong to this unpublished test-local slot. Keep the marker
+        // decision live even though compiled admission excludes captured slots.
+        qore_object_private* data = qore_object_private::get(**object);
+        int initial_real_refs = data->rrefs.load(std::memory_order_relaxed);
+        for (int mode = 0; mode < 3; ++mode) {
+            slot->val.is_closure = mode != 0;
+            slot->val.closure_lent = mode == 2;
+            UT_ASSERT_EQ(c, 1, store(bits), "initial object store preserves live real-reference mode");
+            UT_ASSERT_EQ(c, 2, object->reference_count(), "each slot mode acquires exactly one owner");
+            UT_ASSERT_EQ(c, initial_real_refs + (mode != 1), data->rrefs.load(std::memory_order_relaxed),
+                "only ordinary or lent-closure slots mark a real reference");
+            slot->del(&xsink);
+            UT_ASSERT_EQ(c, 1, object->reference_count(), "each slot mode releases exactly one owner");
+            UT_ASSERT_EQ(c, initial_real_refs, data->rrefs.load(std::memory_order_relaxed),
+                "ordinary cleanup balances every real-reference mode");
+            UT_ASSERT(c, !slot->val.assigned, "cleanup leaves the slot unassigned in every mode");
+        }
+        slot->val.is_closure = false;
+        slot->val.closure_lent = false;
+    }
+    UT_ASSERT(c, !xsink, "first-public-base native checks raise no unexpected exception");
+}
+
+//! Observe the custom dereference contract and cleanup publication of a C++ object subclass.
+class UtAOTLocalReleaseObject : public QoreObject {
+public:
+    UtAOTLocalReleaseObject(const QoreClass* cls, UnitTestCounters& counters, LocalVarValue& slot,
+            int& calls, bool& clearing)
+        : QoreObject(cls, ::getProgram()), counters(counters), slot(slot), calls(calls), clearing(clearing) {
+    }
+
+    void setSingleton(bool singleton) { there_can_be_only_one = singleton; }
+
+protected:
+    void customDeref(ExceptionSink* xsink) override {
+        ++calls;
+        if (clearing) {
+            UT_ASSERT(counters, slot.block_cleared && !slot.val.assigned,
+                "slot state is published before the custom release can reenter");
+            qore_object_private* data = qore_object_private::get(*this);
+            UT_ASSERT_EQ(counters, 1, data->rrefs.load(std::memory_order_relaxed),
+                "the slot real-reference mark is removed before custom dereference");
+        }
+        QoreObject::customDeref(xsink);
+    }
+
+private:
+    UnitTestCounters& counters;
+    LocalVarValue& slot;
+    int& calls;
+    bool& clearing;
+};
+
+//! Exercise the AOT clear entry against live ownership modes, custom handlers, and pending events.
+static void ut_aot_class_local_release(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreClassHolder cls_owner(new QoreClass("UtAOTLocalRelease", "::UtAOTLocalRelease"));
+    QoreClass* cls = cls_owner;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const QoreTypeInfo* ti, ExceptionSink& sink) : var("release_receiver", ti), xsink(sink) {
+            var.instantiateIntern(QoreValue(), false);
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    } local(cls->getTypeInfo(), xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot && !slot->val.assigned, "release fixture starts with an empty runtime slot");
+    if (!slot) {
+        return;
+    }
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    LocalVar* locals[] = {&local.var};
+    context.locals = locals;
+    context.num_locals = 1;
+    context.pgm = getProgram();
+    // All loops have fixed small bounds. The external real owner makes a combined release eligible,
+    // while the borrowed C++ holder keeps the object available for assertions after clearing the slot.
+    for (int kind = 0; kind < 3; ++kind) {
+        for (int mode = 0; mode < 3; ++mode) {
+            for (int event = 0; event < 3; ++event) {
+                int calls = 0;
+                bool clearing = false;
+                ReferenceHolder<QoreObject> object(kind
+                    ? new UtAOTLocalReleaseObject(cls, c, *slot, calls, clearing)
+                    : new QoreObject(cls, getProgram()), &xsink);
+                if (kind != 2) {
+                    object->realRef();
+                }
+                if (kind == 2) {
+                    static_cast<UtAOTLocalReleaseObject*>(*object)->setSingleton(true);
+                }
+                qore_object_private* data = qore_object_private::get(**object);
+                slot->block_cleared = false;
+                slot->val.is_closure = mode != 0;
+                slot->val.closure_lent = mode == 2;
+                slot->val.assignInitialNode(object->objectRefSelf());
+                UT_ASSERT_EQ(c, kind == 2 ? 1 : 3, object->reference_count(),
+                    "initial assignment acquires only a reference-counted slot owner");
+                UT_ASSERT_EQ(c, (kind != 2) + (mode != 1), data->rrefs.load(std::memory_order_relaxed),
+                    "ordinary and lent slots mark real ownership; captured slots do not");
+                if (event == 1) {
+                    xsink.raiseException("AOT-LOCAL-RELEASE-TEST", "pending exception");
+                } else if (event == 2) {
+                    xsink.raiseThreadExit();
+                }
+                clearing = true;
+                qore_rt_clear_class_local_slot_aot_v1(&context, 0, slot, &xsink);
+                clearing = false;
+                UT_ASSERT(c, slot->block_cleared && !slot->val.assigned,
+                    "class-local cleanup leaves the slot cleared and unassigned");
+                UT_ASSERT_EQ(c, kind == 2 ? 1 : 2, object->reference_count(),
+                    "cleanup releases exactly the slot owner");
+                UT_ASSERT_EQ(c, kind != 2, data->rrefs.load(std::memory_order_relaxed),
+                    "cleanup balances the live slot real-reference mode");
+                UT_ASSERT_EQ(c, kind == 1 ? 1 : 0, calls,
+                    "C++ custom dereference is observed and singleton dereference is suppressed");
+                UT_ASSERT_EQ(c, event == 1, xsink.isException(), "cleanup preserves a pending exception");
+                UT_ASSERT_EQ(c, event == 2, xsink.isThreadExit(), "cleanup preserves pending thread exit");
+                xsink.clear();
+                qore_rt_clear_class_local_slot_aot_v1(&context, 0, slot, &xsink);
+                UT_ASSERT_EQ(c, kind == 2 ? 1 : 2, object->reference_count(),
+                    "repeated clear releases no second reference");
+                if (kind == 2) {
+                    static_cast<UtAOTLocalReleaseObject*>(*object)->setSingleton(false);
+                }
+                if (kind != 2) {
+                    object->realDeref(&xsink);
+                }
+                UT_ASSERT_EQ(c, 1, object->reference_count(), "the external real owner is balanced separately");
+                UT_ASSERT_EQ(c, 0, data->rrefs.load(std::memory_order_relaxed),
+                    "no real-reference marker leaks from a completed case");
+                UT_ASSERT(c, !xsink, "cleanup raises no unexpected exception");
+            }
+        }
+    }
+    // Independently prove admission of the combined primitive and its last-real-reference fallback.
+    {
+        ReferenceHolder<QoreObject> object(new QoreObject(cls, getProgram()), &xsink);
+        qore_object_private* data = qore_object_private::get(**object);
+        object->realRef();
+        object->realRef();
+        QoreEnvironmentValue trace("QORE_TRACE_OBJECT_REFS");
+        bool expected = (!trace.c_str() || !*trace.c_str()) && debug < QORE_DEBUG_OBJ_REFS && debug < QRO_LVL;
+        bool handled = data->tryDerefLocalRealReference(&xsink);
+        UT_ASSERT_EQ(c, expected, handled, "combined release is admitted only outside reference diagnostics");
+        if (!handled) {
+            object->realDeref(&xsink);
+        }
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "combined release drops exactly one reference");
+        UT_ASSERT_EQ(c, 1, data->rrefs.load(std::memory_order_relaxed),
+            "combined release drops exactly one real-reference marker");
+        UT_ASSERT(c, !data->tryDerefLocalRealReference(&xsink), "last real reference retains ordinary cleanup");
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "rejected combined release does not change ownership");
+        object->realRef();
+        auto previous = RObject::dbg_before_fast_release.exchange([](RObject*) {});
+        UT_ASSERT(c, !data->tryDerefLocalRealReference(&xsink),
+            "instrumented releases retain the original Debug hook path");
+        RObject::dbg_before_fast_release.store(previous);
+        UT_ASSERT_EQ(c, 3, object->reference_count(), "hook fallback leaves references unchanged");
+        UT_ASSERT_EQ(c, 2, data->rrefs.load(std::memory_order_relaxed),
+            "hook fallback leaves real-reference markers unchanged");
+        object->realDeref(&xsink);
+        object->realDeref(&xsink);
+        UT_ASSERT(c, !xsink, "combined primitive checks leave a clean sink");
+    }
+    slot->val.is_closure = false;
+    slot->val.closure_lent = false;
+}
+
+enum class IndexedReadTestEntry { Compatibility, LiveContext, NullContext };
+
+static void ut_indexed_read_policy(UnitTestCounters& c, RuntimeConfig& rc,
+        IndexedReadTestEntry entry = IndexedReadTestEntry::Compatibility) {
+    ExceptionSink xsink;
+    RuntimeConfig read_context(RuntimeConfigNativeAccess::getCurrent());
+    ReferenceHolder<QoreListNode> list(new QoreListNode(bigIntTypeInfo), &xsink);
+    for (int64_t value : {3, 7, 11}) {
+        list->push(QoreValue(value), &xsink);
+    }
+    ReferenceHolder<WeakListReferenceNode> weak(new WeakListReferenceNode(*list), &xsink);
+    ReferenceHolder<BinaryNode> binary(new BinaryNode, &xsink);
+    const unsigned char bytes[] = {3, 7, 11};
+    binary->append(bytes, sizeof(bytes));
+    auto read = [&](QoreValue container, int64_t index) {
+        QoreSimpleValue raw;
+        raw.setRawBits(entry == IndexedReadTestEntry::Compatibility
+            ? qore_rt_list_index_access_compat(container.rawBits(), index, 1, &xsink)
+            : qore_rt_list_index_access_context_v1(container.rawBits(), index, 1, &xsink,
+                entry == IndexedReadTestEntry::LiveContext ? &read_context : nullptr));
+        return QoreValue(raw);
+    };
+    for (bool enabled : {false, true}) {
+        // The calling Program's options are those of the thread (%modern code has negative offsets), and an
+        // override adds an option that is not positive without removing it, so the override replaces it to set
+        // both policies independently of the caller.
+        QoreCallParseOptionsOverride override_po;
+        override_po.mask = PO_NEGATIVE_OFFSETS;
+        override_po.value = enabled ? PO_NEGATIVE_OFFSETS : QoreParseOptions();
+        override_po.replace = PO_NEGATIVE_OFFSETS;
+        RuntimeParseOptionsOverrideHelper policy(rc, override_po);
+        UT_ASSERT_EQ(c, enabled, runtime_check_parse_option(PO_NEGATIVE_OFFSETS),
+            "the override sets the thread's negative-offset policy");
+        // Deliberately stale snapshot: native reads must use the live thread
+        // view, including the override above, rather than this copied field.
+        read_context.setParseOptions(enabled ? QoreParseOptions() : PO_NEGATIVE_OFFSETS);
+        for (int64_t index : {std::numeric_limits<int64_t>::min(), int64_t{-4}, int64_t{-3},
+                int64_t{-1}, int64_t{0}, int64_t{2}, int64_t{3}, std::numeric_limits<int64_t>::max()}) {
+            int64_t normalized = enabled && index < 0 ? index + 3 : index;
+            for (QoreValue container : {QoreValue(*list), QoreValue(*weak), QoreValue(*binary)}) {
+                ValueHolder result(read(container, index), &xsink);
+                bool in_bounds = normalized >= 0 && normalized < 3;
+                UT_ASSERT(c, !xsink && (in_bounds
+                    ? result->isInt() && result->getInt() == bytes[normalized]
+                    : result->isNothing()), "indexed read preserves current negative-offset policy and bounds");
+            }
+        }
+        UT_ASSERT_EQ(c, 1, list->reference_count(), "strong and weak reads retain caller list ownership");
+        UT_ASSERT_EQ(c, 1, binary->reference_count(), "binary reads retain caller ownership");
+        {
+            ValueHolder result(read(QoreValue(int64_t{17}), 0), &xsink);
+            UT_ASSERT(c, !xsink && result->isNothing(), "unsupported indexed value remains Nothing");
+        }
+        xsink.raiseException("INDEX-PENDING", "pending exception prevents indexed reading");
+        {
+            ValueHolder result(read(QoreValue(*list), 0), &xsink);
+            UT_ASSERT(c, xsink && result->isNothing() && list->reference_count() == 1,
+                "pending exception retains indexed-read ownership and result");
+        }
+        xsink.clear();
+    }
+
+    for (QoreValue value : {QoreValue(), QoreValue(false), QoreValue(true), QoreValue(int64_t{17}),
+            QoreValue(QoreValue::InlineIntMin), QoreValue(QoreValue::InlineIntMax), QoreValue(1.25),
+            QoreValue(-0.0), QoreValue(std::numeric_limits<double>::quiet_NaN()),
+            QoreValue::makeChar(0xe9), QoreValue::makeShortString("short", 5)}) {
+        UT_ASSERT(c, !value.needsRef(), "inline indexed fixture has no owner");
+        ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+        container->push(value, &xsink);
+        ValueHolder result(read(QoreValue(*container), 0), &xsink);
+        UT_ASSERT(c, !xsink && result->rawBits() == value.rawBits(),
+            "inline indexed read preserves exact value bits");
+    }
+
+    auto check_owned = [&](QoreValue value, const AbstractQoreNode* node) {
+        UT_ASSERT(c, node && value.needsRef(), "owned indexed fixture has a node owner");
+        if (!node) {
+            return;
+        }
+        int initial_refs = node->reference_count();
+        ValueHolder survivor(&xsink);
+        {
+            ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+            // Ordinary push normalizes opaque values. Store the actual representation
+            // to exercise ownership of an opaque entry as well as ordinary nodes.
+            qore_list_private::get(**container)->pushIntern(value.refSelf());
+            UT_ASSERT_EQ(c, value.rawBits(), container->retrieveEntry(0).rawBits(),
+                "owned indexed fixture retains its actual representation");
+            UT_ASSERT_EQ(c, initial_refs + 1, node->reference_count(), "list acquires one element owner");
+            xsink.raiseException("INDEX-PENDING", "pending exception must not acquire an element owner");
+            {
+                ValueHolder pending(read(QoreValue(*container), 0), &xsink);
+                UT_ASSERT(c, xsink && pending->isNothing() && node->reference_count() == initial_refs + 1,
+                    "pending indexed read preserves existing ownership");
+            }
+            xsink.clear();
+            survivor = read(QoreValue(*container), 0);
+            UT_ASSERT(c, !xsink && survivor->rawBits() == value.rawBits()
+                && node->reference_count() == initial_refs + 2,
+                "node or opaque indexed read acquires exactly one result owner");
+        }
+        UT_ASSERT_EQ(c, initial_refs + 1, node->reference_count(), "result outlives its source list");
+        survivor = QoreValue();
+        UT_ASSERT_EQ(c, initial_refs, node->reference_count(), "discarding the result balances ownership");
+    };
+    {
+        ReferenceHolder<QoreStringNode> owner(new QoreStringNode("owned indexed string"), &xsink);
+        check_owned(QoreValue(*owner), *owner);
+    }
+    {
+        ValueHolder owner(QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+        check_owned(*owner, owner->getInternalNode());
+    }
+    {
+        // This finite double collides with an opaque tag when encoded inline.
+        ValueHolder owner(QoreValue(-4.4942328371557898e307), &xsink);
+        check_owned(*owner, owner->getInternalNode());
+    }
+    {
+        ReferenceHolder<QoreHashNode> owner(new QoreHashNode(autoTypeInfo), &xsink);
+        ValueHolder opaque(QoreValue::makeOpaqueHash(*owner), &xsink);
+        check_owned(*opaque, *owner);
+    }
+    {
+        ReferenceHolder<QoreListNode> owner(new QoreListNode(autoTypeInfo), &xsink);
+        check_owned(QoreValue(*owner), *owner);
+        ValueHolder opaque(QoreValue::makeOpaqueList(*owner), &xsink);
+        check_owned(*opaque, *owner);
+    }
+    {
+        ReferenceHolder<QoreStringNode> member_value(new QoreStringNode("indexed enum member owner"), &xsink);
+        ValueHolder survivor(&xsink);
+        {
+            QoreEnumDeclHolder decl(new QoreEnumDecl("IndexedEnum", "IndexedEnum", stringTypeInfo));
+            decl->addMember("Member", member_value->refSelf());
+            ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+            container->push(QoreValue::makeEnum(decl->findMember("Member")), &xsink);
+            survivor = read(QoreValue(*container), 0);
+            UT_ASSERT(c, !xsink && survivor->isEnum() && survivor->needsRef(),
+                "inline enum indexed result retains declaration ownership");
+        }
+        UT_ASSERT_EQ(c, 2, member_value->reference_count(),
+            "indexed enum result outlives its list and original declaration owner");
+        survivor = QoreValue();
+        UT_ASSERT_EQ(c, 1, member_value->reference_count(), "enum result releases its declaration exactly once");
+    }
+    {
+        ReferenceHolder<QoreListNode> target(new QoreListNode(autoTypeInfo), &xsink);
+        ReferenceHolder<WeakListReferenceNode> weak_value(new WeakListReferenceNode(*target), &xsink);
+        ValueHolder survivor(&xsink);
+        {
+            ReferenceHolder<QoreListNode> container(new QoreListNode(autoTypeInfo), &xsink);
+            container->push(QoreValue(*weak_value).refSelf(), &xsink);
+            survivor = read(QoreValue(*container), 0);
+            UT_ASSERT(c, !xsink && survivor->getType() == NT_LIST
+                && survivor->get<QoreListNode>() == *target && target->reference_count() == 2,
+                "indexed weak element promotes exactly one target owner");
+            UT_ASSERT_EQ(c, 2, weak_value->reference_count(), "normalization releases its temporary weak owner");
+        }
+        UT_ASSERT(c, target->reference_count() == 2 && weak_value->reference_count() == 1,
+            "promoted result survives source-list destruction");
+        survivor = QoreValue();
+        UT_ASSERT_EQ(c, 1, target->reference_count(), "promoted result releases its target owner");
+    }
+    UT_ASSERT(c, !xsink, "indexed ownership checks leave no exception");
+}
+
+static void ut_aot_prepared_indexed_int_add(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, ExceptionSink& sink)
+                : var(name, qore_get_complex_list_type(bigIntTypeInfo)), xsink(sink) {
+            var.instantiate(QoreValue());
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    } local("native_indexed_int_add", xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot, "indexed addition has invocation-owned storage");
+    if (!slot) {
+        return;
+    }
+    QoreIRLValuePathInstruction inst(QoreIROpcode::LValuePathCompound);
+    LVPathStep root;
+    root.kind = LVPathStepKind::LocalVar;
+    root.ref_ptr = &local.var;
+    LVPathStep index;
+    index.kind = LVPathStepKind::ListIndex;
+    index.operand_idx = 0;
+    inst.path = {root, index};
+    QoreIRLValuePathInstruction* paths[] = {&inst};
+    struct BorrowedPathContext : QoreAOTContext {
+        ~BorrowedPathContext() { lv_path_insts = nullptr; }
+    } context;
+    context.lv_path_insts = paths;
+    context.num_lv_path_insts = 1;
+    auto reset = [&](const QoreTypeInfo* type, QoreValue value) {
+        ReferenceHolder<QoreListNode> list(new QoreListNode(type), &xsink);
+        list->push(value.refSelf(), &xsink);
+        UT_ASSERT(c, !xsink, "indexed fixture list is initialized");
+        slot->syncValue(QoreValue(list.release()), &xsink);
+        UT_ASSERT(c, !xsink, "indexed fixture publishes its sole list owner");
+        return slot->val.getValue().get<QoreListNode>();
+    };
+    auto add = [&](int64_t i, QoreValue rhs, void* prepared, bool consume = false) {
+        QoreSimpleValue result;
+        result.setRawBits(qore_rt_lv_path_int_add_prepared_aot_v1(
+            &context, 0, i, rhs.rawBits(), prepared, consume, &xsink));
+        return QoreValue(result);
+    };
+    auto* list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->isInt() && result->getAsBigInt() == 9,
+            "unique inline addition returns the updated integer");
+        UT_ASSERT(c, slot->val.v.n == list && list->reference_count() == 1
+            && list->retrieveEntry(0).getAsBigInt() == 9,
+            "inline addition preserves the container and its sole owner");
+    }
+    xsink.raiseException("INDEXED-PENDING", "pending exception must prevent mutation");
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing() && list->retrieveEntry(0).getAsBigInt() == 9,
+            "pending exception leaves the list unchanged");
+    }
+    xsink.clear();
+    {
+        ReferenceHolder<QoreListNode> alias(list->listRefSelf(), &xsink);
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == 11 && list->retrieveEntry(0).getAsBigInt() == 9,
+            "shared-list fallback preserves the alias");
+        UT_ASSERT(c, slot->val.v.n != list && alias->reference_count() == 1,
+            "shared-list fallback publishes a copy and releases only the old local owner");
+    }
+    list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), nullptr), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == 9, "null prepared slot uses generic navigation");
+    }
+    {
+        LocalScope other("native_indexed_other", xsink);
+        LocalVarValue* other_slot = thread_try_find_lvar(&other.var);
+        ValueHolder result(add(0, QoreValue(int64_t{2}), other_slot), &xsink);
+        UT_ASSERT(c, other_slot && !xsink && result->getAsBigInt() == 11
+            && other_slot->val.getValue().isNothing(),
+            "wrong local identity cannot redirect an update");
+    }
+    for (const QoreTypeInfo* type : {bigIntTypeInfo, autoTypeInfo, static_cast<const QoreTypeInfo*>(nullptr)}) {
+        list = reset(type, QoreValue(QoreValue::InlineIntMax));
+        ValueHolder result(add(0, QoreValue(int64_t{1}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == QoreValue::InlineIntMax + 1
+            && list->retrieveEntry(0).getAsBigInt() == QoreValue::InlineIntMax + 1,
+            "wide-result fallback retains all integer bits");
+        UT_ASSERT(c, list->getTypeInfo() == (type ? qore_get_complex_list_type(type) : listTypeInfo),
+            "fallback preserves actual list metadata independently of the declaration");
+    }
+    list = reset(floatTypeInfo, QoreValue(4.5));
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, !xsink && result->getType() == NT_FLOAT && result->getAsFloat() == 6.5
+            && list->retrieveEntry(0).getAsFloat() == 6.5, "live floating metadata retains floating addition");
+    }
+    list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    qore_list_private::get(*list)->valid = false;
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing() && list->retrieveEntry(0).getAsBigInt() == 7,
+            "invalid-list fallback raises without modifying the entry");
+    }
+    qore_list_private::get(*list)->valid = true;
+    xsink.clear();
+    list = reset(bigIntTypeInfo, QoreValue(int64_t{7}));
+    {
+        ReferenceHolder<QoreStringNode> delta(new QoreStringNode("2"), &xsink);
+        ValueHolder result(add(0, QoreValue(delta->refSelf()), slot, true), &xsink);
+        UT_ASSERT(c, !xsink && result->getAsBigInt() == 9 && delta->reference_count() == 1,
+            "consumed heap RHS is released once on the generic path");
+        ValueHolder borrowed(add(0, QoreValue(*delta), slot), &xsink);
+        UT_ASSERT(c, !xsink && borrowed->getAsBigInt() == 11 && delta->reference_count() == 1,
+            "borrowed heap RHS retains the caller's reference");
+        xsink.raiseException("INDEXED-PENDING", "pending exception prevents consumed mutation");
+        ValueHolder pending(add(0, QoreValue(delta->refSelf()), slot, true), &xsink);
+        UT_ASSERT(c, xsink && pending->isNothing() && delta->reference_count() == 1
+            && list->retrieveEntry(0).getAsBigInt() == 11,
+            "pending exception releases the consumed heap RHS without updating");
+        xsink.clear();
+        QoreSimpleValue raw;
+        raw.setRawBits(qore_rt_lv_path_int_add_prepared_aot_v1(
+            &context, -1, 0, QoreValue(delta->refSelf()).rawBits(), slot, 1, &xsink));
+        ValueHolder invalid(QoreValue(raw), &xsink);
+        UT_ASSERT(c, xsink && invalid->isNothing() && delta->reference_count() == 1,
+            "invalid context slot releases the transferred RHS");
+        xsink.clear();
+    }
+    local.var.setReadOnly();
+    {
+        ValueHolder result(add(0, QoreValue(int64_t{2}), slot), &xsink);
+        UT_ASSERT(c, xsink && result->isNothing() && list->retrieveEntry(0).getAsBigInt() == 11,
+            "read-only root retains its generic runtime violation");
+    }
+    xsink.clear();
+}
+
+static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    struct LocalScope {
+        LocalVar var;
+        ExceptionSink& xsink;
+        LocalScope(const char* name, const QoreTypeInfo* ti, ExceptionSink& sink) : var(name, ti), xsink(sink) {
+            var.instantiate(QoreValue(int64_t{27}));
+        }
+        ~LocalScope() { var.uninstantiate(&xsink); }
+    } local("native_prepared_reload", autoTypeInfo, xsink);
+    LocalVarValue* slot = thread_try_find_lvar(&local.var);
+    UT_ASSERT(c, slot, "reload fixture has a runtime slot");
+    if (!slot) {
+        return;
+    }
+    struct BorrowedLocalContext : QoreAOTContext {
+        ~BorrowedLocalContext() { locals = nullptr; }
+    } context;
+    LocalVar* locals[] = {&local.var};
+    context.locals = locals;
+    context.num_locals = 1;
+    RuntimeConfig& rc = RuntimeConfigNativeAccess::getCurrent();
+    context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    auto expected_slot = [&](LocalVarValue* value) {
+        return q_env_is_set("QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD") ? nullptr : value;
+    };
+    UT_ASSERT(c, context.pgm, "reload getter has a live Program");
+    UT_ASSERT(c, qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc) == expected_slot(slot),
+        "reload getter resolves actual storage independently of store controls");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(nullptr, 0, &rc), "null AOT context is rejected");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, -1, &rc), "negative reload index is rejected");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 1, &rc), "past-end reload index is rejected");
+    UT_ASSERT(c, !qore_rt_get_reload_local_slot_aot_v1(&context, 0, nullptr), "null runtime context is rejected");
+    context.pgm = nullptr;
+    UT_ASSERT(c, qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc) == expected_slot(slot),
+        "code-owner metadata does not select active invocation storage");
+    context.pgm = RuntimeConfigNativeAccess::getProgram(rc);
+    {
+        LocalScope typed("native_typed_reload", bigIntTypeInfo, xsink);
+        typed.var.setReadOnly();
+        locals[0] = &typed.var;
+        UT_ASSERT(c, qore_rt_get_reload_local_slot_aot_v1(&context, 0, &rc)
+            == expected_slot(thread_try_find_lvar(&typed.var)), "typed read-only storage can be read");
+        locals[0] = &local.var;
+    }
+    // Immediate reloads must evaluate and own the same live value whether the
+    // invocation slot was prepared or ordinary lookup is required.
+    for (void* prepared : {static_cast<void*>(nullptr), static_cast<void*>(slot)}) {
+        auto load = [&]() {
+            QoreSimpleValue raw;
+            raw.setRawBits(qore_rt_load_prepared_local_aot_v1(&context, 0, prepared, &xsink));
+            return QoreValue(raw);
+        };
+        slot->syncValue(QoreValue(int64_t{27}), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->isInt() && value->getInt() == 27,
+                "immediate load returns the live primitive");
+        }
+        slot->syncValue(QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT_EQ(c, std::numeric_limits<int64_t>::max(), value->getAsBigInt(),
+                "immediate load retains all wide integer bits");
+        }
+        ReferenceHolder<QoreStringNode> owner(new QoreStringNode("immediate reload ownership"), &xsink);
+        slot->syncValue(QoreValue(owner->refSelf()), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->getType() == NT_STRING && value->get<QoreStringNode>() == *owner
+                && owner->reference_count() == 3, "immediate node load returns exactly one owned reference");
+        }
+        UT_ASSERT_EQ(c, 2, owner->reference_count(), "discarding an immediate result releases its own reference");
+        xsink.raiseException("RELOAD-PENDING", "preserve generic pending-sink evaluation");
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, xsink && value->getType() == NT_STRING && owner->reference_count() == 3,
+                "pending sink retains the ordinary load's result and ownership");
+        }
+        xsink.clear();
+        ReferenceHolder<QoreListNode> strong_owner(new QoreListNode(bigIntTypeInfo), &xsink);
+        strong_owner->push(QoreValue(int64_t{31}), &xsink);
+        slot->syncValue(QoreValue(strong_owner->listRefSelf()), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, !xsink && value->get<QoreListNode>() == *strong_owner
+                && strong_owner->reference_count() == 3,
+                "immediate strong-list load acquires exactly one owner of the live node");
+        }
+        UT_ASSERT_EQ(c, 2, strong_owner->reference_count(), "strong-list result releases its own reference");
+        xsink.raiseException("RELOAD-PENDING", "strong-list ownership with a pending exception");
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, xsink && value->get<QoreListNode>() == *strong_owner
+                && strong_owner->reference_count() == 3,
+                "pending sink retains the ordinary strong-list result and ownership");
+        }
+        xsink.clear();
+        qore_list_private::get(**strong_owner)->valid = false;
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, !xsink && value->get<QoreListNode>() == *strong_owner
+                && strong_owner->reference_count() == 3,
+                "local loading does not evaluate or validate a stored strong list");
+        }
+        qore_list_private::get(**strong_owner)->valid = true;
+        ReferenceHolder<QoreListNode> weak_owner(new QoreListNode(bigIntTypeInfo), &xsink);
+        weak_owner->push(QoreValue(int64_t{17}), &xsink);
+        slot->syncValue(QoreValue(new WeakListReferenceNode(*weak_owner)), &xsink);
+        UT_ASSERT_EQ(c, 1, strong_owner->reference_count(), "replacement releases the strong-list local owner");
+        UT_ASSERT_EQ(c, 1, owner->reference_count(), "live replacement releases the previous local owner");
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->getType() == NT_LIST && value->get<QoreListNode>() == *weak_owner
+                && weak_owner->reference_count() == 2, "immediate weak load promotes its borrowed target once");
+        }
+        UT_ASSERT_EQ(c, 1, weak_owner->reference_count(), "discarding the weak read releases the promoted owner");
+        slot->del(&xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->isNothing(), "immediate read observes a cleared block slot");
+        }
+        slot->syncValue(QoreValue(false), &xsink);
+        {
+            ValueHolder value(load(), &xsink);
+            UT_ASSERT(c, value->isBool() && !value->getBool(),
+                "immediate read observes reassignment of the same block slot");
+        }
+        UT_ASSERT(c, !xsink, "immediate-load checks leave no unexpected exception");
+    }
+    // Force the non-null helper itself even when testing the getter's disabled
+    // control: matching results from the generic fallback alone are insufficient.
+    for (int prepared : {0, 1, 2}) {
+        for (bool fail : {false, true}) {
+            slot->syncValue(QoreValue(int64_t{27}), &xsink);
+            ReferenceHolder<QoreStringNode> old(new QoreStringNode("old reload tracker"), &xsink);
+            uint64_t tracker = QoreValue(old->refSelf()).rawBits();
+            uint64_t cache = tracker, deferred = QoreValue().rawBits(), valid_epoch = 0;
+            ReferenceHolder<QoreStringNode> owner(new UtReloadDeferredString(c, *slot, cache,
+                tracker, deferred, valid_epoch, tracker, xsink, fail), &xsink);
+            deferred = QoreValue(owner.release()).rawBits();
+            uint64_t before_deferred = deferred;
+            auto reload = [&](uint64_t epoch) {
+                if (prepared == 2) {
+                    qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker,
+                        &deferred, &valid_epoch, epoch, &xsink);
+                } else if (prepared == 1) {
+                    qore_rt_reload_prepared_local_if_stale_aot_v1(slot, &cache, &tracker,
+                        &deferred, &valid_epoch, epoch, &xsink);
+                } else {
+                    qore_rt_reload_local_if_stale(&local.var, &cache, &tracker,
+                        &deferred, &valid_epoch, epoch, &xsink);
+                }
+            };
+            reload(0);
+            UT_ASSERT_EQ(c, tracker, cache, "fresh reload does not change cache");
+            UT_ASSERT_EQ(c, before_deferred, deferred, "fresh reload does not release owners");
+            UT_ASSERT_EQ(c, 2, old->reference_count(), "fresh reload retains tracker ownership");
+            reload(1);
+            UT_ASSERT(c, static_cast<bool>(xsink) == fail, "cleanup exceptions are preserved");
+            xsink.clear();
+            UT_ASSERT_EQ(c, 1, valid_epoch, "epoch is published after cleanup even on sink failure");
+            UT_ASSERT_EQ(c, QoreValue(int64_t{27}).rawBits(), cache, "reload keeps its pre-cleanup result");
+            UT_ASSERT_EQ(c, QoreValue(int64_t{73}).rawBits(), slot->val.getValue().rawBits(),
+                "cleanup's reflective replacement remains in the runtime slot");
+            UT_ASSERT_EQ(c, 2, old->reference_count(), "deferred old tracker still owns exactly one reference");
+            reload(2);
+            UT_ASSERT_EQ(c, 1, old->reference_count(), "next stale reload releases the deferred owner once");
+            UT_ASSERT_EQ(c, QoreValue(int64_t{73}).rawBits(), cache, "next stale reload observes replacement");
+            slot->del(&xsink);
+            reload(3);
+            UT_ASSERT_EQ(c, QoreValue().rawBits(), cache, "cleared block reloads NOTHING through the same slot");
+            slot->syncValue(QoreValue(false), &xsink);
+            reload(4);
+            UT_ASSERT_EQ(c, QoreValue(false).rawBits(), cache, "reassigned block reuses the same slot");
+            slot->syncValue(QoreValue(old->refSelf()), &xsink);
+            reload(5);
+            UT_ASSERT_EQ(c, QoreValue(*old).rawBits(), cache, "node reload publishes the actual object");
+            UT_ASSERT_EQ(c, 3, old->reference_count(), "node reload has holder, runtime-slot and tracker owners");
+            reload(5);
+            UT_ASSERT_EQ(c, 3, old->reference_count(), "fresh node reload adds no ownership");
+            slot->del(&xsink);
+            reload(6);
+            UT_ASSERT_EQ(c, 2, old->reference_count(), "cleared node remains owned by the deferred tracker");
+            reload(7);
+            UT_ASSERT_EQ(c, 1, old->reference_count(), "following reload releases the last tracker owner");
+            qore_rt_decref(tracker, &xsink);
+            qore_rt_decref(deferred, &xsink);
+        }
+    }
+    // Force the live-scalar operation independently of its diagnostic switch:
+    // generic fallback success alone does not establish fast-path correctness.
+    for (QoreValue value : {QoreValue(false), QoreValue(true), QoreValue(int64_t{27}),
+            QoreValue(QoreValue::InlineIntMin), QoreValue(QoreValue::InlineIntMax),
+            QoreValue(2.5), QoreValue(-0.0), QoreValue(std::numeric_limits<double>::quiet_NaN())}) {
+        slot->syncValue(value, &xsink);
+        uint64_t cache = value.rawBits(), tracker = QoreValue(false).rawBits();
+        uint64_t deferred = QoreValue(int64_t{17}).rawBits(), valid_epoch = 0;
+        uint64_t old_tracker = tracker;
+        UT_ASSERT(c, slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 1),
+            "identical live primitive and non-owning cleanup admit scalar reload");
+        UT_ASSERT_EQ(c, value.rawBits(), cache, "scalar reload preserves exact cached bits");
+        UT_ASSERT_EQ(c, value.rawBits(), tracker, "scalar reload publishes the current tracker");
+        UT_ASSERT_EQ(c, old_tracker, deferred, "scalar reload rotates the previous tracker");
+        UT_ASSERT_EQ(c, 1, valid_epoch, "scalar reload publishes completed epoch");
+        slot->syncValue(QoreValue(int64_t{51}), &xsink);
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+            "live replacement is not hidden by cached scalar bits");
+        UT_ASSERT_EQ(c, value.rawBits(), cache, "rejected scalar reload leaves cache unchanged");
+        UT_ASSERT_EQ(c, value.rawBits(), tracker, "rejected scalar reload leaves tracker unchanged");
+        UT_ASSERT_EQ(c, old_tracker, deferred, "rejected scalar reload leaves deferred unchanged");
+        UT_ASSERT_EQ(c, 1, valid_epoch, "rejected scalar reload leaves epoch unchanged");
+        qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker, &deferred, &valid_epoch, 2, &xsink);
+        UT_ASSERT_EQ(c, QoreValue(int64_t{51}).rawBits(), cache, "v2 fallback observes changed live storage");
+    }
+    {
+        slot->syncValue(QoreValue(-0.0), &xsink);
+        uint64_t cache = QoreValue(0.0).rawBits(), tracker = 0, deferred = 0, valid_epoch = 0;
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 1),
+            "different signed-zero bits do not match");
+        qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker, &deferred, &valid_epoch, 1, &xsink);
+        UT_ASSERT_EQ(c, QoreValue(-0.0).rawBits(), cache, "v2 fallback preserves negative zero");
+        for (int flag : {0, 1, 2}) {
+            slot->finalized = flag == 0;
+            slot->block_cleared = flag == 1;
+            slot->val.assigned = flag != 2;
+            UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+                "finalized, cleared or unassigned storage rejects scalar reuse");
+            UT_ASSERT_EQ(c, 1, valid_epoch, "rejected live state leaves epoch unchanged");
+        }
+        slot->finalized = false;
+        slot->block_cleared = false;
+        slot->val.assigned = true;
+        ReferenceHolder<QoreStringNode> owner(new QoreStringNode("scalar reload ownership control"), &xsink);
+        for (bool old_tracker : {false, true}) {
+            uint64_t& owned = old_tracker ? tracker : deferred;
+            owned = QoreValue(owner->refSelf()).rawBits();
+            UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+                "potentially owning cleanup requires the complete reload protocol");
+            UT_ASSERT_EQ(c, 2, owner->reference_count(), "rejected scalar reload does not release an owner");
+            qore_rt_decref(owned, &xsink);
+            owned = 0;
+        }
+        ReferenceHolder<QoreHashNode> opaque_owner(new QoreHashNode(autoTypeInfo), &xsink);
+        deferred = QoreValue::makeOpaqueHash(*opaque_owner).rawBits();
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 2),
+            "opaque cleanup is owning even though its tag lies below the float boundary");
+        UT_ASSERT_EQ(c, 2, opaque_owner->reference_count(), "opaque owner survives rejected scalar reload");
+        qore_rt_decref(deferred, &xsink);
+        deferred = 0;
+        UT_ASSERT_EQ(c, 1, opaque_owner->reference_count(), "opaque cleanup releases exactly its own reference");
+    }
+    for (bool floating : {false, true}) {
+        uint64_t escaped_bits = QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST;
+        double escaped;
+        memcpy(&escaped, &escaped_bits, sizeof(escaped));
+        ValueHolder value(floating ? QoreValue(escaped) : QoreValue(std::numeric_limits<int64_t>::max()), &xsink);
+        slot->syncValue(value->refSelf(), &xsink);
+        uint64_t cache = value->rawBits(), tracker = 0, deferred = 0, valid_epoch = 0;
+        UT_ASSERT(c, !slot->tryReloadAOTScalarValue(&cache, &tracker, &deferred, &valid_epoch, 1),
+            "wide and escaped numeric boxes retain ordinary owning reloads");
+        qore_rt_reload_prepared_local_if_stale_aot_v2(slot, &cache, &tracker, &deferred, &valid_epoch, 1, &xsink);
+        QoreSimpleValue raw;
+        raw.setRawBits(cache);
+        QoreValue reloaded(raw);
+        UT_ASSERT(c, reloaded.isPointer(), "wide numeric reload publishes an owned box");
+        if (floating) {
+            double actual = reloaded.getAsFloat();
+            UT_ASSERT(c, !memcmp(&actual, &escaped, sizeof(actual)), "escaped float reload preserves exact bits");
+        } else {
+            UT_ASSERT_EQ(c, std::numeric_limits<int64_t>::max(), reloaded.getAsBigInt(),
+                "wide integer reload preserves all bits");
+        }
+        qore_rt_decref(tracker, &xsink);
+        qore_rt_decref(deferred, &xsink);
+    }
+    UT_ASSERT(c, !xsink, "prepared reload native checks leave no exception");
+}
 
 //! the I/O thread count of a process in a container with a CPU limit: the cgroup CPU quota files
 static void ut_cgroup_cpu_limit(UnitTestCounters& c) {
@@ -779,6 +3554,51 @@ static void ut_string_data_helper(UnitTestCounters& c) {
     }
 }
 
+//! Long date suffixes deliver cancellation, and parsing recovers after the request is cleared.
+static void ut_date_suffix_cancel(UnitTestCounters& c) {
+    std::string text = "2026-01-01T10:00:00Z";
+    text.append(4096, ' ');
+    ExceptionSink xsink;
+    int requested = qore_cancel_thread(q_gettid(), "date suffix unit test");
+    ReferenceHolder<DateTimeNode> cancelled(new DateTimeNode(nullptr, text.c_str(), &xsink), &xsink);
+    QoreValue error = xsink.getExceptionErr();
+    bool correct_error = error.getType() == NT_STRING && QoreStringDataHelper(error) == "THREAD-CANCELLED";
+    qore_clear_thread_cancel();
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, requested, "request cancellation for date suffix parsing");
+    UT_ASSERT(c, correct_error, "date suffix parsing reports THREAD-CANCELLED");
+    ReferenceHolder<DateTimeNode> recovered(new DateTimeNode(nullptr, text.c_str(), &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "date suffix parsing succeeds after cancellation is cleared");
+}
+
+//! Native byte-order scans deliver cancellation without treating it as an inconclusive sample.
+static void ut_unicode_byte_order_cancel(UnitTestCounters& c) {
+    std::string sample(QORE_UNICODE_BYTE_ORDER_SAMPLE, 'A');
+    const auto* data = reinterpret_cast<const unsigned char*>(sample.data());
+    ExceptionSink xsink;
+    int requested = qore_cancel_thread(q_gettid(), "Unicode scan unit test");
+    QoreUnicodeByteOrder found = q_get_unicode_byte_order(data, sample.size(), &xsink);
+    bool detected_cancel = !!xsink;
+    QoreValue error = xsink.getExceptionErr();
+    bool correct_error = error.getType() == NT_STRING && QoreStringDataHelper(error) == "THREAD-CANCELLED";
+    xsink.clear();
+    int checked = q_check_unicode_byte_order(data, sample.size(), "UTF-16LE", &xsink);
+    bool checked_cancel = !!xsink;
+    // Restore the caller before assertions or any further runtime operation.
+    qore_clear_thread_cancel();
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, requested, "request cancellation for the byte-order scan");
+    UT_ASSERT(c, detected_cancel && correct_error, "detection reports THREAD-CANCELLED");
+    UT_ASSERT(c, !found.encoding, "cancelled detection returns no partial byte-order result");
+    UT_ASSERT(c, checked == -1 && checked_cancel, "byte-order validation propagates cancellation");
+    UT_ASSERT(c, !qore_is_thread_cancel_requested(), "the fixture restores cancellation state");
+    found = q_get_unicode_byte_order(data, sample.size(), &xsink);
+    UT_ASSERT(c, !found.encoding && !xsink, "an inconclusive scan succeeds after cancellation is cleared");
+    UT_ASSERT_EQ(c, 0, q_check_unicode_byte_order(data, sample.size(), "UTF-16LE", &xsink),
+        "inconclusive data remains accepted after recovery");
+    xsink.clear();
+}
+
 //! verifies the public QoreFile timed-read C++ API preserves zero-length and event contracts
 static void ut_qorefile_timed_read_contract(UnitTestCounters& c) {
 #ifndef _Q_WINDOWS
@@ -986,18 +3806,85 @@ int ut_wait_child(pid_t pid) {
 }
 }
 
+//! An inherited typed DBI cache is abandoned even if fork() copied it during a parent thread's insertion.
+static void ut_fork_dbi_typed_result_cache(UnitTestCounters& c) {
+    enum class CacheUse { Close, Lookup, Destroy };
+    for (CacheUse use : {CacheUse::Close, CacheUse::Lookup, CacheUse::Destroy}) {
+        bool open = use == CacheUse::Close;
+        // No driver is called: an open inherited connection is abandoned, and
+        // type-cache lookup itself needs no connection (also test a closed one).
+        std::unique_ptr<Datasource> ds(new Datasource(nullptr, nullptr));
+        auto* priv = qore_ds_private::get(*ds);
+        priv->isopen = open;
+        priv->open_generation = qore_fork_get_generation();
+        std::mutex m;
+        std::condition_variable cv;
+        bool ready = false;
+        bool release = false;
+        std::thread writer([&]() {
+            AutoLocker al(priv->m);
+            // This is the intermediate state of operator[] in
+            // getTypedResultHashDecl(), before its pointer assignment.
+            priv->typed_result_hashdecl_cache["interrupted-insertion"];
+            std::unique_lock<std::mutex> ul(m);
+            ready = true;
+            cv.notify_one();
+            cv.wait(ul, [&]() { return release; });
+            priv->typed_result_hashdecl_cache.clear();
+        });
+        {
+            std::unique_lock<std::mutex> ul(m);
+            cv.wait(ul, [&]() { return ready; });
+        }
+        pid_t pid = fork();
+        if (!pid) {
+            alarm(10);
+            if (use == CacheUse::Destroy) {
+                // A connection can already be closed when its parent's cache
+                // update is interrupted; destroying it must not inspect that cache.
+                ds.reset();
+                _exit(0);
+            }
+            ExceptionSink xsink;
+            if (open && (ds->close(&xsink) || xsink)) {
+                _exit(1);
+            }
+            // Reuse the same key: the child must create its own usable type,
+            // not read the inherited null entry. Destruction releases it normally.
+            const TypedHashDecl* hd = priv->getTypedResultHashDecl("test", "interrupted-insertion", {}, &xsink);
+            bool ok = hd && !xsink && priv->typed_result_hashdecl_cache.size() == 1;
+            ds.reset();
+            _exit(ok ? 0 : 2);
+        }
+        {
+            std::lock_guard<std::mutex> lg(m);
+            release = true;
+            cv.notify_one();
+        }
+        writer.join();
+        priv->isopen = false;
+        UT_ASSERT(c, pid > 0, "fork() succeeds during typed DBI cache insertion");
+        if (pid > 0) {
+            UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child abandons the inherited cache and owns its new cache");
+        }
+        UT_ASSERT(c, priv->typed_result_hashdecl_cache.empty(), "the parent completes its own cache update");
+    }
+}
+
 //! fork() waits for a thread that holds a registered lock acquired before fork(), and the lock is free in the child
 /** Another thread holds each lock, as the prepare handler would; the prepare hook releases it when the prepare handler
     reaches the lock, so the prepare handler waits for the holder deterministically.  Before the fork handlers, the
     child got the lock held by a thread that does not exist in it and waited forever when it took the lock.
 */
 static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
+    UT_ASSERT(c, qore_fork_find_handler("scan_done_wait"), "scan completion waits register a fork handler");
     static const char* names[] = {
         "signal_manager", "async_io_singleton", "aot_module_state", "plugin_registry", "time_zones",
         "thread_counters", "thread_list", "cond_waker", "stack_lck", "external_thread_reaper", "u_tld_seq",
         "program_registry", "program_cleanup", "breakpoints", "constant_value_locks", "opaque_target_shards",
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
-        "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
+        "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "scan_done_wait", "node_watches",
+        "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
         "aot_regex_cache", "llvm_target_init", "environment",
         nullptr,
@@ -4268,13 +7155,16 @@ private:
             addr.sin6_len = sizeof(addr);
 #endif
             // This is fixture setup: macOS permits the native bind, while the Qore wrapper deliberately refuses
-            // a specific address over a bound wildcard. The wildcard bind under test follows below.
+            // a specific address over a bound wildcard. Both listen calls below still use the Qore wrapper.
             rc = ::bind(s.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) ? errno : 0;
             UT_ASSERT_EQ(c, 0, rc, "specific bind: the socket on ::1 is bound");
             if (rc) {
                 return;
             }
-            rc = bindTo(h.fd, AF_INET6, "::", portOf(s.fd));
+            // Bind the other fixture socket natively too: the Qore wrapper's IPv4 port probe correctly rejects
+            // the still-held dual-stack reservation. Keep that reservation until both test sockets are bound.
+            addr.sin6_addr = in6addr_any;
+            rc = ::bind(h.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) ? errno : 0;
             UT_ASSERT_EQ(c, 0, rc,
                 "specific bind: a dual-stack socket on :: shares the port of a bound socket on ::1 that reuses the "
                 "address");
@@ -13315,6 +16205,84 @@ static void dbg_fsio_hook(int fd) {
     }
 }
 
+//! the callback of dbg_call_at_next_debugger_gate(), taken by the first gate that native code fetches
+static std::atomic<ResolvedCallReferenceNode*> dbg_debugger_gate_callback{nullptr};
+
+static void dbg_debugger_gate_hook() {
+    ResolvedCallReferenceNode* callback = dbg_debugger_gate_callback.exchange(nullptr);
+    if (!callback) {
+        return;
+    }
+    qore_dbg_debugger_gate_hook.store(nullptr, std::memory_order_release);
+    ExceptionSink xsink;
+    {
+        ReferenceHolder<ResolvedCallReferenceNode> holder(callback, &xsink);
+        ValueHolder rv(callback->invoke(nullptr, &xsink), &xsink);
+    }
+    // the gate helpers have no exception sink of their own: an exception of the callback is reported here
+    if (xsink) {
+        xsink.handleExceptions();
+    }
+}
+
+//! Debug-only: calls the code once, when the entry of AOT-compiled code next takes the address of a debugger gate
+/** The code runs before the body of the native function whose entry takes the gate, so that a debugger that it
+    attaches is attached while that function runs natively (AOTFusedShapesDebugger.qtest).  JIT code embeds the gate
+    addresses and never calls the code.  DEBUG builds only.
+
+    @param code the code to call, or NOTHING to remove a code that was not called
+*/
+static QoreValue f_dbg_call_at_next_debugger_gate(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(params, 0).get<const ResolvedCallReferenceNode>();
+    ResolvedCallReferenceNode* callback = code ? code->refRefSelf() : nullptr;
+    if (callback) {
+        qore_dbg_debugger_gate_hook.store(dbg_debugger_gate_hook, std::memory_order_release);
+    } else {
+        qore_dbg_debugger_gate_hook.store(nullptr, std::memory_order_release);
+    }
+    if (ResolvedCallReferenceNode* previous = dbg_debugger_gate_callback.exchange(callback)) {
+        previous->deref(xsink);
+    }
+    return QoreValue();
+}
+
+//! Debug-only: reads every thread's call stack while another thread is parked in a frame that it has just published
+/** The first other thread that then publishes a call stack location with one of the given call names (and, if
+    \a callers is not empty, called by a frame with one of those call names) waits right after publishing it until the
+    stacks have been read, so that a test can observe a frame that is far too short for a concurrent reader to see
+    (a walk of the stack of a thread that keeps calling observes that thread after its next pop; see
+    QoreThreadList::walkCallStack()).  Only one thread can wait in this function at a time.  DEBUG builds only.
+
+    @param names the call names of the location (as in CallStackInfo::function)
+    @param callers the call names of the caller's frame, or an empty list for any caller
+    @param timeout_ms the maximum time to wait for a thread to publish a matching location
+    @param on_armed if given, called without arguments once the hook is armed, before waiting: it can let the thread to
+    be parked go on (with a Counter, for example), which then parks at the next matching location that it publishes
+    for certain, also if the location is published only once
+    @param on_parked if given, called with the hash returned while the thread is still parked with the location
+    published: for example, to cancel the thread, which then sees the request at its first cancellation check point
+    in the frame
+
+    @return a hash: \c tid: the TID of the thread parked, \c kind: \c "native-leaf" (a native leaf call with a
+    deferred context), \c "native" (another native call), or \c "ordinary", the kind of call that published the
+    location, \c stacks: every thread's call stack (as returned by get_all_thread_call_stacks()) read while the
+    thread was parked
+
+    @throw DBG-STACK-PARK-TIMEOUT no other thread published a matching location within the timeout
+    @throw DBG-STACK-PARK-ERROR another thread is already waiting in this function, or invalid arguments
+
+    A callback that raises an exception ends the call with it, and the parked thread, if any, goes on.
+*/
+static QoreValue f_dbg_read_stacks_at_frame(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreListNode* names = get_param_value(params, 0).get<const QoreListNode>();
+    const QoreListNode* callers = get_param_value(params, 1).get<const QoreListNode>();
+    int64 timeout_ms = get_param_value(params, 2).getAsBigInt();
+    const ResolvedCallReferenceNode* on_armed = get_param_value(params, 3).get<const ResolvedCallReferenceNode>();
+    const ResolvedCallReferenceNode* on_parked = get_param_value(params, 4).get<const ResolvedCallReferenceNode>();
+    return qore_dbg_read_stacks_at_frame(names, callers, timeout_ms, on_armed, on_parked, xsink);
+}
+
 //! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
 //! that the holder sees at each read or write of the description that a file stream makes without waiting
 /** The second holder is a duplicate of the descriptor (the same file description, as an inherited standard input
@@ -14044,11 +17012,34 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_ir_scalar_snapshot(c);
+    ut_aot_string_split(c);
+    ut_native_closure_context(c);
+    ut_native_method_frame_pair(c);
+    ut_program_context_snapshot(c);
+    ut_runtime_location_helper_live_options(c);
+    ut_runtime_config_thread_storage(c);
+    ut_native_call_options(c);
+    ut_native_callback_policy(c);
+    ut_native_closure_option_replacement(c);
+    ut_lvalue_object_count_records(c);
+    ut_runtime_value_cleanup(c);
+    ut_local_discard(c);
+    ut_aot_scalar_local_store(c);
+    ut_aot_first_public_base(c);
+    ut_aot_class_local_release(c);
+    ut_aot_prepared_local_reload(c);
+    ut_aot_prepared_indexed_int_add(c);
+    ut_indexed_read_policy(c, rc);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::LiveContext);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::NullContext);
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
+    ut_unicode_byte_order_cancel(c);
+    ut_date_suffix_cancel(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
@@ -14062,6 +17053,27 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_ir_scalar_snapshot(c);
+    ut_aot_string_split(c);
+    ut_native_closure_context(c);
+    ut_native_method_frame_pair(c);
+    ut_program_context_snapshot(c);
+    ut_runtime_location_helper_live_options(c);
+    ut_runtime_config_thread_storage(c);
+    ut_native_call_options(c);
+    ut_native_callback_policy(c);
+    ut_native_closure_option_replacement(c);
+    ut_lvalue_object_count_records(c);
+    ut_runtime_value_cleanup(c);
+    ut_local_discard(c);
+    ut_aot_scalar_local_store(c);
+    ut_aot_first_public_base(c);
+    ut_aot_class_local_release(c);
+    ut_aot_prepared_local_reload(c);
+    ut_aot_prepared_indexed_int_add(c);
+    ut_indexed_read_policy(c, rc);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::LiveContext);
+    ut_indexed_read_policy(c, rc, IndexedReadTestEntry::NullContext);
 
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
@@ -14119,6 +17131,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     ut_fork_waits_for_lock_holders(c);
+    ut_fork_dbi_typed_result_cache(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
@@ -16331,6 +19344,12 @@ void init_debug_functions(QoreNamespace& qns) {
         "name");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
+    qns.addBuiltinVariant("dbg_read_stacks_at_frame", f_dbg_read_stacks_at_frame, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 5, listTypeInfo, QORE_PARAM_NO_ARG, "names", listTypeInfo, QORE_PARAM_NO_ARG, "callers",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms", codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "on_armed",
+        codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "on_parked");
+    qns.addBuiltinVariant("dbg_call_at_next_debugger_gate", f_dbg_call_at_next_debugger_gate, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, codeOrNothingTypeInfo, QORE_PARAM_NO_ARG, "code");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

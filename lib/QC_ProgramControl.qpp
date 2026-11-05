@@ -148,7 +148,7 @@ ProgramControl::copy() {
 /**
  */
 ProgramControl::destructor() {
-   printd(5, "ProgramControl::destructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
+   printd(5, "ProgramControl::destructor() pgm: %p, pgmid: " QLLD ", self: %p\n", p, static_cast<int64>(p->getProgramId()), self);
    // the object holds its own reference to the Program
    p->deref(xsink);
 }

@@ -1,0 +1,231 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ThrowExitCleanupTest
+
+#! Tests the cleanup of exception exits with many live locals and temporaries
+/** A throw, rethrow or thread_exit without an in-frame handler leaves the function through the same shared exit
+    cleanup as every exception check of the function, so the code emitted for each raising site stays constant
+    instead of releasing every cleanup slot of the function again.  The fixture checks in each mode that every
+    object is released exactly once and records the release order, which must match the interpreter; the
+    generated code must grow linearly with the number of locals and throw sites.
+*/
+class ThrowExitCleanupTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+
+        const Ok = "aot-throw-exit-cleanup: ok\n";
+        const GrowthOk = "throw-exit-growth: ok\n";
+    }
+
+    constructor() : Test("throw exit cleanup", "1.0", \ARGV) {
+        addTestCase("exception exits release every temporary and local once in interpreter order",
+            \releaseOrder());
+        addTestCase("exception exit code grows linearly with the locals and throw sites", \codeGrowth());
+        addTestCase("returns share one function exit cleanup", \returnExit());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    #! checks the output of all modes and compiled executables of \a source against the interpreter
+    private checkModes(string source, string ok, string dir) {
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex(ok + "$", expected, "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+
+    private releaseOrder() {
+        TmpDir dir("qore-throw-exit-cleanup-");
+        string source = get_script_dir() + "/AOTThrowExitCleanup.qr";
+        checkModes(source, Ok, dir.path);
+        # the interpreter order of representative exits
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex('flat 6: \["s2", "c5", "d6", "l9", "l8", "l7", "l6", "l5", "l4", "l3", "l22", "l1", "l0", '
+            '"caught FLAT: d6", "a6"\]', expected);
+        assertRegex('handlers 0: \["hd0", "inner_on_exit", "h3", "x1", "on_error:x1", "x0", "on_exit:x0", "h2", '
+            '"h1", "h0", "caught HANDLERS: hd0", "ha0"\]', expected);
+        assertRegex('loops 0: \["gig0", "q0", "gig1", "g0", "g2", "g1", "caught LOOPS: q0", "qa0"\]', expected);
+        assertRegex('loops 5: \[.*"hlh0", "q5", "loop_on_error h1", "hlh1", "h0", "h2", "h1", "loop_on_exit", "lo", '
+            '"caught LOOPS: q5"\]', expected);
+        assertRegex('catches 1: \["id", "t1", "id2", "k1", "ia", "t0", "outer caught INNER2", "k0", "c0", '
+            '"caught INNER2: id2", "ia2"\]', expected);
+        assertRegex('scopes 1: \["kc", "x C", "argC", "y B", "argB", "z A", "ka", "argA", "result done"\]', expected);
+        assertRegex('scopes 5: \["kc", "argC", "ka", "argA", "caught B: B", "argB"\]', expected);
+        assertRegex('catches 4: \[.*"ld", "t4", "fd2", "k4", "c0", "caught FROMCATCH2: fd2LAST", "fa2"\]',
+            expected);
+        assertRegex('thread_exit 1: \["e2", "et1", "exit:et1", "e3", "e1", "e0", "r0", "result joined"\]',
+            expected);
+    }
+
+    #! writes a fixture whose function \c growth<n>() has \a n object locals, each followed by a throw site
+    private static string writeGrowthFixture(string dir, int n) {
+        string source = sprintf("%s/growth%d.qr", dir, n);
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nour int live = 0;\nour list<int> released = ();\n"
+            "class Obj { public { int id; } constructor(int id) { self.id = id; ++live; } "
+            "destructor() { --live; released += id; } }\n"
+            "int sub tmp(int id) { return (new Obj(id)).id; }\n");
+        file.write(sprintf("int sub growth%d(int which) {\n", n));
+        for (int i = 0; i < n; ++i) {
+            file.write(sprintf("Obj o%d(%d);\nif (tmp(%d) == which) { throw \"GROWTH\", sprintf(\"%%d\", "
+                "tmp(%d)), new Obj(%d); }\n", i, i, 1000 + i, 2000 + i, 3000 + i));
+        }
+        file.write("int total = 0;\n");
+        for (int i = 0; i < n; ++i) {
+            file.write(sprintf("total += o%d.id;\n", i));
+        }
+        file.write("return total;\n}\n");
+        file.write(sprintf("for (int which = 1000; which <= %d; ++which) {\n"
+            "    released = ();\n"
+            "    try { growth%d(which); if (which < %d) { throw \"ERROR\", \"no exception\"; } }\n"
+            "    catch (hash<ExceptionInfo> ex) { if (ex.err != \"GROWTH\") { rethrow; } }\n"
+            "    if (live) { throw \"LEAK\", sprintf(\"%%d: %%d live\", which, live); }\n"
+            "    int k = which - 1000;\n"
+            # the comparison temporaries so far, the throw statement temporary, the locals in reverse order and
+            # the exception argument; without an exception the comparison temporaries and the locals
+            "    list<int> order = k < %d\n"
+            "        ? (map 1000 + $1, xrange(k + 1)) + (2000 + k,) + (map k - $1, xrange(k + 1)) + (3000 + k,)\n"
+            "        : (map 1000 + $1, xrange(%d)) + (map %d - $1, xrange(%d));\n"
+            "    if (released != order) { throw \"ORDER\", sprintf(\"%%d: %%y != %%y\", which, released, order); }\n"
+            "}\nprintf(\"throw-exit-growth: ok\\n\");\n", 1000 + n, n, 1000 + n, n, n, n - 1, n));
+        file.close();
+        return source;
+    }
+
+    #! writes a fixture whose function \c returns<n>() has an on_exit handler and \a n object locals, each followed by
+    #! a return
+    private static string writeReturnFixture(string dir, int n) {
+        string source = sprintf("%s/returns%d.qr", dir, n);
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nour int live = 0;\nour list<int> released = ();\n"
+            "class Obj { public { int id; } constructor(int id) { self.id = id; ++live; } "
+            "destructor() { --live; released += id; } }\n");
+        file.write(sprintf("int sub returns%d(int which) {\non_exit { released += -1; }\n", n));
+        for (int i = 0; i < n; ++i) {
+            file.write(sprintf("Obj o%d(%d);\nif (which == %d) { return o%d.id + (new Obj(%d)).id; }\n", i, i, i, i,
+                1000 + i));
+        }
+        file.write("return -1;\n}\n");
+        file.write(sprintf("for (int which = 0; which <= %d; ++which) {\n"
+            "    released = ();\n"
+            "    int rv = returns%d(which);\n"
+            "    if (live) { throw \"LEAK\", sprintf(\"%%d: %%d live\", which, live); }\n"
+            "    if (which < %d && rv != 1000 + 2 * which) { throw \"VALUE\", sprintf(\"%%d: %%d\", which, rv); }\n"
+            # the return value temporary, the handler and the locals in reverse order
+            "    int k = which < %d ? which : %d;\n"
+            "    list<int> order = (which < %d ? (1000 + which, -1) : (-1,)) + (map k - $1, xrange(k + 1));\n"
+            "    if (which == %d) { order = (-1,) + (map %d - $1, xrange(%d)); }\n"
+            "    if (released != order) { throw \"ORDER\", sprintf(\"%%d: %%y != %%y\", which, released, order); }\n"
+            "}\nprintf(\"return-exit: ok\\n\");\n", n, n, n, n, n - 1, n, n, n - 1, n));
+        file.close();
+        return source;
+    }
+
+    #! returns the number of lines in the LLVM IR of the functions named \a name that contain \a needle
+    private static int countCalls(string ir, string name, string needle) {
+        int count = 0;
+        bool in_function = False;
+        foreach string line in (ir.split("\n")) {
+            if (!in_function) {
+                in_function = line =~ /^define / && line.find("@" + name + "_") >= 0;
+                continue;
+            }
+            if (line == "}") {
+                in_function = False;
+                continue;
+            }
+            if (line.find(needle) >= 0) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    private returnExit() {
+        TmpDir dir("qore-return-exit-");
+        hash<string, int> handlers;
+        foreach int n in ((8, 24)) {
+            string source = writeReturnFixture(dir.path, n);
+            if (n == 8) {
+                checkModes(source, "return-exit: ok\n", dir.path);
+            }
+            string ir = run((qcc, "-O0", "--strip-source", "-o", dir.path + "/returns", source),
+                "QORE_DUMP_LLVM_IR=1 ");
+            assertEq("return-exit: ok\n", run((dir.path + "/returns",)), "returns " + n);
+            # the function's handlers run at its shared exits (error return and return), not at every return
+            handlers{n} = countCalls(ir, "returns" + n, "call void @qore_rt_exec_on_block_exit(");
+            assertGt(0, handlers{n}, "returns " + n);
+        }
+        assertEq(handlers."8", handlers."24", sprintf("%y", handlers));
+        assertLe(3, handlers."24", sprintf("%y", handlers));
+    }
+
+    #! returns the number of qore_rt_decref calls in the LLVM IR of the functions named \a name
+    private static int countDecref(string ir, string name) {
+        int count = 0;
+        bool in_function = False;
+        foreach string line in (ir.split("\n")) {
+            if (!in_function) {
+                in_function = line =~ /^define / && line.find("@" + name + "_") >= 0;
+                continue;
+            }
+            if (line == "}") {
+                in_function = False;
+                continue;
+            }
+            if (line.find("call void @qore_rt_decref(") >= 0) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    private codeGrowth() {
+        TmpDir dir("qore-throw-exit-growth-");
+        hash<string, int> counts;
+        foreach int n in ((8, 24)) {
+            string source = writeGrowthFixture(dir.path, n);
+            if (n == 8) {
+                checkModes(source, GrowthOk, dir.path);
+            }
+            string ir = run((qcc, "-O0", "--strip-source", "-o", dir.path + "/growth", source),
+                "QORE_DUMP_LLVM_IR=1 ");
+            assertEq(GrowthOk, run((dir.path + "/growth",)), "growth " + n);
+            counts{n} = countDecref(ir, "growth" + n);
+            assertGt(0, counts{n}, "growth " + n);
+        }
+        # three times the locals and throw sites: about three times the releases; releasing every cleanup slot
+        # of the function at each throw site would need about nine times as many
+        assertLt(counts."8" * 4, counts."24", sprintf("%y", counts));
+    }
+}

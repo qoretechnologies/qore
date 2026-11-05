@@ -34,6 +34,8 @@
 
 #include <qore/RuntimeConfig.h>
 
+#include <optional>
+
 /**
  * @brief Runtime configuration passed through the evaluation call chain.
  *
@@ -48,6 +50,9 @@
  * nullptr gracefully or fall back to TLS-based lookups when needed.
  */
 class ExceptionSink;
+class ThreadData;
+class LocalVar;
+class LocalVarValue;
 
 class RuntimeConfig::Impl {
 public:
@@ -87,6 +92,12 @@ public:
     //! Current closure environment
     const QoreClosureBase* closure_env = nullptr;
 
+    // Live thread-state view, acquired only at a native invocation boundary.
+    // Appended to preserve the hot snapshot fields' existing offsets. Unlike
+    // those snapshots, this observes nested compatibility calls directly.
+    // Never use it beyond the acquiring thread's invocation.
+    ThreadData* native_thread_data = nullptr;
+
     //! Check if this RuntimeConfig has valid thread-local program data
     bool hasThreadLocalData() const {
         return tlpd != nullptr;
@@ -95,6 +106,552 @@ public:
     //! Check if this RuntimeConfig is valid for runtime operations
     bool isValid() const {
         return pgm != nullptr;
+    }
+};
+
+//! Internal native-call access; no public RuntimeConfig layout or ABI change.
+class RuntimeConfigNativeAccess {
+public:
+    //! Acquire the live thread view once for a generated function invocation.
+    DLLLOCAL static RuntimeConfig& getCurrent();
+    //! Acquire an optional live view without touching RuntimeConfig after thread-data teardown.
+    //! @return a borrowed same-thread invocation view, or nullptr if thread data is unavailable
+    DLLLOCAL static RuntimeConfig* tryGetCurrent();
+    //! Read the live Program, not a snapshot that a nested call could refresh.
+    DLLLOCAL static QoreProgram* getProgram(const RuntimeConfig& rc);
+    //! Read the live method access context without rediscovering TLS.
+    //! @param rc live same-thread invocation view
+    //! @return current method access class, or nullptr outside class context
+    DLLLOCAL static const qore_class_private* getClass(const RuntimeConfig& rc);
+    //! Read live parse options, including any nested runtime override.
+    //! @param rc live same-thread invocation view
+    //! @return effective runtime parse options, not the compatibility snapshot
+    DLLLOCAL static QoreParseOptions getParseOptions(const RuntimeConfig& rc);
+    //! Read a caller Program's effective options after a call has switched Programs, without a TLS lookup.
+    //! @param rc live same-thread invocation view
+    //! @param pgm caller Program, or nullptr to use the live runtime options
+    //! @return the Program's options with the active runtime override applied
+    DLLLOCAL static QoreParseOptions getEffectiveParseOptionsFor(const RuntimeConfig& rc, const QoreProgram* pgm);
+    //! Whether this invocation has the variable stacks required by a native observable frame.
+    DLLLOCAL static bool hasProgramData(const RuntimeConfig& rc);
+    //! Admit a native cache only for an unchanged, ordinary strong-object slot.
+    //! @param rc borrowed live same-thread invocation context
+    //! @param local compiler-proven unwritten, unescaped parameter
+    //! @param expected object retained by the existing native entry-load owner
+    //! @return same-thread stack epoch address, or an immutable UINT64_MAX sentinel on rejection
+    //! @note The address cannot outlive this invocation/thread. No ownership is transferred.
+    DLLLOCAL static const uint64_t* getStrongLocalMutationEpoch(const RuntimeConfig& rc,
+        const LocalVar* local, const QoreObject* expected);
+    //! Resolve an ordinary, compiler-proven pre-instantiated AOT body local once.
+    //! @param rc same-thread native invocation view
+    //! @param local non-captured body local whose slot is not popped until function exit
+    //! @return borrowed stable stack slot, or nullptr for the ordinary lookup path
+    //! @note No value is cached. The handle cannot escape this invocation/thread.
+    DLLLOCAL static LocalVarValue* getAOTBodyLocalSlot(const RuntimeConfig& rc, const LocalVar* local);
+    //! Preserve the normal stack guard without looking up TLS again.
+    DLLLOCAL static int checkStack(const RuntimeConfig& rc, ExceptionSink* xsink);
+    //! Keep the complete physical guard inline in the prepared callback dispatch frame.
+    //! @param rc same-thread live invocation context
+    //! @param xsink sink receiving the normal stack overflow exception
+    //! @return 0 if within the stack limit, -1 on overflow
+    //! @note Preserves deferred context materialization and all platform stack predicates.
+    DLLLOCAL static int checkStackForPreparedCallback(const RuntimeConfig& rc, ExceptionSink* xsink);
+    //! Perform the normal cancellation check using the live thread view, not TLS snapshots.
+    //! @param rc same-thread invocation view from tryGetCurrent()
+    //! @param xsink optional sink receiving a cancellation or interruption exception
+    //! @param operation diagnostic operation name
+    //! @return true when cancellation or interruption applies
+    DLLLOCAL static bool checkCancel(const RuntimeConfig& rc, ExceptionSink* xsink, const char* operation);
+    static ThreadData* getThreadData(const RuntimeConfig& rc) {
+        assert(rc.impl && rc.impl->native_thread_data);
+        return rc.impl->native_thread_data;
+    }
+    //! Whether \a rc is a view of state that it does not own, as the thread's canonical RuntimeConfig always is
+    /** The canonical RuntimeConfig uses thread-local storage that stays valid after the thread-local destructors have
+        run, when the exit handlers of the main thread destroy the static namespace.
+    */
+    static bool isView(const RuntimeConfig& rc) {
+        return rc.impl && !rc.owned;
+    }
+};
+
+//! Object/class substitution using an already-acquired native invocation context.
+/** Updates both live compatibility state and the RuntimeConfig snapshot, exactly
+    as ObjectSubstitutionHelper does, without rediscovering either through TLS.
+    The context and its live thread view must belong to this invocation/thread
+    and remain valid until destruction. Both previous stores are restored even
+    when they differed on entry. No object reference ownership is changed.
+*/
+class RuntimeConfigNativeObjectHelper {
+public:
+    //! @param rc current thread's live native invocation context
+    //! @param object borrowed method receiver, alive throughout this scope
+    //! @param cls actual method variant's defining-class access context
+    DLLLOCAL RuntimeConfigNativeObjectHelper(RuntimeConfig& rc, QoreObject* object,
+        const qore_class_private* cls);
+    //! Restore live and snapshot contexts without another TLS lookup.
+    DLLLOCAL ~RuntimeConfigNativeObjectHelper();
+    RuntimeConfigNativeObjectHelper(const RuntimeConfigNativeObjectHelper&) = delete;
+    RuntimeConfigNativeObjectHelper& operator=(const RuntimeConfigNativeObjectHelper&) = delete;
+
+private:
+    RuntimeConfig& rc;
+    ThreadData* td;
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+};
+
+//! Native same-Program frame with explicit execution state and normal publication.
+/** Keep this as the LAST member of a fully initialized QoreStackLocation subclass.
+    Construction fills call_loc before publishing; destruction waits for stack
+    observers before any of the enclosing location's members are destroyed.
+    The caller has checked the stack and prepared its callee's AOT context.
+    Only for compiler-proven scalar native leaves with no TLS locals or generic
+    reentry: local/closure frame markers are retained but popped as empty frames.
+*/
+class RuntimeConfigNativeCallHelper {
+public:
+    DLLLOCAL RuntimeConfigNativeCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const QoreProgramLocation* parse_loc,
+        const QoreParseOptions& po, QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL ~RuntimeConfigNativeCallHelper();
+    RuntimeConfigNativeCallHelper(const RuntimeConfigNativeCallHelper&) = delete;
+    RuntimeConfigNativeCallHelper& operator=(const RuntimeConfigNativeCallHelper&) = delete;
+
+private:
+    ThreadData* td;
+    ThreadLocalProgramData* tlpd;
+    QoreProgram* old_call_pgm;
+    const QoreClosureBase* old_closure;
+    const QoreStackLocation* old_stack;
+    const AbstractStatement* old_stmt;
+    const QoreProgramLocation* old_loc;
+    QoreParseOptions old_po;
+    bool swapped;
+};
+
+struct QorePreparedFunctionRefV3;
+struct QoreAOTMethodDispatchCacheEntry;
+
+//! Cold policy state for a reusable, proven non-reentrant scalar callback.
+/** The descriptor is borrowed for the native invocation. Only materialize() reads
+    live policy; saved fields are consumed only after successful materialization.
+    Keep alive until the leaf helper has unpublished its frame and waited for readers.
+*/
+class RuntimeConfigNativeCallbackContext {
+public:
+    //! @param cache invocation-owned immutable admitted callback descriptor
+    explicit RuntimeConfigNativeCallbackContext(const QorePreparedFunctionRefV3& cache) : cache(cache) {
+    }
+    //! @return the borrowed descriptor, unchanged until the frame is unpublished
+    const QorePreparedFunctionRefV3& getCache() const {
+        return cache;
+    }
+    RuntimeConfigNativeCallbackContext(const RuntimeConfigNativeCallbackContext&) = delete;
+    RuntimeConfigNativeCallbackContext& operator=(const RuntimeConfigNativeCallbackContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    const QorePreparedFunctionRefV3& cache;
+    struct SavedOptions {
+        QoreParseOptions mask;
+        QoreParseOptions value;
+        QoreParseOptions replace;
+        QoreParseOptions caller_restrictions;
+        const QoreProgram* module_pgm;
+        qore_program_id_t app_pgm_id;
+    };
+    // Keep the generated callback frame's fixed storage contract. Allocate only
+    // before cold materialization pushes markers, and reuse until frame destruction.
+    std::unique_ptr<SavedOptions> old_options;
+    DLLLOCAL void prepareMaterialization();
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restoreOptions(ThreadData* td);
+};
+
+//! Invocation-owned object context for a compiler-proven non-reentrant native method.
+/** Keep alive until its leaf helper has unpublished the diagnostic frame and
+    restored any materialized state. Construction only borrows the receiver and
+    immutable cache; it neither changes context nor extends object lifetime.
+    The leaf helper saves and substitutes both live and snapshot views only on
+    its exception path. Callback frames do not carry this method-only storage.
+*/
+class RuntimeConfigNativeMethodContext {
+public:
+    //! @param rc initialized same-thread native invocation context
+    //! @param object borrowed receiver, alive until the leaf helper is destroyed
+    //! @param cache immutable admitted method entry, alive for the same scope
+    RuntimeConfigNativeMethodContext(RuntimeConfig& rc, QoreObject* object,
+            const QoreAOTMethodDispatchCacheEntry& cache) : rc(rc), object(object), cache(cache) {
+    }
+    RuntimeConfigNativeMethodContext(const RuntimeConfigNativeMethodContext&) = delete;
+    RuntimeConfigNativeMethodContext& operator=(const RuntimeConfigNativeMethodContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    friend class RuntimeConfigNativeMethodFramePairHelper;
+    RuntimeConfig& rc;
+    QoreObject* object;
+    const QoreAOTMethodDispatchCacheEntry& cache;
+    // Only read after materialize() has installed all four saved values.
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restore(ThreadData* td);
+};
+
+//! Deferred pure-method context after an ordinary, possibly reentrant Program transition.
+/** Borrow only invocation-owned or Program-owned metadata. The caller's replaceable
+    dispatch cache must not survive Program entry. Keep this descriptor and the
+    receiver alive until the leaf helper has unpublished and restored its frame.
+    Construction neither substitutes context nor acquires ownership.
+*/
+class RuntimeConfigNativeUncachedMethodContext {
+public:
+    //! @param rc current thread's live invocation context after Program entry
+    //! @param object borrowed receiver retained throughout the invocation
+    //! @param uvb live, revalidated pure scalar method variant
+    //! @param pgm execution Program already entered by the ordinary dispatcher
+    //! @param class_ctx immutable defining class of the executable variant
+    RuntimeConfigNativeUncachedMethodContext(RuntimeConfig& rc, QoreObject* object,
+            const UserVariantBase* uvb, QoreProgram* pgm, const qore_class_private* class_ctx)
+            : rc(rc), object(object), uvb(uvb), pgm(pgm), class_ctx(class_ctx) {
+    }
+    RuntimeConfigNativeUncachedMethodContext(const RuntimeConfigNativeUncachedMethodContext&) = delete;
+    RuntimeConfigNativeUncachedMethodContext& operator=(const RuntimeConfigNativeUncachedMethodContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    RuntimeConfig& rc;
+    QoreObject* object;
+    const UserVariantBase* uvb;
+    QoreProgram* pgm;
+    const qore_class_private* class_ctx;
+    // Saved values are read only after materialization installs all four.
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restore(ThreadData* td);
+};
+
+//! Invocation-owned deferred object/class/self context for a proven closure-v2 body.
+/** The closure and variant are borrowed until the leaf helper has unpublished its
+    frame and waited for readers. Construction performs no context lookup or write.
+    Only materialize/restore access saved state; captures are never cached here.
+*/
+class RuntimeConfigNativeClosureContext {
+public:
+    //! @param rc initialized same-thread invocation context
+    //! @param closure borrowed closure, alive throughout this invocation
+    //! @param uvb matching immutable closure variant
+    //! @param caller_pgm caller before a Program transition, or nullptr for the current Program
+    RuntimeConfigNativeClosureContext(RuntimeConfig& rc, const QoreClosureBase* closure,
+            const UserVariantBase* uvb, QoreProgram* caller_pgm = nullptr)
+        : rc(rc), closure(closure), uvb(uvb), caller_pgm(caller_pgm) {
+    }
+    RuntimeConfigNativeClosureContext(const RuntimeConfigNativeClosureContext&) = delete;
+    RuntimeConfigNativeClosureContext& operator=(const RuntimeConfigNativeClosureContext&) = delete;
+
+private:
+    friend class RuntimeConfigNativeLeafCallHelper;
+    RuntimeConfig& rc;
+    const QoreClosureBase* closure;
+    const UserVariantBase* uvb;
+    QoreProgram* caller_pgm;
+    QoreObject* old_object;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_object;
+    const qore_class_private* old_rc_class;
+    const QoreObject* old_self;
+    bool restore_self;
+    struct SavedOptions {
+        SavedOptions(const QoreParseOptions& mask, const QoreParseOptions& value, const QoreParseOptions& replace,
+                const QoreParseOptions& caller_restrictions, const QoreProgram* module_pgm,
+                qore_program_id_t app_pgm_id) noexcept
+            : mask(mask), value(value), replace(replace), caller_restrictions(caller_restrictions), module_pgm(module_pgm),
+              app_pgm_id(app_pgm_id) {
+        }
+        QoreParseOptions mask;
+        QoreParseOptions value;
+        QoreParseOptions replace;
+        QoreParseOptions caller_restrictions;
+        const QoreProgram* module_pgm;
+        qore_program_id_t app_pgm_id;
+    };
+    // Disengaged on the successful path; only cold materialization saves an override.
+    std::optional<SavedOptions> old_options;
+    DLLLOCAL void materialize(ThreadData* td);
+    DLLLOCAL void restoreOptions(ThreadData* td);
+    DLLLOCAL void restore(ThreadData* td);
+};
+
+//! Deferred context for a prepared non-reentrant native scalar callee.
+/** Keep as the last member of its published stack location. The callee may
+    evaluate native scalar operations, perform bounded locked member probes
+    through explicit receiver/class arguments, read scalar captures through an
+    explicit closure argument, or enter the full stack guard.
+    Member probes cannot allocate, release ownership, reenter Qore, or inspect
+    the deferred TLS/local context. An effect-prefix miss must unpublish this
+    borrowed frame before its ordinary cold continuation can enter generic code.
+    Diagnostic stack publication is always retained. Empty local/closure
+    markers are private to this thread and unobservable by the admitted body. The
+    integer-result, reusable callback, and scalar closure paths materialize them before any stack
+    exception. Ordinary automatic floating callback frames retain eager markers after
+    measured regressions from deferring them without persistent frame storage.
+    Requires the dispatch helper's entry guard and a guarded native callee entry:
+    this middle publication frame does not repeat their stack checks. The sink
+    parameter is retained for the common helper construction signature, but not used.
+    All pointers belong to the current invocation/thread, including the cache.
+    A compiler-proven forwarding body may be represented by an additional
+    deferred method frame only after preflighting its exact pure inner target.
+    The inner frame must supply its explicit source call site; overflow
+    materializes the deferred chain in caller order before exception work.
+*/
+class RuntimeConfigNativeLeafCallHelper {
+public:
+    //! Install variable markers and original context before stack-overflow exception work; idempotent.
+    /** @throws std::bad_alloc if deferred option storage or a variable-marker block cannot be allocated.
+        Option storage is allocated before either marker is pushed.
+        A failed closure-marker allocation rolls back the local marker before unwinding.
+    */
+    DLLLOCAL void materialize();
+    RuntimeConfigNativeLeafCallHelper(const RuntimeConfigNativeLeafCallHelper&) = delete;
+    RuntimeConfigNativeLeafCallHelper& operator=(const RuntimeConfigNativeLeafCallHelper&) = delete;
+
+protected:
+    // Initialize an inactive callback context owned by one native invocation.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, RuntimeConfigNativeCallbackContext& context);
+    DLLLOCAL void enterReusableCallback(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QorePreparedFunctionRefV3& cache);
+    // Compiler-proven scalar closure-v1 body; both dispatch and callee guard the live stack.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const UserVariantBase* closure_uvb);
+    // Additive closure-v2 contract also defers object/class/self substitution.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, RuntimeConfigNativeClosureContext& context);
+    // Construct only through the policy-specific RAII wrapper below.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink,
+        bool defer_markers);
+    // Only for method-v2 continuations: the complete body proof excludes reentry
+    // and its first operation checks the live stack. Method-v1 stays eager.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, RuntimeConfigNativeMethodContext& context,
+        ExceptionSink* xsink, const QoreProgramLocation* caller_loc = nullptr);
+    // Pure method-v2/v3 retry after ordinary Program entry and live uncached admission.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc, QoreStackLocation* stack_loc,
+        const QoreProgramLocation*& call_loc, RuntimeConfigNativeUncachedMethodContext& context,
+        ExceptionSink* xsink);
+    ~RuntimeConfigNativeLeafCallHelper() = default;
+    DLLLOCAL void restoreEager();
+    DLLLOCAL void restoreDeferred();
+
+private:
+    friend class RuntimeConfigNativeMethodFramePairHelper;
+    // Pair construction initializes both logical frames before publishing either one.
+    DLLLOCAL RuntimeConfigNativeLeafCallHelper(ThreadData* td, RuntimeConfigNativeMethodContext& context);
+    //! Exception-only restoration after both variable markers and context exist.
+    DLLLOCAL void restoreMaterialized();
+    ThreadData* td;
+    ThreadLocalProgramData* tlpd;
+    // Private runtime storage, not a change to either generated-code cache ABI.
+    // Only materialize() discriminates metadata; successful cleanup does not.
+    union {
+        const QorePreparedFunctionRefV3* callback_cache;
+        RuntimeConfigNativeCallbackContext* callback_context;
+        RuntimeConfigNativeMethodContext* method_context;
+        RuntimeConfigNativeUncachedMethodContext* uncached_method_context;
+        const UserVariantBase* closure_uvb;
+        RuntimeConfigNativeClosureContext* closure_context;
+    };
+    RuntimeConfigNativeLeafCallHelper* previous;
+    const QoreStackLocation* old_stack;
+    // Location and statement are saved on entry; other fields are materialized only on demand.
+    QoreProgram* old_call_pgm;
+    const QoreClosureBase* old_closure;
+    const AbstractStatement* old_stmt;
+    const QoreProgramLocation* old_loc;
+    QoreParseOptions old_po;
+    enum class ContextState : uint8_t { EagerMarkers, DeferredMarkers, Materialized };
+    ContextState state;
+    enum class TargetKind : uint8_t { Callback, Method, Closure, ClosureV2, CallbackV2, UncachedMethod };
+    TargetKind target_kind;
+    bool swapped; //!< Initialized only when context is materialized
+#ifndef NDEBUG
+protected:
+    //! Reusable-frame diagnostics share the existing tag padding, preserving its fixed AOT storage.
+    bool reusable_active = false;
+#endif
+};
+
+//! Owns exactly two preflighted forwarding frames and their deferred method contexts.
+/** Both diagnostic frames must be fully initialized before construction, and this
+    helper must be destroyed before either frame or context. The admitted body
+    cannot reenter Qore or observe deferred state. Its guarded entry materializes
+    the existing outer-to-inner context chain before exception work.
+*/
+class RuntimeConfigNativeMethodFramePairHelper final {
+public:
+    /** Publish both frames with one release operation, without allocating.
+        @param rc current thread's live invocation context
+        @param outer_frame initialized forwarding method diagnostic frame
+        @param outer_loc caller-location slot set before publication
+        @param outer_context borrowed receiver and admitted outer method cache
+        @param inner_frame initialized pure leaf diagnostic frame
+        @param inner_loc inner caller-location slot set before publication
+        @param inner_context borrowed receiver and admitted inner method cache
+        @param caller_loc non-null source location of the inner call
+        @note All ordinary live admission and stack guards remain the caller's responsibility.
+    */
+    DLLLOCAL RuntimeConfigNativeMethodFramePairHelper(RuntimeConfig& rc,
+        QoreStackLocation* outer_frame, const QoreProgramLocation*& outer_loc,
+        RuntimeConfigNativeMethodContext& outer_context,
+        QoreStackLocation* inner_frame, const QoreProgramLocation*& inner_loc,
+        RuntimeConfigNativeMethodContext& inner_context, const QoreProgramLocation* caller_loc);
+    //! Restore both contexts and wait for stack readers before either frame can be destroyed.
+    DLLLOCAL ~RuntimeConfigNativeMethodFramePairHelper();
+    RuntimeConfigNativeMethodFramePairHelper(const RuntimeConfigNativeMethodFramePairHelper&) = delete;
+    RuntimeConfigNativeMethodFramePairHelper& operator=(const RuntimeConfigNativeMethodFramePairHelper&) = delete;
+
+private:
+#ifdef DEBUG
+    friend class RuntimeConfigNativeMethodFramePairTestAccess;
+    const QoreStackLocation* published_inner;
+#endif
+    RuntimeConfigNativeLeafCallHelper outer;
+    RuntimeConfigNativeLeafCallHelper inner;
+};
+
+//! Deferred scalar-closure context, owned entirely by the current invocation.
+class RuntimeConfigNativeClosureCallHelper final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    /** Publish a compiler-proven, bounded scalar closure-v1 frame.
+        @param rc current thread's live invocation context
+        @param frame fully initialized diagnostic frame; this helper must be its last member
+        @param loc caller-location slot initialized before publication
+        @param uvb borrowed closure variant, alive until unpublication and reader completion
+        @note Dispatch and callee guards remain mandatory. Object/class/self context is managed separately.
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeClosureCallHelper(RuntimeConfig& rc,
+            QoreStackLocation* frame, const QoreProgramLocation*& loc, const UserVariantBase* uvb)
+            : RuntimeConfigNativeLeafCallHelper(rc, frame, loc, uvb) {}
+    //! Restore materialized state and unpublish, waiting for diagnostic readers before destruction.
+    __attribute__((always_inline)) ~RuntimeConfigNativeClosureCallHelper() { restoreDeferred(); }
+};
+
+//! Full deferred closure-v2 context; v1's separate eager object context is unchanged.
+class RuntimeConfigNativeClosureCallHelperV2 final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    //! @param rc current thread's live invocation context
+    //! @param frame fully initialized immutable diagnostic frame; keep this helper last
+    //! @param loc caller-location slot initialized before publication
+    //! @param context invocation-owned closure metadata, alive until unpublication completes
+    __attribute__((always_inline)) RuntimeConfigNativeClosureCallHelperV2(RuntimeConfig& rc,
+            QoreStackLocation* frame, const QoreProgramLocation*& loc, RuntimeConfigNativeClosureContext& context)
+            : RuntimeConfigNativeLeafCallHelper(rc, frame, loc, context) {}
+    //! Restore any materialized context and wait for readers before destroying borrowed metadata.
+    __attribute__((always_inline)) ~RuntimeConfigNativeClosureCallHelperV2() { restoreDeferred(); }
+};
+
+//! Inactive between calls; a separate per-call scope must pair enter() and leave().
+class RuntimeConfigReusableNativeLeafCallHelper final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    //! Borrow stable thread/cache addresses for one native invocation, without publishing a frame.
+    /** @param rc the current thread's runtime context
+        @param context invocation-owned deferred policy, alive until the last leave() completes
+    */
+    RuntimeConfigReusableNativeLeafCallHelper(RuntimeConfig& rc, RuntimeConfigNativeCallbackContext& context)
+        : RuntimeConfigNativeLeafCallHelper(rc, context) {
+    }
+    //! Publish fresh per-call state only after all live admission and entry-stack checks succeed.
+    /** @param stack_loc the fully initialized diagnostic frame
+        @param call_loc receives the current caller location, valid until leave() completes
+        @param cache the same descriptor borrowed by this helper's context
+        @note Pair every successful enter() with leave() before modifying the frame or descriptor.
+    */
+    __attribute__((always_inline)) void enter(QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            const QorePreparedFunctionRefV3& cache) {
+#ifndef NDEBUG
+        assert(!reusable_active);
+        reusable_active = true;
+#endif
+        enterReusableCallback(stack_loc, call_loc, cache);
+    }
+    //! Restore context and wait for every reader before the frame or cache can be reused.
+    /** @note Called by the per-call RAII scope, including on exceptional exits. */
+    __attribute__((always_inline)) void leave() {
+        restoreDeferred();
+#ifndef NDEBUG
+        reusable_active = false;
+#endif
+    }
+#ifndef NDEBUG
+    bool isActive() const { return reusable_active; }
+#endif
+};
+
+//! Compile-time marker policy keeps eager floating cleanup free of a runtime policy branch.
+template <bool DeferMarkers>
+class RuntimeConfigNativeLeafCallHelperFor final : public RuntimeConfigNativeLeafCallHelper {
+public:
+    /** Publish the invocation's diagnostic frame with the selected marker policy.
+        @param rc the current thread's runtime context
+        @param stack_loc fully initialized diagnostic frame; this helper must be its last member
+        @param call_loc caller-location slot, initialized before publication
+        @param cache owned prepared target, unchanged until frame removal and reader completion
+        @param xsink retained for the common helper signature; neither read nor modified here
+        @throws std::bad_alloc if an eager variable-marker block cannot be allocated
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
+            QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            const QorePreparedFunctionRefV3& cache, ExceptionSink* xsink)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, cache, xsink, DeferMarkers) {
+    }
+    /** Publish a fully admitted method-v2 frame with deferred empty markers.
+        @param rc current thread's live runtime context
+        @param stack_loc initialized diagnostic frame; helper must be its last member
+        @param call_loc caller-location slot, initialized before publication
+        @param context invocation-owned receiver/cache descriptor, alive until readers finish
+        @param xsink retained for the common construction signature, not modified
+        @param caller_loc explicit forwarding call site, or null to use the current runtime location
+        @note Object/class substitution is materialized before exception work;
+            the caller must retain receiver ownership and all live admission guards.
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
+            QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            RuntimeConfigNativeMethodContext& context, ExceptionSink* xsink,
+            const QoreProgramLocation* caller_loc = nullptr)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink, caller_loc) {
+        static_assert(DeferMarkers, "method-v2 leaf contexts use deferred empty markers");
+    }
+    /** Publish a pure native method retry after the ordinary Program transition.
+        @param rc current thread's live runtime context
+        @param stack_loc initialized logical frame retaining the caller's Program identity
+        @param call_loc caller-location slot initialized before publication
+        @param context invocation-owned metadata, alive until restoration and reader completion
+        @param xsink retained for the common construction signature, not modified
+        @note Requires live body/signature checks and guarded v2/v3 entry. The ordinary
+            dispatcher retains the Program transition and caller option/application overrides.
+    */
+    __attribute__((always_inline)) RuntimeConfigNativeLeafCallHelperFor(RuntimeConfig& rc,
+            QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+            RuntimeConfigNativeUncachedMethodContext& context, ExceptionSink* xsink)
+            : RuntimeConfigNativeLeafCallHelper(rc, stack_loc, call_loc, context, xsink) {
+        static_assert(DeferMarkers, "uncached method-v2 leaf contexts use deferred empty markers");
+    }
+    //! Restore installed state and unpublish the frame, waiting for diagnostic readers before it dies.
+    __attribute__((always_inline)) ~RuntimeConfigNativeLeafCallHelperFor() {
+        if constexpr (DeferMarkers) {
+            restoreDeferred();
+        } else {
+            restoreEager();
+        }
     }
 };
 
@@ -180,6 +737,11 @@ private:
 
 /**
  * @brief RAII helper to temporarily change location in RuntimeConfig.
+ *
+ * The location and statement are also set in the thread's live view and restored on exit.  The thread's runtime
+ * parse options are changed (and restored) only if \a has_po is true; otherwise the live options, including any
+ * runtime override, are left as they are: the RuntimeConfig's parse options snapshot is not written to the thread,
+ * as it is maintained only by AST execution.
  */
 class RuntimeConfigLocationHelper {
 public:
@@ -198,9 +760,10 @@ private:
     QoreParseOptions old_po;
     const QoreProgramLocation* tls_old_loc;
     const AbstractStatement* tls_old_stmt;
+    //! the thread's runtime parse options to restore; set only if \a restore_po is true
     QoreParseOptions tls_old_po;
+    //! true if the helper sets the parse options (and restores them on exit)
     bool restore_po;
-    bool used_swap;
 };
 
 /**

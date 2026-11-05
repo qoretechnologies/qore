@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class JITExceptionTempChainTest
+
+#! Tests the release of the temporaries of a statement on its exception edges in native code
+/** An exception raised by a call in a statement with an in-frame handler releases the temporaries that the statement
+    holds, the cleanup allocas registered since the mark of its temp scope, in the reverse order of their creation,
+    before the handler runs.  Every edge releases a prefix of the same sequence, so the edges of a statement share one
+    chain of release blocks, one per temporary, and each edge enters it at the block of its last temporary.  A copy of
+    the releases on each edge made the code grow with the product of the throwing calls and the temporaries of a
+    statement.
+
+    These tests check that the code size is linear (the statistics of the lowering) and that the native code releases
+    the same temporaries in the same order as the AST interpreter, for an exception at each call of the statement and
+    for none.
+*/
+class JITExceptionTempChainTest inherits QUnit::Test {
+    public {
+        #! the number of method chains, each a temporary and a throwing call, in the statement
+        const Chains = 12;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITExceptionTempChainTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("the exception edges share one release per temporary", \testLinearReleases());
+        addTestCase("the release order and set match the AST interpreter", \testReleaseOrder());
+        addTestCase("the AOT program matches the AST interpreter", \testAotProgram());
+        set_return_value(main());
+    }
+
+    #! returns a script whose statement holds \a chains temporaries and raises at chain \a fail_at (-1: none)
+    private static string getCode(int chains, int fail_at) {
+        string code = "%modern
+
+list<string> events;
+
+class Doc {
+    public {
+        string name;
+    }
+    constructor(string n) {
+        name = n;
+        events += \"+\" + n;
+    }
+    destructor() {
+        events += \"~\" + name;
+    }
+    string get(int i, int fail_at) {
+        if (i == fail_at) {
+            throw \"CHAIN-ERROR\", name;
+        }
+        return name;
+    }
+}
+
+Doc sub make(string n) {
+    return new Doc(n);
+}
+
+string sub run(int fail_at) {
+    try {
+        events += sprintf(\"%s\", (";
+        list<string> parts = ();
+        for (int i = 0; i < chains; ++i) {
+            push parts, sprintf("make(\"t%d\").get(%d, fail_at)", i, i);
+        }
+        code += parts.join(", ") + sprintf(").join(\",\"));
+    } catch (hash<ExceptionInfo> ex) {
+        events += \"caught \" + ex.desc;
+    }
+    return events.join(\" \");
+}
+
+events = ();
+printf(\"rv:%%s\\n\", run(%d));
+", fail_at);
+        return code;
+    }
+
+    #! The statement has one release block per temporary however many of its calls can raise
+    /** With twice the chains, a statement has about twice the exception edges and twice the temporaries: the shared
+        chains need twice the release blocks, while a copy of the releases on each edge needed about four times as
+        many (12 chains: 40 edges and 50 release blocks; 24 chains: 76 edges and 86 release blocks).
+    */
+    testLinearReleases() {
+        hash<auto> small = getStats(Chains);
+        hash<auto> large = getStats(Chains * 2);
+        string desc = sprintf("%d chains: %y; %d chains: %y", Chains, small, Chains * 2, large);
+        # each chain has at least its own call that can raise while it holds the temporaries before it
+        assertGe(Chains, small.edges, "every chain raises with temporaries held: " + desc);
+        assertGe(small.edges * 3 / 2, large.edges, "the edges grow with the chains: " + desc);
+        assertGe(Chains - 1, small.releases, "at least the temporaries held by a later call are released: " + desc);
+        assertLe(small.releases * 2 + 4, large.releases, "the releases grow linearly with the temporaries: " + desc);
+    }
+
+    #! returns the exception edge statistics of run() in a script with \a chains chains
+    private hash<auto> getStats(int chains) {
+        string out = runScript(getCode(chains, -1), "jit", "QORE_IR_OPT_STATS=1");
+        *list<*string> stats = (out =~ x/IR-OPT-JIT-LOWERING: run@[^:]*: exception-temp-edges=([0-9]+) exception-temp-releases=([0-9]+)/);
+        assertEq(2, stats.size(), "the lowering of run() reports its exception edges: " + out);
+        return {"edges": stats[0].toInt(), "releases": stats[1].toInt()};
+    }
+
+    #! An exception at each chain releases the temporaries created before it, in reverse order, as in the AST
+    testReleaseOrder() {
+        foreach int fail_at in (-1, 0, 1, Chains / 2, Chains - 1) {
+            string code = getCode(Chains, fail_at);
+            string expected = runResult(code, "ast");
+            if (fail_at >= 0) {
+                list<string> released = ();
+                for (int i = fail_at; i >= 0; --i) {
+                    push released, "~t" + i;
+                }
+                assertNeq(-1, expected.find(released.join(" ") + " caught t" + fail_at),
+                    sprintf("the AST interpreter releases the temporaries in reverse order (fail_at=%d)", fail_at));
+            }
+            foreach string mode in ("ir", "jit", "tiered") {
+                assertEq(expected, runResult(code, mode), sprintf("%s (fail_at=%d)", mode, fail_at));
+            }
+        }
+    }
+
+    #! An AOT-compiled program releases them as the AST interpreter does
+    testAotProgram() {
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        TmpDir tmp("qore-exception-temp-chain-");
+        foreach int fail_at in (-1, 0, Chains / 2, Chains - 1) {
+            string code = getCode(Chains, fail_at);
+            string src = tmp.path + DirSep + sprintf("chain%d.qr", fail_at + 1);
+            File f();
+            f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(code);
+            f.close();
+            string exe = tmp.path + DirSep + sprintf("chain%d", fail_at + 1);
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, qcc_bin, exe, src));
+            assertTrue(is_file(exe), "compiled: " + out);
+            out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe));
+            assertEq(runResult(code, "ast"), getResult(out), sprintf("AOT (fail_at=%d)", fail_at));
+        }
+    }
+
+    #! Runs the script; ExecModeHarness makes JIT compilation synchronous, so that native code runs
+    private string runScript(string code, *string exec_mode, *string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return ExecModeHarness::run(sprintf("%s %s --enable-debug --exec-mode=%s %s",
+            env ?? "", qore_bin, exec_mode ?? "jit", tmp.path));
+    }
+
+    #! returns the result line of a run
+    private string runResult(string code, string exec_mode) {
+        return getResult(runScript(code, exec_mode));
+    }
+
+    #! returns the result line of \a out
+    private static string getResult(string out) {
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^rv:/) {
+                return trim(line);
+            }
+        }
+        throw "NO-RESULT", sprintf("no result line in output: %y", out);
+    }
+}

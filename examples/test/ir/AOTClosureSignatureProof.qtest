@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ClosureSignatureProofTest
+
+class ClosureSignatureProofTest inherits QUnit::Test {
+    private { string libdir; }
+    constructor() : Test("compile-proven closure signature", "1.0", \ARGV) {
+        libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        addTestCase("exact integer proof and signature fallbacks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote("LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + prefix
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTClosureSignatureProof.qr";
+        string expected = "closure-signature-proof: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((libdir + "/qore", "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-closure-signature-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string generated = run((ENV.QCC ?? libdir + "/qcc", level, "--strip-source",
+                    "-o", executable, source), prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_");
+                foreach string factory in (("signatureExactFactory", "signatureCapturedFactory")) {
+                    assertEq(enabled, regex(generated,
+                        "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*" + factory),
+                        factory + " binding " + prefix + level);
+                }
+                foreach string factory in (("signatureSoftParameterFactory", "signatureSoftReturnFactory",
+                        "signatureOptionalParameterFactory", "signatureOptionalReturnFactory",
+                        "signatureAutoReturnFactory", "signatureAutoParameterFactory", "signatureEnumFactory",
+                        "signatureFloatFactory", "signatureZeroFactory", "signatureBinaryFactory")) {
+                    assertFalse(regex(generated,
+                        "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*" + factory),
+                        factory + " retains ordinary signature handling " + prefix + level);
+                }
+                assertTrue(generated.contains("call i32 @qore_rt_try_funcref_int_int_v5("),
+                    "opaque loop callback exercises native closure continuation");
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_SIGNATURE_PROOF=1 "),
+                    "runtime signature recheck " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 "),
+                    "ordinary closure dispatch " + prefix + level);
+            }
+        }
+    }
+}

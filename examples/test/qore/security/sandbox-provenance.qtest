@@ -24,6 +24,9 @@ class SandboxProvenanceTest inherits QUnit::Test {
         code sub bind(code callback) { return SandboxManager::bindCall(callback); }
         code sub capability(code callback) { return SandboxManager::createSystemPolicyCall(callback); }
         sub configure(object reader, string path) { reader.setPath(path); }
+        string sub own_load(string path) { return ReadOnlyFile::readTextFile(path); }
+        code<string(string)> sub own_ref() { return \\own_load(); }
+        string sub own_call(code<string(string)> callback, string path) { return callback(path); }
         list<auto> sub wait(object reader, Queue gate, Queue result) { return reader.startWaiter(gate, result); }
         object sub hooks(string path, Queue result) { return new SandboxProvenanceFixture::Hooks(path, result); }
     ";
@@ -35,6 +38,7 @@ class SandboxProvenanceTest inherits QUnit::Test {
         addTestCase("pre-existing callbacks bind at registration", \registration());
         addTestCase("async work and worker reuse", \workers());
         addTestCase("live policies and manager replacement", \lifetime());
+        addTestCase("same-Program callbacks retain creation context", \sameProgramCallbacks());
         addTestCase("network policy", \network());
         addTestCase("interrupts and composed thread budgets", \interrupts());
         addTestCase("bound closures participate in cycle collection", \cycles());
@@ -166,6 +170,24 @@ class SandboxProvenanceTest inherits QUnit::Test {
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.read());
         delete program;
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \reader.read());
+    }
+
+    private sameProgramCallbacks() {
+        SandboxManager original();
+        Program program = sandbox(original);
+        code<string(string)> callback = program.callFunction("own_ref");
+        SandboxManager replacement();
+        replacement.setFilesystemDefaultPolicy(True);
+        program.setSandboxManager(replacement);
+        assertEq("provenance fixture\n", program.callFunction("own_load", path));
+        # Target and caller share a Program after replacement; cached fast-call
+        # eligibility must still preserve the callback's immutable creation context.
+        for (int i = 0; i < 3; ++i) {
+            assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \program.callFunction(),
+                ("own_call", callback, path));
+        }
+        original.setFilesystemDefaultPolicy(True);
+        assertEq("provenance fixture\n", program.callFunction("own_call", callback, path));
     }
 
     private network() {

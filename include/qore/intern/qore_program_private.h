@@ -1385,8 +1385,11 @@ public:
 
     // returns 0 for OK, -1 for error
     DLLLOCAL int incThreadCount(ExceptionSink* xsink) {
-        int tid = q_gettid();
+        return incThreadCount(xsink, q_gettid());
+    }
 
+    //! Uses the current thread's ID when the caller already holds its live ThreadData.
+    DLLLOCAL int incThreadCount(ExceptionSink* xsink, int tid) {
         // grab program-level lock
         AutoLocker al(plock);
 
@@ -1543,6 +1546,11 @@ public:
 
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
+    }
+
+    //! Uses the current thread's ID without acquiring its ThreadData again.
+    DLLLOCAL bool parsingLocked(int tid) const {
+        return parse_tid == tid;
     }
 
     // called only with plock held
@@ -2345,7 +2353,7 @@ public:
             return true;
         }
 
-        ThreadLocalProgramData* tlpd = pgm_data_map[td];
+        ThreadLocalProgramData* tlpd = i->second;
         new_tlpd = tlpd;
 
         sl.unlock();
@@ -3908,7 +3916,7 @@ public:
     /** The Program can be used only while the caller holds a reference to it; see getReferencedProgram()
     */
     DLLLOCAL static QoreProgram* resolveProgramId(qore_program_id_t programId) {
-        printd(5, "qore_program_private::resolveProgramId(" QLLD ")\n", (int64)programId);
+        printd(5, "qore_program_private::resolveProgramId(" QLLD ")\n", static_cast<int64>(programId));
         QoreAutoRWReadLocker al(&lck_programMap);
         programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
         return i == programid_to_program_map.end() ? nullptr : i->second;

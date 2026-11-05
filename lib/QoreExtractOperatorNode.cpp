@@ -133,6 +133,10 @@ QoreValue QoreExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     if (*xsink)
         return QoreValue();
 
+    // the value extracted, which is released after the lvalue's locks when it is not returned: its destructor can
+    // access the variable
+    ReferenceHolder<AbstractQoreNode> rv(xsink);
+
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
     LValueHelper val(lvalue_exp, xsink);
     if (!val)
@@ -173,8 +177,6 @@ QoreValue QoreExtractOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
         printd(5, "op_extract() val: %p (strlen: " QLLD ") offset: " QLLD "\n", vs, (int64)(vs->strlen()), (int64)offset);
     }
 #endif
-
-    ReferenceHolder<AbstractQoreNode> rv(xsink);
 
     if (vt == NT_LIST) {
         QoreListNode *vl = val.getValue().get<QoreListNode>();

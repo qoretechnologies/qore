@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class BoundaryInteger {
+    int step(int value) { return value + 3; }
+}
+class BoundaryFloat {
+    float step(float value) { return value + 0.5; }
+}
+class BoundaryEffect {
+    int step(int value) {
+        set_local_var_value(1, "other", 91);
+        return value + 5;
+    }
+}
+thread_local int boundary_drops = 0;
+class BoundaryOwner {
+    private { reference<auto> target; bool fail; }
+    constructor(reference<auto> target, bool fail) {
+        self.target = \target;
+        self.fail = fail;
+    }
+    destructor() {
+        ++boundary_drops;
+        target = 73;
+        if (fail) { throw "BOUNDARY-CLEANUP", "after reference replacement"; }
+    }
+}
+sub boundaryExpect(auto expected, auto actual) {
+    if (sprintf("%y", expected) != sprintf("%y", actual)) {
+        throw "BOUNDARY-RESULT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub boundaryIntegerLoop(auto receiver, int count) {
+    auto value = 7;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = receiver.step(value);
+        sum += int(value);
+    }
+    return sum;
+}
+float sub boundaryFloatLoop(auto receiver, int count) {
+    auto value = 1.25;
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) {
+        value = receiver.step(value);
+        sum += float(value);
+    }
+    return sum;
+}
+int sub boundaryEarlierEffect(auto pure, auto effect, auto initial) {
+    auto other = initial;
+    auto value = 7;
+    effect.step(0);
+    value = pure.step(value);
+    return int(other) * 100 + int(value);
+}
+int sub boundaryReferenceCleanup(auto receiver, bool fail) {
+    auto changed = 11;
+    auto value = 7;
+    auto owner = new BoundaryOwner(\changed, fail);
+    try {
+        value = receiver.step(value);
+        owner = 0;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "BOUNDARY-CLEANUP") { rethrow; }
+    }
+    return int(changed) * 100 + int(value);
+}
+int sub boundaryNested(auto receiver, int count) {
+    auto value = 7;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = i & 1 ? receiver.step(value) : (i & 2 ? receiver.step(value) : receiver.step(value));
+        if (i % 3) {
+            sum += int(value);
+            continue;
+        }
+        sum += int(value);
+    }
+    return sum;
+}
+auto sub boundaryScalarKinds(auto input) {
+    auto value = 1;
+    # Unknown calls preserve runtime-visible locals and introduce an epoch.
+    call_function("boundaryExpect", 1, value);
+    value = input;
+    auto copy = value;
+    value = 7;
+    return copy;
+}
+
+auto integer = new BoundaryInteger();
+auto floating = new BoundaryFloat();
+auto effect = new BoundaryEffect();
+foreach int count in ((0, 1, 17, 257)) {
+    int expected = count * 7 + 3 * count * (count + 1) / 2;
+    boundaryExpect(expected, boundaryIntegerLoop(integer, count));
+    boundaryExpect(expected, call_function("boundaryIntegerLoop", integer, count));
+    boundaryExpect(expected, boundaryNested(integer, count));
+    boundaryExpect(float(count) * 1.25 + 0.25 * count * (count + 1), boundaryFloatLoop(floating, count));
+    boundaryExpect(float(count) * 1.25 + 0.25 * count * (count + 1),
+        call_function("boundaryFloatLoop", floating, count));
+}
+# Retain the visible ordinary frame for the explicit reflective depth.
+boundaryExpect(9110, call_function("boundaryEarlierEffect", integer, effect, 1));
+boundaryExpect(7310, boundaryReferenceCleanup(integer, False));
+boundaryExpect(7310, boundaryReferenceCleanup(integer, True));
+boundaryExpect(2, boundary_drops);
+foreach auto value in ((False, True, NOTHING, NULL, 7, 140737488355328, -140737488355329,
+        1.25, -0.0, -3.0e307, @inf@, @nan@, "string", (1, 2), {"key": 3})) {
+    boundaryExpect(value, boundaryScalarKinds(value));
+}
+printf("scalar-boundary-reuse: ok\n");

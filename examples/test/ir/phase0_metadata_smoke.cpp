@@ -14,6 +14,8 @@
 #include <qore/QoreObject.h>
 #include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreIRInterpreter.h>
+#include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/QoreIRVerifier.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
@@ -42,6 +44,231 @@ static bool checkOpcodeRegistry() {
             || isRangeSliceOpcode(QoreIROpcode::RangeInt)) {
         std::cerr << "Opcode registry property smoke checks failed\n";
         return false;
+    }
+    return true;
+}
+
+// Copyright 2026 Qore Technologies, s.r.o.
+// Upstream v21 assigned 409 to the return check and 410/411 to temporary cleanup;
+// performance v20-v22 used 409/410 for snapshots. Round-trip both histories.
+static bool checkAOTOpcodeCompatibility() {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm(xsink);
+    if (xsink) {
+        std::cerr << "opcode compatibility Program creation failed\n";
+        return false;
+    }
+    struct Case {
+        QoreIROpcode opcode;
+        uint16_t version;
+        uint16_t max_opcode;
+        uint16_t wire_opcode; // zero keeps the current encoding
+    } cases[] = {
+        {QoreIROpcode::CheckReturnValue, 21, 416, 409},
+        {QoreIROpcode::IteratorRelease, 21, 416, 410},
+        {QoreIROpcode::ReleaseOwnedTemp, 21, 416, 411},
+        {QoreIROpcode::DebugStatement, 21, 412, 412},
+        {QoreIROpcode::DebugStatement, 21, 416, 412},
+        {QoreIROpcode::ListSetCommonType, 21, 416, 413},
+        {QoreIROpcode::CommonTypeFold, 21, 416, 414},
+        {QoreIROpcode::HashSetCommonType, 21, 416, 415},
+        {QoreIROpcode::ListSetScannedType, 21, 416, 416},
+        {QoreIROpcode::CheckReturnValue, 21, 417, 409},
+        {QoreIROpcode::IteratorRelease, 21, 417, 410},
+        {QoreIROpcode::ReleaseOwnedTemp, 21, 417, 411},
+        {QoreIROpcode::DebugStatement, 21, 417, 412},
+        {QoreIROpcode::ListSetCommonType, 21, 417, 413},
+        {QoreIROpcode::CommonTypeFold, 21, 417, 414},
+        {QoreIROpcode::HashSetKeyValueFold, 21, 417, 414},
+        {QoreIROpcode::HashSetCommonType, 21, 417, 415},
+        {QoreIROpcode::ListSetScannedType, 21, 417, 416},
+        {QoreIROpcode::LegacyListAppendElement, 21, 417, 417},
+        {QoreIROpcode::ListAppendElement, 21, 417, 417},
+        {QoreIROpcode::HashSetKeyValueFold, 22, 421, 0},
+        {QoreIROpcode::ListAppendElement, 22, 421, 0},
+        {QoreIROpcode::LegacyListAppendElement, 22, 421, 0},
+        {QoreIROpcode::DebugStatement, 22, 418, 0},
+        {QoreIROpcode::ListSetCommonType, 22, 418, 0},
+        {QoreIROpcode::CommonTypeFold, 22, 418, 0},
+        {QoreIROpcode::HashSetCommonType, 22, 418, 0},
+        {QoreIROpcode::ListSetScannedType, 22, 418, 0},
+        {QoreIROpcode::CheckReturnValue, 21, 409, 409},
+        {QoreIROpcode::CheckReturnValue, 21, 411, 409},
+        {QoreIROpcode::IteratorRelease, 21, 411, 410},
+        {QoreIROpcode::ReleaseOwnedTemp, 21, 411, 411},
+        {QoreIROpcode::CheckReturnValue, 22, 411, 0},
+        {QoreIROpcode::IteratorRelease, 22, 413, 0},
+        {QoreIROpcode::ReleaseOwnedTemp, 22, 413, 0},
+        {QoreIROpcode::SnapshotInt, 20, 410, 0},
+        {QoreIROpcode::SnapshotFloat, 20, 410, 0},
+        {QoreIROpcode::SnapshotInt, 21, 410, 0},
+        {QoreIROpcode::SnapshotFloat, 21, 410, 0},
+        {QoreIROpcode::SnapshotInt, 22, 410, 0},
+        {QoreIROpcode::SnapshotFloat, 22, 410, 0},
+        {QoreIROpcode::SnapshotInt, 22, 411, 0},
+        {QoreIROpcode::SnapshotFloat, 22, 411, 0},
+    };
+    for (const auto& test : cases) {
+        QoreIRFunction func("opcode-compatibility");
+        QoreIRBuilder builder(&func);
+        builder.setBlock(func.createBlock("entry"));
+        bool floating = test.opcode == QoreIROpcode::SnapshotFloat;
+        auto* value = floating ? builder.createConstFloat(2.5) : builder.createConstInt(7);
+        QoreIRValue result = value->result;
+        if (test.opcode == QoreIROpcode::CheckReturnValue) {
+            builder.createCheckReturnValue(result, bigIntTypeInfo, nullptr, nullptr);
+        } else if (test.opcode == QoreIROpcode::IteratorRelease) {
+            builder.createIteratorRelease(result);
+        } else if (test.opcode == QoreIROpcode::ReleaseOwnedTemp) {
+            builder.createReleaseOwnedTemp(result);
+        } else if (test.opcode == QoreIROpcode::DebugStatement) {
+            builder.append<QoreIRDebugStatementInstruction>(nullptr);
+        } else if (test.opcode == QoreIROpcode::ListSetCommonType) {
+            builder.createListSetCommonType(result, result, bigIntTypeInfo, nullptr);
+        } else if (test.opcode == QoreIROpcode::CommonTypeFold) {
+            result = builder.createCommonTypeFold(result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::HashSetKeyValueFold) {
+            result = builder.createHashSetKeyValueFold(result, result, result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::ListAppendElement) {
+            result = builder.createListAppendElement(result, result, result, nullptr)->result;
+        } else if (test.opcode == QoreIROpcode::LegacyListAppendElement) {
+            builder.createBinaryOp(test.opcode, result, result);
+        } else if (test.opcode == QoreIROpcode::HashSetCommonType) {
+            builder.createHashSetCommonType(result, result, nullptr);
+        } else if (test.opcode == QoreIROpcode::ListSetScannedType) {
+            builder.createListSetScannedType(result, bigIntTypeInfo, QoreIRValue(), nullptr);
+        } else {
+            result = builder.createUnaryOp(test.opcode, result)->result;
+        }
+        builder.createReturn(result);
+        QoreAOTBinaryWriter writer;
+        uint32_t section = writer.beginSection(QoreAOTSectionType::FUNCTIONS);
+        auto write_expr = [](QoreAOTBinaryWriter&, const QoreValue&) { return false; };
+        if (!serializeIRFunction(writer, func, write_expr)) {
+            std::cerr << "opcode compatibility serialization failed\n";
+            return false;
+        }
+        writer.endSection(section);
+        QoreAOTBinaryHeader header = {};
+        header.magic = QORE_AOT_BINARY_MAGIC;
+        header.version = test.version;
+        header.max_opcode_id = test.max_opcode;
+        header.label_offset = writer.strings.add("opcode-compatibility");
+        std::vector<uint8_t> blob;
+        if (!writer.finalize(header, blob)) {
+            std::cerr << "opcode compatibility binary finalization failed\n";
+            return false;
+        }
+        QoreAOTBinaryReader reader;
+        std::string error;
+        if (!reader.open(blob.data(), static_cast<uint32_t>(blob.size()), error)) {
+            std::cerr << "opcode compatibility header failed: " << error << "\n";
+            return false;
+        }
+        const auto* data_section = reader.findSection(QoreAOTSectionType::FUNCTIONS);
+        if (!data_section) {
+            std::cerr << "opcode compatibility functions section missing\n";
+            return false;
+        }
+        const uint8_t* section_data = reader.getSectionData(*data_section);
+        if (reader.getHeader().compression != QORE_AOT_COMPRESSION_NONE || !section_data) {
+            std::cerr << "opcode compatibility fixture must have uncompressed section data\n";
+            return false;
+        }
+        // Section offsets are relative to the data area, after the header, directory and string pool.
+        size_t section_offset = section_data - blob.data();
+        if (section_offset > blob.size() || data_section->size > blob.size() - section_offset) {
+            std::cerr << "opcode compatibility section is outside its fixture\n";
+            return false;
+        }
+        if (test.wire_opcode) {
+            size_t matches = 0;
+            auto opcode = static_cast<uint16_t>(test.opcode);
+            for (size_t i = section_offset; i + 1 < section_offset + data_section->size; ++i) {
+                if (i && i % 100 == 0 && qore_check_cancel(&xsink, "AOT opcode fixture")) {
+                    return false;
+                }
+                if (blob[i] == (opcode & 255) && blob[i + 1] == (opcode >> 8)) {
+                    blob[i] = test.wire_opcode & 255;
+                    blob[i + 1] = test.wire_opcode >> 8;
+                    ++matches;
+                }
+            }
+            if (matches != 1) {
+                std::cerr << "legacy opcode fixture did not identify one target instruction\n";
+                return false;
+            }
+        }
+        const uint8_t* ptr = reader.getSectionData(*data_section);
+        const uint8_t* end = ptr + data_section->size;
+        auto read_expr = [](const QoreAOTBinaryReader&, const uint8_t*&, const uint8_t*, std::string& err) {
+            err = "unexpected expression in opcode compatibility fixture";
+            return QoreValue();
+        };
+        auto restored = deserializeIRFunction(reader, ptr, end, *pgm, read_expr, nullptr, error);
+        if (!restored || !error.empty() || ptr != end || restored->blocks.size() != 1
+                || restored->blocks[0]->instructions.size() != 3
+                || restored->blocks[0]->instructions[1]->opcode != test.opcode
+                || (test.opcode == QoreIROpcode::CheckReturnValue
+                    && restored->blocks[0]->instructions[1]->element_type != bigIntTypeInfo)) {
+            std::cerr << "opcode compatibility round trip failed: " << error << "\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+// The compatibility-only opcode must still execute and propagate conversion errors; new writers use the
+// state-carrying append. Check both against the same list values without relying only on numeric opcode IDs.
+static bool checkMapOpcodeExecution() {
+    ExceptionSink xsink;
+    QoreProgramHelper pgm(xsink);
+    if (xsink) {
+        return false;
+    }
+    QoreExternalProgramContextHelper context(&xsink, *pgm);
+    if (xsink) {
+        return false;
+    }
+    for (bool legacy : {true, false}) {
+        for (bool reject : {false, true}) {
+            QoreIRFunction func("map-opcode-execution");
+            QoreIRBuilder builder(&func);
+            builder.setBlock(func.createBlock("entry"));
+            auto list = builder.createEmptyList(nullptr, bigIntTypeInfo)->result;
+            QoreIRValue value;
+            if (reject) {
+                value = builder.createConstString("not an integer")->result;
+            } else {
+                value = builder.createConstInt(7)->result;
+            }
+            auto state = builder.createConstInt(0)->result;
+            if (legacy) {
+                auto* inst = builder.append<QoreIRInstruction>(QoreIROpcode::LegacyListAppendElement);
+                inst->operands = {list, value};
+                auto folded = builder.createCommonTypeFold(state, value, QoreIRValue())->result;
+                builder.createListSetCommonType(list, folded, bigIntTypeInfo);
+            } else {
+                auto folded = builder.createListAppendElement(list, value, state)->result;
+                builder.createListSetCommonType(list, folded, bigIntTypeInfo);
+            }
+            builder.createReturn(list);
+            QoreValue result;
+            bool ok = QoreIRInterpreter::execute(func, result, &xsink);
+            ValueHolder result_holder(result, &xsink);
+            if (reject) {
+                if (ok || !xsink) {
+                    std::cerr << "map opcode failed to reject incompatible element\n";
+                    return false;
+                }
+                xsink.clear();
+            } else if (!ok || xsink || result.getType() != NT_LIST
+                    || result.get<const QoreListNode>()->size() != 1
+                    || result.get<const QoreListNode>()->retrieveEntry(0).getAsBigInt() != 7) {
+                std::cerr << "map opcode returned an incorrect list\n";
+                return false;
+            }
+        }
     }
     return true;
 }
@@ -194,6 +421,8 @@ static bool checkPhiOrderVerifier() {
 int main() {
     qore_init(QL_GPL);
     bool ok = checkOpcodeRegistry()
+        && checkAOTOpcodeCompatibility()
+        && checkMapOpcodeExecution()
         && checkQoreValueTagReservations()
         && checkTypeProfileBuiltins()
         && checkTypeProfileClassPayload()

@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub cmpExpect(float expected, float actual, string label = "") {
+    if (expected.nanp() ? !actual.nanp() : expected !== actual) {
+        throw "FLOAT-COMPARISON-TEST", sprintf("%s: expected %y, got %y", label, expected, actual);
+    }
+}
+float sub cmpInvoke(code<float(float)> fn, float value) {
+    float result = fn(value);
+    return result;
+}
+sub cmpRow(float value, float eq, float ne, float lt, float le, float gt, float ge) {
+    # Independent expected values; both operand positions cover NaN.
+    cmpExpect(eq, cmpInvoke(\cmpEq(), value), "callback Eq");
+    cmpExpect(ne, cmpInvoke(\cmpNe(), value), "callback Ne");
+    cmpExpect(lt, cmpInvoke(\cmpLt(), value), "callback Lt");
+    cmpExpect(le, cmpInvoke(\cmpLe(), value), "callback Le");
+    cmpExpect(gt, cmpInvoke(\cmpGt(), value), "callback Gt");
+    cmpExpect(ge, cmpInvoke(\cmpGe(), value), "callback Ge");
+    cmpExpect(eq, cmpInvoke(\cmpRightEq(), value), "callback right Eq");
+    cmpExpect(ne, cmpInvoke(\cmpRightNe(), value), "callback right Ne");
+    cmpExpect(gt, cmpInvoke(\cmpRightLt(), value), "callback right Lt");
+    cmpExpect(ge, cmpInvoke(\cmpRightLe(), value), "callback right Le");
+    cmpExpect(lt, cmpInvoke(\cmpRightGt(), value), "callback right Gt");
+    cmpExpect(le, cmpInvoke(\cmpRightGe(), value), "callback right Ge");
+    cmpExpect(eq, cmpEq(value), "direct Eq");
+    cmpExpect(ne, cmpNe(value), "direct Ne");
+    cmpExpect(lt, cmpLt(value), "direct Lt");
+    cmpExpect(le, cmpLe(value), "direct Le");
+    cmpExpect(gt, cmpGt(value), "direct Gt");
+    cmpExpect(ge, cmpGe(value), "direct Ge");
+}
+sub cmpCheck() {
+    cmpRow(-1.0, 2.0, 1.0, 1.0, 1.0, 2.0, 2.0);
+    cmpRow(-0.0, 1.0, 2.0, 2.0, 1.0, 2.0, 1.0);
+    cmpRow(0.0, 1.0, 2.0, 2.0, 1.0, 2.0, 1.0);
+    cmpRow(1.0, 2.0, 1.0, 2.0, 2.0, 1.0, 1.0);
+    cmpRow(-@inf@, 2.0, 1.0, 1.0, 1.0, 2.0, 2.0);
+    cmpRow(@inf@, 2.0, 1.0, 2.0, 2.0, 1.0, 1.0);
+    cmpRow(@nan@, 2.0, 1.0, 2.0, 2.0, 2.0, 2.0);
+    cmpRow(-@nan@, 2.0, 1.0, 2.0, 2.0, 2.0, 2.0);
+    cmpExpect(-5.0, cmpInvoke(\cmpIf(), -3.0));
+    cmpExpect(5.0, cmpInvoke(\cmpIf(), 3.0));
+    cmpExpect(@nan@, cmpInvoke(\cmpIf(), @nan@));
+    cmpExpect(-3.0, cmpInvoke(\cmpNested(), -4.0));
+    cmpExpect(-1.0, cmpInvoke(\cmpNested(), -1.0));
+    cmpExpect(2.0, cmpInvoke(\cmpNested(), 1.0));
+    if (sprintf("%.1f", cmpInvoke(\cmpSignedZero(), 1.0)) != "-0.0"
+            || sprintf("%.1f", cmpInvoke(\cmpSignedZero(), @nan@)) != "0.0") {
+        throw "FLOAT-COMPARISON-TEST", "signed-zero selection changed";
+    }
+    cmpExpect(9.0, cmpInvoke(\cmpDivision(), 0.0));
+    cmpExpect(0.5, cmpInvoke(\cmpDivision(), 2.0));
+    cmpExpect(9.0, cmpInvoke(\cmpNestedDivision(), 0.0));
+    cmpExpect(0.5, cmpInvoke(\cmpNestedDivision(), 2.0));
+    cmpExpect(9.0, cmpDivision(0.0));
+    cmpExpect(9.0, cmpNestedDivision(0.0));
+    int before = cmpEffects;
+    cmpExpect(7.0, cmpInvoke(\cmpEffect(), -1.0));
+    cmpExpect(3.0, cmpInvoke(\cmpEffect(), 2.0));
+    if (cmpEffects != before + 1) {
+        throw "FLOAT-COMPARISON-TEST", "unselected branch executed a side effect";
+    }
+}
+sub main() {
+    for (int round = 0; round < 30; ++round) { cmpCheck(); }
+    printf("float-comparison-summary: ok\n");
+}

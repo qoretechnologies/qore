@@ -1008,7 +1008,7 @@ struct qore_qf_private {
             ExceptionSink* xsink) {
         assert(!marker.empty());
         const size_t width = charset->getMinCharWidth();
-        const bool tty = (bool)isatty(fd);
+        const bool tty = static_cast<bool>(isatty(fd));
         // true if the string ends with the given marker at a character boundary
         auto ends_with = [&str, width](const std::string& m) -> bool {
             size_t sz = str.size();

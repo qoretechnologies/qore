@@ -57,6 +57,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 // Monotonic counter for globally unique object hashes.  Pointer addresses
@@ -470,7 +471,11 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 
     if (acl) {
         ConstListIterator acli(*acl);
+        size_t count = 0;
         while (acli.next()) {
+            if (++count % 10 == 0 && qore_check_cancel(xsink, "external member reads")) {
+                return nullptr;
+            }
             QoreStringValueHelper k(acli.getValue());
             const QoreMemberInfo* ami = cls->findAccessorMember(k->c_str());
             assert(ami);
@@ -718,7 +723,10 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
     // the values for members held in external storage are written with their setters, without the object lock
     ReferenceHolder<QoreHashNode> ext(xsink);
     if (new_data) {
-        takeAccessorMembersForMerge(*new_data, ext);
+        takeAccessorMembersForMerge(*new_data, ext, xsink);
+        if (*xsink) {
+            return;
+        }
     }
 
     if ((new_data && !new_data->empty()) || new_internal_data) {
@@ -751,7 +759,10 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
     ReferenceHolder<QoreHashNode> ext(xsink);
     if (qore_class_private::get(*theclass)->has_member_accessors && !h->empty()) {
         rest = h->copy();
-        takeAccessorMembersForMerge(*rest, ext);
+        takeAccessorMembersForMerge(*rest, ext, xsink);
+        if (*xsink) {
+            return;
+        }
         h = *rest;
     }
 
@@ -788,16 +799,21 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
     }
 }
 
-void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const {
+void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext,
+        ExceptionSink* xsink) const {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (!cls->has_member_accessors) {
         return;
     }
     // collect the keys first, as the hash is modified
     std::vector<std::string> keys;
+    size_t count = 0;
     {
         ConstHashIterator hi(h);
         while (hi.next()) {
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "external member merge preparation")) {
+                return;
+            }
             if (cls->findAccessorMember(hi.getKey())) {
                 keys.push_back(hi.getKey());
             }
@@ -808,6 +824,9 @@ void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, Reference
     }
     ext = new QoreHashNode(autoTypeInfo);
     for (const std::string& key : keys) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "external member merge preparation")) {
+            return;
+        }
         // moving the value between the hashes cannot raise an exception
         qore_hash_private::get(**ext)->setKeyValueIntern(key.c_str(), h->takeKeyValue(key.c_str()));
     }
@@ -820,7 +839,11 @@ int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qor
     vl.del();
     const qore_class_private* cls = qore_class_private::get(*theclass);
     ConstHashIterator hi(ext);
+    size_t count = 0;
     while (hi.next()) {
+        if (++count % 10 == 0 && qore_check_cancel(xsink, "external member merge")) {
+            return -1;
+        }
         const char* key = hi.getKey();
         const QoreTypeInfo* mti = nullptr;
         const qore_class_private* member_class_ctx = nullptr;
@@ -1042,9 +1065,9 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
 
     bool scan_value_removed = needs_scan(rv);
     if (scan_value_removed) {
-        if (!getScanCount()) {
-            lvh.setDelta(-1);
-        }
+        // The parent still holds this object, which needs_scan() counts even when it has no
+        // scan-relevant members.  Only swapKeyValue() updates this object's member count;
+        // propagating a delta to the parent would incorrectly remove its edge to this object.
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
     }
@@ -1104,7 +1127,6 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         return;
     }
 
-    unsigned old_count = getScanCount();
     bool scan_value_removed = false;
 
     QoreHashNode* id = nullptr;
@@ -1151,9 +1173,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         assert(!*lvh.vl.xsink);
     }
 
-    if (old_count && !getScanCount()) {
-        lvh.setDelta(-1);
-    }
+    // As for takeMember(), emptying this object does not remove the parent's reference to it.
     if (scan_value_removed) {
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
@@ -1257,9 +1277,9 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
         size_t hash, const QoreMemberInfo& info,
         const qore_class_private* class_ctx, LValueHelper& lvh,
         bool for_remove, ExceptionSink* xsink) {
+    lvh.disableMemberWriteBack();
     // a declared member held in external storage is bound to a temporary that is written with its setter
     if (info.getAccessors()) {
-        lvh.disableMemberWriteBack();
         return lvh.setMemberWriteGateLValue(obj, key, &info);
     }
     const qore_class_private* member_class_ctx =
@@ -1333,6 +1353,178 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
     assert(!old);
     (void)old;
     return 1;
+}
+
+int qore_object_private::getLValueOrUpdateIntMember(const char* key,
+        const qore_class_private* class_ctx, LValueHelper& lvh, int64_t delta,
+        int64_t& previous, ExceptionSink* xsink) {
+    assert(delta == 1 || delta == -1);
+    lvh.disableMemberWriteBack();
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->member_write_gate && !cls->members.find(key)) {
+        return lvh.setMemberWriteGateLValue(obj, key);
+    }
+    const QoreTypeInfo* member_type = nullptr;
+    const qore_class_private* member_class_ctx = nullptr;
+    if (checkMemberAccessGetTypeInfo(xsink, key, class_ctx, member_class_ctx, member_type)) {
+        return -1;
+    }
+    // Declared external members use their getter/setter temporary, never object storage.
+    if (const QoreMemberInfo* ami = cls->findAccessorMember(key)) {
+        return lvh.setMemberWriteGateLValue(obj, key, ami);
+    }
+    // Use the same lock/existence-pin handoff as getLValue(), including on fallback.
+    qore_object_lock_handoff_helper qolhh(this, lvh.vl);
+    if (status == OS_DELETED) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED",
+            "write attempted to member \"%s\" in an already-deleted object", key);
+        return -1;
+    }
+    QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
+    HashMember* member = odata->priv->findCreateMember(key);
+    // makeIntQv() also accepts an existing integer before consulting its
+    // declaration. The inline tag excludes enums, references and owned nodes.
+    if (member->val.isInt()) {
+        int64_t old_value = member->val.getAsBigInt();
+        int64_t new_value = old_value + delta;
+        if (QoreValue::fitsInline(new_value)) {
+            // Snapshot the diagnostic switch on first eligible use. Initialization
+            // only reads the environment; it cannot enter Qore code or take another
+            // object lock. Non-integer and wide-result misses avoid this guard.
+            static constinit QoreEnvFlag disable_int_update_env("QORE_DISABLE_SELF_MEMBER_INT_UPDATE");
+            const bool disable_int_update = disable_int_update_env.get();
+            if (!disable_int_update) {
+                // Both values are immediate: no ownership, recursive graph or container-count
+                // change, no allocation and no user callback. All guards precede the update.
+                // QoreValue stores Qore's int64 (long long), which is not int64_t on LP64 Linux
+                member->val.set(static_cast<int64>(new_value));
+                previous = old_value;
+                return 1;
+            }
+        }
+    }
+    // Continue the ordinary operation without another lookup or lock/unlock pair.
+    // Missing storage is created exactly as for getLValue(..., for_remove=false).
+    qolhh.stayLocked();
+    lvh.setValue(member->val, member_type);
+    lvh.setObjectContext(this);
+    return 0;
+}
+
+template <bool Prehashed>
+bool qore_object_private::tryUpdateInlineIntMemberImpl(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta) {
+    assert(delta == 1 || delta == -1);
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->isExternalMemberForWrite(key)) {
+        return false;
+    }
+    const qore_class_private* member_class_ctx = nullptr;
+    // The non-throwing access check selects exactly the ordinary storage context.
+    // No member or internal hash may be created by an admission probe.
+    if (checkMemberAccess(key, class_ctx, member_class_ctx)) {
+        return false;
+    }
+    QoreSafeVarRWWriteLocker sl(rml);
+    if (status == OS_DELETED) {
+        return false;
+    }
+    QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    HashMember* member = nullptr;
+    if (odata) {
+        if constexpr (Prehashed) {
+            member = odata->priv->findMemberPrehashed(key, hash);
+        } else {
+            member = odata->priv->findMember(key);
+        }
+    }
+    if (!member || !member->val.isInt()) {
+        return false;
+    }
+    // An inline input cannot overflow int64_t with this unit delta. As in
+    // getLValueOrUpdateIntMember, existing integers bypass declaration filtering.
+    int64_t value = member->val.getAsBigInt() + delta;
+    if (!QoreValue::fitsInline(value)) {
+        return false;
+    }
+    member->val.set(static_cast<int64>(value));
+    return true;
+}
+
+bool qore_object_private::tryUpdateInlineIntMember(const char* key,
+        const qore_class_private* class_ctx, int64_t delta) {
+    return tryUpdateInlineIntMemberImpl<false>(key, 0, class_ctx, delta);
+}
+
+bool qore_object_private::tryUpdateInlineIntMemberPrehashed(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta) {
+    return tryUpdateInlineIntMemberImpl<true>(key, hash, class_ctx, delta);
+}
+
+template <bool Prehashed, bool Internal>
+bool qore_object_private::tryReadScalarMemberImpl(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
+    assert(mem && (bool(integer) != bool(floating)));
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    if (cls->findAccessorMember(mem)) {
+        return false;
+    }
+    if constexpr (!Internal) {
+        if (cls->memberGate && (cls->member_write_gate || cls->memberGate->isBuiltin())
+                && !cls->members.find(mem)) {
+            return false;
+        }
+    }
+    const qore_class_private* member_class_ctx = class_ctx;
+    if constexpr (Internal) {
+        assert(class_ctx);
+    } else {
+        member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem, class_ctx);
+    }
+    QoreSafeVarRWReadLocker sl(rml);
+    if (status == OS_DELETED) {
+        return false;
+    }
+    const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    // A bitwise, borrowed copy is valid only while the object lock is held.
+    // No refSelf()/discard(): even a rejected node must not change ownership.
+    QoreValue value;
+    if (odata) {
+        if constexpr (Prehashed) {
+            bool exists;
+            value = qore_hash_private::get(*odata)->getKeyValueExistencePrehashedIntern(mem, hash, exists);
+        } else {
+            value = qore_hash_private::get(*odata)->getKeyValueIntern(mem);
+        }
+    }
+    // Inspect actual tags/node types, not getType(): enums can report their
+    // underlying scalar type. Canonical wide integers and escaped floats are
+    // safe to extract while locked, without allocating a new box.
+    AbstractQoreNode* node = value.isPointer() ? value.getPtr() : nullptr;
+    if (integer && (value.isInt() || (node && node->getType() == NT_INT))) {
+        *integer = value.getAsBigInt();
+        return true;
+    }
+    if (floating && (value.isFloat() || (node && node->getType() == NT_FLOAT))) {
+        *floating = value.getAsFloat();
+        return true;
+    }
+    return false;
+}
+
+bool qore_object_private::tryReadScalarMember(const char* mem, const qore_class_private* class_ctx,
+        int64_t* integer, double* floating) const {
+    return tryReadScalarMemberImpl<false>(mem, 0, class_ctx, integer, floating);
+}
+
+bool qore_object_private::tryReadScalarMemberPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
+    return tryReadScalarMemberImpl<true>(mem, hash, class_ctx, integer, floating);
+}
+
+bool qore_object_private::tryReadScalarMemberInternalPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const {
+    return tryReadScalarMemberImpl<true, true>(mem, hash, class_ctx, integer, floating);
 }
 
 QoreValue qore_object_private::getReferencedMemberForSelf(const char* mem, ExceptionSink* xsink) const {
@@ -1615,7 +1807,7 @@ void qore_object_private::setRealReference() {
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::setRealReference() this: %p '%s': references %d rrefs %d->%d\n",
         this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs.load(), rrefs.load() + 1);
     // no lock, as for realRef(): only the last real reference going away has to be ordered against rlck
-    rrefs.fetch_add(1, std::memory_order_relaxed);
+    setRealReferenceImpl();
 }
 
 void qore_object_private::unsetRealReference() {
@@ -1640,6 +1832,32 @@ std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook{nullptr};
 std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
 #endif
 
+bool qore_object_private::tryDerefLocalRealReference(ExceptionSink* xsink) {
+    // Preserve virtual custom handlers and singleton behavior, and the split release's trace events.
+    // The real-count check is only an admission hint: customDeref() handles races and final release itself.
+    if (qore_trace_object_refs_enabled || !obj->isReferenceCounted() || typeid(*obj) != typeid(QoreObject)
+            || rrefs.load(std::memory_order_relaxed) <= 1) {
+        return false;
+    }
+#ifdef DEBUG
+    // Instrumented releases keep their original diagnostic and concurrency-test hook sites.
+    if (debug >= QORE_DEBUG_OBJ_REFS || debug >= QRO_LVL
+            || references.load(std::memory_order_relaxed) > 10000000
+            || references.load(std::memory_order_relaxed) <= 0
+            || dbg_after_fast_real_release.load(std::memory_order_acquire)
+            || dbg_before_fast_release.load(std::memory_order_acquire)
+            || dbg_before_deref_scan.load(std::memory_order_acquire)
+            || dbg_deref_decides.load(std::memory_order_acquire)
+            || qore_dbg_deref_decide_hook.load(std::memory_order_acquire)
+            || qore_dbg_deref_marked_hook.load(std::memory_order_acquire)
+            || qore_dbg_deref_collect_hook.load(std::memory_order_acquire)) {
+        return false;
+    }
+#endif
+    customDeref(xsink, true);
+    return true;
+}
+
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);
 
@@ -1658,6 +1876,11 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     if (fast > 0) {
         return;
     }
+
+    customDerefSlow(xsink, real, !fast);
+}
+
+void qore_object_private::customDerefSlow(ExceptionSink* xsink, bool real, bool released_last) {
 
     // Keep this object ALLOCATED for the duration of the call.
     //
@@ -1678,7 +1901,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
     {
         // if the fast path released the last reference, the helper only registers this dereference in progress
-        robject_dereference_helper qodh(this, real, !fast);
+        robject_dereference_helper qodh(this, real, released_last);
         int ref_copy = qodh.getRefs();
 
         // in case this is the last reference (even in recursive cases), ref_copy will remain equal to references throughout this code
@@ -2289,6 +2512,27 @@ void qore_object_private::customRefIntern(bool real) {
 
 void QoreObject::customRef() const {
    priv->customRefIntern(false);
+}
+
+bool qore_object_private::tryRefExisting() {
+    if (status.load(std::memory_order_acquire) != OS_OK) {
+        return false;
+    }
+    int refs = references.load(std::memory_order_relaxed);
+    while (refs > 0) {
+        // A plain ref() can resurrect a zero count after final release has committed to deletion. The cache
+        // owns no reference, so acquisition must compete atomically with that final release.
+        if (references.compare_exchange_weak(refs, refs + 1, std::memory_order_acquire,
+                std::memory_order_relaxed)) {
+            printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::tryRefExisting() this: %p obj: %p '%s' "
+                "references %d->%d\n", this, obj, getClassName(), refs, refs + 1);
+            if (qore_trace_object_refs_enabled) {
+                qore_trace_object_ref("ref", this, obj, getClassName(), refs, refs + 1, false);
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 bool QoreObject::derefImpl(ExceptionSink* xsink) {

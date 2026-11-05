@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ForeachHeldSourceTest
+
+#! Tests that a foreach loop over keys or a range slice holds the operand's value until the loop ends
+/** The AST iterates these lists with functional iterators that hold the hash (or an object's member hash) or the
+    sequence until the foreach statement ends, while the other temporaries of the list expression are released before
+    the body runs.  The compiled tiers evaluate the list eagerly, so they hold the operand's value in the loop
+    instead, releasing it before the loop variables on every way out of the loop; a value that cannot refer to an
+    object is not held.  Every mode and compiled executable must match the interpreter.
+*/
+class ForeachHeldSourceTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("foreach held list source", "1.0", \ARGV) {
+        addTestCase("the operand of keys and range slice lists lives until the loop ends", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/IRForeachHeldSource.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("ir-foreach-held-source: ok\n$", expected);
+        assertRegex('keys literal: \["ba", "kl", "after", "result r"\]', expected);
+        assertRegex('keys throw: \["ba", "bb", "kta", "ktb", "caught KT"\]', expected);
+        assertRegex('keys object: \["ko", "name", "member", "km", "after", "result r"\]', expected);
+        assertRegex('slice variable: \["body sv0", "body sv1", "sv0", "sv2", "sv1", "after", "result r"\]', expected);
+        assertRegex('slice return: \["bsr0", "bsr1", "sr0", "sr2", "sr1", "result ret"\]', expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-foreach-held-source-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

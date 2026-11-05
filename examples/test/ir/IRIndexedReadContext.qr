@@ -1,0 +1,41 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-weak-references
+
+auto sub readIndexed(auto value, int index) {
+    auto result;
+    for (int iteration = 0; iteration < 3; ++iteration) {
+        result = value[index];
+    }
+    return result;
+}
+
+sub emitReads(auto value) {
+    foreach int index in ((-9223372036854775807 - 1, -4, -3, -1, 0, 1, 2, 3, 9223372036854775807)) {
+        try {
+            printf("%y\n", readIndexed(value, index));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("error:%s\n", ex.err);
+        }
+    }
+}
+
+list<int> values = (3, 7, 11);
+auto weak := values;
+reference<list<int>> ref = \values;
+emitReads(values);
+emitReads(weak);
+emitReads(ref);
+emitReads(<03070b>);
+emitReads(new buffer<int64>(values));
+emitReads("aé𐍈");
+emitReads((3, NOTHING, 11));
+emitReads(new buffer<*int64>((3, NOTHING, 11)));
+emitReads(());
+emitReads(binary());
+emitReads(new buffer<int64>(()));
+emitReads("");
+emitReads(NOTHING);
+emitReads(17);

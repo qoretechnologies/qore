@@ -45,7 +45,16 @@ private:
         int pos;        // position of the marker within the block
     };
     std::vector<FrameMarkerRecord> frame_marker_stack;
+    // Only the owning thread can inspect or mutate this Program's local stack.
+    // Reflective writes invalidate native read-only parameter caches. Saturate
+    // rather than wrap, so an old snapshot can never become valid again.
+    uint64_t reflective_mutation_epoch = 0;
 public:
+    //! @return borrowed same-thread epoch address, valid for this stack's lifetime
+    DLLLOCAL const uint64_t* getReflectiveMutationEpoch() const {
+        return &reflective_mutation_epoch;
+    }
+
     // clears and marks all variables as finalized on the stack
     DLLLOCAL void finalize(SafeDerefHelper& sdh) {
         ThreadLocalVariableData::iterator i(curr);
@@ -167,6 +176,29 @@ public:
         // Record the exact location of this marker for O(1) lookup at pop time
         // Note: instantiate() incremented curr->pos, so the marker is at curr->pos - 1
         frame_marker_stack.push_back({curr, (int)curr->pos - 1});
+    }
+
+    //! A native leaf has no TLS locals: retain its visible marker without a cleanup record.
+    /** Only pair with popNativeLeafFrameBoundary(). The compiler must prove that
+        the body cannot instantiate TLS locals or reenter generic execution.
+        Frame inspection still sees the same marker and frame count.
+    */
+    DLLLOCAL void pushNativeLeafFrameBoundary() {
+        LocalVarValue* v = instantiate();
+        assert(!v->val.assigned);
+        v->setFrameBoundary();
+        v->frame_marker_id = ++frame_count;
+    }
+
+    //! Pop the empty native leaf directly, without variable cleanup or marker-vector traffic.
+    DLLLOCAL void popNativeLeafFrameBoundary() {
+        assert(frame_count >= 0 && curr->pos);
+        LocalVarValue& v = curr->var[--curr->pos];
+        assert(v.frame_boundary && v.frame_marker_id == frame_count);
+        assert(!v.val.assigned);
+        v.block_cleared = true;
+        v.frame_boundary = false;
+        --frame_count;
     }
 
     DLLLOCAL void popFrameBoundary() {

@@ -316,6 +316,21 @@ public:
     //! increments the reference count
     DLLEXPORT void ref() const;
 
+    //! Internal reference dispatch shared with ref(), without its debug-tracing wrapper.
+    /** Preserves singleton handling, virtual custom reference handlers and the
+        ordinary node's atomic increment. Internal callers use ref() in Debug
+        builds when reference tracing must be retained.
+    */
+    DLLLOCAL void refImpl() const {
+        if (!there_can_be_only_one) {
+            if (custom_reference_handlers) {
+                customRef();
+            } else {
+                ROreference();
+            }
+        }
+    }
+
     //! returns true if the object is reference-counted
     DLLLOCAL bool isReferenceCounted() const { return !there_can_be_only_one; }
 

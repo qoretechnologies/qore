@@ -280,7 +280,8 @@ public:
     /** @param h the hash to merge, which is modified only if it has such members; the caller owns it
         @param ext receives a hash of the values for such members, if there are any
     */
-    DLLLOCAL void takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const;
+    DLLLOCAL void takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext,
+        ExceptionSink* xsink) const;
 
     //! writes the values of declared members held in external storage that are merged into the object
     /** called without any lock on the object; the lvalue lock in \a vl is released first, since the setters can
@@ -456,6 +457,31 @@ public:
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
+    //! Speculatively copy a canonical scalar without evaluating or owning a member value.
+    /** @param mem member name
+        @param class_ctx method's defining class context, not the caller's context
+        @param integer output for an integer read; null selects a floating read
+        @param floating output for a floating read; null selects an integer read
+        @return true only when the live, locked storage has the requested primitive representation
+        @note A miss leaves outputs untouched. Deleted, missing, enum and reference-backed members
+        require ordinary evaluation. The normal object read lock and member-context rules are retained.
+    */
+    DLLLOCAL bool tryReadScalarMember(const char* mem, const qore_class_private* class_ctx,
+        int64_t* integer, double* floating) const;
+
+    //! Same live read, with a compiler-computed member-name hash (not a cached member value).
+    DLLLOCAL bool tryReadScalarMemberPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
+
+    //! Same read after proving a local private:internal member; class_ctx is its defining/storage class.
+    //! The positive declaration proof must belong to the live method body. No value or receiver is cached.
+    DLLLOCAL bool tryReadScalarMemberInternalPrehashed(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
+
+    template <bool Prehashed, bool Internal = false>
+    DLLLOCAL bool tryReadScalarMemberImpl(const char* mem, size_t hash,
+        const qore_class_private* class_ctx, int64_t* integer, double* floating) const;
+
     DLLLOCAL QoreValue getReferencedMemberNoMethodResolved(const char* mem,
             const qore_class_private* member_class_ctx,
             ExceptionSink* xsink) const;
@@ -489,6 +515,50 @@ public:
             size_t hash, const QoreMemberInfo& info,
             const qore_class_private* member_class_ctx, QoreValue value,
             qore_type_t expected_type, ExceptionSink* xsink);
+
+    //! Updates an inline integer member or prepares its ordinary lvalue under the same lock.
+    /** @param key member name
+        @param class_ctx current method's class context
+        @param lvh receives the locked lvalue when generic evaluation is required
+        @param delta increment (1) or decrement (-1)
+        @param previous receives the old integer only on success
+        @param xsink exception sink
+        @return 1 when updated, 0 with the lvalue prepared, -1 on access/deletion error
+        @note Retains ordinary access checks and one write lock per operation. On 0, continue
+        generic evaluation with lvh, including reference resolution; never restart the lookup.
+        Only inline-to-inline integer updates bypass lvalue bookkeeping, regardless
+        of the declaration: ordinary integer updates also skip filtering an existing int.
+    */
+    DLLLOCAL int getLValueOrUpdateIntMember(const char* key, const qore_class_private* class_ctx,
+            LValueHelper& lvh, int64_t delta, int64_t& previous, ExceptionSink* xsink);
+
+    //! Try a non-evaluating inline-integer update; a miss leaves the object unchanged.
+    /** @param key member name
+        @param class_ctx admitted method's defining context
+        @param delta 1 or -1
+        @return true only after one synchronized update; false requires a continuation at this operation
+        @note Does not create storage, resolve references, allocate, or enter Qore code.
+    */
+    DLLLOCAL bool tryUpdateInlineIntMember(const char* key, const qore_class_private* class_ctx, int64_t delta);
+
+    //! Same synchronized update probe with a compiler-computed storage-key hash.
+    /** @param key member name
+        @param hash name hash for this target's storage implementation
+        @param class_ctx admitted method's defining context, or nullptr for public access
+        @param delta 1 or -1
+        @return true after exactly one update; false leaves storage unchanged for the cold continuation
+        @note The hash must match key. Access/storage context is resolved against the live receiver;
+        neither outcome creates storage, evaluates references, allocates or enters Qore code.
+    */
+    DLLLOCAL bool tryUpdateInlineIntMemberPrehashed(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta);
+
+    //! Shared non-evaluating update implementation.
+    //! @tparam Prehashed whether hash is a valid target-width hash of key
+    //! @copydetails tryUpdateInlineIntMemberPrehashed
+    template <bool Prehashed>
+    DLLLOCAL bool tryUpdateInlineIntMemberImpl(const char* key, size_t hash,
+        const qore_class_private* class_ctx, int64_t delta);
 
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
@@ -699,10 +769,26 @@ public:
     */
     DLLLOCAL void customRefIntern(bool real);
 
+    //! Acquires a cached reference only while the object still has a live owner.
+    /** @return true if one reference was acquired; false leaves the counts unchanged
+        @note The caller must keep the storage allocated. ProgramControl's cache lock does this because its
+        destructor unregisters the cache entry before freeing the object. This does not prevent an explicit
+        delete by another owner, and is not a resurrection operation for objects in a destructor.
+    */
+    DLLLOCAL bool tryRefExisting();
+
     // custom dereference handler - unlocked
     /** @param real if the dereference is "real" (i.e. cannot be part of a recursive cycle) or not
     */
     DLLLOCAL void customDeref(ExceptionSink* xsink, bool real);
+
+    //! Completes a release that requires final-reference or recursive-set processing.
+    /** @param xsink receives destructor exceptions
+        @param real whether the released reference is a real reference
+        @param released_last true when tryFastDeref() already consumed the last reference
+        @note Kept out of line so successful fast releases do not allocate the cleanup frame.
+    */
+    DLLLOCAL __attribute__((noinline)) void customDerefSlow(ExceptionSink* xsink, bool real, bool released_last);
 
     //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
@@ -724,8 +810,24 @@ public:
     // participate in recursive graphs)
     DLLLOCAL void setRealReference();
 
+    //! Internal real-reference increment shared with setRealReference(), without debug tracing.
+    /** The owning reference already keeps the object alive. Only the last real
+        reference going away must be ordered against rlck; increment ordering is
+        unchanged. Use setRealReference() in Debug builds to retain its tracing.
+    */
+    DLLLOCAL void setRealReferenceImpl() {
+        rrefs.fetch_add(1, std::memory_order_relaxed);
+    }
+
     // decrements the real reference count without decrementing the actual reference count
     DLLLOCAL void unsetRealReference();
+
+    //! Attempts to release an ordinary local's real-reference owner through the combined release path.
+    /** The caller must publish its cleared slot before calling. Returns false without changing ownership when
+        custom handlers, reference diagnostics, or the last real reference require the ordinary split release.
+        A true result consumes the reference; the caller must not access the object afterwards.
+    */
+    DLLLOCAL bool tryDerefLocalRealReference(ExceptionSink* xsink);
 
     DLLLOCAL const char* getClassName() const {
         return theclass->getName();

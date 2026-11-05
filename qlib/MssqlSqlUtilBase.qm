@@ -2941,33 +2941,43 @@ so.name = %v", name);
         @since MssqlSqlUtilBase 1.1
     */
     static *string normalizeDefaultValue(*string dv) {
-        while (dv.typeCode() == NT_STRING && dv.size() > 1 && dv[0] == "(" && dv[dv.size() - 1] == ")"
-            && MssqlTable::enclosedInParentheses(dv)) {
-            dv = dv.substr(1, -1);
+        if (!dv || !dv.startsWith("(") || !dv.endsWith(")")) {
+            return dv;
         }
-        return dv;
-    }
-
-    #! Returns True if the first parenthesis of the expression is closed by its last character
-    private static bool enclosedInParentheses(string dv) {
+        # Find all enclosing pairs in one character walk and slice once. Repeatedly scanning and
+        # copying the inner expression is quadratic for nested defaults. UTF-8 byte indexing
+        # avoids rescanning multibyte strings and preserves this module's Qore 1.0 requirement;
+        # all syntax bytes are ASCII, and stripped prefix/suffix bytes are parentheses only.
+        binary bytes = binary(convert_encoding(dv, "UTF-8"));
+        int size = bytes.size();
+        int strip = size / 2;
         int depth = 0;
         bool quoted = False;
-        int last = dv.size() - 1;
-        for (int i = 0; i < last; ++i) {
-            string ch = dv[i];
-            if (ch == "'") {
+        bool prefix = True;
+        for (int pos = 0; pos < size; ++pos) {
+            int cp = bytes[pos];
+            if (prefix && cp != 40) { # '('
+                strip = min(strip, pos);
+                prefix = False;
+            }
+            if (cp == 39) { # single quote
                 # a quote in a string constant is doubled, which toggles twice
                 quoted = !quoted;
             } else if (!quoted) {
-                if (ch == "(") {
+                if (cp == 40) {
                     ++depth;
-                } else if (ch == ")" && !--depth) {
-                    # the first parenthesis is closed before the end
-                    return False;
+                } else if (cp == 41) { # ')'
+                    if (--depth < 0) {
+                        return dv;
+                    }
+                    if (depth < strip && pos != size - depth - 1) {
+                        # This prefix opening closes before its matching suffix position.
+                        strip = depth;
+                    }
                 }
             }
         }
-        return depth == 1 && !quoted;
+        return !depth && !quoted && strip ? dv.substr(strip, -strip) : dv;
     }
 
     private MssqlPrimaryKey getPrimaryKeyImpl() {

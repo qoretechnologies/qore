@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class NativeScalarTempKeepTest
+
+class NativeScalarTempKeepTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/IRNativeScalarTempKeep.qr";
+        const string Expected = "native-scalar-temp-keep: ok\n";
+    }
+    constructor() : Test("native scalar temporary retention", "1.0", \ARGV) {
+        addTestCase("scalar reuse and sparse boxed-source preservation across execution tiers", \source());
+        addTestCase("AOT scalar retention and generic controls", \compiled());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private source() {
+        foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_TEMP_KEEP=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(Expected, run((qore, "--exec-mode=" + mode, worker), prefix), prefix + mode);
+            }
+        }
+    }
+    private compiled() {
+        TmpDir dir("qore-native-scalar-keep-");
+        foreach string prefix in (("", "QORE_DISABLE_NATIVE_SCALAR_TEMP_KEEP=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/worker";
+                run((qcc, level, "--strip-source", "-o", exe, worker), prefix);
+                assertEq(Expected, run((exe,)), prefix + level);
+            }
+        }
+    }
+}

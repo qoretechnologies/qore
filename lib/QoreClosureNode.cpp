@@ -34,12 +34,17 @@
 static thread_local const QoreObject* closure_self_context = nullptr;
 
 QoreClosureSelfContextHelper::QoreClosureSelfContextHelper(const QoreObject* obj)
-        : prev(closure_self_context) {
-    closure_self_context = obj;
+        : prev(exchange(obj)) {
 }
 
 QoreClosureSelfContextHelper::~QoreClosureSelfContextHelper() {
     closure_self_context = prev;
+}
+
+const QoreObject* QoreClosureSelfContextHelper::exchange(const QoreObject* obj) {
+    const QoreObject* previous = closure_self_context;
+    closure_self_context = obj;
+    return previous;
 }
 
 bool qore_closure_self_context(const QoreObject* obj) {

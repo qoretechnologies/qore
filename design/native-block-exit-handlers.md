@@ -1,5 +1,7 @@
 # on_block_exit handlers in native code
 
+<!-- Copyright (c) 2026 Qore Technologies, s.r.o. -->
+
 The body of an `on_exit`, `on_error` or `on_success` handler is lowered to its own IR function
 (`QoreIROnBlockExitInstruction::handler_ir`, see `QoreIRLowering::compileBlockHandlerIRs()`). On the normal exit of
 its block the handler is also lowered inline, so most executions run the inline code; the handler function runs when
@@ -29,10 +31,10 @@ function, and a nested handler is named after the handler containing it, such as
   local without a slot identity and bind it by name to an earlier declaration in another lexical scope.
 
   The runtime binds the local slots of a native closure body to the variables of the closure's serialized IR by
-  slot index (`AOTClosureRuntimeBinding::local_slots`), so the compiler prepares the closure's IR slots before it
-  builds the slot map (`qoreAOTPrepareClosureIRLocalSlots()`, as the serializer does: parameters, `argv`, then the
-  captures by name). A captured variable that only a handler of the closure uses has no IR slot of the closure
-  otherwise, and would take a slot in walk order that binds another variable.
+  slot index (`AOTClosureRuntimeBinding::local_slots`). Both give the closure's locals their canonical slots before
+  lowering (`qore_ir_seed_canonical_local_slots()`, see `ir-local-slot-numbering.md`): parameters, `argv`, the body
+  locals in declaration order, then every capture, so a captured variable that only a handler of the closure uses
+  has the same slot in both.
 
 The handler reads the locals of its function from the thread-local variable stack, to which the function publishes
 them before it runs its handlers (`syncLocalsToRuntimeForHandlers()`), and the function reloads them afterwards.

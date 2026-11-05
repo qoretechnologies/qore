@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+# End-to-end task delivery, including worker recycling and checked queue results.
+# The worker body belongs to this trusted Program, not the submitting sandbox.
+int sub work(int count) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        push values, i + 1;
+    }
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        values[i] += 1;
+        result += values[i];
+    }
+    return result;
+}
+
+sub scenario(string name, bool sandboxed, int count, int batch, int warmup,
+        int samples, int milliseconds, bool check = False) {
+    Queue results();
+    ThreadPool pool(1, 1, 1);
+    on_exit pool.stopWait();
+    int expected = count * (count + 3) / 2;
+    code<nothing()> task = sub () {
+        try {
+            results.push(work(count));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex);
+        }
+    };
+    code<int()> runBatch = int sub () {
+        for (int i = 0; i < batch; ++i) {
+            pool.submit(task);
+        }
+        int sum = 0;
+        for (int i = 0; i < batch; ++i) {
+            auto result = results.get(30s);
+            if (result !== expected) {
+                throw "BENCH-CHECK-ERROR", sprintf("expected %d, got %y", expected, result);
+            }
+            sum += result;
+        }
+        return sum;
+    };
+
+    Program caller(PO_NO_CHILD_PO_RESTRICTIONS);
+    # This wrapper runs once, outside the timer. Both cases have the same call stack.
+    caller.parse("%modern\nsub invoke(code<nothing()> body) { body(); }\n", "pool-benchmark-caller");
+    SandboxManager sandbox();
+    if (sandboxed) {
+        caller.setSandboxManager(sandbox);
+    }
+    caller.callFunction("invoke", sub () {
+        if (check) {
+            printf("CHECK\t%s\t%d\n", name, runBatch());
+            return;
+        }
+        # Ensure worker creation and first execution precede all timing windows.
+        runBatch();
+        for (int window = 0; window < warmup + samples; ++window) {
+            int checksum = 0;
+            int tasks = 0;
+            int started = clock_get_monotonic_us();
+            int elapsed;
+            do {
+                checksum ^= runBatch();
+                tasks += batch;
+                elapsed = clock_get_monotonic_us() - started;
+            } while (elapsed < milliseconds * 1000);
+            printf("%s\t%s\t%d\t%d\t1\t%d\n", window < warmup ? "WARMUP" : "SAMPLE",
+                name, elapsed, tasks, checksum);
+        }
+    });
+}
+
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+
+if (ARGV == ("check",)) {
+    foreach string sandboxMode in (("plain", "sandbox")) {
+        foreach int count in ((0, 1024)) {
+            foreach int batch in ((1, 64)) {
+                string name = sprintf("%s-%d-%d", sandboxMode, count, batch);
+                scenario(name, sandboxMode == "sandbox", count, batch, 0, 1, 1, True);
+            }
+        }
+    }
+} else {
+    if (ARGV.size() != 7 || ARGV[0] !~ /^(plain|sandbox)-(0|1024)-(1|64)$/) {
+        throw "BENCH-ARGUMENT-ERROR", "expected NAME SANDBOX COUNT BATCH WARMUP SAMPLES MILLISECONDS";
+    }
+    int sandboxed = integerArg(1, 0, 1);
+    int count = integerArg(2, 0, 1024);
+    int batch = integerArg(3, 1, 64);
+    string expectedName = sprintf("%s-%d-%d", sandboxed ? "sandbox" : "plain", count, batch);
+    if (ARGV[0] != expectedName) {
+        throw "BENCH-ARGUMENT-ERROR", "scenario name does not match arguments";
+    }
+    scenario(ARGV[0], sandboxed != 0, count, batch, integerArg(4, 0, 1000),
+        integerArg(5, 1, 1000), integerArg(6, 1, 60000));
+}

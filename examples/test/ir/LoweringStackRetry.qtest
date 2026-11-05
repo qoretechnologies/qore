@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+
+%exec-class LoweringStackRetryTest
+
+#! IR lowering of deeply nested code near the end of a thread's stack fails cleanly and is attempted again later
+/** The fixture (lowering_stack_retry.cpp) makes a function with 490 nested blocks reach the IR threshold of tiered mode
+    40KB above the real end of a thread's stack: the walks of the code that lowering makes must stop instead of
+    running past the end of the stack, lowering must fail for lack of stack, and a later call with more stack must
+    lower the function.
+*/
+public class LoweringStackRetryTest inherits QUnit::Test {
+    constructor() : Test("LoweringStackRetryTest", "1.0") {
+        addTestCase("lowering with too little stack", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        if (!inlist(Qore::PlatformOS, ("Darwin", "Linux"))) {
+            testSkip(sprintf("the fixture reads the real stack bounds only on Darwin and Linux, not on %y",
+                Qore::PlatformOS));
+        }
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-lowering-stack-retry-");
+        string exe = dir.path + "/lowering-stack-retry";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-O2", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/lowering_stack_retry.cpp", "-L" + libdir, "-Wl,-rpath," + libdir, "-lqore",
+                "-o", exe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        # the IR threshold of tiered mode is the default one
+        output = backquote("env -u QORE_IR_THRESHOLD LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH="
+            + quote(libdir) + " " + quote(exe) + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertEq("lowering-stack-retry: ok\n", output);
+    }
+}

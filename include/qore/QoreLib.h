@@ -1244,7 +1244,7 @@ DLLEXPORT void q_enforce_thread_size_on_primary_thread();
 //! Sets the stack limit of the primary thread when another runtime, such as a JVM, enforces a maximum stack size on it
 /** The stack limit of the primary thread is derived from the real start of its stack where it can be determined, so
     that the primary thread's stack guard lies above the end of the stack that the thread can use: the smaller of
-    the real stack size and  max_size, less  protected_size.
+    the real stack size and \a max_size, less \a protected_size.
 
     @param max_size the maximum stack size that the runtime enforces on the primary thread; 0 for no maximum, in
     which case the real stack size is used
@@ -1252,6 +1252,10 @@ DLLEXPORT void q_enforce_thread_size_on_primary_thread();
     such as stack zones that the runtime protects
 
     @note this function does nothing if the Qore library was not compiled with stack management support
+
+    @par Example
+    A JVM bridge calls this after starting the JVM, passing its primary-thread stack maximum and protected stack
+    zones so that Qore raises a stack-limit exception before reaching memory reserved by the JVM.
 
     @since %Qore 3.0
 */

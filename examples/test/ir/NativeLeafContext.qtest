@@ -1,0 +1,240 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# The driver runs 112 times (4 configurations, 2 optimization levels, 14 runtime controls), and each run sweeps the
+# stack limit byte by byte through every guard; a run takes about 2.2 s against a debug build on x86_64 Linux (CI
+# tests a debug build), so the whole test takes about 5 minutes there, close to the default 300 s budget.
+# test-timeout: 1200
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+%exec-class NativeLeafContextTest
+
+class NativeLeafContextTest inherits QUnit::Test {
+    constructor() : Test("native leaf deferred context", "1.0", \ARGV) {
+        addTestCase("native boundary overflow and context restoration", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        TmpDir dir("qore-native-leaf-context-");
+        string source = dir.path + "/provider.qr";
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\n"
+            "int sub nativeLeafProbe(int value) { return (value + 17) & 65535; }\n"
+            "code<int(int)> sub makeProbe() { return \\nativeLeafProbe(); }\n"
+            "float sub nativeLeafFloatProbe(float value) { return value + 0.5; }\n"
+            "code<float(float)> sub makeFloatProbe() { return \\nativeLeafFloatProbe(); }\n"
+            "float sub nativeLeafFloatIdentity(float value) { return value; }\n"
+            "code<float(float)> sub makeFloatCallbackIdentityProbe() { return \\nativeLeafFloatIdentity(); }\n"
+            "enum NativeLeafReceiverKind : int { Sample = 7 }\n"
+            "NativeLeafReceiverKind sub makeEnumProbe() { return NativeLeafReceiverKind::Sample; }\n"
+            "int sub methodReceiverProbe(code<int()> probe) { return probe(); }\n"
+            "class NativeLeafMethodBase { int next(int value) { return value + 7; }\n"
+            "    int forward(int value) { return self.next(value); } }\n"
+            "class NativeLeafMethodDerived inherits NativeLeafMethodBase {\n"
+            "    private { int leafContextMarker = 927; }\n"
+            "    int next(int value) { return value + 17; }\n}\n"
+            "NativeLeafMethodBase sub makeMethodProbe() { return new NativeLeafMethodDerived(); }\n"
+            "NativeLeafMethodBase sub makeBaseMethodProbe() { return new NativeLeafMethodBase(); }\n"
+            "int sub methodProbe(NativeLeafMethodBase input, int value) {\n"
+            "    NativeLeafMethodBase receiver = input; value = receiver.next(value); return value;\n}\n"
+            "int sub optionalMethodProbe(*NativeLeafMethodBase receiver, int value) {\n"
+            "    value = receiver.next(value); return value;\n}\n"
+            "int sub methodArgumentProbe(NativeLeafMethodBase input, auto value) {\n"
+            "    NativeLeafMethodBase receiver = input; return receiver.next(value);\n}\n"
+            "int sub optionalMethodArgumentProbe(*NativeLeafMethodBase receiver, auto value) {\n"
+            "    return receiver.next(value);\n}\n"
+            "auto sub genericIntMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub genericForwardMethodProbe(auto receiver, auto value) { return receiver.forward(value); }\n"
+            "int sub nativeForwardMethodProbe(auto receiver, int value) { return int(receiver.forward(value)); }\n"
+            "class NativeLeafPrivateForwardBase {\n"
+            "    private:internal int next(int value) { return value + 17; }\n"
+            "    int forward(int value) { return self.next(value); }\n}\n"
+            "class NativeLeafPrivateForwardDerived inherits NativeLeafPrivateForwardBase {\n"
+            "    private:internal int next(int value) { return value + 91; }\n}\n"
+            "NativeLeafPrivateForwardBase sub makePrivateBaseProbe() { return new NativeLeafPrivateForwardBase(); }\n"
+            "NativeLeafPrivateForwardBase sub makePrivateDerivedProbe() { return new NativeLeafPrivateForwardDerived(); }\n"
+            "int sub nativePrivateForwardMethodProbe(auto receiver, int value) { return int(receiver.forward(value)); }\n"
+            "class NativeLeafFloatMethodBase { float next(float value) { return value + 7.0; } }\n"
+            "class NativeLeafFloatMethodDerived inherits NativeLeafFloatMethodBase {\n"
+            "    private { int leafContextMarker = 927; }\n"
+            "    float next(float value) { return value + 0.5; }\n}\n"
+            "class NativeLeafFloatMethodIdentity inherits NativeLeafFloatMethodBase {\n"
+            "    float next(float value) { return value; }\n}\n"
+            "NativeLeafFloatMethodBase sub makeFloatMethodProbe() { return new NativeLeafFloatMethodDerived(); }\n"
+            "NativeLeafFloatMethodBase sub makeFloatIdentityProbe() { return new NativeLeafFloatMethodIdentity(); }\n"
+            "float sub floatMethodProbe(NativeLeafFloatMethodBase input, float value) {\n"
+            "    NativeLeafFloatMethodBase receiver = input; value = receiver.next(value); return value;\n}\n"
+            "float sub optionalFloatMethodProbe(*NativeLeafFloatMethodBase receiver, float value) {\n"
+            "    value = receiver.next(value); return value;\n}\n"
+            "float sub floatMethodArgumentProbe(NativeLeafFloatMethodBase receiver, auto value) {\n"
+            "    return receiver.next(value);\n}\n"
+            "auto sub genericFloatMethodProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub genericFloatLateProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "class NativeLeafMemberInt {\n"
+            "    public { auto delta = 17; }\n"
+            "    private:internal { int leafContextMarker = 927; }\n"
+            "    int next(int value) { return value + delta; }\n}\n"
+            "class NativeLeafMemberFloat {\n"
+            "    public { auto delta = 0.5; }\n"
+            "    private:internal { int leafContextMarker = 927; }\n"
+            "    float next(float value) { return value + delta; }\n}\n"
+            "NativeLeafMemberInt sub makeMemberIntProbe() { return new NativeLeafMemberInt(); }\n"
+            "NativeLeafMemberFloat sub makeMemberFloatProbe() { return new NativeLeafMemberFloat(); }\n"
+            "auto sub memberIntProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub memberFloatProbe(auto receiver, auto value) { return receiver.next(value); }\n");
+        file.write("class NativeLeafMemberInternalInt {\n"
+            "    private:internal { auto delta = 17; int leafContextMarker = 927; }\n"
+            "    int next(int value) { return value + delta; }\n}\n"
+            "class NativeLeafMemberInternalFloat {\n"
+            "    private:internal { auto delta = 0.5; int leafContextMarker = 927; }\n"
+            "    float next(float value) { return value + delta; }\n}\n"
+            "NativeLeafMemberInternalInt sub makeMemberInternalIntProbe() { return new NativeLeafMemberInternalInt(); }\n"
+            "NativeLeafMemberInternalFloat sub makeMemberInternalFloatProbe() { return new NativeLeafMemberInternalFloat(); }\n"
+            "auto sub memberInternalIntProbe(auto receiver, auto value) { return receiver.next(value); }\n"
+            "auto sub memberInternalFloatProbe(auto receiver, auto value) { return receiver.next(value); }\n");
+        file.write("class NativeLeafEffectInt {\n"
+            "    public { auto first = 0; auto second = 20; auto delta = 17; }\n"
+            "    private:internal { int leafContextMarker = 927; }\n"
+            "    int next(int value) { ++first; --second; return value + delta; }\n}\n"
+            "NativeLeafEffectInt sub makeEffectIntProbe() { return new NativeLeafEffectInt(); }\n"
+            "auto sub effectIntProbe(auto receiver, auto value) { return receiver.next(value); }\n");
+        file.close();
+        string control = dir.path + "/control.qr";
+        file.open2(control, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nint sub contextControl() { return 23; }\n");
+        file.close();
+        string executable = dir.path + "/guard-test";
+        string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " ";
+        # The internal-header fixture needs the build's dependency include paths (NativeFixture).
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/native_leaf_context.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output;
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
+                "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_INLINE_STACK_CHECK=1 ")) {
+            bool inline_callback = prefix.find("FUNCREF") < 0;
+            bool inline_method = prefix.find("NATIVE_METHOD") < 0;
+            foreach string level in (("-O0", "-O3")) {
+                # These probes exercise the native dispatch caches and lazily prepared callee contexts.
+                # Keep the call present; exact override inlining is covered by AOTPolymorphicScalar.
+                output = backquote(env + prefix
+                    + "QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT=1 QORE_DUMP_LLVM_IR=1 "
+                    + quote(qcc) + " " + level
+                    + " -c --batch-script-aggregate=NATIVE_LEAF_CONTEXT --script-aggregate-native-registers"
+                    + " --batch-script-aggregate-output=" + quote(dir.path + "/aggregate.qo")
+                    + " --output-dir=" + quote(dir.path) + " " + quote(source) + " " + quote(control)
+                    + " 2>&1", \status);
+                assertEq(0, status, output);
+                assertRegex("qore_rt_bind_function_call_ref_typed_v2", output, "typed provider binding");
+                assertRegex("qore_rt_bind_method_int_unary_v1[^\n]*NativeLeafMethodDerived", output,
+                    "pure method companion binding");
+                assertRegex("qore_rt_bind_method_int_unary_v2[^\n]*NativeLeafMethodDerived", output,
+                    "guarded pure method-v2 binding");
+                assertEq(inline_method, output.find("qore_rt_bind_method_int_unary_v3") >= 0,
+                    "method-v3 binding or method-only full-guard control");
+                assertRegex("qore_rt_bind_method_float_unary_v1[^\n]*NativeLeafFloatMethodDerived", output);
+                assertRegex("qore_rt_bind_method_float_unary_v2[^\n]*NativeLeafFloatMethodDerived", output);
+                assertRegex("qore_rt_bind_member_int_v1[^\n]*NativeLeafMemberInt", output);
+                assertRegex("qore_rt_bind_member_float_v1[^\n]*NativeLeafMemberFloat", output);
+                assertRegex("qore_rt_bind_effect_member_int_v1[^\n]*NativeLeafEffectInt", output);
+                assertRegex("call i32 @qore_rt_try_update_member_int_prehashed_v1", output);
+                assertRegex("call i32 @qore_rt_try_load_member_int_prehashed_v1", output);
+                assertRegex("call i32 @qore_rt_try_load_member_float_prehashed_v1", output);
+                bool internal_context = prefix.find("SCALAR_MEMBER_CONTEXT") < 0;
+                assertEq(internal_context,
+                    regex(output, "call i32 @qore_rt_try_load_member_int_internal_prehashed_v1"));
+                assertEq(internal_context,
+                    regex(output, "call i32 @qore_rt_try_load_member_float_internal_prehashed_v1"));
+                assertEq(inline_method, output.find("qore_rt_bind_method_float_unary_v3") >= 0);
+                if (inline_method) {
+                    *list<*string> entry = regex_extract(output,
+                        "(?s)define [^\n]*@NativeLeafMethodDerived[^\n]*_method_v3\\([^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!entry, "actual derived method-v3 LLVM entry");
+                    assertRegex("icmp eq ptr [^\n]*null", entry[0] ?? "", "null-view guard");
+                    assertRegex("load i64, ptr", entry[0] ?? "", "live limit load");
+                    assertRegex("@llvm.stacksave", entry[0] ?? "", "current callee stack pointer");
+                    assertRegex("icmp ugt i64", entry[0] ?? "", "unsigned live stack boundary");
+                    assertRegex("tail call i64 @[^\n]*_method_v2", entry[0] ?? "", "cold full-check fallback");
+                }
+                foreach string name in (("methodProbe", "optionalMethodProbe", "nativeForwardMethodProbe",
+                        "nativePrivateForwardMethodProbe")) {
+                    *list<*string> body = regex_extract(output,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("call i32 @qore_rt_try_method_int_unary_v1", body[0] ?? "",
+                        name + " must exercise the native continuation");
+                }
+                foreach string name in (("floatMethodProbe", "optionalFloatMethodProbe")) {
+                    *list<*string> body = regex_extract(output,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("call i32 @qore_rt_try_method_float_unary_v1", body[0] ?? "",
+                        name + " must exercise the float continuation");
+                }
+                foreach string name in (("genericIntMethodProbe", "genericFloatMethodProbe", "genericFloatLateProbe")) {
+                    *list<*string> body = regex_extract(output,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("call i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
+                    assertRegex("call i32 @qore_rt_try_method_int_unary_v2", body[0] ?? "",
+                        name + " guarded boxed integer argument");
+                    assertRegex("call i32 @qore_rt_try_method_float_unary_v2", body[0] ?? "",
+                        name + " guarded boxed float argument");
+                    assertRegex("name_method_int_argument", body[0] ?? "", name + " actual representation guard");
+                    assertFalse(regex(body[0] ?? "", "name_method_native_value"),
+                        name + " unknown argument family retains boxed result");
+                }
+                assertEq(inline_callback, output.find("qore_rt_bind_function_call_ref_typed_v3") >= 0,
+                    "deferred eligible entry or eager control");
+                list<string> objects = glob(dir.path + "/*.qo");
+                assertEq(3, objects.size(), "two native inputs plus aggregate");
+                output = backquote((map quote($1), args).join(" ") + " "
+                    + (map quote($1), objects).join(" ") + " 2>&1", \status);
+                assertEq(0, status, output);
+                foreach string runtime in (("QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ", "",
+                        "QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_PREHASH=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
+                        "QORE_DISABLE_AOT_EARLY_NATIVE_METHOD_ADMISSION=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_SCALAR_KEY=1 ",
+                        "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
+                    output = backquote(env + runtime + quote(executable) + (inline_callback ? " inline" : " eager")
+                        + (inline_method ? " inline" : " eager")
+                        + " 2>&1", \status);
+                    assertEq(0, status, output);
+                    assertEq("native-leaf-context: ok\n", output);
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTLiteralLocalMutationCowTest
+
+#! A local read by an expression is not changed by a later in-place change of the local in the same expression
+/** Native code borrows a local's cached value when it reads the local; an instruction that changes the local in
+    place first releases the references that the native code holds on the cached value, so that the value it changes
+    is unique.  A read whose value is still used after that change, as the first element of
+    <tt>(l, extract l, 0, 1)</tt>, takes a reference of its own, so the change copies the local's value instead of
+    changing (or releasing) the value read, as in the interpreter.  A change whose operand is the lvalue's own value,
+    as in <tt>push l, l</tt>, uses the value that the operand had when it was evaluated in every mode.
+*/
+class AOTLiteralLocalMutationCowTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/AOTLiteralLocalMutationCow.qr";
+        *string expected;
+    }
+
+    constructor() : Test("AOT reads of a local changed later in the same expression", "1.0", \ARGV) {
+        addTestCase("interpreter results", \interpreter());
+        addTestCase("execution modes match the interpreter", \modes());
+        addTestCase("AOT executables match the interpreter", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map AOTLiteralLocalMutationCowTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string getExpected() {
+        return expected ?? (expected = run((qore, "--exec-mode=ast", fixture)));
+    }
+
+    private assertLine(string out, string line) {
+        assertTrue(inlist(line, out.split("\n")), line);
+    }
+
+    interpreter() {
+        string out = getExpected();
+        # checked by hand: the value read keeps its contents and the change applies to the local only
+        assertLine(out, "exact_extract: [[1, 2, 3, 4], [1]]");
+        assertLine(out, "untyped_extract: [[1, 2, 3, 4], [1]]");
+        assertLine(out, "exact_splice: [[1, 2, 3, 4], [2, 3, 4]]");
+        assertLine(out, "exact_push: [[1, 2, 3, 4], [1, 2, 3, 4, 5]]");
+        assertLine(out, "exact_pop: [[1, 2, 3, 4], 4]");
+        assertLine(out, "exact_shift: [[1, 2, 3, 4], 1]");
+        assertLine(out, "exact_unshift: [[1, 2, 3, 4], [0, 1, 2, 3, 4]]");
+        assertLine(out, "int_unshift: [[1, 2, 3], [0, 1, 2, 3]]");
+        assertLine(out, "exact_remove: [[1, 2, 3, 4], 1]");
+        assertLine(out, "exact_add: [[1, 2, 3, 4], [1, 2, 3, 4, 5]]");
+        assertLine(out, "exact_element: [[1, 2, 3, 4], 9]");
+        assertLine(out, "exact_element_add: [[1, 2, 3], 7]");
+        assertLine(out, "maybe_push: [null, [1]]");
+        assertLine(out, "empty_push: [[], [1]]");
+        assertLine(out, "self_add: [[1, 2], [1, 2, 1, 2]]");
+        # an assignment does not release the value read
+        assertLine(out, "assign: [[1, 2, 3, 4], [5]]");
+        assertLine(out, "hash_remove: [{a: 1, b: 2}, 1]");
+        assertLine(out, "hash_store: [{a: 1, b: 2}, 3]");
+        assertLine(out, "hash_literal: {x: {a: 1}, y: 2}");
+        assertLine(out, "hash_literal_extract: {a: [1, 2, 3, 4], b: [1]}");
+        assertLine(out, "nested_extract: {h: {a: [1, 2]}, x: [1], after: {a: [2]}}");
+        assertLine(out, "string_append: [\"ab\", \"abc\"]");
+        assertLine(out, "repeated: [[1, 2, 3], [1], [2]]");
+        assertLine(out, "interleaved: [[1, 2, 3], 3, [1, 2], 1, [2]]");
+        assertLine(out, "in_loop: [[1, 2, 3], [1], [2, 3], [2]]");
+        # the change is still made when a later part of the expression raises an exception
+        assertLine(out, "exception_after_change: \"FAIL: [2, 3]\"");
+        assertLine(out, "conditional_change True: [[1, 2, 3], [1]]");
+        assertLine(out, "conditional_change False: [[1, 2, 3], 0]");
+        assertLine(out, "conditional_read True: [[1, 2, 3], [1]]");
+        assertLine(out, "conditional_read False: [[], [1]]");
+        assertLine(out, "memberExtract: [[1, 2, 3, 4], [1]]");
+        # a loop changing a local in place keeps changing the local's own value
+        assertLine(out, "push_loop: 20000");
+        # a change whose operand is the lvalue's own value uses the value the operand had when it was evaluated
+        assertLine(out, "self_push: [1, 2, [1, 2]]");
+        assertLine(out, "self_unshift: [[1, 2], 1, 2]");
+        assertLine(out, "self_push_auto: [1, \"x\", [1, \"x\"]]");
+        assertLine(out, "self_unshift_untyped: [[1, \"x\"], 1, \"x\"]");
+        assertLine(out, "self_push_twice: [1, 2, [1, 2], [1, 2, [1, 2]]]");
+        assertLine(out, "self_push_empty: [[]]");
+        assertLine(out, "self_push_member: [1, \"x\", [1, \"x\"]]");
+        assertLine(out, "self_push_element: [[1, \"x\", [1, \"x\"]]]");
+        assertLine(out, "self_push_alias: [[1, 2, [1, 2]], [[1, 2], 1, 2]]");
+        assertLine(out, "self_add_nested: [1, 2, [1, 2]]");
+        assertLine(out, "self_hash_add: {a: 1, b: {a: 1}}");
+        assertLine(out, "self_string_add: \"abab\"");
+        # negative: no list contains itself
+        assertNRegex("recursive reference", out);
+        # negative: the changed value is never the value read
+        assertNRegex("(?m)^exact_extract: \\[\\[2, 3, 4\\]", out);
+        assertNRegex("(?m)^assign: \\[null", out);
+    }
+
+    modes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture)), mode);
+        }
+    }
+
+    aot() {
+        string ast = getExpected();
+        TmpDir dir("qore-aot-literal-local-cow-");
+        string executable = dir.path + "/fixture";
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                run((qcc, level, "-o", executable, fixture), prefix);
+                assertEq(ast, run((executable,), prefix), label);
+            }
+        }
+    }
+}

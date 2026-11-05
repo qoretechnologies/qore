@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+int effects = 0;
+int sub composed(int value) {
+    return ((value * 33 + 17) & 65535) ^ 7;
+}
+int sub composedWide(int value) {
+    return (((value * 3 + 1) & 65535) | 1125899906842624) ^ 5;
+}
+int sub composedTwo(int left, int right) {
+    return ((left + right) * (left - right)) ^ (left & right);
+}
+int sub composedCompare(int left, int right) {
+    return ((left <=> right) * 3) ^ 7;
+}
+int sub composedBranch(int value, int offset) {
+    int adjusted = value + offset;
+    if (adjusted < 0) {
+        return (adjusted * 3) & 65535;
+    }
+    return (adjusted - 7) ^ 31;
+}
+int sub composedLocal(int value) {
+    int adjusted = value + 1;
+    ++adjusted;
+    adjusted *= 3;
+    return adjusted - value;
+}
+int sub composedRemainder(int value, int divisor) {
+    return ((value + 3) % divisor) ^ 7;
+}
+int sub composedEffect(int value) {
+    ++effects;
+    return (value + 1) * 3;
+}
+int sub composedUnassigned(int value) {
+    int unset;
+    return (value + unset) ^ 7;
+}
+int sub composedLoop(int value) {
+    for (int i = 0; i < 3; ++i) {
+        value = (value * 3 + 1) ^ 7;
+    }
+    return value;
+}
+int sub concurrentComposed(int value) {
+    return ((value * 17 + 9) ^ 31) & 65535;
+}
+
+int sub concurrentFirstCalls() {
+    const int Threads = 32;
+    Counter ready(Threads);
+    Counter done(Threads);
+    Gate start();
+    Mutex lock();
+    int checksum = 0;
+    start.enter();
+    for (int i = 0; i < Threads; ++i) {
+        background sub (int value) {
+            on_exit done.dec();
+            ready.dec();
+            start.enter();
+            start.exit();
+            int result = concurrentComposed(value);
+            lock.lock();
+            on_exit lock.unlock();
+            checksum += result;
+        }(i);
+    }
+    ready.waitForZero();
+    start.exit();
+    done.waitForZero();
+    return checksum;
+}
+
+code<int(int)> callback = \composed();
+code<int(int)> closure = int sub (int value) {
+    return ((value * 33 + 17) & 65535) ^ 7;
+};
+code<int(int, int)> remainder_closure = int sub (int value, int divisor) {
+    return ((value + 3) % divisor) ^ 7;
+};
+int capture = 5;
+code<int(int)> captured = int sub (int value) {
+    return ((value + capture) * 3) ^ 7;
+};
+foreach int value in ((-9223372036854775807 - 1, -1125899906842624, -65536,
+        -2, -1, 0, 1, 4, 65535, 1125899906842624, 9223372036854775807)) {
+    printf("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\n", value,
+        composed(value), callback(value), closure(value), composedWide(value),
+        composedTwo(value, 7), composedBranch(value, 5), composedLocal(value),
+        composedRemainder(value, 11), composedEffect(value), composedUnassigned(value),
+        composedLoop(value));
+    capture += 2;
+    printf("captured:%d\n", captured(value));
+    printf("compare:%d\n", composedCompare(value, 7));
+    printf("remainder-closure:%d\n", remainder_closure(value, 11));
+}
+printf("effects:%d\n", effects);
+try {
+    composedRemainder(7, 0);
+    throw "COMPOSED-MODULO-NOT-REJECTED", "zero divisor accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "COMPOSED-MODULO-NOT-REJECTED") { rethrow; }
+    printf("modulo:%s\n", ex.err);
+}
+try {
+    remainder_closure(7, 0);
+    throw "COMPOSED-MODULO-NOT-REJECTED", "closure zero divisor accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "COMPOSED-MODULO-NOT-REJECTED") { rethrow; }
+    printf("closure-modulo:%s\n", ex.err);
+}
+int unset_argument;
+try {
+    callback(unset_argument);
+    throw "COMPOSED-ARGUMENT-NOT-REJECTED", "unassigned argument accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "COMPOSED-ARGUMENT-NOT-REJECTED") { rethrow; }
+    printf("argument:%s\n", ex.err);
+}
+printf("concurrent:%d\n", concurrentFirstCalls());
+
+# Alternate result contracts while repeatedly destroying IR-owning Programs.
+# A stale leaf descriptor must not be reused just because addresses recur.
+for (int round = 0; round < 64; ++round) {
+    Program child(PO_NO_CHILD_PO_RESTRICTIONS);
+    child.setExecMode(EM_IR);
+    string result_type = round % 2 ? "bool" : "int";
+    string expression = round % 2 ? "(value + 5) > 3" : "(value + 5) ^ 3";
+    child.parse("%modern\nstring sub exercise(int input) { code<" + result_type
+        + "(int)> callback = " + result_type + " sub (int value) { return "
+        + expression + "; }; return sprintf(\"%y\", callback(input)); }\n"
+        + "code<int(int)> sub make() { code<int(int)> callback = int sub (int value) {"
+        + " return (value + 5) ^ 3; }; callback(7); return callback; }\n",
+        "composed-leaf-program");
+    for (int call = 0; call < 3; ++call) {
+        string actual = child.callFunction("exercise", 7);
+        if (actual != (round % 2 ? "True" : "15")) {
+            throw "COMPOSED-PROGRAM-CACHE", actual;
+        }
+    }
+    code<int(int)> foreign = child.callFunction("make");
+    if (foreign(7) != 15) {
+        throw "COMPOSED-PROGRAM-CROSSING", "foreign closure result";
+    }
+}
+printf("programs:64\n");

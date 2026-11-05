@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class StackGuardTest
 
@@ -19,6 +20,8 @@ public class StackGuardTest inherits QUnit::Test {
         addTestCase("Test two threads", \testRecurseWithBackground());
         addTestCase("Test a stack no larger than the guard", \testStackSizeTooSmall());
         addTestCase("Test a small stack", \testSmallStack());
+        addTestCase("Test the primary thread of a process with a large environment",
+            \testPrimaryThreadLargeEnvironment());
 
         set_return_value(main());
     }
@@ -73,15 +76,40 @@ public class StackGuardTest inherits QUnit::Test {
     }
 
     testStackSizeTooSmall() {
-        # the stack guard reserves 80KB on these CPUs
+        # the stack guard reserves 40KB on these CPUs
         if (!inlist(Qore::PlatformCPU, ("x86_64", "arm64", "aarch64"))) {
             testSkip(sprintf("the stack guard size on %y is not known to this test", Qore::PlatformCPU));
         }
         int size = get_default_thread_stack_size();
-        # a stack of 64KB is valid for threads, but no larger than the stack guard: no code could run on it
-        assertThrows("SET-DEFAULT-THREAD-STACK-SIZE-ERROR", "stack guard", \set_default_thread_stack_size(), 64 * 1024);
+        # a stack of 40KB is valid for threads, but no larger than the stack guard: no code could run on it
+        assertThrows("SET-DEFAULT-THREAD-STACK-SIZE-ERROR", "stack guard", \set_default_thread_stack_size(), 40 * 1024);
         # the default is unchanged
         assertEq(size, get_default_thread_stack_size());
+    }
+
+    #! A stack overflow in the primary thread raises an exception, also when the environment is larger than the guard
+    /** On Linux, the stack resource limit bounds the whole stack mapping, including the arguments and the environment
+        above the top of the stack.  The stack limit was derived as if the stack itself could grow to the resource
+        limit, so the limit lay beyond the real end of the stack by the size of the environment, and a process whose
+        environment was larger than the stack guard crashed (SIGSEGV) instead of raising STACK-LIMIT-EXCEEDED.
+    */
+    testPrimaryThreadLargeEnvironment() {
+        TmpDir dir("qore-primary-stack-env-");
+        string script = dir.path + "/recurse.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\nint sub recurse(int n) { return recurse(n + 1) + 1; }\n"
+            "try { recurse(0); } catch (hash<ExceptionInfo> ex) { print(ex.err); }\n");
+        f.close();
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        # six variables of 100 KB each (no single environment string can be larger than 128 KB on Linux): 600 KB,
+        # far more than the 104 KB guard of the primary thread, and within the space for the arguments and the
+        # environment (2 MB with an 8 MB stack resource limit on Linux, 1 MB on macOS)
+        string vars = (map sprintf("QORE_TEST_PAD_%d=\"$(printf '%%102400s' '')\"", $1), xrange(6)).join(" ");
+        int rc;
+        string output = backquote(sprintf("env %s %s %s 2>&1", vars, qore, script), \rc);
+        assertEq(0, rc, output);
+        assertEq("STACK-LIMIT-EXCEEDED", output);
     }
 
     testSmallStack() {
@@ -90,18 +118,26 @@ public class StackGuardTest inherits QUnit::Test {
         set_default_thread_stack_size(160 * 1024);
         Queue q();
         background sub () {
+            # the thread's stack: at least the size requested; on glibc also the thread-local storage that the C
+            # library takes from it, which Qore adds to the size requested
+            int stack_size = get_stack_size();
             try {
                 recurse();
-                q.push("no exception");
+                q.push({"stack_size": stack_size, "result": "no exception"});
             } catch (hash<ExceptionInfo> ex) {
-                q.push(ex);
+                q.push({"stack_size": stack_size, "result": ex});
             }
         }();
-        auto rv = q.get();
-        assertEq("STACK-LIMIT-EXCEEDED", rv.err);
-        # the limit reported is the part of the stack not reserved for the guard
-        *string limit = (rv.desc =~ x/\(([0-9]+) bytes\)/)[0];
+        hash<auto> rv = q.get();
+        assertEq("STACK-LIMIT-EXCEEDED", rv.result.err);
+        assertGe(160 * 1024, rv.stack_size);
+        # the limit reported is the part of the stack not reserved for the guard (40KB on these CPUs)
+        *string limit = (rv.result.desc =~ x/\(([0-9]+) bytes\)/)[0];
         assertGt(0, int(limit));
-        assertLt(160 * 1024, int(limit));
+        if (inlist(Qore::PlatformCPU, ("x86_64", "arm64", "aarch64"))) {
+            assertEq(rv.stack_size - 40 * 1024, int(limit));
+        } else {
+            assertLt(rv.stack_size, int(limit));
+        }
     }
 }

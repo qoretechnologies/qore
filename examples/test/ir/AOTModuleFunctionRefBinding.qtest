@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+%exec-class ModuleFunctionRefBindingTest
+
+class ModuleFunctionRefBindingTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native module function reference binding", "1.0", \ARGV) {
+        addTestCase("module references use guarded native scalar bindings", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string modules, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "QORE_MODULE_DIR=" + quote(modules)
+            + " LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertFalse(output.contains("loading source module"));
+        return output;
+    }
+    private check() {
+        TmpDir dir("qore-module-function-ref-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/source/ModuleRefBinding.qm";
+        write(source, "%modern
+%allow-debugger
+module ModuleRefBinding { version = \"1.0\"; desc = \"Native reference regression\";
+    author = \"Qore\"; license = \"MIT\"; }
+public namespace ModuleRefBinding {
+    int sub privateStep(int value) { return (value * 33 + 17) & 65535; }
+    public int sub publicStep(int value) { return (value * 33 + 17) & 65535; }
+    int sub identity(int value) { return value; }
+    int sub intZero() { return 17; }
+    float sub floatStep(float value) { return 65535.0 - value; }
+    float sub floatZero() { return 17.5; }
+    bool sub boolStep(bool value) { return value == False; }
+    bool sub boolZero() { return True; }
+    int sub optional(*int value) { return value ?? 0; }
+    int sub two(int left, int right) { return left + right; }
+    int sub effect(int value) { usleep(1); return value; }
+    code<int(int)> sub forward(code<int(int)> value) { return value; }
+    int sub invokeInternal(code<int(int)> fn, int value) { return fn(value); }
+    public int sub applyInside(code<int(int)> fn, int value) { return invokeInternal(fn, value); }
+    public code<int(int)> sub makePrivate() { return \\privateStep(); }
+    public code<int(int)> sub makePublic() { return \\publicStep(); }
+    public code<int(int)> sub makeForwarded() { code<int(int)> value = \\privateStep(); return forward(value); }
+    public code<int(int)> sub makeIdentity() { return \\identity(); }
+    public code<int()> sub makeIntZero() { return \\intZero(); }
+    public code<float(float)> sub makeFloat() { return \\floatStep(); }
+    public code<float()> sub makeFloatZero() { return \\floatZero(); }
+    public code<bool(bool)> sub makeBool() { return \\boolStep(); }
+    public code<bool()> sub makeBoolZero() { return \\boolZero(); }
+    public code<int(*int)> sub makeOptional() { return \\optional(); }
+    public code<int(int,int)> sub makeTwo() { return \\two(); }
+    public code<int(int)> sub makeEffect() { return \\effect(); }
+}
+");
+        string host = dir.path + "/host.qr";
+        write(host, "%modern
+%requires ModuleRefBinding
+code<int(int)> fn = ModuleRefBinding::makePrivate();
+code<int()> zero = ModuleRefBinding::makeIntZero();
+code<float(float)> floating = ModuleRefBinding::makeFloat();
+code<float()> float_zero = ModuleRefBinding::makeFloatZero();
+code<int(*int)> optional = ModuleRefBinding::makeOptional();
+code<int(int,int)> two = ModuleRefBinding::makeTwo();
+code<int(int)> effect = ModuleRefBinding::makeEffect();
+int value = 7;
+for (int i = 0; i < 4; ++i) { value = fn(value); }
+printf(\"%d %d %.2f %.1f %d %d %d\\n\", value, zero(), floating(1.25), float_zero(),
+    optional(NOTHING), two(3, 4), effect(9));
+if (ModuleRefBinding::applyInside(fn, 7) != 248) { throw \"MODULE-CROSS-RESULT\", \"wrong callback result\"; }
+");
+        string expected = run((qore, "--exec-mode=ast", host), dir.path + "/source");
+        assertEq("18571 17 65533.75 17.5 0 7 9\n", expected);
+        assertEq(expected, run((qore, "--exec-mode=ir", host), dir.path + "/source"));
+        string probe = dir.path + "/probe";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread",
+            "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/module_function_ref_binding.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", probe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) { push args, target[0]; }
+        run(args, dir.path + "/source");
+        assertTrue(regex(run((probe, "0"), dir.path + "/source"),
+            "module-funcref-binding: [0-9]+ checks passed"));
+        foreach string compile_prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                run((qcc, level, "--strip-source", "-m", "-o",
+                    dir.path + "/modules/ModuleRefBinding.qmod", source), dir.path + "/source", compile_prefix);
+                foreach string prefix in (("", "QORE_DISABLE_AOT_MODULE_FUNCREF_FAST_CALL=1 ",
+                        "QORE_DISABLE_AOT_CROSS_PROGRAM_FUNCREF_FAST_CALL=1 ")) {
+                    string enabled = prefix.startsWith("QORE_DISABLE_AOT_MODULE_FUNCREF_FAST_CALL") ? "0" : "1";
+                    assertTrue(regex(run((probe, enabled), dir.path + "/modules", prefix),
+                        "module-funcref-binding: [0-9]+ checks passed"));
+                    foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                        assertEq(expected, run((qore, "--exec-mode=" + mode, host),
+                            dir.path + "/modules", prefix));
+                    }
+                }
+            }
+        }
+    }
+}

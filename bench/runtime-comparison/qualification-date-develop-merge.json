@@ -1,0 +1,1502 @@
+{
+  "copyright": "Copyright 2026 Qore Technologies, s.r.o.",
+  "schema": "qore-date-develop-merge-v1",
+  "source_head": "2d609171f7f08e85ae07e767e16219f331903f29",
+  "merged_develop": "3955cf3ac35cd77504c5aee659b23b1a0a71a1a7",
+  "source_sha256": {
+    "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+    "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+    "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+    "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+    "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+    "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+    "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+  },
+  "candidate_patch": "diff --git a/doxygen/lang/145_basic_data_types.dox.tmpl b/doxygen/lang/145_basic_data_types.dox.tmpl\nindex 4f416b608b..81bd025590 100644\n--- a/doxygen/lang/145_basic_data_types.dox.tmpl\n+++ b/doxygen/lang/145_basic_data_types.dox.tmpl\n@@ -494,6 +494,16 @@ auto val = q.pop(20000);\n     - Fractional years are converted to days assuming 365 days in a year\n     - Fractional months are converted to days assuming an average 30 days in a month\n \n+    @ref Qore::date(string) \"date(string)\" reads durations in this format from strings (ex: <tt>date(\"PT15M\")</tt>),\n+    also with lower-case designators and trailing white space, and with weeks (\\c nW, before the \\c \"T\"; ex:\n+    <tt>\"P2W\"</tt> is 14 days) and a comma as the decimal sign (<tt>\"PT1,5S\"</tt>), as in ISO 8601.  It raises\n+    \\c INVALID-DATE for a string it cannot read: a number without a designator (<tt>\"P1\"</tt>), no element\n+    (<tt>\"P\"</tt>, <tt>\"PT\"</tt>), a \\c \"T\" without a time element (<tt>\"P1DT\"</tt>), \\c H, \\c S or \\c u before the\n+    \\c \"T\" or \\c Y, \\c W or \\c D after it, a decimal sign without digits, a value that does not fit in a 32-bit\n+    signed integer, or any other text.  Conversions that do not raise exceptions, such as assigning a string to a\n+    \\c softdate, keep the elements read before the text they cannot read.  The\n+    @ref long_reldates \"long relative time format\" is read only in literals.\n+\n     Here are some examples (using qore's -X command-line option to evaluate and expression and print out the result):\n     @code{.py}\n prompt% qore -X 'P1Y3MT4S'\ndiff --git a/doxygen/lang/900_release_notes.dox.tmpl b/doxygen/lang/900_release_notes.dox.tmpl\nindex 9da82b4d27..f06992b456 100644\n--- a/doxygen/lang/900_release_notes.dox.tmpl\n+++ b/doxygen/lang/900_release_notes.dox.tmpl\n@@ -1049,6 +1049,23 @@\n     Code that passes strings with other text after the date, such as a comment, must remove it first.  The\n     conversions that do not raise exceptions (a string assigned to a \\c softdate, for example) still ignore the text.\n \n+    @par date() Raises an Exception for an ISO 8601 Duration It Cannot Read\n+    @ref Qore::date(string) \"date(string)\" now raises \\c INVALID-DATE for an ISO 8601 duration string\n+    (@ref short_reldates \"PnYnMnWnDTnHnMnS\") that it cannot read, naming the string and where it cannot be read: a\n+    number without a designator (<tt>\"P1\"</tt>, <tt>\"PT1\"</tt>, <tt>\"P1D2\"</tt>), no component (<tt>\"P\"</tt>,\n+    <tt>\"PT\"</tt>), a time designator without a time component (<tt>\"P1DT\"</tt>), an hour, second or microsecond\n+    before the time designator or a year, week or day after it (<tt>\"P1H\"</tt>, <tt>\"PT1D\"</tt>), a decimal sign\n+    without digits (<tt>\"P1.D\"</tt>), a value that does not fit, or other text (<tt>\"P1Dx\"</tt>).  Before, such a\n+    string gave a zero or partial duration, and a string ending in a number, such as <tt>\"P1\"</tt>, was read past its\n+    end, so that whatever memory followed it could turn it into a duration such as 5 days.  These are now read as\n+    they are meant:\n+    - weeks: <tt>\"P1W\"</tt> is 7 days (before, zero)\n+    - a comma as the decimal sign: <tt>\"PT1,5S\"</tt> is 1.5 seconds (before, 5 seconds)\n+    - the fraction of a negative value: <tt>\"P-1.5D\"</tt> is -36 hours, also as a literal (before, -12 hours)\n+\n+    The conversions that do not raise exceptions (a string assigned to a \\c softdate, for example) keep the\n+    components read before the text they cannot read.\n+\n     @par The Ends of File::getPipe() Are Closed\n     The ends of a pipe made by @ref Qore::File::getPipe() \"File::getPipe()\" now own their descriptors:\n     @ref Qore::ReadOnlyFile::close() \"close()\" closes the descriptor and returns 0 (it returned -1 and closed\ndiff --git a/examples/test/qore/vars/date-iso8601-duration-strings.qtest b/examples/test/qore/vars/date-iso8601-duration-strings.qtest\nnew file mode 100755\nindex 0000000000..179d9040b9\n--- /dev/null\n+++ b/examples/test/qore/vars/date-iso8601-duration-strings.qtest\n@@ -0,0 +1,208 @@\n+#!/usr/bin/env qore\n+# -*- mode: qore; indent-tabs-mode: nil -*-\n+# Copyright (C) 2026 Qore Technologies, s.r.o.\n+\n+%modern\n+%prepend-module-path \"${SCRIPT_DIR}/../../../../qlib\"\n+%requires ../../../../qlib/QUnit.qm\n+%exec-class DateIso8601DurationStringsTest\n+\n+#! ISO 8601 duration strings read by date(string) and by the conversions without an exception sink\n+class DateIso8601DurationStringsTest inherits QUnit::Test {\n+    public {\n+        #! strings that cannot be read as a duration; before the fix, the parser stepped over the terminating NUL\n+        #! of some of them (\"P1\", \"PT1\", \"P1D2\", \"PT1H2\", ...) and read the bytes after the string\n+        const Malformed = (\n+            # no component\n+            \"P\", \"PT\", \"p\", \"pt\", \"P \", \"PT \",\n+            # a number without a designator\n+            \"P1\", \"PT1\", \"P1D2\", \"PT1H2\", \"P1DT1H2\", \"P-1\", \"PT-1\", \"P1.5\", \"PT1.5\", \"P1,5\", \"P0\",\n+            # a time designator without a time component\n+            \"P1DT\", \"P1DT \", \"P1YT\",\n+            # a decimal sign without digits, or a sign or a decimal sign without a number\n+            \"P1.\", \"PT1H1.\", \"P1.D\", \"PT1,S\", \"P.5D\", \"P,5D\", \"P-\", \"PT-\", \"P--1D\", \"P-.5D\", \"P+1D\",\n+            # text that is not a component\n+            \"P1D-\", \"P1Dx\", \"P1X\", \"PX\", \"P1D x\", \"P 1D\", \"P1 D\", \"PT1H\\t1M\", \"P1DT1H-\", \"PT1Hz\",\n+            # a time component before the time designator, a date component after it\n+            \"P1H\", \"P1S\", \"P1u\", \"P1D2H\", \"PT1D\", \"PT1Y\", \"PT1W\", \"P1DT1H1D\",\n+            # a repeated time designator\n+            \"PTT1H\", \"PT1HT1M\", \"P1DTT1H\",\n+            # values out of range\n+            \"P2147483648D\", \"P99999999999999999999Y\", \"P2147483647D1D\", \"P-2147483647D-2D\", \"P306783379W\",\n+            # the long format, which only the parser reads, as a literal\n+            \"P0001-02-03\", \"P0001-02-03T04:05:06\", \"P00:01:00\", \"PT01:00:00\",\n+        );\n+    }\n+\n+    constructor() : QUnit::Test(\"ISO 8601 duration strings\", \"1.0\") {\n+        addTestCase(\"valid durations\", \\validDurations());\n+        addTestCase(\"malformed durations raise INVALID-DATE\", \\malformedDurations());\n+        addTestCase(\"the terminating NUL ends the string\", \\terminatingNul());\n+        addTestCase(\"conversions without an exception sink\", \\lenientConversions());\n+        addTestCase(\"format IF round trip\", \\formatRoundTrip());\n+        set_return_value(main());\n+    }\n+\n+    private validDurations() {\n+        # the expected values are built from single-unit literals and functions, which do not use the parser of\n+        # ISO 8601 durations\n+        hash<string, date> cases = {\n+            \"P1D\": 1D,\n+            \"PT1H\": 1h,\n+            \"P1W\": 7D,\n+            \"P2W\": 14D,\n+            \"P1M\": 1M,\n+            \"PT1M\": 1m,\n+            \"P1Y\": 1Y,\n+            \"PT1S\": 1s,\n+            \"P0D\": 0s,\n+            \"PT0S\": 0s,\n+            \"P1Y2M3DT4H5M6S\": 1Y + 2M + 3D + 4h + 5m + 6s,\n+            \"P1Y2M1W3DT4H5M6S\": 1Y + 2M + 10D + 4h + 5m + 6s,\n+            \"P3DT21H\": 3D + 21h,\n+            \"PT4M551u\": 4m + microseconds(551),\n+            \"PT1.5S\": 1s + 500ms,\n+            \"PT0.000001S\": microseconds(1),\n+            \"PT1,5S\": 1s + 500ms,\n+            \"PT19.1S\": 19s + 100ms,\n+            \"P1.5D\": 1D + 12h,\n+            \"P0.5W\": 3D + 12h,\n+            \"PT1.5H\": 1h + 30m,\n+            \"PT1.5M\": 1m + 30s,\n+            \"P1.5Y\": 1Y + 182D + 12h,\n+            \"P1.5M\": 1M + 15D,\n+            \"P-1D\": -1D,\n+            \"PT-1H\": -1h,\n+            \"P-1W\": -7D,\n+            \"P-1.5D\": -1D - 12h,\n+            \"P-0.5D\": -12h,\n+            \"PT-1.5S\": -1s - 500ms,\n+            \"PT1H-30M\": 1h - 30m,\n+            \"p1d\": 1D,\n+            \"p1y2m3dt4h5m6s\": 1Y + 2M + 3D + 4h + 5m + 6s,\n+            \"P1D \": 1D,\n+            \"PT1H\\t\\r\\n\": 1h,\n+            \"P1D1D\": 2D,\n+            \"P2147483647D\": days(2147483647),\n+            \"P-2147483647D\": days(-2147483647),\n+            \"P306783378W\": days(2147483646),\n+        };\n+        foreach hash<auto> i in (cases.pairIterator()) {\n+            date d = date(i.key);\n+            assertTrue(d.relative(), \"relative: \" + i.key);\n+            assertEq(i.value, d, i.key);\n+            # the same string gives the same value every time\n+            assertEq(d, date(i.key), \"again: \" + i.key);\n+            # a conversion without an exception sink gives the same value\n+            softdate sd = i.key;\n+            assertEq(d, sd, \"softdate: \" + i.key);\n+        }\n+\n+        # a literal is read by the same parser: the fraction of a negative value is negative\n+        assertEq(-1D - 12h, P-1.5D, \"literal P-1.5D\");\n+        assertEq(-12h, P-0.5D, \"literal P-0.5D\");\n+        assertEq(1D + 12h, P1.5D, \"literal P1.5D\");\n+\n+        # the components are kept as given, not normalized\n+        assertEq(25, date(\"PT25H\").hours(), \"PT25H hours\");\n+        assertEq(0, date(\"PT25H\").days(), \"PT25H days\");\n+        assertEq(14, date(\"P2W\").days(), \"P2W days\");\n+        assertEq(86400000, date(\"P1D\").durationMilliseconds(), \"P1D ms\");\n+    }\n+\n+    private malformedDurations() {\n+        foreach string str in (Malformed) {\n+            assertThrows(\"INVALID-DATE\", \"ISO 8601 duration string\", \\date(), (str,), str);\n+            # the message names the string\n+            string prefix = sprintf(\"cannot parse ISO 8601 duration string '%s'; \", str);\n+            try {\n+                date d = date(str);\n+                fail(sprintf(\"no exception for %y: %y\", str, d));\n+            } catch (hash<ExceptionInfo> ex) {\n+                assertEq(prefix, ex.desc.substr(0, prefix.length()), \"message: \" + str);\n+            }\n+        }\n+\n+        # the message says where the string cannot be read\n+        assertThrows(\"INVALID-DATE\", \"a number has no designator at the end of the string\", \\date(), (\"P1\",));\n+        assertThrows(\"INVALID-DATE\", \"a number has no designator at the end of the string\", \\date(), (\"PT1H2\",));\n+        assertThrows(\"INVALID-DATE\", \"the time designator 'T' is not followed by a time component\", \\date(),\n+            (\"P1DT\",));\n+        assertThrows(\"INVALID-DATE\", \"the duration has no component\", \\date(), (\"P\",));\n+        assertThrows(\"INVALID-DATE\", \"unknown designator at offset 2 \\\\(char 'X'\\\\)\", \\date(), (\"P1X\",));\n+        assertThrows(\"INVALID-DATE\", \"a time component \\\\(H, S or u\\\\) does not follow\", \\date(), (\"P1H\",));\n+        assertThrows(\"INVALID-DATE\", \"a date component \\\\(Y, W or D\\\\) follows\", \\date(), (\"PT1D\",));\n+        assertThrows(\"INVALID-DATE\", \"the time designator 'T' is repeated\", \\date(), (\"PT1HT1M\",));\n+        assertThrows(\"INVALID-DATE\", \"a decimal sign is not followed by digits\", \\date(), (\"P1.\",));\n+        assertThrows(\"INVALID-DATE\", \"a number is too large\", \\date(), (\"P2147483648D\",));\n+        assertThrows(\"INVALID-DATE\", \"a component value is out of range\", \\date(), (\"P2147483647D1D\",));\n+        assertThrows(\"INVALID-DATE\", \"unexpected text after white space\", \\date(), (\"P1D x\",));\n+\n+        # named argument\n+        assertThrows(\"INVALID-DATE\", date sub () { return date(date_string: \"PT1\"); });\n+\n+        # a valid string still converts after an error\n+        assertEq(1D, date(\"P1D\"), \"after errors\");\n+    }\n+\n+    #! a string can contain a NUL character: the parser reads the duration up to it and never reads past it; the\n+    #! old parser stepped over the NUL after \"P1\" and read the \"5D\" after it as 5 days\n+    private terminatingNul() {\n+        string p1_5d = (<5031003544>).toString();\n+        assertEq(5, p1_5d.size());\n+        assertThrows(\"INVALID-DATE\", \"a number has no designator at the end of the string\", \\date(), (p1_5d,));\n+        softdate sd = p1_5d;\n+        assertEq(0s, sd, \"softdate P1<NUL>5D\");\n+\n+        string pt1h2_5m = (<505431483200354d>).toString();\n+        assertThrows(\"INVALID-DATE\", \"a number has no designator\", \\date(), (pt1h2_5m,));\n+        sd = pt1h2_5m;\n+        assertEq(1h, sd, \"softdate PT1H2<NUL>5M\");\n+\n+        string p1_ = (<503100>).toString();\n+        assertThrows(\"INVALID-DATE\", \"a number has no designator\", \\date(), (p1_,));\n+    }\n+\n+    #! conversions without an exception sink, such as an assignment to a softdate, do not raise an exception for a\n+    #! string that cannot be read; they keep the components read before the error, every time\n+    private lenientConversions() {\n+        hash<string, date> cases = {\n+            \"P1\": 0s,\n+            \"PT1\": 0s,\n+            \"P1D2\": 1D,\n+            \"PT1H2\": 1h,\n+            \"P1DT1H2\": 1D + 1h,\n+            \"P1.5\": 0s,\n+            \"P1DT\": 1D,\n+            \"P1Dx\": 1D,\n+            \"P1H\": 0s,\n+            \"P1D2H\": 1D,\n+            \"PT1D\": 0s,\n+            \"PT1HT1M\": 1h,\n+            \"P2147483647D1D\": days(2147483647),\n+            \"P0001-02-03\": 0s,\n+        };\n+        foreach hash<auto> i in (cases.pairIterator()) {\n+            for (int n = 0; n < 20; ++n) {\n+                softdate sd = i.key;\n+                assertEq(i.value, sd, sprintf(\"softdate %y (%d)\", i.key, n));\n+            }\n+        }\n+        foreach string str in (Malformed) {\n+            softdate first = str;\n+            assertTrue(first.relative(), \"relative: \" + str);\n+            for (int n = 0; n < 5; ++n) {\n+                softdate again = str;\n+                assertEq(first, again, sprintf(\"deterministic %y (%d)\", str, n));\n+            }\n+        }\n+    }\n+\n+    private formatRoundTrip() {\n+        foreach date d in ((P2Y1M3DT5H7M9S, P2Y1M3DT5H7M9.002S, 1D, 25h, 1s + 500ms, microseconds(1), -1D, -1h - 30m,\n+                1Y + 2M + 3D + 4h + 5m + 6s + microseconds(7))) {\n+            string str = d.format(\"IF\");\n+            assertEq(d, date(str), str);\n+        }\n+    }\n+}\ndiff --git a/examples/test/qore/vars/iso8601_duration_cancellation.cpp b/examples/test/qore/vars/iso8601_duration_cancellation.cpp\nnew file mode 100644\nindex 0000000000..ef4c787867\n--- /dev/null\n+++ b/examples/test/qore/vars/iso8601_duration_cancellation.cpp\n@@ -0,0 +1,43 @@\n+/* Copyright (C) 2026 Qore Technologies, s.r.o.\n+ * SPDX-License-Identifier: MIT\n+ */\n+#include <qore/Qore.h>\n+#include <string>\n+\n+#ifdef NDEBUG\n+#undef NDEBUG\n+#endif\n+#include <cassert>\n+#include <cstdio>\n+\n+static void checkCancellation(const std::string& lexical) {\n+    ExceptionSink xsink;\n+    assert(!qore_cancel_thread(q_gettid(), \"duration cancellation test\"));\n+    {\n+        ReferenceHolder<DateTimeNode> value(new DateTimeNode(lexical.c_str(), &xsink), &xsink);\n+        assert(xsink);\n+        assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal(\"THREAD-CANCELLED\"));\n+    }\n+    qore_clear_thread_cancel();\n+    xsink.clear();\n+    {\n+        ReferenceHolder<DateTimeNode> value(new DateTimeNode(lexical.c_str(), &xsink), &xsink);\n+        assert(!xsink);\n+        assert(value->isRelative());\n+    }\n+    assert(!xsink);\n+}\n+\n+int main() {\n+    qore_init(QL_MIT, \"UTF-8\", true, QLO_DISABLE_SIGNAL_HANDLING);\n+    checkCancellation(\"P\" + std::string(1000, '0') + \"1D\");\n+    checkCancellation(\"PT0.\" + std::string(1000, '0') + \"1S\");\n+    checkCancellation(\"P1D\" + std::string(1000, ' '));\n+    std::string components(\"P\");\n+    for (int i = 0; i < 64; ++i) {\n+        components += \"1D\";\n+    }\n+    checkCancellation(components);\n+    qore_cleanup();\n+    std::puts(\"iso8601-duration-cancellation: ok\");\n+}\ndiff --git a/include/qore/intern/qore_date_private.h b/include/qore/intern/qore_date_private.h\nindex 78746ce6c8..a02fd800f0 100644\n--- a/include/qore/intern/qore_date_private.h\n+++ b/include/qore/intern/qore_date_private.h\n@@ -885,7 +885,15 @@ protected:\n         normalize_units<int, int>(year, month, 12);\n     }\n \n-    DLLLOCAL void setIso8601(const char* str);\n+    //! Sets the duration from an ISO 8601 duration string: \\c \"P\" followed by components (\\c nY, \\c nM, \\c nW,\n+    //! \\c nD, and after the time designator \\c \"T\": \\c nH, \\c nM, \\c nS and the %Qore extension \\c nu)\n+    /** @param str the string, which starts with \\c \"P\" or \\c \"p\"\n+        @param xsink for an \\c INVALID-DATE exception if the string cannot be read; can be nullptr, in which case the\n+        duration keeps the components read before the error\n+\n+        @return 0 if the string was read, -1 if not\n+    */\n+    DLLLOCAL int setIso8601(const char* str, ExceptionSink* xsink);\n \n public:\n     DLLLOCAL void set(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second, int n_us) {\n@@ -900,7 +908,7 @@ public:\n \n     DLLLOCAL void set(const QoreValue v);\n \n-    DLLLOCAL void set(const char* str);\n+    DLLLOCAL void set(const char* str, ExceptionSink* xsink = nullptr);\n \n     DLLLOCAL void set(const qore_relative_time& p) {\n         year = p.year;\n@@ -1294,7 +1302,7 @@ public:\n     }\n \n     DLLLOCAL void setAbsoluteDate(const char* str, const AbstractQoreZoneInfo* zone = currentTZ(), ExceptionSink* xsink = 0);\n-    DLLLOCAL void setRelativeDate(const char* str);\n+    DLLLOCAL void setRelativeDate(const char* str, ExceptionSink* xsink = nullptr);\n \n     DLLLOCAL void setDate(const char* str);\n     DLLLOCAL void setDate(const char* str, ExceptionSink* xsink);\ndiff --git a/lib/ql_time.qpp b/lib/ql_time.qpp\nindex 5a4df4d12a..d6c3614996 100644\n--- a/lib/ql_time.qpp\n+++ b/lib/ql_time.qpp\n@@ -1898,13 +1898,22 @@ date d = date(\"Sun Nov  6 08:49:37 1994\");       # asctime\n date d = date(\"Mon, 06 Nov 1994 08:49:37 +0500\");\n     @endcode\n \n-    @throw INVALID-DATE thrown if the date is invalid; invalid or missing date components\n+    A string starting with \\c \"P\" is read as an ISO 8601 duration in the\n+    @ref short_reldates \"short relative time format\" and gives a @ref relative_dates \"relative date/time value\":\n+    @code{.py}\n+date d = date(\"P1DT12H\"); # returns <time: 1 day 12 hours>\n+date w = date(\"P2W\");     # returns <time: 14 days>\n+    @endcode\n+\n+    @throw INVALID-DATE thrown if the date is invalid; invalid or missing date components, or an ISO 8601 duration\n+    that cannot be read (ex: \\c \"P1\", \\c \"P1DT\", \\c \"P1H\")\n \n     @see date(string, string)\n \n     @since %Qore 0.8.12.4 \\c INVALID-DATE exceptions are thrown if the date is invalid\n \n-    @since %Qore 3.0.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported\n+    @since %Qore 3.0.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported; \\c INVALID-DATE is thrown\n+    for an ISO 8601 duration that cannot be read, and weeks (\\c \"P1W\") are read\n  */\n date date(string date_string) [flags=CONSTANT,NAMED_ARGS] {\n     DateTimeNodeValueHelper date(date_string, xsink);\ndiff --git a/lib/qore_date_private.cpp b/lib/qore_date_private.cpp\nindex abfbeb8ade..b80f1708e5 100644\n--- a/lib/qore_date_private.cpp\n+++ b/lib/qore_date_private.cpp\n@@ -287,37 +287,103 @@ static int get_uint(const char *&p, int digits) {\n     return rc;\n }\n \n-static int get_int_or_float(const char*& p, double& d, bool& err) {\n-    int rc = 0;\n+//! Returns true if the character is an ASCII digit; unlike isdigit(), it takes any char value\n+static bool is_ascii_digit(char c) {\n+    return c >= '0' && c <= '9';\n+}\n+\n+//! Reads the number of an ISO 8601 duration component: an optional \\c \"-\", digits, and an optional fraction after a\n+//! decimal sign, which is a full stop or a comma in ISO 8601\n+/** Reading stops at the first character that cannot be part of the number, so it never passes the terminating NUL.\n+\n+    @param p the position of the number; on success, the position after it\n+    @param val the integer part, with the sign\n+    @param frac the fraction, with the same sign as the number, or 0\n+    @param err set to a description of the error if the number cannot be read\n+    @param xsink receives a cancellation exception, if provided\n \n-    int sign = 1;\n-    if (*p == '-') {\n-        sign = -1;\n+    @return 0 if the number was read, -1 if not, or -2 if parsing was cancelled\n+*/\n+static int get_duration_number(const char*& p, int& val, double& frac, const char*& err, ExceptionSink* xsink) {\n+    bool negative = *p == '-';\n+    if (negative) {\n         ++p;\n     }\n \n-    if (!isdigit(*p)) {\n-        err = true;\n-        return 0;\n+    if (!is_ascii_digit(*p)) {\n+        err = \"expecting a number\";\n+        return -1;\n     }\n \n+    int64 rc = 0;\n+    unsigned cancel_count = 0;\n     do {\n         rc = (10 * rc) + ((*p) - '0');\n+        if (rc > std::numeric_limits<int>::max()) {\n+            err = \"a number is too large\";\n+            return -1;\n+        }\n         ++p;\n-    } while (isdigit(*p));\n+        // Leading zeroes can make even an in-range integer arbitrarily long.\n+        if (++cancel_count == 100) {\n+            cancel_count = 0;\n+            if (qore_check_cancel(xsink, \"ISO 8601 duration parsing\")) {\n+                return -2;\n+            }\n+        }\n+    } while (is_ascii_digit(*p));\n \n-    if (*p == '.') {\n+    frac = 0.0;\n+    if (*p == '.' || *p == ',') {\n+        ++p;\n+        if (!is_ascii_digit(*p)) {\n+            err = \"a decimal sign is not followed by digits\";\n+            return -1;\n+        }\n         const char* p0 = p;\n+        while (is_ascii_digit(*p)) {\n+            ++p;\n+            if (++cancel_count == 100) {\n+                cancel_count = 0;\n+                if (qore_check_cancel(xsink, \"ISO 8601 duration parsing\")) {\n+                    return -2;\n+                }\n+            }\n+        }\n+        QoreString str(\"0.\");\n+        str.concat(p0, p - p0);\n+        frac = atof(str.c_str());\n+        if (negative) {\n+            frac = -frac;\n+        }\n+    }\n \n-        // find end of digits\n-        while (isdigit(*(++p)));\n+    val = negative ? -static_cast<int>(rc) : static_cast<int>(rc);\n+    return 0;\n+}\n \n-        QoreString str(p0, p - p0);\n-        str.prepend(\"0\");\n-        d = atof(str.c_str());\n+//! Adds a value to a duration field; returns -1 if the sum does not fit in the field\n+static int add_duration_value(int& field, int64 val) {\n+    int64 sum = static_cast<int64>(field) + val;\n+    if (sum > std::numeric_limits<int>::max() || sum < std::numeric_limits<int>::min()) {\n+        return -1;\n     }\n+    field = static_cast<int>(sum);\n+    return 0;\n+}\n \n-    return rc * sign;\n+//! Raises the exception for a duration string that cannot be read, if there is an exception sink; returns -1\n+static int duration_error(ExceptionSink* xsink, const char* str, const char* p, const char* what) {\n+    if (xsink) {\n+        if (*p) {\n+            xsink->raiseException(\"INVALID-DATE\", \"cannot parse ISO 8601 duration string '%s'; %s at offset %d \"\n+                \"(char '%c')\", str, what, static_cast<int>(p - str), *p);\n+        } else {\n+            xsink->raiseException(\"INVALID-DATE\", \"cannot parse ISO 8601 duration string '%s'; %s at the end of the \"\n+                \"string\", str, what);\n+        }\n+    }\n+    return -1;\n }\n \n bool qore_date_info::isLeapYear(int64 year) {\n@@ -1052,9 +1118,9 @@ void qore_relative_time::set(const QoreValue v) {\n     }\n }\n \n-void qore_relative_time::set(const char* str) {\n+void qore_relative_time::set(const char* str, ExceptionSink* xsink) {\n     if (*str == 'P' || *str == 'p') {\n-        setIso8601(str);\n+        setIso8601(str, xsink);\n         return;\n     }\n \n@@ -1373,109 +1439,199 @@ void qore_date_private::format(QoreString &str, const char *fmt) const {\n     }\n }\n \n-void qore_relative_time::setIso8601(const char* str) {\n-    const char *p = str;\n-    if (*p == 'P' || *p == 'p')\n-        ++p;\n-\n-    bool time = false;\n+int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {\n     zero();\n \n-    bool err = false;\n+    const char* p = str;\n+    assert(*p == 'P' || *p == 'p');\n+    ++p;\n+\n+    // true after the time designator \"T\"\n+    bool time = false;\n+    // true once a component has been read, and once a component has been read after the time designator\n+    bool have_component = false;\n+    bool have_time_component = false;\n+    unsigned component_count = 0;\n     while (true) {\n+        if (++component_count == 10) {\n+            component_count = 0;\n+            if (qore_check_cancel(xsink, \"ISO 8601 duration parsing\")) {\n+                return -1;\n+            }\n+        }\n         if (*p == 'T' || *p == 't') {\n+            if (time) {\n+                return duration_error(xsink, str, p, \"the time designator 'T' is repeated\");\n+            }\n             time = true;\n             ++p;\n         }\n-        double d = 0.0;\n-        int val = get_int_or_float(p, d, err);\n-        if (err)\n+\n+        // the end of the string, which can have trailing white space\n+        if (!*p || *p == ' ' || *p == '\\t' || *p == '\\r' || *p == '\\n') {\n+            unsigned cancel_count = 0;\n+            while (*p == ' ' || *p == '\\t' || *p == '\\r' || *p == '\\n') {\n+                ++p;\n+                if (++cancel_count == 100) {\n+                    cancel_count = 0;\n+                    if (qore_check_cancel(xsink, \"ISO 8601 duration parsing\")) {\n+                        return -1;\n+                    }\n+                }\n+            }\n+            if (*p) {\n+                return duration_error(xsink, str, p, \"unexpected text after white space\");\n+            }\n             break;\n+        }\n+\n+        double d = 0.0;\n+        int val = 0;\n+        const char* err = nullptr;\n+        int number_rc = get_duration_number(p, val, d, err, xsink);\n+        if (number_rc == -2) {\n+            return -1;\n+        }\n+        if (number_rc) {\n+            return duration_error(xsink, str, p, err);\n+        }\n \n-        switch (*p) {\n+        // the designator of the component; the position stays on it until the component is read, so the position\n+        // is never advanced past the end of the string\n+        const char c = *p;\n+        if (!c) {\n+            return duration_error(xsink, str, p, \"a number has no designator\");\n+        }\n+\n+        bool date_designator = false;\n+        bool time_designator = false;\n+        int rc = 0;\n+        switch (c) {\n             case 'Y':\n             case 'y':\n-                year += val;\n-\n-                if (d) {\n+                date_designator = true;\n+                if (time) {\n+                    break;\n+                }\n+                rc = add_duration_value(year, val);\n+                if (!rc && d) {\n                     addFractionalYear(d);\n                 }\n-\n                 break;\n \n             case 'M':\n             case 'm':\n                 if (time) {\n-                    minute += val;\n-\n-                    if (d) {\n+                    rc = add_duration_value(minute, val);\n+                    if (!rc && d) {\n                         addFractionalMinute(d);\n                     }\n-                }\n-                else {\n-                    month += val;\n-\n-                    if (d) {\n+                } else {\n+                    rc = add_duration_value(month, val);\n+                    if (!rc && d) {\n                         addFractionalMonth(d);\n                     }\n                 }\n+                break;\n \n+            case 'W':\n+            case 'w':\n+                date_designator = true;\n+                if (time) {\n+                    break;\n+                }\n+                {\n+                    // a fraction of a week is a number of days and a fraction of a day\n+                    double fd = d * 7.0;\n+                    int wd = static_cast<int>(fd);\n+                    rc = add_duration_value(day, static_cast<int64>(val) * 7 + wd);\n+                    if (!rc && fd != wd) {\n+                        addFractionalDay(fd - wd);\n+                    }\n+                }\n                 break;\n \n             case 'D':\n             case 'd':\n-                day += val;\n-\n-                if (d) {\n+                date_designator = true;\n+                if (time) {\n+                    break;\n+                }\n+                rc = add_duration_value(day, val);\n+                if (!rc && d) {\n                     addFractionalDay(d);\n                 }\n-\n                 break;\n \n             case 'H':\n             case 'h':\n-                if (!time)\n-                    return;\n-\n-                hour += val;\n-\n-                if (d) {\n+                time_designator = true;\n+                if (!time) {\n+                    break;\n+                }\n+                rc = add_duration_value(hour, val);\n+                if (!rc && d) {\n                     addFractionalHour(d);\n                 }\n-\n                 break;\n \n             case 'S':\n             case 's':\n-                if (!time)\n-                    return;\n-\n-                second += val;\n-\n-                if (d) {\n+                time_designator = true;\n+                if (!time) {\n+                    break;\n+                }\n+                rc = add_duration_value(second, val);\n+                if (!rc && d) {\n                     addFractionalSecond(d);\n                 }\n-\n                 break;\n \n-            // non-ISO-8601 extension: <int>u for microseconds\n+            // non-ISO-8601 extension: <int>u for microseconds; a fraction of a microsecond is ignored\n             case 'u':\n-                if (!time)\n-                    return;\n-\n-                us += val;\n+                time_designator = true;\n+                if (!time) {\n+                    break;\n+                }\n+                rc = add_duration_value(us, val);\n                 break;\n \n             default:\n-                break;\n+                return duration_error(xsink, str, p, \"unknown designator\");\n+        }\n+\n+        if (date_designator && time) {\n+            return duration_error(xsink, str, p, \"a date component (Y, W or D) follows the time designator 'T'\");\n+        }\n+        if (time_designator && !time) {\n+            return duration_error(xsink, str, p, \"a time component (H, S or u) does not follow the time \"\n+                \"designator 'T'\");\n+        }\n+        if (rc) {\n+            return duration_error(xsink, str, p, \"a component value is out of range\");\n+        }\n+\n+        have_component = true;\n+        if (time) {\n+            have_time_component = true;\n         }\n+\n+        // the designator was read above, so it is not the terminating NUL\n         ++p;\n     }\n+\n+    if (time && !have_time_component) {\n+        return duration_error(xsink, str, p, \"the time designator 'T' is not followed by a time component\");\n+    }\n+    if (!have_component) {\n+        return duration_error(xsink, str, p, \"the duration has no component\");\n+    }\n+    return 0;\n }\n \n-void qore_date_private::setRelativeDate(const char *str) {\n-   relative = true;\n-   d.rel.set(str);\n+void qore_date_private::setRelativeDate(const char* str, ExceptionSink* xsink) {\n+    relative = true;\n+    d.rel.set(str, xsink);\n }\n \n void qore_date_private::setAbsoluteDate(const char *str, const AbstractQoreZoneInfo *zone, ExceptionSink* xsink) {\n@@ -1494,7 +1650,7 @@ void qore_date_private::setDate(const char *str) {\n void qore_date_private::setDate(const char *str, ExceptionSink* xsink) {\n    assert(str);\n    if (*str == 'P' || *str == 'p')\n-      setRelativeDate(str);\n+      setRelativeDate(str, xsink);\n    else\n       setAbsoluteDate(str, currentTZ(), xsink);\n }\n",
+  "archives": {
+    "build": {
+      "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-build-v1-ajs46bcn",
+      "json": {
+        "completed.json": {
+          "verified": true,
+          "head": "2d609171f7f08e85ae07e767e16219f331903f29",
+          "merge": "3955cf3ac35cd77504c5aee659b23b1a0a71a1a7",
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "flags": "# CMAKE generated file: DO NOT EDIT!\n# Generated by \"Unix Makefiles\" Generator, CMake Version 3.31\n\n# compile CXX with /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++\nCXX_DEFINES = -DHAVE_UNIX_CONFIG_H -DMODULE_DIR=\\\"/usr/local/lib/qore-modules\\\" -DMODULE_VER_DIR=\\\"/usr/local/lib/qore-modules/3.0.0\\\" -DNDEBUG -DNGHTTP2_STATICLIB -DNGHTTP3_STATICLIB -DNGTCP2_STATICLIB -DQORE_INSTALL_PREFIX=\\\"/usr/local\\\" -DUSER_MODULE_DIR=\\\"/usr/local/share/qore-modules/\\\" -DUSER_MODULE_VER_DIR=\\\"/usr/local/share/qore-modules/3.0.0\\\" -D_APPLE_C_SOURCE -D_DARWIN_C_SOURCE -D_QORE_LIB_INTERN -D__APPLE_USE_RFC_3542 -Dlibqore_EXPORTS\n\nCXX_INCLUDES = -I/Users/david/src/qore/git/qore/build -I/Users/david/src/qore/git/qore/build/include -I/Users/david/src/qore/git/qore/include -I/Users/david/src/qore/git/qore/build/_deps/nghttp2-src/lib/includes -I/Users/david/src/qore/git/qore/build/_deps/nghttp2-build/lib/includes -I/Users/david/src/qore/git/qore/build/_deps/nghttp3-src/lib/includes -I/Users/david/src/qore/git/qore/build/_deps/nghttp3-build/lib/includes -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-src/lib/includes -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-build/lib/includes -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-src/crypto/includes -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-build/crypto/includes -I/opt/local/libexec/llvm-22/include -I/Users/david/src/qore/git/qore/build/_deps/cares-build -I/Users/david/src/qore/git/qore/build/_deps/cares-src -I/Users/david/src/qore/git/qore/build/_deps/cares-src/include -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-src/lib -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-src/crypto -I/Users/david/src/qore/git/qore/build/_deps/ngtcp2-build/crypto -F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -isystem /opt/local/include\n\nCXX_FLAGSarm64 = -fno-strict-aliasing -std=c++20 -O3 -DNDEBUG -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -fPIC\n\nCXX_FLAGS = -fno-strict-aliasing -std=c++20 -O3 -DNDEBUG -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -fPIC\n\n",
+          "qmods": 391,
+          "after_runtime": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-build-v1-ajs46bcn/after-runtime",
+          "artifacts": {
+            "qore": "efe50ae679faea707e8567e7f0f6854fef8fcdb69df4a9d8fbb5cdf4857d129f",
+            "qcc": "4f0c67654f5041e3eeefee7aff7d44ab326b85fa06a175d6e4865fea0ad92477",
+            "libqore.20.dylib": "e5052abfe00ce699dda88ad0b56ea7e26072f039c024f77974800b06cf1471b4"
+          }
+        },
+        "independent-review.json": {
+          "verified": true,
+          "processes": 1,
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "driver_sha256": "f9f6c6105a99ebc0eec3ae4af42593c5e65b8bce5014b03c756fc3b8ea6fb673",
+          "qmods": 391
+        },
+        "metadata.json": {
+          "head": "2d609171f7f08e85ae07e767e16219f331903f29",
+          "merge": "3955cf3ac35cd77504c5aee659b23b1a0a71a1a7",
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "driver_sha256": "b35000aee62620de37a304c28ba25984860f47a1938a4c3e0376f3caedecb330",
+          "before_runtime": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-build-v1-ajs46bcn/before-runtime",
+          "before_source_head": "2d609171f7f08e85ae07e767e16219f331903f29",
+          "before_binary_revision": "be27d81d2a53d7646dd0ff3661fdc125fbba2518",
+          "before_artifacts": {
+            "qore": "efe50ae679faea707e8567e7f0f6854fef8fcdb69df4a9d8fbb5cdf4857d129f",
+            "qcc": "4f0c67654f5041e3eeefee7aff7d44ab326b85fa06a175d6e4865fea0ad92477",
+            "libqore.20.dylib": "7425a5cde5525583dc46d80b67c257606383498a330cc70f81576bac33210efa"
+          }
+        },
+        "terminal.json": {
+          "argv": [
+            "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-build-v1.py"
+          ],
+          "exit_code": 0,
+          "child_waited": true,
+          "started": "2026-10-31T00:52:21.676411+00:00",
+          "finished": "2026-10-31T00:55:34.858316+00:00",
+          "driver_sha256": "b35000aee62620de37a304c28ba25984860f47a1938a4c3e0376f3caedecb330",
+          "log": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-build-v1.py.stage.log",
+          "log_sha256": "225e6679cf9f926bf7c8074be7cde0653a5e643f3fd337099ba48fe2d8d9c113",
+          "source": "Actual subprocess.wait()"
+        }
+      },
+      "processes": {
+        "build": {
+          "receipt": {
+            "argv": [
+              "cmake",
+              "--build",
+              "/Users/david/src/qore/git/qore/build",
+              "-j4"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "2a77cc7e2f35775c37e8dfa3d70e8579391458ce3f2b57ddf545e610b16f310c",
+            "stderr_sha256": "8f98651c6cfeabdb7508e5c5e2dcd35f4aeedce2dfddcee0c7a7c32c400ba248",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "-- Found POSIX Threads: TRUE\n-- Found OpenSSL: /opt/local/lib/libcrypto.dylib (found version \"3.6.1\")\n-- Found LibXml2: /opt/local/lib/libxml2.dylib (found version \"2.13.9\")\n-- Found LLVM 22.1.8\n-- LLVM_INCLUDE_DIRS=/opt/local/libexec/llvm-22/include\n-- LLVM_LIBS=/opt/local/libexec/llvm-22/lib/libLLVM-22.dylib\n-- LLVM library directory: /opt/local/libexec/llvm-22/lib\n-- Found ICU\n-- system c-ares 1.34.6 too old (need >= 1.34.8); will build from source\n-- system c-ares not found or too old; building from source (c-ares 1.34.8)\n-- Found Kerberos 5 / GSSAPI: -L/opt/local/lib;-lgssapi_krb5;-lkrb5;-lk5crypto;-lcom_err\n-- Found Brotli: 1.2.0\n-- Found Zstandard: /opt/local/lib/libzstd.dylib (1.5.7)\n-- Found LZ4: 1.10.0\n-- system nghttp2 too old (need >= 1.70.0); will build from source\n-- system nghttp2 not found or too old; building from source (nghttp2 1.70.0)\n-- Found OpenSSL: /opt/local/lib/libcrypto.dylib (found suitable version \"3.6.1\", minimum required is \"1.1.1\")\n-- Could NOT find Libngtcp2 (missing: LIBNGTCP2_LIBRARY LIBNGTCP2_INCLUDE_DIR) (Required is at least version \"1.23.0\")\n-- Could NOT find Libnghttp3 (missing: LIBNGHTTP3_LIBRARY LIBNGHTTP3_INCLUDE_DIR) (Required is at least version \"1.17.0\")\n-- Could NOT find Systemd (missing: SYSTEMD_INCLUDE_DIRS SYSTEMD_LIBRARIES) (Required is at least version \"209\")\n-- Found LibXml2: /opt/local/lib/libxml2.dylib (found suitable version \"2.13.9\", minimum required is \"2.6.26\")\n-- summary of build options:\n\n    Package version: 1.70.0\n    Library version: 43:5:29\n    Install prefix:  /usr/local\n    Target system:   Darwin\n    Compiler:\n      Build type:     Release\n      C compiler:     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang\n      CFLAGS:         -O3   -fno-strict-aliasing\n      C++ compiler:   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++\n      CXXFLAGS:       -O3   -fno-strict-aliasing\n      WARNCFLAGS:       -Wextra -Wall -Wconversion -Winline -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wshadow -Wundef -Wwrite-strings -Waddress -Wattributes -Wcast-align -Wdeclaration-after-statement -Wdiv-by-zero -Wempty-body -Wendif-labels -Wfloat-equal -Wformat-nonliteral -Wformat-security -Wmissing-field-initializers -Wmissing-noreturn -Wno-format-nonliteral -Wredundant-decls -Wsign-conversion -Wstrict-prototypes -Wunreachable-code -Wunused-parameter -Wvla -Wshorten-64-to-32 -Wlanguage-extension-token -Wpragmas -Wunreachable-code-break -Wheader-guard -Wmissing-variable-declarations\n      CXX1XCXXFLAGS:  \n      WARNCXXFLAGS:     -Wall -Wformat-security -Wno-extern-c-compat\n    Python:\n      Python:          /opt/local/bin/python3.14\n      Python3_VERSION: 3.14.3\n    Test:\n      Failmalloc:     ON\n      Build Test:     OFF\n    Libs:\n      OpenSSL:        TRUE (LIBS='')\n      wolfSSL:         (LIBS='')\n      Libxml2:        TRUE (LIBS='/opt/local/lib/libxml2.dylib')\n      Libev:           (LIBS='')\n      Libc-ares:       (LIBS='')\n      Libngtcp2:       (LIBS='')\n      Libngtcp2_crypto_quictls:  (LIBS='')\n      Libngtcp2_crypto_libressl:  (LIBS='')\n      Libngtcp2_crypto_wolfssl:  (LIBS='')\n      Libnghttp3:      (LIBS='')\n      Libbpf:          (LIBS='')\n      Libevent(SSL):   (LIBS='')\n      Jansson:         (LIBS='')\n      Jemalloc:        (LIBS='')\n      Zlib:           TRUE (LIBS='/opt/local/lib/libz.dylib')\n      Systemd:        FALSE (LIBS='SYSTEMD_LIBRARIES-NOTFOUND')\n      Libbrotlienc:    (LIBS='')\n      Libbrotlidec:    (LIBS='')\n    Third-party:\n      http-parser:    \n      MRuby:          0\n      Neverbleed:     0\n    Features:\n      Applications:   OFF\n      HPACK tools:    OFF\n      Examples:       OFF\n      Threading:      ON\n      HTTP/3(EXPERIMENTAL): OFF\n\n-- ngtcp2/nghttp3 not found on system; building from source (ngtcp2 1.25.0, nghttp3 1.18.0)\n-- summary of build options:\n\n    Package version: 1.18.0\n    Library version: 18:0:9\n    Install prefix:  /usr/local\n    Target system:   Darwin\n    Compiler:\n      Build type:     Release\n      C compiler:     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang\n      CFLAGS:         -O3   -fno-strict-aliasing\n      C++ compiler:   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++\n      CXXFLAGS:       -O3   -fno-strict-aliasing\n      WARNCFLAGS:       -Wextra -Wall -Wconversion -Winline -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wshadow -Wundef -Wwrite-strings -Waddress -Wattributes -Wcast-align -Wdeclaration-after-statement -Wdiv-by-zero -Wempty-body -Wendif-labels -Wfloat-equal -Wformat-nonliteral -Wformat-security -Wmissing-field-initializers -Wmissing-noreturn -Wno-format-nonliteral -Wredundant-decls -Wsign-conversion -Wstrict-prototypes -Wunreachable-code -Wunused-macros -Wunused-parameter -Wvla -Wshorten-64-to-32 -Wlanguage-extension-token -Wpragmas -Wunreachable-code-break -Wheader-guard -Wsometimes-uninitialized -Wmissing-variable-declarations\n      WARNCXXFLAGS:     -Wall -Wformat-security -Wsometimes-uninitialized -Wno-noexcept-type\n    Library:\n      Shared:         OFF\n      Static:         ON\n    Test:\n      Build Test:     OFF\n    Library only:     ON\n    Examples:         0\n\n-- summary of build options:\n\n    Package version: 1.25.0\n    Library version: 27:0:11\n    Install prefix:  /usr/local\n    Target system:   Darwin\n    Compiler:\n      Build type:     Release\n      C compiler:     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang\n      CFLAGS:         -O3   -fno-strict-aliasing\n      C++ compiler:   /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++\n      CXXFLAGS:       -O3   -fno-strict-aliasing\n      WARNCFLAGS:       -Wextra -Wall -Wconversion -Winline -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wpointer-arith -Wshadow -Wundef -Wwrite-strings -Waddress -Wattributes -Wcast-align -Wdeclaration-after-statement -Wdiv-by-zero -Wempty-body -Wendif-labels -Wfloat-equal -Wformat-nonliteral -Wformat-security -Wmissing-field-initializers -Wmissing-noreturn -Wno-format-nonliteral -Wredundant-decls -Wsign-conversion -Wstrict-prototypes -Wunreachable-code -Wunused-macros -Wunused-parameter -Wvla -Wshorten-64-to-32 -Wlanguage-extension-token -Wpragmas -Wunreachable-code-break -Wheader-guard -Wsometimes-uninitialized -Wmissing-variable-declarations\n      WARNCXXFLAGS:     -Wall -Wformat-security -Wno-extern-c-compat -Wsometimes-uninitialized -Wno-noexcept-type\n    Library:\n      Shared:         OFF\n      Static:         ON\n    Test:\n      Build Test:     OFF\n    Libs:\n      OpenSSL:        TRUE (LIBS='/opt/local/lib/libssl.dylib;/opt/local/lib/libcrypto.dylib')\n      Libev:           (LIBS='')\n      Libnghttp3:      (LIBS='')\n      GnuTLS:         FALSE (LIBS='')\n      BoringSSL:      FALSE (LIBS='')\n      Picotls:        FALSE (LIBS='')\n      wolfSSL:        FALSE (LIBS='')\n      Jemalloc:        (LIBS='')\n      Libbrotlienc:    (LIBS='')\n      Libbrotlidec:    (LIBS='')\n\n-- Updated git-revision.h: 2d609171f7f08e85ae07e767e16219f331903f29\n-- C++ atomics provided at compile time\n-- Looking for library containing setsockopt\n-- Found setsockopt in the implicitly linked libs\n-- Looking for library containing gethostbyname\n-- Found gethostbyname in the implicitly linked libs\n-- Looking for library containing clock_gettime\n-- Found clock_gettime in the implicitly linked libs\n-- Looking for strerror_r\n-- Looking for strerror_r - found\n-- Looking for pthread_setname_np()\n-- Checking location of STL unordered_map\n-- STL unordered_map found: std_unordered_map\n-- Checking location of STL slist\n-- Generating unix-config.h\n-- Generating qore-version.h\n-- Generating QoreConfigVersion.cmake\n-- Generating QoreConfig.cmake\n-- Generating qore.pc\n-- \n-- Tarball creation target: make dist\n-- \n-- Preparing Doxyfile for library\n-- Preparing Doxyfile for lang (initial pass, without module tags)\n-- \n-- Module astparser documentation target: make docs\n-- \n-- \n-- Module avro documentation target: make docs\n-- \n-- \n-- Module reflection documentation target: make docs\n-- \n-- \n-- Module logger_bin documentation target: make docs\n-- \n-- \n-- Module linenoise documentation target: make docs\n-- \n-- ICU found - building i18n module\n-- \n-- Module i18n documentation target: make docs\n-- \n-- \n-- Module json documentation target: make docs\n-- \n-- \n-- Module yaml documentation target: make docs\n-- \n-- \n-- Module krb5 uninstall target: make uninstall\n-- \n-- \n-- Module krb5 documentation target: make docs\n-- \n-- Checking for module 'mongoc2'\n--   No package 'mongoc2' found\n-- Checking for module 'bson2'\n--   No package 'bson2' found\n-- Checking for module 'libmongoc-1.0'\n--   Found libmongoc-1.0, version 1.26.2\n-- Checking for module 'libbson-1.0'\n--   Found libbson-1.0, version 1.26.2\n-- \n-- Module mongodb documentation target: make docs\n-- \n-- ONNX Runtime found - building with ONNX model support\n-- CUDA runtime not found - ONNX CUDA device outputs will be unavailable\n-- Metal framework found - macOS Metal/UMA device buffers enabled\n-- \n-- Module ml documentation target: make docs\n-- \n-- utf8proc found - building tokenizer module\n-- \n-- Module tokenizer documentation target: make docs\n-- \n-- tesseract + leptonica found - building ocr module\n-- \n-- Module ocr documentation target: make docs\n-- \n-- Found system Apache Arrow 23.0.0 / Parquet 23.0.0\n-- \n-- Module dataframe documentation target: make docs\n-- \n-- \n-- Module sshutil documentation target: make docs\n-- \n-- \n-- Module protobuf documentation target: make docs\n-- \n-- Configuring Doxyfile for lang final pass with module cross-references\n-- \n-- Implicit link libraries and flags detected for C++: c++\n-- \n-- -----------------------------\n-- System: Darwin-27.0.0\n-- Build type: Release\n-- Prefix: /usr/local\n-- Archs: \n-- C Compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang - AppleClang - 21.0.0.21000401\n-- C Flags:  -fno-strict-aliasing\n-- C Flags debug: -g\n-- C Flags release: -O3 -DNDEBUG\n-- C Flags reldeb: -O2 -g -DNDEBUG\n-- CXX Compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++ - AppleClang - 21.0.0.21000401\n-- CXX Flags: -fno-strict-aliasing -std=c++20\n-- CXX Flags debug: -g\n-- CXX Flags release: -O3 -DNDEBUG\n-- CXX Flags reldeb: -O2 -g -DNDEBUG\n-- -----------------------------\n-- \n-- Configuring done (16.9s)\n-- Generating done (2.3s)\n-- Build files have been written to: /Users/david/src/qore/git/qore/build\n[  0%] Updating git-revision.h with source revision\n[  0%] Built target qpp\n[  0%] Built target nghttp2_static\n[  0%] Built target UpdateGitRevision\n[  0%] Built target CHECK_GRAMMAR_CONFLICTS\n[  1%] Built target nghttp3_static\n[  1%] Built target ngtcp2_static\n[  1%] Generating ql_time.cpp, ql_time.dox.h, ql_time.meta.json\n[  2%] Built target c-ares\nqpp: creating cpp file /Users/david/src/qore/git/qore/lib/ql_time.qpp -> /Users/david/src/qore/git/qore/build/ql_time.cpp\nqpp: creating dox file /Users/david/src/qore/git/qore/lib/ql_time.qpp -> /Users/david/src/qore/git/qore/build/ql_time.dox.h\nqpp: creating metadata file /Users/david/src/qore/git/qore/lib/ql_time.qpp -> /Users/david/src/qore/git/qore/build/ql_time.meta.json\n[  2%] Built target BISON_GENERATED_FILES\n[  2%] Built target FLEX_GENERATED_FILES\n[  4%] Built target QPP_GENERATED_FILES\n[  4%] Built target qcc-format-version\n[  4%] Built target qore-aot-link-config\n[  4%] Built target qcc-format-source-qmod-clean\n[  4%] Built target qore-quic-keep-alive-test\n[  4%] Built target tree-sitter-lib\n[  4%] Built target tree-sitter-qore-grammar\n[  4%] Built target ASTPARSER_QPP_GENERATED_FILES\n[  4%] Built target AVRO_QPP_GENERATED_FILES\n[  4%] Built target REFLECTION_QPP_GENERATED_FILES\n[  4%] Built target LOGGER_QPP_GENERATED_FILES\n[  4%] Built target LINENOISE_QPP_GENERATED_FILES\n[  4%] Built target I18N_QPP_GENERATED_FILES\n[  4%] Built target JSON_QPP_GENERATED_FILES\n[  4%] Built target YAML_QPP_GENERATED_FILES\n[  4%] Built target KRB5_QPP_GENERATED_FILES\n[  4%] Built target MONGODB_QPP_GENERATED_FILES\n[  4%] Built target ML_QPP_GENERATED_FILES\n[  6%] Built target TOK_QPP_GENERATED_FILES\n[  6%] Built target OCR_QPP_GENERATED_FILES\n[  6%] Built target DF_QPP_GENERATED_FILES\n[  6%] Built target PROTOBUF_QPP_GENERATED_FILES\n[  6%] Built target CPPAPIUSER_QPP_GENERATED_FILES\n[  6%] Built target SSHUTIL_QPP_GENERATED_FILES\n[  6%] Built target AVROCPPAPI_QPP_GENERATED_FILES\n[  6%] Generating 900_release_notes.dox\n[  6%] Generating 145_basic_data_types.dox\n[  6%] Built target ngtcp2_crypto_ossl_static\n[  6%] Built target qore-aot-runtime-identity\n[  6%] Built target QORE_DOX_FILES\n[  6%] Building CXX object CMakeFiles/libqore.dir/lib/qore_git_revision.cpp.o\n[  6%] Building CXX object CMakeFiles/libqore.dir/lib/single-compilation-unit.cpp.o\n[  6%] Linking CXX shared library libqore.dylib\n[  8%] Built target libqore\n[  8%] Linking CXX executable qore-hash-lookup-test\n[  8%] Linking CXX executable qore-relative-seconds-test\n[  8%] Linking CXX executable qore-date-add-test\n[  8%] Linking CXX executable qore\n[  8%] Built target qore-relative-seconds-test\n[  8%] Built target qore-hash-lookup-test\n[  8%] Built target qore-date-add-test\n[  8%] Built target qore\n[  8%] Linking CXX executable qore-stream-peek-test\n[  8%] Linking CXX executable qore-declaration-owner-test\n[  8%] Linking CXX executable qore-utf8-validation-test\n[  8%] Linking CXX executable qore-hash-key-cancel-test\n[  8%] Built target qore-stream-peek-test\n[  8%] Built target qore-hash-key-cancel-test\n[  8%] Built target qore-utf8-validation-test\n[  8%] Built target qore-declaration-owner-test\n[  8%] Linking CXX executable qore-fork-before-init-test\n[  8%] Linking CXX executable qore-stdio-startup-test\n[  8%] Linking CXX executable qore-native-thread-cleanup-test\n[  8%] Linking CXX executable qcc\n[  8%] Built target qore-fork-before-init-test\n[  8%] Built target qore-native-thread-cleanup-test\n[  8%] Built target qcc\n[  8%] Built target qore-stdio-startup-test\n[  8%] Building CXX object modules/reflection/CMakeFiles/reflection.dir/reflection_scu.cpp.o\n[  8%] Building CXX object modules/logger_bin/CMakeFiles/logger_bin.dir/logger_scu.cpp.o\n[  8%] Building CXX object modules/astparser/CMakeFiles/astparser.dir/astparser_scu.cpp.o\n[  8%] Built target avro\n[  8%] Built target linenoise\n[  8%] Built target i18n\n[  9%] Built target json\n[ 10%] Built target yaml\n[ 10%] Building CXX object modules/krb5/CMakeFiles/krb5.dir/krb5_scu.cpp.o\n[ 10%] Linking CXX shared module logger_bin-api-2.0.qmod\n[ 10%] Linking CXX shared module reflection-api-2.0.qmod\n[ 10%] Linking CXX shared module krb5-api-2.0.qmod\n[ 10%] Built target logger_bin\n[ 10%] Built target krb5\n[ 12%] Built target reflection\n[ 12%] Built target mongodb\n[ 13%] Built target ocr\n[ 13%] Built target tokenizer\n[ 14%] Built target protobuf\n[ 14%] Built target dataframe\n[ 14%] Built target cppapitest\n[ 14%] Built target cppapiuser\n[ 14%] Built target forkexita\n[ 14%] Built target forkexitb\n[ 14%] Linking CXX shared module ../../../modules/staticpgm/staticpgm-api-2.0.qmod\n[ 14%] Built target avrocppapi\n[ 14%] Built target staticpgm\n[ 14%] Built target dbitest\n[ 14%] Built target sshutil\n[ 16%] Built target ml\n[ 16%] Linking CXX shared module astparser-api-2.0.qmod\n[ 16%] Built target astparser\n[ 16%] Built target HttpStreamClient-qmod\n[ 16%] AOT compile Util.qmod\n[ 16%] Built target DatasourceProvider-qmod\n[ 16%] AOT compile QoreApiMetadata.qmod\n[ 16%] Built target ParseOptions-qmod\n[ 16%] AOT compile QoreCodeFormat.qmod\n[ 16%] Built target Qorize-qmod\n[ 16%] Built target QoreHistory-qmod\n[ 16%] Built target QoreCodeCompletion-qmod\n[ 16%] Built target FtpClientIo-qmod\n[ 16%] Built target MapperUtil-qmod\n[ 16%] Built target ValueMask-qmod\n[ 16%] AOT compile QoreLlmTypes.qmod\nqcc: module compilation (-O3): 370064 bytes for 45 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreLlmTypes.qmod\n[ 16%] Link QoreLlmTypes.qmod into source qlib\n[ 16%] Built target QoreLlmTypes-qmod\n[ 18%] Built target QoreMLUtils-qmod\n[ 18%] Built target QoreCrypto-qmod\n[ 18%] Built target QoreAsyncJobUtils-qmod\n[ 18%] AOT compile QoreSpeechUtils.qmod\nqcc: module compilation (-O3): 94536 bytes for 16 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreSpeechUtils.qmod\n[ 18%] Link QoreSpeechUtils.qmod into source qlib\n[ 18%] Built target QoreSpeechUtils-qmod\n[ 18%] AOT compile QoreMediaUtils.qmod\nqcc: module compilation (-O3): 453280 bytes for 28 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreMediaUtils.qmod\n[ 18%] Link QoreMediaUtils.qmod into source qlib\n[ 18%] Built target QoreMediaUtils-qmod\n[ 18%] Built target LineCoverage-qmod\n[ 18%] Built target GraphQL-qmod\n[ 18%] Built target GraphQLClient-qmod\n[ 18%] Built target AwsEventStream-qmod\n[ 18%] Built target JsonPatch-qmod\n[ 18%] Built target YamlTagHandler-qmod\nqcc: module compilation (-O3): 1398664 bytes for 93 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/Util.qmod\n[ 18%] Link Util.qmod into source qlib\n[ 18%] AOT compile QoreLlmUtils.qmod\n[ 18%] Built target Util-qmod\n[ 18%] AOT compile Logger.qmod\nqcc: split module compilation (-O3): 2117400 bytes for 106 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreApiMetadata/QoreApiMetadata.qmod\n[ 18%] Link QoreApiMetadata.qmod into source qlib\n[ 18%] Built target QoreApiMetadata-qmod\n[ 18%] Built target FsUtil-qmod\n[ 18%] Built target qm-metadata-HttpStreamClient\n[ 18%] Built target qm-metadata-ParseOptions\n[ 18%] Built target qm-metadata-Qdx\n[ 18%] Built target qm-metadata-Qorize\n[ 18%] Built target qm-metadata-QoreHistory\n[ 18%] Built target qm-metadata-QoreRepl\n[ 18%] Built target HttpUtil-qmod\n[ 18%] Built target Mime-qmod\n[ 18%] Built target WebSocketUtil-qmod\n[ 18%] Built target qm-metadata-Util\n[ 18%] Built target qm-metadata-ValueMask\n[ 18%] Built target qm-metadata-WebSocketUtil\n[ 18%] Built target qm-metadata-MapperUtil\n[ 18%] Built target qm-metadata-QoreApiMetadata\n[ 18%] Built target qm-metadata-QoreCodeCompletion\n[ 18%] Built target qm-metadata-QoreCodeFormat\n[ 18%] Built target qm-metadata-QLS\n[ 18%] Built target qm-metadata-FileLocationHandler\n[ 18%] Built target qm-metadata-Diff\n[ 18%] Built target Diff-qmod\n[ 18%] Built target qm-metadata-Logger\n[ 18%] Built target qm-metadata-LoggerSemanticSearch\n[ 18%] Built target qm-metadata-ProviderIndexUtil\n[ 18%] Built target qm-metadata-Krb5Util\n[ 18%] Built target qm-metadata-Mime\n[ 18%] Built target qm-metadata-QUnit\n[ 18%] Built target QUnit-qmod\nqcc: module compilation (-O3): 879624 bytes for 141 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/Logger.qmod\n[ 18%] Built target qm-metadata-TextWrap\n[ 18%] Link Logger.qmod into source qlib\n[ 18%] Built target TextWrap-qmod\n[ 19%] Built target Logger-qmod\n[ 19%] Built target qm-metadata-EdifactUtil\n[ 19%] Built target qm-metadata-Hl7v2Util\n[ 19%] Built target qm-metadata-MllpUtil\n[ 21%] Built target qm-metadata-DataProvider\n[ 21%] Built target qm-metadata-AvroUtil\n[ 21%] Built target qm-metadata-DataProviderML\n[ 21%] Built target qm-metadata-DataProviderDataFrame\n[ 21%] Built target QoreOnnxTools-qmod\n[ 21%] Built target qm-metadata-QoreOnnxExport\n[ 22%] Built target qm-metadata-QoreModelRegistry\n[ 22%] Built target QoreOnnxExport-qmod\n[ 22%] Built target qm-metadata-QoreOnnxTools\n[ 22%] Built target qm-metadata-QoreMLUtils\n[ 22%] Built target qm-metadata-QoreTokenizerUtils\n[ 22%] Built target qm-metadata-QoreLlmTypes\n[ 22%] Built target qm-metadata-QoreCrypto\n[ 22%] Built target qm-metadata-QoreStructuredExtraction\n[ 22%] Built target qm-metadata-QoreLlmUtils\n[ 22%] Built target qm-metadata-QoreOcrUtils\n[ 22%] Built target qm-metadata-QoreGuardrails\n[ 22%] Built target qm-metadata-QoreVisionExtraction\n[ 22%] Built target qm-metadata-QoreAgentStrategies\n[ 22%] Built target qm-metadata-QoreRagTypes\n[ 22%] Built target qm-metadata-QoreRagUtils\nqcc: split module compilation (-O3): 3055616 bytes for 231 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreCodeFormat/QoreCodeFormat.qmod\n[ 22%] Built target qm-metadata-QoreAsyncJobUtils\n[ 22%] Built target qm-metadata-QoreSpeechUtils\n[ 22%] Link QoreCodeFormat.qmod into source qlib\n[ 22%] Built target QoreCodeFormat-qmod\n[ 22%] Built target qm-metadata-DpqlWebSocket\n[ 22%] Built target qm-metadata-QoreMediaUtils\n[ 22%] Built target qm-metadata-LineCoverage\n[ 22%] Built target qm-metadata-HttpUtil\n[ 22%] Built target qm-metadata-DebugProgramControl\n[ 22%] Built target qm-metadata-MailMessage\n[ 22%] Built target qm-metadata-HttpServerUtil\n[ 22%] Built target MailMessage-qmod\n[ 22%] Built target qm-metadata-AsyncSocketIo\n[ 22%] Built target qm-metadata-FileDataProvider\n[ 22%] Built target qm-metadata-FilePoller\n[ 22%] Built target qm-metadata-FtpClientDataProvider\n[ 22%] Built target qm-metadata-ServerSentEventHandler\n[ 22%] Built target qm-metadata-HttpClientDataProvider\n[ 22%] Built target qm-metadata-ConnectionProvider\n[ 25%] Built target qm-metadata-SqlUtil\n[ 25%] Built target qm-metadata-CsvUtil\n[ 25%] Built target qm-metadata-FixedLengthUtil\n[ 25%] Built target qm-metadata-Mapper\n[ 25%] Built target qm-metadata-FtpPollerUtil\n[ 25%] Built target qm-metadata-TelnetClient\n[ 25%] Built target qm-metadata-BulkSqlUtil\n[ 26%] Built target qm-metadata-Schema\n[ 26%] Built target qm-metadata-DebugCmdLine\n[ 26%] Built target TerminalFormat-qmod\n[ 26%] Built target qm-metadata-TerminalFormat\n[ 26%] Built target qm-metadata-DiscordWebSocketClient\n[ 26%] Built target qm-metadata-HttpServer\n[ 26%] Built target qm-metadata-HttpServerAsyncIo\n[ 26%] Built target qm-metadata-HttpClientStreamingIo\n[ 26%] Built target qm-metadata-FtpClientIo\n[ 27%] Built target qm-metadata-HttpClientIo\n[ 27%] Built target qm-metadata-UrlDownloader\n[ 27%] Built target qm-metadata-Pop3Client\n[ 27%] Built target qm-metadata-ImapClient\n[ 27%] Built target qm-metadata-SmtpClient\n[ 27%] Built target qm-metadata-SewioWebSocketClient\n[ 27%] Built target qm-metadata-RestSchemaValidator\n[ 27%] Built target qm-metadata-WebSocketHandler\n[ 27%] Built target qm-metadata-ProviderIndex\n[ 27%] Built target qm-metadata-WebUtil\n[ 27%] Built target qm-metadata-MysqlSqlUtil\n[ 27%] Built target qm-metadata-MssqlSqlUtilBase\n[ 28%] Built target qm-metadata-ServerSentEventClient\n[ 28%] Built target qm-metadata-Sqlite3SqlUtil\n[ 28%] Built target qm-metadata-OracleSqlUtilBase\n[ 28%] Built target qm-metadata-PgsqlSqlUtilBase\n[ 28%] Built target qm-metadata-XdbcFirebirdSqlUtilBase\n[ 28%] Built target qm-metadata-WebSocketClient\n[ 28%] Built target qm-metadata-TableMapper\n[ 28%] Built target qm-metadata-FtpPoller\n[ 28%] Built target qm-metadata-DbDataProvider\n[ 28%] Built target qm-metadata-SchemaReverse\nqcc: split module compilation (-O3): 2055792 bytes for 152 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreLlmUtils/QoreLlmUtils.qmod\n[ 28%] Built target qm-metadata-DebugLinenoiseCmdLine\n[ 28%] Built target qm-metadata-AsyncApi\n[ 30%] Built target qm-metadata-DebugHandler\n[ 30%] Link QoreLlmUtils.qmod into source qlib\n[ 30%] Built target QoreLlmUtils-qmod\n[ 30%] Built target qm-metadata-RestHandler\n[ 30%] Built target qm-metadata-Swagger\n[ 30%] Built target qm-metadata-OpenApi3\n[ 30%] Built target qm-metadata-VscDebugAdapter\n[ 30%] Built target qm-metadata-ImapClientDataProvider\n[ 30%] Built target qm-metadata-Pop3ClientDataProvider\n[ 30%] Built target qm-metadata-FreetdsSqlUtil\n[ 30%] Built target qm-metadata-JdbcMicrosoftSqlUtil\n[ 30%] Built target qm-metadata-OracleSqlUtil\n[ 30%] Built target qm-metadata-JdbcOracleSqlUtil\n[ 30%] Built target qm-metadata-PgsqlSqlUtil\n[ 30%] Built target qm-metadata-JdbcPostgresqlSqlUtil\n[ 30%] Built target qm-metadata-JdbcFirebirdSqlUtil\n[ 30%] Built target qm-metadata-RestClient\n[ 30%] Built target qm-metadata-OdbcFirebirdSqlUtil\n[ 30%] Built target qm-metadata-RestClientIo\n[ 30%] Built target qm-metadata-SalesforceRestClient\n[ 30%] Built target qm-metadata-SewioRestClient\n[ 30%] Built target qm-metadata-ZeyosRestClient\n[ 30%] Built target qm-metadata-BillwerkRestClient\n[ 30%] Built target qm-metadata-CircleRestClient\n[ 30%] Built target qm-metadata-BitlyRestClient\n[ 30%] Built target qm-metadata-BigCommerceRestClient\n[ 30%] Built target qm-metadata-InsightlyRestClient\n[ 30%] Built target qm-metadata-Sap4HanaRestClient\n[ 30%] Built target qm-metadata-GorgiasRestClient\n[ 30%] Built target qm-metadata-SmartSheetRestClient\n[ 30%] Built target qm-metadata-ChargebeeRestClient\n[ 30%] Built target qm-metadata-CloseRestClient\n[ 30%] Built target qm-metadata-CdsRestClient\n[ 30%] Built target qm-metadata-DiscordRestClient\n[ 30%] Built target qm-metadata-FreshBooksRestClient\n[ 30%] Built target qm-metadata-FirecrawlRestClient\n[ 30%] Built target qm-metadata-ElevenLabsRestClient\n[ 30%] Built target qm-metadata-EasyPostRestClient\n[ 30%] Built target qm-metadata-GeminiRestClient\n[ 30%] Built target qm-metadata-FreshsalesRestClient\n[ 30%] Built target qm-metadata-GraphQLClient\n[ 31%] Built target qm-metadata-GraphQL\n[ 31%] Built target qm-metadata-GraphQLDataProvider\n[ 31%] Built target qm-metadata-GraphQLHandler\n[ 31%] Built target qm-metadata-LinearRestClient\n[ 31%] Built target qm-metadata-LinkedInRestClient\n[ 31%] Built target qm-metadata-StripeRestClient\n[ 31%] Built target qm-metadata-WooCommerceRestClient\n[ 31%] Built target qm-metadata-WaveRestClient\n[ 31%] Built target qm-metadata-PaddleRestClient\n[ 31%] Built target qm-metadata-GoogleRestClient\n[ 31%] Built target qm-metadata-MailgunRestClient\n[ 31%] Built target qm-metadata-JotformRestClient\n[ 31%] Built target qm-metadata-HueRestClient\n[ 31%] Built target qm-metadata-MewsRestClient\n[ 31%] Built target qm-metadata-BaseLinkerRestClient\n[ 31%] Built target qm-metadata-NetSuiteRestClient\n[ 31%] Built target qm-metadata-AftershipRestClient\n[ 31%] Built target qm-metadata-VoyageRestClient\n[ 31%] Built target qm-metadata-SGLangRestClient\n[ 31%] Built target qm-metadata-AnthropicRestClient\n[ 31%] Built target qm-metadata-BgeM3RestClient\n[ 31%] Built target qm-metadata-TallyRestClient\n[ 31%] Built target qm-metadata-OneDriveRestClient\n[ 31%] Built target qm-metadata-GrokRestClient\n[ 31%] Built target qm-metadata-DropboxRestClient\n[ 31%] Built target qm-metadata-OpenAiRestClient\n[ 31%] Built target qm-metadata-HuggingFaceRestClient\n[ 31%] Built target qm-metadata-PerplexityRestClient\n[ 31%] Built target qm-metadata-SegmentRestClient\n[ 31%] Built target qm-metadata-ServiceNowRestClient\n[ 31%] Built target qm-metadata-ShipStationRestClient\n[ 31%] Built target qm-metadata-SendCloudRestClient\n[ 31%] Built target qm-metadata-LemlistRestClient\n[ 31%] Built target qm-metadata-InstantlyRestClient\n[ 31%] Built target qm-metadata-CustomerIoRestClient\n[ 31%] Built target qm-metadata-ShippoRestClient\n[ 31%] Built target qm-metadata-SystemeIoRestClient\n[ 31%] Built target qm-metadata-ApolloRestClient\n[ 31%] Built target qm-metadata-DeelRestClient\n[ 31%] Built target qm-metadata-GoHighLevelRestClient\n[ 31%] Built target qm-metadata-PdfCoRestClient\n[ 31%] Built target qm-metadata-ConstantContactRestClient\n[ 31%] Built target qm-metadata-KitRestClient\n[ 31%] Built target qm-metadata-SquareRestClient\n[ 31%] Built target qm-metadata-KeapRestClient\n[ 31%] Built target qm-metadata-TableauRestClient\n[ 31%] Built target qm-metadata-ClickFunnelsRestClient\n[ 31%] Built target qm-metadata-Cin7CoreRestClient\n[ 31%] Built target qm-metadata-SquarespaceRestClient\n[ 31%] Built target qm-metadata-KatanaRestClient\n[ 31%] Built target qm-metadata-UnbounceRestClient\n[ 31%] Built target qm-metadata-UnleashedRestClient\n[ 31%] Built target qm-metadata-ZohoBooksRestClient\n[ 31%] Built target qm-metadata-AwsEventStream\n[ 31%] Built target qm-metadata-ZohoInvoiceRestClient\n[ 31%] Built target qm-metadata-AwsRestClient\n[ 31%] Built target qm-metadata-ZohoInventoryRestClient\n[ 31%] Built target qm-metadata-AzureOpenAiDataProvider\n[ 31%] Built target qm-metadata-AzureOpenAiRestClient\n[ 31%] Built target qm-metadata-BedrockRestClient\n[ 31%] Built target qm-metadata-AzureAuth\n[ 31%] Built target qm-metadata-DeepSeekRestClient\n[ 31%] Built target qm-metadata-VertexAiRestClient\n[ 31%] Built target qm-metadata-VertexAiDataProvider\n[ 32%] Built target qm-metadata-BedrockDataProvider\n[ 32%] Built target qm-metadata-DeepgramRestClient\n[ 32%] Built target qm-metadata-AssemblyAiRestClient\n[ 32%] Built target qm-metadata-DeepSeekDataProvider\n[ 32%] Built target qm-metadata-DeepgramDataProvider\n[ 32%] Built target qm-metadata-AwsTextractRestClient\n[ 32%] Built target qm-metadata-AssemblyAiDataProvider\n[ 32%] Built target qm-metadata-GoogleDocumentAiRestClient\n[ 32%] Built target qm-metadata-AwsTextractDataProvider\n[ 32%] Built target qm-metadata-GoogleCloudStorageRestClient\n[ 32%] Built target qm-metadata-AzureDocumentIntelligenceRestClient\n[ 32%] Built target qm-metadata-AzureDocumentIntelligenceDataProvider\n[ 32%] Built target qm-metadata-GoogleDocumentAiDataProvider\n[ 32%] Built target qm-metadata-BflDataProvider\n[ 32%] Built target qm-metadata-BflRestClient\n[ 32%] Built target qm-metadata-StabilityAiDataProvider\n[ 32%] Built target qm-metadata-StabilityAiRestClient\n[ 32%] Built target qm-metadata-GroqRestClient\n[ 32%] Built target qm-metadata-TogetherDataProvider\n[ 32%] Built target qm-metadata-TogetherRestClient\n[ 32%] Built target qm-metadata-GroqDataProvider\n[ 32%] Built target qm-metadata-FireworksDataProvider\n[ 32%] Built target qm-metadata-OllamaRestClient\n[ 32%] Built target qm-metadata-OllamaDataProvider\n[ 32%] Built target qm-metadata-FireworksRestClient\n[ 32%] Built target qm-metadata-JinaDataProvider\n[ 32%] Built target qm-metadata-JinaRestClient\n[ 32%] Built target qm-metadata-CohereDataProvider\n[ 32%] Built target qm-metadata-CohereRestClient\n[ 33%] Built target qm-metadata-MistralDataProvider\n[ 33%] Built target qm-metadata-ChromaDataProvider\n[ 33%] Built target qm-metadata-MistralRestClient\n[ 33%] Built target qm-metadata-ChromaRestClient\n[ 33%] Built target qm-metadata-WeaviateRestClient\n[ 33%] Built target qm-metadata-PineconeDataProvider\n[ 33%] Built target qm-metadata-PineconeRestClient\n[ 34%] Built target qm-metadata-WeaviateDataProvider\n[ 34%] Built target qm-metadata-MilvusRestClient\n[ 34%] Built target qm-metadata-TavilyRestClient\n[ 34%] Built target qm-metadata-MilvusDataProvider\n[ 36%] Built target qm-metadata-TavilyDataProvider\n[ 36%] Built target qm-metadata-LlamaParseDataProvider\n[ 36%] Built target qm-metadata-ExaRestClient\n[ 36%] Built target qm-metadata-LlamaParseRestClient\n[ 36%] Built target qm-metadata-ExaDataProvider\n[ 36%] Built target qm-metadata-GcpAuth\n[ 36%] Built target qm-metadata-UnstructuredRestClient\n[ 36%] Built target qm-metadata-GeminiBodyShape\n[ 36%] Built target qm-metadata-UnstructuredDataProvider\n[ 36%] Built target qm-metadata-RestSchemaDataProvider\n[ 36%] Built target qm-metadata-AsyncApiDataProvider\n[ 36%] Built target qm-metadata-OpenApi3DataProvider\n[ 36%] Built target qm-metadata-SwaggerDataProvider\n[ 37%] Built target qm-metadata-BigCommerceDataProvider\n[ 37%] Built target qm-metadata-BitlyDataProvider\n[ 37%] Built target qm-metadata-RestSchemaActions\n[ 37%] Built target qm-metadata-CircleDataProvider\n[ 37%] Built target qm-metadata-SmartSheetDataProvider\n[ 37%] Built target qm-metadata-CdsRestDataProvider\n[ 37%] Built target qm-metadata-GorgiasDataProvider\n[ 38%] Built target qm-metadata-InsightlyDataProvider\n[ 38%] Built target qm-metadata-ServiceNowRestDataProvider\n[ 38%] Built target qm-metadata-RestClientDataProvider\n[ 38%] Built target qm-metadata-SearchIndexDataProvider\n[ 39%] Built target qm-metadata-ElasticSearchDataProvider\n[ 39%] Built target qm-metadata-GeneratorDataProvider\n[ 39%] Built target qm-metadata-EmpathicBuildingDataProvider\n[ 42%] Built target qm-metadata-OpenSearchDataProvider\n[ 42%] Built target qm-metadata-QdrantDataProvider\n[ 42%] Built target qm-metadata-ElasticSearchLoggerAppender\n[ 42%] Built target qm-metadata-MongoDbDataProvider\n[ 44%] Built target qm-metadata-MemcachedDataProvider\n[ 44%] Built target qm-metadata-RedisDataProvider\n[ 44%] Built target qm-metadata-SalesforceRestDataProvider\n[ 44%] Built target qm-metadata-OpenSearchLoggerAppender\n[ 44%] Built target qm-metadata-AwsS3DataProvider\n[ 45%] Built target qm-metadata-AwsRestClientDataProvider\n[ 45%] Built target qm-metadata-ElevenLabsDataProvider\n[ 45%] Built target qm-metadata-GoogleDataProvider\n[ 46%] Built target qm-metadata-DiscordDataProvider\n[ 48%] Built target qm-metadata-EasyPostDataProvider\n[ 48%] Built target qm-metadata-FreshsalesDataProvider\n[ 51%] Built target qm-metadata-GeminiDataProvider\n[ 51%] Built target qm-metadata-FreshBooksDataProvider\n[ 51%] Built target qm-metadata-FirecrawlDataProvider\n[ 51%] Built target qm-metadata-ConfluenceRestClient\n[ 51%] Built target qm-metadata-LinearDataProvider\n[ 51%] Built target qm-metadata-ConfluenceDataProvider\n[ 51%] Built target qm-metadata-LinkedInDataProvider\n[ 51%] Built target qm-metadata-BitbucketRestClient\n[ 51%] Built target qm-metadata-GitLabRestClient\n[ 51%] Built target qm-metadata-GitLabDataProvider\n[ 53%] Built target qm-metadata-BitbucketDataProvider\n[ 53%] Built target qm-metadata-GitHubDataProvider\n[ 53%] Built target qm-metadata-XeroRestClient\n[ 53%] Built target qm-metadata-XeroDataProvider\n[ 53%] Built target qm-metadata-GitHubRestClient\n[ 53%] Built target qm-metadata-PaddleDataProvider\n[ 53%] Built target qm-metadata-StripeDataProvider\n[ 53%] Built target qm-metadata-IntercomDataProvider\n[ 53%] Built target qm-metadata-IntercomRestClient\n[ 53%] Built target qm-metadata-WaveDataProvider\n[ 53%] Built target qm-metadata-KlaviyoRestClient\n[ 53%] Built target qm-metadata-KlaviyoDataProvider\n[ 54%] Built target qm-metadata-LinkedInOrganizationsDataProvider\n[ 54%] Built target qm-metadata-JotformDataProvider\n[ 54%] Built target qm-metadata-MailgunDataProvider\n[ 54%] Built target qm-metadata-MewsRestDataProvider\n[ 55%] Built target qm-metadata-WooCommerceDataProvider\n[ 55%] Built target qm-metadata-AftershipDataProvider\n[ 55%] Built target qm-metadata-VoyageDataProvider\n[ 57%] Built target qm-metadata-BaseLinkerDataProvider\n[ 57%] Built target qm-metadata-AnthropicDataProvider\n[ 57%] Built target qm-metadata-TallyDataProvider\n[ 57%] Built target qm-metadata-SGLangDataProvider\n[ 57%] Built target qm-metadata-OneDriveDataProvider\n[ 57%] Built target qm-metadata-BgeM3FastApiDataProvider\n[ 57%] Built target qm-metadata-GrokDataProvider\n[ 57%] Built target qm-metadata-GoogleCloudStorageDataProvider\n[ 57%] Built target qm-metadata-HuggingFaceDataProvider\n[ 57%] Built target qm-metadata-SharePointDataProvider\n[ 57%] Built target qm-metadata-GoogleCalendarDataProvider\n[ 59%] Built target qm-metadata-PerplexityDataProvider\n[ 59%] Built target qm-metadata-SegmentDataProvider\n[ 60%] Built target qm-metadata-OpenAiDataProvider\n[ 60%] Built target qm-metadata-GoogleDriveDataProvider\n[ 60%] Built target qm-metadata-DropboxDataProvider\n[ 60%] Built target qm-metadata-GmailDataProvider\n[ 61%] Built target qm-metadata-ZohoBooksDataProvider\n[ 61%] Built target qm-metadata-ZohoInvoiceDataProvider\n[ 65%] Built target qm-metadata-ZohoInventoryDataProvider\n[ 65%] Built target qm-metadata-LemlistDataProvider\n[ 65%] Built target qm-metadata-ShipStationDataProvider\n[ 65%] Built target qm-metadata-SendCloudDataProvider\n[ 69%] Built target qm-metadata-CustomerIoDataProvider\n[ 69%] Built target qm-metadata-SystemeIoDataProvider\n[ 69%] Built target qm-metadata-InstantlyDataProvider\n[ 69%] Built target qm-metadata-DeelDataProvider\n[ 69%] Built target qm-metadata-PdfCoDataProvider\n[ 69%] Built target qm-metadata-ShippoDataProvider\n[ 71%] Built target qm-metadata-GoHighLevelDataProvider\n[ 71%] Built target qm-metadata-ConstantContactDataProvider\n[ 71%] Built target qm-metadata-KitDataProvider\n[ 72%] Built target qm-metadata-ApolloDataProvider\n[ 72%] Built target qm-metadata-KeapDataProvider\n[ 72%] Built target qm-metadata-SquareDataProvider\n[ 75%] Built target qm-metadata-CloseDataProvider\n[ 75%] Built target qm-metadata-SquarespaceDataProvider\n[ 75%] Built target qm-metadata-ChargebeeDataProvider\n[ 75%] Built target qm-metadata-TableauDataProvider\n[ 75%] Built target qm-metadata-Cin7CoreDataProvider\n[ 75%] Built target qm-metadata-UnbounceDataProvider\n[ 75%] Built target qm-metadata-ClickFunnelsDataProvider\n[ 75%] Built target qm-metadata-A2aClient\n[ 75%] Built target qm-metadata-A2aClientDataProvider\n[ 77%] Built target qm-metadata-UnleashedDataProvider\n[ 79%] Built target qm-metadata-KatanaDataProvider\n[ 80%] Built target qm-metadata-A2aServerHandler\n[ 80%] Built target qm-metadata-JsonFileDataProvider\n[ 80%] Built target qm-metadata-FhirRestClient\n[ 80%] Built target qm-metadata-FhirRestDataProvider\n[ 80%] Built target qm-metadata-JsonLd\n[ 80%] Built target qm-metadata-JsonRpcClientIo\n[ 80%] Built target qm-metadata-JsonPatch\n[ 80%] Built target qm-metadata-AgUi\n[ 80%] Built target qm-metadata-McpClient\n[ 80%] Built target qm-metadata-JsonRpcHandler\n[ 80%] Built target qm-metadata-McpClientDataProvider\n[ 80%] Built target qm-metadata-JsonRpcConnection\n[ 80%] Built target qm-metadata-OneRecordServerHandler\n[ 80%] Built target qm-metadata-NdjsonDataProvider\n[ 80%] Built target qm-metadata-OneRecordClient\n[ 80%] Built target qm-metadata-McpServerHandler\n[ 81%] Built target qm-metadata-ConnectDataProvider\n[ 81%] Built target qm-metadata-DataStreamClient\n[ 81%] Built target DataStreamUtil-qmod\n[ 81%] Built target qm-metadata-Connect\n[ 81%] Built target qm-metadata-DataStreamRequestHandler\n[ 81%] Built target qm-metadata-DataStreamClientIo\n[ 81%] Built target qm-metadata-YamlDocumentDataProvider\n[ 81%] Built target qm-metadata-DataStreamUtil\n[ 81%] Built target qm-metadata-YamlSchema\n[ 81%] Built target qm-metadata-YamlRpcClient\n[ 81%] Built target qm-metadata-YamlRpcClientIo\n[ 81%] Built target qm-metadata-YamlRpcHandler\n[ 81%] Built target qm-metadata-DebugUtil\n[ 81%] Built target qm-metadata-YamlTagHandler\n[ 81%] Built target YamlSchema-qmod\n[ 81%] Built target qm-metadata-DatasourceProvider\n[ 81%] Built target DebugUtil-qmod\n[ 81%] Built target qm-metadata-FsUtil\n[ 81%] Built target Qdx-qmod\n[ 81%] AOT compile FileLocationHandler.qmod\n[ 81%] AOT compile Krb5Util.qmod\n[ 81%] AOT compile QLS.qmod\n[ 81%] AOT compile ProviderIndexUtil.qmod\nqcc: split module compilation (-O3): 1268064 bytes for 51 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/Krb5Util/Krb5Util.qmod\n[ 81%] Link Krb5Util.qmod into source qlib\n[ 81%] Built target Krb5Util-qmod\n[ 81%] Built target QoreStructuredExtraction-qmod\n[ 81%] Built target QoreVisionExtraction-qmod\n[ 81%] Built target QoreAgentStrategies-qmod\n[ 81%] Built target DebugProgramControl-qmod\n[ 81%] Built target DebugCmdLine-qmod\n[ 81%] Built target DebugLinenoiseCmdLine-qmod\n[ 81%] Built target VscDebugAdapter-qmod\nqcc: split module compilation (-O3): 1855176 bytes for 285 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/FileLocationHandler/FileLocationHandler.qmod\n[ 81%] Link FileLocationHandler.qmod into source qlib\n[ 81%] Built target FileLocationHandler-qmod\n[ 81%] Built target HttpServerUtil-qmod\n[ 81%] Built target AsyncSocketIo-qmod\n[ 81%] Built target WebUtil-qmod\n[ 81%] Built target JsonRpcHandler-qmod\n[ 81%] Built target YamlRpcHandler-qmod\n[ 81%] Built target HttpClientIo-qmod\n[ 81%] Built target HttpServerAsyncIo-qmod\n[ 81%] Built target JsonLd-qmod\n[ 81%] Built target HttpServer-qmod\nqcc: split module compilation (-O3): 4406328 bytes for 203 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/ProviderIndexUtil/ProviderIndexUtil.qmod\n[ 81%] Link ProviderIndexUtil.qmod into source qlib\n[ 81%] Built target ProviderIndexUtil-qmod\n[ 81%] AOT compile DataProvider.qmod\nqcc: split module compilation (-O3): 6469864 bytes for 316 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QLS/QLS.qmod\n[ 81%] Link QLS.qmod into source qlib\n[ 81%] Built target QLS-qmod\nqcc: split module compilation (-O3): 25964480 bytes for 2408 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/DataProvider/DataProvider.qmod\n[ 81%] Link DataProvider.qmod into source qlib\n[ 81%] Built target DataProvider-qmod\n[ 81%] Built target EdifactUtil-qmod\n[ 81%] AOT compile RestSchemaValidator.qmod\n[ 81%] Built target Hl7v2Util-qmod\n[ 81%] AOT compile ConnectionProvider.qmod\n[ 81%] Built target SqlUtil-qmod\n[ 81%] Built target AvroUtil-qmod\n[ 81%] Built target QoreGuardrails-qmod\n[ 81%] Built target DataProviderDataFrame-qmod\n[ 81%] Built target FilePoller-qmod\n[ 81%] Built target FileDataProvider-qmod\n[ 81%] Built target HttpClientDataProvider-qmod\n[ 81%] Built target FtpClientDataProvider-qmod\n[ 81%] Built target FixedLengthUtil-qmod\n[ 81%] Built target CsvUtil-qmod\n[ 81%] Built target Mapper-qmod\n[ 83%] Built target FtpPollerUtil-qmod\n[ 83%] Built target BulkSqlUtil-qmod\n[ 83%] Built target Schema-qmod\n[ 83%] Built target MssqlSqlUtilBase-qmod\n[ 83%] Built target MysqlSqlUtil-qmod\n[ 83%] Built target OracleSqlUtilBase-qmod\n[ 83%] Built target PgsqlSqlUtilBase-qmod\n[ 83%] Built target Sqlite3SqlUtil-qmod\n[ 83%] Built target XdbcFirebirdSqlUtilBase-qmod\n[ 83%] Built target TableMapper-qmod\n[ 83%] Built target FtpPoller-qmod\n[ 83%] Built target SchemaReverse-qmod\n[ 83%] Built target FreetdsSqlUtil-qmod\n[ 83%] Built target JdbcMicrosoftSqlUtil-qmod\n[ 83%] Built target OracleSqlUtil-qmod\n[ 83%] Built target JdbcOracleSqlUtil-qmod\n[ 83%] Built target PgsqlSqlUtil-qmod\n[ 83%] Built target JdbcPostgresqlSqlUtil-qmod\n[ 83%] Built target JdbcFirebirdSqlUtil-qmod\n[ 83%] Built target OdbcFirebirdSqlUtil-qmod\n[ 83%] Built target GraphQLDataProvider-qmod\n[ 83%] Built target NdjsonDataProvider-qmod\n[ 83%] Built target GeneratorDataProvider-qmod\n[ 83%] Built target JsonFileDataProvider-qmod\n[ 83%] Built target Connect-qmod\n[ 83%] Built target YamlDocumentDataProvider-qmod\n[ 83%] Built target QoreModelRegistry-qmod\nqcc: module compilation (-O3): 1386808 bytes for 146 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/RestSchemaValidator.qmod\n[ 83%] Link RestSchemaValidator.qmod into source qlib\n[ 83%] Built target RestSchemaValidator-qmod\n[ 83%] Built target AsyncApi-qmod\n[ 83%] Built target Swagger-qmod\n[ 84%] Built target OpenApi3-qmod\n[ 84%] Built target WebSocketHandler-qmod\n[ 84%] AOT compile RestHandler.qmod\n[ 84%] Built target HttpClientStreamingIo-qmod\n[ 85%] Built target DebugHandler-qmod\n[ 85%] Built target ServerSentEventHandler-qmod\n[ 85%] AOT compile QoreRepl.qmod\n[ 85%] Built target GraphQLHandler-qmod\nqcc: split module compilation (-O3): 2361176 bytes for 245 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/ConnectionProvider/ConnectionProvider.qmod\n[ 85%] Link ConnectionProvider.qmod into source qlib\n[ 85%] Built target ConnectionProvider-qmod\n[ 85%] Built target RestClient-qmod\n[ 85%] Built target MllpUtil-qmod\n[ 85%] Built target TelnetClient-qmod\n[ 85%] Built target DpqlWebSocket-qmod\n[ 85%] Built target UrlDownloader-qmod\n[ 85%] Built target WebSocketClient-qmod\n[ 85%] Built target Pop3Client-qmod\n[ 85%] Built target ImapClient-qmod\n[ 86%] Built target SewioWebSocketClient-qmod\n[ 86%] Built target SmtpClient-qmod\n[ 86%] AOT compile ProviderIndex.qmod\n[ 86%] Built target DbDataProvider-qmod\n[ 86%] Built target ImapClientDataProvider-qmod\n[ 86%] Built target Pop3ClientDataProvider-qmod\n[ 86%] Built target AsyncApiDataProvider-qmod\n[ 87%] Built target MemcachedDataProvider-qmod\n[ 87%] Built target RedisDataProvider-qmod\n[ 87%] Built target AgUi-qmod\n[ 87%] Built target JsonRpcClientIo-qmod\n[ 87%] Built target McpClient-qmod\n[ 87%] Built target OneRecordClient-qmod\n[ 87%] Built target ConnectDataProvider-qmod\n[ 87%] Built target DataStreamClient-qmod\n[ 87%] Built target YamlRpcClientIo-qmod\n[ 87%] Built target RestClientIo-qmod\n[ 87%] Built target DiscordWebSocketClient-qmod\nqcc: module compilation (-O3): 1283552 bytes for 71 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/RestHandler.qmod\n[ 87%] Link RestHandler.qmod into source qlib\n[ 87%] Built target ServerSentEventClient-qmod\n[ 87%] Built target RestHandler-qmod\n[ 87%] Built target SalesforceRestClient-qmod\n[ 87%] Built target SewioRestClient-qmod\n[ 87%] Built target ZeyosRestClient-qmod\n[ 87%] Built target BigCommerceRestClient-qmod\n[ 87%] Built target BillwerkRestClient-qmod\n[ 87%] Built target BitlyRestClient-qmod\n[ 87%] Built target CircleRestClient-qmod\n[ 87%] Built target InsightlyRestClient-qmod\n[ 87%] Built target SmartSheetRestClient-qmod\n[ 87%] Built target GorgiasRestClient-qmod\n[ 87%] Built target Sap4HanaRestClient-qmod\n[ 87%] Built target CdsRestClient-qmod\n[ 87%] Built target ChargebeeRestClient-qmod\n[ 87%] Built target CloseRestClient-qmod\n[ 87%] Built target DiscordRestClient-qmod\n[ 87%] Built target EasyPostRestClient-qmod\n[ 87%] Built target ElevenLabsRestClient-qmod\n[ 87%] Built target FirecrawlRestClient-qmod\n[ 87%] Built target FreshBooksRestClient-qmod\n[ 87%] Built target FreshsalesRestClient-qmod\n[ 87%] Built target GeminiBodyShape-qmod\n[ 87%] Built target LinearRestClient-qmod\n[ 87%] Built target LinkedInRestClient-qmod\n[ 87%] Built target PaddleRestClient-qmod\n[ 87%] Built target StripeRestClient-qmod\n[ 87%] Built target WaveRestClient-qmod\n[ 87%] Built target WooCommerceRestClient-qmod\n[ 87%] Built target GoogleRestClient-qmod\nqcc: split module compilation (-O3): 1631584 bytes for 128 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreRepl/QoreRepl.qmod\n[ 87%] Built target HueRestClient-qmod\n[ 87%] Link QoreRepl.qmod into source qlib\n[ 87%] Built target JotformRestClient-qmod\n[ 87%] Built target QoreRepl-qmod\n[ 87%] Built target MailgunRestClient-qmod\n[ 87%] Built target MewsRestClient-qmod\n[ 87%] Built target NetSuiteRestClient-qmod\n[ 87%] Built target AftershipRestClient-qmod\n[ 87%] Built target BaseLinkerRestClient-qmod\n[ 87%] Built target AnthropicRestClient-qmod\n[ 87%] Built target TallyRestClient-qmod\n[ 87%] Built target OneDriveRestClient-qmod\n[ 87%] Built target DropboxRestClient-qmod\n[ 87%] Built target HuggingFaceRestClient-qmod\n[ 87%] Built target SegmentRestClient-qmod\n[ 87%] Built target LemlistRestClient-qmod\n[ 87%] Built target ServiceNowRestClient-qmod\n[ 87%] Built target ShipStationRestClient-qmod\n[ 87%] Built target SystemeIoRestClient-qmod\n[ 87%] Built target SendCloudRestClient-qmod\n[ 87%] Built target CustomerIoRestClient-qmod\n[ 87%] Built target InstantlyRestClient-qmod\n[ 87%] Built target ShippoRestClient-qmod\n[ 87%] Built target DeelRestClient-qmod\n[ 87%] Built target PdfCoRestClient-qmod\n[ 87%] Built target GoHighLevelRestClient-qmod\n[ 87%] Built target ApolloRestClient-qmod\n[ 87%] Built target KitRestClient-qmod\n[ 87%] Built target KeapRestClient-qmod\n[ 87%] Built target ConstantContactRestClient-qmod\n[ 87%] Built target SquarespaceRestClient-qmod\n[ 87%] Built target SquareRestClient-qmod\n[ 87%] Built target TableauRestClient-qmod\n[ 87%] Built target ClickFunnelsRestClient-qmod\n[ 87%] Built target Cin7CoreRestClient-qmod\n[ 87%] Built target UnbounceRestClient-qmod\n[ 87%] Built target UnleashedRestClient-qmod\n[ 87%] Built target KatanaRestClient-qmod\n[ 87%] Built target ZohoBooksRestClient-qmod\n[ 87%] Built target ZohoInvoiceRestClient-qmod\n[ 87%] Built target ZohoInventoryRestClient-qmod\n[ 87%] Built target AwsRestClient-qmod\n[ 87%] Built target AzureAuth-qmod\n[ 87%] Built target RestSchemaDataProvider-qmod\n[ 87%] Built target GcpAuth-qmod\n[ 87%] Built target DeepgramRestClient-qmod\n[ 87%] Built target AssemblyAiRestClient-qmod\n[ 87%] Built target AwsTextractRestClient-qmod\n[ 87%] Built target GoogleDocumentAiRestClient-qmod\n[ 87%] Built target GoogleCloudStorageRestClient-qmod\n[ 87%] Built target AzureDocumentIntelligenceRestClient-qmod\n[ 87%] Built target TavilyRestClient-qmod\n[ 87%] Built target ExaRestClient-qmod\n[ 87%] Built target SwaggerDataProvider-qmod\n[ 87%] Built target OpenApi3DataProvider-qmod\n[ 87%] Built target BigCommerceDataProvider-qmod\n[ 87%] Built target BitlyDataProvider-qmod\n[ 87%] Built target CircleDataProvider-qmod\n[ 89%] Built target InsightlyDataProvider-qmod\n[ 89%] Built target SmartSheetDataProvider-qmod\n[ 90%] Built target GorgiasDataProvider-qmod\n[ 90%] Built target CdsRestDataProvider-qmod\n[ 90%] Built target ServiceNowRestDataProvider-qmod\n[ 90%] Built target ElasticSearchDataProvider-qmod\n[ 90%] Built target SearchIndexDataProvider-qmod\n[ 91%] Built target RestClientDataProvider-qmod\n[ 91%] Built target OpenSearchLoggerAppender-qmod\n[ 91%] Built target ElasticSearchLoggerAppender-qmod\n[ 91%] Built target EmpathicBuildingDataProvider-qmod\n[ 91%] Built target SalesforceRestDataProvider-qmod\n[ 91%] Built target AwsRestClientDataProvider-qmod\n[ 92%] Built target AwsS3DataProvider-qmod\n[ 92%] Built target GoogleDataProvider-qmod\n[ 92%] Built target DiscordDataProvider-qmod\n[ 92%] Built target EasyPostDataProvider-qmod\n[ 92%] Built target FirecrawlDataProvider-qmod\n[ 92%] Built target ElevenLabsDataProvider-qmod\n[ 92%] Built target FreshBooksDataProvider-qmod\n[ 92%] Built target FreshsalesDataProvider-qmod\n[ 92%] Built target LinearDataProvider-qmod\n[ 92%] Built target LinkedInDataProvider-qmod\n[ 92%] Built target BitbucketRestClient-qmod\n[ 92%] Built target ConfluenceRestClient-qmod\n[ 92%] Built target GitLabRestClient-qmod\n[ 92%] Built target GitHubRestClient-qmod\n[ 92%] Built target XeroRestClient-qmod\n[ 92%] Built target IntercomRestClient-qmod\n[ 92%] Built target KlaviyoRestClient-qmod\n[ 92%] Built target LinkedInOrganizationsDataProvider-qmod\n[ 92%] Built target WaveDataProvider-qmod\n[ 92%] Built target WooCommerceDataProvider-qmod\n[ 92%] Built target JotformDataProvider-qmod\n[ 92%] Built target MailgunDataProvider-qmod\n[ 92%] Built target MewsRestDataProvider-qmod\n[ 92%] Built target AftershipDataProvider-qmod\n[ 92%] Built target BaseLinkerDataProvider-qmod\n[ 92%] Built target AnthropicDataProvider-qmod\n[ 92%] Built target TallyDataProvider-qmod\n[ 92%] Built target OneDriveDataProvider-qmod\n[ 92%] Built target GoogleCloudStorageDataProvider-qmod\n[ 92%] Built target HuggingFaceDataProvider-qmod\n[ 92%] Built target SegmentDataProvider-qmod\n[ 92%] Built target GoogleDriveDataProvider-qmod\n[ 92%] Built target GoogleCalendarDataProvider-qmod\n[ 92%] Built target DropboxDataProvider-qmod\n[ 92%] Built target GmailDataProvider-qmod\n[ 93%] Built target ZohoBooksDataProvider-qmod\n[ 93%] Built target ZohoInventoryDataProvider-qmod\n[ 93%] Built target LemlistDataProvider-qmod\n[ 93%] Built target ShipStationDataProvider-qmod\n[ 93%] Built target ZohoInvoiceDataProvider-qmod\n[ 93%] Built target SendCloudDataProvider-qmod\n[ 93%] Built target CustomerIoDataProvider-qmod\n[ 93%] Built target SystemeIoDataProvider-qmod\n[ 93%] Built target ShippoDataProvider-qmod\n[ 93%] Built target DeelDataProvider-qmod\n[ 93%] Built target InstantlyDataProvider-qmod\n[ 93%] Built target GoHighLevelDataProvider-qmod\n[ 93%] Built target PdfCoDataProvider-qmod\n[ 93%] Built target ApolloDataProvider-qmod\n[ 93%] Built target ConstantContactDataProvider-qmod\n[ 93%] Built target KitDataProvider-qmod\n[ 93%] Built target KeapDataProvider-qmod\n[ 93%] Built target ChargebeeDataProvider-qmod\n[ 93%] Built target SquareDataProvider-qmod\n[ 93%] Built target CloseDataProvider-qmod\nqcc: split module compilation (-O3): 1982432 bytes for 66 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/ProviderIndex/ProviderIndex.qmod\n[ 93%] Link ProviderIndex.qmod into source qlib\n[ 93%] Built target SquarespaceDataProvider-qmod\n[ 93%] Built target TableauDataProvider-qmod\n[ 93%] Built target Cin7CoreDataProvider-qmod\n[ 93%] Built target ProviderIndex-qmod\n[ 93%] Built target UnleashedDataProvider-qmod\n[ 93%] Built target ClickFunnelsDataProvider-qmod\n[ 93%] Built target UnbounceDataProvider-qmod\n[ 95%] Built target KatanaDataProvider-qmod\n[ 95%] Built target FhirRestClient-qmod\n[ 95%] Built target JsonRpcConnection-qmod\n[ 95%] Built target A2aClient-qmod\n[ 95%] Built target McpClientDataProvider-qmod\n[ 95%] Built target OneRecordServerHandler-qmod\n[ 95%] Built target DataStreamClientIo-qmod\n[ 95%] Built target McpServerHandler-qmod\n[ 95%] Built target DataStreamRequestHandler-qmod\n[ 95%] Built target YamlRpcClient-qmod\n[ 95%] AOT compile QoreRagTypes.qmod\n[ 95%] Built target QoreTokenizerUtils-qmod\n[ 95%] Built target QoreOcrUtils-qmod\n[ 95%] Built target RestSchemaActions-qmod\n[ 95%] Built target DeepgramDataProvider-qmod\n[ 95%] Built target AwsTextractDataProvider-qmod\n[ 95%] Built target TavilyDataProvider-qmod\n[ 96%] Built target ExaDataProvider-qmod\n[ 97%] Built target ConfluenceDataProvider-qmod\n[ 98%] Built target BitbucketDataProvider-qmod\n[ 98%] Built target GitLabDataProvider-qmod\n[ 98%] Built target GitHubDataProvider-qmod\n[ 98%] Built target XeroDataProvider-qmod\n[ 98%] Built target PaddleDataProvider-qmod\n[ 98%] Built target StripeDataProvider-qmod\n[ 98%] Built target IntercomDataProvider-qmod\n[ 98%] Built target KlaviyoDataProvider-qmod\n[ 98%] Built target SharePointDataProvider-qmod\n[ 98%] Built target A2aClientDataProvider-qmod\n[ 98%] Built target A2aServerHandler-qmod\n[ 98%] Built target FhirRestDataProvider-qmod\n[ 98%] Built target DataProviderML-qmod\n[ 98%] Built target AssemblyAiDataProvider-qmod\n[ 98%] Built target GoogleDocumentAiDataProvider-qmod\n[ 98%] Built target StabilityAiRestClient-qmod\n[ 98%] Built target AzureDocumentIntelligenceDataProvider-qmod\n[ 98%] Built target BflRestClient-qmod\n[ 98%] Built target StabilityAiDataProvider-qmod\n[ 98%] Built target BflDataProvider-qmod\nqcc: module compilation (-O3): 392736 bytes for 69 Qore code variants (target: arm64-apple-darwin27.0.0): /Users/david/src/qore/git/qore/build/qlib-qmod/QoreRagTypes.qmod\n[ 98%] Link QoreRagTypes.qmod into source qlib\n[ 98%] Built target QoreRagTypes-qmod\n[ 98%] Built target VoyageRestClient-qmod\n[ 98%] Built target LoggerSemanticSearch-qmod\n[ 98%] Built target GeminiRestClient-qmod\n[ 98%] Built target QoreRagUtils-qmod\n[ 98%] Built target BgeM3RestClient-qmod\n[ 98%] Built target OpenAiRestClient-qmod\n[ 98%] Built target BedrockRestClient-qmod\n[ 98%] Built target VertexAiRestClient-qmod\n[ 98%] Built target JinaRestClient-qmod\n[ 98%] Built target MistralRestClient-qmod\n[ 98%] Built target CohereRestClient-qmod\n[ 98%] Built target ChromaRestClient-qmod\n[ 98%] Built target PineconeRestClient-qmod\n[ 98%] Built target WeaviateRestClient-qmod\n[ 98%] Built target LlamaParseRestClient-qmod\n[ 98%] Built target MilvusRestClient-qmod\n[ 98%] Built target UnstructuredRestClient-qmod\n[ 98%] Built target MongoDbDataProvider-qmod\n[ 98%] Built target OpenSearchDataProvider-qmod\n[ 98%] Built target QdrantDataProvider-qmod\n[ 98%] Built target GeminiDataProvider-qmod\n[100%] Built target VoyageDataProvider-qmod\n[100%] Built target BgeM3FastApiDataProvider-qmod\n[100%] Built target OpenAiDataProvider-qmod\n[100%] Built target SGLangRestClient-qmod\n[100%] Built target GrokRestClient-qmod\n[100%] Built target PerplexityRestClient-qmod\n[100%] Built target AzureOpenAiRestClient-qmod\n[100%] Built target BedrockDataProvider-qmod\n[100%] Built target DeepSeekRestClient-qmod\n[100%] Built target VertexAiDataProvider-qmod\n[100%] Built target GroqRestClient-qmod\n[100%] Built target TogetherRestClient-qmod\n[100%] Built target OllamaRestClient-qmod\n[100%] Built target FireworksRestClient-qmod\n[100%] Built target JinaDataProvider-qmod\n[100%] Built target CohereDataProvider-qmod\n[100%] Built target ChromaDataProvider-qmod\n[100%] Built target MistralDataProvider-qmod\n[100%] Built target PineconeDataProvider-qmod\n[100%] Built target WeaviateDataProvider-qmod\n[100%] Built target MilvusDataProvider-qmod\n[100%] Built target LlamaParseDataProvider-qmod\n[100%] Built target UnstructuredDataProvider-qmod\n[100%] Built target SGLangDataProvider-qmod\n[100%] Built target PerplexityDataProvider-qmod\n[100%] Built target GrokDataProvider-qmod\n[100%] Built target AzureOpenAiDataProvider-qmod\n[100%] Built target DeepSeekDataProvider-qmod\n[100%] Built target TogetherDataProvider-qmod\n[100%] Built target GroqDataProvider-qmod\n[100%] Built target FireworksDataProvider-qmod\n[100%] Built target OllamaDataProvider-qmod\n[100%] Ensuring in-tree source qmod symlinks\n[100%] Built target qore-ensure-source-qmod-symlinks\n",
+          "stderr": "-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- GLOB mismatch!\n-- ICONV_LIBRARY_TYPE is GNU libiconv\nCMake Warning at build/_deps/ngtcp2-src/crypto/CMakeLists.txt:31 (message):\n  libngtcp2_crypto_quictls library is disabled due to lack of good quictls\n\n\nCMake Warning at build/_deps/ngtcp2-src/crypto/CMakeLists.txt:37 (message):\n  libngtcp2_crypto_libressl library is disabled due to lack of good LibreSSL\n\n\nCMake Warning at cmake/QoreMacrosIntern.cmake:666 (message):\n  couldn't find an STL slist\nCall Stack (most recent call first):\n  CMakeLists.txt:1565 (qore_stl_slist)\n\n\nCMake Warning (dev) at /Users/david/src/qore/git/qore/cmake/EnsureSourceQmodSymlinks.cmake:41 (file):\n  Policy CMP0009 is not set: FILE GLOB_RECURSE calls should not follow\n  symlinks by default.  Run \"cmake --help-policy CMP0009\" for policy details.\n  Use the cmake_policy command to set the policy and suppress this warning.\nThis warning is for project developers.  Use -Wno-dev to suppress it.\n\nld: warning: ignoring duplicate libraries: '_deps/ngtcp2-build/lib/libngtcp2.a'\nwarning encountered at /Users/david/src/qore/git/qore/qlib/QLS/QLSServer.qc:3858 (Qore builtin code)\nDUPLICATE-LOCAL-VARIABLE: local variable 'doc' was already declared in this lexical scope at /Users/david/src/qore/git/qore/qlib/QLS/QLSServer.qc:3684\nCMake Warning (dev) at /Users/david/src/qore/git/qore/cmake/EnsureSourceQmodSymlinks.cmake:41 (file):\n  Policy CMP0009 is not set: FILE GLOB_RECURSE calls should not follow\n  symlinks by default.  Run \"cmake --help-policy CMP0009\" for policy details.\n  Use the cmake_policy command to set the policy and suppress this warning.\nThis warning is for project developers.  Use -Wno-dev to suppress it.\n\n"
+        }
+      }
+    },
+    "tests": {
+      "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig",
+      "json": {
+        "completed.json": {
+          "verified": true,
+          "rows": [
+            {
+              "name": "ast-qore_vars_date-iso8601-duration-strings",
+              "mode": "ast",
+              "test": "qore/vars/date-iso8601-duration-strings",
+              "summary": [
+                "5",
+                "5",
+                "960"
+              ],
+              "process_sha256": "e892f4458b8a57ad19f53b120986f5aa29273e1d23f1439e4470bc09ac539f4a"
+            },
+            {
+              "name": "ast-qore_vars_date",
+              "mode": "ast",
+              "test": "qore/vars/date",
+              "summary": [
+                "10",
+                "10",
+                "1557"
+              ],
+              "process_sha256": "c71ee1d41cca3ade4c6d1041ae499c64b16110a485e5e2ade834ff770bc30f79"
+            },
+            {
+              "name": "ast-qore_functions_date_durations",
+              "mode": "ast",
+              "test": "qore/functions/date_durations",
+              "summary": [
+                "5",
+                "5",
+                "253"
+              ],
+              "process_sha256": "da4b25e1ad97255c2c147eece8aa886e13d9775acf78395520a0b5b5714e4af0"
+            },
+            {
+              "name": "ast-qore_vars_date-utc-offset",
+              "mode": "ast",
+              "test": "qore/vars/date-utc-offset",
+              "summary": [
+                "5",
+                "5",
+                "611"
+              ],
+              "process_sha256": "d9c71a98477d931444027dbba6d3dc03fb93d8d83f7de0ec93a09fb00910e2e8"
+            },
+            {
+              "name": "ast-qore_vars_timezone-date-errors",
+              "mode": "ast",
+              "test": "qore/vars/timezone-date-errors",
+              "summary": [
+                "5",
+                "5",
+                "59"
+              ],
+              "process_sha256": "92d975832e46f49964f7205db24933d6878de6ff8a3130bd6d015cd113248174"
+            },
+            {
+              "name": "ast-qore_misc_date-format-codes",
+              "mode": "ast",
+              "test": "qore/misc/date-format-codes",
+              "summary": [
+                "4",
+                "4",
+                "13"
+              ],
+              "process_sha256": "2907539f528616a50d0a8ffc3e76e460c46192b699927ab13213f369023740a9"
+            },
+            {
+              "name": "ir-qore_vars_date-iso8601-duration-strings",
+              "mode": "ir",
+              "test": "qore/vars/date-iso8601-duration-strings",
+              "summary": [
+                "5",
+                "5",
+                "960"
+              ],
+              "process_sha256": "ef0d531d494783f309e0227edb89c9c2d3c953e8ca7466f9ff4246c3f6f2a142"
+            },
+            {
+              "name": "ir-qore_vars_date",
+              "mode": "ir",
+              "test": "qore/vars/date",
+              "summary": [
+                "10",
+                "10",
+                "1557"
+              ],
+              "process_sha256": "c5231707fc644f32f28dec314d22145091b061984d4f515b625caa989b843ad9"
+            },
+            {
+              "name": "ir-qore_functions_date_durations",
+              "mode": "ir",
+              "test": "qore/functions/date_durations",
+              "summary": [
+                "5",
+                "5",
+                "253"
+              ],
+              "process_sha256": "cdaf64b9fa275ff89e351c6b65fe9666747a764e16e305abb422a70e2fd6177c"
+            },
+            {
+              "name": "ir-qore_vars_date-utc-offset",
+              "mode": "ir",
+              "test": "qore/vars/date-utc-offset",
+              "summary": [
+                "5",
+                "5",
+                "611"
+              ],
+              "process_sha256": "aaa85577fd0161d735aae4ce2dfae4511f7a2a7d04015e53f8b6f287be50514c"
+            },
+            {
+              "name": "ir-qore_vars_timezone-date-errors",
+              "mode": "ir",
+              "test": "qore/vars/timezone-date-errors",
+              "summary": [
+                "5",
+                "5",
+                "59"
+              ],
+              "process_sha256": "5994fda89e9b74bfbddac00a0e838ba4fe8b893b141ca8f4e973ad2c2280bde5"
+            },
+            {
+              "name": "ir-qore_misc_date-format-codes",
+              "mode": "ir",
+              "test": "qore/misc/date-format-codes",
+              "summary": [
+                "4",
+                "4",
+                "13"
+              ],
+              "process_sha256": "b12c2509b338c0f0f4f53dfbf8003d9ce3ad59400a77982a30448ef68cc00525"
+            },
+            {
+              "name": "jit-qore_vars_date-iso8601-duration-strings",
+              "mode": "jit",
+              "test": "qore/vars/date-iso8601-duration-strings",
+              "summary": [
+                "5",
+                "5",
+                "960"
+              ],
+              "process_sha256": "4f414f0d6189dd19eb9115cff84ef78d7fb73ba35fac8f34ec6c999b0a4cfde0"
+            },
+            {
+              "name": "jit-qore_vars_date",
+              "mode": "jit",
+              "test": "qore/vars/date",
+              "summary": [
+                "10",
+                "10",
+                "1557"
+              ],
+              "process_sha256": "2ac58f8342f5f8fee003f832760dd4e2740b2b21dde01b7cf3b3cb0ca48b6cd3"
+            },
+            {
+              "name": "jit-qore_functions_date_durations",
+              "mode": "jit",
+              "test": "qore/functions/date_durations",
+              "summary": [
+                "5",
+                "5",
+                "253"
+              ],
+              "process_sha256": "5319004ab98aef7c221f89299052bd41f8229bc8b13bd39fa7005bd037accf28"
+            },
+            {
+              "name": "jit-qore_vars_date-utc-offset",
+              "mode": "jit",
+              "test": "qore/vars/date-utc-offset",
+              "summary": [
+                "5",
+                "5",
+                "611"
+              ],
+              "process_sha256": "f9ec5523733d975c0d7c4c55f0953083748575d18b748d51a6481ad673331256"
+            },
+            {
+              "name": "jit-qore_vars_timezone-date-errors",
+              "mode": "jit",
+              "test": "qore/vars/timezone-date-errors",
+              "summary": [
+                "5",
+                "5",
+                "59"
+              ],
+              "process_sha256": "09791ce9904a8131a0f7478ae761cb54fa9a8d13d062a97938c3d0da054534c5"
+            },
+            {
+              "name": "jit-qore_misc_date-format-codes",
+              "mode": "jit",
+              "test": "qore/misc/date-format-codes",
+              "summary": [
+                "4",
+                "4",
+                "13"
+              ],
+              "process_sha256": "b20a3c7576f933b930dbf6af4279daff769b2d8141627b2ab2d58cb916d5cb60"
+            }
+          ],
+          "native": [
+            "duration",
+            "extended-year"
+          ]
+        },
+        "independent-review.json": {
+          "verified": true,
+          "processes": 22,
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "driver_sha256": "f9f6c6105a99ebc0eec3ae4af42593c5e65b8bce5014b03c756fc3b8ea6fb673",
+          "fixtures": 18,
+          "cases": 102,
+          "assertions": 10359,
+          "native_checks": 2
+        },
+        "metadata.json": {
+          "head": "2d609171f7f08e85ae07e767e16219f331903f29",
+          "merge": "3955cf3ac35cd77504c5aee659b23b1a0a71a1a7",
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "runtime_sha256": {
+            "qore": "efe50ae679faea707e8567e7f0f6854fef8fcdb69df4a9d8fbb5cdf4857d129f",
+            "qcc": "4f0c67654f5041e3eeefee7aff7d44ab326b85fa06a175d6e4865fea0ad92477",
+            "libqore.20.dylib": "e5052abfe00ce699dda88ad0b56ea7e26072f039c024f77974800b06cf1471b4"
+          },
+          "driver_sha256": "96741ca0720955d99c0b782ac230dfc65441eedef69ab9d02a85d675027dfbfc"
+        },
+        "terminal.json": {
+          "argv": [
+            "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1.py"
+          ],
+          "exit_code": 0,
+          "child_waited": true,
+          "started": "2026-10-31T00:56:04.786495+00:00",
+          "finished": "2026-10-31T00:56:12.947740+00:00",
+          "driver_sha256": "96741ca0720955d99c0b782ac230dfc65441eedef69ab9d02a85d675027dfbfc",
+          "log": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1.py.stage.log",
+          "log_sha256": "a4b42c59423779e6a39ca40d9d6fc060174d95a9327d0484a13cf9c2697a143d",
+          "source": "Actual subprocess.wait()"
+        }
+      },
+      "processes": {
+        "ast-qore_functions_date_durations": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ast",
+              "/Users/david/src/qore/git/qore/examples/test/qore/functions/date_durations.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "0e65ea66f794bca889267bae9c6d8e6e447b2366bc5deb5eba74a8c6134d9d9c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateDurationsTest\" v1.0\nRan 5 test cases, 5 succeeded (253 assertions)\n",
+          "stderr": ""
+        },
+        "ast-qore_misc_date-format-codes": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ast",
+              "/Users/david/src/qore/git/qore/examples/test/qore/misc/date-format-codes.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "584782d056fd4846efb332e51390305606d2ac6939ede200a35b1aea68b3ee9b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateFormatCodeTest\" v1.0\nRan 4 test cases, 4 succeeded (13 assertions)\n",
+          "stderr": ""
+        },
+        "ast-qore_vars_date-iso8601-duration-strings": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ast",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date-iso8601-duration-strings.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "523230c2ebc74fbc2b6607837ff66fa5e2ffb98ae0d5b13b51b6581b9c3ad771",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"ISO 8601 duration strings\" v1.0\nRan 5 test cases, 5 succeeded (960 assertions)\n",
+          "stderr": ""
+        },
+        "ast-qore_vars_date-utc-offset": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ast",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date-utc-offset.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "6b99f51db7c8540b2a03fadc1c632e1ff84b676ef1d11c433a828577eea30753",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"Date UTC offset at the represented instant\" v1.0\nRan 5 test cases, 5 succeeded (611 assertions)\n",
+          "stderr": ""
+        },
+        "ast-qore_vars_date": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ast",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "f2965a23b71230db481587c65d0a8600ad13af52efd6f92d15eee60fb6ff12e2",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateTest\" v1.0\nSkipped: WindowsTimeZoneTests: 0 assertions (skipping because the test is not run on Windows)\n2026-10-31 00:56:05.266309: Skip requested at /Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest:332 [DateTest::windowsTimeZoneTests()] <- /Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest:30 [DateTest::constructor()]\n-----\n\t>> skipping because the test is not run on Windows\n-----\nRan 10 test cases, 10 succeeded (1557 assertions)\n",
+          "stderr": ""
+        },
+        "ast-qore_vars_timezone-date-errors": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ast",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/timezone-date-errors.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "efb67273abf7c601d4f5b53575c9762a8e748f228f23d004be4bf5e96e50b289",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"TimeZone date errors\" v1.0\nRan 5 test cases, 5 succeeded (59 assertions)\n",
+          "stderr": ""
+        },
+        "compile-duration": {
+          "receipt": {
+            "argv": [
+              "c++",
+              "-std=c++17",
+              "-O3",
+              "-DNDEBUG",
+              "-pthread",
+              "-mmacosx-version-min=28.0",
+              "-I/Users/david/src/qore/git/qore/build/include",
+              "-I/Users/david/src/qore/git/qore/include",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/iso8601_duration_cancellation.cpp",
+              "-L/Users/david/src/qore/git/qore/build",
+              "-Wl,-rpath,/Users/david/src/qore/git/qore/build",
+              "-lqore",
+              "-o",
+              "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig/duration"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "",
+          "stderr": ""
+        },
+        "compile-extended-year": {
+          "receipt": {
+            "argv": [
+              "c++",
+              "-std=c++17",
+              "-O3",
+              "-DNDEBUG",
+              "-pthread",
+              "-mmacosx-version-min=28.0",
+              "-I/Users/david/src/qore/git/qore/build/include",
+              "-I/Users/david/src/qore/git/qore/include",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/extended_year_cancellation.cpp",
+              "-L/Users/david/src/qore/git/qore/build",
+              "-Wl,-rpath,/Users/david/src/qore/git/qore/build",
+              "-lqore",
+              "-o",
+              "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig/extended-year"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "",
+          "stderr": ""
+        },
+        "ir-qore_functions_date_durations": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/qore/functions/date_durations.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "0e65ea66f794bca889267bae9c6d8e6e447b2366bc5deb5eba74a8c6134d9d9c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateDurationsTest\" v1.0\nRan 5 test cases, 5 succeeded (253 assertions)\n",
+          "stderr": ""
+        },
+        "ir-qore_misc_date-format-codes": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/qore/misc/date-format-codes.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "584782d056fd4846efb332e51390305606d2ac6939ede200a35b1aea68b3ee9b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateFormatCodeTest\" v1.0\nRan 4 test cases, 4 succeeded (13 assertions)\n",
+          "stderr": ""
+        },
+        "ir-qore_vars_date-iso8601-duration-strings": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date-iso8601-duration-strings.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "523230c2ebc74fbc2b6607837ff66fa5e2ffb98ae0d5b13b51b6581b9c3ad771",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"ISO 8601 duration strings\" v1.0\nRan 5 test cases, 5 succeeded (960 assertions)\n",
+          "stderr": ""
+        },
+        "ir-qore_vars_date-utc-offset": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date-utc-offset.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "6b99f51db7c8540b2a03fadc1c632e1ff84b676ef1d11c433a828577eea30753",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"Date UTC offset at the represented instant\" v1.0\nRan 5 test cases, 5 succeeded (611 assertions)\n",
+          "stderr": ""
+        },
+        "ir-qore_vars_date": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "2fe3ab6c5a7f5943f9ca279003a0043cd01ea3c1bb8e993c9191e1203d11ce43",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateTest\" v1.0\nSkipped: WindowsTimeZoneTests: 0 assertions (skipping because the test is not run on Windows)\n2026-10-31 00:56:07.085810: Skip requested at /Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest:332 [DateTest::windowsTimeZoneTests()] <- /Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest:30 [DateTest::constructor()]\n-----\n\t>> skipping because the test is not run on Windows\n-----\nRan 10 test cases, 10 succeeded (1557 assertions)\n",
+          "stderr": ""
+        },
+        "ir-qore_vars_timezone-date-errors": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/timezone-date-errors.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "efb67273abf7c601d4f5b53575c9762a8e748f228f23d004be4bf5e96e50b289",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"TimeZone date errors\" v1.0\nRan 5 test cases, 5 succeeded (59 assertions)\n",
+          "stderr": ""
+        },
+        "jit-qore_functions_date_durations": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=jit",
+              "/Users/david/src/qore/git/qore/examples/test/qore/functions/date_durations.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "0e65ea66f794bca889267bae9c6d8e6e447b2366bc5deb5eba74a8c6134d9d9c",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateDurationsTest\" v1.0\nRan 5 test cases, 5 succeeded (253 assertions)\n",
+          "stderr": ""
+        },
+        "jit-qore_misc_date-format-codes": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=jit",
+              "/Users/david/src/qore/git/qore/examples/test/qore/misc/date-format-codes.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "584782d056fd4846efb332e51390305606d2ac6939ede200a35b1aea68b3ee9b",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateFormatCodeTest\" v1.0\nRan 4 test cases, 4 succeeded (13 assertions)\n",
+          "stderr": ""
+        },
+        "jit-qore_vars_date-iso8601-duration-strings": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=jit",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date-iso8601-duration-strings.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "523230c2ebc74fbc2b6607837ff66fa5e2ffb98ae0d5b13b51b6581b9c3ad771",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"ISO 8601 duration strings\" v1.0\nRan 5 test cases, 5 succeeded (960 assertions)\n",
+          "stderr": ""
+        },
+        "jit-qore_vars_date-utc-offset": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=jit",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date-utc-offset.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "6b99f51db7c8540b2a03fadc1c632e1ff84b676ef1d11c433a828577eea30753",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"Date UTC offset at the represented instant\" v1.0\nRan 5 test cases, 5 succeeded (611 assertions)\n",
+          "stderr": ""
+        },
+        "jit-qore_vars_date": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=jit",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "7f8e35bc916e2daa894746afe6c8fc8be279d0b29a1ff21768085ef1bd768025",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"DateTest\" v1.0\nSkipped: WindowsTimeZoneTests: 0 assertions (skipping because the test is not run on Windows)\n2026-10-31 00:56:09.409569: Skip requested at /Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest:332 [DateTest::windowsTimeZoneTests()] <- /Users/david/src/qore/git/qore/examples/test/qore/vars/date.qtest:30 [DateTest::constructor()]\n-----\n\t>> skipping because the test is not run on Windows\n-----\nRan 10 test cases, 10 succeeded (1557 assertions)\n",
+          "stderr": ""
+        },
+        "jit-qore_vars_timezone-date-errors": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=jit",
+              "/Users/david/src/qore/git/qore/examples/test/qore/vars/timezone-date-errors.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "efb67273abf7c601d4f5b53575c9762a8e748f228f23d004be4bf5e96e50b289",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"TimeZone date errors\" v1.0\nRan 5 test cases, 5 succeeded (59 assertions)\n",
+          "stderr": ""
+        },
+        "native-duration": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig/duration"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "bb3a290dd1ce722dfc8dad62df504e0541c706dbf6e513f570e94c03aa1e7cb7",
+            "stderr_sha256": "942d9eb7923c4177c72adc58ebdfb54fb7f5eed2f9920114989633fe83d76747",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "iso8601-duration-cancellation: ok\n",
+          "stderr": {
+            "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig/native-duration.stderr",
+            "sha256": "942d9eb7923c4177c72adc58ebdfb54fb7f5eed2f9920114989633fe83d76747",
+            "bytes": 75829
+          }
+        },
+        "native-extended-year": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig/extended-year"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "80026b56d0cd58e4b392101353248fc05251a83dab215eb203a8a8ad214e06d8",
+            "stderr_sha256": "7e37da2270e172b9b2ac3d9d4a0d10c3aa8c4d8abaebea3cacb50312746963da",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "extended-year-cancellation: ok\n",
+          "stderr": {
+            "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-tests-v1-e1m9wgig/native-extended-year.stderr",
+            "sha256": "7e37da2270e172b9b2ac3d9d4a0d10c3aa8c4d8abaebea3cacb50312746963da",
+            "bytes": 75834
+          }
+        }
+      }
+    },
+    "aot": {
+      "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-aot-v1-build-jd2hjgdw",
+      "json": {
+        "completed.json": {
+          "verified": true,
+          "head": "2d609171f7f08e85ae07e767e16219f331903f29",
+          "rows": [
+            {
+              "test": "AOTPolymorphicScalar",
+              "summaries": [
+                [
+                  "1",
+                  "1",
+                  "1492"
+                ]
+              ],
+              "process_sha256": "799147fb4b0c21d8fc0b2ddc806132127a473931be44717cc09c229ee32bb931"
+            },
+            {
+              "test": "AOTExactReceiverIdentity",
+              "summaries": [
+                [
+                  "1",
+                  "1",
+                  "534"
+                ]
+              ],
+              "process_sha256": "4ae3993d27b52aaa73c7fb80bb47a58bcb5695328c5bcefb6c171c732b88fae2"
+            },
+            {
+              "test": "AOTPinnedBaseValidity",
+              "summaries": [
+                [
+                  "1",
+                  "1",
+                  "68"
+                ]
+              ],
+              "process_sha256": "13a6077142ad99ca01a5c6aaa76eefdaa29a758a117ee23a3c46a660b730b668"
+            },
+            {
+              "test": "AOTNativeBinaryCall",
+              "summaries": [
+                [
+                  "1",
+                  "1",
+                  "632"
+                ]
+              ],
+              "process_sha256": "ada9cee59eae9c153b61c4b7a41f9a36d8936faf2a19c654f08f10cbc286fe7b"
+            },
+            {
+              "test": "AOTDynamicClosureEntry",
+              "summaries": [
+                [
+                  "3",
+                  "3",
+                  "586"
+                ]
+              ],
+              "process_sha256": "8ae60b3050139914d7aba682a3b1f02fa88bd28b71f5c675bd80e202b0aa499b"
+            },
+            {
+              "test": "AOTDebugScalarReplacement",
+              "summaries": [
+                [
+                  "1",
+                  "1",
+                  "57"
+                ]
+              ],
+              "process_sha256": "c88e2b62835b5d2d2702d09c67ae7892e94f83e5fbc795148ac8f182832044f6"
+            },
+            {
+              "test": "NativeLeafContext",
+              "summaries": [
+                [
+                  "1",
+                  "1",
+                  "652"
+                ]
+              ],
+              "process_sha256": "6d7015c15aa15a2551425227007e3fb51638f1d24ad9f07ac1b6d85eb84acd62"
+            }
+          ]
+        },
+        "independent-review.json": {
+          "verified": true,
+          "processes": 7,
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "driver_sha256": "f9f6c6105a99ebc0eec3ae4af42593c5e65b8bce5014b03c756fc3b8ea6fb673",
+          "fixtures": 7,
+          "cases": 9,
+          "assertions": 4021
+        },
+        "metadata.json": {
+          "head": "2d609171f7f08e85ae07e767e16219f331903f29",
+          "tests": [
+            "AOTPolymorphicScalar",
+            "AOTExactReceiverIdentity",
+            "AOTPinnedBaseValidity",
+            "AOTNativeBinaryCall",
+            "AOTDynamicClosureEntry",
+            "AOTDebugScalarReplacement",
+            "NativeLeafContext"
+          ],
+          "tree": "/Users/david/src/qore/git/qore/build",
+          "source_sha256": {
+            "doxygen/lang/145_basic_data_types.dox.tmpl": "6939549b8fa096a3420713cf888fdd8a2e18a4cc077a97e5272cd220488bdcba",
+            "doxygen/lang/900_release_notes.dox.tmpl": "6ea736560bfa22f0c37ba8363d1830eefbbd0f0445a20dddc597a9d6fc90e86b",
+            "examples/test/qore/vars/date-iso8601-duration-strings.qtest": "7678fe5be7d39506ede8f818cf75b8fe50c769fce76391fa7a936223e41a46b6",
+            "examples/test/qore/vars/iso8601_duration_cancellation.cpp": "66c533d50fa42f95885e15245c67b3a991da749a7da782d51dbf74851c597913",
+            "include/qore/intern/qore_date_private.h": "2013e1feb0f9107e0dfc36d9a4b67c27757ffb721cb38280401411729e4d76ac",
+            "lib/ql_time.qpp": "3183b91b0553a58c3b965d53e4fd5251c9b892bd2347573ff091869d8479304b",
+            "lib/qore_date_private.cpp": "49211c2477807db52c424c98f6f27c40a766bcfe5a78ddd71dd64aac6367eaa5"
+          },
+          "driver_sha256": "b3198b1a40c269be781ae63b525e6e981bfc08942bec24898f82a9da7b89b1cd",
+          "runtime_sha256": {
+            "qore": "efe50ae679faea707e8567e7f0f6854fef8fcdb69df4a9d8fbb5cdf4857d129f",
+            "qcc": "4f0c67654f5041e3eeefee7aff7d44ab326b85fa06a175d6e4865fea0ad92477",
+            "libqore.20.dylib": "e5052abfe00ce699dda88ad0b56ea7e26072f039c024f77974800b06cf1471b4"
+          }
+        },
+        "terminal.json": {
+          "argv": [
+            "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-aot-v1.py",
+            "build",
+            "AOTPolymorphicScalar",
+            "AOTExactReceiverIdentity",
+            "AOTPinnedBaseValidity",
+            "AOTNativeBinaryCall",
+            "AOTDynamicClosureEntry",
+            "AOTDebugScalarReplacement",
+            "NativeLeafContext"
+          ],
+          "exit_code": 0,
+          "child_waited": true,
+          "started": "2026-10-31T00:56:18.356137+00:00",
+          "finished": "2026-10-31T00:59:25.928780+00:00",
+          "driver_sha256": "b3198b1a40c269be781ae63b525e6e981bfc08942bec24898f82a9da7b89b1cd",
+          "log": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/date-develop-aot-v1.py.6e787395e7219fcf.stage.log",
+          "log_sha256": "080bf3e8b82913585e0b6485413df90d9385bdcd20cd71f24d50f410583f5d84",
+          "source": "Actual subprocess.wait()"
+        }
+      },
+      "processes": {
+        "AOTDebugScalarReplacement": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/AOTDebugScalarReplacement.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "92c7c5129f2bf89c32832465bd646b2cc63c70b5a6038c467e90595b38fc9a87",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"Separate native and debug AOT aggregate IR\" v1.0\nRan 1 test case, 1 succeeded (57 assertions)\n",
+          "stderr": ""
+        },
+        "AOTDynamicClosureEntry": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/AOTDynamicClosureEntry.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "57a8870a0aeb4d5b3f0cbac795e8a94e980efc2a20e829cba92ab8ff31b17860",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"dynamic native closure entry\" v1.0\nRan 3 test cases, 3 succeeded (586 assertions)\n",
+          "stderr": ""
+        },
+        "AOTExactReceiverIdentity": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/AOTExactReceiverIdentity.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "46c51e53f72f8968137090af5c919967c8af30ee967b434285c499f077f276a0",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"AOT exact receiver identity\" v1.0\nRan 1 test case, 1 succeeded (534 assertions)\n",
+          "stderr": ""
+        },
+        "AOTNativeBinaryCall": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/AOTNativeBinaryCall.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "a03608b08a8839f1ae76349e232a6763c5397ac95b0cb70e6d593e1d09a8939a",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"native call binary arithmetic\" v1.0\nRan 1 test case, 1 succeeded (632 assertions)\n",
+          "stderr": ""
+        },
+        "AOTPinnedBaseValidity": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/AOTPinnedBaseValidity.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "ddc3879303e00e861b7b518e09f37f4c5fd9268d02e1377d93177162bae1f5d6",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"conditional receiver deletion\" v1.0\nRan 1 test case, 1 succeeded (68 assertions)\n",
+          "stderr": ""
+        },
+        "AOTPolymorphicScalar": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/AOTPolymorphicScalar.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "9db4db58a8972903ea21e6ebd6b3d37a5c6ad62a0badcb5acd8801a60833e1ad",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"bounded polymorphic scalar inlining\" v1.0\nRan 1 test case, 1 succeeded (1492 assertions)\n",
+          "stderr": ""
+        },
+        "NativeLeafContext": {
+          "receipt": {
+            "argv": [
+              "/Users/david/src/qore/git/qore/build/qore",
+              "--exec-mode=ir",
+              "/Users/david/src/qore/git/qore/examples/test/ir/NativeLeafContext.qtest"
+            ],
+            "exit_code": 0,
+            "child_waited": true,
+            "timed_out": false,
+            "stdout_sha256": "2a7db9de0407e1ffa6ca31cc104bc5c5f030024829a5768cff58d96204eba7e0",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "dependencies_checked": false,
+            "dependency_error": null
+          },
+          "stdout": "QUnit Test \"native leaf deferred context\" v1.0\nRan 1 test case, 1 succeeded (652 assertions)\n",
+          "stderr": ""
+        }
+      }
+    }
+  },
+  "audit": [
+    {
+      "number": 1,
+      "check": "Entry exists in `doxygen/lang/120_modules.dox.tmpl` (for modules in the Qore repo; N/A for external module repos)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 2,
+      "check": "Entry exists in `doxygen/lang/900_release_notes.dox.tmpl` (for modules in the Qore repo; external modules have release notes in their .qm)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 3,
+      "check": "`qore_user_module()` or `qore_external_user_module()` call in `CMakeLists.txt`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 4,
+      "check": "Module added to QMOD list in `CMakeLists.txt`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 5,
+      "check": "`.qm` file has `@section <lowercasemodname>intro` as first doc section \u2014 **must be all lowercase** (e.g., `avrodataproviderintro`, not `AvroDataProviderintro`)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 6,
+      "check": "`%modern` in `.qm` file \u2014 no redundant `%new-style`, `%require-types`, `%strict-args`, `%enable-all-warnings`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 7,
+      "check": "No parse directives (`%requires`, `%modern`, `%new-style`) in separated `.qc` files (check OUTSIDE of `@code` blocks only)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 8,
+      "check": "No `%include` usage (deprecated for modules)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 9,
+      "check": "Copyright 2026 on all new files",
+      "status": "Pass",
+      "evidence": "Upstream duration qtest and new native fixture have Copyright 2026."
+    },
+    {
+      "number": 10,
+      "check": "Directory layout: `.qm` inside `qlib/<ModuleName>/` directory (not at `qlib/<ModuleName>.qm` for multi-file modules)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 11,
+      "check": "No second `.qm` for the same module at `qlib/<ModuleName>.qm`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 12,
+      "check": "`ns=Qore::XX` matches the QoreNamespace constructor path",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 13,
+      "check": "`%modern` directive present",
+      "status": "Pass",
+      "evidence": "The new duration qtest has %modern."
+    },
+    {
+      "number": 14,
+      "check": "Executable permission set (`chmod +x`)",
+      "status": "Pass",
+      "evidence": "The duration qtest has executable mode; native fixture is compiled and run explicitly."
+    },
+    {
+      "number": 15,
+      "check": "Uses %prepend-module-path  before %requires for in-repo modules",
+      "status": "Pass",
+      "evidence": "Duration qtest prepends repository qlib before requiring QUnit."
+    },
+    {
+      "number": 16,
+      "check": "External module dependencies use `%try-module` \u2014 except modules delivered with Qore itself (DataProvider, ConnectionProvider, QUnit, etc.) which use hard `%requires`",
+      "status": "Pass",
+      "evidence": "Only Qore-delivered QUnit is required."
+    },
+    {
+      "number": 17,
+      "check": "No filesystem operations (fopen, open, creat, unlink, remove, rename, mkdir, rmdir, stat, chmod) without sandbox checks",
+      "status": "Pass",
+      "evidence": "No C++ filesystem operation added."
+    },
+    {
+      "number": 18,
+      "check": "No network operations (connect, bind, socket, getaddrinfo, gethostbyname) without sandbox checks",
+      "status": "Pass",
+      "evidence": "No C++ network operation added."
+    },
+    {
+      "number": 19,
+      "check": "If filesystem/network ops exist, verify `QoreSandboxManagerHelper` usage",
+      "status": "N/A",
+      "evidence": "No C++ I/O requiring sandbox helpers."
+    },
+    {
+      "number": 20,
+      "check": "No `File::`, `Dir::`, `Socket::`, `HTTPClient::` usage without justification",
+      "status": "Pass",
+      "evidence": "No new Qore File/Dir/Socket/HTTPClient operation; fixture exercises date parsing and formatting."
+    },
+    {
+      "number": 21,
+      "check": "All `for`/`while` loops that could iterate >100 times have `qore_check_cancel()` checks",
+      "status": "Pass",
+      "evidence": "Audit found unbounded integer-leading-zero, fractional-digit, whitespace and component loops. Added cancellation every100characters and every10components. Native fixture construction loops64times; remaining scalar helper loops have fixed small bounds."
+    },
+    {
+      "number": 22,
+      "check": "Uses `qore_check_cancel()` (NOT deprecated `qore_check_io_interrupt()`)",
+      "status": "Pass",
+      "evidence": "Uses qore_check_cancel, preserving the existing cancellation exception rather than converting it to INVALID-DATE."
+    },
+    {
+      "number": 23,
+      "check": "Check frequency: every 100 iterations for tight loops, every 10 for expensive iterations",
+      "status": "Pass",
+      "evidence": "Digit and whitespace scanning check every100iterations; the component loop checks every10iterations. Counters reset at the threshold."
+    },
+    {
+      "number": 24,
+      "check": "No blocking operations without cancellation support",
+      "status": "Pass",
+      "evidence": "No new blocking I/O or wait. Cancellation test pre-sets the current thread request and ends normally after clearing it."
+    },
+    {
+      "number": 25,
+      "check": "Every action has `display_name`, `short_desc` (plain text, <80 chars), `desc` (markdown)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 26,
+      "check": "Every action has `options` populated via `getActionOptionFromFields()` \u2014 without this, the action shows an empty, unusable form",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 27,
+      "check": "Every action has `output_type` set to a typed data type constant (e.g., `MyResponseDataType`) \u2014 not omitted",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 28,
+      "check": "DPAT_API actions: provider has `\"supports_request\": True` and implements `doRequestImpl()`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 29,
+      "check": "DPAT_FIND actions: every option exists in `SearchOptions`, `getRecordTypeImpl()` returns `*hash<string, AbstractDataField>`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 30,
+      "check": "Scheme-based apps (with `\"scheme\"` in registerApp): actions use `\"path\"` and do NOT use `\"cls\"` \u2014 having both `scheme` and `cls` causes a runtime error",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 31,
+      "check": "Single-key hash slices use trailing comma: `Fields{\"key\",}` (without trailing comma, `Fields{\"key\"}` returns the value, not a hash)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 32,
+      "check": "**Typed data type classes exist** for request and response types \u2014 inherit `HashDataType`, have `const Fields` hash, call `addQoreFields(Fields)` in constructor, export public constant at bottom (e.g., `public const MyDataType = new MyDataType();`)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 33,
+      "check": "Request/input types use `public` Fields (enables `ClassName::Fields` in action registration)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 34,
+      "check": "Response/output types use `private` Fields",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 35,
+      "check": "Each field in data types has `display_name`, `type`, and `desc` (markdown-formatted)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 36,
+      "check": "Input fields have `example_value` where useful (string fields, endpoint URIs, SQL queries, etc.)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 37,
+      "check": "Fields with finite allowed values use `allowed_values` with `AllowedValueInfo` containing both `value` and `display_name` (Title Case, human-readable) \u2014 never bare values, never described only in text",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 38,
+      "check": "Password/secret fields have `\"sensitive\": True`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 39,
+      "check": "`groups` uses `AppGroup` enum values from `qlib/DataProvider/AppGroup.qc`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 40,
+      "check": "App `logo` stored as separate file, loaded at module level in `Priv` namespace",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 41,
+      "check": "App `desc` uses markdown: bullet list of capabilities, links to project website, business-language explanation of value",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 42,
+      "check": "`display_name` is user-friendly (\"Apache Avro\" not \"avro\")",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 43,
+      "check": "`short_desc` is plain text, under 80 chars, single sentence \u2014 no markdown",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 44,
+      "check": "`desc` uses markdown: backticks for code/field refs (`` `field_name` ``, `` `True` ``, `` `pdf` ``), `\\n\\n` for paragraphs, `- ` bullet lists for enumerations, `**bold**` for caveats",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 45,
+      "check": "Descriptions use plain business language relating to common challenges \u2014 not just technical \"what\" but \"why\" and \"when to use\"",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 46,
+      "check": "No bare `True`/`False`/`NOTHING` \u2014 must be backtick-wrapped in `desc`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 47,
+      "check": "No bare field/option names in prose \u2014 must use backticks",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 48,
+      "check": "Long descriptions (>500 chars) use bold section headers and bullet lists",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 49,
+      "check": "**Factory registration in Qore repo**: every factory name registered in `qlib/DataProvider/DataProvider.qc` \u2192 `FactoryMap` (without this, module loads but doesn't appear in Qorus apps)",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 50,
+      "check": "**`getRecordTypeImpl()` signature**: must be `private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options)` \u2014 NOT returning `*AbstractDataProviderType`",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 51,
+      "check": "**Dependency JARs committed** (for JNI modules): JAR files in `qlib/*/jar/` may be gitignored \u2014 use `git add -f` to ensure they're tracked, otherwise CI compilation fails",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 52,
+      "check": "JAR install rules in CMakeLists.txt for all dependency JARs",
+      "status": "N/A",
+      "evidence": "No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency."
+    },
+    {
+      "number": 53,
+      "check": "**No workarounds**: No TODOs, FIXMEs, stubs, or partially-implemented features",
+      "status": "Pass",
+      "evidence": "Complete upstream merge plus bounded parser cancellation; no TODO, FIXME or stub introduced."
+    },
+    {
+      "number": 54,
+      "check": "**Exception safety**: C++ uses `ReferenceHolder` for Qore allocations, `std::unique_ptr` for C++ allocations, `*xsink` checked after every fallible operation",
+      "status": "Pass",
+      "evidence": "Parser scratch strings use stack RAII. Native fixture owns DateTimeNode with ReferenceHolder and checks ExceptionSink after construction. The distinct internal cancellation return bypasses duration_error and preserves THREAD-CANCELLED."
+    },
+    {
+      "number": 55,
+      "check": "**Thread safety**: All mutable shared state protected by `std::lock_guard<std::mutex>` or documented as immutable-after-construction",
+      "status": "Pass",
+      "evidence": "No new mutable shared state; parser counters and fields belong to the current invocation/object. Cancellation uses the existing thread API."
+    },
+    {
+      "number": 56,
+      "check": "**Type safety**: Strongly-typed `code<return(args)>` instead of untyped `code`; `static_cast` instead of C casts; typed hashdecls for results; enums where appropriate",
+      "status": "Pass",
+      "evidence": "Numeric parsing uses int64 intermediates and range checks before int conversion; week multiplication and component addition use int64. ASCII digit checks handle any char value. No public runtime ABI or object-layout change."
+    },
+    {
+      "number": 57,
+      "check": "**Performance**: No O(n\u00b2) where O(n) is possible; no unnecessary copies; coordinate descent uses incremental residuals not full matrix multiply",
+      "status": "Pass",
+      "evidence": "Parsing remains linear in input length; polling adds bounded counters. Call compiler files are byte-identical to the qualified pinned-base candidate. This merge report makes no timing or speedup claim; a fresh cumulative checkpoint follows."
+    },
+    {
+      "number": 58,
+      "check": "**Error handling**: All inputs validated (dimensions, empty data, unfitted models); C++ I/O handles EAGAIN/EINTR if applicable",
+      "status": "Pass",
+      "evidence": "Malformed and embedded-NUL inputs, missing designators, decimal signs, wrong component sections and component overflow are covered. Cancellation returns independently from parse errors, preserving its exception; native tests verify completion after clearing the request."
+    },
+    {
+      "number": 59,
+      "check": "**Documentation**: Doxygen `@param`, `@return`, `@throw` on all public methods; `@par Example` with realistic business scenarios; `@note` for important caveats",
+      "status": "Pass",
+      "evidence": "Upstream duration format docs and release notes document strict date(string), lenient conversions, weeks, decimal commas and negative fractions. Internal helper comments document cancellation return. No new public method."
+    },
+    {
+      "number": 60,
+      "check": "**QPP flags**: `[flags=CONSTANT]` on methods that never throw; `[flags=RET_VALUE_ONLY]` on methods that throw but have no side effects",
+      "status": "N/A",
+      "evidence": "No QPP flag changes; existing date(string) flags are preserved."
+    },
+    {
+      "number": 61,
+      "check": "**Security**: No user-controlled format strings; no buffer overflows; bounds checking on array indices; no credentials in code",
+      "status": "Pass",
+      "evidence": "No user-controlled format strings or credentials. The component cursor advances only after a non-NUL designator; digit scanning remains within the NUL-terminated string. Changes preserve the existing date parser contracts."
+    },
+    {
+      "number": 62,
+      "check": "**Correctness**: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)",
+      "status": "Pass",
+      "evidence": "Six date suites pass in AST, IR and JIT modes:18runs,10359assertions. Native duration and extended-year checks pass using the merged optimized library. Seven AOT fixtures pass, including retained receiver/reflection/deletion, native binary calls, closures, debugger scalar replacement and the C++ Program-boundary fixture. Full Release -O3 -DNDEBUG build produces391qmods; allocation tracking is OFF. No additional Debug/sanitizer/other-platform validation is claimed for this date merge."
+    }
+  ],
+  "audit_totals": {
+    "N/A": 41,
+    "Pass": 21
+  },
+  "call_compiler_sha256": {
+    "include/qore/intern/QoreIRToLLVM.h": "fd38a7ffeb798b9b5ad10887f2a9e1dd55cdecd660c59d70b0129e4d99fa1f08",
+    "lib/QoreIRToLLVM.cpp": "90dd070169a7cb152529aff86d1439b42dacc2b5be73eb786a593fedfad02977"
+  },
+  "performance_evidence": {
+    "commit": "2d609171f7f08e85ae07e767e16219f331903f29",
+    "path": "results-pinned-base-macos-arm64.json",
+    "sha256": "b36cbe486a4608fb78469bc2e3113aa517cde62c4412f50f508740ffe41a7512",
+    "limits": "Previous measured call optimization remains separate. No new before/after timing or Java ratio is inferred from this correctness merge."
+  },
+  "drivers": {
+    "date-develop-aot-v1.py": {
+      "sha256": "b3198b1a40c269be781ae63b525e6e981bfc08942bec24898f82a9da7b89b1cd",
+      "source": "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\nfrom pathlib import Path\nimport importlib.util,json,os,re,subprocess,sys,tempfile\nb=Path(__file__).resolve().parent;root=b.parents[1]\ns=importlib.util.spec_from_file_location('deps',b/'post-packages-dependencies.py');d=importlib.util.module_from_spec(s);s.loader.exec_module(d)\ndef save(p,v):\n assert not p.exists(),p\n p.write_text(v if isinstance(v,str) else json.dumps(v,indent=2)+'\\n')\ntree=root/sys.argv[1];tests=sys.argv[2:];assert tests\no=Path(tempfile.mkdtemp(prefix='date-develop-aot-v1-' + tree.name + '-',dir=b));save(b/('date-develop-aot-v1-' + tree.name + '-path.json'),dict(directory=str(o)));print(o,flush=True)\nhead=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert not subprocess.check_output(['git','ls-files','-u'],text=True).strip()\nsources={n:d.sha(root/n) for n in (subprocess.check_output(['git','diff','--name-only','HEAD'],text=True).splitlines() + subprocess.check_output(['git','ls-files','--others','--exclude-standard'],text=True).splitlines()) if (root/n).is_file()}\nsave(o/'metadata.json',dict(head=head,tests=tests,tree=str(tree),source_sha256=sources,driver_sha256=d.sha(__file__),runtime_sha256={n:d.sha(tree/n) for n in ('qore','qcc','libqore.20.dylib')}))\nenv={k:v for k,v in os.environ.items() if k!='SDKROOT' and not k.startswith(('QORE_','DYLD_'))};env.update(TZ='UTC',CPATH='/opt/local/include',MACOSX_DEPLOYMENT_TARGET='28.0')\npaths=[tree/'qlib-qmod',root/'qlib']+sorted(p for p in (tree/'modules').iterdir() if p.is_dir())\nenv.update(PATH=str(tree)+':'+env['PATH'],QORE_EXECUTABLE=str(tree/'qore'),QORE_QCC_EXECUTABLE=str(tree/'qcc'),QORE_QPP_EXECUTABLE=str(tree/'qpp'),QORE_TEST_BUILD_DIR=str(tree),QORE_BIN=str(tree/'qore'),QORE_BINARY=str(tree/'qore'),QCC=str(tree/'qcc'),QORE_LIBDIR=str(tree),DYLD_LIBRARY_PATH=str(tree),QORE_MODULE_DIR=':'.join(map(str,paths)))\nrows=[]\nfor test in tests:\n selection=['--include=AOT optimization levels'] if test=='AOTSmokeOptLevels' else (['--include=HttpClient Test'] if test=='HTTPClientDefaults' else [])\n test_name='AOTSmoke' if test=='AOTSmokeOptLevels' else ('qore/classes/HTTPClient/HTTPClient' if test=='HTTPClientDefaults' else test)\n test_path=root/test if test.startswith('modules/') else (root/'examples/test'/(test_name+'.qtest') if '/' in test_name else root/'examples/test/ir'/(test_name+'.qtest'))\n test=test.replace('/','__')\n print('Starting:',test,flush=True)\n x=d.run_recorded([str(tree/'qore'),'--exec-mode=ir',str(test_path)]+selection,env,o,test,save,timeout=1800)\n raw=x.stdout+x.stderr;assert 'FAILURE:' not in raw and 'loading source module' not in raw\n summaries=re.findall(r'^Ran (\\d+) test cases?, (\\d+) succeeded \\((\\d+) assertions?\\)$',raw,re.M);assert all(a==z for a,z,c in summaries)\n assert len(summaries)==1 or test in ('IRFixedListScalarReplacement','IRFixedHashScalarReplacement','AOTWarmedClosureSlotLayout','AOTKnownCallRefFastEntry','AOTPrivateStaticClosureContext','AOTNoopDecrefPrune','AOTWideIntExpressionSummary','AOTGenericInstanceMethodFastEntry','AOTGenericCrossObjectFastEntry','AOTDebuggableClosureSerialization','qore__closures__const-deferred-closure-init','AOTNativeClosure','AOTImmediateCapturedClosure','qore__debug__ProgramControlLifetime'),(test,summaries)\n if test in ('AOTWarmedClosureSlotLayout','AOTDebuggableClosureSerialization','qore__closures__const-deferred-closure-init'):assert raw=='OK\\n'\n if test in ('IRFixedListScalarReplacement','IRFixedHashScalarReplacement'):assert raw==''\n rows.append(dict(test=test,summaries=summaries,process_sha256=d.sha(o/(test+'.process.json'))));print('Passed:',test,summaries,flush=True)\nassert all(d.sha(root/n)==h for n,h in sources.items())\nsave(o/'completed.json',dict(verified=True,head=head,rows=rows));print('Merged develop regressions passed',flush=True)\n"
+    },
+    "date-develop-build-v1.py": {
+      "sha256": "b35000aee62620de37a304c28ba25984860f47a1938a4c3e0376f3caedecb330",
+      "source": "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\nfrom pathlib import Path\nimport importlib.util,json,os,shutil,subprocess,tempfile\nb=Path(__file__).resolve().parent;root=b.parents[1];read=lambda p:json.loads(p.read_text())\ns=importlib.util.spec_from_file_location('d',b/'post-packages-dependencies.py');d=importlib.util.module_from_spec(s);s.loader.exec_module(d)\ndef save(p,v):\n assert not p.exists(),p\n p.write_text(v if isinstance(v,str) else json.dumps(v,indent=2)+'\\n')\nhead=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert head.startswith('2d609171f7');merge=subprocess.check_output(['git','rev-parse','MERGE_HEAD'],text=True).strip();assert merge.startswith('3955cf3ac3')\nfiles=subprocess.check_output(['git','diff','--name-only','HEAD'],text=True).splitlines();assert len(files)==7\nsources={n:d.sha(root/n) for n in files};o=Path(tempfile.mkdtemp(prefix='date-develop-build-v1-',dir=b));save(b/'date-develop-build-v1-path.json',dict(directory=str(o)));print(o,flush=True)\nold=Path(read(b/'pinned-base-prepare-v1-path.json')['directory'])/'after-runtime';before=o/'before-runtime';before.mkdir()\nfor n in ('qore','qcc','libqore.20.dylib'):shutil.copy2(old/n,before/n)\n(before/'libqore.dylib').symlink_to('libqore.20.dylib')\nsave(o/'metadata.json',dict(head=head,merge=merge,source_sha256=sources,driver_sha256=d.sha(__file__),before_runtime=str(before),before_source_head=head,before_binary_revision=read(Path(read(b/'pinned-base-prepare-v1-path.json')['directory'])/'metadata.json').get('head'),before_artifacts={n:d.sha(before/n) for n in ('qore','qcc','libqore.20.dylib')}));save(o/'merge.patch',subprocess.check_output(['git','diff','HEAD'],text=True))\nenv={k:v for k,v in os.environ.items() if k!='SDKROOT' and not k.startswith(('QORE_','DYLD_'))};env.update(CPATH='/opt/local/include',MACOSX_DEPLOYMENT_TARGET='28.0',TZ='UTC')\nd.run_recorded(['cmake','--build',str(root/'build'),'-j4'],env,o,'build',save,timeout=10800)\nflags=(root/'build/CMakeFiles/libqore.dir/flags.make').read_text();assert '-O3 -DNDEBUG' in flags and 'ENABLE_ALLOC_TRACKING:BOOL=OFF' in (root/'build/CMakeCache.txt').read_text();assert all(d.sha(root/n)==h for n,h in sources.items())\nlinks=[p for p in (root/'qlib').rglob('*.qmod') if p.is_symlink()];assert len(links)==391 and all(p.resolve().is_relative_to(root/'build/qlib-qmod') and p.is_file() for p in links)\nafter=o/'after-runtime';after.mkdir()\nfor n in ('qore','qcc','libqore.20.dylib'):shutil.copy2(root/'build'/n,after/n)\n(after/'libqore.dylib').symlink_to('libqore.20.dylib')\nsave(o/'completed.json',dict(verified=True,head=head,merge=merge,source_sha256=sources,flags=flags,qmods=391,after_runtime=str(after),artifacts={n:d.sha(root/'build'/n) for n in ('qore','qcc','libqore.20.dylib')}));print('Optimized merged build passed;391qmods',flush=True)\n"
+    },
+    "date-develop-publish-v1.py": {
+      "sha256": "f895ee36a39f35cfb1aa2d8394c12a03dd3e0fc392beeb9f035ee39994b917fb",
+      "source": "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\nfrom pathlib import Path\nimport collections,hashlib,json,re,subprocess\nb=Path(__file__).resolve().parent;root=b.parents[1];read=lambda p:json.loads(p.read_text());sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\ndef save(p,x):\n assert not p.exists(),p\n p.write_text(x if isinstance(x,str) else json.dumps(x,indent=2)+'\\n')\narchives={}\nfor stage in ('build','tests','aot'):\n key='date-develop-'+stage+'-v1'+('-build' if stage=='aot' else '')+'-path.json';o=Path(read(b/key)['directory']);assert read(o/'independent-review.json')['verified'];processes={}\n for p in sorted(o.glob('*.process.json')):\n  r=read(p);assert r['exit_code']==0 and r['child_waited'] and not r['timed_out'];entry=dict(receipt=r)\n  for stream in ('stdout','stderr'):\n   f=o/(p.name[:-13]+'.'+stream);assert sha(f)==r[stream+'_sha256'];entry[stream]=f.read_text() if f.stat().st_size<65536 else dict(archive=str(f),sha256=sha(f),bytes=f.stat().st_size)\n  processes[p.name[:-13]]=entry\n archives[stage]=dict(archive=str(o),json={p.name:read(p) for p in sorted(o.glob('*.json')) if not p.name.endswith('.process.json')},processes=processes)\nsource=archives['build']['json']['metadata.json']['source_sha256'];assert len(source)==7 and all(sha(root/n)==h for n,h in source.items());head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();merge=subprocess.check_output(['git','rev-parse','MERGE_HEAD'],text=True).strip();assert head.startswith('2d609171f7') and merge.startswith('3955cf3ac3')\nprior=read(root/'bench/runtime-comparison/results-pinned-base-macos-arm64.json');compiler={n:sha(root/n) for n in ('include/qore/intern/QoreIRToLLVM.h','lib/QoreIRToLLVM.cpp')};assert all(prior['source_sha256'][n]==h for n,h in compiler.items())\nchecks=re.findall(r'^- \\[ \\] (.*)$',Path('/Users/david/.codex/skills/audit-changes/SKILL.md').read_text(),re.M);assert len(checks)==62\nproof={9:'Upstream duration qtest and new native fixture have Copyright 2026.',13:'The new duration qtest has %modern.',14:'The duration qtest has executable mode; native fixture is compiled and run explicitly.',15:'Duration qtest prepends repository qlib before requiring QUnit.',16:'Only Qore-delivered QUnit is required.',17:'No C++ filesystem operation added.',18:'No C++ network operation added.',20:'No new Qore File/Dir/Socket/HTTPClient operation; fixture exercises date parsing and formatting.',21:'Audit found unbounded integer-leading-zero, fractional-digit, whitespace and component loops. Added cancellation every100characters and every10components. Native fixture construction loops64times; remaining scalar helper loops have fixed small bounds.',22:'Uses qore_check_cancel, preserving the existing cancellation exception rather than converting it to INVALID-DATE.',23:'Digit and whitespace scanning check every100iterations; the component loop checks every10iterations. Counters reset at the threshold.',24:'No new blocking I/O or wait. Cancellation test pre-sets the current thread request and ends normally after clearing it.',53:'Complete upstream merge plus bounded parser cancellation; no TODO, FIXME or stub introduced.',54:'Parser scratch strings use stack RAII. Native fixture owns DateTimeNode with ReferenceHolder and checks ExceptionSink after construction. The distinct internal cancellation return bypasses duration_error and preserves THREAD-CANCELLED.',55:'No new mutable shared state; parser counters and fields belong to the current invocation/object. Cancellation uses the existing thread API.',56:'Numeric parsing uses int64 intermediates and range checks before int conversion; week multiplication and component addition use int64. ASCII digit checks handle any char value. No public runtime ABI or object-layout change.',57:'Parsing remains linear in input length; polling adds bounded counters. Call compiler files are byte-identical to the qualified pinned-base candidate. This merge report makes no timing or speedup claim; a fresh cumulative checkpoint follows.',58:'Malformed and embedded-NUL inputs, missing designators, decimal signs, wrong component sections and component overflow are covered. Cancellation returns independently from parse errors, preserving its exception; native tests verify completion after clearing the request.',59:'Upstream duration format docs and release notes document strict date(string), lenient conversions, weeks, decimal commas and negative fractions. Internal helper comments document cancellation return. No new public method.',61:'No user-controlled format strings or credentials. The component cursor advances only after a non-NUL designator; digit scanning remains within the NUL-terminated string. Changes preserve the existing date parser contracts.',62:'Six date suites pass in AST, IR and JIT modes:18runs,10359assertions. Native duration and extended-year checks pass using the merged optimized library. Seven AOT fixtures pass, including retained receiver/reflection/deletion, native binary calls, closures, debugger scalar replacement and the C++ Program-boundary fixture. Full Release -O3 -DNDEBUG build produces391qmods; allocation tracking is OFF. No additional Debug/sanitizer/other-platform validation is claimed for this date merge.'}\nna='No new Qore module, QPP class, DataProvider registration/type/app or JNI dependency.'\naudit=[dict(number=i,check=c,status='Pass' if i in proof else 'N/A',evidence=proof.get(i,'No C++ I/O requiring sandbox helpers.' if i==19 else 'No QPP flag changes; existing date(string) flags are preserved.' if i==60 else na)) for i,c in enumerate(checks,1)];totals=dict(collections.Counter(a['status'] for a in audit));assert totals=={'N/A':41,'Pass':21}\nreport=dict(copyright='Copyright 2026 Qore Technologies, s.r.o.',schema='qore-date-develop-merge-v1',source_head=head,merged_develop=merge,source_sha256=source,candidate_patch=subprocess.check_output(['git','diff','HEAD','--',*source],text=True),archives=archives,audit=audit,audit_totals=totals,call_compiler_sha256=compiler,performance_evidence=dict(commit=head,path='results-pinned-base-macos-arm64.json',sha256=sha(root/'bench/runtime-comparison/results-pinned-base-macos-arm64.json'),limits='Previous measured call optimization remains separate. No new before/after timing or Java ratio is inferred from this correctness merge.'),drivers={p.name:dict(sha256=sha(p),source=p.read_text()) for p in sorted(b.glob('date-develop-*.py'))},limits=['Clean automatic merge of origin/develop3955cf3ac3; added cancellation polling required by audit and a native regression fixture.','Production call lowering is unchanged from2d609171f7. Optimized merged binary is qualified before the merge commit; postcommit installation must verify revision-only differences against this frozen binary.','External module repositories are untouched. System installation remains6c4d9cae71 until the separate verified install stage.'])\nsave(root/'bench/runtime-comparison/qualification-date-develop-merge.json',report)\nrows='\\n'.join('|'+str(a['number'])+'. '+a['check'].replace('|',r'\\|')+'|'+a['status']+'|'+a['evidence'].replace('|',r'\\|') for a in audit)\nsave(root/'bench/runtime-comparison/audit-date-develop-merge.md','# Duration parser develop merge audit (2026-10-31)\\n\\nCopyright 2026 Qore Technologies, s.r.o.\\n\\nMerged origin/develop `3955cf3ac3` onto `2d609171f7` without conflicts. Added bounded cancellation checks and a native regression fixture after reviewing the new parser loops. All 62 checks are resolved: '+json.dumps(totals)+'.\\n\\n|!Check|!Status|!Evidence\\n'+rows+'\\n\\nThe [qualification record](qualification-date-develop-merge.json) preserves build and test receipts, source hashes, the merged patch and all checks. The preceding [call performance measurements](results-pinned-base-macos-arm64.json) remain separate; this merge introduces no new speedup claim.\\n')\nprint('Published merged qualification and all62auditchecks',totals)\n"
+    },
+    "date-develop-review-v1.py": {
+      "sha256": "f9f6c6105a99ebc0eec3ae4af42593c5e65b8bce5014b03c756fc3b8ea6fb673",
+      "source": "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\nfrom pathlib import Path\nimport hashlib,json,re\nb=Path(__file__).resolve().parent;root=b.parents[1];read=lambda p:json.loads(p.read_text());sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()\nfor stage in ('build','tests','aot'):\n key='date-develop-'+stage+'-v1'+('-build' if stage=='aot' else '')+'-path.json';o=Path(read(b/key)['directory']);m=read(o/'metadata.json');c=read(o/'completed.json');t=read(o/'terminal.json');assert c['verified'] and t['exit_code']==0 and t['child_waited'];count=0\n for p in o.glob('*.process.json'):\n  r=read(p);assert r['exit_code']==0 and r['child_waited'] and not r['timed_out'];count+=1\n  for stream in ('stdout','stderr'):assert sha(o/(p.name[:-13]+'.'+stream))==r[stream+'_sha256']\n assert all(sha(root/n)==h for n,h in m['source_sha256'].items())\n result=dict(verified=True,processes=count,source_sha256=m['source_sha256'],driver_sha256=sha(__file__))\n if stage=='build':\n  assert c['qmods']==391 and '-O3 -DNDEBUG' in c['flags'];assert 'ENABLE_ALLOC_TRACKING:BOOL=OFF' in (root/'build/CMakeCache.txt').read_text();assert all(sha(root/'build'/n)==h==sha(Path(c['after_runtime'])/n) for n,h in c['artifacts'].items());result['qmods']=391\n else:\n  expected=18 if stage=='tests' else 7;assert len(c['rows'])==expected;cases=assertions=0\n  for row in c['rows']:\n   name=row['name'] if stage=='tests' else row['test'];raw=(o/(name+'.stdout')).read_text()+(o/(name+'.stderr')).read_text();assert all(x not in raw for x in ('SKIP','FAILURE:','loading source module'));summaries=re.findall(r'^Ran (\\d+) test cases?, (\\d+) succeeded \\((\\d+) assertions?\\)$',raw,re.M);assert len(summaries)==1 and summaries[0][0]==summaries[0][1];assert sha(o/(name+'.process.json'))==row['process_sha256'];cases+=int(summaries[0][0]);assertions+=int(summaries[0][2])\n  result.update(fixtures=expected,cases=cases,assertions=assertions)\n  if stage=='tests':\n   assert {r['mode'] for r in c['rows']}=={'ast','ir','jit'} and count==22 and assertions==10359\n   for n,expected in [('duration','iso8601-duration-cancellation: ok\\n'),('extended-year','extended-year-cancellation: ok\\n')]:assert (o/('native-'+n+'.stdout')).read_text()==expected and str(root/'build/libqore.20.dylib') in (o/('native-'+n+'.stderr')).read_text()\n   result['native_checks']=2\n p=o/'independent-review.json';assert not p.exists();p.write_text(json.dumps(result,indent=2)+'\\n');print(stage,result)\n"
+    },
+    "date-develop-tests-v1.py": {
+      "sha256": "96741ca0720955d99c0b782ac230dfc65441eedef69ab9d02a85d675027dfbfc",
+      "source": "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\nfrom pathlib import Path\nimport importlib.util,json,os,re,subprocess,tempfile\nb=Path(__file__).resolve().parent;root=b.parents[1];read=lambda p:json.loads(p.read_text());s=importlib.util.spec_from_file_location('d',b/'post-packages-dependencies.py');d=importlib.util.module_from_spec(s);s.loader.exec_module(d)\ndef save(p,v):\n assert not p.exists(),p\n p.write_text(v if isinstance(v,str) else json.dumps(v,indent=2)+'\\n')\nbo=Path(read(b/'date-develop-build-v1-path.json')['directory']);bc=read(bo/'completed.json');assert bc['verified'];assert all(d.sha(root/'build'/n)==h for n,h in bc['artifacts'].items())\no=Path(tempfile.mkdtemp(prefix='date-develop-tests-v1-',dir=b));save(b/'date-develop-tests-v1-path.json',dict(directory=str(o)));print(o,flush=True)\nenv={k:v for k,v in os.environ.items() if k!='SDKROOT' and not k.startswith(('QORE_','DYLD_'))};tree=root/'build';env.update(TZ='UTC',CPATH='/opt/local/include',MACOSX_DEPLOYMENT_TARGET='28.0',PATH=str(tree)+':'+env['PATH'],QORE_BIN=str(tree/'qore'),QORE_BINARY=str(tree/'qore'),QCC=str(tree/'qcc'),QORE_LIBDIR=str(tree),DYLD_LIBRARY_PATH=str(tree),QORE_MODULE_DIR=str(tree/'qlib-qmod')+':'+str(root/'qlib'))\nsave(o/'metadata.json',dict(head=bc['head'],merge=bc['merge'],source_sha256=bc['source_sha256'],runtime_sha256=bc['artifacts'],driver_sha256=d.sha(__file__)))\nrows=[]\nfor mode in ('ast','ir','jit'):\n for test in ('qore/vars/date-iso8601-duration-strings','qore/vars/date','qore/functions/date_durations','qore/vars/date-utc-offset','qore/vars/timezone-date-errors','qore/misc/date-format-codes'):\n  name=mode+'-'+test.replace('/','_');print('Starting:',name,flush=True)\n  x=d.run_recorded([str(tree/'qore'),'--exec-mode='+mode,str(root/'examples/test'/(test+'.qtest'))],{**env,'QORE_JIT_SYNC_COMPILE':'1','QORE_IR_THRESHOLD':'1','QORE_JIT_THRESHOLD':'1'},o,name,save,timeout=1800)\n  raw=x.stdout+x.stderr;assert all(t not in raw for t in ('FAILURE:','SKIP','loading source module'));summary=re.findall(r'^Ran (\\d+) test cases?, (\\d+) succeeded \\((\\d+) assertions?\\)$',raw,re.M);assert len(summary)==1 and summary[0][0]==summary[0][1]\n  rows.append(dict(name=name,mode=mode,test=test,summary=summary[0],process_sha256=d.sha(o/(name+'.process.json'))));print('Passed:',name,summary,flush=True)\nfor name,source,expected in [('duration','iso8601_duration_cancellation.cpp','iso8601-duration-cancellation: ok\\n'),('extended-year','extended_year_cancellation.cpp','extended-year-cancellation: ok\\n')]:\n exe=o/name;d.run_recorded(['c++','-std=c++17','-O3','-DNDEBUG','-pthread','-mmacosx-version-min=28.0','-I'+str(tree/'include'),'-I'+str(root/'include'),str(root/'examples/test/qore/vars'/source),'-L'+str(tree),'-Wl,-rpath,'+str(tree),'-lqore','-o',str(exe)],env,o,'compile-'+name,save,timeout=600)\n x=d.run_recorded([str(exe)],{**env,'DYLD_PRINT_LIBRARIES':'1'},o,'native-'+name,save,timeout=120);assert x.stdout==expected and str(tree/'libqore.20.dylib') in x.stderr;print('Passed native:',name,flush=True)\nassert all(d.sha(root/n)==h for n,h in bc['source_sha256'].items());save(o/'completed.json',dict(verified=True,rows=rows,native=['duration','extended-year']));print('Merged date regressions passed',flush=True)\n"
+    }
+  },
+  "limits": [
+    "Clean automatic merge of origin/develop3955cf3ac3; added cancellation polling required by audit and a native regression fixture.",
+    "Production call lowering is unchanged from2d609171f7. Optimized merged binary is qualified before the merge commit; postcommit installation must verify revision-only differences against this frozen binary.",
+    "External module repositories are untouched. System installation remains6c4d9cae71 until the separate verified install stage."
+  ]
+}

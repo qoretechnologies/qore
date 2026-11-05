@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 %modern
-%allow-injection
+# This fixture uses ordinary subclasses; no injection privileges are needed.
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires AssemblyAiDataProvider

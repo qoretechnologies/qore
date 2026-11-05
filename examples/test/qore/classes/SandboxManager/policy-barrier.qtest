@@ -136,7 +136,7 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-callback-module");
 
         # stands in for module code: this program has no manager
-        code module_read = string sub (string path) {
+        code<string(string)> module_read = string sub (string path) {
             return ReadOnlyFile::readTextFile(path);
         };
         assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING,
@@ -159,8 +159,8 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-nested");
 
         # The resource callback is created by trusted code before entering the sandbox.
-        code read_file = \ReadOnlyFile::readTextFile();
-        code barriered = auto sub (string path) {
+        code<auto(string)> read_file = \ReadOnlyFile::readTextFile();
+        code<auto(string)> barriered = auto sub (string path) {
             return SandboxManager::callWithSystemPolicy(read_file, path);
         };
         assertEq("barrier probe\n",
@@ -168,10 +168,10 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
             "the innermost barrier bounds resolution");
 
         # after the inner barrier is released, the outer one still governs the callback's module code
-        code module_read = string sub (string path) {
+        code<string(string)> module_read = string sub (string path) {
             return ReadOnlyFile::readTextFile(path);
         };
-        code both = auto sub (string path) {
+        code<auto(string)> both = auto sub (string path) {
             SandboxManager::callWithSystemPolicy(read_file, path);
             return module_read(path);
         };
@@ -190,7 +190,7 @@ class SandboxPolicyBarrierTest inherits QUnit::Test {
         p.setSandboxManager(sm);
         p.parse("auto sub run(code c, string path) { return c(path); }", "barrier-callback-thread");
 
-        code start_reader = auto sub (string path) {
+        code<auto(string)> start_reader = auto sub (string path) {
             Queue q();
             background sub () {
                 try {

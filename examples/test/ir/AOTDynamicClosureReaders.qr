@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+hashdecl DynamicClosureReaderResult {
+    #! frames read that are not as expected
+    list<string> errors;
+}
+
+sub dynamicClosureReaderCaller(code<int(int)> callback, Counter started, Counter readers,
+        Counter done, Queue failures) {
+    on_exit done.dec();
+    started.dec();
+    while (readers.getCount()) {
+        for (int i = 0; i < 1024; ++i) {
+            int value = callback(5);
+            # The writer can change the capture between the two reads.
+            if (value != 3 && value != 5 && value != 7) {
+                failures.push(sprintf("unexpected concurrent capture value: %d", value));
+                return;
+            }
+        }
+    }
+}
+
+sub dynamicClosureReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<DynamicClosureReaderResult> result();
+    result.errors = ();
+    for (int i = 0; i < 400; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            bool caller = False;
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.function == "dynamicClosureReaderCaller") { caller = True; break; }
+            }
+            if (!caller) { continue; }
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.function == "<anonymous closure>") {
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid closure frame: %y", frame);
+                    }
+                }
+            }
+        }
+    }
+    results.push(result);
+}
+
+#! Returns the stack of a caller read while it is in the closure's frame
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub dynamicClosureParkedStack() {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("<anonymous closure>",),
+        ("dynamicClosureReaderCaller",), 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    hash<CallStackInfo> leaf = stack[0];
+    if (leaf.type != "user" || leaf.file.empty() || leaf.line < 0 || leaf.endline < leaf.line) {
+        throw "DYNAMIC-CLOSURE-READERS", sprintf("invalid parked closure frame: %y", stack);
+    }
+    return stack;
+}
+
+int shared = 17;
+code<int(int)> callback = int sub (int value) { return value + shared - shared; };
+Counter started(4);
+# the concurrent readers and the parked read below
+Counter readers(3);
+Counter callers_done(4);
+Counter readers_done(2);
+Counter writer_done(1);
+Queue failures();
+Queue results();
+background sub () {
+    on_exit writer_done.dec();
+    int i = 0;
+    while (readers.getCount()) {
+        shared = (i++ & 1) ? 17 : 19;
+    }
+}();
+for (int i = 0; i < 4; ++i) {
+    background dynamicClosureReaderCaller(callback, started, readers, callers_done, failures);
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background dynamicClosureReader(readers, readers_done, results);
+}
+{
+    on_exit readers.dec();
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        dynamicClosureParkedStack();
+    }
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+writer_done.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    hash<DynamicClosureReaderResult> result = results.get(10000);
+    if (result.errors) { throw "DYNAMIC-CLOSURE-READERS", result.errors.join("\n"); }
+}
+if (failures.size()) {
+    throw "DYNAMIC-CLOSURE-READERS", sprintf("%d failures", failures.size());
+}
+printf("dynamic-closure-readers: ok\n");

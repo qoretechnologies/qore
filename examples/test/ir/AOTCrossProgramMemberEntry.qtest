@@ -1,0 +1,281 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+%exec-class CrossProgramMemberEntryTest
+
+class CrossProgramMemberEntryTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native member method retry after Program entry", "1.0", \ARGV) {
+        addTestCase("integer and float entry and restoration", \check());
+        addTestCase("foreign member guards and effect continuation", \checkFallbacks());
+        addTestCase("reference member compile admission", \checkReferenceAdmission());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string modules, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "QORE_MODULE_DIR=" + quote(modules)
+            + " LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertFalse(output.contains("loading source module"));
+        return output;
+    }
+    private check() {
+        TmpDir dir("qore-cross-program-member-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/source/CrossProgramMemberEntry.qm";
+        write(source, "%modern
+module CrossProgramMemberEntry { version = \"1.0\"; desc = \"Cross-Program native method regression\";
+    author = \"Qore\"; license = \"MIT\"; }
+public namespace CrossProgramMemberEntry {
+    public class Base { private:internal { int delta = 11; } int next(int value) { return value + delta; } }
+    public class Derived inherits Base { private:internal { int delta = 17; } int next(int value) { return value + delta; } }
+    public Base sub make() { return new Derived(); }
+    public auto sub call(Base receiver, int value) { return receiver.next(value); }
+    public class FloatBase { private:internal { float delta = 11.0; } float next(float value) { return value + delta; } }
+    public class FloatDerived inherits FloatBase { private:internal { float delta = 17.0; } float next(float value) { return value + delta; } }
+    public FloatBase sub makeFloat() { return new FloatDerived(); }
+    public auto sub callFloat(FloatBase receiver, float value) { return receiver.next(value); }
+    public class Effect {
+        public { auto first = 0; auto second = 20; }
+        private:internal { int delta = 17; }
+        int next(int value) { ++first; --second; return value + delta; }
+    }
+    public Effect sub makeEffect() { return new Effect(); }
+    public auto sub callEffect(Effect receiver, int value) { return receiver.next(value); }
+}
+");
+        string host = dir.path + "/host.qr";
+        write(host, "%modern
+%requires CrossProgramMemberEntry
+auto integer = CrossProgramMemberEntry::make();
+auto floating = CrossProgramMemberEntry::makeFloat();
+for (int round = 0; round < 16; ++round) {
+    if (CrossProgramMemberEntry::call(integer, -7) != 10
+            || CrossProgramMemberEntry::callFloat(floating, -7.25) != 9.75) {
+        throw \"CROSS-PROGRAM-METHOD\", \"incorrect result\";
+    }
+}
+printf(\"cross-program-member-source: ok\\n\");
+");
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq("cross-program-member-source: ok\n",
+                run((qore, "--exec-mode=" + mode, host), dir.path + "/source"));
+        }
+        list<string> probes;
+        foreach string kind in (("int", "float", "effect")) {
+            string probe = dir.path + "/" + kind + "-probe";
+            list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread",
+                "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+                + native_fixture_include_args(libdir)
+                + (get_script_dir() + "/cross_program_member_entry.cpp", "-L" + libdir,
+                "-Wl,-rpath," + libdir, "-lqore", "-o", probe);
+            if (kind == "float") { push args, "-DPROBE_FLOAT=1"; }
+            if (kind == "effect") { push args, "-DPROBE_EFFECT=1"; }
+            *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+            if (target) { push args, target[0]; }
+            run(args, dir.path + "/source");
+            push probes, probe;
+        }
+        foreach string compile_prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                run((qcc, level, "--strip-source", "-m", "-o",
+                    dir.path + "/modules/CrossProgramMemberEntry.qmod", source),
+                    dir.path + "/source", compile_prefix);
+                foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                        "QORE_DISABLE_AOT_CROSS_PROGRAM_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_CROSS_PROGRAM_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_PARAM_BINDING_CACHE=1 ")) {
+                    string enabled = !prefix
+                        && !ENV.QORE_TEST_EXPECT_NO_CROSS_PROGRAM_MEMBER ? "1" : "0";
+                    foreach string probe in (probes) {
+                        assertRegex("cross-program-member-entry: [0-9]+ entries; [0-9]+ checks passed",
+                            run((probe, enabled), dir.path + "/modules", prefix));
+                    }
+                    foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                        assertEq("cross-program-member-source: ok\n",
+                            run((qore, "--exec-mode=" + mode, host), dir.path + "/modules", prefix));
+                    }
+                }
+            }
+        }
+    }
+    private checkReferenceAdmission() {
+        TmpDir dir("qore-reference-member-admission-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string module = "ReferenceMemberAdmission";
+        string source = dir.path + "/source/" + module + ".qm";
+        write(source, "%modern
+module ReferenceMemberAdmission { version = \"1.0\"; desc = \"Reference companion admission regression\";
+    author = \"Qore\"; license = \"MIT\"; }
+public namespace ReferenceMemberAdmission {
+    public class RefInt {
+        public { static int storage = 17; int calls = 0; }
+        private:internal { reference<int> value; }
+        constructor() { value = \\RefInt::storage; }
+        int next(int arg) { return arg + value; }
+        int read() { return value + 1; }
+        int effect(int arg) { ++calls; return arg + value; }
+    }
+    public class RefFloat {
+        public { static float storage = 17.5; }
+        private:internal { reference<float> value; }
+        constructor() { value = \\RefFloat::storage; }
+        float next(float arg) { return arg + value; }
+        float read() { return value + 1.0; }
+    }
+    public class RefShadow inherits RefInt { private:internal { int value = 100; } }
+    public class RefOverride inherits RefInt {
+        private:internal { int value = 100; }
+        int next(int arg) { return arg + value; }
+        int read() { return value + 1; }
+    }
+    public class RefOrdinary {
+        private { reference<int> value; }
+        constructor() { value = \\RefInt::storage; }
+        int next(int arg) { return arg + value; }
+        int read() { return value + 1; }
+    }
+    public class RefInherited inherits RefOrdinary {
+        int next(int arg) { return arg + value; }
+        int read() { return value + 1; }
+    }
+    public class RefPublic {
+        public { reference<int> value; }
+        constructor() { value = \\RefInt::storage; }
+        int next(int arg) { return arg + value; }
+        int read() { return value + 1; }
+    }
+    public class RefAuto {
+        private:internal { auto value = 100; }
+        int next(int arg) { return arg + value; }
+        int read() { return value + 1; }
+    }
+    public sub check() {
+        RefInt integer(); RefFloat floating(); RefShadow shadow();
+        RefOverride overridden(); RefOrdinary ordinary(); RefAuto automatic();
+        RefInherited inherited(); RefPublic exposed();
+        for (int round = 0; round < 4; ++round) {
+            int expected = 17 + round;
+            RefInt::storage = expected;
+            RefFloat::storage = expected + 0.5;
+            if (integer.next(3) != expected + 3 || integer.read() != expected + 1
+                    || integer.effect(3) != expected + 3 || integer.calls != round + 1
+                    || floating.next(3.0) != expected + 3.5 || floating.read() != expected + 1.5
+                    || shadow.next(3) != expected + 3 || shadow.read() != expected + 1
+                    || overridden.next(3) != 103 || overridden.read() != 101
+                    || ordinary.next(3) != expected + 3 || ordinary.read() != expected + 1
+                    || inherited.next(3) != expected + 3 || inherited.read() != expected + 1
+                    || exposed.next(3) != expected + 3 || exposed.read() != expected + 1
+                    || automatic.next(3) != 103 || automatic.read() != 101) {
+                throw \"REFERENCE-MEMBER-ADMISSION\", \"incorrect result or repeated effect\";
+            }
+        }
+        printf(\"reference-member-admission: ok\\n\");
+    }
+}
+");
+        string host = dir.path + "/host.qr";
+        write(host, "%modern\n%requires " + module + "\nReferenceMemberAdmission::check();\n");
+        string expected = "reference-member-admission: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, host), dir.path + "/source"));
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string ir = run((qcc, level, "--strip-source", "-m", "-o",
+                    dir.path + "/modules/" + module + ".qmod", source), dir.path + "/source",
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string cls in (("RefInt", "RefFloat", "RefOverride", "RefOrdinary", "RefInherited",
+                        "RefPublic", "RefAuto")) {
+                    bool eligible = !!ENV.QORE_TEST_EXPECT_REFERENCE_MEMBER_ENTRIES
+                        || cls == "RefOverride" || cls == "RefAuto";
+                    assertEq(eligible, regex(ir, "call void @qore_rt_bind_member_[^\n]*" + cls + "__next"), cls);
+                    assertEq(eligible, regex(ir, "call void @qore_rt_bind_getter_[^\n]*" + cls + "__read"), cls);
+                }
+                # A successful effect prefix remains useful even when the final read must resume.
+                assertRegex("call void @qore_rt_bind_effect_member_int_v1[^\n]*RefInt__effect", ir);
+                foreach string runtime in (("", "QORE_DISABLE_AOT_CROSS_PROGRAM_MEMBER_ENTRY=1 ")) {
+                    foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                        assertEq(expected, run((qore, "--exec-mode=" + mode, host), dir.path + "/modules", runtime));
+                    }
+                }
+            }
+        }
+    }
+    private checkFallbacks() {
+        TmpDir dir("qore-cross-program-member-fallback-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        foreach bool effect in ((False, True)) {
+            string module = effect ? "CrossProgramMemberEffects" : "CrossProgramMemberReads";
+            string fixture = effect ? "AOTEffectMemberEntry.qr" : "AOTScalarMemberEntry.qr";
+            string source = File::readTextFile(get_script_dir() + "/" + fixture);
+            source = replace(source, "#!/usr/bin/env qore\n", "");
+            source = replace(source, "\nclass ", "\npublic class ");
+            source = replace(source, "\nsub ", "\npublic sub ");
+            source = replace(source, "\nauto sub ", "\npublic auto sub ");
+            source = replace(source, "%allow-debugger", "%allow-debugger\nmodule " + module
+                + " { version = \"1.0\"; desc = \"Foreign member fallback regression\";"
+                + " author = \"Qore\"; license = \"MIT\"; }");
+            string function = "run" + module;
+            if (effect) {
+                assertTrue(source.contains("public sub main()"));
+                source = replace(source, "public sub main()", "public sub " + function + "()");
+                assertTrue(source.endsWith("main();\n"));
+                source = substr(source, 0, source.size() - 8);
+            } else {
+                string marker = "\nScalarMemberInt integer();";
+                assertTrue(source.contains(marker));
+                source = replace(source, marker, "\npublic sub " + function + "() {" + marker) + "}\n";
+            }
+            string path = dir.path + "/source/" + module + ".qm";
+            write(path, source);
+            string host = dir.path + "/host.qr";
+            write(host, "%modern\n%requires " + module + "\n" + function + "();\n");
+            string expected = effect ? "effect-member-entry: ok\n" : "scalar-member-entry: ok\n";
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, host), dir.path + "/source"));
+            }
+            foreach string compile_prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    run((qcc, level, "--strip-source", "-m", "-o", dir.path + "/modules/" + module + ".qmod", path),
+                        dir.path + "/source", compile_prefix);
+                    foreach string prefix in (("", "QORE_DISABLE_AOT_CROSS_PROGRAM_MEMBER_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                            "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                            "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ")) {
+                        foreach string mode in (("ast", "ir")) {
+                            assertEq(expected, run((qore, "--exec-mode=" + mode, host), dir.path + "/modules", prefix));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -36,6 +36,7 @@ class CatchScopeRethrowTest inherits QUnit::Test {
             "callee_nested_throw": "caught OUTER:outer",
             "callee_nested_throw_value": "returned \"CALLEE\"",
             "nested_throw": "caught OUTER:outer",
+            "nested_assert": "caught OUTER:outer",
             "nested_rethrow": "caught OUTER-OUTER:outer",
             "nested_rethrow_args": "caught NESTED:nested",
             "nested_throw_in_loop": "caught OUTER:outer",

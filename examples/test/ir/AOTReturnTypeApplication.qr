@@ -1,0 +1,400 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a value returned from user code takes the declared return type as the AST interpreter gives it in the return
+# statement: no type and any strip complex types, auto leaves them, and a declared type converts or rejects the value;
+# every execution mode must give the same output
+
+%modern
+
+hashdecl ReturnRecord {
+    int value = 1;
+}
+
+class ReturnTarget {
+    public {
+        int value = 3;
+    }
+}
+
+any sub anyTypedHash() {
+    hash<string, int> value = ("a": 1);
+    return value;
+}
+
+auto sub autoTypedHash() {
+    hash<string, int> value = ("a": 1);
+    return value;
+}
+
+hash sub plainTypedHash() {
+    hash<string, int> value = ("a": 1);
+    return value;
+}
+
+hash<auto> sub autoHashTypedHash() {
+    hash<string, int> value = ("a": 1);
+    return value;
+}
+
+*hash<auto> sub optionalAutoHashTypedHash() {
+    hash<string, int> value = ("a": 1);
+    return value;
+}
+
+any sub anyTypedList() {
+    list<int> value = (1, 2);
+    return value;
+}
+
+auto sub autoTypedList() {
+    list<int> value = (1, 2);
+    return value;
+}
+
+softlist sub softListTypedList() {
+    list<int> value = (1, 2);
+    return value;
+}
+
+any sub anyHashdecl() {
+    hash<ReturnRecord> value();
+    return value;
+}
+
+auto sub autoHashdecl() {
+    hash<ReturnRecord> value();
+    return value;
+}
+
+any sub anyNestedList() {
+    list<hash<string, int>> value = (("a": 1),);
+    return value;
+}
+
+any sub anyObject() {
+    ReturnTarget value();
+    return value;
+}
+
+any sub anyScalar() {
+    return 42;
+}
+
+any sub anyNothing() {
+}
+
+auto sub autoNothing() {
+}
+
+softint sub softIntReturn() {
+    auto value = "42";
+    return value;
+}
+
+softstring sub softStringReturn() {
+    auto value = 42;
+    return value;
+}
+
+*softint sub optionalSoftIntReturn() {
+    auto value = "7";
+    return value;
+}
+
+any sub anyTypedHashInTry() {
+    try {
+        hash<string, int> value = ("a": 1);
+        return value;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+any sub anyTypedHashFromLoop(int count) {
+    hash<string, int> value = ("a": 0);
+    for (int i = 0; i < count; ++i) {
+        value.a += i;
+        if (i == count - 1) {
+            return value;
+        }
+    }
+    return value;
+}
+
+any sub anyTypedHashOnExit() {
+    hash<string, int> value = ("a": 1);
+    on_exit {
+        value.a = 2;
+    }
+    return value;
+}
+
+int sub badIntReturn() {
+    auto value = "not an int";
+    return value;
+}
+
+hash<string, int> sub badTypedHashReturn() {
+    auto value = ("a": "x");
+    return value;
+}
+
+ReturnTarget sub badObjectReturn() {
+    auto value = new Mutex();
+    return value;
+}
+
+int sub missingIntReturn(bool ret) {
+    if (ret) {
+        return 1;
+    }
+}
+
+int sub badIntReturnInTry() {
+    try {
+        auto value = "not an int";
+        return value;
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+class ReturnMethods {
+    any anyTypedHash() {
+        hash<string, int> value = ("a": 1);
+        return value;
+    }
+
+    auto autoTypedHash() {
+        hash<string, int> value = ("a": 1);
+        return value;
+    }
+
+    any anyTypedList() {
+        list<int> value = (1, 2);
+        return value;
+    }
+
+    softint softIntReturn() {
+        auto value = "42";
+        return value;
+    }
+
+    int badIntReturn() {
+        auto value = "not an int";
+        return value;
+    }
+
+    static any staticAnyTypedHash() {
+        hash<string, int> value = ("a": 1);
+        return value;
+    }
+
+    static auto staticAutoTypedHash() {
+        hash<string, int> value = ("a": 1);
+        return value;
+    }
+
+    static softstring staticSoftStringReturn() {
+        auto value = 42;
+        return value;
+    }
+
+    static int staticBadIntReturn() {
+        auto value = "not an int";
+        return value;
+    }
+}
+
+# describes a value and whether a string can be stored under a new key or appended to it
+string sub probe(auto value) {
+    string desc = value.fullType();
+    switch (value.typeCode()) {
+        case NT_HASH: {
+            try {
+                value.b = "x";
+                desc += ":store-ok:" + value.b.type();
+            } catch (hash<ExceptionInfo> ex) {
+                desc += ":" + ex.err;
+            }
+            break;
+        }
+        case NT_LIST: {
+            try {
+                push value, "x";
+                desc += ":push-ok:" + value[-1].type();
+            } catch (hash<ExceptionInfo> ex) {
+                desc += ":" + ex.err;
+            }
+            break;
+        }
+        case NT_OBJECT: {
+            desc += ":" + value.className() + ":" + value.value;
+            break;
+        }
+        default: {
+            desc += ":" + value;
+            break;
+        }
+    }
+    return desc;
+}
+
+# returns the error and description of a call that must fail
+string sub error(code c) {
+    try {
+        auto value = c();
+        return "accepted:" + value.type();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + ": " + ex.desc;
+    }
+}
+
+# runs every case once; the output must not depend on the execution mode or the iteration
+list<string> sub runCases() {
+    list<string> out = ();
+    ReturnMethods obj();
+
+    # direct calls, with the value stored in an untyped local before it is changed
+    auto v = anyTypedHash();
+    try {
+        v.b = "x";
+        push out, "direct-any-hash=" + v.fullType() + ":" + v.b;
+    } catch (hash<ExceptionInfo> ex) {
+        push out, "direct-any-hash=" + ex.err;
+    }
+    v = autoTypedHash();
+    try {
+        v.b = "x";
+        push out, "direct-auto-hash=" + v.fullType() + ":" + v.b;
+    } catch (hash<ExceptionInfo> ex) {
+        push out, "direct-auto-hash=" + ex.err;
+    }
+
+    push out, "any-hash=" + probe(anyTypedHash());
+    push out, "auto-hash=" + probe(autoTypedHash());
+    push out, "plain-hash=" + probe(plainTypedHash());
+    push out, "auto-hash-type=" + probe(autoHashTypedHash());
+    push out, "optional-auto-hash-type=" + probe(optionalAutoHashTypedHash());
+    push out, "any-list=" + probe(anyTypedList());
+    push out, "auto-list=" + probe(autoTypedList());
+    push out, "softlist-list=" + probe(softListTypedList());
+    push out, "any-hashdecl=" + probe(anyHashdecl());
+    push out, "auto-hashdecl=" + probe(autoHashdecl());
+    {
+        auto nested = anyNestedList();
+        string desc = nested.fullType() + ":" + nested[0].fullType();
+        try {
+            nested[0].b = "x";
+            desc += ":store-ok";
+        } catch (hash<ExceptionInfo> ex) {
+            desc += ":" + ex.err;
+        }
+        push out, "any-nested=" + desc;
+    }
+    push out, "any-object=" + probe(anyObject());
+    push out, "any-scalar=" + probe(anyScalar());
+    push out, "any-nothing=" + anyNothing().type();
+    push out, "auto-nothing=" + autoNothing().type();
+    push out, "softint=" + probe(softIntReturn());
+    push out, "softstring=" + probe(softStringReturn());
+    push out, "optional-softint=" + probe(optionalSoftIntReturn());
+    push out, "any-try=" + probe(anyTypedHashInTry());
+    push out, "any-loop=" + probe(anyTypedHashFromLoop(5));
+    push out, "any-on-exit=" + probe(anyTypedHashOnExit());
+
+    # calls in a try block
+    try {
+        push out, "try-any-hash=" + probe(anyTypedHash());
+        push out, "try-auto-hash=" + probe(autoTypedHash());
+        push out, "try-method-any-hash=" + probe(obj.anyTypedHash());
+        push out, "try-static-any-hash=" + probe(ReturnMethods::staticAnyTypedHash());
+    } catch (hash<ExceptionInfo> ex) {
+        push out, "try=" + ex.err;
+    }
+
+    # methods and static methods
+    push out, "method-any-hash=" + probe(obj.anyTypedHash());
+    push out, "method-auto-hash=" + probe(obj.autoTypedHash());
+    push out, "method-any-list=" + probe(obj.anyTypedList());
+    push out, "method-softint=" + probe(obj.softIntReturn());
+    push out, "static-any-hash=" + probe(ReturnMethods::staticAnyTypedHash());
+    push out, "static-auto-hash=" + probe(ReturnMethods::staticAutoTypedHash());
+    push out, "static-softstring=" + probe(ReturnMethods::staticSoftStringReturn());
+
+    # closures and call references
+    code any_closure = any sub () {
+        hash<string, int> value = ("a": 1);
+        return value;
+    };
+    code auto_closure = auto sub () {
+        hash<string, int> value = ("a": 1);
+        return value;
+    };
+    code softint_closure = softint sub () {
+        auto value = "42";
+        return value;
+    };
+    code any_list_closure = any sub () {
+        list<int> value = (1, 2);
+        return value;
+    };
+    push out, "closure-any-hash=" + probe(any_closure());
+    push out, "closure-auto-hash=" + probe(auto_closure());
+    push out, "closure-softint=" + probe(softint_closure());
+    push out, "closure-any-list=" + probe(any_list_closure());
+    code fref = \anyTypedHash();
+    push out, "ref-any-hash=" + probe(fref());
+    code mref = \obj.anyTypedHash();
+    push out, "ref-method-any-hash=" + probe(mref());
+    push out, "call-function-any-hash=" + probe(call_function("anyTypedHash"));
+
+    # return type errors
+    push out, "bad-int=" + error(\badIntReturn());
+    push out, "bad-typed-hash=" + error(\badTypedHashReturn());
+    push out, "bad-object=" + error(\badObjectReturn());
+    push out, "missing-int=" + error(auto sub () { return missingIntReturn(False); });
+    push out, "present-int=" + error(auto sub () { return missingIntReturn(True); });
+    push out, "bad-int-try=" + error(\badIntReturnInTry());
+    push out, "method-bad-int=" + error(\obj.badIntReturn());
+    push out, "static-bad-int=" + error(\ReturnMethods::staticBadIntReturn());
+    push out, "closure-bad-int=" + error(int sub () { auto value = "not an int"; return value; });
+    try {
+        badIntReturn();
+        push out, "direct-bad-int=accepted";
+    } catch (hash<ExceptionInfo> ex) {
+        push out, "direct-bad-int=" + ex.err + ": " + ex.desc;
+    }
+    return out;
+}
+
+# the cases run repeatedly so that tiered and JIT execution reach native code; every iteration must give the same
+# output as the first
+list<string> first = runCases();
+for (int i = 1; i < 200; ++i) {
+    list<string> again = runCases();
+    if (again != first) {
+        printf("iteration %d differs:\n", i);
+        foreach string line in (again) {
+            printf("%s\n", line);
+        }
+        break;
+    }
+}
+foreach string line in (first) {
+    printf("%s\n", line);
+}
+
+# direct calls of a hot loop in the main code
+int changed = 0;
+for (int i = 0; i < 500; ++i) {
+    auto hot = anyTypedHash();
+    hot.b = "x";
+    if (hot.b == "x") {
+        ++changed;
+    }
+}
+printf("hot-loop=%d\n", changed);

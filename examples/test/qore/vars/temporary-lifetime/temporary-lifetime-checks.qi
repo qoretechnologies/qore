@@ -324,6 +324,29 @@ public namespace TemporaryLifetimeChecks {
         }
     }
 
+    #! a statement whose method chains raise in a try block of the function at chain \a n while it holds the
+    #! documents of the chains before it
+    string sub temps_throw_in_try(int n) {
+        try {
+            Trace::add(sprintf("%s %s %s %s", n == 1 ? make("a" + n).fail() : make("a" + n).getName(),
+                n == 2 ? make("b" + n).fail() : make("b" + n).getName(),
+                n == 3 ? make("c" + n).fail() : make("c" + n).getName(),
+                n == 4 ? make("d" + n).fail() : make("d" + n).getName()));
+        } catch (hash<ExceptionInfo> ex) {
+            Trace::add("caught " + ex.desc);
+        }
+        return "";
+    }
+
+    #! the same statement in a function whose local holds an object, raising to the caller
+    string sub temps_throw_with_local(int n) {
+        Doc keep("keep" + n);
+        Trace::add(sprintf("%s %s %s", n == 1 ? make("e" + n).fail() : make("e" + n).getName(),
+            n == 2 ? make("f" + n).fail() : make("f" + n).getName(),
+            n == 3 ? make("g" + n).fail() : make("g" + n).getName()));
+        return keep.name;
+    }
+
     string sub on_exit_chain() {
         on_exit log(make("on-exit").getSchema().state());
         Trace::add("body");
@@ -656,6 +679,80 @@ public namespace TemporaryLifetimeChecks {
         }
         Trace::add("after the break");
         rv."62 break in a foreach over a map" = Trace::take();
+
+        # each exception edge of a statement releases the temporaries created before it, in reverse order
+        for (int n = 1; n <= 5; ++n) {
+            temps_throw_in_try(n);
+        }
+        rv."63 exceptions at each call of a statement in a try block" = Trace::take();
+
+        for (int n = 1; n <= 4; ++n) {
+            try {
+                log(temps_throw_with_local(n));
+            } catch (hash<ExceptionInfo> ex) {
+                Trace::add("caught " + ex.desc);
+            }
+        }
+        rv."64 exceptions at each call of a statement with a block local" = Trace::take();
+        # the value of an operand that an operator consumes is released when the operator returns, after its other
+        # operands, while a temporary that the result can refer to lives until the end of the statement
+        {
+            string s = (make("ternary-cond") ? log("then") : log("else")) + log("after");
+        }
+        rv."65 condition of a ternary operator" = Trace::take();
+
+        {
+            bool b = (make("and-left") && make("and-right")) && log("after");
+        }
+        rv."66 operands of a logical and" = Trace::take();
+
+        {
+            bool b = (!make("or-left") || make("or-right")) && log("after");
+        }
+        rv."67 operands of a logical or and a logical not" = Trace::take();
+
+        {
+            bool b = !(exists make("exists")) || log("after");
+        }
+        rv."68 operand of exists" = Trace::take();
+
+        {
+            bool b = !(make("instanceof") instanceof Doc) || log("after");
+        }
+        rv."69 operand of instanceof" = Trace::take();
+
+        {
+            bool b = (make("eq-left") == make("eq-right")) || log("after");
+        }
+        rv."70 operands of a comparison" = Trace::take();
+
+        {
+            *Doc d = make("removed-cond");
+            string s = ((remove d) ? log("then") : log("else")) + log("after");
+        }
+        rv."71 removed value as the condition of a ternary operator" = Trace::take();
+
+        {
+            string s = ((new Doc("new-cond")) ? log("then") : log("else")) + log("after");
+        }
+        rv."72 new object as the condition of a ternary operator" = Trace::take();
+
+        {
+            string s = (make("chain-cond").getName() ? log("then") : log("else")) + log("after");
+        }
+        rv."73 chain as the condition of a ternary operator" = Trace::take();
+
+        # a list or hash that a statement constructs holds the values created for it, so a call argument constructed
+        # that way is released when the call returns, as one created by a call is
+        {
+            string s = type((make("list-arg"), 1)) + log("after");
+        }
+        rv."74 list literal as a call argument" = Trace::take();
+
+        {
+            string s = type({"a": make("hash-arg")}) + log("after");
+        }
+        rv."75 hash literal as a call argument" = Trace::take();
 
         return rv;
     }

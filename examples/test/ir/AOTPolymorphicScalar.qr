@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "POLYMORPHIC-SCALAR", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub expectFloat(float expected, float actual) {
+    if (expected.nanp() ? !actual.nanp() : expected != actual
+            || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual))) {
+        throw "POLYMORPHIC-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+class PolyInt { int scalarInt(int value) { return value * 3 + 1; } }
+class PolyIntB inherits PolyInt {
+    int scalarInt(int value) { return value * 5 + 2; }
+    int scalarInt(float value) { return 101; }
+}
+class PolyIntC inherits PolyInt { int scalarInt(int value) { return value * 7 + 3; } }
+class PolyIntThrow inherits PolyInt {
+    int scalarInt(int value) { throw "EXPECTED-POLY-INT", "ordinary override fallback"; }
+}
+class PolyFloat { float scalarFloat(float value) { return -value; } }
+class PolyFloatB inherits PolyFloat { float scalarFloat(float value) { return value + 2.0; } }
+class PolyFloatC inherits PolyFloat { float scalarFloat(float value) { return value * 3.0; } }
+class PolyFloatThrow inherits PolyFloat {
+    float scalarFloat(float value) { throw "EXPECTED-POLY-FLOAT", "ordinary override fallback"; }
+}
+int sub scalarIntCall(PolyInt receiver, int value) { return receiver.scalarInt(value); }
+float sub scalarFloatCall(PolyFloat receiver, float value) { return receiver.scalarFloat(value); }
+auto sub scalarIntInvoke(PolyInt receiver, int value) {
+    try { return receiver.scalarInt(value); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+auto sub scalarFloatInvoke(PolyFloat receiver, float value) {
+    try { return receiver.scalarFloat(value); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+int sub scalarIntLoop(PolyInt a, PolyInt b, int value, int count) {
+    for (int i = 0; i < count; ++i) {
+        value = (i % 2 == 0 ? a : b).scalarInt(value);
+    }
+    return value;
+}
+float sub scalarFloatLoop(PolyFloat a, PolyFloat b, float value, int count) {
+    for (int i = 0; i < count; ++i) {
+        value = (i % 2 == 0 ? a : b).scalarFloat(value);
+    }
+    return value;
+}
+auto sub scalarIntLoopInvoke(PolyInt receiver, int value) {
+    try {
+        for (int i = 0; i < 3; ++i) { value = receiver.scalarInt(value); }
+        return value;
+    } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+auto sub scalarFloatLoopInvoke(PolyFloat receiver, float value) {
+    try {
+        for (int i = 0; i < 3; ++i) { value = receiver.scalarFloat(value); }
+        return value;
+    } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+class PolyOverload {
+    int scalarOverload(int value) { return value + 13; }
+    int scalarOverload(float value) { return 17; }
+}
+class PolyOverloadB inherits PolyOverload {
+    int scalarOverload(int value) { return value + 19; }
+}
+int sub scalarOverloadCall(PolyOverload receiver, int value) { return receiver.scalarOverload(value); }
+int sub inheritedOverloadCall(PolyOverload receiver, float value) { return receiver.scalarOverload(value); }
+# More than three alternatives deliberately retains the original dispatch path.
+class PolyMany { int scalarMany(int value) { return value; } }
+class PolyManyA inherits PolyMany { int scalarMany(int value) { return value + 1; } }
+class PolyManyB inherits PolyMany { int scalarMany(int value) { return value + 2; } }
+class PolyManyC inherits PolyMany { int scalarMany(int value) { return value + 3; } }
+class PolyManyD inherits PolyMany { int scalarMany(int value) { return value + 4; } }
+int sub scalarManyCall(PolyMany receiver, int value) { return receiver.scalarMany(value); }
+sub deleteScalar(PolyInt receiver) { delete receiver; }
+bool sub scalarDeleted(PolyInt receiver, int value) {
+    scalarIntCall(receiver, value);
+    deleteScalar(receiver);
+    try { receiver.scalarInt(value); }
+    catch (hash<ExceptionInfo> ex) { return ex.err == "OBJECT-ALREADY-DELETED"; }
+    return False;
+}
+
+# Entry classification must never cache liveness across an ordinary call.
+string sub scalarDeleteInLoop(PolyInt receiver) {
+    try {
+        int value = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (i == 1) { deleteScalar(receiver); }
+            value = receiver.scalarInt(value);
+        }
+        return "not deleted";
+    } catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+
+PolyInt a(); PolyIntB b(); PolyIntC c(); PolyIntThrow bad();
+PolyFloat fa(); PolyFloatB fb(); PolyFloatC fc(); PolyFloatThrow fbad();
+PolyOverload oa(); PolyOverloadB ob();
+for (int round = 0; round < 8; ++round) {
+    foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+            -140737488355329, 1125899906842624, 9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value * 3 + 1, scalarIntCall(a, value));
+        expect(value * 5 + 2, scalarIntCall(b, value));
+        expect(value * 7 + 3, scalarIntCall(c, value));
+        expect(value * 3 + 1, scalarIntInvoke(a, value));
+        expect(value * 5 + 2, scalarIntInvoke(b, value));
+        expect(value * 7 + 3, scalarIntInvoke(c, value));
+        expect(value + 13, scalarOverloadCall(oa, value));
+        expect(value + 19, scalarOverloadCall(ob, value));
+        expect(17, inheritedOverloadCall(ob, float(value)));
+        expect(value + 4, scalarManyCall(new PolyManyD(), value));
+        foreach int count in ((0, 1, 7)) {
+            int expected = value;
+            for (int i = 0; i < count; ++i) { expected = i % 2 == 0 ? expected * 5 + 2 : expected * 7 + 3; }
+            expect(expected, scalarIntLoop(b, c, value, count));
+        }
+        expect(((value * 5 + 2) * 5 + 2) * 5 + 2, scalarIntLoopInvoke(b, value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@)) {
+        expectFloat(-value, scalarFloatCall(fa, value));
+        expectFloat(value + 2.0, scalarFloatCall(fb, value));
+        expectFloat(value * 3.0, scalarFloatCall(fc, value));
+        expectFloat(-value, float(scalarFloatInvoke(fa, value)));
+        expectFloat(value + 2.0, float(scalarFloatInvoke(fb, value)));
+        expectFloat(value * 3.0, float(scalarFloatInvoke(fc, value)));
+        foreach int count in ((0, 1, 7)) {
+            float expected = value;
+            for (int i = 0; i < count; ++i) { expected = i % 2 == 0 ? expected + 2.0 : expected * 3.0; }
+            expectFloat(expected, scalarFloatLoop(fb, fc, value, count));
+        }
+        expectFloat(((value + 2.0) + 2.0) + 2.0, float(scalarFloatLoopInvoke(fb, value)));
+    }
+    expect("EXPECTED-POLY-INT", scalarIntInvoke(bad, 1));
+    expect("EXPECTED-POLY-FLOAT", scalarFloatInvoke(fbad, 1.0));
+    expect("EXPECTED-POLY-INT", scalarIntLoopInvoke(bad, 1));
+    expect("EXPECTED-POLY-FLOAT", scalarFloatLoopInvoke(fbad, 1.0));
+    expect(True, scalarDeleted(new PolyIntB(), 1));
+    expect("OBJECT-ALREADY-DELETED", scalarDeleteInLoop(new PolyIntB()));
+    PolyIntB deleted();
+    deleteScalar(deleted);
+    expect(1, scalarIntLoop(deleted, b, 1, 0));
+    expect("OBJECT-ALREADY-DELETED", scalarIntLoopInvoke(deleted, 1));
+}
+# Runtime-created classes are absent from the compilation's target cohort.
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importClass("PolyInt");
+foreign.importClass("PolyIntB");
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nclass PolyUnknown inherits PolyInt { int scalarInt(int value) { return value + 101; } }\n"
+    + "PolyInt sub make(bool imported) { return imported ? new PolyIntB() : new PolyUnknown(); }\n",
+    "polymorphic-unknown");
+PolyInt unknown = foreign.callFunction("make", False);
+PolyInt imported = foreign.callFunction("make", True);
+for (int value = 0; value < 16; ++value) {
+    expect(value + 101, scalarIntCall(unknown, value));
+    expect(value * 5 + 2, scalarIntCall(imported, value));
+    expect(value * 5 + 2, scalarIntCall(b, value));
+    int expected = value;
+    for (int i = 0; i < 7; ++i) { expected = i % 2 == 0 ? expected + 101 : expected * 5 + 2; }
+    expect(expected, scalarIntLoop(unknown, b, value, 7));
+    expect(((value * 5 + 2) * 5 + 2) * 5 + 2, scalarIntLoopInvoke(imported, value));
+}
+printf("polymorphic-scalar: ok\n");

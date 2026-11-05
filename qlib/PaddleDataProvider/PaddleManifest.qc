@@ -847,8 +847,7 @@ public class PaddleManifest {
                     "`updated_at` and `billed_at` take an operator suffix, as in "
                     "`updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only "
                     "what changed.\n\n"
-                    "`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a "
-                    "transaction is a large object.",
+                    "`per_page` defaults to 30 and cannot exceed 30, because a transaction is a large object.",
                 "groups": (GroupTransactions,),
                 "field_order": ("customer_id", "status", "subscription_id", "updated_at", "created_at",
                     "billed_at", "include", "per_page", "after", "id", "invoice_number", "origin",

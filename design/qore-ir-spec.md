@@ -89,6 +89,17 @@ constants: an unresolved field becomes a null pointer in native code that faults
 the first time the instruction is reached, which can be long after the program
 started and only on the first execution that takes that branch.
 
+The serialized expression itself need not come back in the form the compiler
+gave it. A constant reference is stored as the constant's path, and the reader
+resolves the path again: a constant that already has its value is read back as
+that value, and only a constant that is still pending becomes a
+`RuntimeConstantRefNode` (or a node that resolves it when evaluated). A
+`LoadConstant` instruction, or an `Invoke` whose `invoke_opcode` is
+`LoadConstant` (a read inside a try block or a loop with cleanup), can therefore
+hold a reference, a node that needs evaluation, or the value, and every consumer
+must serve all three as the IR interpreter does (`qore_rt_load_constant_expr()`
+in the JIT runtime).
+
 Resolution happens per execution, so a consumer must keep the resolved address in
 a local. Every thread executing a function shares one instruction, and writing
 the resolution back races with the other threads' reads of the same field.
@@ -98,7 +109,8 @@ the resolution back races with the other threads' reads of the same field.
 Locals are mutable runtime locations, not SSA variables. IR uses explicit
 load/store instructions and a per-function `local_var_slots` map.
 
-Slot identity is significant:
+Slot identity is significant, so every lowering of a function numbers its locals alike, from the AST, before it is
+lowered (`ir-local-slot-numbering.md`):
 
 - Deferred handler IR inherits parent locals by IR slot ID.
 - AOT local tables preserve IR slot IDs so handler inheritance remains exact.
@@ -208,3 +220,74 @@ of a compound or increment operation does not inherit the integer range of the
 value it replaces. `IRScalarReplacementTemporaryLifetime.qtest` checks integers
 outside the inline range and boxed doubles in fixed hashes and lists, including
 loop-carried and branch values, in every execution mode and compiled code.
+
+### Exact numeric snapshots after aggregate scalarization
+
+`SnapshotInt` (409) and `SnapshotFloat` (410) preserve an assigned exact numeric
+SSA value after its owning aggregate is removed. Native arithmetic facts alone
+do not prove inline `QoreValue` storage. The fixed-aggregate scalarizer snapshots
+possibly boxed operands, mutation results and merge values before statement
+cleanup can invalidate them; it also invalidates stale integer bounds on new
+mutation/PHI results. Proven inline values need no snapshot. This does not permit
+extending object lifetimes or hoisting arbitrary conversions.
+
+The interpreter retains snapshots in a separate frame-owned, unique-slot ledger.
+Overwriting a snapshot releases its previous value; ordinary temporary cleanup
+does not release it. Normal, exceptional and cancelled frame exits drain the
+ledger, and returning a snapshot transfers its owned value. Only exact integers
+or floats are accepted, not enum values. The ledger is initialized lazily and
+has at most one registration per SSA slot, including repeated loop execution.
+
+LLVM materializes the native value at the snapshot definition, never by delaying
+unboxing until a later use. Snapshots of native PHIs, including snapshot alias
+chains, are predeclared native aliases so basic-block storage order need not
+match dominance order. Aggregate-return summaries propagate snapshots only with
+matching assigned, never-Nothing native facts. The existing Base instruction
+serialization group carries these unary instructions; the appended opcode
+maximum rejects older readers. No runtime-helper ABI or RuntimeConfig layout
+changes. AOT artifacts require a matching runtime and recompilation.
+
+`IRScalarSnapshot.qtest` covers wide integers, tag-colliding doubles, mutation,
+PHIs, loop overwrites, exceptional exits and serialized closures in AST, IR,
+JIT, tiered and AOT O0/O3 modes. Native tests verify exact reference counts on
+return, non-return and error exits, including pooled frame reuse.
+
+### Constant-local proofs include fused accesses
+
+Fixed-aggregate scalarization must not infer a constant local from a partial
+LoadLocal/StoreLocal inventory. `AddAssignLocalInt` reads its source and reads and
+writes its target; `IncrementLocalInt` reads and writes its local;
+`BranchIfLtLocalInt` reads both comparison locals. These references live in
+instruction metadata rather than SSA operands. Exclude all such locals from the
+constant-local shortcut, including dead-selector/initializer removal. A fused
+read keeps an initializer live even if there is no explicit LoadLocal; a fused
+write invalidates a previously constant selector. The existing native-local
+definite-assignment proof can optimize the preserved initialization normally.
+`IRScalarFusedLocals.qtest` covers both correctness and native counter selection.
+
+### Canonical one-argument trim in AOT CallDirect
+
+One non-reference argument to the canonical Qore builtin trim value overload can
+use `qore_rt_string_trim_aot_v1`. Admission proves a BuiltinFunctionValueVariant in
+namespace Qore named trim, exact string return and string/*string parameters,
+PURE/HOST_PORTABLE/NAMED_ARGS flags, default domain, no varargs/type substitution
+or explicit type arguments, and two NOTHING default slots. This does not infer
+assignment from a type hint: the helper guards a non-enum runtime string and the
+same active Program/caller context; misses use ordinary consuming dispatch.
+
+The helper omits argument-list construction and default/type binding only. Its
+frame reproduces the canonical Program parse-option/statement-location transition
+when runtime options differ, with restoration on error and success. It retains
+runtime flags, return type, builtin diagnostics, class/object context and stack
+checks. The result is an owned copy trimmed by the canonical Unicode-aware API;
+caller argument cleanup, exception/result ownership and runtime-local reloads
+are unchanged. No IR opcode, RuntimeConfig layout or serialized call-target layout
+changes; the versioned internal helper uses the ordinary runtime symbol registry.
+
+`QORE_DISABLE_AOT_STRING_TRIM` disables lowering at compile time and exercises
+ordinary consuming dispatch at execution. Prelink-disabled execution also falls
+back. Other overloads and Invoke lowering retain normal dispatch. The old JIT
+name-only trim shortcut is removed because it did not preserve reference overload
+semantics; the legacy byte-only helper is not used by this specialization.
+`AOTStringTrim.qtest` covers overloads, encodings, exceptions, context restoration
+and AOT compilation/control variants.

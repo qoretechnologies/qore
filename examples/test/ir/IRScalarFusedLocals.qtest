@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRScalarFusedLocalsTest
+
+class IRScalarFusedLocalsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string gate = "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 ";
+        string native_gate = "QORE_DISABLE_AOT_NATIVE_BODY_LOCALS=1 ";
+    }
+    constructor() : Test("Scalarization and fused local accesses", "1.0", \ARGV) {
+        addTestCase("live initializers, changing selectors and native counters", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/IRScalarFusedLocals.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("fused local scalarization checks passed", expected);
+        foreach string prefix in (("", gate, "QORE_DISABLE_IR_NATIVE_LOCAL_SSA=1 ")) {
+            foreach string mode in (("ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-scalar-fused-locals-");
+        foreach string prefix in (("", gate, native_gate, "QORE_DISABLE_IR_NATIVE_LOCAL_SSA=1 ",
+                "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                if (level == "-O3" && (prefix == "" || prefix == native_gate)) {
+                    *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@nonzeroStart"
+                        + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, "nonzeroStart LLVM definition");
+                    assertFalse(regex(body[0] ?? "", "(?:call|invoke) [^\n]*@qore_rt_make_list"),
+                        "constant-index aggregate remains scalarized");
+                    assertEq(prefix == native_gate,
+                        regex(body[0] ?? "", "(?:call|invoke) [^\n]*@qore_rt_add_assign_local_int_aot"),
+                        "initialized loop counter uses the native body-local proof");
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

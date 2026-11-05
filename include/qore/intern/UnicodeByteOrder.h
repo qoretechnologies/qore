@@ -64,10 +64,12 @@ struct QoreUnicodeByteOrder {
     @param p the start of the data
     @param size the number of bytes at \a p; up to the first QORE_UNICODE_BYTE_ORDER_SAMPLE bytes are examined for zero
     bytes
+    @param xsink receives cancellation or interrupt exceptions
 
     @return the byte order found, if any
 */
-DLLLOCAL inline QoreUnicodeByteOrder q_get_unicode_byte_order(const unsigned char* p, size_t size) {
+DLLLOCAL inline QoreUnicodeByteOrder q_get_unicode_byte_order(const unsigned char* p, size_t size,
+        ExceptionSink* xsink) {
     QoreUnicodeByteOrder rv;
     // the UTF-32 marks first: the UTF-32LE one starts with the UTF-16LE one
     if (size >= 4 && !memcmp(p, "\xff\xfe\x00\x00", 4)) {
@@ -98,6 +100,9 @@ DLLLOCAL inline QoreUnicodeByteOrder q_get_unicode_byte_order(const unsigned cha
     // zero bytes by their place in each group of four
     size_t zeros[4] = {0, 0, 0, 0};
     for (size_t i = 0; i < n; ++i) {
+        if (!(i % 100) && qore_check_cancel(xsink, "Unicode byte-order detection")) {
+            return rv;
+        }
         if (!p[i]) {
             ++zeros[i % 4];
         }
@@ -147,7 +152,10 @@ DLLLOCAL inline int q_check_unicode_byte_order(const unsigned char* p, size_t si
     if (*declared_order && strcmp(declared_order, "LE") && strcmp(declared_order, "BE")) {
         return 0;
     }
-    QoreUnicodeByteOrder found = q_get_unicode_byte_order(p, size);
+    QoreUnicodeByteOrder found = q_get_unicode_byte_order(p, size, xsink);
+    if (*xsink) {
+        return -1;
+    }
     // only the byte order of the same width is compared
     if (!found.encoding || strncmp(found.encoding + 4, code + 4, 2)) {
         return 0;

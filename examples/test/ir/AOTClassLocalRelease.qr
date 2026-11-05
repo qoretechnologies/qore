@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class ReleaseNode {
+    public { *ReleaseNode peer; }
+    private { Counter gone; }
+
+    constructor(Counter notify) { gone = notify; }
+    int next(int value) { return (value * 33 + 17) & 65535; }
+    destructor() { gone.dec(); }
+}
+
+foreach bool cyclic in ((False, True)) {
+    for (int round = 0; round < 12; ++round) {
+        Counter gone(cyclic ? 2 : 1);
+        Counter ready(8);
+        Counter start(1);
+        Counter done(8);
+        Counter failed();
+        ReleaseNode shared(gone);
+        if (cyclic) {
+            shared.peer = new ReleaseNode(gone);
+            shared.peer.peer = shared;
+        }
+        for (int worker = 0; worker < 8; ++worker) {
+            background sub (ReleaseNode mine) {
+                on_exit done.dec();
+                ready.dec();
+                start.waitForZero();
+                try {
+                    int total = 0;
+                    for (int i = 0; i < 512; ++i) {
+                        # The parameter remains a real owner while each iteration owns and clears this alias.
+                        ReleaseNode alias = mine;
+                        total += alias.next(i);
+                    }
+                    if (total != 4325632) {
+                        failed.inc();
+                    }
+                    remove mine;
+                } catch (hash<ExceptionInfo> err) {
+                    failed.inc();
+                }
+            }(shared);
+        }
+        ready.waitForZero();
+        remove shared;
+        start.dec();
+        done.waitForZero();
+        if (gone.waitForZero(30s) || failed.getCount()) {
+            throw "CLASS-LOCAL-RELEASE-TEST", sprintf("cycle=%y round=%d failed=%d remaining=%d",
+                cyclic, round, failed.getCount(), gone.getCount());
+        }
+    }
+}
+printf("concurrent-class-local-release: ok\n");

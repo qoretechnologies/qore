@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeCallConversionTest
+
+class NativeCallConversionTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native call scalar conversions", "1.0", \ARGV) {
+        addTestCase("native conversions and arbitrary boxed fallbacks", \check());
+        addTestCase("target-aware floating conversion", \checkNativeFloatToInt());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private string fastBody(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*_fast_[^\n]*\\([^\n]*\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " fast LLVM entry");
+        return found[0] ?? "";
+    }
+    private checkNativeFloatToInt() {
+        string source = get_script_dir() + "/AOTNativeCallConversion.qr";
+        TmpDir dir("qore-native-float-to-int-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_FLOAT_TO_INT=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                bool arm64 = regex(ir, "target triple = \"(arm64|aarch64)-");
+                bool native = arm64 && !prefix;
+                assertEq(native, ir.find("call i64 @llvm.fptosi.sat.i64.f64(") >= 0,
+                    "defined native conversion " + prefix + level);
+                assertTrue(ir.find("call i64 @qore_rt_float_to_int(") >= 0,
+                    "callback conversions retain runtime fallback " + prefix + level);
+                assertRegex("call i64 @qore_rt_float_to_int", body(ir, "callbackFloatInt"),
+                    "callback lowering remains unchanged " + prefix + level);
+                # O3 can inline and remove these small private entries. Check
+                # their individual lowering before that transformation, while
+                # checking optimized code generation and behavior at both levels.
+                if (level == "-O0") {
+                    assertRegex("call i64 @qore_rt_float_to_int", fastBody(ir, "callbackFloatInt"),
+                        "callback fast entry retains runtime conversion " + prefix + level);
+                    assertRegex("call i64 @qore_rt_float_to_int", body(ir, "methodFloatInt"),
+                        "ordinary method consumer retains runtime conversion " + prefix + level);
+                    assertEq(native, fastBody(ir, "methodFloatInt").find("call i64 @llvm.fptosi.sat.i64.f64(") >= 0,
+                        "fast method consumer uses destination semantics " + prefix + level);
+                }
+                assertEq("native-call-conversion: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTNativeCallConversion.qr";
+        string expected = "native-call-conversion: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-call-conversion-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ",
+                "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ",
+                "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                "QORE_AOT_NO_DEBUG_INFO=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("callbackInt", "callbackIntFloat", "callbackFloatInt", "callbackFloat",
+                        "callbackBoolInt", "callbackBoolFloat", "callbackZeroInt", "callbackZeroFloat",
+                        "callbackZeroBool", "methodInt", "methodIntFloat", "methodFloatInt", "methodFloat",
+                        "typedMethodInt", "typedMethodIntFloat", "typedMethodFloatInt", "typedMethodFloat",
+                        "methodIntInvoke", "methodFloatInvoke", "conditionalInt", "conditionalFloat")) {
+                    bool callback = name.startsWith("callback") || name == "conditionalFloat";
+                    bool floating = name.startsWith("methodFloat") || name.startsWith("typedMethodFloat");
+                    bool enabled = prefix != "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 "
+                        && (callback ? prefix != "QORE_DISABLE_AOT_FUNCREF_NATIVE_CONTINUATION=1 "
+                                && prefix != "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 "
+                            : prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 "
+                                && (!floating || prefix != "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 "));
+                    string entry = body(ir, name);
+                    assertEq(enabled, regex(entry, "native_call_converted_value"), name + prefix + level);
+                    if (enabled && (name == "callbackFloatInt" || name == "methodFloatInt"
+                            || name == "typedMethodFloatInt")) {
+                        assertRegex("call i64 @qore_rt_float_to_int", entry,
+                            name + " preserves runtime exceptional-float conversion");
+                    }
+                }
+                foreach string name in (("escapeResult", "multipleConsumers", "boxedArgument")) {
+                    assertFalse(regex(body(ir, name), "native_call_converted_value"), name + " excluded result");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

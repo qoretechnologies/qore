@@ -1,0 +1,93 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file AOTStaticCallRef.qm fixture module for AOTDeserializedConstantJITTier.qtest
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Static and instance members initialized with call references to static methods of their own class.  The
+# initial value of such a member is read from the AOT binary while the binary's classes are still being loaded,
+# before their methods are committed, so the reader has to find the method in the class that is being built.
+
+%modern
+
+module AOTStaticCallRef {
+    version = "1.0";
+    desc = "members initialized with call references to static methods of their own class";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the fixture's namespace
+public namespace AOTStaticCallRef {
+#! a hashdecl whose member defaults are call references to static methods of a class of the module
+/** hashdecls are read before the classes of the binary have their methods
+*/
+public hashdecl RefInfo {
+    code make = \Refs::make();
+    hash<string, code> refs = {"num": \Refs::num()};
+}
+
+#! members initialized with call references to static methods of their own class
+public class Refs {
+    public {
+        #! a static member holding a call reference to a static method of its own class
+        static code sref = \Refs::make();
+        #! a static member holding call references to static methods of its own class in a container
+        static hash<string, code> refs = {"make": \Refs::make(), "num": \Refs::num()};
+        #! a static member holding call references in a list
+        static list<code> list_refs = (\Refs::num(), \Refs::make());
+        #! an instance member holding a call reference to a static method of its own class
+        code iref = \Refs::make();
+    }
+
+    #! returns a hash
+    static hash<auto> make() {
+        return {"made": True, "n": 1};
+    }
+
+    #! returns an integer
+    static int num() {
+        return 41;
+    }
+
+    #! calls every call reference in a native method body inside a try block
+    static string callTry() {
+        try {
+            return Refs::describe(sref, refs, list_refs, new Refs());
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! calls every call reference in a native method body
+    static string callPlain() {
+        return Refs::describe(sref, refs, list_refs, new Refs());
+    }
+
+    #! formats the results of the call references
+    static string describe(code sref, hash<string, code> refs, list<code> list_refs, Refs obj) {
+        hash<RefInfo> info();
+        return sprintf("%y|%y|%d|%d|%y|%y|%y|%d", sref(), refs.make(), refs.num(), list_refs[0](), list_refs[1](),
+            obj.iref(), info.make(), info.refs.num());
+    }
+}
+}

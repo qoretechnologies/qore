@@ -1559,6 +1559,15 @@
       @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()" refuses a size not larger than
       the stack guard, and the primary thread's limit set by a runtime such as the JVM is derived from its real stack
       (<a href="https://github.com/qoretechnologies/qore/issues/5518">issue 5518</a>)
+    - on Linux, the stack limit of the primary thread is anchored to the real end of its stack: the stack resource
+      limit also bounds the arguments and the environment above the stack, so a process started with a large
+      environment crashed on a stack overflow in its primary thread instead of raising \c STACK-LIMIT-EXCEEDED
+    - on macOS, the stack limit of the primary thread is anchored to the real end of its stack: the stack used before
+      Qore was initialized reduced the stack guard, so a deep recursion could crash instead of raising
+      \c STACK-LIMIT-EXCEEDED
+    - the stack guard of a thread is 40KB instead of 80KB on x86_64 and aarch64, so a thread with a small stack, such
+      as a thread created with musl's 128KB default by a program that embeds Qore, can parse and run code (see
+      @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()")
     - a closure releases its captured variables in the order they were declared, not by address
     - malformed UTF-8, UTF-16 and UTF-32 input raises \c ENCODING-CONVERSION-ERROR on every platform, also through
       streams and with the macOS iconv
@@ -1807,6 +1816,12 @@
       epoch were negative (ex: <tt>1969-12-31T20:15:25-10:00</tt>)
     - the ISO week of the last days of a year with 53 ISO weeks that starts on a Thursday was reported as week 1 of
       the next year (ex: 2004-12-31 is <tt>2004-W53-5</tt>)
+    - a @ref foreach "foreach" loop over a range slice of a variable (<tt>foreach auto v in (l[0..2])</tt>) did
+      not hold the list, so a loop body assigning the variable could read the released list (see @ref list_slicing)
+    - @ref push "push", @ref unshift "unshift" and the compound assignment operators use the value of their operand
+      as it was evaluated: <tt>push l, l</tt> created a recursive reference
+    - @ref Qore::split() "split()" of a string containing an embedded NUL character with an empty separator looped
+      indefinitely
 
     @section qore_2_2_1 Qore 2.2.1
 

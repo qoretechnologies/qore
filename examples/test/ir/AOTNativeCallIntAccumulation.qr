@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "NATIVE-ADD-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub identity(int value) { return value; }
+int sub zero() { return 1125899906842624; }
+thread_local int calls = 0;
+thread_local int destroyed = 0;
+thread_local auto fallbackValue;
+int sub counted(int value) { ++calls; return value; }
+int sub throwing(int value) { ++calls; throw "NATIVE-ADD-ERROR", "callback"; }
+auto sub fallback(int value) { ++calls; return fallbackValue; }
+class AddOwned { destructor() { ++destroyed; } }
+auto sub owned(int value) { ++calls; return new AddOwned(); }
+int sub addRight(code<int(int)> fn, int value) { return 17 + fn(value); }
+int sub addLeft(code<int(int)> fn, int value) { return fn(value) + 17; }
+int sub addZero(code<int()> fn) { int result = 17; result += fn(); return result; }
+int sub compound(code<int(int)> fn, int value) { int result = 17; result += fn(value); return result; }
+int sub twoCompound(code<int(int)> first, code<int(int)> second, int value) {
+    int result = 0;
+    result += first(value);
+    result += second(17);
+    return result;
+}
+int sub addTwo(code<int(int)> first, code<int(int)> second, int value) {
+    return first(value) + second(17);
+}
+int sub accumulate(code<int(int)> fn, int value, int count) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) { total += fn(value + i); }
+    return total;
+}
+int sub conditional(code<int(int)> fn, int value, bool first) {
+    return first ? 17 + fn(value) : fn(value + 1) + 17;
+}
+list<int> sub multipleConsumers(code<int(int)> fn, int value) {
+    int result = fn(value);
+    return (result, result + 17);
+}
+auto sub escaping(code<int(int)> fn, int value) { return fn(value); }
+int sub explicitConversion(code<int(int)> fn, int value) { return int(fn(value)); }
+int sub reference(auto value) { int result = 17; result += value; return result; }
+auto sub observe(code<auto()> operation) {
+    try { return operation(); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+        -140737488355328, -140737488355329, 1125899906842624,
+        9223372036854775807, -9223372036854775807 - 1)) {
+    code<int(int)> closure = int sub (int arg) { return arg; };
+    foreach code<int(int)> fn in ((\identity(), closure, \counted())) {
+        expect(value + 17, addRight(fn, value));
+        expect(value + 17, compound(fn, value));
+        expect(value + 17, twoCompound(fn, fn, value));
+        expect(value + 17, addLeft(fn, value));
+        expect(value + 17, addTwo(fn, fn, value));
+        expect(value + 17, conditional(fn, value, True));
+        expect(value + 18, conditional(fn, value, False));
+        expect((value, value + 17), multipleConsumers(fn, value));
+        expect(value, escaping(fn, value));
+        expect(value, explicitConversion(fn, value));
+    }
+}
+expect(-9223372036854775792, addRight(\identity(), 9223372036854775807));
+expect(1125899906842641, addZero(\zero()));
+expect(1125899906842641, addZero(int sub () { return 1125899906842624; }));
+calls = 0;
+expect(1125899906842624 * 16 + 120, accumulate(\counted(), 1125899906842624, 16));
+expect(16, calls);
+calls = 0;
+expect("NATIVE-ADD-ERROR", observe(auto sub () { return addTwo(\counted(), \throwing(), 7); }));
+expect(2, calls);
+calls = 0;
+expect("NATIVE-ADD-ERROR", observe(auto sub () { return addTwo(\throwing(), \counted(), 7); }));
+expect(1, calls);
+calls = 0;
+destroyed = 0;
+expect("NATIVE-ADD-ERROR", observe(auto sub () { return addTwo(\owned(), \throwing(), 7); }));
+expect(2, calls);
+expect(1, destroyed);
+foreach auto value in ((NOTHING, True, False, 17, 1125899906842624, 4.5, "23", (1, 2), {"key": 1})) {
+    fallbackValue = value;
+    calls = 0;
+    expect(reference(value), compound(\fallback(), 0));
+    expect(reference(value), twoCompound(\fallback(), \identity(), 0));
+    expect(2, calls);
+}
+calls = 0;
+destroyed = 0;
+expect(17, addRight(\owned(), 0));
+expect(1, calls);
+expect(1, destroyed);
+calls = 0;
+destroyed = 0;
+expect(17, compound(\owned(), 0));
+expect(1, calls);
+expect(1, destroyed);
+calls = 0;
+expect("NATIVE-ADD-ERROR", observe(auto sub () { return twoCompound(\counted(), \throwing(), 7); }));
+expect(2, calls);
+printf("native-call-add-int: ok\n");

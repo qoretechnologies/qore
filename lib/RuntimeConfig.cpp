@@ -49,24 +49,35 @@ RuntimeConfig::RuntimeConfig(const RuntimeConfig& other) : impl(nullptr), owned(
     }
 }
 
+// A RuntimeConfig that does not own its Impl is a view of storage owned elsewhere: the thread's canonical
+// RuntimeConfig (rc_get_tls_ref()) uses thread-local storage that stays valid while the thread runs, including the
+// exit handlers of the main thread, which run after the thread-local destructors and destroy the static namespace,
+// whose objects use the canonical RuntimeConfig.  So the canonical RuntimeConfig must never own, and hence never
+// free, an Impl: assigning to a view assigns its state (and moving an owner's state to it releases the owner's), and
+// moving from a view leaves the view as it is.
+
 RuntimeConfig::RuntimeConfig(RuntimeConfig&& other) noexcept : impl(other.impl), owned(other.owned) {
-    other.impl = nullptr;
-    other.owned = false;
+    if (owned) {
+        other.impl = nullptr;
+        other.owned = false;
+    }
 }
 
 RuntimeConfig& RuntimeConfig::operator=(const RuntimeConfig& other) {
     if (this == &other) {
         return *this;
     }
+    if (impl && !owned) {
+        *impl = other.impl ? *other.impl : Impl();
+        return *this;
+    }
+    // allocate before releasing the current state, so that a failed allocation leaves this object unchanged
+    Impl* new_impl = other.impl ? new Impl(*other.impl) : nullptr;
     if (owned && impl) {
         delete impl;
     }
-    impl = nullptr;
-    owned = false;
-    if (other.impl) {
-        impl = new Impl(*other.impl);
-        owned = true;
-    }
+    impl = new_impl;
+    owned = new_impl != nullptr;
     return *this;
 }
 
@@ -74,13 +85,25 @@ RuntimeConfig& RuntimeConfig::operator=(RuntimeConfig&& other) noexcept {
     if (this == &other) {
         return *this;
     }
+    if (impl && !owned) {
+        *impl = other.impl ? *other.impl : Impl();
+        // the state moved from an owner is released, so it is empty as after any other move
+        if (other.owned) {
+            delete other.impl;
+            other.impl = nullptr;
+            other.owned = false;
+        }
+        return *this;
+    }
     if (owned && impl) {
         delete impl;
     }
     impl = other.impl;
     owned = other.owned;
-    other.impl = nullptr;
-    other.owned = false;
+    if (owned) {
+        other.impl = nullptr;
+        other.owned = false;
+    }
     return *this;
 }
 
@@ -309,39 +332,41 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         const QoreParseOptions& new_po,
         ExceptionSink* xsink)
     : rc(rc), old_loc(rc.getLocation()), old_stmt(rc.getStatement()), old_po(rc.getParseOptions()),
-      tls_old_loc(rc.getLocation()), tls_old_stmt(rc.getStatement()), tls_old_po(rc.getParseOptions()),
-      restore_po(has_po), used_swap(false) {
+      restore_po(has_po) {
     rc.setLocation(new_loc);
     if (new_stmt) {
         rc.setStatement(new_stmt);
     }
+    // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts
+    // without RuntimeConfig access) gets the correct location.  The thread's previous state is saved from the thread
+    // itself: the snapshot fields of the RuntimeConfig are not maintained by every execution mode (compiled code and
+    // the IR interpreter keep the live thread view only), so they must never be written back to the thread.
     if (has_po) {
         rc.setParseOptions(new_po);
-    }
-    // Sync to TLS so code that falls back to TLS (like rc_get_current() from contexts
-    // without RuntimeConfig access) gets the correct location
-    if (xsink) {
-        used_swap = true;
-        swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), rc.getParseOptions(),
+        swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), new_po,
             tls_old_stmt, tls_old_loc, tls_old_po);
-    } else {
-        update_runtime_statement_location(rc.getStatement(), rc.getLocation(), rc.getParseOptions());
+        return;
     }
+    // without new parse options, the thread's runtime parse options, including any runtime override, stay as they are
+    tls_old_stmt = get_runtime_statement();
+    tls_old_loc = get_runtime_location();
+    update_runtime_statement_location(rc.getStatement(), rc.getLocation());
+#ifdef QORE_MANAGE_STACK
+    if (xsink) {
+        check_stack(xsink);
+    }
+#endif
 }
 
 RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
     rc.setLocation(old_loc);
     rc.setStatement(old_stmt);
+    // Restore TLS to its old values
     if (restore_po) {
         rc.setParseOptions(old_po);
-    }
-    // Restore TLS to old values
-    if (restore_po) {
         update_runtime_statement_location(tls_old_stmt, tls_old_loc, tls_old_po);
-    } else if (used_swap) {
-        update_runtime_statement_location(tls_old_stmt, tls_old_loc);
     } else {
-        update_runtime_statement_location(old_stmt, old_loc, rc.getParseOptions());
+        update_runtime_statement_location(tls_old_stmt, tls_old_loc);
     }
 }
 

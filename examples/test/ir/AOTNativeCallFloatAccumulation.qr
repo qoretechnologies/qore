@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+sub expectFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "NATIVE-FLOAT-ACCUMULATION", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub positive() { return 2.5; }
+float sub negative() { return -2.5; }
+float sub zero() { return 0.0; }
+float sub negativeZero() { return -0.0; }
+float sub collisionA() { return -3.0e307; }
+float sub collisionB() { return -6.0e307; }
+float sub positiveInfinity() { return @inf@; }
+float sub negativeInfinity() { return -@inf@; }
+float sub positiveNan() { return @nan@; }
+float sub negativeNan() { return -@nan@; }
+int sub wideInteger() { return 0x7fffffffffffffff; }
+bool sub trueValue() { return True; }
+bool sub falseValue() { return False; }
+*float sub nothingValue() { return NOTHING; }
+float sub compound(code<float()> fn, float initial) {
+    float total = initial; total += fn(); return total;
+}
+float sub expression(code<float()> fn, float initial) {
+    float total = initial; return (total += fn()) + total;
+}
+float sub accumulate(code<float()> fn, float initial, int count) {
+    float total = initial;
+    for (int i = 0; i < count; ++i) { total += fn(); }
+    return total;
+}
+foreach code<float()> fn in ((\positive(), \negative(), \zero(), \negativeZero(), \collisionA(), \collisionB(),
+        \positiveInfinity(), \negativeInfinity(), \positiveNan(), \negativeNan(), \wideInteger(), \trueValue(),
+        \falseValue(), \nothingValue())) {
+    float value = float(fn());
+    foreach float initial in ((0.0, -0.0, 1.5, -3.0e307, -6.0e307)) {
+        float once = initial + value;
+        expectFloat(once, compound(fn, initial));
+        expectFloat(once + once, expression(fn, initial));
+        foreach int count in ((0, 1, 3, 17)) {
+            float expected = initial;
+            for (int i = 0; i < count; ++i) { expected = expected + value; }
+            expectFloat(expected, accumulate(fn, initial, count));
+        }
+    }
+}
+printf("native-float-call-arithmetic: ok\n");

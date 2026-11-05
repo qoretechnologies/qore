@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ClassLocalAssignmentTest
+
+class ClassLocalAssignmentTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("class-local assignment checks", "1.0", \ARGV) {
+        addTestCase("assignment checks, weak values and ownership", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTClassLocalAssignment.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertTrue(expected.startsWith("0:24:5:1:1:3\n"), expected);
+        assertFalse(expected.find("unexpected-") >= 0, expected);
+        assertTrue(expected.endsWith("RUNTIME-TYPE-ERROR\nclass-local-assignment: ok\n"), expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-class-local-assignment-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE=1 ",
+                "QORE_DISABLE_AOT_CLASS_STORE_RESULT=1 ",
+                "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 ",
+                "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ",
+                "QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            bool separate_coercion = prefix.startsWith("QORE_DISABLE_AOT_RUNTIME_CHECKED_CLASS_STORE");
+            bool stored_result = !separate_coercion && !prefix.startsWith("QORE_DISABLE_AOT_CLASS_STORE_RESULT");
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("classLocalPhi", "classLocalInvoke", "rawClassSource")) {
+                    *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                        + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    # The invoke fixture also filters its catch hash. Match the
+                    # receiver's slot, not unrelated coercions in the function:
+                    # its canonical slot follows the parameters, argv and the
+                    # locals declared before it (design/ir-local-slot-numbering.md)
+                    int receiver_slot = name == "classLocalPhi" ? 6 : 2;
+                    string slot_pattern = "[^\\n]*\\(ptr %ctx, i32 " + receiver_slot + ",";
+                    assertEq(separate_coercion,
+                        regex(body[0] ?? "", "qore_rt_coerce_value_aot" + slot_pattern),
+                        name + " separate class coercion selection " + prefix + level);
+                    assertEq(!separate_coercion && !stored_result,
+                        regex(body[0] ?? "", "qore_rt_assign_local_eval_weak_aot" + slot_pattern),
+                        name + " checked assignment retained " + prefix + level);
+                    assertEq(stored_result,
+                        regex(body[0] ?? "", "qore_rt_assign_class_local_result_aot" + slot_pattern),
+                        name + " owned stored result " + prefix + level);
+                    if (name != "rawClassSource") {
+                        assertEq(stored_result && !prefix.startsWith("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL"),
+                            regex(body[0] ?? "", "(?:call|invoke) i32 @qore_rt_try_assign_pinned_class_local_aot"),
+                            name + " entry-pinned cache borrow " + prefix + level);
+                    }
+                }
+                *list<*string> captured_body = regex_extract(ir,
+                    "(?s)define [^\n]*@escapedTarget_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!captured_body, "captured local definition");
+                assertFalse(regex(captured_body[0] ?? "", "qore_rt_assign_class_local_result_aot"),
+                    "captured target keeps the post-cleanup reload");
+                *list<*string> parameterized_body = regex_extract(ir,
+                    "(?s)define [^\n]*@parameterizedClassSource_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!parameterized_body, "parameterized target definition");
+                assertFalse(regex(parameterized_body[0] ?? "", "qore_rt_assign_class_local_result_aot"),
+                    "parameterized target keeps generic acceptance");
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "runtime context control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE=1 "),
+                    "runtime fresh-store control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH=1 "),
+                    "generic class-acceptance control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_NODE_STORE=1 "),
+                    "generic value-store control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_STRONG_STORE=1 "),
+                    "weak-normalization path control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_PINNED_CLASS_LOCAL=1 "),
+                    "owned-cache control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 "),
+                    "runtime local-slot control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_STRONG_CLASS_LOCAL_CLEAR=1 "),
+                    "generic class-local cleanup control " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLASS_LOCAL_PREPARE=1 "),
+                    "runtime declaration-metadata control " + prefix + level);
+            }
+        }
+    }
+}

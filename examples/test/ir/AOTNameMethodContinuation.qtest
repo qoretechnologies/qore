@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NameMethodContinuationTest
+
+class NameMethodContinuationTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("name-dispatched native method continuations", "1.0", \ARGV) {
+        addTestCase("native continuation and fallback contracts", \check());
+        addTestCase("nullable native method observation", \checkObservation());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTNameMethodContinuation.qr";
+        string expected = "name-method-continuation: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-name-method-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_LLVM_METHOD_DECREF_GUARD=1 ",
+                "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ",
+                "QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 QORE_IR_OPT_STATS=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_");
+                if (prefix == "" || prefix == "QORE_AOT_EH=1 ") {
+                    assertRegex("scalar-cleanup-guards=[1-9][0-9]*", ir,
+                        "method-only callers receive cleanup guards");
+                } else if (prefix == "QORE_DISABLE_LLVM_METHOD_DECREF_GUARD=1 ") {
+                    assertRegex("scalar-cleanup-guards=0", ir, "method guard disabled");
+                } else if (prefix == "QORE_DISABLE_LLVM_SCALAR_DECREF_GUARD=1 ") {
+                    assertFalse(regex(ir, "scalar-cleanup-guards="), "all guards disabled");
+                }
+                foreach string name in (("nameNativeLoop", "nameNativeDynamic", "nameNativeInvoke")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertEq(enabled, regex(body[0] ?? "", "call i32 @qore_rt_try_method_int_unary_v1"),
+                        name + prefix + level);
+                    assertEq(enabled, regex(body[0] ?? "", "name_method_native_value"), name + " native store");
+                }
+                foreach string name in (("nameNativeEscapes", "nameNativeBoxedArg", "nameNativeOptionalArg")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertFalse(regex(body[0] ?? "", "name_method_native_value"), name + " excluded");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private checkObservation() {
+        TmpDir dir("qore-name-method-observation-");
+        # Reuse the full concurrent-reader and debugger protocols with nullable
+        # callers, while their original tests retain required-class coverage.
+        foreach string name in (("AOTNativeMethodFrameReaders", "AOTNativeMethodDebugger")) {
+            string source = File::readTextFile(get_script_dir() + "/" + name + ".qr");
+            if (name == "AOTNativeMethodFrameReaders") {
+                assertRegex("NativeReaderA receiver =", source);
+                source = replace(source, "NativeReaderA receiver =", "*NativeReaderA receiver =");
+            } else {
+                assertRegex("NativeDebugBase receiver =", source);
+                source = replace(source, "NativeDebugBase receiver =", "*NativeDebugBase receiver =");
+                source = replace(source, "return receiver.next(value);",
+                    "value = receiver.next(value); return value;");
+            }
+            string fixture = dir.path + "/" + name + ".qr";
+            File file();
+            file.open(fixture, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            file.write(source);
+            file.close();
+            string expected = name == "AOTNativeMethodFrameReaders"
+                ? "native-method-frame-readers: ok\n" : "native-method-debugger: ok\n";
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
+                        prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    if (name == "AOTNativeMethodFrameReaders") {
+                        assertRegex("name_method_native_value", ir);
+                    } else {
+                        # the parameter assigned from the call is read after the release of the old receiver, whose
+                        # destructor could replace it by reflection: it stays boxed, and only the call is native
+                        assertRegex("call i32 @qore_rt_try_method_int_unary_v1", ir);
+                    }
+                    assertEq(expected, run((executable,)), name + prefix + level);
+                    assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 "),
+                        name + " disabled " + prefix + level);
+                    assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "),
+                        name + " eager method frame " + prefix + level);
+                }
+            }
+        }
+    }
+}

@@ -23,7 +23,8 @@
     report the data race in the child; every build checks that the calls in all threads return the expected values.
 
     The test compiles the module with qcc and runs child processes that load it with \c load_module() and call the
-    method in several threads, all released together by a Counter.
+    methods in several threads, all released together by a Counter. It covers ordinary dispatch and a unary
+    integer continuation, and verifies that the latter emits the native fast-call helper.
 */
 class AotRuntimeClassContextTest inherits QUnit::Test {
     public {
@@ -54,11 +55,18 @@ public class HierCaller inherits HierBase {
     int call(object o) {
         return o.value();
     }
+    int callUnary(object o, int n) {
+        n = o.unary(n);
+        return n;
+    }
 }
 
 public class HierTarget {
     int value() {
         return 2;
+    }
+    int unary(int n) {
+        return n + 1;
     }
 }
 ";
@@ -82,6 +90,7 @@ code run = sub () {
     int sum = 0;
     for (int i = 0; i < 2000; ++i) {
         sum += call_object_method(c, \"call\", t);
+        sum += call_object_method(c, \"callUnary\", t, 1);
     }
     results.push(sum);
 };
@@ -152,11 +161,13 @@ printf(\"sums: %y\\n\", sums);
         f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(ModuleSource);
         f.close();
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module "
+        string out = backquote(sprintf("QORE_DUMP_LLVM_IR=1 LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -O3 --module "
             "--strip-source -o %s %s 2>&1", libqore_dir, libqore_dir, tmp.path, qcc_bin, qmod, src));
         if (!is_file(qmod)) {
             testSkip(sprintf("qcc could not compile the module: %s", out));
         }
+        assertTrue(out.find("call i32 @qore_rt_try_method_int_unary_v1(") >= 0,
+            "the compiled module includes the native unary method continuation");
         # the child must load the compiled module, not its source
         unlink(src);
 
@@ -165,8 +176,8 @@ printf(\"sums: %y\\n\", sums);
         f.write(ChildSource);
         f.close();
 
-        # each call returns 2
-        list<int> expected = map 4000, xrange(Threads);
+        # both the ordinary call and the native unary continuation return 2
+        list<int> expected = map 8000, xrange(Threads);
         for (int round = 1; round <= Rounds; ++round) {
             out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s %d %d %s 2>&1; echo \"rc=$?\"",
                 libqore_dir, tmp.path, qore_bin, child, Threads, programs, delete_programs ? "delete" : ""));

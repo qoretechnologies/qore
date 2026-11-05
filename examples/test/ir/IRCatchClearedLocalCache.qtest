@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class IRCatchClearedLocalCacheTest
+
+/** A member, key or element store to a local container drops native code's cached copy of the local, so that the
+    runtime can change the container in place, and reloads it after the store.  When the store raised an exception,
+    the handler of the enclosing try block read the dropped cache instead of the local (NOTHING), with JIT
+    compilation of the function (jit and tiered modes).
+*/
+class IRCatchClearedLocalCacheTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/IRCatchClearedLocalCache.qr";
+    }
+
+    constructor() : Test("the handler of a raising container store reads the local", "1.0", \ARGV) {
+        addTestCase("execution modes", \modes());
+        addTestCase("compiled program", \compiled());
+        set_return_value(main());
+    }
+
+    #! the output of the worker, as with the AST interpreter
+    private static string expected() {
+        list<string> lines;
+        for (int round = 0; round < 3; ++round) {
+            lines += (
+                sprintf("%d notification object: NOTIFY-ERROR True 13", round),
+                sprintf("%d member type object: RUNTIME-TYPE-ERROR True 1", round),
+                sprintf("%d hashdecl key: INVALID-MEMBER {a: 1}", round),
+                sprintf("%d list element: RUNTIME-TYPE-ERROR [1, 2]", round),
+                sprintf("%d after try: True 2", round),
+                sprintf("%d in loop: 3", round),
+                sprintf("%d on_error handler: on_error True, catch True", round),
+            );
+        }
+        return lines.join("\n") + "\n";
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command("LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "));
+        if (result.mode) {
+            ExecModeHarness::check_native(result);
+        }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+
+    modes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected(), run((qore, "--exec-mode=" + mode, worker)), mode);
+        }
+    }
+
+    compiled() {
+        TmpDir dir("qore-ir-catch-cleared-cache-");
+        string exe = dir.path + "/worker";
+        run((qcc, "-o", exe, worker));
+        assertEq(expected(), run((exe,)), "qcc");
+    }
+}

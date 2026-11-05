@@ -235,7 +235,8 @@ string sub form(string mod) {
 }
 printf(\"qlib: %s %s\\n\", form(\"Mapper\"), form(\"DataProvider\"));
 
-Program p(PO_NEW_STYLE);
+Program p(PO_MODERN);
+p.setExecMode(__QORE_TEST_EXEC_MODE__);
 p.loadModule(\"OwnStateMod\");
 p.loadModule(\"Mapper\");
 p.loadModule(\"DataProvider\");
@@ -263,7 +264,8 @@ auto sub direct_dyn_put() { return call_function('save_thread_data', 'k', 'direc
 \", \"restricted\");
 
 # a Program that uses the module and may use thread-local data itself
-Program u(PO_NEW_STYLE);
+Program u(PO_MODERN);
+u.setExecMode(__QORE_TEST_EXEC_MODE__);
 u.loadModule(\"OwnStateMod\");
 u.parse(\"
 auto sub module_put_user_get() { OwnStateMod::Store::put('iso', 'module'); return get_thread_data('iso'); }
@@ -300,7 +302,8 @@ foreach string f in (\"static_put\", \"static_get\", \"get_all\", \"remove_key\"
 # restricted code calling a flagged function directly
 string direct_err;
 try {
-    Program d(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+    Program d(PO_MODERN | PO_NO_THREAD_CONTROL);
+    d.setExecMode(__QORE_TEST_EXEC_MODE__);
     d.parse(\"save_thread_data('k', 1);\", \"direct\");
     direct_err = \"no error\";
 } catch (hash<ExceptionInfo> ex) {
@@ -323,10 +326,17 @@ foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_on
         return path;
     }
 
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
     private compileModule(string qm_path, string qmod_path) {
+        int status;
         string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "%s -b --compile-module --output %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qore_bin,
-            qmod_path, qm_path));
+            "%s -b --compile-module --output %s %s 2>&1",
+            quote(libqore_dir), quote(libqore_dir), quote(libqore_dir), quote(qore_bin),
+            quote(qmod_path), quote(qm_path)), \status);
+        assertEq(0, status, compile_out);
         assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", basename(qmod_path), compile_out));
     }
 
@@ -335,12 +345,21 @@ foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_on
         example) that the qlib modules under test require, which a test environment can provide only through it
     */
     private hash<ExecModeHarness::ModeRunResult> runScript(string module_path, string script_path, string mode) {
+        # Child Programs choose their execution mode independently of the process.
+        script_path = writeFile(script_path + "." + mode + ".q",
+            replace(ReadOnlyFile::readTextFile(script_path), "__QORE_TEST_EXEC_MODE__", "EM_" + toupper(mode)));
         if (ENV.QORE_MODULE_DIR) {
             module_path += ":" + ENV.QORE_MODULE_DIR;
         }
-        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
-            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, libqore_dir,
-            module_path, qore_bin, mode, script_path));
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b --enable-debug --exec-mode=%s %s",
+            quote(libqore_dir), quote(libqore_dir), quote(libqore_dir),
+            quote(module_path), quote(qore_bin), mode, quote(script_path)));
+        assertEq(0, result.rc, result.out);
+        assertEq((), result.loader_warnings, "module calls use the requested source/AOT modules");
+        ExecModeHarness::check_native(result);
+        return result;
     }
 
     #! runs the script with the source and the AOT test module in every mode against the source module's AST output

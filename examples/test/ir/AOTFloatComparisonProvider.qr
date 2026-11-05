@@ -1,0 +1,35 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+float sub cmpEq(float value) { return value == 0.0 ? 1.0 : 2.0; }
+float sub cmpNe(float value) { return value != 0.0 ? 1.0 : 2.0; }
+float sub cmpLt(float value) { return value < 0.0 ? 1.0 : 2.0; }
+float sub cmpLe(float value) { return value <= 0.0 ? 1.0 : 2.0; }
+float sub cmpGt(float value) { return value > 0.0 ? 1.0 : 2.0; }
+float sub cmpGe(float value) { return value >= 0.0 ? 1.0 : 2.0; }
+float sub cmpRightEq(float value) { return 0.0 == value ? 1.0 : 2.0; }
+float sub cmpRightNe(float value) { return 0.0 != value ? 1.0 : 2.0; }
+float sub cmpRightLt(float value) { return 0.0 < value ? 1.0 : 2.0; }
+float sub cmpRightLe(float value) { return 0.0 <= value ? 1.0 : 2.0; }
+float sub cmpRightGt(float value) { return 0.0 > value ? 1.0 : 2.0; }
+float sub cmpRightGe(float value) { return 0.0 >= value ? 1.0 : 2.0; }
+float sub cmpIf(float value) {
+    if (value >= 0.0) { return value + 2.0; }
+    return value - 2.0;
+}
+float sub cmpNested(float value) {
+    if (value < 0.0) {
+        if (value < -2.0) { return -3.0; }
+        return -1.0;
+    }
+    return value + 1.0;
+}
+float sub cmpSignedZero(float value) { return value >= 0.0 ? -0.0 : 0.0; }
+float sub cmpDivision(float value) { return value == 0.0 ? 9.0 : 1.0 / value; }
+float sub cmpDivideLeaf(float value) { return 1.0 / value; }
+float sub cmpNestedDivision(float value) { return value == 0.0 ? 9.0 : cmpDivideLeaf(value); }
+thread_local int cmpEffects = 0;
+float sub cmpBump(float value) { ++cmpEffects; return value + 1.0; }
+float sub cmpEffect(float value) { return value > 0.0 ? cmpBump(value) : 7.0; }

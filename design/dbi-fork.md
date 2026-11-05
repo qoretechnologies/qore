@@ -45,15 +45,21 @@ the statement.
 The memory given up is a fixed amount for each inherited connection and statement; connections that the child opens
 itself are freed normally.
 
+The typed result hashdecl cache is also abandoned without traversing it. The child handler marks every datasource's
+cache as inherited, including a closed datasource: a parent thread can have set `isopen` to false and still be
+releasing cached hashdecls. The first cache read or cleanup swaps the inherited map into process-lifetime storage
+under the reset datasource mutex. It does this even if the inherited map reports itself empty, since the copy can
+have happened between an insertion's node update and its size update. The child's new cache is owned and cleared
+normally. The child handler itself performs no allocation or traversal of the cache.
+
 ## When the child gives up a connection
 
 Each check names what the caller does with the connection (`QoreDbiForkCheck`, `include/qore/intern/DbiForkRegistry.h`):
 
-| Mode | Callers | Inherited connection | Transaction of the parent |
-|---|---|---|---|
-| `Raise` | actions that use a connection: `startDBAction()` with a connection, `open()`, `qore_ds_private::forkCheck()` in every `Datasource` action, `DatasourcePool::getDSIntern()` | given up; the action opens a new one | `DATASOURCE-FORK-ERROR` |
-| `Defer` | actions that need no connection: options and configuration (`acquireLock()`), `setAutoCommit()`, closing a statement, the pool's `inTransaction()` and `toString()` | given up | recorded; raised by the next `Raise` check |
-| `Discard` | `close()`, `reset()`, the destructors, the thread resource cleanup | given up | forgotten without an error |
+|!Mode|!Callers|!Inherited connection|!Transaction of the parent
+|`Raise`|actions that use a connection: `startDBAction()` with a connection, `open()`, `qore_ds_private::forkCheck()` in every `Datasource` action, `DatasourcePool::getDSIntern()`|given up; the action opens a new one|`DATASOURCE-FORK-ERROR`
+|`Defer`|actions that need no connection: options and configuration (`acquireLock()`), `setAutoCommit()`, closing a statement, the pool's `inTransaction()` and `toString()`|given up|recorded; raised by the next `Raise` check
+|`Discard`|`close()`, `reset()`, the destructors, the thread resource cleanup|given up|forgotten without an error
 
 A transaction of the parent is one of:
 

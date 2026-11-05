@@ -338,6 +338,13 @@ enum class AOTFloatExpressionNodeKind : uint8_t {
     //! Select a float value; lhs is the condition, rhs the true value, and param the false value.
     Select = 9,
     HashKeyFloat = 10,
+    //! Float comparisons produce bool nodes; Ne is unordered, the others ordered.
+    Eq = 11,
+    Ne = 12,
+    Lt = 13,
+    Le = 14,
+    Gt = 15,
+    Ge = 16,
 };
 
 constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 64;
@@ -558,6 +565,13 @@ struct AOTGlobalIntInfo {
     }
 };
 
+//! Private, same-compilation fast entry for one immutable callback argument.
+struct AOTCallbackFastEntry {
+    unsigned param_index = 0;
+    const AbstractQoreFunctionVariant* target = nullptr;
+    std::string name;
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     std::string call_ref_path;           //!< Canonical Qore function path for exact call-reference dispatch
@@ -577,6 +591,11 @@ struct BatchCalleeInfo {
     BatchCalleeBoxedReturnKind boxed_return_kind = BatchCalleeBoxedReturnKind::Unknown;
         //!< Exact body-proven boxed runtime kind
     std::string fast_name;               //!< Fast entry function name (if eligible)
+    std::vector<AOTCallbackFastEntry> callback_fast_entries; //!< Private callback argument specializations
+    std::string callback_runtime_config_name; //!< Private native target entry with a borrowed live RuntimeConfig
+    bool callback_entry_state = false; //!< Companion borrows native slots, cancellation and stack-limit addresses
+    bool callback_runtime_config_entry = false; //!< Companion admitted by callback specialization
+    bool direct_runtime_config_entry = false; //!< Companion admitted for direct same-program calls too
     std::string fast_contract_hash;      //!< Native fast-call ABI/effect contract hash
     bool preloaded_fast_entry = false;   //!< fast_name came from an immutable sibling artifact
     //! The body contract fields (hash and dependency rows) came from a sibling artifact's symbol index; they
@@ -595,6 +614,9 @@ struct BatchCalleeInfo {
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTIntExpressionInfo int_expression; //!< Importable bounded pure native-int/bool expression
     AOTFloatExpressionInfo float_expression; //!< Importable bounded pure native-float expression
+    //! Bounded, compile-time-only exact receiver alternatives with the same unary scalar ABI.
+    //! Every target is independently type-resolved and has a pure body summary in this compilation.
+    std::vector<const AbstractQoreFunctionVariant*> scalar_overrides;
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     AOTStringExpressionInfo string_expression; //!< Importable bounded typed string expression

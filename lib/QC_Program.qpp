@@ -1410,7 +1410,7 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     program_set_independent_creator(*pgm, independent);
 
     self->setPrivate(CID_PROGRAM, pgm);
-    printd(5, "Program::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", pgm, (int64)pgm->getProgramId(), self);
+    printd(5, "Program::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", pgm, static_cast<int64>(pgm->getProgramId()), self);
 }
 
 //! Creates a new Program object with parse options from a ParseOptions object
@@ -1436,7 +1436,7 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     program_set_independent_creator(*pgm, independent);
 
     self->setPrivate(CID_PROGRAM, pgm);
-    printd(5, "Program::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", pgm, (int64)pgm->getProgramId(), self);
+    printd(5, "Program::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", pgm, static_cast<int64>(pgm->getProgramId()), self);
 }
 
 //! Throws an exception to prevent objects of this class from being copied
@@ -1460,7 +1460,7 @@ Program::copy() {
     the code crashed the process when it returned
  */
 Program::destructor() {
-    printd(5, "Program::destructor() pgm: %p pgmid: " QLLD " self: %p\n", p, (int64)p->getProgramId(), self);
+    printd(5, "Program::destructor() pgm: %p pgmid: " QLLD " self: %p\n", p, static_cast<int64>(p->getProgramId()), self);
     p->waitForTerminationAndDeref(xsink);
 }
 
@@ -2982,7 +2982,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
         return QoreValue();
     }
     // remove the QoreProgram private data from the object
-    printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
+    printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, static_cast<int64>(p->getProgramId()), self);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif
@@ -3037,7 +3037,7 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
         return QoreValue();
     }
     // remove the QoreProgram private data from the object
-    printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
+    printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, static_cast<int64>(p->getProgramId()), self);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif
@@ -3091,7 +3091,7 @@ Program::loadApplyToPrivateUserModule(
         return QoreValue();
     }
     // remove the QoreProgram private data from the object
-    printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
+    printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, static_cast<int64>(p->getProgramId()), self);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif
@@ -3142,7 +3142,7 @@ Program::loadApplyToPrivateUserModule(
         return QoreValue();
     }
     // remove the QoreProgram private data from the object
-    printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
+    printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, static_cast<int64>(p->getProgramId()), self);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif

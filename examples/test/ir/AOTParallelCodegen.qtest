@@ -31,6 +31,7 @@ class AOTParallelCodegenTest inherits QUnit::Test {
 
         addTestCase("parallel codegen is load-equivalent to single-object", \testLoadEquivalence());
         addTestCase("parallel codegen is deterministic (same binary)", \testDeterminism());
+        addTestCase("split codegen preserves stripped exception locations", \testSourceLocations());
         # SplitModule-promoted locals must be restored on both ELF and Mach-O.
         if (PlatformOS != "Windows") {
             addTestCase("split .qo has no extra global symbols vs single", \testQoSymbolEquivalence());
@@ -40,7 +41,11 @@ class AOTParallelCodegenTest inherits QUnit::Test {
     }
 
     private string run(string cmd) {
-        return backquote(cmd + " 2>&1");
+        # macOS system shells strip inherited DYLD_* variables; select the
+        # requested build explicitly for both the compiler and child programs.
+        string quoted_libdir = "'" + replace(libqore_dir, "'", "'\"'\"'") + "'";
+        return backquote("LD_LIBRARY_PATH=" + quoted_libdir + " DYLD_LIBRARY_PATH="
+            + quoted_libdir + " " + cmd + " 2>&1");
     }
 
     private write(string path, string body) {
@@ -167,6 +172,47 @@ class AOTParallelCodegenTest inherits QUnit::Test {
         assertTrue(single_digest =~ /total=/, "single-object module loads and runs: " + single_digest);
         assertEq(single_digest, par_digest,
             "parallel-built module is load-equivalent to single-object build");
+    }
+
+    private testSourceLocations() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/locations.qr";
+        write(src, "%modern\n"
+            "int sub divide(int value) {\n"
+            "    # Keep the scalar leaf's throwing line distinct from its declaration.\n"
+            "    return 100 / value;\n"
+            "}\n"
+            "int sub negative(int value) {\n"
+            "    # This function can live in another codegen partition.\n"
+            "    return -100 / value;\n"
+            "}\n"
+            "int sub offset(int value) {\n"
+            "    # Its location table is independent of the other functions.\n"
+            "    return 1000 / value;\n"
+            "}\n"
+            "int sub invoke(code<int(int)> fn, int value) { return fn(value); }\n"
+            "foreach code<int(int)> fn in ((\\divide(), \\negative(), \\offset())) {\n"
+            "    try { invoke(fn, 0); } catch (hash<ExceptionInfo> ex) {\n"
+            "        printf(\"%s:%d\\n\", ex.err, ex.line);\n"
+            "    }\n"
+            "}\n");
+        string expected = run(sprintf("%s --exec-mode=ast %s", qore_bin, src));
+        assertEq("DIVISION-BY-ZERO:4\nDIVISION-BY-ZERO:8\nDIVISION-BY-ZERO:12\n", expected,
+            "AST reports the throwing statement, not any function declaration");
+        foreach string opt in (("-O0", "-O3")) {
+            foreach int jobs in ((1, 4)) {
+                string exe = tmp_dir + "/locations";
+                string out = run(sprintf("MAKEFLAGS= QCC_SPLIT_THRESHOLD=1 QORE_DEBUG_OPT=1 "
+                    "%s --jobs %d %s --strip-source --strip-debug-info -o %s %s",
+                    qcc_bin, jobs, opt, exe, src));
+                assertTrue(is_file(exe), "location fixture compiles: " + out);
+                if (jobs > 1) {
+                    assertTrue(out =~ /AOT: parallel codegen/, "forced split path executes: " + out);
+                }
+                assertEq(expected, run(exe), sprintf("%s jobs=%d stripped native locations", opt, jobs));
+                unlink(exe);
+            }
+        }
     }
 
     private testDeterminism() {

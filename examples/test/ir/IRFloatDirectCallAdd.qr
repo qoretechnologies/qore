@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+sub expectFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "FLOAT-DIRECT-ADD", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub identity(float x) { return x; }
+float sub directAdd(float initial, float delta) { float x = initial; x += identity(delta); return x; }
+auto sub directExpression(float initial, float delta) { float x = initial; return x += identity(delta); }
+float sub emptyValue() {}
+float sub unassignedValue() { float x; return x; }
+auto sub dynamicNothing() { return NOTHING; }
+float sub dynamicValue() { return dynamicNothing(); }
+float sub conditionalValue() { if (False) { return 1.5; } }
+float sub coercedValue() { return 3; }
+float sub defaultValue(float x = 2.5) { return x; }
+*float sub optionalValue(*float x) { return x; }
+float sub optionalAdd(*float delta) { float x = 1.5; x += optionalValue(delta); return x; }
+float sub defaultAdd() { float x = 1.5; x += defaultValue(); return x; }
+float sub coercedAdd() { float x = 1.5; x += coercedValue(); return x; }
+float sub genericValue<T>(T x) { return 2.0; }
+float sub genericAdd() { float x = 1.5; x += genericValue<int>(2); return x; }
+float sub unassignedAdd() { float x; x += identity(2.5); return x; }
+float sub conditionalAdd(bool assign) { float x; if (assign) { x = 1.5; } x += identity(-0.0); return x; }
+float sub removedAdd() { float x = 1.5; remove x; x += identity(2.5); return x; }
+float sub mutatedValue(reference<float> x) { x = 7.5; return 2.5; }
+float sub mutatedAdd() { float x = 1.5; x += mutatedValue(\x); return x; }
+thread_local int destroyed = 0;
+class Owned {
+    destructor() { ++destroyed; }
+}
+float sub ownedValue(bool fail) { Owned item(); if (fail) { throw "EXPECTED", "RHS"; } return 2.5; }
+float sub ownedAdd(bool fail) {
+    float x = 1.5;
+    try { x += ownedValue(fail); }
+    catch (hash<ExceptionInfo> e) { if (e.err != "EXPECTED") { rethrow; } }
+    return x;
+}
+sub badReturn(int which) {
+    float x = 1.5;
+    string error;
+    try {
+        switch (which) {
+            case 0: x += emptyValue(); break;
+            case 1: x += unassignedValue(); break;
+            case 2: x += dynamicValue(); break;
+            case 3: x += conditionalValue(); break;
+        }
+    } catch (hash<ExceptionInfo> e) { error = e.err; }
+    if (error != "RUNTIME-TYPE-ERROR") { throw "FLOAT-DIRECT-ADD", sprintf("bad return %d: %y", which, error); }
+    expectFloat(1.5, x);
+}
+float sub overloaded(float x) { return x; }
+*float sub overloaded(nothing x) { return NOTHING; }
+float sub overloadedAdd(*float delta) { float x = 1.5; x += overloaded(delta); return x; }
+foreach float initial in ((0.0, -0.0, 1.5, -1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach float delta in ((0.0, -0.0, 2.5, -2.5, @inf@, -@inf@)) {
+        expectFloat(initial + delta, directAdd(initial, delta));
+        expectFloat(initial + delta, directExpression(initial, delta));
+    }
+}
+foreach int which in ((0, 1, 2, 3)) { badReturn(which); }
+expectFloat(4.0, defaultAdd());
+expectFloat(4.5, coercedAdd());
+expectFloat(3.5, genericAdd());
+expectFloat(1.5, optionalAdd(NOTHING));
+expectFloat(4.0, optionalAdd(2.5));
+expectFloat(2.5, unassignedAdd());
+expectFloat(0.0, conditionalAdd(False));
+expectFloat(1.5, conditionalAdd(True));
+expectFloat(2.5, removedAdd());
+expectFloat(10.0, mutatedAdd());
+expectFloat(1.5, ownedAdd(True));
+expectFloat(4.0, ownedAdd(False));
+if (destroyed != 2) { throw "FLOAT-DIRECT-ADD", "temporary cleanup count"; }
+expectFloat(1.5, overloadedAdd(NOTHING));
+expectFloat(4.0, overloadedAdd(2.5));
+printf("float-direct-add: ok\n");

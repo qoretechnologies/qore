@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+%exec-class ImportedClosureEntryTest
+
+class ImportedClosureEntryTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("imported native closure execution context", "1.0", \ARGV) {
+        addTestCase("distinct code owner and execution Program", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string modules, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "QORE_MODULE_DIR=" + quote(modules)
+            + " LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertFalse(output.contains("loading source module"));
+        return output;
+    }
+    private check() {
+        TmpDir dir("qore-imported-closure-entry-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/source/ImportedClosureEntry.qm";
+        write(source, "%modern
+%allow-debugger
+module ImportedClosureEntry { version = \"1.0\"; desc = \"Imported closure context regression\";
+    author = \"Qore\"; license = \"MIT\"; }
+public namespace ImportedClosureEntry {
+    public code<int(int)> sub plain() { return int sub(int value) { return value + 17; }; }
+    public code<int(int)> sub capture() {
+        int offset = 17;
+        return int sub(int value) { return value + offset; };
+    }
+}
+");
+        string host = dir.path + "/host.qr";
+        write(host, "%modern
+%requires ImportedClosureEntry
+code<int(int)> plain = ImportedClosureEntry::plain();
+code<int(int)> capture = ImportedClosureEntry::capture();
+printf(\"%d %d\\n\", plain(7), capture(-7));
+");
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq("24 10\n", run((qore, "--exec-mode=" + mode, host), dir.path + "/source"));
+        }
+        string probe = dir.path + "/probe";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread",
+            "-DHAVE_UNIX_CONFIG_H", "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/imported_closure_entry.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", probe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) { push args, target[0]; }
+        run(args, dir.path + "/source");
+        foreach string compile_prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                run((qcc, level, "--strip-source", "-m", "-o",
+                    dir.path + "/modules/ImportedClosureEntry.qmod", source), dir.path + "/source", compile_prefix);
+                foreach string prefix in (("", "QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS=1 ",
+                        "QORE_DISABLE_AOT_IMPORTED_CLOSURE_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ")) {
+                    string enabled = !prefix || prefix.startsWith("QORE_DISABLE_AOT_IMPORTED_CLOSURE_DEFERRED_OPTIONS")
+                        ? "1" : "0";
+                    assertTrue(regex(run((probe, enabled), dir.path + "/modules", prefix),
+                        "imported-closure-entry: [0-9]+ checks passed"));
+                    foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                        assertEq("24 10\n", run((qore, "--exec-mode=" + mode, host), dir.path + "/modules", prefix));
+                    }
+                }
+            }
+        }
+    }
+}

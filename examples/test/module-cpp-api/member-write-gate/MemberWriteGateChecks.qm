@@ -40,6 +40,10 @@ public namespace MemberWriteGateChecks {
         int reenter() { return ++reentries; }
         int reentryCount() { return reentries; }
         auto read() { return self.v; }
+        int readInt() { return self.v; }
+        float readFloat() { return self.f; }
+        int postIncrement() { return self.v++; }
+        incrementDiscarded() { ++self.v; }
         update() {
             self.v = 10;
             self.v += 5;
@@ -206,6 +210,19 @@ public namespace MemberWriteGateChecks {
             && d.removed == NOTHING && d.local == 6 && d.reentryCount() > 0 && d.counts()[2] == 1 && d.counts()[3] == 1 ? 1 : 0;
     }
 
+    #! native scalar getters and integer update shortcuts must honor external storage
+    int sub check_fast_members() {
+        Derived d();
+        d.v = 10;
+        d.f = 1.25;
+        for (int i = 0; i < 64; ++i) {
+            if (d.postIncrement() != 10 + i * 2) { return 0; }
+            d.incrementDiscarded();
+            if (d.readInt() != 12 + i * 2 || d.readFloat() != 1.25) { return 0; }
+        }
+        return d.v == 138 ? 1 : 0;
+    }
+
     #! a rejected assignment reaches catch and releases its value
     bool sub reject_assignment() {
         object p = new CppApiTest::MemberWriteProbe();
@@ -345,7 +362,8 @@ public namespace MemberWriteGateChecks {
         return {"typed": check_typed(new CppApiTest::MemberWriteProbe()),
             "object": check_object(new CppApiTest::MemberWriteProbe()),
             "auto": check_auto(new CppApiTest::MemberWriteProbe()),
-            "inheritance": check_inheritance(), "exception": check_exception(),
+            "inheritance": check_inheritance(), "fast-members": check_fast_members(),
+            "exception": check_exception(),
             "private": check_private(), "reference": check_reference(),
             "read-inheritance": check_read_inheritance(), "internal": check_internal(),
             "object-removal": check_object_removal(), "nested": check_nested(),

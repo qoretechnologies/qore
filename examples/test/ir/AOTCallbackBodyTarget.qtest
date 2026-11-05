@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class CallbackBodyTargetTest
+
+class CallbackBodyTargetTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTCallbackBodyTarget.qr";
+    }
+    constructor() : Test("Native AOT callback body targets", "1.0", \ARGV) {
+        addTestCase("loop bodies, exceptions and dynamic fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq("callback-body-target: ok\n", run((qore, "--exec-mode=" + mode, behavior)), mode);
+        }
+        TmpDir dir("qore-callback-body-target-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FLOAT_BODY_FAST_PATHS=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
+                    bool selected = !prefix.startsWith("QORE_DISABLE_");
+                    int entries = 0;
+                    int callers = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string header = definition.split("\n")[0];
+                        string body = definition.split("\n}")[0];
+                        if (header.contains("@bodyKnownUnary_") && header.contains("_fast_")) {
+                            assertEq(selected, body.contains("_cb2_bodyStep_"), "known target entry selection");
+                            ++callers;
+                        }
+                        if ((header.contains("@bodyHofUnary_") || header.contains("@bodyHofResult_"))
+                                && header.contains("_cb")) {
+                            ++entries;
+                            assertTrue(body.contains("%known_callref_result = call double @body"),
+                                "ordinary native target call without an expression summary");
+                            assertTrue(body.contains("@qore_rt_push_native_call_frame_aot_named"));
+                            assertTrue(body.contains("@qore_rt_pop_native_call_frame"));
+                            assertTrue(body.contains("@qore_rt_check_stack"));
+                            assertTrue(body.contains("load atomic"), "loop cancellation polling");
+                            assertTrue(body.contains("load ptr, ptr %xsink"), "fallible call exception check");
+                            assertFalse(body.contains("@qore_rt_call_closure"));
+                            assertFalse(body.contains("@qore_rt_try_funcref_"));
+                        }
+                        if (header.contains("@bodyDynamic_") || header.contains("@bodyReassigned_")) {
+                            assertFalse(body.contains("_cb"), "unknown or reassigned callback retains dispatch");
+                        }
+                    }
+                    assertEq(1, callers, "inspected native known caller");
+                    assertEq(selected ? 4 : 0, entries, "unary, zero-argument, throwing and cancellable loop targets");
+                }
+                assertEq("callback-body-target: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

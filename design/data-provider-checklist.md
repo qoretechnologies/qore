@@ -679,42 +679,41 @@ Within the `DataProvider` namespace, the shorter `AppGroup::XYZ` form works.
 
 ### Available Groups
 
-| Enum Value | Display Name | Use For |
-|---|---|---|
-| `AccountingErp` | Accounting & ERP | Zoho Books, FreshBooks, Wave, Cin7, Unleashed, Zoho Invoice, Business Central |
-| `AiLlm` | AI & Language Models | OpenAI, MCP, AI/ML tools |
-| `Analytics` | Analytics & Reporting | DataProviderML, analytics platforms |
-| `ApiIntegration` | API & Integration | REST client, SOAP, MCP, remote-instance, generic API tools |
-| `CloudStorage` | Cloud Storage & File Management | WebDAV, cloud file services |
-| `CrmSales` | CRM & Sales Management | Salesforce, Dynamics CRM/CDS |
-| `CustomerSupport` | Customer Support & Helpdesk | ServiceNow |
-| `Databases` | Databases & Backend Services | DB, ElasticSearch, Redis, Memcached, MongoDB |
-| `DataTransformation` | Data Transformation | CSV, FixedLength, EDIFACT, Generator, Tar, Zip |
-| `DesignCreative` | Design & Creative Tools | ImageMagick |
-| `DevOps` | DevOps & Cloud Infrastructure | integration engine |
-| `DocumentSigning` | Document Signing & Contracts | DocuSign, signing services |
-| `Documents` | Documents & Documentation | Word, PDF |
-| `Ecommerce` | E-commerce Platforms | Zoho Inventory, Square |
-| `Email` | Email & Email Marketing | SMTP, Gmail, Mailgun, POP3 |
-| `FileSystem` | File System & Local Storage | File data provider, file poller |
-| `FileTransfer` | File Transfer Protocols | FTP, SFTP |
-| `FormsSurveys` | Forms, Surveys & Scheduling | Jotform |
-| `GoogleWorkspace` | Google Workspace Suite | Gmail, Google Calendar |
-| `Hospitality` | Hospitality & Property Management | Mews |
-| `Hr` | HR & People Management | HR platforms |
-| `Iot` | IoT & Smart Building | Empathic Building, BusyLight, MQTT |
-| `Marketing` | Marketing Automation | Marketing platforms |
-| `Messaging` | Messaging & Real-time Communication | WebSocket, SSE, Discord, Kafka, MQTT |
-| `Notifications` | Notifications & Alerts | Notification services |
-| `Payments` | Payment Processing | Square |
-| `ProjectManagement` | Project & Task Management | Linear |
-| `Shipping` | Shipping & Logistics | Shippo, ShipStation |
-| `SocialMedia` | Social Media Management | Social media platforms |
-| `Spreadsheets` | Spreadsheets & Data Tables | Excel |
-| `VersionControl` | Version Control & Code Repositories | Git platforms |
-| `VideoConferencing` | Video Conferencing & Meetings | Video meeting platforms |
-| `Weather` | Weather | Weather services |
-| `WebAutomation` | Web Scraping & Automation | Web scraping tools |
+|!Enum Value|!Display Name|!Use For
+|`AccountingErp`|Accounting & ERP|Zoho Books, FreshBooks, Wave, Cin7, Unleashed, Zoho Invoice, Business Central
+|`AiLlm`|AI & Language Models|OpenAI, MCP, AI/ML tools
+|`Analytics`|Analytics & Reporting|DataProviderML, analytics platforms
+|`ApiIntegration`|API & Integration|REST client, SOAP, MCP, remote-instance, generic API tools
+|`CloudStorage`|Cloud Storage & File Management|WebDAV, cloud file services
+|`CrmSales`|CRM & Sales Management|Salesforce, Dynamics CRM/CDS
+|`CustomerSupport`|Customer Support & Helpdesk|ServiceNow
+|`Databases`|Databases & Backend Services|DB, ElasticSearch, Redis, Memcached, MongoDB
+|`DataTransformation`|Data Transformation|CSV, FixedLength, EDIFACT, Generator, Tar, Zip
+|`DesignCreative`|Design & Creative Tools|ImageMagick
+|`DevOps`|DevOps & Cloud Infrastructure|integration engine
+|`DocumentSigning`|Document Signing & Contracts|DocuSign, signing services
+|`Documents`|Documents & Documentation|Word, PDF
+|`Ecommerce`|E-commerce Platforms|Zoho Inventory, Square
+|`Email`|Email & Email Marketing|SMTP, Gmail, Mailgun, POP3
+|`FileSystem`|File System & Local Storage|File data provider, file poller
+|`FileTransfer`|File Transfer Protocols|FTP, SFTP
+|`FormsSurveys`|Forms, Surveys & Scheduling|Jotform
+|`GoogleWorkspace`|Google Workspace Suite|Gmail, Google Calendar
+|`Hospitality`|Hospitality & Property Management|Mews
+|`Hr`|HR & People Management|HR platforms
+|`Iot`|IoT & Smart Building|Empathic Building, BusyLight, MQTT
+|`Marketing`|Marketing Automation|Marketing platforms
+|`Messaging`|Messaging & Real-time Communication|WebSocket, SSE, Discord, Kafka, MQTT
+|`Notifications`|Notifications & Alerts|Notification services
+|`Payments`|Payment Processing|Square
+|`ProjectManagement`|Project & Task Management|Linear
+|`Shipping`|Shipping & Logistics|Shippo, ShipStation
+|`SocialMedia`|Social Media Management|Social media platforms
+|`Spreadsheets`|Spreadsheets & Data Tables|Excel
+|`VersionControl`|Version Control & Code Repositories|Git platforms
+|`VideoConferencing`|Video Conferencing & Meetings|Video meeting platforms
+|`Weather`|Weather|Weather services
+|`WebAutomation`|Web Scraping & Automation|Web scraping tools
 
 ### Example
 

@@ -37,6 +37,21 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Groups the blocks of a function into the straight-line regions that invokes split them into
+/** An invoke (a call that can raise, with an exception edge) ends its block and continues in the block of its normal
+    target; a block entered only that way runs exactly once each time the invoke's block does, so it continues the
+    invoke's block, as if the invoke did not end it.  A region is a block that has another way in (its head), with the
+    blocks that continue it this way.  A value defined in a region and used only once later in the same region is
+    therefore used exactly once per definition, as a value defined and used in one block is, which lets an operation
+    take over its reference: a function whose locals are released in a set order on unwinding, or that has handlers,
+    has exception edges at all of its calls, and would otherwise hand no call's result over.
+    @param func the function
+    @param region receives, for each block of the function (by its index in \a func.blocks), the index of its region's
+    head
+    @return false if the analysis was cancelled; then \a region is incomplete
+*/
+DLLLOCAL bool qore_ir_compute_invoke_regions(const QoreIRFunction& func, std::vector<uint32_t>& region);
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
@@ -150,6 +165,65 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
 //! Covers ordinary stores, fused scalar writes, and local-rooted lvalue paths.
 DLLLOCAL const LocalVar* qore_ir_get_written_local(
     const QoreIRInstruction* inst);
+
+//! Returns true if running the function can run a reflection builtin on its thread, apart from its exact callees
+/** Reflection (get_local_vars(), set_local_var_value()) inspects only the frames of the current thread, so a frame can
+    be reflected only while code that the function runs calls a reflection builtin.  The function may reflect if it
+    calls a reflection builtin or a builtin that can run user code, makes a call not resolved to an exact variant, or
+    handles a value that can hold an object (a released object runs its destructor).  See
+    design/aot-reflection-visible-locals.md.
+    @param func the function, lowered for a program that allows the debugger
+    @param callees receives the exact user variants called, whose own effect decides the function's
+    @param lvalue_release_reflects whether an update of a member that may release an object counts as possibly
+    reflecting (its result is a scalar, so the other rules miss it): always for the IR and JIT tiers, which keep the
+    parameters and the body locals of a reflection-free frame private; for AOT only when the analyzed frame has body
+    locals, since its native method entries publish and reload the parameters around such an update
+    (AOTEffectMemberEntry, with and without its effect entry), but its body locals stay private.  An update of a
+    static, a global or a captured variable, or a write through a reference, that may release an object always counts:
+    no entry reloads the parameters around it
+    @return true if the function may reflect by itself; then \a callees is incomplete
+*/
+DLLLOCAL bool qore_ir_function_may_reflect_locally(const QoreIRFunction& func,
+    std::vector<const AbstractQoreFunctionVariant*>& callees, bool lvalue_release_reflects = true);
+
+//! Returns the parameters that the function may access after an instruction that may reflect
+/** A reflection builtin run by a callee, a callback or a destructor can replace a parameter of the function's frame
+    (set_local_var_value()); the function observes that only if it accesses the parameter afterwards, in the same
+    block or a block reachable from it, before assigning it.  The rules are those of qore_ir_function_may_reflect_locally(), except that an
+    exact user callee counts as reflecting; an instruction that is not a plain local access or a local-free scalar
+    operation counts as accessing every parameter.
+    @param func the function, lowered for a program that allows the debugger
+    @param params receives the keys (LocalVar pointers) of the parameters accessed after a possible reflection
+    @return false if cancelled; then \a params is incomplete and every parameter must be assumed
+*/
+DLLLOCAL bool qore_ir_get_params_read_after_reflection(const QoreIRFunction& func,
+    std::unordered_set<const void*>& params);
+
+//! Returns true if a value of the type can be or hold an object, whose destructor can run when it is released
+//! @param ti the type; nullptr means any type
+//! @param depth the nesting depth of complex container types already examined
+DLLLOCAL bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
+
+//! Returns true if assigning a variable of the type can release a value that can be or hold an object
+/** As qore_ir_type_may_hold_object(), except that for a reference, the type that it refers to decides: a write through
+    a reference replaces the value of the variable that it refers to, while releasing the reference itself releases
+    no object.
+    @param ti the declared type of the variable; nullptr means any type
+*/
+DLLLOCAL bool qore_ir_lvalue_type_may_hold_object(const QoreTypeInfo* ti);
+
+//! Returns true if an instruction can release a value that may hold an object when it changes an lvalue
+/** An assignment, a compound assignment, a removal, an element store, a scope exit of a local, or another update of a
+    variable releases the value it replaces or removes, and the destructor of an object released runs user code, which
+    can replace a local of the frame by name (set_local_var_value(), see design/aot-reflection-visible-locals.md).  The
+    declared type of the variable decides (a reference: the type that it refers to); a member, whose type the
+    instruction does not carry, or a variable of unknown type, may hold an object.  A value that the instruction
+    removes and returns is released with the temporaries of its statement, or right away if it is not used.
+
+    In a frame whose locals reflection can replace (QoreIRFunction::reflective_frame), the execution tiers reload the
+    frame's locals from the runtime stack after such an instruction, as after a call.
+*/
+DLLLOCAL bool qore_ir_instruction_may_release_object(const QoreIRInstruction* inst);
 
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the
@@ -316,6 +390,184 @@ size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func);
 
 //! Mark assigned exact list and binary pseudo-method receivers for no-guard lowering.
 size_t qore_ir_specialize_proven_collection_operations(QoreIRFunction& func);
+
+//! Records the unfused form of calls that an optimization pass fuses (QoreIRDebuggerAlternative)
+/** A pass that fuses a call of a user function or method with the instructions consuming its result, or replaces the
+    call by its known result, keeps the call's unfused form when the callee's Program can be debugged: plan() it
+    before the pass changes the call, take() the consumers out of each block before the pass erases them, and
+    finish() after the pass.  The native code takes the unfused form while a debugger is attached.
+*/
+class QoreIRDebuggerAlternativeBuilder {
+public:
+    DLLLOCAL explicit QoreIRDebuggerAlternativeBuilder(QoreIRFunction& func) : func(func) {
+    }
+
+    //! Returns true if the callee of a call can be debugged (its Program allows debugging)
+    DLLLOCAL static bool calleeMayBeDebugged(const QoreIRInstruction* call);
+
+    //! Returns the resolved callee of a call, as calleeMayBeDebugged() resolves it, or nullptr if it is not known
+    /** The lowering of a call that keeps an unfused form gates it on this callee's Program.
+    */
+    DLLLOCAL static const AbstractQoreFunctionVariant* resolvedCallee(const QoreIRInstruction* call);
+
+    //! Returns true if the call needs an unfused form: a builder is enabled and its callee can be debugged
+    DLLLOCAL bool needs(const QoreIRInstruction* call) const {
+        return enabled && calleeMayBeDebugged(call);
+    }
+
+    //! Plans the unfused form of a call that the pass fuses
+    /** @param call the instruction that the native code runs, which keeps the unfused form
+        @param call_result the call's own result, before the pass replaces it
+        @param call_nargs the number of the call's argument operands
+        @param consumers the instructions that the pass eliminates, in their order; the last one defines the fused
+        result; empty if the pass replaces the call's result
+        @param available values available at the call besides its operands, such as operands that the pass appends
+        @param aliases values that the consumers use in place of others: a local's load of the call's result (the
+        call's result), or a load that the pass moves before the call (its moved copy)
+
+        @return false if the consumers use a value that is not available at the call (other than a constant), so
+        the pass must not fuse the call; true otherwise, also if the callee cannot be debugged
+    */
+    DLLLOCAL bool plan(QoreIRInstruction* call, QoreIRValue call_result, uint32_t call_nargs,
+            std::vector<QoreIRInstruction*> consumers, const std::vector<QoreIRValue>& available = {},
+            const std::unordered_map<uint32_t, QoreIRValue>& aliases = {});
+
+    //! Plans the unfused form of a call shared by several calls that the pass fuses with one consumer (a phi)
+    /** @param calls the fused calls, each of which makes the ordinary call while a debugger is attached
+        @param base the value that \a consumer takes from the calls (the phi of their results)
+        @param consumer the eliminated consumer, whose other operands must be constants
+    */
+    DLLLOCAL bool planShared(const std::vector<QoreIRInstruction*>& calls, QoreIRValue base,
+            QoreIRInstruction* consumer);
+
+    //! Plans a call that the pass keeps although native code takes its result from another value (a fold)
+    /** @param call the call, which stays in its block; the pass leaves its uses
+        @param native_value the value that native code gives its result, available at the call
+        @param prefix eliminated instructions that the call's arguments need, in their order
+    */
+    DLLLOCAL bool planFold(QoreIRInstruction* call, QoreIRValue native_value,
+            std::vector<QoreIRInstruction*> prefix = {});
+
+    //! Plans a call that the pass keeps although native code does not make it, as its result is not used
+    /** @param call the call, which stays in its block
+        @param prefix eliminated instructions that the call's arguments need, in their order
+        @param site a site from newSite() whose keyed instructions (planDerived()) take the call's result, or 0
+        @param gated true if the call follows \a site, whose first call made the ordinary call, instead of storing
+        its result for it
+    */
+    DLLLOCAL bool planEventsOnly(QoreIRInstruction* call, std::vector<QoreIRInstruction*> prefix = {},
+            uint32_t site = 0, bool gated = false);
+
+    //! Plans an instruction that the pass keeps although native code takes its result from another value
+    /** The unfused form takes the call's ordinary result and lowers copies of \a consumers from it.  Unlike plan(),
+        the consumers stay where they are; the copies are made now, with the facts that their results have now.
+
+        @param kept the instruction that keeps the unfused form: the call (\a site 0), which makes the ordinary call
+        while a debugger is attached, or a consumer of the call keyed on the call's \a site, which takes the result
+        of the call's ordinary call when the call made it (planEventsOnly())
+        @param kind Fold: native code gives \a kept's result \a native_value; Consumers: \a kept is a fused call
+        @param native_value for Fold, the value that native code gives \a kept's result, available at \a kept
+        @param site the site of the call, for a consumer keyed on it, or 0
+        @param call_result the call's result, which the copies take in place of the values in \a aliases
+        @param consumers the instructions copied, in their order; the last one defines the result
+        @param aliases the values that the copies take from the call's result (\a call_result) or from the
+        copy of a reload (\a reloads)
+        @param reloads the values whose copies load their local again after the ordinary call (a guarded index)
+        @param at_consumers true if the unfused form runs where the consumers are, so that their other operands are
+        available; false if it runs at the call, so that their other operands must be constants
+        @param site_gated true if \a kept is a call that follows \a site, making its own ordinary call when the site's
+        first call made its ordinary call (a call whose arguments the site's calls give), instead of being keyed on it
+
+        @return false if a copy cannot be made, so the pass must not fuse; true otherwise
+    */
+    DLLLOCAL bool planDerived(QoreIRInstruction* kept, QoreIRDebuggerAlternative::Kind kind,
+            QoreIRValue native_value, uint32_t site, QoreIRValue call_result,
+            const std::vector<const QoreIRInstruction*>& consumers,
+            const std::unordered_map<uint32_t, QoreIRValue>& aliases,
+            const std::unordered_map<uint32_t, const QoreIRInstruction*>& reloads, bool at_consumers,
+            bool site_gated = false);
+
+    //! Sets the native value of the last planDerived() plan of \a kept, for a value that the pass makes later
+    DLLLOCAL void setNativeValue(const QoreIRInstruction* kept, QoreIRValue native_value);
+
+    //! Returns a copy of a consumer instruction, without its unfused form, or nullptr if it cannot be copied
+    DLLLOCAL static std::unique_ptr<QoreIRInstruction> cloneConsumer(const QoreIRInstruction& inst);
+
+    //! Returns a new call site for planKeyed()
+    DLLLOCAL uint32_t newSite() {
+        return func.createValue().id;
+    }
+
+    //! Plans the unfused form of a fused call that shares the ordinary call of a site with other fused calls
+    /** As plan(); \a store is true for the first call of the site, which makes the ordinary call.
+    */
+    DLLLOCAL bool planKeyed(uint32_t site, bool store, QoreIRInstruction* call, QoreIRValue call_result,
+            uint32_t call_nargs, std::vector<QoreIRInstruction*> consumers,
+            const std::unordered_map<uint32_t, QoreIRValue>& aliases = {});
+
+    //! Returns true if an instruction keeps a planned unfused form
+    DLLLOCAL bool planned(const QoreIRInstruction* inst) const {
+        for (const Plan& plan : plans) {
+            if (plan.call == inst) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns the number of plans, for rollback()
+    DLLLOCAL size_t planCount() const {
+        return plans.size();
+    }
+
+    //! Drops the plans made after planCount() returned \a count, for a candidate that the pass does not fuse
+    DLLLOCAL void rollback(size_t count) {
+        if (plans.size() > count) {
+            plans.erase(plans.begin() + static_cast<std::ptrdiff_t>(count), plans.end());
+        }
+    }
+
+    //! Takes the planned consumers out of a block before the pass erases its eliminated instructions
+    DLLLOCAL void take(std::vector<std::unique_ptr<QoreIRInstruction>>& instructions);
+
+    //! Attaches the planned unfused forms whose consumers were all taken
+    DLLLOCAL void finish();
+
+private:
+    struct Plan {
+        QoreIRInstruction* call = nullptr;
+        QoreIRValue call_result{};
+        uint32_t call_nargs = 0;
+        std::vector<QoreIRInstruction*> consumers;
+        std::vector<const QoreIRInstruction*> constants;
+        std::unordered_map<uint32_t, QoreIRValue> aliases;
+        bool has_result_facts = false;
+        QoreIRValueFacts result_facts;
+        bool has_call_facts = false;
+        QoreIRValueFacts call_facts;
+        QoreIRDebuggerAlternative::Kind kind = QoreIRDebuggerAlternative::Kind::Consumers;
+        std::vector<QoreIRInstruction*> prefix;
+        QoreIRValue native_value{};
+        //! other calls that share the alternative
+        std::vector<QoreIRInstruction*> shared_calls;
+        uint32_t site = 0;
+        bool site_store = false;
+        bool site_keyed = false;
+        bool site_gated = false;
+        //! the unfused form made by planDerived()
+        std::unique_ptr<QoreIRDebuggerAlternative> derived;
+    };
+    //! Builds the definitions of the function's values once
+    DLLLOCAL bool buildDefinitions();
+
+    QoreIRFunction& func;
+    bool enabled = true;
+    std::vector<Plan> plans;
+    std::unordered_map<const QoreIRInstruction*, std::unique_ptr<QoreIRInstruction>> taken;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    bool definitions_built = false;
+    size_t check_count = 0;
+};
 
 using QoreIRCollectionProducerQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*)>;

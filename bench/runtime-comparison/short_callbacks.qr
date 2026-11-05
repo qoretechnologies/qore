@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+# Batch short callback invocations with changing data and a dependent checksum.
+# The timer and string dispatch run once per batch. Inline controls are reported
+# separately; subtracting them does not establish isolated callback latency.
+int sub intZeroA() { return 17; }
+int sub intZeroB() { return 19; }
+int sub intUnaryA(int value) { return (value * 33 + 17) & 65535; }
+int sub intUnaryB(int value) { return (value * 33 + 19) & 65535; }
+float sub floatZeroA() { return 0.25; }
+float sub floatZeroB() { return 0.5; }
+float sub floatUnaryA(float value) { return 65535.5 - value; }
+float sub floatUnaryB(float value) { return 65534.5 - value; }
+int sub intZero(int count, int seed) {
+    code<int()> fn = (seed & 1) ? \intZeroA() : \intZeroB();
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { sum += fn(); }
+    return sum;
+}
+int sub intUnary(int count, int seed) {
+    code<int(int)> fn = (seed & 1) ? \intUnaryA() : \intUnaryB();
+    int value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { value = fn(value); sum += value; }
+    return sum;
+}
+int sub floatZero(int count, int seed) {
+    code<float()> fn = (seed & 1) ? \floatZeroA() : \floatZeroB();
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { sum += fn(); }
+    return int(sum * 2.0);
+}
+int sub floatUnary(int count, int seed) {
+    code<float(float)> fn = (seed & 1) ? \floatUnaryA() : \floatUnaryB();
+    float value = float(seed);
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = fn(value); sum += value; }
+    return int(sum * 2.0);
+}
+int sub intZero1Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + intZero(1, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub intZero17Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + intZero(17, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub intUnary1Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + intUnary(1, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub intUnary17Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + intUnary(17, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub floatZero1Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + floatZero(1, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub floatZero17Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + floatZero(17, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub floatUnary1Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + floatUnary(1, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub floatUnary17Batch(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + floatUnary(17, seed)) & 65535;
+    }
+    return checksum;
+}
+
+int sub inlineIntZero(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + ((seed & 1) ? 17 : 19)) & 65535;
+    }
+    return checksum;
+}
+
+int sub inlineIntUnary(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + ((seed * 33 + ((seed & 1) ? 17 : 19)) & 65535)) & 65535;
+    }
+    return checksum;
+}
+
+int sub inlineFloatZero(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + ((seed & 1) ? 0 : 1)) & 65535;
+    }
+    return checksum;
+}
+
+int sub inlineFloatUnary(int count, int seed) {
+    int checksum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed + 1) & 65535;
+        checksum = (checksum * 33 + (((seed & 1) ? 131071 : 131069) - 2 * seed)) & 65535;
+    }
+    return checksum;
+}
+int sub dispatch(string name, int count, int seed) {
+    switch (name) {
+        case "int_zero_1": return intZero1Batch(count, seed);
+        case "int_zero_17": return intZero17Batch(count, seed);
+        case "int_unary_1": return intUnary1Batch(count, seed);
+        case "int_unary_17": return intUnary17Batch(count, seed);
+        case "float_zero_1": return floatZero1Batch(count, seed);
+        case "float_zero_17": return floatZero17Batch(count, seed);
+        case "float_unary_1": return floatUnary1Batch(count, seed);
+        case "float_unary_17": return floatUnary17Batch(count, seed);
+        case "int_zero_inline": return inlineIntZero(count, seed);
+        case "int_unary_inline": return inlineIntUnary(count, seed);
+        case "float_zero_inline": return inlineFloatZero(count, seed);
+        case "float_unary_inline": return inlineFloatUnary(count, seed);
+    }
+    throw "BENCH-ARGUMENT-ERROR", "unknown kernel";
+}
+int sub integerArg(list<string> arguments, int index, int minimum, int maximum) {
+    if (index >= arguments.size() || arguments[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = arguments[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+sub run(list<string> arguments) {
+    if (arguments.size() == 1 && arguments[0] == "check") {
+        foreach int count in ((0, 1, 17, 257, 4096)) {
+            foreach int seed in ((0, 7, 65535)) {
+                foreach string name in (("int_zero_1", "int_zero_17", "int_unary_1", "int_unary_17", "float_zero_1", "float_zero_17", "float_unary_1", "float_unary_17", "int_zero_inline", "int_unary_inline", "float_zero_inline", "float_unary_inline")) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed, dispatch(name, count, seed));
+                }
+            }
+        }
+        return;
+    }
+    if (arguments.size() != 6) { throw "BENCH-ARGUMENT-ERROR", "expected check or KERNEL COUNT WARMUP SAMPLES MS SEED"; }
+    string name = arguments[0];
+    int count = integerArg(arguments, 1, 1, 1000000);
+    int warmup = integerArg(arguments, 2, 0, 1000);
+    int samples = integerArg(arguments, 3, 1, 1000);
+    int duration_us = integerArg(arguments, 4, 1, 60000) * 1000;
+    int seed = integerArg(arguments, 5, 0, 65535);
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= dispatch(name, count, seed);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+
+
+run(ARGV);

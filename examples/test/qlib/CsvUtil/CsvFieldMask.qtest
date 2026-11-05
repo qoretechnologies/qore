@@ -101,7 +101,8 @@ public class CsvFieldMaskTest inherits QUnit::Test {
             hash<auto> fields = {"v": {"type": "date", "mask": mask}};
             date v = mask =~ /ZZ/ ? 2026-11-02T14:05:09+05:30 : ValueMask::parseDate(ValueMask::formatDate(
                 2026-11-02T14:05:09Z, mask, "Europe/Berlin"), mask, "Europe/Berlin");
-            string text = writeOne(fields, {"v": v});
+            # Match the reader's zone; a date-only mask cannot preserve an instant across different wall clocks.
+            string text = writeOne(fields, {"v": v}, {"timezone": "Europe/Berlin"});
             assertEq(({"v": v},), read(new CsvDataIterator(text, {"separator": ";", "header_names": True,
                 "fields": fields, "timezone": "Europe/Berlin"})), mask);
         }

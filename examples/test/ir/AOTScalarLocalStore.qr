@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%allow-weak-references
+%allow-opaque-references
+
+sub expect(auto expected, auto actual, string probe = "") {
+    if (expected.fullType() == "float" && actual.fullType() == "float"
+            && expected.nanp() && actual.nanp()) {
+        return;
+    }
+    if (expected !== actual) {
+        throw "SCALAR-STORE-TEST", sprintf("%s: expected %y (%s), got %y (%s)",
+            probe, expected, expected.fullType(), actual, actual.fullType());
+    }
+}
+auto sub replaceValue(auto first, auto next) {
+    auto value = first;
+    value = next;
+    expect(value, get_local_vars(0).value.value, "replaceValue visibility");
+    return value;
+}
+auto sub capturedValue(auto next) {
+    auto value = 1.25;
+    code<auto()> read = auto sub() { return value; };
+    value = next;
+    expect(next, read());
+    return value;
+}
+sub referenceValue(reference<auto> value, auto next) {
+    value = next;
+}
+auto sub handlerValue(auto next) {
+    auto value = 1.25;
+    on_exit { expect(next, value); }
+    value = next;
+    expect(value, get_local_vars(0).value.value, "handlerValue visibility");
+    return value;
+}
+int sub typedValue(auto next) {
+    softint value = 7;
+    value = next;
+    return value;
+}
+thread_local int destroyed = 0;
+class ScalarStoreTarget {
+    public { int marker = 17; }
+    destructor() { ++destroyed; }
+}
+enum ScalarStoreEnum : int { Value = 7 }
+
+sub objectCleanup() {
+    int before = destroyed;
+    auto value = new ScalarStoreTarget();
+    value = 2.5;
+    expect(before + 1, destroyed);
+    expect(value, get_local_vars(0).value.value, "objectCleanup visibility");
+    value = new ScalarStoreTarget();
+    expect(17, value.marker);
+    value = False;
+    expect(before + 2, destroyed);
+}
+sub weakAndOpaque() {
+    int before = destroyed;
+    {
+        auto target = new ScalarStoreTarget();
+        auto weak := target;
+        auto opaque @= target;
+        auto value = 1.25;
+        value = weak;
+        expect(target, value);
+        value = 2.5;
+        value = opaque;
+        expect(target, value);
+        value = True;
+        expect(before, destroyed);
+    }
+    expect(before + 1, destroyed);
+}
+sub blockReuse(bool inspect) {
+    for (int i = 0; i < 4; ++i) {
+        auto value = 1.25;
+        value = float(i);
+        expect(float(i), value);
+        if (inspect) {
+            expect(value, get_local_vars(0).value.value, "blockReuse visibility");
+        }
+    }
+}
+
+# Both retained and direct constant-argument calls preserve reflected locals.
+code<auto()> cleanup = \objectCleanup();
+code<auto(bool)> reuse = \blockReuse();
+for (int round = 0; round < 8; ++round) {
+    foreach auto next in ((False, True, 7, -9, 140737488355327, 140737488355328,
+            -140737488355328, -140737488355329, 9223372036854775807,
+            1.25, -1.25, 0.0, -0.0, -3.0e307, @inf@, -@inf@, @nan@, -@nan@,
+            NOTHING, NULL, c'x', "short", "a longer string value", (1, 2), {"value": 3},
+            ScalarStoreEnum::Value)) {
+        expect(next, replaceValue(1.25, next));
+        expect(next.fullType(), replaceValue(True, next).fullType());
+        expect(2.5, replaceValue(next, 2.5));
+        expect(next, capturedValue(next));
+        expect(next, handlerValue(next));
+        # Exercise every primitive storage family as the replaced value, including
+        # signed zero and nonfinite floats. The incoming matrix also covers values
+        # that must fall back (wide integers, escaped floats, enums and nodes).
+        foreach auto first in ((False, True, 0, -7, 1.25, -0.0, @nan@, -@inf@)) {
+            auto actual = replaceValue(first, next);
+            expect(next, actual, "primitive replacement");
+            expect(next.fullType(), actual.fullType(), "primitive replacement type");
+            if (next.fullType() == "float") {
+                expect(sprintf("%g", next), sprintf("%g", actual), "float representation");
+            }
+        }
+        if (next.fullType() == "float") {
+            expect(sprintf("%g", next), sprintf("%g", replaceValue(1.25, next)));
+        }
+        auto reference_target = 1.25;
+        referenceValue(\reference_target, next);
+        expect(next, reference_target);
+    }
+    expect(21, typedValue("21"));
+    cleanup();
+    weakAndOpaque();
+    reuse(True);
+    blockReuse(True);
+    objectCleanup();
+}
+printf("scalar-local-store: ok\n");

@@ -1,0 +1,593 @@
+// Copyright (c) 2026 Qore Technologies, s.r.o.
+// SPDX-License-Identifier: MIT
+package org.qore.bench;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongUnaryOperator;
+import java.util.function.DoubleUnaryOperator;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.CompilerControl;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+
+// One JMH operation is one count-element kernel; run.py normalizes ns/element.
+@State(Scope.Thread)
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
+public class RuntimeBench {
+    @Param({"1024"})
+    public int count;
+    @Param({"7"})
+    public long seed;
+    private ArrayList<Long> data;
+    private Stepper receiver;
+    private LongUnaryOperator callback;
+    private LongUnaryOperator closureCallback, capturedCallback;
+    private LongUnaryOperator wideCallback;
+    private LongUnaryOperator affineCallback, branchIntCallback;
+    private DoubleUnaryOperator floatCallback, taggedCallback, branchCallback;
+    private DynamicStep a, b, c;
+    private DynamicFloatStep fa, fb, fc;
+
+    @Setup
+    public void setup() {
+        data = makeData(count, 7);
+        receiver = new Stepper();
+        callback = RuntimeBench::boundaryStep;
+        closureCallback = new ClosureStep();
+        capturedCallback = new CapturedStep(17);
+        wideCallback = RuntimeBench::wideStep;
+        affineCallback = RuntimeBench::affineStep;
+        branchIntCallback = RuntimeBench::branchIntStep;
+        floatCallback = RuntimeBench::floatStep;
+        taggedCallback = RuntimeBench::taggedFloatStep;
+        branchCallback = RuntimeBench::branchFloatStep;
+        a = new DynamicStep();
+        b = new DynamicStepB();
+        c = new DynamicStepC();
+        fa = new DynamicFloatStep();
+        fb = new DynamicFloatStepB();
+        fc = new DynamicFloatStepC();
+    }
+
+    static long step(long value) {
+        return (value * 33 + 17) & 65535;
+    }
+
+    static final class ClosureStep implements LongUnaryOperator {
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        public long applyAsLong(long value) { return (value * 33 + 17) & 65535; }
+    }
+
+    // Non-final storage models Qore's captured variable, not a constant folded
+    // into the target body. Neither workload mutates this capture while timed.
+    static final class CapturedStep implements LongUnaryOperator {
+        private long increment;
+        CapturedStep(long increment) { this.increment = increment; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        public long applyAsLong(long value) { return (value * 33 + increment) & 65535; }
+    }
+
+    static final class Stepper {
+        long next(long value) {
+            return (value * 33 + 17) & 65535;
+        }
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long boundaryStep(long value) {
+        return (value * 33 + 17) & 65535;
+    }
+
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long wideStep(long value) {
+        return ((value * 33 + 17) & 65535) | 1125899906842624L;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long affineStep(long value) {
+        return value + 17;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static long branchIntStep(long value) {
+        if (value > 32767) { return value - 32767; }
+        return value + 17;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static double floatStep(double value) {
+        return 65535.0 - value;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static double branchFloatStep(double value) {
+        return value > 32767.0 ? value - 32767.0 : value + 17.0;
+    }
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    static double taggedFloatStep(double value) {
+        return -9.0e307 - value;
+    }
+
+    static class DynamicStep {
+        long calls;
+        private long increment = 17;
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long next(long value) { return (value * 33 + 17) & 65535; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long fieldNext(long value) { return (value * 33 + increment) & 65535; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long effectNext(long value) { ++calls; return (value * 33 + increment) & 65535; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long viaContext(long value) { return next(value); }
+    }
+    static class DynamicStepB extends DynamicStep {
+        private long increment = 19;
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long next(long value) { return (value * 33 + 19) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long fieldNext(long value) { return (value * 33 + increment) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long effectNext(long value) { ++calls; return (value * 33 + increment) & 65535; }
+    }
+    static class DynamicStepC extends DynamicStep {
+        private long increment = 23;
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long next(long value) { return (value * 33 + 23) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long fieldNext(long value) { return (value * 33 + increment) & 65535; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        long effectNext(long value) { ++calls; return (value * 33 + increment) & 65535; }
+    }
+
+    static class DynamicFloatStep {
+        private double limit = 65535.0;
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double next(double value) { return 65535.0 - value; }
+        @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double fieldNext(double value) { return limit - value; }
+    }
+    static class DynamicFloatStepB extends DynamicFloatStep {
+        private double limit = 65537.0;
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double next(double value) { return 65537.0 - value; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double fieldNext(double value) { return limit - value; }
+    }
+    static class DynamicFloatStepC extends DynamicFloatStep {
+        private double limit = 65541.0;
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double next(double value) { return 65541.0 - value; }
+        @Override @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+        double fieldNext(double value) { return limit - value; }
+    }
+
+    static long indirectCall(int count, long seed, LongUnaryOperator callback) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = callback.applyAsLong(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long wideIndirectCall(int count, long seed, LongUnaryOperator callback) {
+        long value = seed | 1125899906842624L;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = callback.applyAsLong(value);
+            sum += value & 65535;
+        }
+        return sum;
+    }
+
+    static long floatIndirectCall(int count, long seed, DoubleUnaryOperator callback) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = callback.applyAsDouble(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long intIndirectResult(int count, long seed, LongUnaryOperator callback) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += callback.applyAsLong(seed);
+            seed = 65535 - seed;
+        }
+        return sum;
+    }
+
+    static long floatIndirectResult(int count, long seed, DoubleUnaryOperator callback) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (long) callback.applyAsDouble(value);
+            value = 65535.0 - value;
+        }
+        return sum;
+    }
+
+    static long taggedFloatIndirectCall(int count, long seed, DoubleUnaryOperator callback) {
+        double value = (seed & 1) != 0 ? -3.0e307 : -6.0e307;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = callback.applyAsDouble(value);
+            sum += value < -4.5e307 ? 6 : 3;
+        }
+        return sum;
+    }
+
+    static long monomorphicCall(int count, long seed, DynamicStep receiver) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = receiver.next(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long polymorphicCall(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            DynamicStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+            seed = receiver.next(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    // Matched source-level decomposition; target methods retain DONT_INLINE.
+    static long polymorphicExpressionCall(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long monomorphicFloatCall(int count, long seed, DynamicFloatStep receiver) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = receiver.next(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long polymorphicFloatCall(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            DynamicFloatStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+            value = receiver.next(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long polymorphicFloatExpressionCall(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    static long dynamicIntResultCall(int count, long seed,
+            DynamicStep a, DynamicStep b, DynamicStep c) {
+        long value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+            value = 65535 - value;
+        }
+        return sum;
+    }
+
+    static long dynamicIntResultFallback(int count, long seed,
+            DynamicStep a, DynamicStep b, DynamicStep c) {
+        long value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (i % 3 == 0 ? a : i % 3 == 1 ? b : c).viaContext(value);
+            value = 65535 - value;
+        }
+        return sum;
+    }
+
+    // Java retains native results where the matched Qore result has a dynamic contract.
+    static long dynamicFloatResultCall(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += (long) (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+            value = 65535.0 - value;
+        }
+        return sum;
+    }
+
+    static long dispatchControl(int count, long seed) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            long increment = i % 3 == 0 ? 17 : i % 3 == 1 ? 19 : 23;
+            seed = (seed * 33 + increment) & 65535;
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long arithmetic(int count, long seed) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long directCall(int count, long seed) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = step(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long methodCall(int count, long seed, Stepper receiver) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = receiver.next(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static ArrayList<Long> makeData(int count, long seed) {
+        ArrayList<Long> values = new ArrayList<>();
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            values.add(seed);
+        }
+        return values;
+    }
+
+    static long listRead(ArrayList<Long> values, long seed) {
+        long sum = 0;
+        for (int i = 0; i < values.size(); ++i) {
+            sum += values.get(i) ^ seed;
+        }
+        return sum;
+    }
+
+    static long listBuild(int count, long seed) {
+        ArrayList<Long> values = new ArrayList<>();
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            values.add(seed);
+        }
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            sum += values.get(i);
+        }
+        return sum;
+    }
+
+    static long listMutate(int count, long seed) {
+        ArrayList<Long> values = new ArrayList<>();
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            values.add(seed);
+        }
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            values.set(i, values.get(i) + 1);
+            sum += values.get(i);
+        }
+        return sum;
+    }
+
+    static long temporaryList(int count, long seed) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            long[] pair = {seed, seed + 1};
+            sum += pair[(int) (seed & 1)];
+        }
+        return sum;
+    }
+
+    static long temporaryHash(int count, long seed) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            HashMap<String, Long> pair = new HashMap<>();
+            pair.put("left", seed);
+            pair.put("right", seed + 1);
+            String key = (seed & 1) != 0 ? "right" : "left";
+            sum += pair.get(key);
+        }
+        return sum;
+    }
+
+    // Observable stores keep this target outside the pure scalar-member subset.
+    static long boxedIntMethodEffect(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        a.calls = 0;
+        b.calls = 0;
+        c.calls = 0;
+        long value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).effectNext(value);
+            sum += value;
+        }
+        return sum + a.calls + b.calls + c.calls;
+    }
+
+    // Historical fallback name: these non-final fields are read on every call.
+    static long boxedIntMethodFallback(int count, long seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(seed);
+            sum += seed;
+        }
+        return sum;
+    }
+
+    static long boxedFloatMethodFallback(int count, long seed,
+            DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+        double value = seed;
+        long sum = 0;
+        for (int i = 0; i < count; ++i) {
+            value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(value);
+            sum += (long) value;
+        }
+        return sum;
+    }
+
+    private long nextSeed() {
+        seed = (seed + 1) & 65535;
+        return seed;
+    }
+
+    @Benchmark public long arithmetic() { return arithmetic(count, nextSeed()); }
+    @Benchmark public long direct_call() { return directCall(count, nextSeed()); }
+    @Benchmark public long method_call() { return methodCall(count, nextSeed(), receiver); }
+    @Benchmark public long indirect_call() { return indirectCall(count, nextSeed(), callback); }
+    @Benchmark public long closure_call() { return indirectCall(count, nextSeed(), closureCallback); }
+    @Benchmark public long closure_capture() { return indirectCall(count, nextSeed(), capturedCallback); }
+    @Benchmark public long indirect_wide() { return wideIndirectCall(count, nextSeed(), wideCallback); }
+    @Benchmark public long indirect_affine() { return indirectCall(count, nextSeed(), affineCallback); }
+    @Benchmark public long indirect_affine_wide() { return wideIndirectCall(count, nextSeed(), affineCallback); }
+    @Benchmark public long indirect_branch_int() { return indirectCall(count, nextSeed(), branchIntCallback); }
+    @Benchmark public long indirect_float() { return floatIndirectCall(count, nextSeed(), floatCallback); }
+    @Benchmark public long indirect_int_result() { return intIndirectResult(count, nextSeed(), callback); }
+    @Benchmark public long indirect_float_result() { return floatIndirectResult(count, nextSeed(), floatCallback); }
+    @Benchmark public long indirect_branch_float() { return floatIndirectCall(count, nextSeed(), branchCallback); }
+    @Benchmark public long indirect_tagged_float() { return taggedFloatIndirectCall(count, nextSeed(), taggedCallback); }
+    @Benchmark public long polymorphic_call() { return polymorphicCall(count, nextSeed(), a, b, c); }
+    @Benchmark public long polymorphic_expression_call() {
+        return polymorphicExpressionCall(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long monomorphic_call() { return monomorphicCall(count, nextSeed(), a); }
+    // Java references already permit null. Both workloads time a strong non-null receiver.
+    @Benchmark public long optional_method_call() { return monomorphicCall(count, nextSeed(), a); }
+    @Benchmark public long polymorphic_float_call() {
+        return polymorphicFloatCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long polymorphic_float_expression_call() {
+        return polymorphicFloatExpressionCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long monomorphic_float_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
+    @Benchmark public long optional_float_method_call() { return monomorphicFloatCall(count, nextSeed(), fa); }
+    @Benchmark public long boxed_float_method_call() {
+        return polymorphicFloatExpressionCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long boxed_int_method_call() {
+        return polymorphicExpressionCall(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long boxed_int_method_fallback() {
+        return boxedIntMethodFallback(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long boxed_int_method_effect() {
+        return boxedIntMethodEffect(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long boxed_float_method_fallback() {
+        return boxedFloatMethodFallback(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long dynamic_float_result_call() {
+        return dynamicFloatResultCall(count, nextSeed(), fa, fb, fc);
+    }
+    @Benchmark public long dynamic_int_result_call() {
+        return dynamicIntResultCall(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long dynamic_int_result_fallback() {
+        return dynamicIntResultFallback(count, nextSeed(), a, b, c);
+    }
+    @Benchmark public long dispatch_control() { return dispatchControl(count, nextSeed()); }
+    @Benchmark public long list_read() { return listRead(data, nextSeed()); }
+    @Benchmark public long list_build() { return listBuild(count, nextSeed()); }
+    @Benchmark public long list_mutate() { return listMutate(count, nextSeed()); }
+    @Benchmark public long temporary_list() { return temporaryList(count, nextSeed()); }
+    @Benchmark public long temporary_hash() { return temporaryHash(count, nextSeed()); }
+
+    public static void main(String[] args) {
+        if (args.length == 1 && args[0].equals("startup")) {
+            System.out.println("ready");
+            return;
+        }
+        if (args.length != 1 || !args[0].equals("check")) {
+            throw new IllegalArgumentException("expected startup or check; use JMH for measurements");
+        }
+        Stepper receiver = new Stepper();
+        LongUnaryOperator callback = RuntimeBench::boundaryStep;
+        LongUnaryOperator closureCallback = new ClosureStep(), capturedCallback = new CapturedStep(17);
+        LongUnaryOperator wideCallback = RuntimeBench::wideStep;
+        LongUnaryOperator affineCallback = RuntimeBench::affineStep, branchIntCallback = RuntimeBench::branchIntStep;
+        DoubleUnaryOperator floatCallback = RuntimeBench::floatStep, taggedCallback = RuntimeBench::taggedFloatStep;
+        DoubleUnaryOperator branchCallback = RuntimeBench::branchFloatStep;
+        DynamicStep a = new DynamicStep(), b = new DynamicStepB(), c = new DynamicStepC();
+        DynamicFloatStep fa = new DynamicFloatStep(), fb = new DynamicFloatStepB(), fc = new DynamicFloatStepC();
+        for (int count : new int[] {0, 1, 17, 1024, 4096}) {
+            ArrayList<Long> values = makeData(count, 7);
+            for (long seed : new long[] {0, 7, 65535}) {
+                String[] names = {"arithmetic", "direct_call", "method_call", "indirect_call",
+                    "indirect_wide", "indirect_float", "indirect_int_result", "indirect_float_result",
+                    "indirect_tagged_float", "indirect_branch_float",
+                    "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
+                    "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
+                    "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
+                    "monomorphic_float_call", "optional_float_method_call",
+                    "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
+                    "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
+                    "boxed_int_method_effect",
+                    "dynamic_float_result_call",
+                    "dispatch_control", "list_read",
+                    "list_build", "list_mutate", "temporary_list", "temporary_hash",
+                    "closure_call", "closure_capture"};
+                long[] results = {arithmetic(count, seed), directCall(count, seed),
+                    methodCall(count, seed, receiver), indirectCall(count, seed, callback),
+                    wideIndirectCall(count, seed, wideCallback), floatIndirectCall(count, seed, floatCallback),
+                    intIndirectResult(count, seed, callback), floatIndirectResult(count, seed, floatCallback),
+                    taggedFloatIndirectCall(count, seed, taggedCallback),
+                    floatIndirectCall(count, seed, branchCallback),
+                    indirectCall(count, seed, affineCallback), wideIndirectCall(count, seed, affineCallback),
+                    indirectCall(count, seed, branchIntCallback),
+                    polymorphicCall(count, seed, a, b, c), polymorphicExpressionCall(count, seed, a, b, c),
+                    monomorphicCall(count, seed, a),
+                    monomorphicCall(count, seed, a),
+                    polymorphicFloatCall(count, seed, fa, fb, fc),
+                    polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
+                    monomorphicFloatCall(count, seed, fa), monomorphicFloatCall(count, seed, fa),
+                    polymorphicFloatExpressionCall(count, seed, fa, fb, fc),
+                    dynamicIntResultCall(count, seed, a, b, c),
+                    dynamicIntResultFallback(count, seed, a, b, c),
+                    polymorphicExpressionCall(count, seed, a, b, c),
+                    boxedIntMethodFallback(count, seed, a, b, c),
+                    boxedFloatMethodFallback(count, seed, fa, fb, fc),
+                    boxedIntMethodEffect(count, seed, a, b, c),
+                    dynamicFloatResultCall(count, seed, fa, fb, fc),
+                    dispatchControl(count, seed),
+                    listRead(values, seed), listBuild(count, seed),
+                    listMutate(count, seed), temporaryList(count, seed), temporaryHash(count, seed),
+                    indirectCall(count, seed, closureCallback), indirectCall(count, seed, capturedCallback)};
+                for (int i = 0; i < names.length; ++i) {
+                    System.out.printf("CHECK\t%s\t%d\t%d\t%d%n", names[i], count, seed, results[i]);
+                }
+            }
+        }
+    }
+}

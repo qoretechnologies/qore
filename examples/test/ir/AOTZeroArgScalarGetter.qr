@@ -1,0 +1,230 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class ZeroGetterInt {
+    private:internal { int value = 17; }
+    int read() { return value; }
+    set(int next) { value = next; }
+}
+class ZeroGetterInherited inherits ZeroGetterInt {
+    private:internal { int value = 19; }
+}
+class ZeroGetterOverride inherits ZeroGetterInt {
+    private:internal { int value = 23; }
+    int read() { return value; }
+}
+class ZeroGetterPublic {
+    public { auto value = 31; }
+    int read() { return value + 1; }
+}
+class ZeroGetterFloat {
+    public { float value = 0.25; }
+    float read() { return value; }
+}
+class ZeroGetterInternalFloat {
+    private:internal { auto value = 0.5; }
+    float read() { return value + 0.25; }
+    set(auto next) { value = next; }
+}
+class ZeroGetterInheritedFloat inherits ZeroGetterInternalFloat {
+    private:internal { float value = 99.0; }
+}
+class ZeroGetterReference {
+    private { reference<int> value; }
+    constructor(reference<int> target) { value = \target; }
+    int read() { return value + 1; }
+}
+class ZeroGetterEffect {
+    public { int calls = 0; }
+    private { int value = 41; }
+    int read() { ++calls; return value; }
+}
+class ZeroGetterTwoReads {
+    private { int value = 43; }
+    int read() { return value + value; }
+}
+class ZeroGetterConstant {
+    int read() { return 47; }
+}
+class ZeroGetterExplicitSelf {
+    public { int value = 53; }
+    int read() { return self.value; }
+}
+class ZeroGetterDefault {
+    private:internal { int value = 59; }
+    int read(int delta = 1) { return value + delta; }
+}
+class ZeroGetterDefaultInherited inherits ZeroGetterDefault {
+    private:internal { int value = 999; }
+}
+class ZeroGetterStringResult {
+    private:internal { string value = "ordinary string result"; }
+    string read() { return value; }
+}
+our bool zero_getter_default_throw = False;
+our int zero_getter_default_count = 0;
+int sub zeroGetterThrowDefault() {
+    ++zero_getter_default_count;
+    if (zero_getter_default_throw) {
+        throw "ZERO-GETTER-DEFAULT-EXPECTED", "default argument evaluated normally";
+    }
+    return 97;
+}
+class ZeroGetterDefaultThrow {
+    int read(int delta = zeroGetterThrowDefault()) { return delta; }
+}
+int sub zeroGetterExactDefault(ZeroGetterDefault receiver) { return receiver.read(); }
+string sub zeroGetterStringResult(auto receiver) { return receiver.read(); }
+class ZeroGetterArgv {
+    private { int value = 61; }
+    int read() { return value + ARGV.size(); }
+}
+class ZeroGetterThrow {
+    int read() { throw "ZERO-GETTER-EXPECTED", "ordinary throwing override"; }
+}
+class ZeroGetterUnary {
+    private { int value = 67; }
+    int read(int delta) { return value + delta; }
+}
+class ZeroGetterSynchronized {
+    private { int value = 79; }
+    synchronized int read() { return value; }
+}
+enum ZeroGetterEnum : int { Seven = 7 }
+
+auto sub zeroGetterCall(auto receiver) { return receiver.read(); }
+auto sub zeroGetterSecondCall(auto receiver) { return receiver.read(); }
+auto sub zeroGetterFallback(auto receiver) { return receiver.read(); }
+auto sub zeroGetterOther(auto receiver) { return receiver.read(); }
+auto sub zeroGetterSpecial(auto receiver) { return receiver.read(); }
+auto sub zeroGetterExtra(auto receiver) {
+    try { return receiver.read(2, 3); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+auto sub zeroGetterUnary(auto receiver, int value) { return receiver.read(value); }
+auto sub zeroGetterInvoke(auto receiver) {
+    try { return receiver.read(); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+sub zeroGetterExpect(auto expected, auto actual) {
+    if (expected != actual) {
+        throw "ZERO-GETTER-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub zeroGetterExpectFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "ZERO-GETTER-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+ZeroGetterInt integer();
+ZeroGetterInherited inherited();
+ZeroGetterOverride overridden();
+ZeroGetterPublic dynamic();
+ZeroGetterFloat floating();
+ZeroGetterInternalFloat internal_float();
+ZeroGetterInheritedFloat inherited_float();
+int target = 37;
+ZeroGetterReference referenced(\target);
+ZeroGetterEffect effect();
+ZeroGetterTwoReads twice();
+ZeroGetterConstant constant();
+ZeroGetterExplicitSelf explicit_self();
+ZeroGetterDefault defaults();
+ZeroGetterArgv argv_reader();
+ZeroGetterThrow throwing();
+ZeroGetterUnary unary();
+for (int round = 0; round < 32; ++round) {
+    zeroGetterExpect(17, zeroGetterCall(integer));
+    zeroGetterExpect(17, zeroGetterCall(inherited));
+    zeroGetterExpect(23, zeroGetterCall(overridden));
+    zeroGetterExpect(32, zeroGetterFallback(dynamic));
+    zeroGetterExpectFloat(0.25, zeroGetterSecondCall(floating));
+    zeroGetterExpectFloat(0.75, zeroGetterSecondCall(internal_float));
+    zeroGetterExpectFloat(0.75, zeroGetterSecondCall(inherited_float));
+    zeroGetterExpect(38, zeroGetterFallback(referenced));
+    zeroGetterExpect(41, zeroGetterFallback(effect));
+    zeroGetterExpect(86, zeroGetterFallback(twice));
+    zeroGetterExpect(47, zeroGetterOther(constant));
+    zeroGetterExpect(53, zeroGetterOther(explicit_self));
+    zeroGetterExpect(60, zeroGetterOther(defaults));
+    zeroGetterExpect(61, zeroGetterOther(argv_reader));
+    zeroGetterExpect("RUNTIME-OVERLOAD-ERROR", zeroGetterExtra(argv_reader));
+    zeroGetterExpect("RUNTIME-OVERLOAD-ERROR", zeroGetterExtra(integer));
+    zeroGetterExpect(67 + round, zeroGetterUnary(unary, round));
+    zeroGetterExpect("ZERO-GETTER-EXPECTED", zeroGetterInvoke(throwing));
+}
+zeroGetterExpect(32, effect.calls);
+inherited.set(29);
+zeroGetterExpect(29, zeroGetterCall(inherited));
+zeroGetterExpect(23, zeroGetterCall(overridden));
+foreach int value in ((0, 1, -1, 140737488355328, -140737488355329, 1125899906842624)) {
+    integer.set(value);
+    for (int round = 0; round < 12; ++round) {
+        zeroGetterExpect(value, zeroGetterCall(integer));
+        zeroGetterExpect(value, zeroGetterSecondCall(integer));
+    }
+}
+foreach float value in ((0.0, -0.0, 1.25, -9.0e307, @inf@, -@inf@, @nan@)) {
+    floating.value = value;
+    internal_float.set(value);
+    inherited_float.set(value);
+    for (int round = 0; round < 12; ++round) {
+        zeroGetterExpectFloat(value, zeroGetterSecondCall(floating));
+        zeroGetterExpectFloat(value + 0.25, zeroGetterSecondCall(internal_float));
+        zeroGetterExpectFloat(value + 0.25, zeroGetterSecondCall(inherited_float));
+    }
+}
+internal_float.set(7);
+zeroGetterExpectFloat(7.25, zeroGetterSecondCall(internal_float));
+internal_float.set(NOTHING);
+zeroGetterExpectFloat(0.25, zeroGetterSecondCall(internal_float));
+internal_float.set(ZeroGetterEnum::Seven);
+zeroGetterExpectFloat(7.25, zeroGetterSecondCall(internal_float));
+target = 71;
+zeroGetterExpect(72, zeroGetterFallback(referenced));
+dynamic.value = ZeroGetterEnum::Seven;
+zeroGetterExpect(8, zeroGetterFallback(dynamic));
+dynamic.value = NOTHING;
+zeroGetterExpect(1, zeroGetterFallback(dynamic));
+dynamic.value = 73;
+zeroGetterExpect(74, zeroGetterFallback(dynamic));
+for (int round = 0; round < 16; ++round) {
+    zeroGetterExpect(74, zeroGetterInvoke(dynamic));
+}
+delete dynamic;
+if (type(zeroGetterInvoke(dynamic)) != "string") {
+    throw "ZERO-GETTER-TEST", "deleted receiver did not raise";
+}
+ZeroGetterSynchronized locked();
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.parse("%modern\nclass ZeroGetterForeign {\n"
+    "private { int value = 83; }\nint read() { return value; }\n}\n"
+    "object sub make() { return new ZeroGetterForeign(); }\n", "foreign-zero-getter");
+auto imported = foreign.callFunction("make");
+for (int round = 0; round < 16; ++round) {
+    zeroGetterExpect(79, zeroGetterSpecial(locked));
+    zeroGetterExpect(83, zeroGetterSpecial(imported));
+    zeroGetterExpect(23, zeroGetterCall(overridden));
+}
+# Warm name-based and parse-selected entries at the same typed call site.
+# The inherited receiver populates a name cache first; the exact default method
+# must preserve its normal binding/context when its non-fast entry is then cached.
+ZeroGetterDefaultInherited inherited_defaults();
+ZeroGetterStringResult string_result();
+ZeroGetterDefaultThrow default_throw();
+for (int round = 0; round < 32; ++round) {
+    zeroGetterExpect(60, zeroGetterExactDefault(inherited_defaults));
+    zeroGetterExpect(60, zeroGetterExactDefault(defaults));
+    zeroGetterExpect("ordinary string result", zeroGetterStringResult(string_result));
+    zero_getter_default_throw = False;
+    zeroGetterExpect(97, zeroGetterInvoke(default_throw));
+    zero_getter_default_throw = True;
+    zeroGetterExpect("ZERO-GETTER-DEFAULT-EXPECTED", zeroGetterInvoke(default_throw));
+}
+zeroGetterExpect(64, zero_getter_default_count);
+printf("zero-arg-getter: ok\n");

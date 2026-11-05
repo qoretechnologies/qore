@@ -1,5 +1,7 @@
 # Background expressions in the compiled tiers
 
+<!-- Copyright (c) 2026 Qore Technologies, s.r.o. -->
+
 The `background` operator evaluates its whole expression in the new thread, in every execution mode (issue #5482):
 the call's arguments and its target (the object of a method call, the expression giving a call reference), or any
 other expression. What the expression takes from the code that starts the thread is evaluated when the thread starts:

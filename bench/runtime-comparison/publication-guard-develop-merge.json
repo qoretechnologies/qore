@@ -1,0 +1,58 @@
+{
+  "copyright": "Copyright 2026 Qore Technologies, s.r.o.",
+  "producer": {
+    "copyright": "Copyright 2026 Qore Technologies, s.r.o.",
+    "driver": "guard-develop-merge-publish-v2.py",
+    "driver_sha256": "9c228187ab18d8e50d985f09f6c82382d7d406cb70e5c2404cb24dfa84b82f15",
+    "observed_exit_code": 1,
+    "observed_via": "exec_command session97624; write_stdin terminal result chunk612855",
+    "reason": "All outputs and git diff --check completed before the final logging statement raised KeyError: totals. The compilation-cost table loop reused variable r, replacing the in-memory report variable only after the report was saved. Generated report bytes are unchanged.",
+    "outputs": {
+      "bench/runtime-comparison/results-guard-develop-merge-macos-arm64.json": {
+        "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/guard-develop-merge-publication-producer-v2-8wjrrx0x/results-guard-develop-merge-macos-arm64.json",
+        "sha256": "3720bf7b6d4482fe718b7398f86e39c2e8b512be09478faa0b504ba38b4f1094"
+      },
+      "bench/runtime-comparison/audit-guard-develop-merge.md": {
+        "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/guard-develop-merge-publication-producer-v2-8wjrrx0x/audit-guard-develop-merge.md",
+        "sha256": "c99b7ad55ae13a46f42a27fb2e79f6af72ab65d3b8984d4955c31959ded20336"
+      },
+      "bench/runtime-comparison/README.md": {
+        "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/guard-develop-merge-publication-producer-v2-8wjrrx0x/README.md",
+        "sha256": "69ae2546542dbb6080708622bcc8c20185b06433395e119e34f0f4c17ce2063b"
+      },
+      "bench/runtime-comparison/RESULTS.md": {
+        "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/guard-develop-merge-publication-producer-v2-8wjrrx0x/RESULTS.md",
+        "sha256": "13e694a528f7da8261152441009b40972115162c94e0c27d6a630f9563f7f665"
+      },
+      "design/qore-jit-aot-current-state.md": {
+        "archive": "/Users/david/src/qore/git/qore/build/bench-runtime-comparison/guard-develop-merge-publication-producer-v2-8wjrrx0x/qore-jit-aot-current-state.md",
+        "sha256": "aa46db3852322b1ec59b68e0aaa1595f4b38f40be8ab6e0e72adc50b6da014cc"
+      }
+    }
+  },
+  "independent_validation": {
+    "verified": true,
+    "report_sha256": "3720bf7b6d4482fe718b7398f86e39c2e8b512be09478faa0b504ba38b4f1094",
+    "audit": {
+      "N/A": 41,
+      "Pass": 21
+    },
+    "jobs": 846,
+    "windows": 2538,
+    "strict_doc_checks": 4,
+    "source_sha256": {
+      "examples/test/ir/AOTDebugIRStatementStep.qtest": "35484ef3a75f82323a8da4b1312f0fcd69858d7ae9dcc44991e4c46334701402",
+      "examples/test/ir/AOTSerializedDebugSteps.qtest": "4ef0b2360f20f994c941a5368b03cb7b543c4ba20d5dca4c36b1d034725e972a",
+      "include/qore/intern/QoreIR.h": "5f0f1756fb360bb83f55402589aece6f1fbc7a76f330bdbc56fad5a3f2a6683f",
+      "lib/QoreAOT.cpp": "a711206fa7627dc7b2f3437e593a38627c4a1d60ffb1eecfe704ca7a4ca86e68",
+      "lib/QoreAOTBinary.cpp": "57a1e569ed7560cb0d4d48351e1bb1d0e7c0dd3444371d18f3b455c2c6a63717",
+      "lib/QoreIRLowering.cpp": "0ca5018791a680f33430b1b4046df476ab77626de60f45d9e28fdf1420b2eda2",
+      "lib/QoreIRToLLVM.cpp": "a0bee4e1f8b452ed53dab4d4dcbbe12f517adebd6b688ecdf3674e7c524c0833",
+      "examples/test/ir/AOTDebugScalarReplacement.qr": "c8248ac6228aa21f44d4f2a4e5109b6a328bb42a54a8a171ab273a5b88606bd2",
+      "examples/test/ir/AOTDebugScalarReplacement.qtest": "9433469b13a86fb63c97c8f69d9d05b85fd253362cc7254aa51403bf89177ee0"
+    },
+    "driver_sha256": "09aec75efbd91300dea67d3f010d122d178542d312675e344b4d84e607db35bf"
+  },
+  "report_sha256": "3720bf7b6d4482fe718b7398f86e39c2e8b512be09478faa0b504ba38b4f1094",
+  "resolution": "Independent raw measurement replay, all62 audit checks, source hashes and4 strict documentation checks passed. The producer logging exception is preserved as a failed tool execution, not relabeled successful."
+}

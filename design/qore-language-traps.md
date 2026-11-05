@@ -14,22 +14,21 @@ and would have been documented as true if they had not been re-run.
 
 ## Index by error text
 
-| Error or symptom | Trap |
-|---|---|
-| `RUNTIME-TYPE-ERROR: <lvalue> expects type 'X', but got no value instead` | [1](#1-a-declaration-does-not-initialize), [9](#9-map-over-nothing-returns-nothing) |
-| `PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `PARSE-TYPE-ERROR: cannot append a value with type 'X' to a list with element type 'Y'` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash (or list) holding the target` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `PARSE-EXCEPTION: 'C()' names class 'C', not a function` | [11](#11-constructing-an-object-in-an-expression-requires-new) |
-| `PARSE-EXCEPTION: read-only local variable 'X' declared without type information` | [12](#12-a-read-only-local-needs-an-explicit-type) |
-| `PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'` | [10](#10-identifiers-that-collide-with-keywords) |
-| a lookup always reports "not found"; a loop over an inherited member iterates zero times | [6](#6-privateinternal-is-invisible-to-subclasses-silently) |
-| a method override is ignored, with no error | [7](#7-the-first-inherits-branch-wins) |
-| a declared capability/option key reads as absent | [5](#5-presence-emptiness-and-absence-are-three-different-things) |
-| a remote call exceeds an interval limit only in some time zones | [8](#8-days-and-months-are-calendar-units) |
-| a character loop truncates non-ASCII text or reads past the end | [13](#13-size-counts-bytes-length-counts-characters) |
-| `OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted`, thrown in a `background` thread | [16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not) |
-| `OBJECT-ALREADY-DELETED: attempt to access member 'X' of an already-deleted object of class 'C'`, thrown in a `background` thread | [16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not) |
+|!Error or symptom|!Trap
+|`RUNTIME-TYPE-ERROR: <lvalue> expects type 'X', but got no value instead`|[1](#1-a-declaration-does-not-initialize), [9](#9-map-over-nothing-returns-nothing)
+|`PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment`|[2](#2-container-types-are-narrowed-by-their-first-value)
+|`PARSE-TYPE-ERROR: cannot append a value with type 'X' to a list with element type 'Y'`|[2](#2-container-types-are-narrowed-by-their-first-value)
+|`RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash (or list) holding the target`|[2](#2-container-types-are-narrowed-by-their-first-value)
+|`PARSE-EXCEPTION: 'C()' names class 'C', not a function`|[11](#11-constructing-an-object-in-an-expression-requires-new)
+|`PARSE-EXCEPTION: read-only local variable 'X' declared without type information`|[12](#12-a-read-only-local-needs-an-explicit-type)
+|`PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'`|[10](#10-identifiers-that-collide-with-keywords)
+|a lookup always reports "not found"; a loop over an inherited member iterates zero times|[6](#6-privateinternal-is-invisible-to-subclasses-silently)
+|a method override is ignored, with no error|[7](#7-the-first-inherits-branch-wins)
+|a declared capability/option key reads as absent|[5](#5-presence-emptiness-and-absence-are-three-different-things)
+|a remote call exceeds an interval limit only in some time zones|[8](#8-days-and-months-are-calendar-units)
+|a character loop truncates non-ASCII text or reads past the end|[13](#13-size-counts-bytes-length-counts-characters)
+|`OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted`, thrown in a `background` thread|[16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not)
+|`OBJECT-ALREADY-DELETED: attempt to access member 'X' of an already-deleted object of class 'C'`, thrown in a `background` thread|[16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not)
 
 ## Parser and tool feedback
 
@@ -44,18 +43,17 @@ one or more `suggestions`. Exact source rewrites are marked `machine-applicable`
 marked `review-required`. This lets an editor or coding agent act on the diagnostic without matching mutable
 exception prose.
 
-| Diagnostic ID | Severity and exact detection boundary | Primary correction |
-|---|---|---|
-| `UNINITIALIZED-LOCAL-READ` | strict warning for a direct read of a non-optional local that is not definitely assigned; optional locals, `exists` operands, declaration sites, assignment targets, and reads after all control-flow branches assign are excluded | initialize before the read or make absence explicit in the type |
-| `NARROWED-CONTAINER-TYPE-MISMATCH` | error only when the parser can trace an `auto` container's effective element type to a narrowing assignment | use `auto!` only for an intentionally heterogeneous container |
-| `NULL-NOTHING-COMPARISON` | strict warning for a parse-time-known `NULL`/`NOTHING` comparison with `==`, `!=`, `===`, or `!==` | test the two states separately according to the data contract |
-| `HASH-MEMBER-TRUTHINESS` | strict warning when a statically container-valued hash member is converted directly to bool by `if`, loop, ternary, `!`, `&&`, or `\|\|`; scalar members and members passed through another expression are excluded | use `hasKey()` if presence is intended |
-| `OPTIONAL-MAP-RESULT` | strict warning for a direct `map` result whose source's static type permits `NOTHING` assigned to a required list; optional and explicitly coalesced targets are excluded, and the wording does not claim that a runtime guard is absent | confirm the source is non-`NOTHING` on every path, coalesce with `?? ()`, or make the target optional |
-| `HARD-KEYWORD-MEMBER-ACCESS` | syntax error only for a hard keyword after `.` | apply the exact quoted-subscript replacement |
-| `MISSING-NEW-CONSTRUCTOR` | error only after callable lookup fails and the same reachable name resolves to a class | apply the exact `new ` insertion |
-| `READONLY-LOCAL-REQUIRES-TYPE` | error for an untyped read-only local when types are required | write `const auto NAME` or a concrete type |
-| `STRING-MULTIPLICATION-IS-NUMERIC` | strict warning when exactly one `*` operand is a parse-time-known string and the other is statically numeric | call `strmul()` |
-| `EXISTS-OPTIONAL-REFERENCE-VALUE` | strict warning for `exists` applied directly to an optional local reference | return `{found, value}` or pass a separate supplied flag |
+|!Diagnostic ID|!Severity and exact detection boundary|!Primary correction
+|`UNINITIALIZED-LOCAL-READ`|strict warning for a direct read of a non-optional local that is not definitely assigned; optional locals, `exists` operands, declaration sites, assignment targets, and reads after all control-flow branches assign are excluded|initialize before the read or make absence explicit in the type
+|`NARROWED-CONTAINER-TYPE-MISMATCH`|error only when the parser can trace an `auto` container's effective element type to a narrowing assignment|use `auto!` only for an intentionally heterogeneous container
+|`NULL-NOTHING-COMPARISON`|strict warning for a parse-time-known `NULL`/`NOTHING` comparison with `==`, `!=`, `===`, or `!==`|test the two states separately according to the data contract
+|`HASH-MEMBER-TRUTHINESS`|strict warning when a statically container-valued hash member is converted directly to bool by `if`, loop, ternary, `!`, `&&`, or `\|\|`; scalar members and members passed through another expression are excluded|use `hasKey()` if presence is intended
+|`OPTIONAL-MAP-RESULT`|strict warning for a direct `map` result whose source's static type permits `NOTHING` assigned to a required list; optional and explicitly coalesced targets are excluded, and the wording does not claim that a runtime guard is absent|confirm the source is non-`NOTHING` on every path, coalesce with `?? ()`, or make the target optional
+|`HARD-KEYWORD-MEMBER-ACCESS`|syntax error only for a hard keyword after `.`|apply the exact quoted-subscript replacement
+|`MISSING-NEW-CONSTRUCTOR`|error only after callable lookup fails and the same reachable name resolves to a class|apply the exact `new ` insertion
+|`READONLY-LOCAL-REQUIRES-TYPE`|error for an untyped read-only local when types are required|write `const auto NAME` or a concrete type
+|`STRING-MULTIPLICATION-IS-NUMERIC`|strict warning when exactly one `*` operand is a parse-time-known string and the other is statically numeric|call `strmul()`
+|`EXISTS-OPTIONAL-REFERENCE-VALUE`|strict warning for `exists` applied directly to an optional local reference|return `{found, value}` or pass a separate supplied flag
 
 ### Runtime diagnostics
 
@@ -204,12 +202,11 @@ where a single expression must tolerate a narrowly-typed argument.
 Reading a missing key returns `NOTHING`, and an empty hash or list is `False`, so a truth test cannot
 tell a missing key from a present-but-empty one:
 
-| key state | `h.k` truth test | `exists h.k` | `h.hasKey("k")` |
-|---|---|---|---|
-| present, non-empty value | True | True | True |
-| present, empty hash or list | **False** | True | True |
-| present, value is `NOTHING` | False | **False** | True |
-| absent | False | False | False |
+|!key state|!`h.k` truth test|!`exists h.k`|!`h.hasKey("k")`
+|present, non-empty value|True|True|True
+|present, empty hash or list|**False**|True|True
+|present, value is `NOTHING`|False|**False**|True
+|absent|False|False|False
 
 This is the common failure in protocol code, where a capability is declared by the *presence* of a
 key whose value is an often-empty settings hash:
@@ -440,15 +437,14 @@ This is the same weak reference that breaks a call reference taken on a temporar
 statement that created the receiver has ended — see
 [trap 11](#11-constructing-an-object-in-an-expression-requires-new) — reached here on a different path.
 
-| Background expression | Object kept alive | Why |
-|---|---|---|
-| `background method()`, `background self.method()` | yes | a non-static self call takes a real reference on the object for the thread's duration |
-| `background sub () { ... }()` capturing object scope | yes | captured object scope is checked and referenced before the thread starts |
-| `background obj.method()`, `background (new T()).method()` | yes | the thread holds a strong reference to the object: a local variable such as `obj` is captured when the thread starts, and an object expression such as `new T()` is evaluated in the *new* thread (see below) |
-| `background f(self)`, `background T::sm(self)` | yes | `self` is an ordinary strong reference in the evaluated argument list |
-| `background c()` where `c` is `\method()` or `\obj.method()` | **no** | a method call reference holds a weak reference only |
-| `background call_function_args(\method(), args)` | **no** | same — the call reference is the only link to the object |
-| any of the above while another thread runs `delete obj` | **no** | `delete` destroys the object unconditionally |
+|!Background expression|!Object kept alive|!Why
+|`background method()`, `background self.method()`|yes|a non-static self call takes a real reference on the object for the thread's duration
+|`background sub () { ... }()` capturing object scope|yes|captured object scope is checked and referenced before the thread starts
+|`background obj.method()`, `background (new T()).method()`|yes|the thread holds a strong reference to the object: a local variable such as `obj` is captured when the thread starts, and an object expression such as `new T()` is evaluated in the *new* thread (see below)
+|`background f(self)`, `background T::sm(self)`|yes|`self` is an ordinary strong reference in the evaluated argument list
+|`background c()` where `c` is `\method()` or `\obj.method()`|**no**|a method call reference holds a weak reference only
+|`background call_function_args(\method(), args)`|**no**|same — the call reference is the only link to the object
+|any of the above while another thread runs `delete obj`|**no**|`delete` destroys the object unconditionally
 
 `background T::staticMethod()` correctly takes no reference: a static call has no object.
 
@@ -473,11 +469,10 @@ least as long as the thread, or pass the object itself as an argument.
 These were carried in working notes as facts and are **false** at Qore 3.0.0. They are recorded so
 they are not re-introduced.
 
-| Claim | Reality |
-|---|---|
-| "`map` over an empty source yields `NOTHING`" | Only a `NOTHING` or empty-**hash** source does. An empty **list** yields an empty list — see trap 9 for the accurate rule. |
-| "`protected` is a reserved word" | It is not. `h.protected` parses fine, as do `private`, `public` and `static` as member names. |
-| "`Foo::get().bar()` is a parse error; assign to a temporary first" | Calling a method on a static-method result works. The real trap is the *bare constructor* form — see trap 11. |
+|!Claim|!Reality
+|"`map` over an empty source yields `NOTHING`"|Only a `NOTHING` or empty-**hash** source does. An empty **list** yields an empty list — see trap 9 for the accurate rule.
+|"`protected` is a reserved word"|It is not. `h.protected` parses fine, as do `private`, `public` and `static` as member names.
+|"`Foo::get().bar()` is a parse error; assign to a temporary first"|Calling a method on a static-method result works. The real trap is the *bare constructor* form — see trap 11.
 
 ## Verifying an entry
 

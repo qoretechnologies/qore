@@ -70,6 +70,7 @@ null
         set_return_value(main());
     }
 
+%ifndef NoNdjsonDataProvider
     #! Writes the bytes to a new temporary file and returns its path; the file is removed by the caller
     private static string writeTemp(binary data, string suffix) {
         string path = tmp_location() + DirSep + "byte-order-" + get_random_string() + suffix;
@@ -98,7 +99,6 @@ null
         assertEq(2, readNdjson(path, "UTF-16LE").size());
     }
 
-%ifndef NoNdjsonDataProvider
     testNdjsonIteratorBasic() {
         NdjsonDataProvider::NdjsonIterator iter(BasicNdjson);
         list<auto> results = ();

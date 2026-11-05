@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTPreparedIndexedIntAddTest
+
+class AOTPreparedIndexedIntAddTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT prepared indexed integer addition", "1.0", \ARGV) {
+        addTestCase("guarded mutation and generic fallbacks", \check());
+        addTestCase("negative-index policy, weak and block-local values", \negative());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " ordinary LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTPreparedIndexedIntAdd.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("sparse:\\[null, null, null, 7\\]", expected);
+        assertRegex("parameter:\\[5, 8\\]:\\[4, 8\\]", expected);
+        assertRegex("recursive:55", expected);
+        assertRegex("reference:9:\\[9\\]", expected);
+        assertRegex("nested:\\[\\[6\\]\\]", expected);
+        assertRegex("owned:0:140737488355335:\\[140737488355335\\]", expected);
+        assertRegex("owned:2:9:\\[9\\]", expected);
+        assertRegex("native-negative:\\[7, 10\\]", expected);
+        assertRegex("reflect:0:RUNTIME-TYPE-ERROR:3:\\[3\\]:list<int>\n", expected);
+        assertRegex("reflect:1:RUNTIME-TYPE-ERROR:3:\\[3\\]:list<int>\n", expected);
+        assertRegex("reflect:2:RUNTIME-TYPE-ERROR:3:\\[3\\]:list<int>\n", expected);
+        assertRegex("reflect:3:42:\\[42\\]:list<int>\n", expected);
+        assertRegex("reflect:4:43:\\[43\\]:list<int>\n", expected);
+        assertRegex("indexed-int-add: ok", expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-indexed-int-add-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_AOT_PREPARED_INDEXED_INT_ADD=1 ", "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                string loop = body(ir, "indexedAddLoop");
+                bool selected = !prefix.startsWith("QORE_DISABLE_");
+                assertEq(selected, regex(loop,
+                    "(?:call|invoke) i64 @qore_rt_lv_path_int_add_prepared_aot_(?:throwing_)?v1"),
+                    "prepared typed body-local path " + prefix + level);
+                assertEq(selected, regex(body(ir, "indexedAddOwned"),
+                    "@qore_rt_lv_path_int_add_prepared_aot_(?:throwing_)?v1\\([^\n]*i32 1, ptr"),
+                    "owned RHS is transferred through the prepared helper " + prefix + level);
+                foreach string excluded in (("indexedAddParameter", "indexedAddNested")) {
+                    assertFalse(regex(body(ir, excluded), "@qore_rt_lv_path_int_add_prepared_aot_"), excluded);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private negative() {
+        string source = get_script_dir() + "/AOTPreparedIndexedIntAddNegative.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("indexed-negative: ok", expected);
+        assertRegex("weak:\\[9\\]:\\[9\\]", expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-indexed-negative-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_PREPARED_INDEXED_INT_ADD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

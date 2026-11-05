@@ -32,8 +32,10 @@
 #ifndef _QORE_INTERN_QOREIRLOWERING_H
 #define _QORE_INTERN_QOREIRLOWERING_H
 
+#include <map>
 #include <stack>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -71,18 +73,22 @@ class QoreBackgroundOperatorNode;
 class QoreIRLowering;
 
 //! The stack that IR lowering keeps free above the thread's stack limit
-/** Lowering recurses with the nesting of the code, and several of its frames are large (much larger again with
-    AddressSanitizer), so each check leaves room for a few levels of nesting; code nested more deeply than the thread's
-    stack allows for lowering runs on the AST tier, which checks the stack itself and raises \c STACK-LIMIT-EXCEEDED if
-    it runs out.
+/** Lowering recurses with the nesting of the code, and it and the walks of the code that it makes check the stack at
+    every level of nesting: the stack they use below a check that fails (up to 0.7KB measured, for nested statements
+    of every kind and for nested expressions) is held by the stack guard (QORE_STACK_GUARD), as for the code that runs
+    between the stack checks of execution, so lowering stops at the thread's stack limit itself.  Code nested more
+    deeply than the thread's stack allows for lowering runs on the AST tier, which checks the stack itself and raises
+    \c STACK-LIMIT-EXCEEDED if it runs out, and lowering is attempted again by a call with more stack (see
+    UserVariantBase::lowerIROnce()).  A reserve keeps that much stack of a thread from lowering: with a 128KB reserve,
+    no code was lowered on a thread with a 128KB stack (musl's default thread stack).
 */
-constexpr size_t QORE_IR_LOWERING_STACK_RESERVE = 128 * 1024;
+constexpr size_t QORE_IR_LOWERING_STACK_RESERVE = 0;
 
 //! The lowering error when the reserve is reached
 constexpr const char* QORE_IR_LOWERING_STACK_ERROR = "the code is nested too deeply to be lowered within the stack of "
     "this thread";
 
-//! Returns true if the thread's stack has reached QORE_IR_LOWERING_STACK_RESERVE in a recursive walk of the code
+//! Returns true if the stack has reached its limit plus QORE_IR_LOWERING_STACK_RESERVE in a recursive walk of the code
 /** For the analyses and walks of the AST or of the IR that lowering and IR optimization make: they recurse with the
     nesting of the code and stop when this returns true.  An analysis then returns its conservative answer; the
     lowering in progress in the thread, if any, fails with QORE_IR_LOWERING_STACK_ERROR (see
@@ -120,6 +126,17 @@ private:
     std::string& error;
     QoreIRValue result;
 };
+
+//! Returns true if a function's frame cleanup alone releases its locals in reverse declaration order
+/** An exception that no block cleanup anchors releases the private IR locals of the frame first, last declared
+    first, and its runtime-owned locals after them.  That is reverse declaration order unless a runtime-owned local
+    that can hold an object is declared after a private one in a scope that overlaps it; then the blocks anchor an
+    unwind cleanup.  Uses the function's actual local classification (QoreIRFunction::computeIROnlyLocals()).
+    @param root the function's root statement block
+    @param func the function lowered from it
+    @return true if no unwind cleanup anchor is needed for the order of its locals; false otherwise or on cancellation
+*/
+DLLLOCAL bool qore_ir_local_unwind_order_is_exact(const StatementBlock* root, const QoreIRFunction& func);
 
 class QoreIRLowering {
 public:
@@ -274,7 +291,7 @@ public:
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
 
 private:
-    //! set when lowering stopped at QORE_IR_LOWERING_STACK_RESERVE; see stackLimitReached()
+    //! set when lowering stopped at the stack limit (plus QORE_IR_LOWERING_STACK_RESERVE); see stackLimitReached()
     bool stack_limit_reached = false;
 
     //! the number of walks that stopped at the stack reserve in this thread when lowering started
@@ -551,6 +568,29 @@ private:
     */
     DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
 
+    //! Returns true if reflection can read or replace the locals of the function being lowered by name
+    /** True in a program that allows the debugger unless the function is proven reflection-free
+        (QoreIRFunction::reflection_free); the lowering then keeps every local's runtime state current.
+    */
+    DLLLOCAL bool localsMayBeReflected() const;
+
+    //! Releases the value of an operand that an operator has consumed, as the AST interpreter releases it
+    /** The AST interpreter holds the value of an operand while the operator is evaluated and releases it when the
+        operator returns; the compiled tiers release a temporary at the end of its statement otherwise
+        (QoreIROpcode::ReleaseOperandTemp, design/temporary-lifetime.md).  Nothing is emitted for a variable, a
+        constant, or a value whose type cannot be or hold an object.
+        @param operand the operand's expression
+        @param value the operand's value
+        @param loc the operator's location
+    */
+    DLLLOCAL void releaseConsumedOperand(const QoreValue& operand, QoreIRValue value, const QoreProgramLocation* loc);
+
+    //! Releases the values of the operands of a binary operator after its result (see releaseConsumedOperand())
+    /** @return \a result
+    */
+    DLLLOCAL QoreIRValue releaseConsumedOperands(QoreIRValue result, const QoreValue& left_expr, QoreIRValue left,
+        const QoreValue& right_expr, QoreIRValue right, const QoreProgramLocation* loc);
+
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
      *  - OBE_Unconditional: always executes
@@ -616,6 +656,11 @@ private:
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    //! True if an exception leaving the function could release its object locals out of reverse declaration order
+    //! unless their blocks anchor an unwind cleanup; set when the function's root block is lowered
+    bool local_unwind_order_needs_anchors = true;
+    //! The exception cleanup blocks that lowerStatementBlock() anchors; each runs the ScopeExit of its own block
+    std::unordered_set<const QoreIRBasicBlock*> block_cleanup_targets;
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 
@@ -651,7 +696,9 @@ private:
         QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
+        QoreIRValue foreach_held_source;           //!< operand of a keys or range slice list held by the loop, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
+        uint32_t uid = 0;                          //!< identifies the entry within the function (pushBlockCleanup())
         //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
         bool block_scope = false;
         //! the exception target of the body of the block of a Scope entry with handlers (block_scope)
@@ -674,6 +721,42 @@ private:
 
     //! Handlers registered for current block, to be lowered inline at exit points
     std::vector<InlineHandler> block_handlers;
+
+    //! Counter for BlockCleanupEntry::uid
+    uint32_t cleanup_entry_counter = 0;
+
+    //! True if the returns of the function being lowered share their cleanup (see emitSharedReturn())
+    bool share_return_cleanup = false;
+
+    //! A block of the shared return path: it runs the cleanup of one cleanup_stack entry, or returns
+    struct SharedReturnNode {
+        QoreIRBasicBlock* block = nullptr;
+        //! the value returned, from the returns that reach the block; null for a return without a value
+        QoreIRPhiInstruction* phi = nullptr;
+    };
+    //! The shared return path: (entry uid, 0 for the Return itself; has value; parse type of the value) -> block
+    std::map<std::tuple<uint32_t, bool, const QoreTypeInfo*>, SharedReturnNode> shared_return_nodes;
+
+    //! Leaves the function from a return statement through the shared cleanup of the scopes it leaves
+    /** Every cleanup that a return runs - releasing the locals of the blocks it leaves, ending catch blocks, foreach
+        statements and scopes without handlers to run - is written once for its cleanup_stack entry, in a block that
+        the returns leaving that entry branch to with their value and that continues to the block of the enclosing
+        entry, down to one Return per kind of returned value; so the code of a function grows with its returns and its
+        scopes rather than with their product.  The cleanups run in the same order as when written at the return.
+        Only the entries below the innermost entry whose cleanup depends on where the return is - a scope with
+        handlers to inline, a reference foreach, a context, an inlined handler - are shared; the return writes those
+        and the entries above them itself, as before.
+
+        @param shared set to true if the return was written; false if it is to be written as before
+    */
+    DLLLOCAL bool emitSharedReturn(QoreIRValue value, bool has_value, const QoreTypeInfo* parse_type,
+            const QoreProgramLocation* loc, bool& shared, std::string& error);
+
+    //! Returns true if the cleanup of cleanup_stack[index] on a return does not depend on where the return is
+    DLLLOCAL bool isReturnCleanupShareable(size_t index);
+
+    //! Emits the cleanup of a shareable entry on a return (see isReturnCleanupShareable())
+    DLLLOCAL void emitShareableReturnCleanup(const BlockCleanupEntry& entry);
 
     //! True while lowering top-level code
     /** Top-level IR is executed without the IR optimization passes, so the analysis that proves a local list
@@ -704,11 +787,28 @@ private:
 
     //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
     /** Releases the iterator, the list and the loop variables, as the AST's foreach statement does when an exception
-        unwinds it, before the handler of the enclosing try block or block with handlers runs.
+        unwinds it, before the handler of the enclosing try block or block with handlers runs; without
+        \a outer_target, the exception then leaves the frame through a synthetic rethrow.
     */
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
-            const QoreProgramLocation* loc);
+            const QoreProgramLocation* loc, QoreIRValue held_source = QoreIRValue());
+
+    //! Lowers the list of a value foreach loop, keeping the operand of a keys or range slice list
+    /** The AST iterates a keys or range slice list with a functional iterator that holds the value of the
+        operator's operand (the hash or the sequence) until the statement ends, releasing only the other temporaries
+        of the list expression before the body runs (ForEachStatement::execImpl()); an object that only that value
+        refers to is destroyed when the loop ends.  The operand is therefore lowered first, as a temporary of the
+        statement, and the rest of the expression in its own temp scope, which uses the lowered operand.
+
+        @param held_source set to the operand's value when it is held this way
+    */
+    DLLLOCAL QoreIRValue lowerForeachList(const QoreValue& list_expr, const QoreProgramLocation* loc,
+            QoreIRValue& held_source, std::string& error);
+
+    //! An expression lowered ahead of the expression that contains it (see lowerForeachList())
+    const AbstractQoreNode* prelowered_node = nullptr;
+    QoreIRValue prelowered_value;
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
@@ -761,20 +861,23 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
-    //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
-    /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
-        leaves only the catch scopes entered since the try body began; the catch scopes that enclose the try statement
-        stay active (see catchScopesLeftByThrow()).
-    */
-    std::vector<int> try_catch_cleanup_depth_stack;
+    //! Returns the number of active catch scopes that a throw, assert or rethrow statement at the current point ends
+    //! itself
+    /** With a handler for the exception in this function (an enclosing try statement's catch block, or the exception
+        cleanup block of an enclosing catch block or of a block with locals or handlers), the statement ends none: each
+        catch block that the exception leaves on its way to the handler ends its own catch scope on its exception edge
+        (QoreIROpcode::CatchUnwind, after releasing its catch variable, in the order the AST interpreter ends them), and
+        the catch scopes that enclose the try statement whose catch block receives the exception stay active, so a
+        rethrow in such an enclosing catch block still reads its own exception after the inner try statement.  Without
+        a handler in this function, the exception leaves the function and with it every catch scope of the function.
 
-    //! Returns the number of active catch scopes that a throw or rethrow statement at the current point leaves
-    /** These are the catch scopes entered since the body of the innermost enclosing try statement began, or all of
-        them when there is none.  Popping more would delete the exception of a catch block that is still running, and
-        that a rethrow in it reads after the inner try statement.
+        A rethrow reads the exception of the current catch context before the scopes are ended: the rethrow helpers
+        and the IR interpreter pop no catch scope themselves, only the Rethrow instruction's catch_depth after raising
+        the exception.  A rethrow in an on_error handler, whose exception is the handler's and not a catch scope's,
+        therefore never pops a scope of a caller.
     */
     int catchScopesLeftByThrow() const {
-        return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
+        return exception_stack.empty() ? catch_cleanup_depth : 0;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr

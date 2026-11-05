@@ -1027,9 +1027,9 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
-        const QoreFunction* f = qore_root_ns_private::parseResolveFunction(*scope);
-        if (f) {
-            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, f);
+        const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(*scope);
+        if (fe) {
+            ResolvedCallReferenceNode* fr = fe->makeCallReference(loc);
             deref();
             val = fr;
             return parse_init_same_level(fr, val, parse_context);
@@ -1120,11 +1120,17 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
 }
 
 LocalFunctionCallReferenceNode::LocalFunctionCallReferenceNode(const QoreProgramLocation* loc,
-        const QoreFunction* n_uf, bool n_needs_eval) : ResolvedCallReferenceNodeIntern(loc, n_needs_eval), uf(n_uf) {
+        const QoreFunction* n_uf, bool n_needs_eval, std::shared_ptr<const std::string> n_function_path)
+        : ResolvedCallReferenceNodeIntern(loc, n_needs_eval), uf(n_uf), function_path(std::move(n_function_path)) {
 }
 
 LocalFunctionCallReferenceNode::LocalFunctionCallReferenceNode(const QoreProgramLocation* loc,
-        const QoreFunction* n_uf) : ResolvedCallReferenceNodeIntern(loc, true), uf(n_uf) {
+        const QoreFunction* n_uf, std::shared_ptr<const std::string> n_function_path)
+        : ResolvedCallReferenceNodeIntern(loc, true), uf(n_uf), function_path(std::move(n_function_path)) {
+}
+
+const char* LocalFunctionCallReferenceNode::getFunctionPath() const {
+    return function_path ? function_path->c_str() : uf ? uf->getName() : "";
 }
 
 QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -1135,7 +1141,7 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionS
 QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
-    return new FunctionCallReferenceNode(loc, uf, call_pgm);
+    return new FunctionCallReferenceNode(loc, uf, call_pgm, function_path);
 }
 
 QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
@@ -1149,6 +1155,64 @@ bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Ex
     //printd(5, "LocalFunctionCallReferenceNode::is_equal_hard() %p == %p (%p %s)\n", uf, vc ? vc->uf : 0, v,
     //  v ? v->getTypeName() : "n/a");
     return vc && uf == vc->uf;
+}
+
+uint32_t qore_function_ref_scalar_kind(const QoreTypeInfo* type) {
+    using Kind = QoreFunctionRefScalarKind;
+    return static_cast<uint32_t>(type == bigIntTypeInfo ? Kind::Int
+        : type == floatTypeInfo ? Kind::Float : type == boolTypeInfo ? Kind::Bool : Kind::None);
+}
+
+FunctionCallReferenceNode::FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
+        QoreProgram* n_pgm, std::shared_ptr<const std::string> n_function_path)
+        : LocalFunctionCallReferenceNode(loc, n_uf, false, std::move(n_function_path)), pgm(n_pgm) {
+    assert(pgm);
+    // Keep the existing weak Program lifetime; a strong reference could cycle.
+    pgm->depRef();
+    // Creation provenance is immutable. Keep tagged references on invoke()'s
+    // context-establishing path rather than admitting them to reusable native entries.
+    if (QoreSandboxContext* provenance = qore_get_call_reference_provenance(this)) {
+        provenance->deref();
+        return;
+    }
+    if (!uf->isParseInitialized() || uf->numVariants() != 1) {
+        return;
+    }
+    const AbstractQoreFunctionVariant* variant = uf->first();
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb || variant->getFunctionality()) {
+        return;
+    }
+    const UserSignature* sig = uvb->getUserSignature();
+    unsigned count = sig->numParams();
+    // Bound all signature scans before checking static eligibility.
+    if (count > 16 || !uvb->isStaticallyFastCallEligible()) {
+        return;
+    }
+    // A module reference captures the importing caller, while its body belongs
+    // to the module Program. Signature facts alone do not authorize execution:
+    // a different owner must also have an exact compiler-published native
+    // binding at dispatch. Keep ordinary IR/AST references on their old path.
+    bool different_owner = uvb->pgm != pgm;
+    static constinit QoreEnvFlag disable_module_env("QORE_DISABLE_AOT_MODULE_FUNCREF_FAST_CALL");
+    if (different_owner && (!uvb->hasCachedAOT() || count > 1
+            || !qore_function_ref_scalar_kind(sig->getReturnTypeInfo())
+            || disable_module_env.get())) {
+        return;
+    }
+    uint32_t scalar_params = 0;
+    for (unsigned i = 0; i < count; ++i) {
+        const QoreTypeInfo* ti = sig->getParamTypeInfo(i);
+        if (QoreTypeInfo::isReference(ti) || sig->lv[i]->isNoNarrowContainer()) {
+            return;
+        }
+        unsigned kind = qore_function_ref_scalar_kind(ti);
+        scalar_params |= kind << (2 * i);
+    }
+    if (different_owner && count && !scalar_params) {
+        return;
+    }
+    fast_call = {variant, uvb, sig, count, scalar_params};
 }
 
 bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
@@ -1198,7 +1262,7 @@ FunctionCallReferenceNode* DeferredFunctionCallReferenceNode::resolve(RuntimeCon
     }
 
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
-    return new FunctionCallReferenceNode(loc, func, call_pgm);
+    return fe->makeRuntimeCallReference(loc, call_pgm);
 }
 
 QoreValue DeferredFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

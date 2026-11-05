@@ -2,6 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
+%allow-weak-references
+%allow-opaque-references
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 
@@ -15,7 +17,26 @@ class EnumLifetimeTest inherits QUnit::Test {
         addTestCase("enum copies and variable overwrites retain and release ownership", \copiesAndOverwrites());
         addTestCase("enum values survive nested Programs and exception cleanup", \nestedPrograms());
         addTestCase("enum constants survive repeated calls and casts", \constantCalls());
+        addTestCase("enum references and assignment modes preserve ownership", \referenceCopies());
         set_return_value(main());
+    }
+
+    referenceCopies() {
+        auto original = values()[0];
+        reference<auto> alias = \original;
+        auto copied = alias;
+        original = NOTHING;
+        assertTrue(copied.isEnum());
+        assertTrue(copied == 1);
+        auto weak := copied;
+        auto opaque @= copied;
+        copied = NOTHING;
+        assertTrue(weak.isEnum());
+        assertTrue(opaque.isEnum());
+        assertTrue(weak === opaque);
+        weak = NOTHING;
+        assertTrue(opaque == 1);
+        opaque = NOTHING;
     }
 
     private auto echo(auto value) {

@@ -151,6 +151,18 @@ run("nested_throw", auto sub () {
         rethrow;
     }
 });
+# an assertion failure in a try statement nested in a catch block lands in the nested catch block, as a throw does
+run("nested_assert", auto sub () {
+    try {
+        throw "OUTER", "outer";
+    } catch (hash<ExceptionInfo> ex) {
+        try {
+            @assert(False);
+        } catch (hash<ExceptionInfo> ex2) {
+        }
+        rethrow;
+    }
+});
 run("nested_rethrow", auto sub () {
     try {
         throw "OUTER", "outer";

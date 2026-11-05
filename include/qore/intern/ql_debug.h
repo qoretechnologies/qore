@@ -176,6 +176,30 @@ DLLLOCAL void qore_dbg_cares_lookup_env_read();
 //! been counted for the collector and before the lock is released, with the queue's object; set by the C++ unit tests
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
+
+//! called by the AOT debugger gate helpers (qore_rt_get_aot_method_debugger_gate_v1(),
+//! qore_rt_get_aot_context_debugger_gate_v1()) when the entry of native code takes the address of a debugger gate,
+//! before its body runs; set by dbg_call_at_next_debugger_gate()
+typedef void (*qore_dbg_debugger_gate_hook_t)();
+DLLLOCAL extern std::atomic<qore_dbg_debugger_gate_hook_t> qore_dbg_debugger_gate_hook;
+
+//! Reads every thread's call stack while another thread is parked right after publishing a matching location
+/** The first thread other than this one that publishes a call stack location with one of the given call names (and,
+    if callers is not empty, whose caller frame has one of those call names) waits right after the location is
+    published until the stacks have been read; implemented in lib/thread.cpp.  See dbg_read_stacks_at_frame().
+
+    @param on_armed if not nullptr, called without arguments right after the hook is armed, before waiting: it can let
+    the thread to be parked go on, which then parks at its next matching location for certain
+    @param on_parked if not nullptr, called with the hash returned while the thread is still parked
+
+    @return a hash: \c tid: the TID of the thread parked, \c kind: \c "native-leaf", \c "native" or
+    \c "ordinary", the kind of call that published the location, \c stacks: the result of
+    get_all_thread_call_stacks() read while that thread was parked; nullptr with an exception raised on error, if a
+    callback raised one, or if no thread published a matching location within the timeout
+*/
+DLLLOCAL QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const QoreListNode* callers,
+    int64 timeout_ms, const ResolvedCallReferenceNode* on_armed, const ResolvedCallReferenceNode* on_parked,
+    ExceptionSink* xsink);
 #endif
 
 #endif

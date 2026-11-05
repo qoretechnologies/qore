@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub dynamicClosureCall(code<int(int)> callback, int value) {
+    return callback(value);
+}
+# Unknown arguments must retain binding semantics, including wide integers
+# that do not fit the inline integer tag and unsupported argument types.
+auto sub dynamicClosureAutoArg(code<int(int)> callback, auto value) {
+    return callback(value);
+}
+thread_local int fallbackDestroyed = 0;
+thread_local int functionEffects = 0;
+int sub dynamicClosureEffectFunction(int value) {
+    ++functionEffects;
+    return value + 1;
+}
+class DynamicClosureOwnedArgument {
+    destructor() { ++fallbackDestroyed; }
+}
+auto sub dynamicClosureProducedArgument(bool owned) {
+    return owned ? new DynamicClosureOwnedArgument() : 1125899906842624;
+}
+auto sub dynamicClosureConsumedArg(code<int(int)> callback, bool owned) {
+    return callback(dynamicClosureProducedArgument(owned));
+}
+int sub dynamicClosureFunction(int value) {
+    return ((value * 3 + 47) ^ 5);
+}
+int sub dynamicClosureAlternating(code<int(int)> first, code<int(int)> second, int count, int input) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        code<int(int)> selected = (i & 1) ? first : second;
+        total += selected(input + i);
+    }
+    return total;
+}
+code<int(int)> sub dynamicClosureFactory(int offset) {
+    return int sub (int value) { return ((value * 3 + offset) ^ 5); };
+}
+code<int(int)> sub dynamicClosurePlain() {
+    return int sub (int value) { return ((value * 3 + 17) ^ 5); };
+}
+code<int(int)> sub dynamicClosureReference(reference<int> offset) {
+    return int sub (int value) { return ((value * 3 + offset) ^ 5); };
+}
+sub checkValue(int expected, int actual, string label) {
+    if (expected != actual) {
+        throw "DYNAMIC-CLOSURE-TEST", sprintf("%s: expected %d, got %d", label, expected, actual);
+    }
+}
+
+code<int(int)> first = dynamicClosureFactory(17);
+code<int(int)> second = dynamicClosureFactory(31);
+code<int(int)> plain = dynamicClosurePlain();
+code<int(int)> function = \dynamicClosureFunction();
+int shared = 9;
+code<int(int)> changing = int sub (int value) { return (value + shared) ^ 7; };
+code<int(int)> repeated = int sub (int value) { return value + shared - shared; };
+code<nothing(int)> write = nothing sub (int value) { shared = value; };
+code<int(int)> reference = dynamicClosureReference(\shared);
+foreach int input in ((0, 1, -1, 1125899906842624, -1125899906842624,
+        9223372036854775807, -9223372036854775807 - 1)) {
+    # One loop site switches between an owned prepared function reference and
+    # borrowed closures, and between two instances of the same closure variant.
+    foreach int count in ((0, 1, 16)) {
+        int forward = 0;
+        int reverse = 0;
+        int environments = 0;
+        for (int i = 0; i < count; ++i) {
+            int value = input + i;
+            forward += (value * 3 + ((i & 1) ? 47 : 17)) ^ 5;
+            reverse += (value * 3 + ((i & 1) ? 17 : 47)) ^ 5;
+            environments += (value * 3 + ((i & 1) ? 17 : 31)) ^ 5;
+        }
+        checkValue(forward, dynamicClosureAlternating(function, first, count, input), "function/closure");
+        checkValue(reverse, dynamicClosureAlternating(first, function, count, input), "closure/function");
+        checkValue(environments, dynamicClosureAlternating(first, second, count, input), "two environments");
+    }
+    for (int round = 0; round < 8; ++round) {
+        checkValue((input * 3 + 17) ^ 5, dynamicClosureCall(first, input), "first environment");
+        checkValue((input * 3 + 31) ^ 5, dynamicClosureCall(second, input), "second environment");
+        checkValue((input * 3 + 17) ^ 5, dynamicClosureCall(plain, input), "noncapturing");
+        write(round + 9);
+        checkValue((input + round + 9) ^ 7, dynamicClosureCall(changing, input), "mutation");
+        checkValue(input, dynamicClosureCall(repeated, input), "repeated reads");
+        checkValue((input * 3 + round + 9) ^ 5,
+            dynamicClosureCall(reference, input), "reference fallback");
+    }
+}
+remove shared;
+checkValue(12, dynamicClosureCall(changing, 11), "unassigned capture fallback");
+shared = 1125899906842624;
+checkValue((11 + shared) ^ 7, dynamicClosureCall(changing, 11), "assigned again");
+
+int unset;
+try {
+    dynamicClosureCall(first, unset);
+    throw "DYNAMIC-CLOSURE-TEST", "NOTHING argument accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "DYNAMIC-CLOSURE-TEST") { rethrow; }
+}
+int effects = 0;
+code<int(int)> effect = int sub (int value) { ++effects; return value + 1; };
+for (int i = 0; i < 16; ++i) {
+    checkValue(i + 1, dynamicClosureCall(effect, i), "effect fallback");
+}
+checkValue(16, effects, "effects exactly once");
+checkValue(1125899906842625, dynamicClosureAutoArg(effect, 1125899906842624),
+    "boxed wide argument to an effectful closure");
+checkValue(17, effects, "boxed effect exactly once");
+code<int(int)> effectFunction = \dynamicClosureEffectFunction();
+foreach int input in ((7, 1125899906842624, -1125899906842624,
+        9223372036854775807, -9223372036854775807 - 1)) {
+    functionEffects = 0;
+    checkValue(input + 1, dynamicClosureAutoArg(effectFunction, input), "boxed effectful function");
+    checkValue(1, functionEffects, "boxed function effect exactly once");
+}
+
+foreach int input in ((7, 140737488355327, 140737488355328, -140737488355328,
+        -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
+    checkValue((input * 3 + 17) ^ 5, dynamicClosureAutoArg(first, input),
+        "boxed argument compatibility fallback");
+    checkValue((input * 3 + 47) ^ 5, dynamicClosureAutoArg(function, input),
+        "boxed function reference argument");
+}
+checkValue((1125899906842624 * 3 + 17) ^ 5, dynamicClosureConsumedArg(first, False),
+    "consumed wide argument");
+foreach auto invalid in ((NOTHING, "not an integer", (1, 2))) {
+    try {
+        dynamicClosureAutoArg(first, invalid);
+        throw "DYNAMIC-CLOSURE-TEST", "invalid boxed argument accepted";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "DYNAMIC-CLOSURE-TEST") { rethrow; }
+    }
+}
+try {
+    dynamicClosureConsumedArg(first, True);
+    throw "DYNAMIC-CLOSURE-TEST", "owned object argument accepted";
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "DYNAMIC-CLOSURE-TEST") { rethrow; }
+}
+checkValue(1, fallbackDestroyed, "owned argument destroyed exactly once after rejection");
+
+# Simultaneous first calls share the variant, not its invocation captures.
+const int Threads = 16;
+Counter ready(Threads);
+Counter done(Threads);
+Gate start();
+Queue errors();
+code<int(int)> concurrent = dynamicClosureFactory(41);
+start.enter();
+for (int i = 0; i < Threads; ++i) {
+    background sub (int input) {
+        on_exit done.dec();
+        ready.dec();
+        start.enter();
+        start.exit();
+        try {
+            for (int round = 0; round < 128; ++round) {
+                checkValue((input * 3 + 41) ^ 5,
+                    dynamicClosureCall(concurrent, input), "concurrent first entry");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(ex.desc);
+        }
+    }(i);
+}
+ready.waitForZero();
+start.exit();
+done.waitForZero();
+if (errors.size()) { throw "DYNAMIC-CLOSURE-TEST", errors.get(); }
+printf("dynamic-closure-entry: ok\n");

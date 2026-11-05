@@ -89,6 +89,7 @@
 #include <netinet/in_pcb.h>
 #include <netinet/tcp_var.h>
 #include <netinet/tcp_fsm.h>
+#include <libproc.h>
 #endif
 
 // maximum number of non-blocking network operations before returning
@@ -13263,8 +13264,8 @@ struct QoreSocketTableEntry {
 };
 
 //! Calls @a f with each socket of the type in the system's socket table that is bound to a port and not connected
-/** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64); it lists
-    the sockets of all users.
+/** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64);
+    macOS can restrict which sockets appear in the returned snapshot.
 
     @param socktype the socket type, \c SOCK_STREAM or \c SOCK_DGRAM
     @param f called with each socket
@@ -13349,6 +13350,114 @@ static int qore_socket_for_each_bound_socket(int socktype, F&& f, ExceptionSink*
     return -1;
 }
 
+//! Checks process socket descriptors when the system table omits sockets owned by other processes.
+/** macOS can return a successful but filtered pcblist64 snapshot. The public libproc interface can
+    still describe accessible process descriptors. As with the system table, exited processes, closed descriptors,
+    and processes whose metadata is not accessible are skipped; no descriptor is opened or changed.
+
+    @return 1 on a matching socket, 0 otherwise, -1 if cancellation was raised in @a xsink
+*/
+template <typename F>
+static int qore_socket_process_port_held(int socktype, int port, F&& matches, ExceptionSink* xsink) {
+    int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+    if (bytes <= 0 || bytes > INT_MAX - 4096) {
+        return 0;
+    }
+    std::vector<pid_t> pids((bytes + 4096) / sizeof(pid_t));
+    bytes = proc_listpids(PROC_ALL_PIDS, 0, pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+    if (bytes <= 0) {
+        return 0;
+    }
+    size_t count = std::min(pids.size(), static_cast<size_t>(bytes) / sizeof(pid_t));
+    std::vector<proc_fdinfo> fds;
+    size_t checks = 0;
+    auto cancelled = [&]() {
+        return xsink && !(checks++ % 10)
+            && qore_check_cancel(xsink, "checking process socket descriptors");
+    };
+    for (size_t i = 0; i < count; ++i) {
+        if (cancelled()) {
+            return -1;
+        }
+        if (pids[i] <= 0) {
+            continue;
+        }
+        int needed = proc_pidinfo(pids[i], PROC_PIDLISTFDS, 0, nullptr, 0);
+        if (needed <= 0 || needed > INT_MAX - 4096) {
+            continue;
+        }
+        fds.resize((needed + 4096) / sizeof(proc_fdinfo));
+        int got = proc_pidinfo(pids[i], PROC_PIDLISTFDS, 0, fds.data(),
+            static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+        if (got <= 0) {
+            continue;
+        }
+        size_t fd_count = std::min(fds.size(), static_cast<size_t>(got) / sizeof(proc_fdinfo));
+        // the effective user of the process, read when a socket's description has no owner (see below)
+        bool have_process_uid = false;
+        uid_t process_uid = static_cast<uid_t>(-1);
+        for (size_t j = 0; j < fd_count; ++j) {
+            if (cancelled()) {
+                return -1;
+            }
+            if (fds[j].proc_fdtype != PROX_FDTYPE_SOCKET) {
+                continue;
+            }
+            socket_fdinfo info;
+            if (proc_pidfdinfo(pids[i], fds[j].proc_fd, PROC_PIDFDSOCKETINFO, &info, sizeof(info))
+                    != sizeof(info)) {
+                continue;
+            }
+            const socket_info& socket = info.psi;
+            if (socket.soi_type != socktype || (socket.soi_family != AF_INET && socket.soi_family != AF_INET6)) {
+                continue;
+            }
+            bool tcp = socktype == SOCK_STREAM;
+            if (socket.soi_kind != (tcp ? SOCKINFO_TCP : SOCKINFO_IN)) {
+                continue;
+            }
+            const in_sockinfo& inp = tcp ? socket.soi_proto.pri_tcp.tcpsi_ini : socket.soi_proto.pri_in;
+            if (ntohs(static_cast<uint16_t>(inp.insi_lport)) != port || inp.insi_fport) {
+                continue;
+            }
+            QoreSocketTableEntry entry;
+            entry.port = port;
+            if (inp.insi_vflag & INI_IPV6) {
+                entry.addrs.setIpv6(inp.insi_laddr.ina_6, inp.insi_flags & IN6P_IPV6_V6ONLY);
+            } else if (inp.insi_vflag & INI_IPV4) {
+                entry.addrs.setIpv4(inp.insi_laddr.ina_46.i46a_addr4);
+            } else {
+                continue;
+            }
+            entry.options = socket.soi_options;
+            entry.listening = tcp && (socket.soi_proto.pri_tcp.tcpsi_state == TSI_S_LISTEN
+                || (entry.options & SO_ACCEPTCONN));
+            // The owner of the socket is in its stat information, which macOS 27 leaves empty in the description
+            // (all of soi_stat is zero, while fstat() of the socket reports its owner): an empty one has no file
+            // type in vst_mode, and the owner is then taken to be the effective user of the process, the creator of
+            // the socket unless the process changed its user or was given the descriptor.  If that cannot be read,
+            // the socket belongs to no user, so it does not share the port by SO_REUSEPORT.
+            if (socket.soi_stat.vst_mode) {
+                entry.uid = socket.soi_stat.vst_uid;
+            } else {
+                if (!have_process_uid) {
+                    have_process_uid = true;
+                    struct proc_bsdinfo bsd_info;
+                    if (proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 0, &bsd_info, sizeof(bsd_info))
+                            == static_cast<int>(sizeof(bsd_info))) {
+                        process_uid = bsd_info.pbi_uid;
+                    }
+                }
+                entry.uid = process_uid;
+            }
+            if (matches(entry)) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 //! Returns true if a socket option that is a flag is set on the socket
 static bool qore_socket_has_flag(int sock, int level, int option) {
     int value = 0;
@@ -13381,23 +13490,25 @@ static int qore_socket_port_held(int socktype, const QoreSocketServedAddrs& ours
     bool reuseport = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEPORT);
     uid_t uid = geteuid();
     bool held = false;
+    auto matches = [&](const QoreSocketTableEntry& e) {
+        if (e.port != port || !e.addrs.overlaps(ours) || (at_listen && e.addrs.sameAs(ours))) {
+            return false;
+        }
+        return !((reuse_shares && reuse && (e.options & SO_REUSEADDR) && !e.listening)
+            || (reuseport && (e.options & SO_REUSEPORT) && e.uid == uid));
+    };
     try {
         int rc = qore_socket_for_each_bound_socket(socktype, [&](const QoreSocketTableEntry& e) {
-            if (held || e.port != port || !e.addrs.overlaps(ours) || (at_listen && e.addrs.sameAs(ours))) {
-                return;
-            }
-            if ((reuse_shares && reuse && (e.options & SO_REUSEADDR) && !e.listening)
-                || (reuseport && (e.options & SO_REUSEPORT) && e.uid == uid)) {
-                return;
-            }
-            held = true;
+            held = held || matches(e);
         }, xsink);
         if (rc == -2) {
             return -1;
         }
+        if (!held) {
+            return qore_socket_process_port_held(socktype, port, matches, xsink);
+        }
     } catch (std::bad_alloc&) {
-        // the table could not be read
-        return 0;
+        // No complete snapshot could be allocated; retain any match already found.
     }
     return held ? 1 : 0;
 }

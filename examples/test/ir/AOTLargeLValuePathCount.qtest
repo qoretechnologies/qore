@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTLargeLValuePathCountTest
+
+#! Tests an AOT-compiled function with more than 255 LValuePath instructions
+/** Each `remove` of a local is an LValuePath instruction, whose operation the compiled code runs through the slot
+    table of its function's context.  The metadata of a compiled function recorded the number of these slots in a
+    byte, so a function with 256 or more of them was loaded with a table of the count's low 8 bits: the first
+    operation beyond it raised an internal error, and the bytes of the unread entries were parsed as the fields
+    that follow them.  The fixture removes object locals whose destructors log, in a function large enough to be
+    outlined too; every mode and compiled executable must log the interpreter's destructor order.
+*/
+class AOTLargeLValuePathCountTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+
+        #! the number of object locals; all but the last two are removed: 262 LValuePath instructions
+        const Locals = 264;
+    }
+
+    constructor() : Test("functions with more than 255 LValuePath instructions", "1.0", \ARGV) {
+        addTestCase("removes of object locals in one function", \checkRemoves());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    #! object locals whose destructors log, each removed two statements later, and blocks of two locals
+    private static string fixture(int n) {
+        list<string> lines = ("%modern", "our list<string> events = ();",
+            "class Tracked { private { string name; } constructor(string name) { self.name = name; }"
+                " destructor() { push events, name; } string get() { return name; } }",
+            "sub ext(auto v) { push events, \"ext\"; }", "int sub big(int seed) {", "    int total = 0;");
+        for (int i = 0; i < n; ++i) {
+            push lines, sprintf("    Tracked t%d(sprintf(\"t%d-%%d\", seed)); ext(t%d); total += t%d.get().size();",
+                i, i, i, i);
+            if (i >= 2) {
+                push lines, sprintf("    remove t%d;", i - 2);
+            }
+            # a block whose locals, used out of declaration order, are released at its end in reverse declaration
+            # order
+            if (!(i % 8)) {
+                push lines, sprintf("    { Tracked a%d(\"a%d\"); Tracked b%d(\"b%d\"); ext(b%d); ext(a%d);"
+                    " total += b%d.get().size() + a%d.get().size(); }", i, i, i, i, i, i, i, i);
+            }
+        }
+        lines += ("    return total;", "}", "printf(\"%d:%s\\n\", big(7), events.join(\",\"));");
+        return lines.join("\n") + "\n";
+    }
+
+    private checkRemoves() {
+        TmpDir dir("qore-aot-lvpath-count-");
+        string source = dir.path + "/fixture.q";
+        write(source, fixture(Locals));
+
+        string expected = run((qore, "--exec-mode=ast", source));
+        # each removed local is destroyed by its remove, after the call made with the next local
+        assertRegex("^[0-9]+:ext,ext,ext,b0,a0,ext,ext,t0-7,ext,t1-7,", expected);
+        assertRegex(sprintf(",t%d-7,t%d-7\n$", Locals - 1, Locals - 2), expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+
+        string executable = dir.path + "/fixture";
+        # with and without the outliner, which splits this function into helpers
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_OUTLINE_FN=0 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+
+        # the metadata records all of the function's LValuePath instructions
+        string dump = run((qcc, "--dump-info", executable));
+        *list<*string> lvpaths = (dump =~ x/ lvpaths=([0-9]+) /);
+        assertEq(1, lvpaths.size(), dump);
+        assertGe(Locals - 2, lvpaths[0].toInt(), dump);
+    }
+}

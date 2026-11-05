@@ -181,12 +181,33 @@ public:
 };
 
 //! evaluates the operand of a change to an lvalue, as a statement of its own where the other modes do
-class QoreMutationOperandHolder : public QoreScopedEvalHolder {
+/** The operand of a change that is not an assignment (a compound assignment, push or unshift) holds a reference of
+    its own to its value: evaluating a variable can borrow the variable's value, and the change makes the lvalue's
+    value unique before it uses the operand, so an operand that is the lvalue's own value, as in
+    <tt>push l, l</tt>, must make the value shared first; the change then separates the lvalue from the operand
+    (copy-on-write), and the value used is the one that the operand had when it was evaluated, as in the other
+    execution modes, instead of the lvalue's value changed in place (which would contain itself).  An assignment
+    takes its own reference to the new value before it releases the old one.
+*/
+class QoreMutationOperandHolder : public ValueEvalOptimizedRefHolder {
 public:
     //! evaluates @p exp, the operand of a change to @p lvalue; see qore_mutation_operand_has_own_scope()
     DLLLOCAL QoreMutationOperandHolder(const QoreValue& lvalue, const QoreValue& exp, bool assignment,
-            ExceptionSink* xsink)
-            : QoreScopedEvalHolder(exp, qore_mutation_operand_has_own_scope(lvalue, assignment), xsink) {
+            ExceptionSink* xsink) : ValueEvalOptimizedRefHolder(xsink) {
+        if (qore_mutation_operand_has_own_scope(lvalue, assignment)) {
+            QoreStatementTempScope temps(xsink);
+            evalOperand(exp, assignment);
+        } else {
+            evalOperand(exp, assignment);
+        }
+    }
+
+private:
+    //! evaluates the operand; the value of the operand of a change that is not an assignment is referenced
+    DLLLOCAL void evalOperand(const QoreValue& exp, bool assignment) {
+        if (!eval(exp) && !assignment) {
+            ensureReferencedValue();
+        }
     }
 };
 

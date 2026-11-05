@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Inlined scalar override bodies publish the frame of the ordinary method call,
+# so other threads' call stack readers see them; also in loops whose override
+# class admission is hoisted to the function entry.
+
+hashdecl OverrideFrameReadResult {
+    #! frames read that are not as expected
+    list<string> errors;
+}
+
+class OvReaderBase {
+    int next(int value) { return (value + 17) & 65535; }
+    float nextf(float value) { return value * 0.5 + 17.0; }
+}
+class OvReaderFirst inherits OvReaderBase {
+    int next(int value) { return (value + 19) & 65535; }
+    float nextf(float value) { return value * 0.5 + 19.0; }
+}
+class OvReaderSecond inherits OvReaderBase {
+    int next(int value) { return (value + 23) & 65535; }
+    float nextf(float value) { return value * 0.5 + 23.0; }
+}
+
+const Frames = ("OvReaderFirst::next", "OvReaderSecond::next", "OvReaderFirst::nextf", "OvReaderSecond::nextf");
+
+int sub overrideIntBatch(OvReaderBase a, OvReaderBase b) {
+    int value = 0;
+    for (int i = 0; i < 4096; ++i) {
+        value = (i % 2 == 0 ? a : b).next(value);
+    }
+    return value;
+}
+float sub overrideFloatBatch(OvReaderBase a, OvReaderBase b) {
+    float value = 0.0;
+    for (int i = 0; i < 4096; ++i) {
+        value = (i % 2 == 0 ? a : b).nextf(value);
+    }
+    return value;
+}
+
+sub overrideReaderCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    OvReaderFirst first();
+    OvReaderSecond second();
+    int int_expected = overrideIntBatch(first, second);
+    float float_expected = overrideFloatBatch(first, second);
+    if (int_expected != ((2048 * (19 + 23)) & 65535)) {
+        failures.push(sprintf("incorrect int warmup result %d", int_expected));
+    }
+    started.dec();
+    while (readers.getCount()) {
+        if (overrideIntBatch(first, second) != int_expected
+                || overrideFloatBatch(first, second) != float_expected) {
+            failures.push("incorrect batch result");
+            return;
+        }
+    }
+}
+
+sub overrideReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<OverrideFrameReadResult> result();
+    result.errors = ();
+    for (int i = 0; i < 1000; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            list<hash<CallStackInfo>> stack = tid_stack.value;
+            if (!(select stack, $1.function == "overrideReaderCaller")) {
+                continue;
+            }
+            foreach hash<CallStackInfo> frame in (stack) {
+                if (Frames.contains(frame.function)) {
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid override frame: %y", frame);
+                    }
+                }
+            }
+            # the leaf override frame is called by the batch function
+            for (int j = 0; j + 1 < stack.size(); ++j) {
+                if (Frames.contains(stack[j].function) && stack[j + 1].function != "overrideIntBatch"
+                        && stack[j + 1].function != "overrideFloatBatch") {
+                    result.errors += sprintf("unexpected override caller: %y", stack[j + 1]);
+                }
+            }
+        }
+    }
+    results.push(result);
+}
+
+#! Returns the stack of a caller read while it is in one of the given override frames, called by the given batch
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub overrideParkedStack(list<string> frames, string batch) {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame", frames, (batch,), 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    hash<CallStackInfo> leaf = stack[0];
+    if (leaf.type != "user" || leaf.file.empty() || leaf.line < 0 || leaf.endline < leaf.line
+            || !(select stack, $1.function == "overrideReaderCaller")) {
+        throw "OVERRIDE-FRAME-TEST", sprintf("invalid parked override frame: %y", stack);
+    }
+    return stack;
+}
+
+Counter started(4);
+# the concurrent readers and the parked reads below
+Counter readers(3);
+Counter callers_done(4);
+Counter readers_done(2);
+Queue failures();
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background overrideReaderCaller(started, readers, callers_done, failures);
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background overrideReader(readers, readers_done, results);
+}
+{
+    on_exit readers.dec();
+    # int and float override frames must both be visible
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        overrideParkedStack(("OvReaderFirst::next", "OvReaderSecond::next"), "overrideIntBatch");
+        overrideParkedStack(("OvReaderFirst::nextf", "OvReaderSecond::nextf"), "overrideFloatBatch");
+    }
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    hash<OverrideFrameReadResult> result = results.get(10000);
+    if (result.errors) {
+        throw "OVERRIDE-FRAME-TEST", result.errors.join("\n");
+    }
+}
+if (failures.size()) {
+    throw "OVERRIDE-FRAME-TEST", sprintf("%d caller failures: %y", failures.size(), failures.get());
+}
+printf("override-frame-readers: ok\n");

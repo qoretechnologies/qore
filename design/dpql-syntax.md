@@ -65,14 +65,13 @@ the key, escaped or not.
 
 Within quoted field names, a backslash starts an escape:
 
-| Sequence | Meaning |
-|----------|---------|
-| `\"` | Double quote |
-| `\\` | Backslash |
-| `\.` | A dot that is part of a key, not a separator of the path |
-| `\n` | Newline |
-| `\r` | Carriage return |
-| `\t` | Tab |
+|!Sequence|!Meaning
+|`\"`|Double quote
+|`\\`|Backslash
+|`\.`|A dot that is part of a key, not a separator of the path
+|`\n`|Newline
+|`\r`|Carriage return
+|`\t`|Tab
 
 Any other escape is an error (`DPQL-E003`, "Unknown escape '\x' in a quoted field name"). It is
 not read as its character or as a backslash and its character, as either would give a name that
@@ -182,17 +181,16 @@ Field reference operators can be chained:
 is the `map` operator written as an accessor: the accessors after it are the body that `map`
 evaluates for each item, and it evaluates exactly as that `map` expression does.
 
-| Wildcard | Same as | Result |
-|----------|---------|--------|
-| `@orders[*].id` | `map @id, @orders` | The `id` of each order |
-| `@orders[*].customer.name` | `map @customer.name, @orders` | The `.name` steps continue the field |
-| `@orders[*]{"order-id"}` | `map @"order-id", @orders` | A single key is a field too |
-| `@orders[*].tags[0]` | `map @tags[0], @orders` | Ordinary accessors follow |
-| `@orders[*].items[*].sku` | `map (map @sku, @items), @orders` | Nested: a list of lists, never flattened |
-| `@prices{*}` | `map @value, @prices` | The values, in key order |
-| `@prices{*}.amount` | `map @value.amount, @prices` | The accessors apply to `@value` |
-| `@orders[*]` | `@orders` | A trailing `[*]` is the items: the list itself |
-| `@matrix[*][0]` | `map @value[0], @matrix` | Accessors that do not start with a field apply to the item |
+|!Wildcard|!Same as|!Result
+|`@orders[*].id`|`map @id, @orders`|The `id` of each order
+|`@orders[*].customer.name`|`map @customer.name, @orders`|The `.name` steps continue the field
+|`@orders[*]{"order-id"}`|`map @"order-id", @orders`|A single key is a field too
+|`@orders[*].tags[0]`|`map @tags[0], @orders`|Ordinary accessors follow
+|`@orders[*].items[*].sku`|`map (map @sku, @items), @orders`|Nested: a list of lists, never flattened
+|`@prices{*}`|`map @value, @prices`|The values, in key order
+|`@prices{*}.amount`|`map @value.amount, @prices`|The accessors apply to `@value`
+|`@orders[*]`|`@orders`|A trailing `[*]` is the items: the list itself
+|`@matrix[*][0]`|`map @value[0], @matrix`|Accessors that do not start with a field apply to the item
 
 Missing fields, wrong source types (a non-list under `[*]`, a non-hash under `{*}`), empty
 sources and no value give the same results and raise the same errors as the `map` expression.
@@ -212,24 +210,22 @@ and completion offers `[*]` after a list and `{*}` after a hash.
 
 ## Comparison Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `==` | Equal |
-| `!=` | Not equal |
-| `>` | Greater than |
-| `>=` | Greater than or equal |
-| `<` | Less than |
-| `<=` | Less than or equal |
+|!Operator|!Meaning
+|`==`|Equal
+|`!=`|Not equal
+|`>`|Greater than
+|`>=`|Greater than or equal
+|`<`|Less than
+|`<=`|Less than or equal
 
 ## Arithmetic Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `+` | Addition (numbers, strings, dates, lists) |
-| `-` | Subtraction |
-| `*` | Multiplication |
-| `/` | Division |
-| `%` | Modulus (remainder) |
+|!Operator|!Meaning
+|`+`|Addition (numbers, strings, dates, lists)
+|`-`|Subtraction
+|`*`|Multiplication
+|`/`|Division
+|`%`|Modulus (remainder)
 
 Arithmetic follows standard precedence: `*`, `/`, `%` bind tighter than `+`, `-`.
 Use parentheses to override:
@@ -242,11 +238,10 @@ Use parentheses to override:
 
 ## Logical Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `&&` | Logical AND |
-| `\|\|` | Logical OR |
-| `!` | Logical NOT |
+|!Operator|!Meaning
+|`&&`|Logical AND
+|`\|\|`|Logical OR
+|`!`|Logical NOT
 
 ## Field Existence
 
@@ -260,13 +255,12 @@ exists @type && @type == "return"   # false for a record without type; no error
 any exists @id, @orders              # each item is tested with any or all
 ```
 
-| Expression | True when |
-|------------|-----------|
-| `exists @a` | the record has the key `a` (any value, also `null`) |
-| `exists @a.b`, `exists @a{b}` | the record has `a`, which is a hash with the key `b` |
-| `exists @a[0]`, `exists @a[-1]` | `a` is a list or a string with an element at that position (negative from the end) |
-| `exists @a[0].b` | each step in turn, as above |
-| `exists @"a\.b"` | the record has the key `a.b` (an escaped dot is part of the key) |
+|!Expression|!True when
+|`exists @a`|the record has the key `a` (any value, also `null`)
+|`exists @a.b`, `exists @a{b}`|the record has `a`, which is a hash with the key `b`
+|`exists @a[0]`, `exists @a[-1]`|`a` is a list or a string with an element at that position (negative from the end)
+|`exists @a[0].b`|each step in turn, as above
+|`exists @"a\.b"`|the record has the key `a.b` (an escaped dot is part of the key)
 
 The field reference is a path as everywhere else in DPQL ([Field Paths](#field-paths)):
 `exists @"x.y"` is the path `x`, `y`, as `exists @x.y` is.
@@ -473,19 +467,18 @@ hash_map @key, @value, @weights, @value > 0
 
 Supported prefix operator forms:
 
-| Operator | Syntax | Result |
-|----------|--------|--------|
-| `map` | `map body, source[, filter]` | List of evaluated body results |
-| `hash_map` | `hash_map key, value, source[, filter]` | Hash built from evaluated keys and values |
-| `select` | `select source, predicate` | List of matching source items |
-| `first` | `first source` or `first predicate, source` | First item, first matching item, or `nothing` |
-| `any` | `any source` or `any predicate, source` | `true` if any item or predicate result is truthy |
-| `all` | `all predicate, source` | `true` if all predicate results are truthy |
-| `count` | `count source` or `count predicate, source` | Number of source items or matching items |
-| `take` | `take count, source` | First `count` items |
-| `drop` | `drop count, source` | Items after the first `count` items |
-| `takewhile` | `takewhile predicate, source` | Items until the predicate first becomes false |
-| `takeuntil` | `takeuntil predicate, source` | Items until the predicate first becomes true |
+|!Operator|!Syntax|!Result
+|`map`|`map body, source[, filter]`|List of evaluated body results
+|`hash_map`|`hash_map key, value, source[, filter]`|Hash built from evaluated keys and values
+|`select`|`select source, predicate`|List of matching source items
+|`first`|`first source` or `first predicate, source`|First item, first matching item, or `nothing`
+|`any`|`any source` or `any predicate, source`|`true` if any item or predicate result is truthy
+|`all`|`all predicate, source`|`true` if all predicate results are truthy
+|`count`|`count source` or `count predicate, source`|Number of source items or matching items
+|`take`|`take count, source`|First `count` items
+|`drop`|`drop count, source`|Items after the first `count` items
+|`takewhile`|`takewhile predicate, source`|Items until the predicate first becomes false
+|`takeuntil`|`takeuntil predicate, source`|Items until the predicate first becomes true
 
 ```dpql
 select @orders, @amount > 100
@@ -611,27 +604,25 @@ environment variables, and dynamic context without hardcoding values.
 
 ### Syntax
 
-| Form | Example | Description |
-|------|---------|-------------|
-| Simple | `$static:account.id` | Context `static`, value `account.id` |
-| Bracketed | `$qore-expr:{1 + 2}` | Bracketed value (allows special characters) |
-| Fallback | `$static:A??{$static:B}` | Fallback syntax (raw passthrough) |
+|!Form|!Example|!Description
+|Simple|`$static:account.id`|Context `static`, value `account.id`
+|Bracketed|`$qore-expr:{1 + 2}`|Bracketed value (allows special characters)
+|Fallback|`$static:A??{$static:B}`|Fallback syntax (raw passthrough)
 
 ### Template Contexts
 
 Template contexts identify the source of the value. Well-known contexts include:
 
-| Context | Description |
-|---------|-------------|
-| `static` | Static context values |
-| `dynamic` | Dynamic runtime values |
-| `config` | Configuration values |
-| `var` | Variable values |
-| `transient` | Transient context values |
-| `env` | Environment variables |
-| `timestamp` | Timestamp values |
-| `qore-expr` | Qore expression evaluation |
-| `rest` | REST context values |
+|!Context|!Description
+|`static`|Static context values
+|`dynamic`|Dynamic runtime values
+|`config`|Configuration values
+|`var`|Variable values
+|`transient`|Transient context values
+|`env`|Environment variables
+|`timestamp`|Timestamp values
+|`qore-expr`|Qore expression evaluation
+|`rest`|REST context values
 
 ### Usage in Expressions
 

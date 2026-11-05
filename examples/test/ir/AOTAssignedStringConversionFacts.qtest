@@ -19,6 +19,10 @@ string root = "/tmp/qore-aot-assigned-string-conversion-facts-"
     + string(getpid());
 mkdir(root);
 string source = root + "/test.qr";
+# the call counts are taken from a copy that cannot be debugged: a debuggable build also makes the ordinary calls in
+# its debugger blocks
+string nodebug_source = root + "/nodebug.qr";
+string debuggable = root + "/debuggable";
 string enabled = root + "/enabled";
 string disabled = root + "/disabled";
 string cleanup_disabled = root + "/cleanup-disabled";
@@ -52,6 +56,10 @@ int sub main() {
 main();
 ");
 source_file.close();
+source_file = new File();
+source_file.open2(nodebug_source, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(replace(ReadOnlyFile::readTextFile(source), "%modern\n", "%modern\n%no-debugging\n"));
+source_file.close();
 
 string ast = ExecModeHarness::run(sprintf(
     "LD_LIBRARY_PATH=%s %s --exec-mode=ast %s",
@@ -67,25 +75,35 @@ foreach string mode in (("ir", "tiered", "jit")) {
     }
 }
 
+string debuggable_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 --strip-source -o %s %s 2>&1",
+    libqore_dir, qcc_bin, debuggable, source));
 string enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " %s -O3 --strip-source -o %s %s 2>&1",
-    libqore_dir, qcc_bin, enabled, source));
+    libqore_dir, qcc_bin, enabled, nodebug_source));
 string disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS=1"
         + " %s -O3 --strip-source -o %s %s 2>&1",
-    libqore_dir, qcc_bin, disabled, source));
+    libqore_dir, qcc_bin, disabled, nodebug_source));
 string cleanup_disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " QORE_DISABLE_AOT_SINGLE_ARG_CLEANUP_INLINE=1"
         + " %s -O3 --strip-source -o %s %s 2>&1",
-    libqore_dir, qcc_bin, cleanup_disabled, source));
-if (!is_file(enabled) || !is_file(disabled)
+    libqore_dir, qcc_bin, cleanup_disabled, nodebug_source));
+if (!is_file(debuggable) || !is_file(enabled) || !is_file(disabled)
         || !is_file(cleanup_disabled)) {
-    printf("compile failed:\nenabled:\n%sdisabled:\n%s"
+    printf("compile failed:\ndebuggable:\n%senabled:\n%sdisabled:\n%s"
         + "cleanup disabled:\n%s",
-        enabled_compile, disabled_compile, cleanup_disabled_compile);
+        debuggable_compile, enabled_compile, disabled_compile, cleanup_disabled_compile);
+    exit(2);
+}
+string debuggable_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, debuggable));
+if (debuggable_output != ast) {
+    printf("AOT output mismatch:\nast:\n%sdebuggable:\n%s", ast, debuggable_output);
     exit(2);
 }
 

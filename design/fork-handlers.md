@@ -18,11 +18,10 @@ the fork handlers), so `system()` and the backquote operator are not affected.
 
 Each handler belongs to one rank (the lock order below) and one mode:
 
-| Mode | Before `fork()` | In the parent | In the child |
-|---|---|---|---|
-| `QFLM_ACQUIRE` | acquires the lock (waits for its holder) | releases it | initializes it again (it is held by the forking thread) |
-| `QFLM_TRY` | acquires the lock only if it is free | releases it if acquired | initializes it again; the owner learns from `wasAcquired()` whether the protected data is consistent |
-| `QFLM_RESET` | nothing | nothing | initializes it again; the owner repairs or abandons the protected data |
+|!Mode|!Before `fork()`|!In the parent|!In the child
+|`QFLM_ACQUIRE`|acquires the lock (waits for its holder)|releases it|initializes it again (it is held by the forking thread)
+|`QFLM_TRY`|acquires the lock only if it is free|releases it if acquired|initializes it again; the owner learns from `wasAcquired()` whether the protected data is consistent
+|`QFLM_RESET`|nothing|nothing|initializes it again; the owner repairs or abandons the protected data
 
 - The prepare handlers run in increasing rank order with the registry lock held; the parent and child handlers run
   in decreasing rank order.
@@ -44,28 +43,27 @@ A thread holding a lock of a given rank may only acquire locks of a higher rank 
 Locks of the same rank are never held together. The prepare handlers acquire in increasing rank order, so they
 cannot deadlock with a thread that keeps to the order.
 
-| Rank | Lock | Mode | May acquire while held |
-|---|---|---|---|
-| 0 | the handler registry | (held by the handlers) | — |
-| 40 | AOT lazy constant initialization lock | RESET | anything (runs compiled initializers) |
-| 50 | module manager (`QMM.mutex`) | RESET | anything (held across `dlopen()`) |
-| 60 | module locks held across user code or input (`QFR_MODULE_RESET`: linenoise) | RESET | anything |
-| 100 | signal manager (`QSM.mutex`, with `QSM.tcount`) | ACQUIRE | thread list, signal thread counter |
-| 150 | JIT compile lock (`QoreJIT::compile_mutex`) | TRY | JIT caches, JIT queue, type caches, environment |
-| 200 | async I/O controller singleton | ACQUIRE | Program cleanup callbacks |
-| 300 | AOT module state | ACQUIRE | condition waker, thread list |
-| 310 | plugin registry | ACQUIRE | thread list (cancellation checks), environment |
-| 320 | time zone manager (`QTZM`) | ACQUIRE | thread list (cancellation checks) |
-| 400 | thread counters (`thread_counter`, `tp_thread_counter`) | ACQUIRE | thread list, condition waker (cancellable waits) |
-| 450 | module locks whose holders check for cancellation (`QFR_MODULE_CANCELLABLE`: the sshutil registry) | ACQUIRE | thread list, leaf locks |
-| 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
-| 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
-| 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the content hashes of the sources of linked AOT modules, the DBI object registry, and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
-| 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
-| 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
-| 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
-| 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
+|!Rank|!Lock|!Mode|!May acquire while held
+|0|the handler registry|(held by the handlers)|—
+|40|AOT lazy constant initialization lock|RESET|anything (runs compiled initializers)
+|50|module manager (`QMM.mutex`)|RESET|anything (held across `dlopen()`)
+|60|module locks held across user code or input (`QFR_MODULE_RESET`: linenoise)|RESET|anything
+|100|signal manager (`QSM.mutex`, with `QSM.tcount`)|ACQUIRE|thread list, signal thread counter
+|150|JIT compile lock (`QoreJIT::compile_mutex`)|TRY|JIT caches, JIT queue, type caches, environment
+|200|async I/O controller singleton|ACQUIRE|Program cleanup callbacks
+|300|AOT module state|ACQUIRE|condition waker, thread list
+|310|plugin registry|ACQUIRE|thread list (cancellation checks), environment
+|320|time zone manager (`QTZM`)|ACQUIRE|thread list (cancellation checks)
+|400|thread counters (`thread_counter`, `tp_thread_counter`)|ACQUIRE|thread list, condition waker (cancellable waits)
+|450|module locks whose holders check for cancellation (`QFR_MODULE_CANCELLABLE`: the sshutil registry)|ACQUIRE|thread list, leaf locks
+|500|thread list (`thread_list.lck`)|ACQUIRE|condition waker, stack lock
+|510|condition waker (`cond_waker.lck`)|ACQUIRE|—
+|520|stack lock (`stack_lck`)|ACQUIRE|— (only `pthread_create()`)
+|1000|leaf locks: caches and registries (among them the JIT caches and queue, the native and variant call-name caches, the AOT pending constants, the AOT regex cache, the content hashes of the sources of linked AOT modules, the DBI object registry, and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list)|ACQUIRE|environment, debug output, allocation tracking
+|1100|LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process|ACQUIRE|—
+|1500|environment (`SystemEnvironment`)|ACQUIRE|debug output, allocation tracking
+|1900|debug output (`printd()`)|ACQUIRE|allocation tracking
+|1950|allocation tracking (only with `ENABLE_ALLOC_TRACKING`)|ACQUIRE|—
 
 The environment lock ranks near the top: its holders only copy variables and change the environment, so it is a
 leaf, and every lock that reads the environment while held (there are hundreds of such reads) ranks below it. Code
@@ -133,10 +131,9 @@ before `fork()`. The other library code that calls `dlopen()` or `dlclose()` hol
 
 The process environment is protected by two read-write locks (`lib/SystemEnvironment.cpp`):
 
-| Lock | Held shared | Held exclusively | Before `fork()` | In the child |
-|---|---|---|---|---|
-| environment lock (rank 1500) | to copy a variable: `SystemEnvironment::get()`, `isSet()`, `valueExists()`, `QoreEnvironmentValue` | to change the environment: `SystemEnvironment::set()`, `unset()`, `AtomicEnvironmentSetter` | acquired exclusively | reset |
-| environment change lock (not ranked) | to use the environment with the C library directly: `QoreEnvironmentReadLock` (passing `environ` to `posix_spawn()` or `execvp()`, `popen()`, `system()`, `localtime_r()`, c-ares channel creation and the start of a c-ares lookup, which reads `HOSTALIASES`, OpenSSL's default CA paths, the ENV hash) | to change the environment, before the environment lock | not acquired | reset |
+|!Lock|!Held shared|!Held exclusively|!Before `fork()`|!In the child
+|environment lock (rank 1500)|to copy a variable: `SystemEnvironment::get()`, `isSet()`, `valueExists()`, `QoreEnvironmentValue`|to change the environment: `SystemEnvironment::set()`, `unset()`, `AtomicEnvironmentSetter`|acquired exclusively|reset
+|environment change lock (not ranked)|to use the environment with the C library directly: `QoreEnvironmentReadLock` (passing `environ` to `posix_spawn()` or `execvp()`, `popen()`, `system()`, `localtime_r()`, c-ares channel creation and the start of a c-ares lookup, which reads `HOSTALIASES`, OpenSSL's default CA paths, the ENV hash)|to change the environment, before the environment lock|not acquired|reset
 
 - A change takes the change lock and then the environment lock, both exclusively, so while the forking thread holds
   the environment lock, no other thread is changing the environment, and the child gets a consistent copy.
@@ -239,6 +236,10 @@ starts such an initialization then blocks inside the guard.
 
 Besides the locks:
 
+- **Scan completion waits**: the process-wide scan wait mutex and its condition variable are registered before
+  threads start and recreated in the child. Registration has no function-local static initialization guard, and
+  the state stays alive during process exit. As with other collector locks, this does not make a copied object
+  whose r-section is held by a vanished parent thread usable in the child.
 - **Thread list**: only the forking thread's entry is kept; the entries of the other threads are freed (their
   thread data is not, since Programs can still refer to it), with their cancellation state, wait registrations
   and wakeup descriptors.

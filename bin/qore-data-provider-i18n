@@ -929,6 +929,8 @@ class QoreDataProviderI18nCmd {
                 # changes no more than its ids; one without such a place comes after them, in the order of the root
                 list<hash<auto>> placed = ();
                 int unplaced = translations.size() + 1;
+                # Several new schema identities can share one digest-free type key. Choose its translation once.
+                hash<string, string> best_by_type = {};
                 foreach hash<auto> entry in (new_messages.pairIterator()) {
                     if (*hash<string, int> c = counts{entry.key}) {
                         if (c.size() > 1) {
@@ -947,7 +949,10 @@ class QoreDataProviderI18nCmd {
                         if (c.size() > 1) {
                             ++variants;
                         }
-                        string message = mostFrequent(c, by_type_first{type_key});
+                        if (!exists best_by_type{type_key}) {
+                            best_by_type{type_key} = mostFrequent(c, by_type_first{type_key});
+                        }
+                        string message = best_by_type{type_key};
                         placed += {"id": entry.key, "pos": by_type_first{type_key}{message},
                             "value": {"source": entry.value.source, "message": message}};
                         ++matched;

@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+enum PushState : int {
+    One = 1,
+    Wide = 140737488355328,
+}
+
+enum OtherPushState : int {
+    One = 1,
+}
+
+string sub enumPush(auto value) {
+    list<PushState> values = ();
+    try {
+        push values, value;
+        return sprintf("%s:%y", values[0].fullType(), values);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s:%d", ex.err, values.size());
+    }
+}
+
+string sub enumArithmeticPush(int seed) {
+    auto value = seed + 1;
+    list<PushState> values = ();
+    try {
+        push values, value;
+        return sprintf("accepted:%d", values.size());
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s:%d", ex.err, values.size());
+    }
+}
+
+string sub enumToIntPush(PushState value) {
+    list<int> values = ();
+    push values, value;
+    return sprintf("%s:%d:%y", values[0].fullType(), values[0].isEnum(), values);
+}
+
+list<int> sub exactPush(int seed) {
+    list<int> values = ();
+    for (int i = 0; i < 5; ++i) {
+        push values, seed;
+        seed = seed ^ (i + 1);
+    }
+    return values;
+}
+
+int sub nativeLoop(int seed) {
+    list<int> values = ();
+    for (int i = 0; i < 1024; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push values, seed;
+    }
+    int result = 0;
+    foreach int value in (values) {
+        result += value;
+    }
+    return result;
+}
+
+int sub replaceValue(reference<int> value) {
+    value = 9223372036854775807;
+    return 1;
+}
+
+list<int> sub snapshotPush(int seed) {
+    list<int> values = ();
+    push values, seed + replaceValue(\seed);
+    push values, seed;
+    return values;
+}
+
+string sub maybePush(bool assign) {
+    list<int> values = ();
+    int value;
+    if (assign) {
+        value = 140737488355328;
+    }
+    try {
+        push values, value;
+        return sprintf("%y", values);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub optionalPush(*int value) {
+    list<int> values = ();
+    try {
+        push values, value;
+        return sprintf("%y", values);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub softPush(string value) {
+    list<softint> values = ();
+    push values, value;
+    return sprintf("%y", values);
+}
+
+string sub dynamicPush(auto value) {
+    list<int> values = ();
+    try {
+        push values, value;
+        return sprintf("%y", values);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+list<int> escaped;
+
+int sub aliasedPush(int value) {
+    list<int> values = (1,);
+    escaped = values;
+    push values, value;
+    return escaped.size() * 10 + values.size();
+}
+
+nothing sub referencePush(reference<list<int>> values, int value) {
+    push values, value;
+}
+
+list<int> sub sparsePush(int value) {
+    list<int> values = ();
+    values[4] = value;
+    push values, value;
+    return values;
+}
+
+list<int> sub revivedPush(int value) {
+    list<int> values = (1,);
+    remove values;
+    push values, value;
+    return values;
+}
+
+foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+        -140737488355328, -140737488355329, 9223372036854775807,
+        -9223372036854775807 - 1)) {
+    printf("exact:%d:%y\n", value, exactPush(value));
+    printf("snapshot:%d:%y\n", value, snapshotPush(value));
+    printf("optional:%d:%s\n", value, optionalPush(value));
+    printf("dynamic:%d:%s\n", value, dynamicPush(value));
+    printf("alias:%d:%d:%y\n", value, aliasedPush(value), escaped);
+    list<int> referenced = (1,);
+    referencePush(\referenced, value);
+    printf("reference:%d:%y\n", value, referenced);
+    printf("sparse:%d:%y\n", value, sparsePush(value));
+    printf("revived:%d:%y\n", value, revivedPush(value));
+}
+printf("native:%d\n", nativeLoop(7));
+printf("maybe-no:%s\nmaybe-yes:%s\n", maybePush(False), maybePush(True));
+printf("nothing:%s\nsoft:%s\ndynamic-string:%s\n", optionalPush(NOTHING),
+    softPush("9223372036854775807"), dynamicPush("wrong type"));
+printf("enum-one:%s\nenum-wide:%s\nenum-wrong:%s\nenum-int:%s\nenum-arithmetic:%s\n",
+    enumPush(PushState::One), enumPush(PushState::Wide), enumPush(OtherPushState::One),
+    enumPush(1), enumArithmeticPush(0));
+printf("enum-to-int:%s\nenum-wide-to-int:%s\n", enumToIntPush(PushState::One),
+    enumToIntPush(PushState::Wide));

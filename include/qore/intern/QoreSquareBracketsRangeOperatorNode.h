@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -103,8 +103,10 @@ protected:
 public:
     DLLLOCAL QoreFunctionalSquareBracketsRangeOperator(ValueEvalRefHolder& old_seq, int64 begin, int64 end,
             ExceptionSink* xsink)
-            : RangeIterator(begin, end, 1, &Nothing, xsink), seq(*old_seq, old_seq.isTemp(), xsink), start(begin),
-            stop(end) {
+            : RangeIterator(begin, end, 1, &Nothing, xsink),
+            // the iterator outlives the evaluation of the sequence, so it holds a reference to it even when the
+            // sequence is the value of a variable, which the code iterating can assign another value
+            seq(old_seq.isTemp() ? *old_seq : old_seq->refSelf(), true, xsink), start(begin), stop(end) {
         old_seq.clearTemp();
     }
 

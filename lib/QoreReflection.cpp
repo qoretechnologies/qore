@@ -728,8 +728,8 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
         return 0;
     }
     xsink->raiseException("REFLECTION-ACCESS-ERROR", "code in Program " QLLD " cannot %s Program " QLLD ": it is not "
-        "that Program, did not create it, and has fewer privileges than it", (int64)pgm_id, what,
-        (int64)target->getProgramId());
+        "that Program, did not create it, and has fewer privileges than it", static_cast<int64>(pgm_id), what,
+        static_cast<int64>(target->getProgramId()));
     return -1;
 }
 

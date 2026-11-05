@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+# The worker of IRCatchClearedLocalCache.qtest: a member or key store to a local container raises an exception in a
+# try block; the handler, and the code after the try statement, must still see the local's value
+%modern
+
+class Notified {
+    public {
+        int d = 1;
+    }
+
+    memberNotification(string member) {
+        if (d == 13) {
+            throw "NOTIFY-ERROR", "the notification rejects the value";
+        }
+    }
+}
+
+class Plain {
+    public {
+        int d = 1;
+    }
+}
+
+hashdecl Keys {
+    int a = 1;
+}
+
+#! a member notification raises the exception after the value has been stored
+string sub notification_object() {
+    object g = new Notified();
+    try {
+        g.d = 13;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %y %d", ex.err, exists g, g.d);
+    }
+    return "not raised";
+}
+
+#! the member's type rejects the value
+string sub member_type_object() {
+    object g = new Plain();
+    try {
+        g.d = "x";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %y %d", ex.err, exists g, g.d);
+    }
+    return "not raised";
+}
+
+#! the hashdecl has no such key
+string sub hashdecl_key() {
+    hash<Keys> h();
+    string key = "b";
+    try {
+        h{key} = 2;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %y", ex.err, h);
+    }
+    return "not raised";
+}
+
+#! the element type of the list rejects the value
+string sub list_element() {
+    list<int> l = (1, 2);
+    int i = 1;
+    # the type of the value is known only at run time
+    auto v = "x";
+    try {
+        l[i] = v;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %y", ex.err, l);
+    }
+    return "not raised";
+}
+
+#! the handler leaves the try statement, and the code after it uses the local
+string sub after_try() {
+    object g = new Notified();
+    try {
+        g.d = 13;
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    g.d = 2;
+    return sprintf("%y %d", exists g, g.d);
+}
+
+#! every iteration raises in the try block of the loop body
+string sub in_loop() {
+    object g = new Notified();
+    int caught;
+    for (int i = 0; i < 3; ++i) {
+        try {
+            g.d = 13;
+        } catch (hash<ExceptionInfo> ex) {
+            if (exists g) {
+                ++caught;
+            }
+        }
+    }
+    return sprintf("%d", caught);
+}
+
+#! an on_error handler of the block sees the local too
+string sub on_error_handler() {
+    object g = new Notified();
+    string result;
+    try {
+        on_error result = sprintf("on_error %y", exists g);
+        g.d = 13;
+    } catch (hash<ExceptionInfo> ex) {
+        result += sprintf(", catch %y", exists g);
+    }
+    return result;
+}
+
+# each round calls every case again, so that the tiered and JIT modes run their native code
+for (int round = 0; round < 3; ++round) {
+    printf("%d notification object: %s\n", round, notification_object());
+    printf("%d member type object: %s\n", round, member_type_object());
+    printf("%d hashdecl key: %s\n", round, hashdecl_key());
+    printf("%d list element: %s\n", round, list_element());
+    printf("%d after try: %s\n", round, after_try());
+    printf("%d in loop: %s\n", round, in_loop());
+    printf("%d on_error handler: %s\n", round, on_error_handler());
+}

@@ -1,0 +1,329 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+
+sub expect(auto expected, auto actual) {
+    if (expected != actual) {
+        throw "FUNCREF-TEST-ERROR", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+int sub increment(int value) { return value + 1; }
+int sub increment_with_a_diagnostic_name_longer_than_the_small_string_buffer(int value) { return value + 1; }
+float sub half(float value) { return value + 0.5; }
+bool sub invert(bool value) { return !value; }
+int sub zero() { return 42; }
+float sub zeroFloat() { return 1.25; }
+bool sub zeroBool() { return True; }
+int sub intFromBool(bool value) { return value ? 7 : 3; }
+float sub floatFromBool(bool value) { return value ? 1.5 : 2.5; }
+bool sub boolFromInt(int value) { return value > 0; }
+float sub floatFromInt(int value) { return value + 0.5; }
+int sub intFromFloat(float value) { return int(value); }
+bool sub boolFromFloat(float value) { return value > 0.0; }
+float sub mixed(int a, float b, bool c, int d) { return a + b + (c ? d : 0); }
+string sub text(string value) { return value; }
+hash<string, int> sub container(hash<string, int> value) { return value; }
+*int sub optional(bool present) { if (present) { return 7; } return NOTHING; }
+int sub divide(int value) {
+    # Keep the throwing statement on a different line from the signature:
+    # stripped-debug native entries must not report only the signature line.
+    return 100 / value;
+}
+int sub defaulted(int value = 9) { return value; }
+int sub overloaded(int value) { return value + 10; }
+string sub overloaded(string value) { return value + "!"; }
+int sub softened(softint value) { return value + 1; }
+int sub extra(int value, ...) { return value + int(argv[0]); }
+sub bump(reference<int> value) { ++value; }
+hash<auto!> sub noNarrow(hash<auto!> value) { value.text = "ok"; return value; }
+
+# The callee is an argument, not a compiler-known function reference at this
+# call site. Include zero, one, and array-argument runtime dispatch helpers.
+int sub invokeInt(code<int(int)> fn, int value) { return fn(value); }
+float sub invokeFloat(code<float(float)> fn, float value) { return fn(value); }
+bool sub invokeBool(code<bool(bool)> fn, bool value) { return fn(value); }
+auto sub invokeIntZero(code<int()> fn) { return fn(); }
+auto sub invokeFloatZero(code<float()> fn) { return fn(); }
+auto sub invokeBoolZero(code<bool()> fn) { return fn(); }
+auto sub invokeIntBool(code<int(bool)> fn, bool value) { return fn(value); }
+auto sub invokeFloatBool(code<float(bool)> fn, bool value) { return fn(value); }
+auto sub invokeBoolInt(code<bool(int)> fn, int value) { return fn(value); }
+auto sub invokeFloatInt(code<float(int)> fn, int value) { return fn(value); }
+auto sub invokeIntFloat(code<int(float)> fn, float value) { return fn(value); }
+auto sub invokeBoolFloat(code<bool(float)> fn, float value) { return fn(value); }
+auto sub invokeMissing(code<int(int)> fn) { int value; return fn(value); }
+auto sub invokeSlot(code<int(int)> fn, list<int> values, int index) { return fn(values[index]); }
+auto sub invokeZero(code fn) { return fn(); }
+auto sub invokeOne(code fn, auto value) { return fn(value); }
+auto sub invokeMixed(code fn, int a, float b, bool c, int d) { return fn(a, b, c, d); }
+
+int sub recursive(int depth) {
+    return depth ? invokeInt(\recursive(), depth - 1) + 1 : 0;
+}
+
+# One generated invocation retains its execution-state view while compatibility
+# calls enter another Program and refresh the TLS RuntimeConfig snapshot.
+int sub alternatingPrograms(code<int(int)> local, code<int(int)> other) {
+    int value = 0;
+    int depth = get_thread_call_stack().size();
+    for (int i = 0; i < 20; ++i) {
+        value = local(value);
+        value = other(value);
+        value = local(value);
+    }
+    expect(depth, get_thread_call_stack().size());
+    return value;
+}
+
+thread_local int destroyed = 0;
+thread_local int division_line = 0;
+class Marker {
+    public { int value; }
+    constructor(int value) { self.value = value; }
+    destructor() { ++destroyed; }
+    int method(int add) { return value + add; }
+    int callback() { return invokeInt(\method(), 3); }
+}
+Marker sub identity(Marker value) { return value; }
+
+for (int i = 0; i < 100; ++i) {
+    expect(i + 1, invokeInt(\increment(), i));
+    expect(1125899906842625, invokeInt(\increment(), 1125899906842624));
+    expect(-1125899906842623, invokeInt(\increment(), -1125899906842624));
+    expect(-9223372036854775807 - 1, invokeInt(\increment(), 9223372036854775807));
+    expect(1.75, invokeFloat(\half(), 1.25));
+    expect(-1.0e308, invokeFloat(\half(), -1.0e308));
+    expect(True, invokeBool(\invert(), False));
+    expect(False, invokeBool(\invert(), True));
+    expect(42, invokeZero(\zero()));
+    expect(42, invokeIntZero(\zero()));
+    expect(1.25, invokeFloatZero(\zeroFloat()));
+    expect(True, invokeBoolZero(\zeroBool()));
+    expect(7, invokeIntBool(\intFromBool(), True));
+    expect(3, invokeIntBool(\intFromBool(), False));
+    expect(1.5, invokeFloatBool(\floatFromBool(), True));
+    expect(2.5, invokeFloatBool(\floatFromBool(), False));
+    expect(True, invokeBoolInt(\boolFromInt(), 1));
+    expect(False, invokeBoolInt(\boolFromInt(), -1));
+    expect(4.5, invokeFloatInt(\floatFromInt(), 4));
+    expect(4, invokeIntFloat(\intFromFloat(), 4.5));
+    expect(True, invokeBoolFloat(\boolFromFloat(), 4.5));
+    expect(False, invokeBoolFloat(\boolFromFloat(), -4.5));
+    expect(9.5, invokeMixed(\mixed(), 2, 3.5, True, 4));
+    expect(5.5, invokeMixed(\mixed(), 2, 3.5, False, 4));
+    expect("long string that requires node ownership", invokeOne(\text(),
+        "long string that requires node ownership"));
+    hash<string, int> original = {"key": i};
+    hash<string, int> copy = invokeOne(\container(), original);
+    copy.key = -1;
+    expect(i, original.key);
+    expect(NOTHING, invokeOne(\optional(), False));
+    expect(7, invokeOne(\optional(), True));
+    expect(9, invokeZero(\defaulted()));
+    expect(14, invokeOne(\overloaded(), 4));
+    expect("value!", invokeOne(\overloaded(), "value"));
+    expect(13, invokeOne(\softened(), "12"));
+    code variadic = \extra();
+    expect(9, variadic(4, 5));
+    int value = 4;
+    code referenceCall = \bump();
+    referenceCall(\value);
+    expect(5, value);
+    hash<auto> wide = invokeOne(\noNarrow(), original);
+    expect("ok", wide.text);
+    expect(i, original.key);
+    expect(8, invokeInt(\recursive(), 8));
+    {
+        Marker marker = invokeOne(\identity(), new Marker(i));
+        expect(i, marker.value);
+        expect(i + 3, marker.callback());
+    }
+    expect(i + 1, destroyed);
+    try {
+        invokeInt(\divide(), 0);
+        throw "FUNCREF-TEST-ERROR", "division must throw";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("DIVISION-BY-ZERO", ex.err);
+        division_line = ex.line;
+        bool found = False;
+        foreach hash<CallStackInfo> frame in (ex.callstack) {
+            if (frame.function =~ /divide/) { found = True; }
+        }
+        expect(True, found);
+    }
+    foreach auto invalid in ((NOTHING, "wrong", (1, 2))) {
+        try {
+            invokeOne(\increment(), invalid);
+            throw "FUNCREF-TEST-ERROR", "invalid binding must throw";
+        } catch (hash<ExceptionInfo> ex) {
+            expect(True, ex.err =~ /^RUNTIME-(OVERLOAD|TYPE)-ERROR$/);
+        }
+    }
+    expect(5, invokeInt(\increment(), 4));
+    try {
+        invokeMissing(\increment());
+        throw "FUNCREF-TEST-ERROR", "an unassigned int must not become native zero";
+    } catch (hash<ExceptionInfo> ex) {
+        expect(True, ex.err =~ /^RUNTIME-(OVERLOAD|TYPE)-ERROR$/);
+    }
+    list<int> sparse = (1, 2);
+    delete sparse[1];
+    expect(2, invokeSlot(\increment(), sparse, 0));
+    try {
+        invokeSlot(\increment(), sparse, 1);
+        throw "FUNCREF-TEST-ERROR", "a sparse slot must not become native zero";
+    } catch (hash<ExceptionInfo> ex) {
+        expect(True, ex.err =~ /^RUNTIME-(OVERLOAD|TYPE)-ERROR$/);
+    }
+}
+
+Program foreign(PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nint sub increment(int value) { return value + 100; }\n"
+    "code<int(int)> sub callback() { return \\increment(); }\n"
+    "int sub invoke(code<int(int)> fn, int value) { return fn(value); }", "foreign-funcref");
+code<int(int)> foreignRef = foreign.callFunction("callback");
+expect(104, invokeInt(foreignRef, 4));
+expect(5, foreign.callFunction("invoke", \increment(), 4));
+foreach auto mode in ((EM_AST, EM_IR, EM_TIERED)) {
+    foreign.setExecMode(mode);
+    expect(104, foreign.callFunction("invoke", foreignRef, 4));
+}
+expect(5, invokeInt(\increment(), 4));
+
+expect(2040, alternatingPrograms(\increment(), foreignRef));
+
+# Share the same immutable descriptor and compiled entry between threads.
+code<int(int)> shared = \increment_with_a_diagnostic_name_longer_than_the_small_string_buffer();
+Counter pending(4);
+Queue<auto> outcomes();
+for (int worker = 0; worker < 4; ++worker) {
+    background sub() {
+        on_exit pending.dec();
+        try {
+            int value = 0;
+            for (int j = 0; j < 200; ++j) { value = invokeInt(shared, value); }
+            outcomes.push(value);
+        } catch (hash<ExceptionInfo> ex) {
+            outcomes.push(ex.err);
+        }
+    }();
+}
+expect(0, pending.waitForZero(10000));
+for (int worker = 0; worker < 4; ++worker) { expect(200, outcomes.get(1000)); }
+# Exact function-node recognition must reject closures and preserve captures.
+int offset = 2;
+code<int(int)> captured = int sub (int value) { return value + offset; };
+expect(6, invokeInt(captured, 4));
+offset = 3;
+expect(7, invokeInt(captured, 4));
+code<int(int)> nestedCapture = int sub (int value) {
+    int before = offset;
+    int result = invokeInt(shared, value);
+    expect(before, offset);
+    return result + offset;
+};
+expect(8, nestedCapture(4));
+offset = 5;
+expect(10, nestedCapture(4));
+
+# Observe native callback frames from another thread while they are pushed and
+# popped. A bounded controller keeps workers live throughout the walks; exact
+# leaf-frame sampling is deliberately not required for a deterministic test.
+sub checkConcurrentFrames(code<int(int)> shared) {
+    Counter walkersReady(2);
+    Counter walkersRunning(1);
+    Counter walkersDone(2);
+    Queue<auto> walkOutcomes();
+    for (int worker = 0; worker < 2; ++worker) {
+        background sub () {
+            on_exit walkersDone.dec();
+            walkersReady.dec();
+            try {
+                int value = 0;
+                while (walkersRunning.getCount()) {
+                    for (int j = 0; j < 64; ++j) {
+                        value = shared(value);
+                    }
+                }
+                walkOutcomes.push(value >= 0);
+            } catch (hash<ExceptionInfo> ex) {
+                walkOutcomes.push(ex.err);
+            }
+        }();
+    }
+    {
+        on_exit {
+            walkersRunning.dec();
+            expect(0, walkersDone.waitForZero(10000));
+        }
+        expect(0, walkersReady.waitForZero(10000));
+        for (int i = 0; i < 100; ++i) {
+            hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+            expect(True, stacks.size() >= 3);
+            foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+                foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                    # Ordinary AOT frames can have empty names in the baseline.
+                    # Inspect this optimization's borrowed named frame only.
+                    if (frame.function == "increment_with_a_diagnostic_name_longer_than_the_small_string_buffer") {
+                        expect("user", frame.type);
+                        # A lazy native caller may still have a builtin eager
+                        # location; exception PC resolution is tested above.
+                        expect(True, frame.line >= -1);
+                    }
+                }
+            }
+        }
+    }
+    expect(True, walkOutcomes.get(1000));
+    expect(True, walkOutcomes.get(1000));
+}
+checkConcurrentFrames(shared);
+
+# Cross multiple 64-entry TLS stack blocks while mixing native leaves with
+# ordinary recursive frames, captured locals, owned objects, and unwinding.
+int sub checkLeafFrameBlocks(code<int(int)> fn, code<int()> readCapture, int depth, bool fail) {
+    Marker owned(depth);
+    on_exit {
+        expect(42, readCapture());
+        expect(depth, owned.value);
+        expect(depth + 1, fn(depth));
+    }
+    expect(depth + 1, fn(depth));
+    if (depth) {
+        expect(depth - 1, checkLeafFrameBlocks(fn, readCapture, depth - 1, fail));
+    } else if (fail) {
+        throw "LEAF-FRAME-UNWIND", "unwind through mixed native and ordinary frames";
+    }
+    expect(42, readCapture());
+    return depth;
+}
+sub checkLeafFrames(code<int(int)> fn) {
+    int captured = 42;
+    code<int()> readCapture = int sub () { return captured; };
+    int before = destroyed;
+    int stack_depth = get_thread_call_stack().size();
+    # Exercise both sides of repeated block transitions, including reuse after
+    # returning to an earlier block. Captures and owned locals stay ordinary.
+    foreach int depth in ((0, 1, 31, 32, 63, 64, 65, 127, 128, 129, 140)) {
+        expect(depth, checkLeafFrameBlocks(fn, readCapture, depth, False));
+        before += depth + 1;
+        expect(before, destroyed);
+        expect(42, readCapture());
+        expect(stack_depth, get_thread_call_stack().size());
+    }
+    try {
+        checkLeafFrameBlocks(fn, readCapture, 140, True);
+        throw "FUNCREF-TEST-ERROR", "expected leaf-frame unwind";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("LEAF-FRAME-UNWIND", ex.err);
+    }
+    expect(before + 141, destroyed);
+    expect(stack_depth, get_thread_call_stack().size());
+    expect(8, fn(7));
+}
+checkLeafFrames(shared);
+printf("function-references: ok (%d)\n", division_line);

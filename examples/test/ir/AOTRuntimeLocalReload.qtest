@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class RuntimeLocalReloadTest
+
+class RuntimeLocalReloadTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT runtime-backed boxed local reload", "1.0", \ARGV) {
+        addTestCase("reflective replacement and ownership", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTRuntimeLocalReload.qr";
+        string expected = "runtime-local-reload: ok\n";
+        list<string> cases = ("reloadParameter", "reloadParameterThrow", "reloadBody", "reloadBodyThrow",
+            "reloadValueParameter", "reloadValueBody", "reloadAssignedString", "reloadAssignedList");
+        foreach string caller in (cases) {
+            assertEq(expected, run((qore, "--exec-mode=ast", source, caller)), caller);
+        }
+        TmpDir dir("qore-runtime-local-reload-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1 ",
+                "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ",
+                "QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD=1 ",
+                "QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1 ",
+                "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ",
+                "QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT=1 ",
+                "QORE_DISABLE_AOT_STABLE_UNTYPED_LOAD=1 ",
+                "QORE_DISABLE_AOT_NATIVE_BODY_LOCALS=1 QORE_DISABLE_AOT_STRING_BODY_LOCALS=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string caller in (cases) {
+                    string entry = body(ir, caller);
+                    assertRegex("local_reload_epoch", entry,
+                        caller + " native AOT runtime-slot invalidation " + prefix + level);
+                    assertEq(prefix != "QORE_DISABLE_AOT_INLINE_RELOAD_GUARD=1 ",
+                        regex(entry, "aot_local_cache_stale"), caller + " inline freshness guard " + prefix + level);
+                    if (caller == "reloadBody" || caller == "reloadBodyThrow" || caller == "reloadValueBody") {
+                        bool prepared = prefix != "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ";
+                        assertEq(prepared, regex(entry, "call ptr @qore_rt_get_reload_local_slot_aot_v1"),
+                            caller + " invocation-local reload slot " + prefix + level);
+                        string version = prefix == "QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD=1 " ? "v1" : "v2";
+                        assertEq(prepared, regex(entry, "call void @qore_rt_reload_prepared_local_if_stale_aot_" + version),
+                            caller + " prepared reload and independent store controls " + prefix + level);
+                    }
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD=1 ",
+                        "QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
+                    foreach string caller in (cases) {
+                        assertEq(expected, run((executable, caller), runtime), prefix + level + runtime + caller);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -137,6 +137,42 @@ public:
         return false;
     }
 
+    //! Tests a single unfiltered class constraint without generic conversion dispatch.
+    /** Uses the ordinary object's raw/parameterized and inheritance/access checks.
+        A false result requires normal acceptance for conversions or diagnostics;
+        neither the value nor the exception sink is modified here.
+        @param n borrowed, weak-normalized assignment value
+        @return true only when one unfiltered required-class spec accepts the object
+    */
+    DLLLOCAL bool acceptsRequiredClassValueWithoutFilter(const QoreValue& n) const;
+
+    //! Returns this immutable type's single unfiltered required-class constraint, if any.
+    /** The borrowed class remains owned by the type's defining Program. This is
+        a constraint, not proof that any particular object satisfies it.
+    */
+    DLLLOCAL const QoreClass* getUnfilteredRequiredClassConstraint() const {
+        return accept_vec.size() == 1 && !accept_vec[0].map
+            && accept_vec[0].spec.getTypeSpec() == QTS_CLASS ? accept_vec[0].spec.getClass() : nullptr;
+    }
+
+    //! Tests a live strong object against a previously prepared class constraint.
+    /** Retains ordinary raw/parameterized compatibility and current inheritance/private-access checks.
+        @param constraint borrowed constraint from getUnfilteredRequiredClassConstraint()
+        @param object live borrowed strong object
+        @return true if accepted without filtering; false requires normal assignment fallback
+    */
+    DLLLOCAL static bool acceptsRequiredClassObject(const QoreClass& constraint, const QoreObject& object);
+
+    //! Live class acceptance with an exact first-public-base identity shortcut.
+    /** Only self or the first direct public base can bypass ordinary ordered lookup.
+        All raw/parameterized rules and other hierarchy/access checks remain live.
+        @param constraint borrowed unfiltered required-class constraint
+        @param object live borrowed strong object
+        @return true if accepted unchanged; false requires normal assignment fallback
+    */
+    DLLLOCAL static bool acceptsRequiredClassObjectFirstPublicBase(const QoreClass& constraint,
+        const QoreObject& object);
+
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
         assert(!accept_vec.empty());
         return accept_vec[0];
@@ -739,8 +775,11 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static bool superSetOf(const QoreTypeInfo* first, const QoreTypeInfo* second) {
         if (hasType(first)) {
-            if (hasType(second))
-                return first->superSetOf(second);
+            if (hasType(second)) {
+                // Identical type metadata has identical ordered accept/return specifications.
+                // Keep this inside the hasType checks: untyped/auto inputs have different rules.
+                return first == second || first->superSetOf(second);
+            }
             return false;
         }
         return hasType(second);

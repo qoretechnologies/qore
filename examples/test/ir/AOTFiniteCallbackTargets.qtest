@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FiniteCallbackTargetsTest
+
+class FiniteCallbackTargetsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("finite pure callback targets", "1.0", \ARGV) {
+        addTestCase("conditional callback values and observable fallback behavior", \check());
+        addTestCase("native scalar replacement preserves debugger callback events", \debugger());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTFiniteCallbackTargets.qr";
+        string expected = "finite-callback-targets: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir tmp("qore-finite-callback-targets-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ",
+                "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ",
+                "QORE_DISABLE_AOT_FINITE_CALLREF_RELOAD_ELISION=1 ",
+                "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ",
+                "QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1 ",
+                "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ",
+                "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
+                "QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1 ",
+                "QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE=1 ",
+                "QORE_DISABLE_AOT_KNOWN_CALLREF_EXCEPTION_ELISION=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = tmp.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_TARGETS=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
+                            "multipleGroups", "conditionalChoice")) {
+                        bool scalarized = prefix == ""
+                            && regex(name, "^(zeroLoop|wideChoice|zeroChoice|collisionChoice|nestedLoop)$");
+                        assertEq(prefix == "" && !scalarized,
+                            regex(body(ir, name), "finite_callref_result"), name + level);
+                    }
+                    foreach string name in (("reassigned", "unknown", "captured", "aliased",
+                            "effectChoice", "throwingChoice", "defaultChoice", "maybeAssigned", "optionalInt",
+                            "optionalFloat", "arbitrary", "variableSignature", "sparse", "evaluatedArg",
+                            "interveningCall", "multipleExpression")) {
+                        assertFalse(regex(body(ir, name), "finite_callref_result"), name + level);
+                    }
+                }
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "zeroChoice", "collisionChoice",
+                            "nestedLoop", "constantTwice", "constantGroups",
+                            "constantConditional", "specialConstant")) {
+                        string lowered = body(ir, name);
+                        assertEq(prefix != "", regex(lowered, "@qore_rt_create_call_ref"),
+                            name + level + " callback object creation");
+                        if (prefix == "") {
+                            assertFalse(regex(lowered, "@qore_rt_call_closure"), name + level + " no indirect call");
+                            assertFalse(regex(lowered, "@qore_rt_coerce_value_aot"), name + level + " no coercion");
+                        }
+                    }
+                    foreach string name in (("unaryChoice", "reassigned", "unknown", "captured", "aliased",
+                            "effectChoice", "throwingChoice", "defaultChoice", "interveningCall",
+                            "laterEffect", "escapingConstant", "constantExpression")) {
+                        assertTrue(regex(body(ir, name), "@qore_rt_create_call_ref"),
+                            name + level + " retains callback objects");
+                    }
+                }
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
+                            "multipleGroups", "conditionalChoice")) {
+                        assertEq(prefix != "", regex(body(ir, name), "@qore_rt_bind_function_call_ref_native"),
+                            name + level + " native adapter binding");
+                    }
+                    foreach string name in (("reassigned", "captured", "aliased", "interveningCall")) {
+                        assertTrue(regex(body(ir, name), "@qore_rt_bind_function_call_ref_native"),
+                            name + level + " retains binding");
+                    }
+                }
+                if (prefix == "" || prefix == "QORE_DISABLE_AOT_FINITE_CALLREF_COERCE_ELISION=1 ") {
+                    foreach string name in (("zeroLoop", "wideChoice", "unaryChoice", "floatChoice",
+                            "zeroChoice", "collisionChoice", "nestedLoop", "multipleCalls",
+                            "multipleGroups", "conditionalChoice")) {
+                        assertEq(prefix != "", regex(body(ir, name), "@qore_rt_coerce_value_aot"),
+                            name + level + " exact callback assignment coercion");
+                    }
+                    foreach string name in (("plainCodeChoice", "optionalCodeChoice", "nonExactCodeChoice",
+                            "reassigned", "captured", "interveningCall")) {
+                        assertTrue(regex(body(ir, name), "@qore_rt_coerce_value_aot"),
+                            name + level + " retains assignment coercion");
+                    }
+                    # A referenced local uses the checked closure-store path.
+                    assertTrue(regex(body(ir, "aliased"), "@qore_rt_store_closure_eval_weak_aot"),
+                        level + " retains referenced local assignment");
+                }
+                if (prefix == "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ") {
+                    string fallback_ir = run((qcc, level, "--strip-source", "-o", tmp.path + "/fallback", source),
+                        prefix + "QORE_DISABLE_AOT_FINITE_CALLREF_BIND_ELISION=1 QORE_DUMP_LLVM_IR=1 ");
+                    foreach string name in (("unaryChoice", "multipleCalls")) {
+                        string lowered = body(ir, name);
+                        string fallback = body(fallback_ir, name);
+                        assertFalse(regex(lowered, "finite_callref_result"), name + level + " fallback");
+                        assertTrue(regex(lowered, "@qore_rt_call_closure"), name + level + " fallback call");
+                        # Disabling expression import can also suppress adapter
+                        # generation. Preserve exactly the fallback's bindings.
+                        foreach string binder in (("native", "typed_v1", "typed_v2", "typed_v3")) {
+                            string symbol = "@qore_rt_bind_function_call_ref_" + binder;
+                            assertEq(regex(fallback, symbol), regex(lowered, symbol),
+                                name + level + " fallback " + binder);
+                        }
+                    }
+                }
+                foreach string runtime in (("", "QORE_DISABLE_FUNCREF_FAST_CALL=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private debugger() {
+        string source = get_script_dir() + "/AOTConstantCallbackDebugger.qr";
+        string expected = "constant-callback-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir tmp("qore-constant-callback-debugger-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_CONSTANT_CALLBACK_SCALAR_REPLACEMENT=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                # Both AOT forms use serialized debug IR when the debugger attaches after native warmup.
+                # Its line-based boundaries must keep reporting the callback local as well as entry/exit events.
+                foreach bool stripped in ((True, False)) {
+                    string executable = tmp.path + "/fixture";
+                    list<string> args = (qcc, level);
+                    if (stripped) {
+                        push args, "--strip-source";
+                    }
+                    args += ("-o", executable, source);
+                    run(args, prefix);
+                    assertEq(expected, run((executable,)), prefix + level + (stripped ? " stripped" : " embedded"));
+                }
+            }
+        }
+    }
+}

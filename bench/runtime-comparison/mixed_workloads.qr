@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+# Synthetic mixed CPU workloads, not a production application score.
+# Input generation is untimed. Parsing, allocation, transformation, aggregation,
+# and result formatting are timed. No external modules, services, or file I/O.
+list<int> sub inputValues(int count) {
+    list<int> values = ();
+    int value = 7;
+    for (int i = 0; i < count; ++i) {
+        value = (value * 33 + 17) & 65535;
+        push values, value;
+    }
+    return values;
+}
+
+string sub csvInput(list<int> values) {
+    list<string> lines = ();
+    foreach int value in (values) {
+        push lines, sprintf("%d,%d,%d", value % 16, value, value % 5);
+    }
+    return lines.join("\n");
+}
+
+string sub textInput(list<int> values) {
+    list<string> lines = ();
+    foreach int value in (values) {
+        push lines, sprintf(" Item_%d ITEM_%d item_%d ", value % 128,
+            (value >> 3) % 128, (value >> 6) % 128);
+    }
+    return lines.join("\n");
+}
+
+int sub csvReport(string input, int seed) {
+    hash<string, int> totals = {};
+    int selected = 0;
+    foreach string line in (input.split("\n")) {
+        if (line.empty()) { continue; }
+        list<string> fields = line.split(",");
+        int amount = (fields[1].toInt() + seed) & 65535;
+        if (fields[2].toInt() && amount >= 128) {
+            string key = fields[0];
+            totals{key} = (totals{key} ?? 0) + amount;
+            ++selected;
+        }
+    }
+    string report = "";
+    int sum = 0;
+    for (int i = 0; i < 16; ++i) {
+        int amount = totals{sprintf("%d", i)} ?? 0;
+        report += sprintf("%d=%d;", i, amount);
+        sum += amount;
+    }
+    return sum + selected * 65537 + report.size();
+}
+
+class Order {
+    private { int value; int quantity; }
+    constructor(int v, int q) { value = v; quantity = q; }
+    int subtotal(int seed) { return ((value + seed) & 65535) * quantity; }
+    int category() { return value % 16; }
+}
+class Discount {
+    int apply(int amount) { return amount - (amount >> 3); }
+}
+class LargeDiscount inherits Discount {
+    int apply(int amount) { return amount - (amount >> 2); }
+}
+
+int sub orderReport(list<int> values, int seed, Discount regular, Discount large) {
+    list<Order> orders = ();
+    int index = 0;
+    foreach int value in (values) {
+        push orders, new Order(value, (index++ % 4) + 1);
+    }
+    hash<string, int> totals = {};
+    index = 0;
+    foreach Order order in (orders) {
+        int amount = (index++ % 2 ? large : regular).apply(order.subtotal(seed));
+        amount += amount >> 4;
+        string key = sprintf("%d", order.category());
+        totals{key} = (totals{key} ?? 0) + amount;
+    }
+    string report = "";
+    int sum = 0;
+    for (int i = 0; i < 16; ++i) {
+        int amount = totals{sprintf("%d", i)} ?? 0;
+        report += sprintf("%d=%d;", i, amount);
+        sum += amount * (i + 1);
+    }
+    return sum + orders.size() * 17 + report.size();
+}
+
+int sub pipelineStep(int value) { return (value * 33 + 17) & 65535; }
+code<int(int)> sub pipelineClosure() {
+    int increment = 19;
+    return int sub (int value) { return (value * 33 + increment) & 65535; };
+}
+int sub callbackPipeline(list<int> values, int seed, code<int(int)> first, code<int(int)> second) {
+    list<int> intermediate = ();
+    foreach int value in (values) {
+        if (value % 3) { push intermediate, first(value ^ seed); }
+    }
+    int result = 0;
+    foreach int value in (intermediate) { result += second(value); }
+    return result + intermediate.size() * 17;
+}
+
+int sub textIndex(string input, int seed) {
+    hash<string, int> frequencies = {};
+    foreach string line in (input.split("\n")) {
+        foreach string word in (trim(tolower(line)).split(" ")) {
+            if (!word.empty()) { frequencies{word} = (frequencies{word} ?? 0) + 1; }
+        }
+    }
+    string report = "";
+    int sum = 0;
+    for (int i = 0; i < 128; ++i) {
+        string word = sprintf("item_%d", i);
+        int frequency = frequencies{word} ?? 0;
+        if (frequency) {
+            report += sprintf("%s=%d;", word, frequency);
+            sum += frequency * (i + seed + 1);
+        }
+    }
+    return sum + report.size();
+}
+
+int sub dispatch(string name, list<int> values, string csv, string text, int seed,
+        Discount regular, Discount large, code<int(int)> first, code<int(int)> second) {
+    switch (name) {
+        case "csv_report": return csvReport(csv, seed);
+        case "object_orders": return orderReport(values, seed, regular, large);
+        case "callback_pipeline": return callbackPipeline(values, seed, first, second);
+        case "text_index": return textIndex(text, seed);
+    }
+    throw "BENCH-ARGUMENT-ERROR", "unknown mixed workload: " + name;
+}
+
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+
+sub main() {
+    Discount regular();
+    LargeDiscount large();
+    code<int(int)> first = \pipelineStep();
+    code<int(int)> second = pipelineClosure();
+    if (ARGV.size() == 1 && ARGV[0] == "check") {
+        foreach int count in ((0, 1, 17, 1024, 4096)) {
+            list<int> values = inputValues(count);
+            string csv = csvInput(values);
+            string text = textInput(values);
+            foreach int seed in ((0, 7, 65535)) {
+                foreach string name in (("csv_report", "object_orders", "callback_pipeline", "text_index")) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
+                        dispatch(name, values, csv, text, seed, regular, large, first, second));
+                }
+            }
+        }
+        return;
+    }
+    if (ARGV.size() != 6) {
+        throw "BENCH-ARGUMENT-ERROR", "expected: check | WORKLOAD COUNT WARMUP SAMPLES MS SEED";
+    }
+    string name = ARGV[0];
+    int count = integerArg(1, 1, 1000000);
+    int warmup = integerArg(2, 0, 1000);
+    int samples = integerArg(3, 1, 1000);
+    int duration_us = integerArg(4, 1, 60000) * 1000;
+    int seed = integerArg(5, 0, 65535);
+    list<int> values = inputValues(count);
+    string csv = csvInput(values);
+    string text = textInput(values);
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= dispatch(name, values, csv, text, seed, regular, large, first, second);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+main();

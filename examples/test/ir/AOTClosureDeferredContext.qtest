@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+%exec-class ClosureDeferredContextTest
+
+class ClosureDeferredContextTest inherits QUnit::Test {
+    constructor() : Test("scalar closure deferred context", "1.0", \ARGV) {
+        addTestCase("live guards, post-publication overflow and context restoration", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) { testSkip("runtime built without native stack protection"); }
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-closure-deferred-context-");
+        string control_source = dir.path + "/control.qr";
+        File control_file();
+        control_file.open2(control_source, O_WRONLY | O_CREAT | O_TRUNC);
+        control_file.write("%modern\nint sub closureContextControl() { return 23; }\n");
+        control_file.close();
+        string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " ";
+        string exe = dir.path + "/fixture";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/closure_deferred_context.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) { push args, target[0]; }
+        foreach string level in (("-O0", "-O3")) {
+            int status;
+            string output = backquote(env + "QORE_DUMP_LLVM_IR=1 " + quote(ENV.QCC ?? libdir + "/qcc")
+                + " " + level + " -c --batch-script-aggregate=CLOSURE_DEFERRED_CONTEXT"
+                + " --script-aggregate-native-registers --batch-script-aggregate-output="
+                + quote(dir.path + "/aggregate.qo") + " --output-dir=" + quote(dir.path) + " "
+                + quote(get_script_dir() + "/AOTClosureDeferredContext.qr") + " "
+                + quote(control_source) + " 2>&1", \status);
+            assertEq(0, status, output);
+            assertRegex("call void @qore_rt_bind_closure_int_unary_v1", output);
+            assertRegex("call void @qore_rt_bind_closure_int_unary_v2", output);
+            assertRegex("(?s)define[^\n]*_dynamic_int_v1[^\n]*\\{[^}]*call i32 @qore_rt_check_stack_v2", output);
+            list<string> objects = glob(dir.path + "/*.qo");
+            assertEq(3, objects.size(), "provider, control and aggregate");
+            output = backquote((map quote($1), args + (level,)).join(" ") + " "
+                + (map quote($1), objects).join(" ") + " 2>&1", \status);
+            assertEq(0, status, output);
+            foreach string control in (("", "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ",
+                    "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT=1 ")) {
+                output = backquote(env + control + quote(exe) + " 2>&1", \status);
+                assertEq(0, status, output);
+                assertEq("closure-deferred-context: ok\n", output);
+            }
+        }
+    }
+}

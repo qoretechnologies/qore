@@ -1417,6 +1417,18 @@ vda.run();
         }
     }
 
+    #! Completes launch configuration and resumes a program held at its bootstrap stop.
+    /** @param args optional request arguments; no fields are required
+        @return nothing
+        @note Request and event handling hold the adapter lock. Errors while resuming the bootstrap propagate to
+        the request handler through the ordinary debug-command path.
+
+        @par Example:
+        An IDE debugging an order processor sends this after installing its line breakpoints:
+        @code{.json}
+{"seq": 2, "type": "request", "command": "configurationDone"}
+        @endcode
+    */
     public nothing vsc_configurationDone(*hash args) {
         # the configuration phase has ended: the launched program held at its first bootstrap stop (see the
         # attach handling in processEvents()) may now run.  Resume it if it is held; if it has not yet reached

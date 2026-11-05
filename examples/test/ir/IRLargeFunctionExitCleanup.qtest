@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRLargeFunctionExitCleanupTest
+
+#! Exits of large functions release their temporaries and locals as the AST interpreter does
+/** Native code releases the temporaries of the statements left and the locals of a function at each of its exits.
+    A function with many of them releases them with one runtime call over an array of their cleanup slots instead of
+    repeating the release of each one at every exit, which made the code quadratic in the size of the function.  The
+    values must be released at every exit in the same order as with the inline release (and the AST interpreter),
+    which objects with destructors show.
+*/
+class IRLargeFunctionExitCleanupTest inherits QUnit::Test {
+    public {
+        #! the number of statements of the generated functions: more than the threshold of the array form
+        const Statements = 48;
+    }
+
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        *string expected;
+        TmpDir dir("qore-ir-large-exit-cleanup-");
+        string fixture;
+    }
+
+    constructor() : Test("exits of large functions release their values", "1.0", \ARGV) {
+        fixture = dir.path + "/large-exit-cleanup.q";
+        writeFixture(fixture);
+        addTestCase("AST results", \astResults());
+        addTestCase("execution modes", \execModes());
+        addTestCase("compiled programs", \compiled());
+        set_return_value(main());
+    }
+
+    #! writes the program: functions with many statements, temporaries and locals, left at every statement
+    private writeFixture(string path) {
+        string src = "%modern
+class Tracked {
+    private {
+        string name;
+        reference<list<string>> log;
+    }
+    constructor(string name, reference<list<string>> log) {
+        self.name = name;
+        self.log = \\log;
+    }
+    destructor() {
+        push log, name;
+    }
+    string getName() {
+        return name;
+    }
+}
+
+list<string> destroyed;
+
+Tracked sub make(string name) {
+    return new Tracked(name, \\destroyed);
+}
+
+string sub str(int i) {
+    return sprintf(\"s%d\", i);
+}
+";
+        # each statement declares a local holding an object, and uses temporaries (an object and strings); the
+        # function returns, raises an exception, or raises one from a catch block at the given statement
+        string return_src = "";
+        string raise_src = "";
+        string catch_src = "";
+        for (int i = 0; i < Statements; ++i) {
+            return_src += sprintf("    Tracked l%d = make(\"r%d\");\n"
+                "    out += make(\"t%d\").getName() + str(%d) + l%d.getName();\n"
+                "    if (stop == %d) {\n        return out + \":\" + make(\"ret%d\").getName();\n    }\n",
+                i, i, i, i, i, i, i);
+            raise_src += sprintf("    Tracked l%d = make(\"e%d\");\n"
+                "    out += make(\"u%d\").getName() + str(%d);\n"
+                "    if (stop == %d) {\n        throw \"STOP\", out + \":\" + make(\"thr%d\").getName();\n    }\n",
+                i, i, i, i, i, i);
+            catch_src += sprintf("    try {\n        Tracked l%d = make(\"c%d\");\n"
+                "        out += make(\"v%d\").getName() + str(%d);\n"
+                "        if (stop == %d) {\n            throw \"INNER\", out;\n        }\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        throw \"OUTER\", ex.desc + \":\" + make(\"cat%d\").getName();\n    }\n",
+                i, i, i, i, i, i);
+        }
+        src += "string sub leave_return(int stop) {\n    string out;\n" + return_src + "    return out;\n}\n";
+        src += "string sub leave_raise(int stop) {\n    string out;\n" + raise_src + "    return out;\n}\n";
+        src += "string sub leave_catch(int stop) {\n    string out;\n" + catch_src + "    return out;\n}\n";
+        src += sprintf("
+string sub run(code fn, int stop) {
+    string result;
+    try {
+        result = fn(stop);
+    } catch (hash<ExceptionInfo> ex) {
+        result = ex.err + \": \" + ex.desc;
+    }
+    string rv = sprintf(\"%%s %%d: %%s; destroyed: %%s\", fn == \\leave_return() ? \"returns\" : fn == \\leave_raise()
+        ? \"raises\" : \"catches\", stop, result, destroyed.join(\",\"));
+    destroyed = ();
+    return rv;
+}
+
+# every function runs several times, so that tiered execution compiles it, with exits at the first, a middle,
+# the last and no statement
+for (int pass = 0; pass < 3; ++pass) {
+    foreach code fn in ((\\leave_return(), \\leave_raise(), \\leave_catch())) {
+        foreach int stop in ((0, 1, 31, 32, %d, %d, -1)) {
+            string line = run(fn, stop);
+            if (!pass) {
+                print(line + \"\\n\");
+            }
+        }
+    }
+}
+", Statements / 2, Statements - 1);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        on_exit f.close();
+        f.write(src);
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! runs a command and returns its output; the command must succeed
+    private string run(list<string> args, string label, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "QORE_LIBDIR=" + quote(libdir) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map IRLargeFunctionExitCleanupTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, label + ": " + output);
+        return output;
+    }
+
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", fixture), "ast");
+        }
+        return expected;
+    }
+
+    astResults() {
+        string out = getExpected();
+        list<string> lines = out.split("\n");
+        assertEq(3 * 7, (select lines, $1).size(), "a result for each function and exit");
+        # the local and the temporaries of the statement left are released, and then the locals of the earlier
+        # statements; checked for the first statement
+        assertRegex("(?m)^returns 0: t0s0r0:ret0; destroyed: t0,ret0,r0$", out, "return at the first statement");
+        assertRegex("(?m)^raises 0: STOP: u0s0:thr0; destroyed: u0,thr0,e0$", out, "exception at the first statement");
+        # every object is destroyed at every exit
+        foreach string line in (lines) {
+            if (!line) {
+                continue;
+            }
+            *list<*string> m = (line =~ x/^(returns|raises|catches) (-?[0-9]+): .*; destroyed: (.*)$/);
+            assertTrue(exists m, "line format: " + line);
+            int stop = m[1].toInt();
+            int n = stop < 0 ? Statements : stop + 1;
+            # a local, an object temporary and, at the exit, the temporary of the exit, for each statement run
+            int expected_count = n * 2 + (stop < 0 ? 0 : 1);
+            assertEq(expected_count, m[2].split(",").size(), "objects destroyed: " + line);
+        }
+    }
+
+    execModes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            # the functions are compiled to native code when they are first called
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture), mode, mode == "ir" ? ""
+                : "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+    }
+
+    compiled() {
+        string ast = getExpected();
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture" + level;
+            run((qcc, level, "-o", executable, fixture), "compile " + level);
+            assertEq(ast, run((executable,), "run " + level), "AOT " + level);
+        }
+    }
+}

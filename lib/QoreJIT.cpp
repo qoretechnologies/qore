@@ -735,7 +735,9 @@ bool qore_ir_fast_entry_param_is_private(
     // Therefore absence from both local inventories proves that the parameter
     // is unused. Object locals are excluded because their lifetime still
     // requires the runtime stack even when their value is not loaded.
+    // Reflection can read an unused parameter of a reflective frame by name.
     return !ir_func.has_opaque_ast_local_access
+        && !ir_func.reflective_frame
         && !ir_func.isAstVisibleLocal(key)
         && !local->isTopLevel()
         && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());

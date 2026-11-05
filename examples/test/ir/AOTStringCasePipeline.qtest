@@ -106,10 +106,13 @@ string root = "/tmp/qore-aot-string-case-pipeline-" + string(getpid());
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
+# the consumer in a Program that cannot be debugged, without the debugger blocks of the fused calls
+string nodebug_dir = root + "/nodebug";
 mkdir(root);
 mkdir(provider_dir);
 mkdir(enabled_dir);
 mkdir(disabled_dir);
+mkdir(nodebug_dir);
 
 string provider_path = root + "/provider.qr";
 string consumer_path = root + "/consumer.qr";
@@ -122,6 +125,11 @@ File consumer_file();
 consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
 consumer_file.write(consumer_source);
 consumer_file.close();
+string nodebug_consumer_path = nodebug_dir + "/consumer.qr";
+File nodebug_consumer_file();
+nodebug_consumer_file.open2(nodebug_consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+nodebug_consumer_file.write(replace(consumer_source, "%modern\n", "%modern\n%no-debugging\n"));
+nodebug_consumer_file.close();
 File combined_file();
 combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
 combined_file.write(provider_source + consumer_source + "\nmain();\n");
@@ -152,11 +160,11 @@ if (!is_file(provider_qo)) {
 }
 unlink(provider_path);
 
-string sub compileConsumer(string output_dir, string env) {
+string sub compileConsumer(string output_dir, string env, *string source) {
     string output = backquote(sprintf(
         "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c -L %s"
             + " --output-dir=%s %s 2>&1",
-        env, libqore_dir, qcc_bin, provider_dir, output_dir, consumer_path));
+        env, libqore_dir, qcc_bin, provider_dir, output_dir, source ?? consumer_path));
     if (!is_file(output_dir + "/consumer.qo")) {
         printf("consumer compile failed:\n%s", output);
         exit(2);
@@ -165,6 +173,7 @@ string sub compileConsumer(string output_dir, string env) {
 }
 
 string enabled_compile = compileConsumer(enabled_dir, "");
+string nodebug_compile = compileConsumer(nodebug_dir, "", nodebug_consumer_path);
 string disabled_compile = compileConsumer(disabled_dir,
     "QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1");
 foreach string function in (("lowerContains", "upperStartsWith",
@@ -194,19 +203,27 @@ if (disabled_compile =~ /string-consumers=[1-9]/) {
 
 string enabled_qo = enabled_dir + "/consumer.qo";
 string disabled_qo = disabled_dir + "/consumer.qo";
+string nodebug_qo = nodebug_dir + "/consumer.qo";
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string nodebug_undefined = backquote(sprintf("nm -u %s 2>&1", nodebug_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+# a Program that can be debugged also has the unfused consumers of the fused calls, which its native code lowers
+# for the ordinary calls taken while a debugger is attached; the native path is that of the Program that cannot
 if (enabled_undefined !~ /qore_rt_string_concat_multi_pipeline_search/
         || enabled_undefined =~ /qore_rt_string_concat_multi_substr/
-        || enabled_undefined
+        || enabled_undefined !~ /qore_rt_get_aot_method_debugger_gate_v1/
+        || nodebug_undefined !~ /qore_rt_string_concat_multi_pipeline_search/
+        || nodebug_undefined =~ /qore_rt_string_concat_multi_substr/
+        || nodebug_undefined
             =~ /qore_rt_pseudo_string_case_consume_native_noguard/
+        || nodebug_undefined =~ /qore_rt_get_aot_method_debugger_gate_v1/
         || disabled_undefined
             =~ /qore_rt_string_concat_multi_pipeline_search/
         || disabled_undefined !~ /qore_rt_string_concat_multi_substr/
         || disabled_undefined
             !~ /qore_rt_pseudo_string_case_consume_native_noguard/) {
     printf("composed string pipeline helper mismatch:\nenabled:\n%s"
-        + "disabled:\n%s", enabled_undefined, disabled_undefined);
+        + "no debugging:\n%sdisabled:\n%s", enabled_undefined, nodebug_undefined, disabled_undefined);
     exit(2);
 }
 

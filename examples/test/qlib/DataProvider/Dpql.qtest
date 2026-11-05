@@ -9487,7 +9487,7 @@ public class DpqlTest inherits QUnit::Test {
     existsEvalTests() {
         # a field with a value or with no value exists; a field that the record does not have does not
         foreach bool prepare in ((False, True)) {
-            code eval = auto sub (string text, hash<auto> rec) {
+            code<auto(string, hash<auto>)> eval = auto sub (string text, hash<auto> rec) {
                 hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(text);
                 if (prepare) {
                     exp = AbstractDataProvider::prepareExpression(exp);

@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || (type(expected) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected != actual)) {
+        throw "CALLBACK-BODY-TARGET", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub bodyStep(float input) {
+    float value = 65535.0 - input;
+    for (int j = 0; j < 2; ++j) { value += 0.25; }
+    return value;
+}
+float sub bodyResult() {
+    float value = 1.0;
+    for (int j = 0; j < 3; ++j) { value += 5.5; }
+    return value;
+}
+float sub bodyDivide(float input) {
+    float value = input;
+    for (int j = 0; j < 2; ++j) { value = 1.0 / value; }
+    return value;
+}
+float sub bodyWait(float input) {
+    float value = input;
+    # runs until the thread is cancelled
+    for (int i = 0; i < 9223372036854775807; ++i) { value += 0.25; }
+    return value;
+}
+float sub bodyHofUnary(float seed, int count, code<float(float)> callback) {
+    float value = seed;
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { value = callback(value); sum += value; }
+    return sum;
+}
+float sub bodyHofResult(int count, code<float()> callback) {
+    float sum = 0.0;
+    for (int i = 0; i < count; ++i) { sum += float(callback()); }
+    return sum;
+}
+float sub bodyKnownUnary(float seed, int count) {
+    code<float(float)> callback = \bodyStep();
+    return bodyHofUnary(seed, count, callback);
+}
+float sub bodyKnownResult(int count) { return bodyHofResult(count, \bodyResult()); }
+float sub bodyKnownDivide(float seed) { return bodyHofUnary(seed, 3, \bodyDivide()); }
+float sub bodyKnownWait() { return bodyHofUnary(1.0, 1, \bodyWait()); }
+float sub bodyDynamic(float seed, int count, code<float(float)> callback) {
+    return bodyHofUnary(seed, count, callback);
+}
+float sub bodyReassigned(bool replace) {
+    code<float(float)> callback = \bodyDivide();
+    if (replace) { callback = \bodyStep(); }
+    return bodyHofUnary(2.0, 1, callback);
+}
+foreach float value in ((0.0, -0.0, 1.5, -1.5, -3.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    foreach int count in ((0, 1, 2, 17, 257)) {
+        float current = value;
+        float sum = 0.0;
+        for (int i = 0; i < count; ++i) {
+            current = 65535.0 - current;
+            current += 0.25;
+            current += 0.25;
+            sum += current;
+        }
+        expect(sum, bodyKnownUnary(value, count));
+        expect(sum, bodyDynamic(value, count, \bodyStep()));
+        expect(float(count) * 17.5, bodyKnownResult(count));
+    }
+}
+expect(6.0, bodyKnownDivide(2.0));
+expect(2.0, bodyReassigned(False));
+expect(65533.5, bodyReassigned(True));
+bool caught = False;
+try { bodyKnownDivide(0.0); }
+catch (hash<ExceptionInfo> ex) {
+    expect("DIVISION-BY-ZERO", ex.err);
+    bool target_frame = False;
+    foreach hash<CallStackInfo> frame in (ex.callstack) {
+        if (frame.function == "bodyDivide") { target_frame = True; }
+    }
+    expect(True, target_frame);
+    caught = True;
+}
+expect(True, caught);
+# Reusing the same callback consumer after an exception must remain valid.
+expect(6.0, bodyKnownDivide(2.0));
+# Cancel the worker in the frame of the target, whose loop ends only when the thread is cancelled.  A DEBUG build parks
+# the worker right after it has published the target's frame (dbg_read_stacks_at_frame()) and cancels it there, so the
+# request is seen in the target's loop for certain, not before the private callback entry is reached, and the
+# cancellation must come from that frame; a release build cancels the worker once it runs the call, and checks the
+# outcome only.
+bool parking = exists_function("dbg_read_stacks_at_frame");
+for (int attempt = 0; attempt < 2; ++attempt) {
+    Counter running(1);
+    Counter go(1);
+    Counter done(1);
+    string outcome;
+    bool recovered = False;
+    bool in_target = False;
+    int tid = background (sub () {
+        on_exit done.dec();
+        try {
+            running.dec();
+            go.waitForZero();
+            bodyKnownWait();
+            outcome = "not cancelled";
+        } catch (hash<ExceptionInfo> ex) {
+            clear_thread_cancel();
+            outcome = ex.err;
+            in_target = boolean(select ex.callstack, $1.function == "bodyWait");
+            recovered = bodyKnownDivide(2.0) == 6.0;
+        }
+    })();
+    bool delivered = False;
+    bool observed = False;
+    if (parking) {
+        # the worker goes on once the hook is armed, and is cancelled while it is parked in the target's frame
+        hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("bodyWait",), (), 60000,
+            sub () { go.dec(); },
+            sub (hash<auto> stacks_read) { delivered = cancel_thread(tid, "native callback entry-state test"); });
+        observed = parked.tid == tid && parked.stacks{string(tid)}[0].function == "bodyWait";
+    } else {
+        running.waitForZero();
+        go.dec();
+        delivered = cancel_thread(tid, "native callback entry-state test");
+    }
+    if (done.waitForZero(60s)) {
+        # End the entire test process, including its worker, if the cancellation is not seen.
+        printf("callback cancellation did not complete\n");
+        exit(1);
+    }
+    expect(True, delivered);
+    expect("THREAD-CANCELLED", outcome);
+    expect(True, recovered);
+    if (parking) {
+        expect(True, observed);
+        expect(True, in_target);
+    }
+}
+printf("callback-body-target: ok\n");

@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+thread_local int reload_mutations = 0;
+thread_local int reload_original_deleted = 0;
+thread_local int reload_target_deleted = 0;
+thread_local int reload_payload_deleted = 0;
+thread_local auto reload_replacement;
+
+class ReloadPayload {
+    private:internal { int value; }
+    constructor(int value) { self.value = value; }
+    int marker() { return value; }
+    destructor() { ++reload_payload_deleted; }
+}
+class ReloadTarget {
+    int next(int value) { return value + 19; }
+    destructor() { ++reload_target_deleted; }
+}
+class ReloadMutation {
+    int next(int value) {
+        ++reload_mutations;
+        set_local_var_value(1, "receiver", new ReloadTarget());
+        set_local_var_value(1, "payload", new ReloadPayload(53));
+        return value + 3;
+    }
+    destructor() { ++reload_original_deleted; }
+}
+class ReloadMutationThrow inherits ReloadMutation {
+    int next(int value) {
+        ++reload_mutations;
+        set_local_var_value(1, "receiver", new ReloadTarget());
+        set_local_var_value(1, "payload", new ReloadPayload(53));
+        throw "RELOAD-THROW", "after replacing caller locals";
+    }
+}
+
+int sub reloadParameter(auto receiver, auto value, auto payload) {
+    auto result = receiver.next(value);
+    if (payload.marker() != 53) { throw "RELOAD-PAYLOAD", "parameter after return"; }
+    return int(receiver.next(value)) + int(result);
+}
+int sub reloadParameterThrow(auto receiver, auto value, auto payload) {
+    try { return int(receiver.next(value)); }
+    catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "RELOAD-THROW") { rethrow; }
+        if (payload.marker() != 53) { throw "RELOAD-PAYLOAD", "parameter after throw"; }
+        return int(receiver.next(value));
+    }
+}
+int sub reloadBody(auto input, auto value, auto input_payload) {
+    auto receiver = input;
+    auto payload = input_payload;
+    auto result = receiver.next(value);
+    if (payload.marker() != 53) { throw "RELOAD-PAYLOAD", "body local after return"; }
+    return int(receiver.next(value)) + int(result);
+}
+int sub reloadBodyThrow(auto input, auto value, auto input_payload) {
+    auto receiver = input;
+    auto payload = input_payload;
+    try { return int(receiver.next(value)); }
+    catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "RELOAD-THROW") { rethrow; }
+        if (payload.marker() != 53) { throw "RELOAD-PAYLOAD", "body local after throw"; }
+        return int(receiver.next(value));
+    }
+}
+
+sub reloadReplaceValue(bool fail) {
+    set_local_var_value(1, "payload", reload_replacement);
+    if (fail) { throw "RELOAD-VALUE-THROW", "after replacing caller value"; }
+}
+auto sub reloadValueParameter(auto payload, bool fail) {
+    try { call_function("reloadReplaceValue", fail); }
+    catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "RELOAD-VALUE-THROW") { rethrow; }
+    }
+    return payload;
+}
+auto sub reloadValueBody(bool fail) {
+    auto payload = 17;
+    try { call_function("reloadReplaceValue", fail); }
+    catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "RELOAD-VALUE-THROW") { rethrow; }
+    }
+    return payload;
+}
+sub reloadNoop() { }
+string sub reloadAssignedString(*string payload) {
+    payload = "assigned";
+    call_function("reloadNoop");
+    return payload ?? "lost assignment";
+}
+list<auto> sub reloadAssignedList(list<auto> payload) {
+    payload = ("assigned",);
+    call_function("reloadNoop");
+    return payload;
+}
+
+# Enter the ordinary AOT entry: private direct-entry frame visibility is a
+# separate contract, not made correct by reloading runtime-backed boxed slots.
+string caller = ARGV[0];
+if (caller == "reloadAssignedString") {
+    if (call_function(caller, NOTHING) != "assigned") {
+        throw "RELOAD-ASSIGNMENT", "ordinary optional string parameter lost its assignment";
+    }
+} else if (caller == "reloadAssignedList") {
+    auto actual = call_function(caller, ("initial",));
+    if (actual != ("assigned",)) {
+        throw "RELOAD-ASSIGNMENT", sprintf("ordinary list parameter lost its assignment: %y", actual);
+    }
+} else if (caller.startsWith("reloadValue")) {
+    foreach auto value in ((NOTHING, 0, 140737488355328, -140737488355329, 1.25, -9.0e307,
+            @inf@, -@inf@, @nan@, 0.0, -0.0, False, True, "changed", (1, 2), ("flag": "changed"))) {
+        reload_replacement = value;
+        foreach bool fail in ((False, True)) {
+            auto actual = caller == "reloadValueBody" ? call_function(caller, fail)
+                : call_function(caller, "initial", fail);
+            if (type(actual) != type(value) || sprintf("%y", actual) != sprintf("%y", value)
+                    || (type(value) == "float" && float(value) == 0.0
+                        && sprintf("%g", value) != sprintf("%g", actual))) {
+                throw "RELOAD-VALUE", sprintf("%s fail=%y: expected %y, got %y", caller, fail, value, actual);
+            }
+        }
+    }
+} else {
+    bool throwing = caller.endsWith("Throw");
+    int result = call_function(caller, throwing ? new ReloadMutationThrow() : new ReloadMutation(),
+        7, new ReloadPayload(17));
+    if (result != (throwing ? 26 : 36) || reload_mutations != 1
+            || reload_original_deleted != 1 || reload_target_deleted != 1 || reload_payload_deleted != 2) {
+        throw "RELOAD-CONTRACT", sprintf("result %d, mutations %d, destroyed %d/%d/%d", result,
+            reload_mutations, reload_original_deleted, reload_target_deleted, reload_payload_deleted);
+    }
+}
+printf("runtime-local-reload: ok\n");

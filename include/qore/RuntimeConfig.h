@@ -116,6 +116,7 @@ private:
     friend class RuntimeConfigClosureHelper;
     friend class RuntimeConfigElementHelper;
     friend class RuntimeConfigStackHelper;
+    friend class RuntimeConfigNativeAccess;
 };
 
 #endif // _QORE_RUNTIMECONFIG_H

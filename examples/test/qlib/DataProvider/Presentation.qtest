@@ -2117,7 +2117,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "removed-action", "display_name")} = {"source": "Removed", "message": "Removed"};
 
         # a canonical tree with the catalogs of both owners, each beside the source of its module
-        code make_tree = string sub (string name) {
+        code<string(string)> make_tree = string sub (string name) {
             string lib = join_paths(work, name, "qlib");
             foreach list<string> owner in (((RekeyOwnerModule, fx.domain), (PatternOwnerModule, pattern_domain))) {
                 string dir = join_paths(lib, owner[0] + ".i18n", owner[1]);

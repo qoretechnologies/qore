@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+hashdecl PreparedFrameReadResult {
+    #! frames read that are not as expected
+    list<string> errors;
+}
+
+int sub preparedLeafA(int value) { return (value + 17) & 65535; }
+int sub preparedLeafB(int value) { return (value + 19) & 65535; }
+float sub preparedFloatLeafA(float value) { return value + 0.25; }
+float sub preparedFloatLeafB(float value) { return value + 0.5; }
+
+int sub preparedBatch(code<int(int)> first, code<int(int)> second, bool replace) {
+    int value = 0;
+    for (int i = 0; i < 4096; ++i) {
+        code<int(int)> fn = replace && (i & 1) ? first : second;
+        value = fn(value);
+    }
+    return value;
+}
+
+float sub preparedFloatBatch(code<float(float)> first, code<float(float)> second, bool replace) {
+    float value = 0.0;
+    for (int i = 0; i < 4096; ++i) {
+        code<float(float)> fn = replace && (i & 1) ? first : second;
+        value = fn(value);
+    }
+    return value;
+}
+
+sub preparedCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    code<int(int)> first = \preparedLeafA();
+    code<int(int)> second = \preparedLeafB();
+    started.dec();
+    bool replace = False;
+    while (readers.getCount()) {
+        int actual = preparedBatch(first, second, replace);
+        if (actual != (replace ? 8192 : 12288)) {
+            failures.push("incorrect callback result");
+            return;
+        }
+        replace = !replace;
+    }
+}
+
+sub preparedReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<PreparedFrameReadResult> result();
+    result.errors = ();
+    for (int i = 0; i < 400; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            bool caller = False;
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.function == "preparedCaller" || frame.function == "preparedFloatCaller") {
+                    caller = True;
+                    break;
+                }
+            }
+            if (!caller) {
+                continue;
+            }
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.type == "user" && frame.function != "preparedCaller"
+                        && frame.function != "preparedBatch" && frame.function != "preparedLeafA"
+                        && frame.function != "preparedLeafB" && frame.function != "preparedFloatCaller"
+                        && frame.function != "preparedFloatBatch" && frame.function != "preparedFloatLeafA"
+                        && frame.function != "preparedFloatLeafB") {
+                    result.errors += sprintf("unexpected caller frame: %y", frame);
+                }
+                if (frame.function == "preparedLeafA" || frame.function == "preparedLeafB"
+                        || frame.function == "preparedFloatLeafA" || frame.function == "preparedFloatLeafB") {
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid native frame: %y", frame);
+                    }
+                }
+            }
+        }
+    }
+    results.push(result);
+}
+
+sub preparedFloatCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    code<float(float)> first = \preparedFloatLeafA();
+    code<float(float)> second = \preparedFloatLeafB();
+    started.dec();
+    bool replace = False;
+    while (readers.getCount()) {
+        float actual = preparedFloatBatch(first, second, replace);
+        if (actual != (replace ? 1536.0 : 2048.0)) {
+            failures.push("incorrect floating callback result");
+            return;
+        }
+        replace = !replace;
+    }
+}
+
+#! Returns the stack of a caller read while it is in one of the given leaf frames, called by the given batch
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub preparedParkedStack(list<string> frames, string batch, string caller) {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame", frames, (batch,), 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    hash<CallStackInfo> leaf = stack[0];
+    if (leaf.type != "user" || leaf.file.empty() || leaf.line < 0 || leaf.endline < leaf.line
+            || !(select stack, $1.function == caller)) {
+        throw "PREPARED-FRAME-TEST", sprintf("invalid parked native frame: %y", stack);
+    }
+    return stack;
+}
+
+Counter started(4);
+# the concurrent readers and the parked reads below
+Counter readers(3);
+Counter callers_done(4);
+Counter readers_done(2);
+Queue failures();
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    if (i & 1) {
+        background preparedFloatCaller(started, readers, callers_done, failures);
+    } else {
+        background preparedCaller(started, readers, callers_done, failures);
+    }
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background preparedReader(readers, readers_done, results);
+}
+{
+    on_exit readers.dec();
+    # integer and floating leaf frames must both be visible
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        preparedParkedStack(("preparedLeafA", "preparedLeafB"), "preparedBatch", "preparedCaller");
+        preparedParkedStack(("preparedFloatLeafA", "preparedFloatLeafB"), "preparedFloatBatch",
+            "preparedFloatCaller");
+    }
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    hash<PreparedFrameReadResult> result = results.get(10000);
+    if (result.errors) {
+        throw "PREPARED-FRAME-TEST", result.errors.join("\n");
+    }
+}
+if (failures.size()) {
+    throw "PREPARED-FRAME-TEST", sprintf("%d caller failures", failures.size());
+}
+printf("prepared-frame-readers: ok\n");

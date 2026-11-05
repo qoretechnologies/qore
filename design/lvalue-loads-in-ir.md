@@ -121,6 +121,26 @@ For a structured mutation that throws, the interpreter must release the
 `LValueHelper` (and therefore its lock) before cleaning up values or transferring
 control to the instruction's exception target.
 
+## Deferred Reference Storage
+
+`LValueHelper` retains replaced values and old COW containers until it has
+released the lvalue lock and completed any recursive-reference scan. Its first
+deferred reference is stored inline; additional references use the existing
+overflow vector. This avoids allocating a vector for the common one-reference
+case without changing the lifetime of any value.
+
+Both the inline reference and overflow references participate in the
+insertion-only scan decision. They remain alive throughout the scan and are
+then discarded in insertion order, even when a destructor raises an exception.
+Moving the helper transfers the inline reference and clears the source slot.
+Do not release a reference early to optimize storage: destructor callbacks can
+re-enter the locked object, and cycle collection relies on these temporary roots.
+
+`examples/test/ir/IRDeferredLValueRelease.qr` covers single-reference cleanup,
+nested COW overflow, aliases, destructor re-entry, and throwing destructors in
+all execution modes through `IRPerformanceSemantics.qtest`. The DGC scan,
+ownership, and operand-temporary suites cover the associated graph invariants.
+
 ## Cache Invalidation Rule
 
 Before any lvalue mutation that can write through `LValueHelper`, the
@@ -230,6 +250,24 @@ Regression coverage: `examples/test/qore/misc/lvalue-delete-semantics.qtest` pin
 whatever engine it is run under, and `examples/test/qore/misc/lvalue-delete-cycle-scan.qtest` covers
 the lock-release requirement.
 
+## Indexed compound mutation metadata
+
+For a two-step `root / ListIndex` compound mutation, native runtime helpers
+pass the resolved integer index separately to `LValueHelper::navigatePath()`.
+This avoids copying the path vector and its root-name strings on every call.
+The shared instruction remains immutable: the override is stack-local, including
+when concurrent calls use different indices. Static indices use the same path.
+Longer paths and other selector kinds retain the private copied-path fallback.
+The IR interpreter also retains its private copy: specializing its large dispatch
+function improved indexed mutation but regressed several unrelated IR kernels
+in an interleaved benchmark, so that experimental change was not retained.
+
+This is a metadata optimization, not direct container access. Root resolution,
+reference following, locking, copy-on-write, auto-vivification, negative indices,
+buffer handling, type checks, RHS ownership, cache invalidation, and exception
+cleanup still use the existing navigation and compound-assignment machinery.
+`IRPerformanceSemantics.qtest` exercises the change in AST/IR/JIT/tiered/AOT modes.
+
 ## Review Checklist
 
 When adding a new lvalue opcode or helper:
@@ -246,3 +284,81 @@ When adding a new lvalue opcode or helper:
 - Removal opcodes match `LValueRemoveHelper` semantics, including which forms run
   destructors, and run them with the lvalue locks released.
 - Tests cover unique and shared-container mutation.
+
+## Exact builtin integer append lowering
+
+LLVM AOT/JIT lowering may replace an already-marked in-place list push with an
+unchecked integer helper only when the source has assigned, never-NOTHING
+NativeInt facts, both source and element type are exactly `bigIntTypeInfo`,
+and the LLVM operand is i64. A scalar base-type match is not sufficient: enum
+values also have scalar base types. The original freshness/exclusive-local
+proof, borrowed root and cache cleanup requirements still apply.
+
+A raw native integer uses `qore_rt_list_push_int_in_place_unchecked_v1`; an
+already NaN-boxed operand uses `qore_rt_list_push_int_bits_in_place_unchecked_v1`.
+The first accepts all signed 64-bit values and constructs the normal QoreValue;
+the second acquires the list's own reference without replacing an existing
+wide-integer box. Both return unchanged borrowed list bits. Operand cleanup
+continues to own any source box independently. These helpers introduce no
+runtime policy/context, callback or type-conversion operation.
+
+Optional/unassigned/soft/enum values and unproven lists retain ordinary checked
+handling. No shared-local locking, COW, mutation snapshot or cancellation rule
+is weakened. Paired stores and their coercion are not removed by this change,
+including for runtime-backed AOT locals. `QORE_DISABLE_IR_NATIVE_INT_IN_PLACE_LIST_PUSH`
+disables this lowering; the existing general native-push gate also applies.
+Neither gate adds a runtime branch. Ordinary IR interpretation is unchanged.
+
+`IRNativeIntListPush.qtest` covers wide integers, aliases, reference roots,
+snapshots, unassigned/optional/soft inputs, enum identity/conversion/rejection,
+AOT configurations and native reference-count/box identity tests at O0/O3.
+
+## Exact integer paired-store coercion
+
+AOT lowering records the originating `LocalVar` only after selecting the exact
+integer in-place helper above, and only for an ordinary non-reference,
+non-closure declaration whose type is canonical `list<int>`. The paired normal
+`StoreLocal` may skip coercion only when it carries both in-place and local-COW
+markers, targets that same declaration, and still has that exact type. The
+producer's borrowed result preserves the list pointer and type and cannot run
+a conversion or callback. A different local or incomplete proof retains checks.
+The compiler-private map is cleared at each function; it is not runtime state.
+
+By itself this eliminates only repeated coercion and its temporary ownership/error work.
+It does not eliminate runtime-backed assignment, cache cleanup/reload, local
+ownership, weak-reference normalization, reflective visibility, exception
+handling or cancellation. Outlining that removes the strong markers prevents
+admission. IR-only redundant-store behavior remains as before. No generic COW
+replacement writeback may be removed using this coercion proof alone.
+
+`QORE_DISABLE_AOT_IN_PLACE_INT_LIST_STORE` disables the new lowering without a
+runtime branch. Disabling the existing integer-push helper also prevents this
+proof. Ordinary IR interpretation and LLVM JIT are unchanged by this extension.
+`AOTInPlaceIntListStore.qtest` pins generated coercion/writeback sites as well
+as wide integers, aliases, expression values, exceptions, reference/captured
+fallbacks, remove/revive, sparse mutation and reflective local replacement.
+
+## Unchanged integer-list body-local publication
+
+The paired coercion proof above is necessary but not sufficient to elide
+runtime assignment. AOT lowering additionally requires a runtime-backed body
+local, a redundant-store marker, no closure use or weak assignment, and neither
+a fast-entry parameter owner nor a pre-instantiated entry cleanup owner. The
+existing analysis requires adjacent load/push/store instructions in one block.
+The exact integer helper returns the same strong list pointer without changing
+its type, invoking user code or replacing its root. The runtime slot already
+owns that mutated list, so assigning it the same pointer again is unnecessary.
+
+This path retains the common cache/reload cleanup, alloca update and freshness
+mark, exception check, normal cache reference retention/deferred cleanup and
+consumed-operand cleanup. The ordinary runtime slot remains an owner throughout.
+It does not relax general COW replacement writeback, parameter ownership,
+reference/closure handling, weak normalization or cancellation. Any missing
+proof retains ordinary publication; outlining removes the strong markers.
+
+`QORE_DISABLE_AOT_IN_PLACE_INT_LIST_PUBLICATION` disables only this extension.
+Disabling either integer-push or paired-coercion lowering also prevents it.
+`AOTInPlaceIntListPublication.qtest` checks one fewer writeback in eligible
+loops, retained initial publication, both prerequisite fallbacks and the shared
+wide-integer, alias, exception and reflective-replacement fixture at O0/O3.
+This is AOT-only, with no new runtime layout, helper ABI or serialized metadata.

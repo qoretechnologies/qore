@@ -375,11 +375,10 @@ correct code.
 
 **Validation measurements (2026-04-18):**
 
-| Module     | Funcs | Baseline | threshold=200 | Speedup | Output   |
-|------------|-------|----------|---------------|---------|----------|
-| HttpServer | 198   | 623 s    | 13.6 s        | **46x** | 18 → 5.7 MB |
-| SqlUtil    | 747   | 293 s    | 172 s         | 1.70x   | 19.9 → 15.6 MB |
-| OpenApi3   | 201   | 29.2 s   | 29.2 s        | 1.00x   | identical |
+|!Module|!Funcs|!Baseline|!threshold=200|!Speedup|!Output
+|HttpServer|198|623 s|13.6 s|**46x**|18 → 5.7 MB
+|SqlUtil|747|293 s|172 s|1.70x|19.9 → 15.6 MB
+|OpenApi3|201|29.2 s|29.2 s|1.00x|identical
 
 - HttpServer is the pathological case (one 905-BB function) — 46x win.
 - SqlUtil has multiple medium-large functions but no single outlier —
@@ -509,12 +508,11 @@ Phase 4 (.qo/.qoa object files + linkage)                — SUBSTANTIALLY SHIPP
 
 Introduce three levels, selectable via qcc flags:
 
-| qcc invocation | Opt | Debug info | Analogy |
-|---|---|---|---|
-| `qcc -O0 -g`         | `-O0` | DWARF | `Debug` |
-| `qcc -O3`            | `-O3` | none | `Release` |
-| `qcc -O3 -g`         | `-O3` | DWARF | `RelWithDebInfo` |
-| `qcc -O1 --strip-debug` | `-O1` | none | minimal |
+|!qcc invocation|!Opt|!Debug info|!Analogy
+|`qcc -O0 -g`|`-O0`|DWARF|`Debug`
+|`qcc -O3`|`-O3`|none|`Release`
+|`qcc -O3 -g`|`-O3`|DWARF|`RelWithDebInfo`
+|`qcc -O1 --strip-debug`|`-O1`|none|minimal
 
 `-g` flag toggles `emit_debug_info` in `QoreIRToLLVM`. Mirrors clang/gcc.
 

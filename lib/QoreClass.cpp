@@ -2439,7 +2439,10 @@ const QoreClass* BCNode::getClass(const qore_class_private& qc, ClassAccess& n_a
     if (access >= Internal && !toplevel)
         return nullptr;
 
-    const QoreClass* rv = sclass->priv->getClassIntern(qc, n_access, false);
+    // Exact identity needs no structural/injected-class comparison. Keep the
+    // edge's visibility check above and access accumulation below the shortcut.
+    const QoreClass* rv = sclass->priv == &qc ? qc.cls
+        : sclass->priv->getClassIntern(qc, n_access, false);
 
     if (rv && n_access < access)
         n_access = access;
@@ -3398,6 +3401,9 @@ void QoreClass::addBuiltinBaseClass(QoreClass* qc) {
     }
     priv->scl->push_back(new BCNode(&loc_builtin, qc));
     priv->scl->sml.add(this, qc, false);
+    // Native dispatch entries can cache defining-class access normalization.
+    // A changed hierarchy invalidates those proofs as well as method lookup.
+    qore_bump_method_dispatch_epoch();
 }
 
 void QoreClass::addDefaultBuiltinBaseClass(QoreClass* qc) {
@@ -3570,6 +3576,7 @@ void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
         qc->priv->scl->addBaseClassesToSubclass(qc, cls, virt);
     }
     scl->sml.add(cls, qc, virt);
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::addBaseClass(QoreClass* qc, ClassAccess access, bool virt) {
@@ -3585,6 +3592,7 @@ void qore_class_private::addBaseClass(QoreClass* qc, ClassAccess access, bool vi
         qc->priv->scl->addBaseClassesToSubclass(qc, cls, virt);
     }
     scl->sml.add(cls, qc, virt);
+    qore_bump_method_dispatch_epoch();
 }
 
 void qore_class_private::parseCheckAbstractNew(const QoreProgramLocation* loc) const {
@@ -4330,6 +4338,13 @@ const QoreClass* QoreClass::getClass(qore_classid_t cid, bool& cpriv) const {
 }
 
 const QoreClass* QoreClass::getClass(const QoreClass& qc, bool& cpriv) const {
+    // Definition identity is unconditionally public, including copied handles.
+    // Return the canonical handle, as getClassIntern() does; non-identical
+    // definitions retain the complete equivalence and inheritance/access lookup.
+    if (priv == qc.priv) {
+        cpriv = false;
+        return priv->cls;
+    }
     ClassAccess access = Public;
     const QoreClass* rv = priv->getClassIntern(*qc.priv, access, true);
     cpriv = (access > Public);

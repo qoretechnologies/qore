@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeFloatMethodEntryTest
+
+class NativeFloatMethodEntryTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native floating polymorphic method entries", "1.0", \ARGV) {
+        addTestCase("native entry and guarded fallback contracts", \check());
+        addTestCase("concurrent native method stack readers", \checkReaders());
+        addTestCase("debugger attach invalidates native admission", \checkDebugger());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTNativeFloatMethodEntry.qr";
+        string expected = "native-float-method-entry: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-method-entry-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("Base", "Derived", "Other", "Thread", "Identity", "Negative")) {
+                    assertEq(prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "
+                        && prefix != "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        regex(ir, "call void @qore_rt_bind_method_float_unary_v1[^\\n]*NativeFloatMethod" + name),
+                        name + " native binding " + prefix + level);
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(ir, "call void @qore_rt_bind_method_float_unary_v2[^\\n]*NativeFloatMethod" + name),
+                        name + " explicit-context binding " + prefix + level);
+                }
+                foreach string name in (("Optional", "String", "Throwing", "Self", "Argv", "Divide", "Effect", "Mixed")) {
+                    assertFalse(regex(ir, "call void @qore_rt_bind_method_float_unary_v1[^\\n]*NativeFloatMethod"
+                        + name), name + " excluded body " + prefix + level);
+                    assertFalse(regex(ir, "call void @qore_rt_bind_method_float_unary_v2[^\\n]*NativeFloatMethod"
+                        + name), name + " excluded explicit-context body " + prefix + level);
+                }
+                if (!prefix.startsWith("QORE_DISABLE_")) {
+                    assertRegex("call i32 @qore_rt_try_method_float_unary_v1", ir);
+                    assertRegex("method_native_value", ir);
+                } else {
+                    assertFalse(regex(ir, "call i32 @qore_rt_try_method_float_unary_v1"),
+                        "disabled caller " + prefix + level);
+                }
+                foreach string name in (("nativeFloatGenericCall", "nativeFloatGenericInvoke",
+                        "nativeFloatGenericSpecial")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
+                    bool integer_enabled = prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "
+                        && prefix != "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ";
+                    assertEq(integer_enabled, regex(body[0] ?? "", "call i32 @qore_rt_try_method_int_unary_v2"),
+                        name + " actual boxed integer argument " + prefix + level);
+                    assertEq(integer_enabled && prefix != "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        regex(body[0] ?? "", "call i32 @qore_rt_try_method_float_unary_v2"),
+                        name + " actual boxed float argument " + prefix + level);
+                    assertEq(integer_enabled, regex(body[0] ?? "", "name_method_int_argument"));
+                    assertFalse(regex(body[0] ?? "", "name_method_native_value"),
+                        name + " unknown argument family retains boxed result");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+
+    private checkDebugger() {
+        string source = get_script_dir() + "/AOTNativeFloatMethodDebugger.qr";
+        string expected = "native-float-method-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-native-method-debugger-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                "QORE_DUMP_LLVM_IR=1 ");
+            assertRegex("call void @qore_rt_bind_method_float_unary_v1[^\n]*NativeFloatDebugDerived", ir);
+            assertRegex("call void @qore_rt_bind_method_float_unary_v1[^\n]*NativeFloatDebugLateDerived", ir);
+            assertEq(expected, run((executable,)), level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
+                "fallback " + level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 "),
+                "uncached admission " + level);
+            assertEq(expected, run((executable,), "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 "),
+                "generic float disabled " + level);
+        }
+    }
+
+    private checkReaders() {
+        string source = get_script_dir() + "/AOTNativeFloatMethodFrameReaders.qr";
+        string expected = "native-float-method-frame-readers: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source, "generic")), "generic " + mode);
+        }
+        TmpDir dir("qore-native-method-readers-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("call void @qore_rt_bind_method_float_unary_v1[^\n]*NativeFloatReaderB", ir);
+                *list<*string> body = regex_extract(ir,
+                    "(?s)define [^\n]*@nativeFloatGenericMethodReaderBatch_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!body);
+                assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", body[0] ?? "");
+                assertRegex("call i32 @qore_rt_try_method_float_unary_v2", body[0] ?? "");
+                assertRegex("name_method_float_argument", body[0] ?? "");
+                assertFalse(regex(body[0] ?? "", "name_method_native_value"));
+                foreach bool generic in ((False, True)) {
+                    list<string> args = generic ? (executable, "generic") : (executable,);
+                    foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                            "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                            "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ")) {
+                        # the default entry publishes the frames of the calls that native code makes
+                        assertEq(expected, run(args, runtime ? runtime : "QORE_TEST_NATIVE_FRAME=1 "),
+                            prefix + level + runtime + generic);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub accumulation(int count, int seed) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        total += seed;
+    }
+    return total;
+}
+
+int sub caught(int count) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        try {
+            total += 100 / (i % 3);
+        } catch (hash<auto> error) {
+            if (error.err != "DIVISION-BY-ZERO") { rethrow; }
+            total += 7;
+        }
+    }
+    return total;
+}
+
+float sub twoSteps(float value) {
+    float result = 65535.0 - value;
+    for (int i = 0; i < 2; ++i) {
+        result += 0.25;
+    }
+    return result;
+}
+
+foreach int count in ((0, 1, 2, 17, 1000)) {
+    printf("%d:%d:%d:%.2f\n", count, accumulation(count, 7), caught(count), twoSteps(count));
+}

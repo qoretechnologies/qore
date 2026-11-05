@@ -1368,6 +1368,12 @@ design — that omission is exactly what makes it identical in both compile mode
 Channel 1 respects this directly: it excludes any provider the object imports with a
 body-contract hash, and those keep the compile-contract edge the previous pass gave them.
 
+A per-file emitter must retain the same call-summary map through lowering and symbol-index
+serialization. This also applies when a batch has one source file or cross-file fast entries
+are disabled: lowering can consume a contract for its own body. Discarding the local map after
+lowering leaves the import recorded but omits the matching definition hash, so even a simple
+single-file executable fails contract validation at link time.
+
 Channel 2 cannot, because the token's prerequisites are the required-edge predecessors, which
 is the whole imported-provider set. Measured on the Qorus group:
 

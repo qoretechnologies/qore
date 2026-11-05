@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub plusOne(int value) { return value + 1; }
+int sub minusOne(int value) { return value - 1; }
+float sub plusHalf(float value) { return value + 0.5; }
+float sub minusHalf(float value) { return value - 0.5; }
+int sub eight() { return 8; }
+float sub one() { return 1.0; }
+float sub plusTwo(float value) { return value + 2.0; }
+float sub minusTwo(float value) { return value - 2.0; }
+int sub twoInt() { return 2; }
+int sub threeInt() { return 3; }
+float sub twoFloat() { return 2.0; }
+float sub threeFloat() { return 3.0; }
+int sub four() { return 4; }
+float sub half() { return 0.5; }
+
+int sub invariantInt(int count, int seed, code<int(int)> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = callback(seed);
+        sum += seed;
+    }
+    return sum;
+}
+int sub invariantFloat(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += int(value);
+    }
+    return sum;
+}
+int sub invariantZero(int count, code<int()> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { sum += int(callback()); }
+    return sum;
+}
+int sub invariantFloatZero(int count, code<float()> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { sum += int(callback()); }
+    return sum;
+}
+int sub changing(int count, code<int(int)> first, code<int(int)> second) {
+    int value = 0;
+    for (int i = 0; i < count; ++i) {
+        code<int(int)> callback = i % 2 ? first : second;
+        value = callback(value);
+    }
+    return value;
+}
+sub expect(int expected, int actual) {
+    if (expected != actual) {
+        throw "INVARIANT-CALLBACK-TEST", sprintf("expected %d, got %d", expected, actual);
+    }
+}
+sub exercise() {
+    code<int(int)> plusOneRef = \plusOne();
+    code<int(int)> minusOneRef = \minusOne();
+    code<float(float)> plusHalfRef = \plusHalf();
+    code<float(float)> minusHalfRef = \minusHalf();
+    code<float(float)> plusTwoRef = \plusTwo();
+    code<float(float)> minusTwoRef = \minusTwo();
+    code<int()> fourRef = \four();
+    code<int()> eightRef = \eight();
+    code<int()> twoIntRef = \twoInt();
+    code<int()> threeIntRef = \threeInt();
+    code<float()> halfRef = \half();
+    code<float()> oneRef = \one();
+    code<float()> twoFloatRef = \twoFloat();
+    code<float()> threeFloatRef = \threeFloat();
+    for (int round = 0; round < 20; ++round) {
+        int triangular = round * (round + 1) / 2;
+        int floating = round * round / 4;
+        expect(triangular, invariantInt(round, 0, plusOneRef));
+        expect(-triangular, invariantInt(round, 0, minusOneRef));
+        expect(floating, invariantFloat(round, 0, plusHalfRef));
+        expect(-floating, invariantFloat(round, 0, minusHalfRef));
+        expect(round * (round + 1), invariantFloat(round, 0, plusTwoRef));
+        expect(-round * (round + 1), invariantFloat(round, 0, minusTwoRef));
+        expect(round * 4, invariantZero(round, fourRef));
+        expect(round * 8, invariantZero(round, eightRef));
+        expect(round * 2, invariantZero(round, twoIntRef));
+        expect(round * 3, invariantZero(round, threeIntRef));
+        expect(0, invariantFloatZero(round, halfRef));
+        expect(round, invariantFloatZero(round, oneRef));
+        expect(round * 2, invariantFloatZero(round, twoFloatRef));
+        expect(round * 3, invariantFloatZero(round, threeFloatRef));
+        expect(round % 2 ? -1 : 0, changing(round, plusOneRef, minusOneRef));
+        expect(triangular, invariantInt(round, 0, int sub(int value) { return value + 1; }));
+        int increment = 1;
+        expect(triangular, invariantInt(round, 0, int sub(int value) { return value + increment; }));
+    }
+}
+exercise();
+print("invariant-callback: ok\n");

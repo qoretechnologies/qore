@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || expected != actual) {
+        throw "INTEGER-CALLBACK", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub bodyIntPlus(int value) { return value + 3; }
+int sub bodyIntBranch(int value) { return value < 0 ? value - 7 : value + 11; }
+int sub bodyIntIdentity(int value) { return value; }
+int sub bodyIntResult() { return 1152921504606846979; }
+int sub bodyIntDivide(int value) { return 100 / value; }
+int sub bodyIntWide(int left, int right) { return left + right; }
+int sub bodyIntWait(int value) {
+    # runs until the thread is cancelled
+    for (int i = 0; i < 9223372036854775807; ++i) { value += 1; }
+    return value;
+}
+int sub bodyIntUnary(int value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntZero(code<int()> callback) { return callback(); }
+int sub bodyIntDivision(int value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntWaiting(int value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntAuto(auto value, code<int(int)> callback) { return callback(value); }
+int sub bodyIntTwo(int left, int right, code<int(int, int)> callback) { return callback(left, right); }
+int sub bodyIntKnownPlus(int value) { return bodyIntUnary(value, \bodyIntPlus()); }
+int sub bodyIntKnownBranch(int value) { return bodyIntUnary(value, \bodyIntBranch()); }
+int sub bodyIntKnownIdentity(int value) { return bodyIntUnary(value, \bodyIntIdentity()); }
+int sub bodyIntKnownResult() { return bodyIntZero(\bodyIntResult()); }
+int sub bodyIntKnownDivide(int value) { return bodyIntDivision(value, \bodyIntDivide()); }
+int sub bodyIntKnownWait() { return bodyIntWaiting(1, \bodyIntWait()); }
+int sub bodyIntKnownAuto(auto value) { return bodyIntAuto(value, \bodyIntPlus()); }
+int sub bodyIntKnownWide(int left, int right) { return bodyIntTwo(left, right, \bodyIntWide()); }
+int sub bodyIntLoop(int count, int value, code<int(int)> callback) {
+    for (int i = 0; i < count; ++i) { value = callback(value); }
+    return value;
+}
+int sub bodyIntKnownLoop(int count, int value) { return bodyIntLoop(count, value, \bodyIntPlus()); }
+int sub bodyIntKnownIdentityLoop(int count, int value) { return bodyIntLoop(count, value, \bodyIntIdentity()); }
+int sub bodyIntMaybeLocal(bool assigned, code<int(int)> callback) {
+    int value;
+    if (assigned) { value = 40; }
+    return callback(value);
+}
+int sub bodyIntKnownMaybeLocal(bool assigned) { return bodyIntMaybeLocal(assigned, \bodyIntPlus()); }
+int sub bodyIntOptionalLocal(bool assigned, code<int(int)> callback) {
+    *int value = assigned ? 40 : NOTHING;
+    return callback(value);
+}
+int sub bodyIntKnownOptionalLocal(bool assigned) { return bodyIntOptionalLocal(assigned, \bodyIntPlus()); }
+int sub bodyIntSparseLocal(int index, code<int(int)> callback) {
+    list<int> values = ();
+    values[3] = 40;
+    return callback(values[index]);
+}
+int sub bodyIntKnownSparseLocal(int index) { return bodyIntSparseLocal(index, \bodyIntPlus()); }
+# Deliberately dynamic callback and result types exercise native integer boxing.
+auto sub bodyIntGeneric(auto value, auto callback) { return callback(value); }
+auto sub bodyIntGenericZero(auto callback) { return callback(); }
+auto sub bodyIntKnownGeneric(auto value) { return bodyIntGeneric(value, \bodyIntIdentity()); }
+auto sub bodyIntKnownGenericResult() { return bodyIntGenericZero(\bodyIntResult()); }
+code<int(int)> sub bodyIntEscape(code<int(int)> callback) { return callback; }
+int sub bodyIntReassigned(bool branch) {
+    code<int(int)> callback = \bodyIntPlus();
+    if (branch) { callback = \bodyIntBranch(); }
+    return bodyIntUnary(2, callback);
+}
+
+expect(3, bodyIntKnownPlus(0));
+expect(281474976710659, bodyIntKnownPlus(281474976710656));
+expect(-1152921504606846973, bodyIntKnownPlus(-1152921504606846976));
+expect(-9, bodyIntKnownBranch(-2));
+expect(13, bodyIntKnownBranch(2));
+expect(9223372036854775807, bodyIntKnownIdentity(9223372036854775807));
+expect(-9223372036854775807 - 1, bodyIntKnownIdentity(-9223372036854775807 - 1));
+expect(1152921504606846979, bodyIntKnownResult());
+expect(1152921504606846979, bodyIntKnownWide(1152921504606846976, 3));
+expect(9223372036854775807, bodyIntKnownGeneric(9223372036854775807));
+expect(-9223372036854775807 - 1, bodyIntKnownGeneric(-9223372036854775807 - 1));
+expect(1152921504606846979, bodyIntKnownGenericResult());
+expect(1152921504606846988, bodyIntKnownLoop(4, 1152921504606846976));
+expect(-1152921504606846964, bodyIntKnownLoop(4, -1152921504606846976));
+expect(2, bodyIntKnownLoop(4, -10));
+expect(9223372036854775807, bodyIntKnownLoop(0, 9223372036854775807));
+expect(9223372036854775807, bodyIntKnownIdentityLoop(4, 9223372036854775807));
+expect(-9223372036854775807 - 1, bodyIntKnownIdentityLoop(4, -9223372036854775807 - 1));
+foreach bool assigned in ((False, True)) {
+    try { printf("maybe-local: %y\n", bodyIntKnownMaybeLocal(assigned)); }
+    catch (hash<ExceptionInfo> ex) { printf("maybe-local-error: %s\n", ex.err); }
+    try { printf("optional-local: %y\n", bodyIntKnownOptionalLocal(assigned)); }
+    catch (hash<ExceptionInfo> ex) { printf("optional-local-error: %s\n", ex.err); }
+}
+foreach int index in ((0, 3)) {
+    try { printf("sparse-local: %y\n", bodyIntKnownSparseLocal(index)); }
+    catch (hash<ExceptionInfo> ex) { printf("sparse-local-error: %s\n", ex.err); }
+}
+expect(5, bodyIntReassigned(False));
+expect(13, bodyIntReassigned(True));
+code<int(int)> escaped = bodyIntEscape(\bodyIntPlus());
+expect(7, escaped(4));
+# Compare coercion/error output with the source AST oracle in the harness.
+foreach auto value in ((NOTHING, 40, 40.5, "40")) {
+    try { printf("coerce: %y\n", bodyIntKnownAuto(value)); }
+    catch (hash<ExceptionInfo> ex) { printf("coerce-error: %s\n", ex.err); }
+}
+expect(50, bodyIntKnownDivide(2));
+bool caught = False;
+try { bodyIntKnownDivide(0); }
+catch (hash<ExceptionInfo> ex) {
+    expect("DIVISION-BY-ZERO", ex.err);
+    bool target_frame = False;
+    foreach hash<CallStackInfo> frame in (ex.callstack) {
+        if (frame.function == "bodyIntDivide") { target_frame = True; }
+    }
+    expect(True, target_frame);
+    caught = True;
+}
+expect(True, caught);
+expect(50, bodyIntKnownDivide(2));
+# Cancel the worker in the frame of the target, whose loop ends only when the thread is cancelled.  A DEBUG build parks
+# the worker right after it has published the target's frame (dbg_read_stacks_at_frame()) and cancels it there, so the
+# request is seen in the target's loop for certain, not before the specialized callback target is reached, and the
+# cancellation must come from that frame; a release build cancels the worker once it runs the call, and checks the
+# outcome only.
+bool parking = exists_function("dbg_read_stacks_at_frame");
+for (int attempt = 0; attempt < 2; ++attempt) {
+    Counter running(1);
+    Counter go(1);
+    Counter done(1);
+    string outcome;
+    bool recovered = False;
+    bool in_target = False;
+    int tid = background (sub () {
+        on_exit done.dec();
+        try {
+            running.dec();
+            go.waitForZero();
+            bodyIntKnownWait();
+            outcome = "not cancelled";
+        } catch (hash<ExceptionInfo> ex) {
+            clear_thread_cancel();
+            outcome = ex.err;
+            in_target = boolean(select ex.callstack, $1.function == "bodyIntWait");
+            recovered = bodyIntKnownDivide(2) == 50;
+        }
+    })();
+    bool delivered = False;
+    bool observed = False;
+    if (parking) {
+        # the worker goes on once the hook is armed, and is cancelled while it is parked in the target's frame
+        hash<auto> parked = call_function("dbg_read_stacks_at_frame", ("bodyIntWait",), (), 60000,
+            sub () { go.dec(); },
+            sub (hash<auto> stacks_read) { delivered = cancel_thread(tid, "integer callback specialization test"); });
+        observed = parked.tid == tid && parked.stacks{string(tid)}[0].function == "bodyIntWait";
+    } else {
+        running.waitForZero();
+        go.dec();
+        delivered = cancel_thread(tid, "integer callback specialization test");
+    }
+    if (done.waitForZero(60s)) {
+        # End the entire test process, including its worker, if the cancellation is not seen.
+        printf("integer callback cancellation did not complete\n");
+        exit(1);
+    }
+    expect(True, delivered);
+    expect("THREAD-CANCELLED", outcome);
+    expect(True, recovered);
+    if (parking) {
+        expect(True, observed);
+        expect(True, in_target);
+    }
+}
+printf("integer-callbacks: ok\n");

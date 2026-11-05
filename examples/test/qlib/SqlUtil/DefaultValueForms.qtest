@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires PgsqlSqlUtilBase
+%exec-class DefaultValueFormsTest
+
+# Offline metadata fixture: unexpected database operations fail immediately.
+class DefaultValueDatasource inherits Qore::SQL::AbstractDatasource {
+    *string getPassword() { return NOTHING; }
+    *string getOSEncoding() { return "UTF-8"; }
+    *string getDBName() { return "offline"; }
+    *string getHostName() { return NOTHING; }
+    *string getUserName() { return NOTHING; }
+    *string getDBEncoding() { return "UTF-8"; }
+    *int getPort() { return NOTHING; }
+    string getDriverName() { return "freetds"; }
+    string getConfigString() { return "offline"; }
+    hash<auto> getConfigHash() { return {}; }
+    auto getClientVersion() { return "offline"; }
+    auto getServerVersion() { return "Microsoft SQL Server 2019"; }
+    bool inTransaction() { return False; }
+    auto selectRow(string sql, ...) {
+        if (sql == "select schema_name() as \"schema\"") {
+            return {"schema": "dbo"};
+        }
+        throw "UNEXPECTED-DB-ACCESS", sql;
+    }
+    auto exec(string sql, ...) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto execRaw(string sql) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto select(string sql, ...) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto selectTyped(string sql, ...) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto selectRows(string sql, ...) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto selectRowsTyped(string sql, ...) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto vexec(string sql, *softlist<auto> args) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto vselect(string sql, *softlist<auto> args) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto vselectTyped(string sql, *softlist<auto> args) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto vselectRow(string sql, *softlist<auto> args) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto vselectRows(string sql, *softlist<auto> args) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    auto vselectRowsTyped(string sql, *softlist<auto> args) { throw "UNEXPECTED-DB-ACCESS", sql; }
+    nothing beginTransaction() { throw "UNEXPECTED-DB-ACCESS"; }
+    nothing commit() { throw "UNEXPECTED-DB-ACCESS"; }
+    nothing rollback() { throw "UNEXPECTED-DB-ACCESS"; }
+    AbstractSQLStatement getSQLStatement() { throw "UNEXPECTED-DB-ACCESS"; }
+}
+
+class DefaultValueFormsTest inherits QUnit::Test {
+    constructor() : Test("DefaultValueForms", "1.0", \ARGV) {
+        addTestCase("SQL Server default expressions", \mssqlDefaults());
+        addTestCase("SQL Server normalization agrees with reference", \normalizationReference());
+        addTestCase("SQL Server existing constraint names and ordering", \constraintNames());
+        addTestCase("PostgreSQL numeric and string defaults", \pgsqlDefaults());
+        set_return_value(main());
+    }
+
+    private mssqlDefaults() {
+        assertEq(NOTHING, MssqlTable::normalizeDefaultValue(NOTHING));
+        foreach list<string> pair in (("", ""), ("-1", "-1"), ("((-1))", "-1"),
+                ("('abc')", "'abc'"), ("(getdate())", "getdate()"), ("((1)+(2))", "(1)+(2)"),
+                ("(1)+(2)", "(1)+(2)"), ("(('a''(b)'))", "'a''(b)'"), ("()", ""),
+                ("((())", "((())"), ("(()))", "(()))"), ("('abc)", "('abc)"),
+                ("(('é🙂)'))", "'é🙂)'")) {
+            assertEq(pair[1], MssqlTable::normalizeDefaultValue(pair[0]), pair[0]);
+            assertEq(convert_encoding(pair[1], "UTF-16LE"),
+                MssqlTable::normalizeDefaultValue(convert_encoding(pair[0], "UTF-16LE")), pair[0]);
+        }
+        string nested = "'deep(🙂)'";
+        for (int i = 0; i < 2000; ++i) {
+            nested = "(" + nested + ")";
+        }
+        assertEq("'deep(🙂)'", MssqlTable::normalizeDefaultValue(nested));
+    }
+
+    # Intentionally simple, bounded reference: validate, then strip one matching pair at a time.
+    private static string referenceDefault(string value) {
+        int depth = 0;
+        bool quoted = False;
+        for (int pos = 0; pos < value.size(); ++pos) {
+            string ch = value[pos];
+            if (ch == "'") { quoted = !quoted; }
+            else if (!quoted && ch == "(") { ++depth; }
+            else if (!quoted && ch == ")" && --depth < 0) { return value; }
+        }
+        if (depth || quoted) { return value; }
+        while (value.startsWith("(") && value.endsWith(")")) {
+            depth = 0;
+            quoted = False;
+            for (int i = 0; i < value.size(); ++i) {
+                string ch = value[i];
+                if (ch == "'") { quoted = !quoted; }
+                else if (!quoted && ch == "(") { ++depth; }
+                else if (!quoted && ch == ")" && !--depth && i != value.size() - 1) { return value; }
+            }
+            value = value.substr(1, -1);
+        }
+        return value;
+    }
+
+    private normalizationReference() {
+        list<string> values = ("",);
+        for (int length = 0; length <= 5; ++length) {
+            list<string> next = ();
+            foreach string value in (values) {
+                assertEq(referenceDefault(value), MssqlTable::normalizeDefaultValue(value), value);
+                if (length < 5) {
+                    foreach string ch in (("(", ")", "'", "a")) { next += value + ch; }
+                }
+            }
+            values = next;
+        }
+    }
+
+    private constraintNames() {
+        MssqlTable table(new DefaultValueDatasource(), "defaults_test");
+        string prefix = "alter table " + table.getSqlName();
+        foreach list<*string> pair in (("DF_plain", "DF_plain"), ("order", "[order]"),
+                ("name with spaces", "[name with spaces]"), ("odd]name", "[odd]]name]"),
+                # a letter of any script starts and continues a regular identifier (mssql_get_sql_identifier()),
+                # so it needs no brackets; a leading digit, a space or a "$" first does
+                ("é", "é"), ("DF_ü1", "DF_ü1"), ("1abc", "[1abc]"), ("é x", "[é x]"), ("$df", "[$df]"),
+                (NOTHING, "dv_col")) {
+            MssqlColumn oldcol("col", "varchar", "string", 80, False, "'old'");
+            oldcol.default_constraint = pair[0];
+            MssqlColumn newcol("col", "varchar", "string", 80, False, "'new'");
+            assertEq((prefix + " drop constraint " + pair[1],
+                prefix + " add constraint dv_col default 'new' for col"), oldcol.getModifySql(table, newcol));
+            newcol.def_val = NOTHING;
+            assertEq((prefix + " drop constraint " + pair[1],), oldcol.getModifySql(table, newcol));
+            MssqlColumn resized("col", "varchar", "string", 120, False, "'new'");
+            assertEq((prefix + " drop constraint " + pair[1],
+                prefix + " alter column col varchar(120) not null",
+                prefix + " add constraint dv_col default 'new' for col"), oldcol.getModifySql(table, resized));
+            assertEq((), oldcol.getModifySql(table, oldcol));
+        }
+    }
+
+    private pgsqlDefaults() {
+        foreach list<auto> row in ((NOTHING, NOTHING, True), (NOTHING, "1", False), ("1", NOTHING, False),
+                ("'-1'::integer", "-1", True), ("'-1.50'::numeric", "-1.5", True),
+                ("1::bigint", "+1", True), ("'1e2'::double precision", "100", True),
+                ("'-1'::integer", "1", False), ("'abc'::character varying", "'abc'", True),
+                ("'-1'::character varying", "-1", False), ("'bad'::numeric", "0", False),
+                ("1::integer", "1::bigint", False), ("now()", "now()", True),
+                ("nextval('seq'::regclass)", "nextval('seq'::regclass)", True), ("NULL", "NULL", True)) {
+            assertEq(row[2], PgsqlColumn::equalDefaultValue(row[0], row[1]), sprintf("%y", row));
+        }
+    }
+}

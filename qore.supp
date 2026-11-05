@@ -532,3 +532,35 @@
    obj:*
    ...
 }
+
+# ============================================================================
+# libLLVM (LLVM 21, Ubuntu aarch64): uninitialised reads inside LLVM itself
+# ============================================================================
+# JIT compilation reads uninitialised values in these LLVM functions on Ubuntu aarch64 (libLLVM.so.21.1, Ubuntu
+# 21.1.8): each value comes from a stack allocation of LLVM's own code, or from an LLVM object that the caller's
+# frame holds and LLVM constructs; a program that builds and runs the same pipeline with LLVM alone, without Qore,
+# shows the same reports in buildModuleSimplificationPipeline() and emitPatchableFunctionEntries().  Valgrind does not
+# report them on x86_64.
+
+{
+   libLLVM_PassBuilder_buildModuleSimplificationPipeline
+   Memcheck:Cond
+   fun:*PassBuilder*buildModuleSimplificationPipeline*
+   ...
+}
+
+{
+   libLLVM_AsmPrinter_emitPatchableFunctionEntries
+   Memcheck:Cond
+   fun:*AsmPrinter*emitPatchableFunctionEntries*
+   ...
+}
+
+{
+   libLLVM_InstCombinePass_internal
+   Memcheck:Cond
+   obj:*/libLLVM.so.21*
+   ...
+   fun:*InstCombinePass*run*
+   ...
+}

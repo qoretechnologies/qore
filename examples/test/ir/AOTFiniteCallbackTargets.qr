@@ -1,0 +1,294 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "FINITE-CALLBACK-TARGET", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+sub expectFloat(float expected, float actual) {
+    if (expected.nanp() ? !actual.nanp() : expected != actual
+            || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual))) {
+        throw "FINITE-CALLBACK-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+int sub one() { return 17; }
+int sub two() { return 19; }
+int sub wideA() { return 0x7fffffffffffffff; }
+int sub wideB() { return -0x7fffffffffffffff; }
+int sub intA(int value) { return (value * 33 + 17) & 65535; }
+int sub intB(int value) { return (value * 33 + 19) & 65535; }
+float sub floatA(float value) { return -value; }
+float sub floatB(float value) { return value + 0.5; }
+float sub positiveZero() { return 0.0; }
+float sub negativeZero() { return -0.0; }
+float sub collisionA() { return -3.0e307; }
+float sub collisionB() { return -6.0e307; }
+int sub zeroLoop(bool first, int count) {
+    code<int()> fn = first ? \one() : \two();
+    int sum = 0;
+    for (int i = 0; i < count; ++i) { sum += fn(); }
+    return sum;
+}
+int sub wideChoice(bool first) {
+    code<int()> fn = first ? \wideA() : \wideB();
+    return fn();
+}
+int sub unaryChoice(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub multipleCalls(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    int a = fn(value);
+    int b = fn(value + 1);
+    return a + b;
+}
+int sub multipleExpression(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    return fn(value) + fn(value + 1);
+}
+float sub floatChoice(bool first, float value) {
+    code<float(float)> fn = first ? \floatA() : \floatB();
+    return fn(value);
+}
+float sub zeroChoice(bool first) {
+    code<float()> fn = first ? \positiveZero() : \negativeZero();
+    return fn();
+}
+float sub collisionChoice(bool first) {
+    code<float()> fn = first ? \collisionA() : \collisionB();
+    return fn();
+}
+int sub nestedLoop(int count) {
+    int sum = 0;
+    for (int j = 0; j < count; ++j) {
+        code<int()> fn = (j & 1) ? \one() : \two();
+        for (int i = 0; i < 3; ++i) { sum += fn(); }
+    }
+    return sum;
+}
+int sub plainCodeChoice(bool first, int value) {
+    code fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub optionalCodeChoice(bool first, int value) {
+    *code<int(int)> fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub nonExactCodeChoice(bool first, int value) {
+    code<softint(int)> fn = first ? \intA() : \intB();
+    return fn(value);
+}
+int sub multipleGroups(bool first, int value) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    code<int()> zero = first ? \one() : \two();
+    int a = fn(value);
+    int z = zero();
+    return a + z;
+}
+int sub conditionalChoice(bool active, bool first, int value) {
+    if (active) {
+        code<int(int)> fn = first ? \intA() : \intB();
+        return fn(value);
+    }
+    return -1;
+}
+int sub reassigned(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    int value = fn();
+    fn = \wideA();
+    return value + (fn() == 0x7fffffffffffffff ? 1 : 0);
+}
+int sub unknown(bool first, code<int()> supplied) {
+    code<int()> fn = first ? \one() : supplied;
+    return fn();
+}
+int sub captured(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    code<int()> call = int sub () { return fn(); };
+    return call();
+}
+int sub change(reference<code<int()>> target) { target = \two(); return 0; }
+int sub aliased(bool first) {
+    code<int()> fn = first ? \one() : \wideA();
+    change(\fn);
+    return fn();
+}
+our int calls = 0;
+int sub effect() { ++calls; return 23; }
+int sub effectChoice(bool first) {
+    code<int()> fn = first ? \one() : \effect();
+    return fn();
+}
+int sub failing() { throw "EXPECTED-CALLBACK-ERROR", "failure"; }
+int sub throwingChoice(bool first) {
+    code<int()> fn = first ? \one() : \failing();
+    try { return fn(); }
+    catch (hash<ExceptionInfo> ex) { expect("EXPECTED-CALLBACK-ERROR", ex.err); return -1; }
+}
+int sub defaulted(int value = 29) { return value; }
+int sub defaultChoice(bool first) {
+    code<int()> fn = first ? \one() : \defaulted();
+    return fn();
+}
+int sub sideArg() { ++calls; return 31; }
+int sub evaluatedArg(bool first) {
+    code<int(int)> fn = first ? \intA() : \intB();
+    return fn(sideArg());
+}
+int sub interveningCall(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    sideArg();
+    return fn();
+}
+int sub constantTwice(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    int a = fn();
+    int b = fn();
+    return a + b;
+}
+int sub constantExpression(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    return fn() + fn();
+}
+int sub constantGroups(bool first) {
+    code<int()> a = first ? \one() : \two();
+    code<int()> b = first ? \two() : \one();
+    int x = a();
+    int y = b();
+    return x + y;
+}
+int sub constantConditional(bool active, bool first) {
+    if (active) {
+        code<int()> fn = first ? \one() : \two();
+        return fn();
+    }
+    return -1;
+}
+int sub laterEffect(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    int value = fn();
+    sideArg();
+    return value;
+}
+code<int()> sub escapingConstant(bool first) {
+    code<int()> fn = first ? \one() : \two();
+    return fn;
+}
+float sub infinity() { return @inf@; }
+float sub notANumber() { return @nan@; }
+float sub specialConstant(bool first) {
+    code<float()> fn = first ? \infinity() : \notANumber();
+    return fn();
+}
+foreach bool first in ((False, True)) {
+    expect(first ? 34 : 38, constantTwice(first));
+    expect(first ? 34 : 38, constantExpression(first));
+    expect(36, constantGroups(first));
+    expect(first ? 17 : 19, constantConditional(True, first));
+    expect(-1, constantConditional(False, first));
+    calls = 0;
+    expect(first ? 17 : 19, laterEffect(first));
+    expect(1, calls);
+    code<int()> escaped = escapingConstant(first);
+    expect(first ? 17 : 19, escaped());
+    expectFloat(first ? @inf@ : @nan@, specialConstant(first));
+
+    foreach int count in ((0, 1, 17, 4096)) { expect((first ? 17 : 19) * count, zeroLoop(first, count)); }
+    expect(first ? 0x7fffffffffffffff : -0x7fffffffffffffff, wideChoice(first));
+    foreach int value in ((0, 1, -1, 65535, 0x7fffffffffffffff, -0x7fffffffffffffff)) {
+        expect((value * 33 + (first ? 17 : 19)) & 65535, unaryChoice(first, value));
+    }
+    expect(first ? intA(5) + intA(6) : intB(5) + intB(6), multipleCalls(first, 5));
+    expect(first ? intA(5) + intA(6) : intB(5) + intB(6), multipleExpression(first, 5));
+    expect(first ? intA(5) : intB(5), plainCodeChoice(first, 5));
+    expect(first ? intA(5) : intB(5), optionalCodeChoice(first, 5));
+    expect(first ? intA(5) : intB(5), nonExactCodeChoice(first, 5));
+    expect(first ? intA(5) + 17 : intB(5) + 19, multipleGroups(first, 5));
+    expect(first ? intA(5) : intB(5), conditionalChoice(True, first, 5));
+    expect(-1, conditionalChoice(False, first, 5));
+    foreach float value in ((0.0, -0.0, 1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+        expectFloat(first ? -value : value + 0.5, floatChoice(first, value));
+    }
+    expectFloat(first ? 0.0 : -0.0, zeroChoice(first));
+    expectFloat(first ? -3.0e307 : -6.0e307, collisionChoice(first));
+    expect(first ? 18 : 20, reassigned(first));
+    expect(first ? 17 : 19, unknown(first, \two()));
+    expect(first ? 17 : 19, captured(first));
+    expect(19, aliased(first));
+    calls = 0;
+    expect(first ? 17 : 23, effectChoice(first));
+    expect(first ? 0 : 1, calls);
+    expect(first ? 17 : -1, throwingChoice(first));
+    expect(first ? 17 : 29, defaultChoice(first));
+    calls = 0;
+    expect((31 * 33 + (first ? 17 : 19)) & 65535, evaluatedArg(first));
+    expect(1, calls);
+    calls = 0;
+    expect(first ? 17 : 19, interveningCall(first));
+    expect(1, calls);
+}
+expect(0, nestedLoop(0));
+expect(57, nestedLoop(1));
+expect(9180, nestedLoop(170));
+int sub bindingA(int value) { return value + 17; }
+int sub bindingB(int value) { return value + 19; }
+int sub bindingVariadicA(int value, ...) { return value + 17; }
+int sub bindingVariadicB(int value, ...) { return value + 19; }
+float sub bindingFloatA(float value) { return value + 0.5; }
+float sub bindingFloatB(float value) { return value - 0.5; }
+string sub maybeAssigned(bool first, bool assign) {
+    code<int(int)> fn = first ? \bindingA() : \bindingB();
+    int value;
+    if (assign) { value = 4; }
+    try { return sprintf("%y", fn(value)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+string sub optionalInt(bool first, *int value) {
+    code<int(int)> fn = first ? \bindingA() : \bindingB();
+    try { return sprintf("%y", fn(value)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+string sub optionalFloat(bool first, *float value) {
+    code<float(float)> fn = first ? \bindingFloatA() : \bindingFloatB();
+    try { return sprintf("%y", fn(value)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+string sub arbitrary(bool first, auto value) {
+    code<int(int)> fn = first ? \bindingA() : \bindingB();
+    try { return sprintf("%y", fn(value)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+int sub variableSignature(bool first) {
+    code<int(int)> fn = first ? \bindingVariadicA() : \bindingVariadicB();
+    return fn(4);
+}
+string sub sparse(bool first) {
+    code<int(int)> fn = first ? \bindingA() : \bindingB();
+    list<int> values = (1, 2);
+    delete values[1];
+    try { return sprintf("%y", (map fn($1), values)); }
+    catch (hash<ExceptionInfo> ex) { return ex.err; }
+}
+sub expectBindingError(string actual) {
+    if (actual != "RUNTIME-OVERLOAD-ERROR" && actual != "RUNTIME-TYPE-ERROR") {
+        throw "FINITE-CALLBACK-BINDING", "expected an argument binding error; got " + actual;
+    }
+}
+foreach bool first in ((False, True)) {
+    string expectedInt = first ? "21" : "23";
+    expectBindingError(maybeAssigned(first, False));
+    expect(expectedInt, maybeAssigned(first, True));
+    expectBindingError(optionalInt(first, NOTHING));
+    expect(expectedInt, optionalInt(first, 4));
+    expectBindingError(optionalFloat(first, NOTHING));
+    expect(first ? "4.5" : "3.5", optionalFloat(first, 4.0));
+    expect(expectedInt, arbitrary(first, 4));
+    foreach auto value in ((NOTHING, 4.0, True, "4", (1, 2), {"x": 4})) {
+        expectBindingError(arbitrary(first, value));
+    }
+    expect(first ? 21 : 23, variableSignature(first));
+    expectBindingError(sparse(first));
+}
+printf("finite-callback-targets: ok\n");

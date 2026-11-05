@@ -97,10 +97,44 @@ call that AOT code runs inline (a summary of the callee's body) pushes the frame
 `qore_rt_push_native_inline_call_frame_aot()`, which makes the location of the callee's body, held by the callee's
 image, the runtime location until the pop; a summary proven not to raise an exception has no frame, as nothing can
 see it.
+The inlined body of a scalar subclass override (the bounded override alternatives of a method call site) keeps its
+frame even then: the ordinary call of the override publishes its frame (a compact native-method frame), and readers on
+other threads see it (`AOTOverrideFrameReaders.qr`). An inlined exact-class method body without exceptions still has no
+frame.
 
 AOT code keeps its runtime location as JIT code does: it stores the address of a constant `QoreProgramLocation` of its
 image when the line changes (and at the start of every block), so every thread's stack, its own current line
 included, can be read at any time; an exception takes its location and its call stack from them as they are.
+
+### Compact native-method frames
+
+The same-Program unary-integer AOT continuation uses
+`QoreCompactNativeMethodStackLocation` after the complete live PIC admission.
+It borrows the immutable admitted cache entry instead of copying three metadata
+pointers into each frame. The entry owns the call name and identifies the
+execution Program and user variant; the variant's statement block is immutable
+for this lifetime. Source-stripped entry/debug statements are separate and do
+not replace that block. The caller's AOT context owns the entry until after the
+call returns, including entries retired from PIC slots.
+
+The frame still stores the caller location and publishes on every call, even
+when the compiler has proven the body pure. A concurrent stack reader can
+observe that call. Its publishing helper is the last member: construction
+initializes the borrowed entry and location before publishing, and destruction
+unpublishes and waits for readers before either becomes invalid. Deferred frame
+helpers save the caller's statement and location eagerly, install the immutable
+callee body location, and restore both on every exit, including successful calls
+that never materialize object/class context and calls with no parse location.
+Cold overflow materialization does not overwrite the saved caller location.
+Eager/native-v1 calls keep their existing frame. Receiver and closure bodies
+obtain location slots through the explicit RuntimeConfig helper.
+
+`AOTNativeMethodEntry.qtest` and `AOTNameMethodContinuation.qtest` exercise the
+default frame and the eager control selected at runtime by
+`QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1`, including concurrent readers
+and debugger behavior. The compact-frame experiment is qualified in release
+and debug, not by a new sanitizer run; the earlier protocol validation below
+must not be read as sanitizer qualification of this change.
 
 ### Known limitation: external module frames
 
@@ -114,6 +148,36 @@ pushing), plus the corresponding change in each module.
 For the same reason, no virtual function or data member may be added to `QoreStackLocation` or to any public class
 derived from it (`QoreExternalStackLocation` and its subclasses): a module compiled against the previous header
 would have no vtable slot or member at the new position, and the library calling or reading it would crash.
+
+## What a walk observes
+
+A walk reads the stack as it is at the walker's load of `current_stack_location`, and a thread that pops a location
+during the walk waits until the walk has finished, with the restored location already published.  With the heavy
+barrier, the walker's flag store and its load are separated by the `membarrier()` system call, which takes far longer
+than a short call: every thread that keeps calling reaches its next pop in that time, sees the flag and waits, so the
+walk observes each such thread just after a pop, never inside a short leaf frame.  Without the heavy barrier (macOS,
+or `membarrier` unavailable) the load follows the store at once, and a walk samples a running thread at a random
+point.  Both are correct snapshots; a frame is published for the whole of its call either way.  A concurrent reader
+therefore cannot count on observing a leaf frame: on Linux the native fast paths (whose leaf frames last a few
+nanoseconds) were seen in no sample at all.
+
+Tests that must observe a frame use `dbg_read_stacks_at_frame()` (DEBUG builds only, `QDOM_DEBUG_HOOK`): the first
+other thread that publishes a location with one of the requested call names (and, optionally, called by a frame with
+one of the requested names) parks right after publishing it, and the caller of the function reads every thread's stack
+while it is parked; the result reports which kind of call published the frame (`native-leaf`, `native` or
+`ordinary`).  The check is made in the publishing functions of `lib/thread.cpp` behind one relaxed load of a flag, in
+DEBUG builds only.  It is not made for the location of an external module (`update_get_runtime_external_stack_location()`,
+see the known limitation above), whose virtual methods cannot be called when it is pushed.
+`examples/test/ir/AOT*FrameReaders.qr` and `concurrent-call-stacks.qtest` use it.
+
+Two optional callbacks make a frame that is published only once observable without polling: `on_armed` runs once the
+hook is armed, before the caller waits, and can let the thread go on (a `Counter` that the thread waits for), so the
+thread parks at its next matching location for certain; `on_parked` runs with the result while the thread is still
+parked, and can act on the thread in the frame (cancel it, so that it sees the request at its first cancellation
+check point in the frame).  The callbacks run without the hook's lock; one that raises an exception ends the call with
+it, and a thread parked goes on.  `AOTCallbackBodyTarget`, `AOTDirectRuntimeConfig`,
+`AOTIntegerCallbackSpecialization` and `AOTSharedCallbackInline` use them to cancel a thread in a native callback
+target's loop.
 
 ## Thread teardown
 

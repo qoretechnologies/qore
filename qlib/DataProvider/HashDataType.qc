@@ -570,6 +570,11 @@ response.setFieldList((id_field, name_field));
     /** In addition to the members that AbstractDataProviderType::getConfigInfo() returns, a hash type that declares
         no fields describes the type of its other fields in \c default_field_type_info, as getInfo() does.
 
+        @return the type's configuration description, including its default field type when applicable
+        @par Example
+        A configuration form can describe a hash-valued order field with
+        <tt>order_field.getType().getConfigInfo()</tt> without expanding its declared fields.
+
         @since DataProvider 3.11
     */
     hash<DataTypeInfo> getConfigInfo() {

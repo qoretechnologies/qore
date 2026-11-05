@@ -242,7 +242,7 @@ public class CsvByteOrderMarkTest inherits QUnit::Test {
                 (be32, "UTF-32LE", "UTF-32BE"),
             ) {
             string label = sprintf("%s declared as %s", c[2], c[1]);
-            foreach code read in ((\readStream(), \readFile(), \readProvider())) {
+            foreach code<list<hash<auto>>(binary, string)> read in ((\readStream(), \readFile(), \readProvider())) {
                 assertThrows("ENCODING-BYTE-ORDER-ERROR", "use " + c[2], read, (c[0], c[1]), label);
             }
         }

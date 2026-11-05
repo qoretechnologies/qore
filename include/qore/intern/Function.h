@@ -56,6 +56,9 @@ struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
+//! Parse-option fields taken from the execution Program when a user body has a different owner.
+DLLLOCAL QoreParseOptions get_user_variant_runtime_po_override_mask();
+
 // these data structures are all private to the library
 
 class LocalVar;
@@ -1002,7 +1005,15 @@ protected:
     //! the location of the body of the AOT-compiled function, which its image holds (QoreAOTFunc::body_loc)
     const QoreProgramLocation* aot_body_loc = nullptr;
     mutable std::atomic<QoreAOTContext*> cached_aot_ctx{nullptr};
-    mutable std::once_flag ir_lower_once;
+    //! Serializes the IR lowering attempts of this variant; see lowerIROnce()
+    mutable std::mutex ir_lower_mutex;
+    //! True once an IR lowering attempt has had a final result: the IR, or a failure that does not depend on the stack
+    mutable std::atomic_bool ir_lower_done{false};
+    //! The stack that remained above the stack limit in the last lowering attempt that stopped for lack of stack
+    /** 0 if no attempt stopped for lack of stack.  The failure depends on the stack of the call that made the
+        attempt, not on the code: lowering is attempted again by a call that has more stack than that.
+    */
+    mutable std::atomic<size_t> ir_lower_stack_room{0};
     //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
     mutable std::atomic<int> jit_compile_state{0};
     mutable std::atomic_bool ir_lower_failed{false};
@@ -1058,12 +1069,14 @@ protected:
         under --exec-mode=ir/jit/tiered so IR gaps surface as parse errors
         rather than silently falling back to AST.
     */
-    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false,
+    //! returns true if the result is final, false if lowering stopped for lack of stack; see lowerIROnce()
+    DLLLOCAL bool attemptIRLowering(const char* name, bool raise_on_failure = false,
             bool promote_to_ir = true) const;
     DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
-            bool mark_failure, bool raise_on_failure) const;
+            bool mark_failure, bool raise_on_failure, bool reflection_free = false,
+            bool unwind_order_proven = false) const;
     DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIR(const char* name,
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,
@@ -1142,6 +1155,17 @@ public:
         }
     }
 
+    //! Returns true if this is the variant of a closure
+    DLLLOCAL bool isClosureVariant() const {
+        return is_closure;
+    }
+
+    //! Returns the variables that the closure of this variant captures, in declaration order
+    /** @return the captured variables, or nullptr if this is not the variant of a closure or the closure's function is
+        not recorded
+    */
+    DLLLOCAL const LVarSet* getClosureCaptures() const;
+
     //! Returns the name of the call stack frame of a call of the variant, as an AST call names it
     /** The name of the function, qualified with its class for a method (see CodeEvaluationHelper::setCallName());
         built once, it is valid as long as the variant exists, so native code can push frames with it.
@@ -1151,6 +1175,15 @@ public:
             buildCallName();
         }
         return call_name;
+    }
+
+    //! Returns the immutable frame name if it has already been built, or nullptr
+    /** The acquire pairs with buildCallName()'s publication. Native frame construction can keep first-use
+        initialization in a separate slow path without preparing names for calls that never execute.
+        @return the name, valid as long as the variant exists, or nullptr before publication
+    */
+    DLLLOCAL const std::string* getCachedCallName() const {
+        return call_name_ready.load(std::memory_order_acquire) ? &call_name : nullptr;
     }
 
     DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& type_params) {
@@ -1303,6 +1336,11 @@ public:
         return cached_aot_fn != nullptr;
     }
 
+    //! Identity guard for an optional native function-reference adapter.
+    DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
+        return cached_aot_fn;
+    }
+
     //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown
     /** Where AOT code that a summary of the body takes the place of a call of the function runs
         (qore_rt_push_native_inline_call_frame_aot()).
@@ -1372,10 +1410,35 @@ public:
     //! promote_to_ir=false when the IR is only an internal batch body.
     DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false,
             bool promote_to_ir = true) const {
-        std::call_once(ir_lower_once, [this, name, raise_on_failure, promote_to_ir]() {
-            attemptIRLowering(name, raise_on_failure, promote_to_ir);
+        lowerIROnce([this, name, raise_on_failure, promote_to_ir]() {
+            return attemptIRLowering(name, raise_on_failure, promote_to_ir);
         });
     }
+
+    //! Runs an IR lowering attempt unless an attempt has had a final result; attempts are serialized
+    /** @param attempt the attempt: returns true if its result is final, false if lowering stopped for lack of stack
+
+        An attempt that stopped for lack of stack is not final: the stack depends on the call that made it, which can
+        be deep in a recursion, not on the code.  Another attempt is made only by a call that has more stack above
+        the stack limit than the last one that stopped (ir_lower_stack_room), so that the calls of a deep recursion
+        do not each attempt it again.
+    */
+    template <typename F>
+    DLLLOCAL void lowerIROnce(F&& attempt) const {
+        if (ir_lower_done.load(std::memory_order_acquire) || !hasLowerIRStackRoom()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(ir_lower_mutex);
+        if (ir_lower_done.load(std::memory_order_relaxed) || !hasLowerIRStackRoom()) {
+            return;
+        }
+        if (attempt()) {
+            ir_lower_done.store(true, std::memory_order_release);
+        }
+    }
+
+    //! Returns true if no lowering attempt stopped for lack of stack, or if this call has more stack than it had
+    DLLLOCAL bool hasLowerIRStackRoom() const;
 
     //! Eagerly compile to IR and optionally JIT when --exec-mode is specified
     //! This respects the user's explicit request to execute in a specific mode
@@ -1672,6 +1735,11 @@ public:
 
     DLLLOCAL unsigned numVariants() const {
         return vlist.size();
+    }
+
+    //! Finalized function signatures cannot acquire additional user variants.
+    DLLLOCAL bool isParseInitialized() const {
+        return parse_init_done;
     }
 
     //! Returns true if a call of this method can resolve to a variant inherited from a base class

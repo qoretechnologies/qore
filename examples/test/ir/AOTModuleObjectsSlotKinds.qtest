@@ -1,0 +1,376 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTModuleObjectsSlotKindsTest
+
+#! The expressions that native code reaches through AOT slots, in a module linked from per-file objects
+/** A module linked from per-file objects (<tt>qcc -m --from-objects</tt>) writes the slot tables of the code of its
+    objects from the slot map walk alone, without generating the code again, so every slot that the code uses must be
+    assigned by the walk; a module compiled in one pass and one linked from objects must give the same results.  The
+    module has an expression of every kind that the code generator reaches through a slot: find expressions, context
+    statements, regex operators, casts of every kind, switch statements with regex cases, lvalue operations,
+    background calls, constructors, constants, call and method references, closures and methods of a class hierarchy
+    called through a base class.
+*/
+class AOTModuleObjectsSlotKindsTest inherits QUnit::Test {
+    public {
+        const ModuleSource = "%modern
+module SlotObjs {
+    version = \"1.0\";
+    desc = \"AOT slots in a module linked from per-file objects\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+";
+
+        #! expressions reached through slots
+        const ExprsSource = "public namespace SlotObjs {
+public hashdecl Pair {
+    int a = 1;
+    string b = \"x\";
+}
+
+public enum Color {
+    Red = \"red\",
+    Green = \"green\",
+}
+
+const Limit = 2;
+const Names = (\"one\", \"two\", \"three\");
+
+public list<auto> sub find_rows() {
+    hash<auto> q = {\"a\": (1, 2, 3), \"b\": (\"x\", \"y\", \"z\")};
+    return find %b in q where (%a >= Limit);
+}
+
+public string sub context_rows() {
+    hash<auto> q = {\"a\": (3, 1, 2), \"b\": (\"c\", \"a\", \"b\")};
+    string out;
+    context (q) where (%a > 1) sortBy (%a) {
+        out += %b;
+    }
+    return out;
+}
+
+public list<auto> sub regexes(string s) {
+    return (s =~ /b+/, s !~ /^a/, s =~ x/(a)(b+)/, s =~ /B/i, s =~ x/([a-z])/g);
+}
+
+public list<auto> sub casts(auto h, auto l, auto o, string c) {
+    hash<string, int> th = cast<hash<string, int>>(h);
+    list<int> tl = cast<list<int>>(l);
+    hash<Pair> p = cast<hash<Pair>>({\"a\": 5});
+    Base b = cast<Base>(o);
+    *hash<string, int> nh = cast<*hash<string, int>>(NOTHING);
+    Color col = cast<Color>(c);
+    return (th.fullType(), tl.fullType(), p.fullType(), p.a, b.className(), nh, col.fullType(), col);
+}
+
+public string sub regex_switch(string s) {
+    switch (s) {
+        case /^a/: return \"starts with a\";
+        case =~ /z$/: return \"ends with z\";
+        case \"m\": return \"m\";
+        default: return \"other\";
+    }
+}
+
+public list<auto> sub lvalues() {
+    hash<auto!> inner = {\"b\": 1};
+    hash<auto!> h = {\"a\": inner};
+    h.a.b += 2;
+    h.a.c = Names[1];
+    list<auto!> l = (1, 2, 3, 4);
+    splice l, 1, 2, (\"x\",);
+    string s = \"abcdef\";
+    splice s, 1, 3;
+    ++h.a.b;
+    push h.a.l, 1;
+    list<auto> extracted = extract l, 0, 1;
+    return (h, l, s, extracted);
+}
+
+int sub bg_target(int v, Queue q) { q.push(v * 2); return v; }
+
+public int sub background_call(int v) {
+    Queue q();
+    background bg_target(v, q);
+    return q.get();
+}
+
+public list<auto> sub constructors() {
+    Base b();
+    Derived d();
+    hash<Pair> p = <Pair>{\"b\": \"y\"};
+    return (b.next(1), d.next(1), p.b, Names, Limit, Color::Green);
+}
+}
+";
+
+        #! a class hierarchy called through its base class
+        const ClassesSource = "public namespace SlotObjs {
+public class Base {
+    int next(int value) { return value + 1; }
+    static int twice(int v) { return v * 2; }
+    code selfRef() { return \\next(); }
+}
+public class Derived inherits Base {
+    int next(int value) { return value + 10; }
+}
+public class Third inherits Base {
+    int next(int value) { return value + 100; }
+}
+
+public int sub loop(Base receiver, int n) {
+    int value = 0;
+    for (int i = 0; i < n; ++i) {
+        value = receiver.next(value);
+    }
+    return value;
+}
+
+public list<auto> sub refs(Base b) {
+    code f = \\loop();
+    code m = \\b.next();
+    code s = \\Base::twice();
+    code c = int sub (int v) { return loop(b, v) + 1; };
+    return (f(b, 2), m(5), s(4), c(3), b.selfRef()(7));
+}
+}
+";
+
+        #! the script using the module
+        const HostSource = "%modern
+%requires SlotObjs
+SlotObjs::Base b();
+SlotObjs::Derived d();
+SlotObjs::Third t();
+list<string> out = (
+    sprintf(\"find=%y\", SlotObjs::find_rows()),
+    sprintf(\"context=%y\", SlotObjs::context_rows()),
+    sprintf(\"regexes=%y\", SlotObjs::regexes(\"abbc\")),
+    sprintf(\"casts=%y\", SlotObjs::casts({\"a\": 1}, (1, 2), d, \"red\")),
+    sprintf(\"switch=%y\", (map SlotObjs::regex_switch($1), (\"abc\", \"xyz\", \"m\", \"q\"))),
+    sprintf(\"lvalues=%y\", SlotObjs::lvalues()),
+    sprintf(\"background=%y\", SlotObjs::background_call(21)),
+    sprintf(\"constructors=%y\", SlotObjs::constructors()),
+    sprintf(\"loop=%y\", (SlotObjs::loop(b, 3), SlotObjs::loop(d, 3), SlotObjs::loop(t, 3))),
+    sprintf(\"refs=%y\", (SlotObjs::refs(b), SlotObjs::refs(t))),
+);
+map printf(\"%s\\n\", $1), out;
+";
+
+        #! empty regex patterns, lowered from the pattern string like any other regex
+        const EmptyRegexSource = "public namespace SlotObjs {
+public bool sub empty_match(string s) { return s =~ //; }
+public bool sub empty_nmatch(string s) { return s !~ //; }
+public *list<*string> sub empty_extract(string s) { return s =~ x//g; }
+public string sub empty_subst(string s) { s =~ s//-/; return s; }
+public string sub empty_subst_element(string s) { hash<auto> h = {\"a\": s}; h.a =~ s//+/; return h.a; }
+public string sub empty_case(string s) {
+    switch (s) {
+        case /^x/: return \"x\";
+        case //: return \"empty\";
+    }
+    return \"none\";
+}
+}
+";
+
+        #! prints the results of the empty regex patterns
+        const EmptyRegexHostSource = "%modern
+%requires SlotObjs
+list<string> subjects = (\"\", \"ab\", \"xy\");
+list<string> out = (
+    sprintf(\"match=%y\", (map SlotObjs::empty_match($1), subjects)),
+    sprintf(\"nmatch=%y\", (map SlotObjs::empty_nmatch($1), subjects)),
+    sprintf(\"extract=%y\", (map SlotObjs::empty_extract($1), subjects)),
+    sprintf(\"subst=%y\", (map SlotObjs::empty_subst($1), subjects)),
+    sprintf(\"element=%y\", (map SlotObjs::empty_subst_element($1), subjects)),
+    sprintf(\"case=%y\", (map SlotObjs::empty_case($1), subjects)),
+);
+map printf(\"%s\\n\", $1), out;
+";
+    }
+
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        *string expected;
+    }
+
+    constructor() : Test("AOT slots in modules linked from per-file objects", "1.0", \ARGV) {
+        addTestCase("source module", \sourceModule());
+        addTestCase("module compiled in one pass", \onePass());
+        addTestCase("module linked from per-file objects", \fromObjects());
+        addTestCase("empty regex patterns in both compiles", \emptyRegex());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static writeFile(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    #! runs a command and returns its exit status and output
+    private string runStatus(list<string> args, reference<int> status, *string modules) {
+        return backquote((modules ? "QORE_MODULE_DIR=" + quote(modules) + " " : "")
+            + "QORE_LIBDIR=" + quote(libdir) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map AOTModuleObjectsSlotKindsTest::quote($1), args).join(" ") + " 2>&1", \status);
+    }
+
+    #! runs a command and returns its output; the command must succeed
+    private string run(list<string> args, string label, *string modules) {
+        int status;
+        string output = runStatus(args, \status, modules);
+        assertEq(0, status, label + ": " + output);
+        return output;
+    }
+
+    #! writes the module source files to a new directory and returns the directory of the module
+    private string writeModule(string dir, hash<string, string> files = {"Exprs.qc": ExprsSource,
+            "Classes.qc": ClassesSource}, string host = HostSource) {
+        string mod_dir = dir + "/src/SlotObjs";
+        mkdir(dir + "/src");
+        mkdir(mod_dir);
+        writeFile(mod_dir + "/SlotObjs.qm", ModuleSource);
+        map writeFile(mod_dir + "/" + $1.key, $1.value), files.pairIterator();
+        writeFile(dir + "/host.q", host);
+        return mod_dir;
+    }
+
+    #! returns the output of the script with the source module
+    private string getExpected() {
+        if (!expected) {
+            TmpDir dir("qore-aot-objects-slots-src-");
+            writeModule(dir.path);
+            expected = run((qore, dir.path + "/host.q"), "source", dir.path + "/src");
+        }
+        return expected;
+    }
+
+    #! runs the script with the compiled module in each execution mode
+    private checkCompiled(string dir, string label, *string ast) {
+        # the directory holds only the compiled module, so the script cannot load the source instead
+        Dir modules();
+        modules.chdir(dir + "/modules");
+        assertEq(("SlotObjs.qmod",), sort(modules.listFiles()), label + ": compiled module only");
+        if (!ast) {
+            ast = getExpected();
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(ast, run((qore, "--exec-mode=" + mode, dir + "/host.q"), label + " " + mode,
+                dir + "/modules"), label + " " + mode);
+        }
+    }
+
+    #! compiles the module to per-file objects and links them; returns the output of the link
+    private string linkFromObjects(string dir, string mod_dir, string level, list<string> files,
+            reference<int> status) {
+        mkdir(dir + "/objects");
+        mkdir(dir + "/modules");
+        list<string> objs = ();
+        foreach string file in (("SlotObjs.qm",) + files) {
+            string obj = dir + "/objects/" + file + ".qo";
+            string out = runStatus((qcc, level, "-c", "--context=" + mod_dir, "-o", obj, mod_dir + "/" + file),
+                \status);
+            if (status) {
+                return out;
+            }
+            objs += obj;
+        }
+        return runStatus((qcc, level, "-m", "--from-objects", "--context=" + mod_dir, "-o",
+            dir + "/modules/SlotObjs.qmod") + objs, \status);
+    }
+
+    sourceModule() {
+        string out = getExpected();
+        # some results checked by hand: the other cases are compared with these
+        assertRegex("(?m)^find=\\[\"y\", \"z\"\\]$", out);
+        assertRegex("(?m)^context=\"bc\"$", out);
+        assertRegex("(?m)^loop=\\[3, 30, 300\\]$", out);
+        assertRegex("(?m)^background=42$", out);
+        assertRegex("(?m)^switch=\\[\"starts with a\", \"ends with z\", \"m\", \"other\"\\]$", out);
+        assertRegex("(?m)^casts=\\[\"hash<string, int>\", \"list<int>\", \"hash<Pair>\", 5, \"Derived\", null, "
+            "\"enum<Color>\", \"red\"\\]$", out);
+    }
+
+    onePass() {
+        foreach string level in (("-O0", "-O3")) {
+            TmpDir dir("qore-aot-objects-slots-one-");
+            string mod_dir = writeModule(dir.path);
+            mkdir(dir.path + "/modules");
+            run((qcc, level, "-m", "-o", dir.path + "/modules/SlotObjs.qmod", mod_dir), "one-pass compile " + level);
+            checkCompiled(dir.path, "one pass " + level);
+        }
+    }
+
+    fromObjects() {
+        foreach string level in (("-O0", "-O3")) {
+            TmpDir dir("qore-aot-objects-slots-obj-");
+            string mod_dir = writeModule(dir.path);
+            int status;
+            string out = linkFromObjects(dir.path, mod_dir, level, ("Exprs.qc", "Classes.qc"), \status);
+            assertEq(0, status, "per-file objects " + level + ": " + out);
+            checkCompiled(dir.path, "from objects " + level);
+        }
+    }
+
+    #! functions with an empty regex pattern compile in both compiles and give the results of the source module
+    /** An empty pattern is a pattern like any other: the code lowers the operation from the pattern string, and the
+        slot map walk skips the expression's slot in both compiles
+    */
+    emptyRegex() {
+        hash<string, string> files = {"EmptyRegex.qc": EmptyRegexSource};
+        string expected;
+        {
+            TmpDir dir("qore-aot-objects-slots-empty-src-");
+            writeModule(dir.path, files, EmptyRegexHostSource);
+            expected = run((qore, dir.path + "/host.q"), "empty regex source", dir.path + "/src");
+        }
+        # checked by hand: an empty pattern matches every subject; a substitution leaves an empty subject unchanged
+        assertRegex("(?m)^match=\\[True, True, True\\]$", expected);
+        assertRegex("(?m)^nmatch=\\[False, False, False\\]$", expected);
+        assertRegex("(?m)^subst=\\[\"\", \"-ab\", \"-xy\"\\]$", expected);
+        assertRegex("(?m)^element=\\[\"\", \"\\+ab\", \"\\+xy\"\\]$", expected);
+        assertRegex("(?m)^case=\\[\"empty\", \"empty\", \"x\"\\]$", expected);
+        foreach string level in (("-O0", "-O3")) {
+            {
+                TmpDir dir("qore-aot-objects-slots-empty-one-");
+                string mod_dir = writeModule(dir.path, files, EmptyRegexHostSource);
+                mkdir(dir.path + "/modules");
+                int status;
+                string out = runStatus((qcc, level, "-m", "-o", dir.path + "/modules/SlotObjs.qmod", mod_dir), \status);
+                assertEq(0, status, "empty regex one pass " + level + ": " + out);
+                # negative: no compile refuses the functions
+                assertNRegex("cannot serialize function|slot map walk did not assign", out);
+                checkCompiled(dir.path, "empty regex one pass " + level, expected);
+            }
+            {
+                TmpDir dir("qore-aot-objects-slots-empty-obj-");
+                string mod_dir = writeModule(dir.path, files, EmptyRegexHostSource);
+                int status;
+                string out = linkFromObjects(dir.path, mod_dir, level, ("EmptyRegex.qc",), \status);
+                assertEq(0, status, "empty regex per-file objects " + level + ": " + out);
+                assertNRegex("cannot serialize function|slot map walk did not assign", out);
+                checkCompiled(dir.path, "empty regex from objects " + level, expected);
+            }
+        }
+    }
+}

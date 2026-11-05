@@ -5,10 +5,10 @@
 # Regression test for the AOT serialization of the DebugStatement IR instruction (#5558 follow-up).
 #
 # A closure that is promoted to the IR tier (hot) in a program that allows debugging has its cached IR
-# lowered with per-statement DebugStatement hooks (QoreIROpcode::DebugStatement, opcode 412).  When such a
+# lowered with per-statement DebugStatement hooks (QoreIROpcode::DebugStatement, opcode 414).  When such a
 # closure is then compiled ahead of time, qcc serializes that cached IR into the AOT binary.  Before the fix,
 # classifyInstruction() had no mapping for QoreIRDebugStatementInstruction, so the AOT compile failed with
-#   "cannot serialize IR instruction opcode DebugStatement (412): ... has no AOT instruction group mapping".
+#   "cannot serialize IR instruction opcode DebugStatement (414): ... has no AOT instruction group mapping".
 # This broke every AOT build of a program built with debugging support (e.g. Qorus), whose closures are hot.
 #
 # The warmup is a const initializer, which qcc evaluates at parse-commit (i.e. during the compile itself).
@@ -38,7 +38,7 @@ if (!is_file(qcc_bin)) {
 string code = "%modern
 
 int sub warmComparator() {
-    code cmp = int sub (int a, int b) {
+    code<int(int, int)> cmp = int sub (int a, int b) {
         int diff = a - b;
         if (diff == 0) {
             return 0;
@@ -95,19 +95,21 @@ string exe_path = sprintf("/tmp/qore-aot-debuggable-closure-%d", getpid());
 on_exit {
     unlink(exe_path);
 }
+int compile_status;
 string compile_out = backquote(sprintf(
     "QORE_IR_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --parse-option=PO_ALLOW_DEBUGGER -O3 -o %s %s 2>&1",
-    libqore_dir, libqore_dir, qcc_bin, exe_path, script_path));
-if (!is_file(exe_path)) {
+    libqore_dir, libqore_dir, qcc_bin, exe_path, script_path), \compile_status);
+if (compile_status || !is_file(exe_path)) {
     printf("AOT compile of a warmed debuggable closure failed (DebugStatement serialization regression):\n%s",
         compile_out);
     exit(2);
 }
 
 # 3. the AOT executable must produce the same result as the interpreter tiers
+int aot_status;
 string aot_actual = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
-    libqore_dir, libqore_dir, exe_path));
-if (aot_actual != expected) {
+    libqore_dir, libqore_dir, exe_path), \aot_status);
+if (aot_status || aot_actual != expected) {
     printf("AOT result mismatch\nexpected:\n%sactual:\n%s", expected, aot_actual);
     exit(2);
 }

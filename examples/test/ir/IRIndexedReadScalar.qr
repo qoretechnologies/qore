@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-weak-references
+
+auto sub readIndexed(auto value, int index) {
+    auto result;
+    for (int iteration = 0; iteration < 3; ++iteration) {
+        result = value[index];
+    }
+    return result;
+}
+
+sub emitReads(auto value) {
+    foreach int index in ((-9223372036854775807 - 1, -4, -3, -1, 0, 1, 2, 3, 9223372036854775807)) {
+        try {
+            printf("%y\n", readIndexed(value, index));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("error:%s\n", ex.err);
+        }
+    }
+}
+
+list<int> values = (3, 7, 11);
+auto weak := values;
+reference<list<int>> ref = \values;
+emitReads(values);
+emitReads(weak);
+emitReads(ref);
+emitReads(<03070b>);
+emitReads(new buffer<int64>(values));
+emitReads("aé𐍈");
+emitReads((3, NOTHING, 11));
+emitReads(new buffer<*int64>((3, NOTHING, 11)));
+emitReads(());
+emitReads(binary());
+emitReads(new buffer<int64>(()));
+emitReads("");
+emitReads(NOTHING);
+emitReads(17);
+
+# Exercise actual value representations independently of the container's declared type.
+enum IndexedScalarText : string {
+    Short = "short",
+    Long = "enum value with a heap-allocated string"
+}
+
+auto sub temporaryRead(auto value) {
+    list<auto> source = (value,);
+    return readIndexed(source, 0);
+}
+
+auto sub heapRead() {
+    list<auto> source = ("owned string from a temporary container",);
+    return readIndexed(source, 0);
+}
+
+list<auto> scalar_values = (NOTHING, False, True, -17, 17, 9223372036854775807,
+    -9223372036854775807 - 1, 1.25, -0.0, "é"[0], "short",
+    "a string longer than inline storage", IndexedScalarText::Short, IndexedScalarText::Long,
+    <010203>, (1, 2), {"value": 7});
+foreach auto element in (scalar_values) {
+    auto result = temporaryRead(element);
+    printf("%s:%y\n", typename(result), result);
+}
+auto survivor = heapRead();
+printf("%s:%y\n", typename(survivor), survivor);

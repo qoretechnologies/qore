@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class ModuleCallSpecializationTest
+
+class ModuleCallSpecializationTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("Private AOT entries in compiled modules", "1.0", \ARGV) {
+        addTestCase("module calls preserve context, frames, cancellation and fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string module_path, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "QORE_MODULE_DIR=" + quote(module_path) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "));
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private string wrap(string fixture, string ns) {
+        string body = File::readTextFile(get_script_dir() + "/" + fixture + ".qr");
+        body = body.substr(body.find("%modern") + strlen("%modern"));
+        int start = body.find("\nexpect(");
+        assertTrue(start >= 0);
+        # Reuse the arithmetic, fallback, exception and joined cancellation checks unchanged.
+        return "namespace " + ns + " {\n" + body.substr(0, start)
+            + "\nsub run() {\n" + body.substr(start) + "\n}\n}\n";
+    }
+    private check() {
+        TmpDir dir("qore-module-call-specialization-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/source/ModuleCallSpecialization.qm";
+        write(source, "%modern\nmodule ModuleCallSpecialization {\n"
+            + "version = \"1.0\"; desc = \"Module native call regression\"; author = \"Qore\"; license = \"MIT\";\n}\n"
+            + "public namespace ModuleCallSpecialization {\n"
+            + wrap("AOTDirectRuntimeConfig", "Direct")
+            + wrap("AOTSharedCallbackInline", "Callback")
+            + "public sub run() { Direct::run(); Callback::run(); }\n}\n");
+        string host = dir.path + "/host.qr";
+        write(host, "%modern\n%requires ModuleCallSpecialization\nModuleCallSpecialization::run();\n");
+        string tail = ":" + (ENV.QORE_MODULE_DIR ?? "");
+        string expected = "direct-runtime-config: ok\ncallback-body-target: ok\n";
+        assertEq(expected, run((qore, "--exec-mode=ir", host), dir.path + "/source" + tail));
+        foreach string prefix in (("", "QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_CALLBACK_ENTRY_STATE=1 ",
+                "QORE_DISABLE_AOT_COMPANION_INLINE_STACK=1 ",
+                "QORE_CONTROL_AOT_NULL_COMPANION_STACK_LIMIT=1 ",
+                "QORE_CONTROL_AOT_NULL_CALLBACK_RUNTIME_CONFIG=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string artifact = dir.path + "/modules/ModuleCallSpecialization.qmod";
+                string generated = run((qcc, level, "--strip-source", "-m", "-o", artifact, source),
+                    dir.path + "/source" + tail, prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
+                    int companions = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string header = definition.split("\n")[0];
+                        if (header.contains("_fast_") && header.contains("_runtime_config(")) {
+                            ++companions;
+                        }
+                    }
+                    bool enabled = !prefix.contains("QORE_DISABLE_AOT_MODULE_CALL_SPECIALIZATION")
+                        && !prefix.contains("QORE_DISABLE_AOT_DIRECT_RUNTIME_CONFIG");
+                    assertEq(enabled, companions > 0, prefix);
+                }
+                assertEq(expected, run((qore, "--exec-mode=ir", host), dir.path + "/modules" + tail),
+                    prefix + level);
+            }
+        }
+    }
+}

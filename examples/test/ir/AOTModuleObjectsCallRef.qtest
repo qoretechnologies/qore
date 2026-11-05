@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTModuleObjectsCallRefTest
+
+#! Call references, closures and method references in a module linked from per-file objects
+/** The native code of a resolved function call reference (\c \\target()) loads its target from an expression slot.
+    A module linked from per-file objects (<tt>qcc -m --from-objects</tt>) writes its metadata from a slot map that is
+    built without lowering the code again, so that slot map must assign the slot that the code of each object uses;
+    when it did not, the linked module had fewer expression slots than its code and a call of the reference crashed.
+*/
+class AOTModuleObjectsCallRefTest inherits QUnit::Test {
+    public {
+        const ModuleSource = "%modern
+module RefObjs {
+    version = \"1.0\";
+    desc = \"call references in a module linked from per-file objects\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+";
+
+        #! the code of the module, in a file of its own
+        const RefsSource = "public namespace RefObjs {
+int sub target(int v) { return v * 3 + 1; }
+public int sub public_target(int v) { return v + 100; }
+string sub other(string s) { return s + \"!\"; }
+int sub unused_target(int v) { return -v; }
+
+public code sub get_ref() { return \\target(); }
+public code sub get_public_ref() { return \\public_target(); }
+public code sub get_string_ref() { return \\other(); }
+public code sub get_closure(int base) { return int sub (int v) { return base + target(v); }; }
+public code sub get_ref_closure() {
+    return int sub (int v) {
+        code f = \\target();
+        return f(v) + 1;
+    };
+}
+public list<code> sub get_refs() { return (\\target(), \\public_target(), \\target()); }
+public bool sub same_target() { return \\target() == \\target(); }
+
+public class Calc {
+    private {
+        int k;
+    }
+    constructor(int k) { self.k = k; }
+    int mul(int v) { return v * k; }
+    static int sq(int v) { return v * v; }
+    code getSelfRef() { return \\mul(); }
+    code getStaticRef() { return \\Calc::sq(); }
+    code getFuncRef() { return \\target(); }
+}
+public code sub get_method_ref(Calc c) { return \\c.mul(); }
+public code sub get_static_ref() { return \\Calc::sq(); }
+}
+";
+
+        #! the code of the module in a second file: references to functions of the first file
+        const MoreSource = "public namespace RefObjs {
+public code sub get_cross_ref() { return \\other(); }
+public int sub call_cross(int v) { code f = \\target(); return f(v) * 2; }
+}
+";
+
+        #! the script using the module
+        const HostSource = "%modern
+%requires RefObjs
+RefObjs::Calc c(5);
+list<string> out = (
+    sprintf(\"ref=%d\", RefObjs::get_ref()(4)),
+    sprintf(\"public-ref=%d\", RefObjs::get_public_ref()(4)),
+    sprintf(\"string-ref=%s\", RefObjs::get_string_ref()(\"x\")),
+    sprintf(\"closure=%d\", RefObjs::get_closure(10)(4)),
+    sprintf(\"ref-closure=%d\", RefObjs::get_ref_closure()(4)),
+    sprintf(\"refs=%y\", (map $1(2), RefObjs::get_refs())),
+    sprintf(\"same-target=%y\", RefObjs::same_target()),
+    sprintf(\"self-method-ref=%d\", c.getSelfRef()(4)),
+    sprintf(\"class-static-ref=%d\", c.getStaticRef()(4)),
+    sprintf(\"class-func-ref=%d\", c.getFuncRef()(4)),
+    sprintf(\"method-ref=%d\", RefObjs::get_method_ref(c)(4)),
+    sprintf(\"static-ref=%d\", RefObjs::get_static_ref()(4)),
+    sprintf(\"cross-ref=%s\", RefObjs::get_cross_ref()(\"y\")),
+    sprintf(\"call-cross=%d\", RefObjs::call_cross(2)),
+);
+map printf(\"%s\\n\", $1), out;
+";
+
+        #! the output of the script, computed by hand from the module's code
+        const Expected = "ref=13
+public-ref=104
+string-ref=x!
+closure=23
+ref-closure=14
+refs=[7, 102, 7]
+same-target=True
+self-method-ref=20
+class-static-ref=16
+class-func-ref=13
+method-ref=20
+static-ref=16
+cross-ref=y!
+call-cross=14
+";
+    }
+
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("AOT call references in modules linked from per-file objects", "1.0", \ARGV) {
+        addTestCase("source module", \sourceModule());
+        addTestCase("module compiled in one pass", \onePass());
+        addTestCase("module linked from per-file objects", \fromObjects());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static writeFile(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    #! runs a command and returns its output; the command must succeed
+    private string run(list<string> args, string label, *string modules) {
+        int status;
+        string output = backquote((modules ? "QORE_MODULE_DIR=" + quote(modules) + " " : "")
+            + "QORE_LIBDIR=" + quote(libdir) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map AOTModuleObjectsCallRefTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, label + ": " + output);
+        return output;
+    }
+
+    #! writes the module source files to a new directory and returns the directory of the module
+    private string writeModule(string dir) {
+        string mod_dir = dir + "/src/RefObjs";
+        mkdir(dir + "/src");
+        mkdir(mod_dir);
+        writeFile(mod_dir + "/RefObjs.qm", ModuleSource);
+        writeFile(mod_dir + "/Refs.qc", RefsSource);
+        writeFile(mod_dir + "/More.qc", MoreSource);
+        writeFile(dir + "/host.q", HostSource);
+        return mod_dir;
+    }
+
+    #! runs the script with the compiled module in each execution mode
+    private checkCompiled(string dir, string label) {
+        # the directory holds only the compiled module, so the script cannot load the source instead
+        Dir modules();
+        modules.chdir(dir + "/modules");
+        assertEq(("RefObjs.qmod",), sort(modules.listFiles()), label + ": compiled module only");
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, dir + "/host.q"), label + " " + mode,
+                dir + "/modules"), label + " " + mode);
+        }
+    }
+
+    sourceModule() {
+        TmpDir dir("qore-aot-objects-callref-src-");
+        writeModule(dir.path);
+        assertEq(Expected, run((qore, dir.path + "/host.q"), "source", dir.path + "/src"));
+    }
+
+    onePass() {
+        foreach string level in (("-O0", "-O3")) {
+            TmpDir dir("qore-aot-objects-callref-one-");
+            string mod_dir = writeModule(dir.path);
+            mkdir(dir.path + "/modules");
+            run((qcc, level, "-m", "-o", dir.path + "/modules/RefObjs.qmod", mod_dir), "one-pass compile " + level);
+            checkCompiled(dir.path, "one pass " + level);
+        }
+    }
+
+    fromObjects() {
+        foreach string level in (("-O0", "-O3")) {
+            TmpDir dir("qore-aot-objects-callref-obj-");
+            string mod_dir = writeModule(dir.path);
+            mkdir(dir.path + "/objects");
+            mkdir(dir.path + "/modules");
+            list<string> objs = ();
+            foreach string file in (("RefObjs.qm", "Refs.qc", "More.qc")) {
+                string obj = dir.path + "/objects/" + file + ".qo";
+                run((qcc, level, "-c", "--context=" + mod_dir, "-o", obj, mod_dir + "/" + file),
+                    "compile " + file + " " + level);
+                assertTrue(is_file(obj), "object of " + file + " " + level);
+                objs += obj;
+            }
+            run((qcc, level, "-m", "--from-objects", "--context=" + mod_dir, "-o",
+                dir.path + "/modules/RefObjs.qmod") + objs, "link " + level);
+            checkCompiled(dir.path, "from objects " + level);
+        }
+    }
+}

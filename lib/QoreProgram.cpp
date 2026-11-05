@@ -546,11 +546,11 @@ void qore_program_private::registerProgram() {
     qore_program_set.insert(pgm);
     // a new Program has its first reference
     programid_to_program_map.insert(programid_to_program_map_t::value_type(programId, pgm));
-    printd(5, "qore_program_private::registerProgram() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
+    printd(5, "qore_program_private::registerProgram() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, static_cast<int64>(programId));
 }
 
 qore_program_private::~qore_program_private() {
-    printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
+    printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, static_cast<int64>(programId));
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
         // the thread can be stopped.
@@ -574,7 +574,7 @@ qore_program_private::~qore_program_private() {
         assert(pi->second == pgm);
         programid_to_program_map.erase(pi);
     }
-    printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD " removed\n", this, pgm, (int64)programId);
+    printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD " removed\n", this, pgm, static_cast<int64>(programId));
 
     statementByFileIndex.clear();
     statementIds.clear();
@@ -3124,13 +3124,13 @@ void ThreadLocalProgramData::dbgExit(const StatementBlock* statement, QoreValue&
 }
 
 QoreProgram::~QoreProgram() {
-    printd(5, "QoreProgram::~QoreProgram() this: %p, pgmid: " QLLD "\n", this, (int64)priv->getProgramId());
+    printd(5, "QoreProgram::~QoreProgram() this: %p, pgmid: " QLLD "\n", this, static_cast<int64>(priv->getProgramId()));
     delete priv;
 }
 
 // setup independent program object
 QoreProgram::QoreProgram() : priv(new qore_program_private(this, PO_DEFAULT)) {
-    printd(5, "QoreProgram::QoreProgram() this: %p, pgmid: " QLLD "\n", this, (int64)priv->getProgramId());
+    printd(5, "QoreProgram::QoreProgram() this: %p, pgmid: " QLLD "\n", this, static_cast<int64>(priv->getProgramId()));
 }
 
 // setup independent program object
@@ -3143,7 +3143,7 @@ QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
 QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn)
         : priv(new qore_program_private(this, po, pgm)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: " QLLD "\n", this, pgm, priv,
-        (int64)priv->getProgramId());
+        static_cast<int64>(priv->getProgramId()));
     priv->exec_class = ec;
     if (ecn) {
         priv->exec_class_name = ecn;

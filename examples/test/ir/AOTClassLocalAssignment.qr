@@ -1,0 +1,357 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-weak-references
+%allow-opaque-references
+
+enum ClassLocalScalar : int { Sample = 7 }
+
+thread_local int destroyed = 0;
+class ClassLocalValue {
+    public { int id; }
+    constructor(int id) { self.id = id; }
+    destructor() { ++destroyed; }
+}
+class ClassLocalDerived inherits ClassLocalValue {
+    constructor(int id) : ClassLocalValue(id) { }
+}
+class ClassLocalGrandchild inherits ClassLocalDerived {
+    constructor(int id) : ClassLocalDerived(id) { }
+}
+class ClassLocalCycle inherits ClassLocalValue {
+    public { *ClassLocalCycle peer; }
+    constructor(int id) : ClassLocalValue(id) { self.peer = self; }
+}
+class ClassLocalThrowing {
+    destructor() {
+        ++destroyed;
+        throw "CLASS-LOCAL-DESTRUCTOR", "final owning local release";
+    }
+}
+class ClassLocalUnrelated {
+}
+class ClassLocalGenericDerived<T> inherits ClassLocalValue {
+    constructor(T id) : ClassLocalValue(int(id)) { }
+}
+class ClassLocalRawAccept<T> [legacy_raw_accepts] {
+    public { T value; }
+    constructor(T value) { self.value = value; }
+}
+class ClassLocalPrivate inherits private ClassLocalValue {
+    constructor() : ClassLocalValue(13) { }
+    static string check() {
+        ClassLocalPrivate value();
+        return privateContext(value);
+    }
+    static int accepted() {
+        ClassLocalPrivate value();
+        ClassLocalValue receiver = value;
+        return receiver.id;
+    }
+}
+class ClassLocalInternalBase {
+}
+class ClassLocalInternal inherits private:internal ClassLocalInternalBase {
+    static bool accepted() {
+        ClassLocalInternal value();
+        ClassLocalInternalBase receiver = value;
+        return receiver.className() == "ClassLocalInternal";
+    }
+}
+class ClassLocalInternalChild inherits ClassLocalInternal {
+}
+
+string sub checkedInternalSource(auto input) {
+    try {
+        ClassLocalInternalBase receiver = input;
+        return receiver.className();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub rawClassSource(auto input) {
+    ClassLocalRawAccept receiver = input;
+    return int(receiver.value);
+}
+
+string sub parameterizedClassSource(auto input) {
+    try {
+        ClassLocalRawAccept<int> receiver = input;
+        return sprintf("%d", receiver.value);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# Argument acceptance happens in the caller's context; its class annotation
+# alone does not prove private-inheritance access for this local assignment.
+string sub privateContext(ClassLocalValue input) {
+    try {
+        ClassLocalValue receiver = input;
+        return "unexpected-private-access";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub classLocalPhi(int count, ClassLocalValue left, ClassLocalValue right) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        ClassLocalValue receiver = (i & 1) ? right : left;
+        total += receiver.id;
+    }
+    return total;
+}
+
+int sub classLocalInvoke(ClassLocalValue input) {
+    try {
+        ClassLocalValue receiver = input;
+        return receiver.id;
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+string sub checkedSource(auto input) {
+    try {
+        ClassLocalValue receiver = input;
+        return string(receiver.id);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub removedSource(bool erase) {
+    ClassLocalValue source(7);
+    if (erase) { remove source; }
+    try {
+        ClassLocalValue receiver = source;
+        return string(receiver.id);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub capturedSource() {
+    ClassLocalValue source(7);
+    code<auto()> clear = sub () { remove source; };
+    clear();
+    try {
+        ClassLocalValue receiver = source;
+        return "unexpected-captured-value";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+sub clearReference(reference<ClassLocalValue> value) { remove value; }
+string sub referencedSource() {
+    ClassLocalValue source(7);
+    clearReference(\source);
+    try {
+        ClassLocalValue receiver = source;
+        return "unexpected-reference-value";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub weakSource(bool expire) {
+    ClassLocalValue owner(11);
+    *ClassLocalValue source := owner;
+    if (expire) { remove owner; }
+    try {
+        ClassLocalValue receiver = source;
+        return string(receiver.id);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub opaqueSource() {
+    int before = destroyed;
+    {
+        ClassLocalValue owner(53);
+        ClassLocalValue source @= owner;
+        remove owner;
+        ClassLocalValue receiver = source;
+        remove source;
+        if (receiver.id != 53 || destroyed != before) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "opaque initializer lost its owned value";
+        }
+    }
+    return destroyed - before;
+}
+
+int sub classLocalLifetime(bool throwing) {
+    int before = destroyed;
+    try {
+        ClassLocalValue source(9);
+        ClassLocalValue receiver = source;
+        source = receiver;
+        if (throwing) { throw "CLASS-LOCAL-EXPECTED", "unwind owned aliases"; }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "CLASS-LOCAL-EXPECTED") { rethrow; }
+    }
+    return destroyed - before;
+}
+
+int sub failedReassignment(auto input) {
+    ClassLocalValue receiver(17);
+    try {
+        receiver = input;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+    }
+    return receiver.id;
+}
+
+# After the input owner is removed, the initializer's runtime slot and cache
+# must keep the object alive. A weak observer does not provide an extra owner.
+int sub classLocalOwnedAlias(bool throwing) {
+    int before = destroyed;
+    *ClassLocalValue observer;
+    try {
+        ClassLocalValue source(47);
+        ClassLocalValue receiver = source;
+        observer := receiver;
+        remove source;
+        if (destroyed != before || receiver.id != 47 || observer.id != 47) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "initializer did not retain its own reference";
+        }
+        if (throwing) { throw "CLASS-LOCAL-EXPECTED", "unwind the remaining owner"; }
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "CLASS-LOCAL-EXPECTED") { rethrow; }
+    }
+    if (observer) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "initializer retained its reference after scope exit";
+    }
+    return destroyed - before;
+}
+
+# Reuse the empty runtime slot after both ordinary and exceptional exits. The
+# initializer must be a real root for cycle collection, not just a strong owner.
+sub classLocalRepeatedCycleRoot() {
+    int before = destroyed;
+    for (int i = 0; i < 4; ++i) {
+        *ClassLocalValue observer;
+        try {
+            ClassLocalCycle source(i);
+            ClassLocalValue receiver = source;
+            observer := receiver;
+            remove source;
+            if (destroyed != before + i || receiver.id != i || observer.id != i) {
+                throw "CLASS-LOCAL-ASSIGNMENT", "initializer lost its cycle root";
+            }
+            if (i & 1) { throw "CLASS-LOCAL-EXPECTED", "unwind the cycle root"; }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "CLASS-LOCAL-EXPECTED") { rethrow; }
+        }
+        if (observer || destroyed != before + i + 1) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "cleared initializer retained its cycle root";
+        }
+    }
+}
+
+# Cleanup must propagate destructor exceptions after the other owner is removed.
+sub classLocalThrowingCleanup() {
+    int before = destroyed;
+    bool caught = False;
+    try {
+        ClassLocalThrowing source();
+        ClassLocalThrowing receiver = source;
+        remove source;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "CLASS-LOCAL-DESTRUCTOR") { rethrow; }
+        caught = True;
+    }
+    if (!caught || destroyed != before + 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "final cleanup lost a destructor or its exception";
+    }
+}
+
+# A prepared slot is storage, not a promise that its live value is still strong.
+sub classLocalRetaggedCleanup(bool opaque) {
+    int before = destroyed;
+    {
+        ClassLocalValue owner(61);
+        ClassLocalValue receiver = owner;
+        if (opaque) { receiver @= owner; }
+        else { receiver := owner; }
+        if (receiver.id != 61) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "retagged class local lost its value";
+        }
+        remove owner;
+    }
+    if (destroyed != before + 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "retagged class-local cleanup retained an owner";
+    }
+}
+
+code<int()> sub escapedTarget(ClassLocalValue input) {
+    ClassLocalValue receiver = input;
+    return int sub () { return receiver.id; };
+}
+
+ClassLocalValue left(3);
+ClassLocalDerived right(5);
+for (int round = 0; round < 8; ++round) {
+    classLocalThrowingCleanup();
+    classLocalRetaggedCleanup(False);
+    classLocalRetaggedCleanup(True);
+    classLocalRepeatedCycleRoot();
+    foreach auto rejected in ((NULL, True, 7, 1.25, 9223372036854775807, -3.0e307,
+            "short", "not a class-local object", (1, 2), {"key": 1}, ClassLocalScalar::Sample)) {
+        if (checkedSource(rejected) != "RUNTIME-TYPE-ERROR") {
+            throw "CLASS-LOCAL-ASSIGNMENT", "non-object initializer was accepted";
+        }
+    }
+    if (opaqueSource() != 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "opaque initializer retained its reference after scope exit";
+    }
+    if (rawClassSource(new ClassLocalRawAccept<int>(29)) != 29
+            || rawClassSource(new ClassLocalRawAccept<string>("31")) != 31
+            || checkedSource(new ClassLocalGenericDerived<int>(37)) != "37"
+            || checkedSource(new ClassLocalUnrelated()) != "RUNTIME-TYPE-ERROR"
+            || parameterizedClassSource(new ClassLocalRawAccept<int>(41)) != "41"
+            || parameterizedClassSource(new ClassLocalRawAccept<string>("43")) != "RUNTIME-TYPE-ERROR"
+            || ClassLocalPrivate::accepted() != 13) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "class access or generic acceptance changed";
+    }
+    # Identity at a base edge must still accumulate private access and reject
+    # a non-top-level internal edge before matching its exact class pointer.
+    if (checkedSource(new ClassLocalGrandchild(43)) != "43"
+            || checkedSource(new ClassLocalPrivate()) != "RUNTIME-TYPE-ERROR"
+            || checkedInternalSource(new ClassLocalInternal()) != "RUNTIME-TYPE-ERROR"
+            || checkedInternalSource(new ClassLocalInternalChild()) != "RUNTIME-TYPE-ERROR"
+            || !ClassLocalInternal::accepted()) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "exact class lookup bypassed an inheritance access edge";
+    }
+    int capture_before = destroyed;
+    {
+        code<int()> reader = escapedTarget(new ClassLocalValue(23));
+        if (reader() != 23 || destroyed != capture_before) {
+            throw "CLASS-LOCAL-ASSIGNMENT", "captured initializer lost its owned value";
+        }
+    }
+    if (destroyed != capture_before + 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "captured initializer retained its value after scope exit";
+    }
+    if (failedReassignment("wrong") != 17 || failedReassignment(NOTHING) != 17) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "failed reassignment changed the previous value";
+    }
+    if (classLocalOwnedAlias(False) != 1 || classLocalOwnedAlias(True) != 1) {
+        throw "CLASS-LOCAL-ASSIGNMENT", "initializer changed final-owner destruction";
+    }
+    printf("%d:%d:%d:%d:%d:%d\n", classLocalPhi(0, left, right),
+        classLocalPhi(6, left, right), classLocalInvoke(right),
+        classLocalLifetime(False), classLocalLifetime(True), classLocalPhi(1, left, right));
+    printf("%s:%s:%s:%s:%s:%s:%s:%s:%s\n", checkedSource(left),
+        checkedSource("wrong"), checkedSource(NOTHING), removedSource(False),
+        removedSource(True), capturedSource(), referencedSource(),
+        weakSource(False), weakSource(True));
+    printf("%s\n", ClassLocalPrivate::check());
+}
+printf("class-local-assignment: ok\n");

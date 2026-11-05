@@ -256,9 +256,16 @@ static int read_date_suffix(const char* str, const char* p, bool after_time, con
         }
     }
 
-    // trailing white space
+    // Trailing whitespace can be arbitrarily long; keep parsing cancellable.
+    unsigned cancel_count = 0;
     while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
         ++p;
+        if (++cancel_count == 100) {
+            cancel_count = 0;
+            if (qore_check_cancel(xsink, "date/time suffix parsing")) {
+                return -1;
+            }
+        }
     }
     if (*p) {
         if (xsink) {
@@ -292,11 +299,15 @@ static bool is_ascii_digit(char c) {
     @param p the position of the number; on success, the position after it
     @param val the integer part, with the sign
     @param frac the fraction, with the same sign as the number, or 0
+    @param has_fraction true if a decimal sign was present, including an all-zero fraction
     @param err set to a description of the error if the number cannot be read
+    @param xsink receives a cancellation exception, if provided
 
-    @return 0 if the number was read, -1 if not
+    @return 0 if the number was read, -1 if not, or -2 if parsing was cancelled
 */
-static int get_duration_number(const char*& p, int& val, double& frac, const char*& err) {
+static int get_duration_number(const char*& p, int& val, double& frac, bool& has_fraction, const char*& err,
+        ExceptionSink* xsink) {
+    has_fraction = false;
     bool negative = *p == '-';
     if (negative) {
         ++p;
@@ -308,6 +319,7 @@ static int get_duration_number(const char*& p, int& val, double& frac, const cha
     }
 
     int64 rc = 0;
+    unsigned cancel_count = 0;
     do {
         rc = (10 * rc) + ((*p) - '0');
         if (rc > std::numeric_limits<int>::max()) {
@@ -315,10 +327,18 @@ static int get_duration_number(const char*& p, int& val, double& frac, const cha
             return -1;
         }
         ++p;
+        // Leading zeroes can make even an in-range integer arbitrarily long.
+        if (++cancel_count == 100) {
+            cancel_count = 0;
+            if (qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                return -2;
+            }
+        }
     } while (is_ascii_digit(*p));
 
     frac = 0.0;
     if (*p == '.' || *p == ',') {
+        has_fraction = true;
         ++p;
         if (!is_ascii_digit(*p)) {
             err = "a decimal sign is not followed by digits";
@@ -327,6 +347,12 @@ static int get_duration_number(const char*& p, int& val, double& frac, const cha
         const char* p0 = p;
         while (is_ascii_digit(*p)) {
             ++p;
+            if (++cancel_count == 100) {
+                cancel_count = 0;
+                if (qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                    return -2;
+                }
+            }
         }
         QoreString str("0.");
         str.concat(p0, p - p0);
@@ -1453,8 +1479,12 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
             ++q;
         }
         const char* e = q;
+        unsigned cancel_count = 0;
         while (is_ascii_digit(*e)) {
             ++e;
+            if (++cancel_count % 100 == 0 && qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                return -1;
+            }
         }
         size_t digits = e - q;
         if (!after_t && ((digits == 4 && *e == '-')
@@ -1473,11 +1503,18 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
     // true once a component has been read, and once a component has been read after the time designator
     bool have_component = false;
     bool have_time_component = false;
+    unsigned component_count = 0;
     // the last component read, to keep the order of ISO 8601
     int last = -1;
     // true if the last component read has a decimal fraction, which only the last component may have
     bool have_fraction = false;
     while (true) {
+        if (++component_count == 10) {
+            component_count = 0;
+            if (qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                return -1;
+            }
+        }
         if (*p == 'T' || *p == 't') {
             if (time) {
                 return duration_error(xsink, str, p, "the time designator 'T' is repeated");
@@ -1488,8 +1525,15 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
 
         // the end of the string, which can have trailing white space
         if (!*p || is_duration_trailing_ws(*p)) {
+            unsigned cancel_count = 0;
             while (is_duration_trailing_ws(*p)) {
                 ++p;
+                if (++cancel_count == 100) {
+                    cancel_count = 0;
+                    if (qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                        return -1;
+                    }
+                }
             }
             if (*p) {
                 return duration_error(xsink, str, p, "unexpected text after white space");
@@ -1506,7 +1550,11 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
         double d = 0.0;
         int val = 0;
         const char* err = nullptr;
-        if (get_duration_number(p, val, d, err)) {
+        int number_rc = get_duration_number(p, val, d, have_fraction, err, xsink);
+        if (number_rc == -2) {
+            return -1;
+        }
+        if (number_rc) {
             return duration_error(xsink, str, p, err);
         }
 
@@ -1617,13 +1665,6 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
         }
 
         last = comp;
-        // a fraction was given if the number has a decimal sign, even when its digits are zero
-        for (const char* q = num; q < p; ++q) {
-            if (*q == '.' || *q == ',') {
-                have_fraction = true;
-                break;
-            }
-        }
         have_component = true;
         if (time) {
             have_time_component = true;
@@ -1712,13 +1753,17 @@ int qore_relative_time::setIso8601Alternative(const char* str, const char* p, Ex
                     return duration_error(xsink, str, p, "a decimal sign is not followed by digits");
                 }
                 int dlen = 0;
+                unsigned cancel_count = 0;
                 while (is_ascii_digit(*p)) {
                     // excess digits beyond microsecond resolution are ignored
                     if (dlen < 6) {
                         n_us = n_us * 10 + (*p - '0');
+                        ++dlen;
                     }
-                    ++dlen;
                     ++p;
+                    if (++cancel_count % 100 == 0 && qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+                        return -1;
+                    }
                 }
                 while (dlen < 6) {
                     n_us *= 10;
@@ -1728,8 +1773,12 @@ int qore_relative_time::setIso8601Alternative(const char* str, const char* p, Ex
         }
     }
 
+    unsigned cancel_count = 0;
     while (is_duration_trailing_ws(*p)) {
         ++p;
+        if (++cancel_count % 100 == 0 && qore_check_cancel(xsink, "ISO 8601 duration parsing")) {
+            return -1;
+        }
     }
     if (*p) {
         return duration_error(xsink, str, p, "unexpected text in a duration in the alternative format");

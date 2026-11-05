@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class FunctionDebuggerTest
+
+#! Native AOT calls of user functions and static methods honor an attached debugger
+/** While a debugger is attached, a function or static method that AOT code calls natively (fast entry, inline body
+    summary, self-recursive entry) reports the function events of the ordinary call, also when the debugger is
+    attached during a loop or a recursion that already runs natively; a Program that cannot be debugged has no check.
+*/
+class FunctionDebuggerTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native AOT function calls honor debuggers", "1.0", \ARGV) {
+        addTestCase("debugger attached before and during native function calls", \checkDebugger());
+        addTestCase("a Program that cannot be debugged has no debugger check", \checkNoDebugging());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private static int count(string text, string pattern) {
+        return (select text.split("\n"), regex($1, pattern)).size();
+    }
+
+    private checkDebugger() {
+        string source = get_script_dir() + "/AOTFunctionDebugger.qr";
+        string expected = "function-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-function-debugger-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_LAZY_FAST_ARGS=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("callOnce", "callTry", "callLoop", "callLoopTry")) {
+                    string fn = body(ir, name);
+                    # the native calls stay selected; each has a debugger check loaded at every call
+                    assertTrue(regex(fn, "aot_batch_fast"), name + " native fast entries " + label);
+                    assertTrue(regex(fn, "\naot_call_debugger[0-9]*:"), name + " inline call detours " + label);
+                    int gates = count(fn, "call ptr @qore_rt_get_aot_method_debugger_gate_v1");
+                    assertTrue(gates >= 3, sprintf("%s gates %s: %d", name, label, gates));
+                    assertEq(gates, count(fn, "load atomic ptr, ptr %method_debugger_gate[0-9]* monotonic"),
+                        name + " live gate loads " + label);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), label + " " + runtime);
+                }
+            }
+        }
+    }
+
+    private checkNoDebugging() {
+        string source = get_script_dir() + "/AOTFunctionNoDebugging.qr";
+        string expected = "function-no-debugging: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-function-no-debugging-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            string ir = run((qcc, level, "--strip-source", "-o", executable, source), "QORE_DUMP_LLVM_IR=1 ");
+            # no debugger check anywhere, but the same native calls and inline overrides
+            assertFalse(regex(ir, "qore_rt_get_aot_method_debugger_gate_v1"), "no gate " + level);
+            assertFalse(regex(ir, "aot_call_debugger|method_debugger_detached"), "no detour " + level);
+            assertFalse(regex(ir, "qore_rt_call_self_recursive_v2"), "no JIT self-recursion check " + level);
+            string fn = body(ir, "ndLoop");
+            assertTrue(regex(fn, "aot_batch_fast"), "native fast entries " + level);
+            assertTrue(regex(fn, "\nscalar_override[0-9]*:"), "inline overrides " + level);
+            assertEq(expected, run((executable,)), level);
+        }
+    }
+}

@@ -50,10 +50,14 @@ class RuntimeConfig;
 #ifndef QORE_STACK_GUARD
 // Fallback only; platform-specific headers (macros-x86_64.h, macros-aarch64.h,
 // etc.) should define QORE_STACK_GUARD before this header is included.
-// The guard must be larger than the thread startup overhead (stack consumed
-// between the actual thread stack top and ThreadData::stack_start initialization).
+// The guard must hold the code that runs between two stack checks and after a
+// check fails (see macros-x86_64.h); where the stack limit is not anchored to the
+// real end of the stack, also the stack used before ThreadData::stack_start is set.
 #define QORE_STACK_GUARD (1024 * 8)
 #endif // QORE_STACK_GUARD
+
+//! The additional stack guard of the primary thread (issue #4392)
+#define QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD (64 * 1024)
 
 class Operator;
 class Context;
@@ -334,6 +338,12 @@ DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
 */
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm = nullptr);
+//! As update_get_runtime_stack_location(), for the location of an external module
+/** Such a location is pushed by QoreExternalRuntimeStackLocationHelper before the module's class is constructed (see
+    design/call-stack-publication.md), so no virtual method of it may be called when it is pushed.
+*/
+DLLLOCAL const QoreStackLocation* update_get_runtime_external_stack_location(QoreStackLocation* stack_loc,
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm);
 //! As update_get_runtime_stack_location(), and also sets the runtime location to the builtin location
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc,
@@ -738,14 +748,22 @@ class RuntimeParseOptionsOverrideHelper {
 public:
     //! sets an override that inherits no caller restrictions
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
+    //! Use an already acquired same-thread native context for this scope.
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc, const QoreParseOptions& mask,
+        const QoreParseOptions& value);
     //! sets the override of a call
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o);
+    //! sets the override of a call using an already acquired same-thread context
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc, const QoreCallParseOptionsOverride& o);
     DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
 
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const RuntimeParseOptionsOverrideHelper&) = delete;
     DLLLOCAL RuntimeParseOptionsOverrideHelper& operator=(const RuntimeParseOptionsOverrideHelper&) = delete;
 
 private:
+    DLLLOCAL RuntimeParseOptionsOverrideHelper(ThreadData* td, const QoreParseOptions& mask,
+        const QoreParseOptions& value);
+    ThreadData* td;
     QoreParseOptions old_mask;
     QoreParseOptions old_value;
     QoreParseOptions old_replace;
@@ -1015,6 +1033,15 @@ public:
     }
 
 protected:
+    //! Tag of the constructor for the location of an external module
+    struct ExternalLocation {};
+
+    //! Pushes the location of an external module, which may not be fully constructed yet
+    DLLLOCAL QoreProgramStackLocationHelper(QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt,
+            QoreProgram*& current_pgm, ExternalLocation) :
+        stack_loc(update_get_runtime_external_stack_location(stack_loc, current_stmt, current_pgm)) {
+    }
+
     const QoreStackLocation* stack_loc;
 };
 
@@ -1398,6 +1425,9 @@ class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
     DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    //! Preserve full Program entry using a live native context from this thread.
+    DLLLOCAL ProgramThreadCountContextHelper(RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm,
+        bool runtime);
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
@@ -1417,6 +1447,8 @@ public:
     }
 
 protected:
+    //! Borrowed only for this scope; all entry and restoration occurs on the same thread.
+    ThreadData* context_td = nullptr;
     QoreProgram* old_pgm = nullptr;
     ThreadLocalProgramData* old_tlpd = nullptr;
     ProgramThreadCountContextHelper* old_ctx = nullptr;
@@ -1428,6 +1460,9 @@ protected:
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+
+private:
+    DLLLOCAL void setWithThreadData(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 };
 
 class ProgramRuntimeParseContextHelper {

@@ -110,6 +110,18 @@ class DapClient {
         return map $1.body.output, backlog, $1.event == "output" && $1.body.category == category;
     }
 
+    #! Waits for output in the given category, joining fragments up to the requested character count
+    string waitForOutput(string category, int size) {
+        string output;
+        while (output.size() < size) {
+            hash<auto> msg = waitFor(bool sub(hash<auto> m) {
+                return m.type == "event" && m.event == "output" && m.body.category == category;
+            }, category + " output");
+            output += msg.body.output;
+        }
+        return output;
+    }
+
     #! Reads the next message; returns NOTHING if the adapter does not send one in time
     private *hash<auto> readMessage() {
         while (True) {
@@ -898,8 +910,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         # the program catches the exception
         r = dap.request("continue", {"threadId": tid});
         assertTrue(r.success, r.message);
+        # Output is forwarded by another thread and may arrive after the termination event.
+        string expected = "caught TEST-ERROR\n";
+        assertEq(expected, dap.waitForOutput("stdout", expected.size()));
         dap.waitForEvent("terminated");
-        assertEq(("caught TEST-ERROR\n",), dap.getOutput("stdout"));
         assertEq((), dap.getEvents("stopped"));
         r = dap.request("disconnect");
         assertTrue(r.success, r.message);
@@ -969,8 +983,9 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         r = dap.request("configurationDone");
         assertTrue(r.success, r.message);
 
+        string expected = "caught TEST-ERROR\n";
+        assertEq(expected, dap.waitForOutput("stdout", expected.size()));
         dap.waitForEvent("terminated");
-        assertEq(("caught TEST-ERROR\n",), dap.getOutput("stdout"));
         assertEq((), dap.getEvents("stopped"));
         r = dap.request("disconnect");
         assertTrue(r.success, r.message);

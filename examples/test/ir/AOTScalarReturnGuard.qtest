@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ScalarReturnGuardTest
+
+class ScalarReturnGuardTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT scalar return guard", "1.0", \ARGV) {
+        addTestCase("exact immediate scalars and full return fallback", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTScalarReturnGuard.qr";
+        string expected = "scalar-return-guard: ok\n";
+        # This compiler guard is AOT-only; AST supplies the cleanup/filter reference.
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-scalar-return-guard-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_SCALAR_RETURN_GUARD=1 ",
+                "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_SCALAR_RETURN_GUARD"),
+                    generated.find("scalar_return_value") >= 0, "inline return guard selection");
+                assertRegex("qore_rt_coerce_return_by_type_path_aot", generated,
+                    "full return filtering fallback retained");
+                foreach string name in (("returnInt", "returnFloat", "returnBool",
+                        "returnSoftInt", "returnSoftFloat", "returnSoftBool",
+                        "returnOptionalInt", "returnTimeout", "returnEnum")) {
+                    *list<*string> body = regex_extract(generated,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " normal LLVM entry");
+                    bool eligible = name == "returnInt" || name == "returnFloat" || name == "returnBool";
+                    assertEq(eligible && !prefix.startsWith("QORE_DISABLE_AOT_SCALAR_RETURN_GUARD"),
+                        (body[0] ?? "").find("scalar_return_value") >= 0, name + " exact contract guard");
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

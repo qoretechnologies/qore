@@ -4,6 +4,7 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 
 %exec-class UnicodeByteOrderTest
@@ -67,6 +68,9 @@ public class UnicodeByteOrderTest inherits QUnit::Test {
             (binary(convert_encoding(Text, "UTF-32LE")), "UTF-32"));
         assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-32BE", \check_unicode_byte_order(),
             (binary(convert_encoding(Text, "UTF-32BE")), "utf_32le"));
+        # normalization scans long names in cancellable chunks without changing the canonical name
+        assertThrows("ENCODING-BYTE-ORDER-ERROR", "use UTF-16LE", \check_unicode_byte_order(),
+            (le, strmul("_", 4096) + "utf16"));
 
         # the same byte order, or a byte order mark of either order with a generic encoding
         foreach list<auto> c in ((le, "UTF-16LE"), (be, "UTF-16"), (be, "UTF-16BE"), (<fffe> + le, "UTF-16"),

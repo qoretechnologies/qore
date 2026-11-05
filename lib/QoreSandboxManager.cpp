@@ -35,6 +35,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreSandboxInterrupt.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 
 #include <cassert>
@@ -1036,11 +1037,16 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 // Sandbox Manager - Public Implementation
 //------------------------------------------------------------------------------
 
+std::atomic<uint64_t> qore_pending_program_interrupts{0};
+
 QoreSandboxManager::QoreSandboxManager()
     : max_threads(0), interrupt_requested(false), active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
+    if (interrupt_requested.load(std::memory_order_seq_cst)) {
+        qore_pending_program_interrupts.fetch_sub(1, std::memory_order_seq_cst);
+    }
 }
 
 QoreFilesystemSecurityManager& QoreSandboxManager::filesystem() {
@@ -1124,9 +1130,16 @@ void QoreSandboxManager::releaseThreadSlot() {
 }
 
 void QoreSandboxManager::requestInterrupt() {
+    // Publish a conservative global indication BEFORE setting the manager's flag. Each
+    // request takes a provisional count; if it finds the flag already set, it releases
+    // that count. This remains balanced when request/clear calls race, without adding a
+    // lock around callbacks. A concurrent clear first clears the flag, then drops its count.
+    qore_pending_program_interrupts.fetch_add(1, std::memory_order_seq_cst);
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check interrupt) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
-    interrupt_requested.store(true, std::memory_order_seq_cst);
+    if (interrupt_requested.exchange(true, std::memory_order_seq_cst)) {
+        qore_pending_program_interrupts.fetch_sub(1, std::memory_order_seq_cst);
+    }
 
     // Wake any threads currently blocked in QoreCondition::waitWithInterrupt — they re-check their
     // cancel/interrupt state on wakeup.  We don't filter by program (no back-ref from manager to
@@ -1156,7 +1169,9 @@ void QoreSandboxManager::requestInterrupt() {
 }
 
 void QoreSandboxManager::clearInterrupt() {
-    interrupt_requested.store(false, std::memory_order_seq_cst);
+    if (interrupt_requested.exchange(false, std::memory_order_seq_cst)) {
+        qore_pending_program_interrupts.fetch_sub(1, std::memory_order_seq_cst);
+    }
 }
 
 bool QoreSandboxManager::isInterruptRequested() const {

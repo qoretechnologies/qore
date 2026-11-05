@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%requires FusedShapesTarget
+
+# Debugs the Program of the FusedShapesTarget module, which AOTFusedShapesDebugger.qtest loads from its source or
+# from an AOT qmod, and prints the values and the callees' function events, which must be those of the AST
+# interpreter, also when the debugger replaces the callees' results.
+
+const CalleeLines = {
+    "17": "pair", "20": "triple", "24": "StringFactory::makeStatic", "28": "makeRow", "31": "makeValues",
+    "34": "readListSize", "37": "readMiddle", "40": "identityHash", "43": "identityList", "46": "identityString",
+    "50": "RowFactory::makeRow", "53": "RowFactory::makeValues",
+};
+
+class CalleeRecorder inherits DebugProgram {
+    public {
+        hash<string, int> entries = {};
+        hash<string, int> exits = {};
+        #! replaces the callees' results while true
+        bool replace = False;
+    }
+
+    #! the replaced result of a callee: another value of the same type
+    static auto replaceResult(auto value) {
+        switch (value.typeCode()) {
+            case NT_INT:
+                return value + 1000;
+            case NT_STRING:
+                return value + "!";
+            case NT_HASH: {
+                hash<string, int> result = {};
+                foreach hash<auto> pair in (value.pairIterator()) {
+                    result{pair.key} = pair.value + 1000;
+                }
+                return result;
+            }
+            case NT_LIST: {
+                list<int> result = ();
+                foreach int element in (value) {
+                    result += element + 1000;
+                }
+                return result;
+            }
+        }
+        return value;
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *string key = sid ? CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()} : NOTHING;
+        if (key) {
+            ++entries{key};
+        }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *string key = sid ? CalleeLines{pgm.getStatementIdInfo(sid).start_line.toString()} : NOTHING;
+        if (key) {
+            ++exits{key};
+            if (replace) {
+                rv = replaceResult(rv);
+            }
+        }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+CalleeRecorder recorder();
+
+# the module's Program: the only one besides this one
+ProgramControl sub getTarget() {
+    int self = ProgramControl::getProgram().getProgramId();
+    list<ProgramControl> others = select ProgramControl::getAllPrograms(), $1.getProgramId() != self;
+    if (others.size() != 1) {
+        throw "TARGET-ERROR", sprintf("expected one module Program; got %d", others.size());
+    }
+    return others[0];
+}
+ProgramControl target = getTarget();
+bool attached;
+code attach = sub () {
+    if (!attached) {
+        recorder.addProgram(target);
+        attached = True;
+    }
+};
+sub detach() {
+    if (attached) {
+        recorder.removeProgram(target);
+        attached = False;
+    }
+}
+
+sub report(string label, list<auto> results) {
+    printf("%s values: %y\n", label, results);
+    hash<string, int> entries;
+    hash<string, int> exits;
+    foreach string key in (sort(keys recorder.entries)) {
+        entries{key} = recorder.entries{key};
+    }
+    foreach string key in (sort(keys recorder.exits)) {
+        exits{key} = recorder.exits{key};
+    }
+    printf("%s entry counts: %y\n", label, entries);
+    printf("%s exit counts: %y\n", label, exits);
+    recorder.entries = {};
+    recorder.exits = {};
+}
+
+list<auto> sub runShapes(int n, int attach_at) {
+    FusedShapesTarget::Shapes shapes();
+    list<auto> results = shapes.shapesLoop(n, attach_at, attach);
+    for (int i = 0; i < n; ++i) {
+        results += shapes.multiConsumers(i, attach_at, attach);
+    }
+    return results;
+}
+
+for (int i = 0; i < 32; ++i) {
+    runShapes(3, -1);
+}
+report("warmup", ());
+
+# attached before the calls
+attach();
+list<auto> results = runShapes(4, -1);
+detach();
+report("before", results);
+
+# detached again
+results = runShapes(4, -1);
+report("detached", results);
+
+# attached during calls that already run natively: the loop's iterations 3 to 7, then each call of multiConsumers()
+results = runShapes(8, 3);
+detach();
+report("during", results);
+FusedShapesTarget::Shapes shapes();
+for (int i = 0; i < 4; ++i) {
+    results = (shapes.multiConsumers(i, i, attach),);
+    detach();
+    report("call " + i, results);
+}
+
+# attached during calls that already run natively, replacing the callees' results
+recorder.replace = True;
+results = runShapes(8, 3);
+detach();
+recorder.replace = False;
+report("replaced", results);
+
+results = runShapes(4, -1);
+report("after", results);

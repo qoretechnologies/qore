@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%allow-weak-references
+%allow-opaque-references
+thread_local list<string> events = ();
+thread_local bool fail_destroy = False;
+class OwnedResult {
+    destructor() { push events, "destroy"; if (fail_destroy) { throw "EXPECTED-DESTRUCTOR", "owned RHS"; } }
+}
+auto sub objectResult() { push events, "call"; return new OwnedResult(); }
+auto sub thrownResult() { push events, "call"; throw "EXPECTED-CALL", "callback"; }
+float sub observe() { push events, "observe"; return 100.0; }
+sub ownedCase(bool fail, bool call_fail) {
+    events = (); fail_destroy = fail;
+    code<float()> fn = call_fail ? \thrownResult() : \objectResult();
+    float sum = 1.5;
+    float result = -1.0;
+    string caught = "none";
+    try { result = (sum += fn()) + observe(); }
+    catch (hash<ExceptionInfo> e) { caught = e.err; }
+    printf("OWNED %y %y %y %y %s %y\n", fail, call_fail, sum, result, caught, events);
+}
+enum FloatEnum : float { Value = 2.5 }
+enum IntEnum : int { Value = 7 }
+enum StringEnum : string { Value = "2.5" }
+enum NumberEnum : number { Value = 2.5n }
+thread_local auto supplied;
+auto sub suppliedValue() { return supplied; }
+float sub add(code<float()> fn) { float sum = 1.5; sum += fn(); return sum; }
+float sub expression(code<float()> fn) { float sum = 1.5; return (sum += fn()) + sum; }
+float sub unassigned(code<float()> fn) { float sum; sum += fn(); return sum; }
+float sub removed(code<float()> fn) { float sum = 5.0; remove sum; sum += fn(); return sum; }
+float sub optional(code<float()> fn) { *float sum = 1.5; sum += fn(); return sum; }
+sub mutation() {
+    float sum = 1.5;
+    code<float()> fn = float sub () { sum = 10.0; return 2.5; };
+    sum += fn(); printf("CAPTURED %y\n", sum);
+}
+foreach auto value in ((1, 0x7fffffffffffffff, -7, True, False, c'A', FloatEnum::Value, IntEnum::Value, StringEnum::Value, NumberEnum::Value, 2.5, -0.0, 2.5n,
+        "2.5", "2.500000000000000000000000000000000000", NOTHING, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    supplied = value;
+    printf("VALUE %s %y %y %y %y %y\n", type(value), add(\suppliedValue()), expression(\suppliedValue()),
+        unassigned(\suppliedValue()), removed(\suppliedValue()), optional(\suppliedValue()));
+}
+if (!ARGV || ARGV[0] != "generic") {
+    ownedCase(False, False); ownedCase(True, False); ownedCase(False, True);
+}
+mutation();
+
+# A result borrowed from a live variable must not destroy that variable's object.
+events = (); fail_destroy = False; supplied = new OwnedResult();
+printf("BORROWED %y %y\n", add(\suppliedValue()), events);
+remove supplied;
+printf("BORROWED-CLEANUP %y\n", events);
+float sub typedFloat() { return 2.5; }
+int sub typedInt() { return 7; }
+number sub typedNumber() { return 2.5n; }
+bool sub typedBool() { return True; }
+char sub typedChar() { return c'A'; }
+*float sub typedNothing() { return NOTHING; }
+foreach code<float()> fn in ((\typedFloat(), \typedInt(), \typedNumber(), \typedBool(), \typedChar(), \typedNothing())) {
+    printf("TYPED %y\n", add(fn));
+}
+# AOT can resolve these local references to scalar entries, including a native i1 boolean result.
+bool sub typedFalse() { return False; }
+float sub knownBool() { code<float()> fn = \typedBool(); float sum = 1.5; sum += fn(); return sum; }
+float sub knownFalse() { code<float()> fn = \typedFalse(); float sum = 1.5; sum += fn(); return sum; }
+float sub knownInt() { code<float()> fn = \typedInt(); float sum = 1.5; sum += fn(); return sum; }
+float sub knownChar() { code<float()> fn = \typedChar(); float sum = 1.5; sum += fn(); return sum; }
+float sub knownNumber() { code<float()> fn = \typedNumber(); float sum = 1.5; sum += fn(); return sum; }
+float sub knownNothing() { code<float()> fn = \typedNothing(); float sum = 1.5; sum += fn(); return sum; }
+printf("KNOWN %y %y %y %y %y %y\n", knownBool(), knownFalse(), knownInt(), knownChar(), knownNumber(), knownNothing());
+float sub referenced(reference<float> sum, code<float()> fn) { sum += fn(); return sum; }
+float sub weakAdd(code<float()> fn) { float sum = 1.5; sum := 3.0; sum += fn(); return sum; }
+float sub opaqueAdd(code<float()> fn) { float sum = 1.5; sum @= 3.0; sum += fn(); return sum; }
+float sub withArgument(code<float(float)> fn) { float sum = 1.5; sum += fn(2.5); return sum; }
+float sub identity(float v) { return v; }
+code<float()> sub computed() { return \typedFloat(); }
+float sub computedCallee() { float sum = 1.5; sum += computed()(); return sum; }
+float target = 1.5;
+printf("NEGATIVE %y %y %y %y %y\n", referenced(\target, \typedFloat()), weakAdd(\typedFloat()),
+    opaqueAdd(\typedFloat()), withArgument(\identity()), computedCallee());
+sub foreachAdd() {
+    list<float> numbers = (1.5, 2.5);
+    code<float()> fn = \typedFloat();
+    foreach float sum in (numbers) { sum += fn(); }
+    printf("FOREACH %y\n", numbers);
+}
+foreachAdd();
+sub foreachReferenceAdd() {
+    list<float> numbers = (1.5, 2.5);
+    code<float()> fn = \typedFloat();
+    foreach float sum in (\numbers) { sum += fn(); }
+    printf("FOREACH-REFERENCE %y\n", numbers);
+}
+foreachReferenceAdd();
+sub nested(bool fail) {
+    events = (); fail_destroy = fail;
+    code<float()> fn = \objectResult();
+    float sum = 1.5;
+    try {
+        on_exit push events, "exit";
+        try { float result = (sum += fn()) + observe(); push events, "done"; }
+        catch (hash<ExceptionInfo> e) { push events, e.err; }
+    } catch (hash<ExceptionInfo> e) { push events, "outer:" + e.err; }
+    printf("NESTED %y %y %y\n", fail, sum, events);
+}
+if (!ARGV || ARGV[0] != "generic") { nested(False); nested(True); }

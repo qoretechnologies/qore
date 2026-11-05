@@ -508,24 +508,8 @@ public:
         return *xsink ? nullptr : rv.release();
     }
 
-    DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const {
-        QoreHashNodeHolder h(getCopy(), xsink);
-        size_t count = 0;
-        for (qhlist_t::const_iterator i = member_list.begin(), e = member_list.end(); i != e; ++i) {
-            if (++count % 100 == 0 && qore_check_cancel(xsink, "hash expression evaluation")) {
-                return nullptr;
-            }
-            ValueEvalOptimizedRefHolder value((*i)->val, xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            h->priv->setKeyValue((*i)->key, value.takeReferencedValue(), xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-        }
-        return h.release();
-    }
+    //! Evaluate the children of a hash expression, preserving its container type.
+    DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const;
 
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, SafeDerefHelper& sdh, ExceptionSink* xsink) {
         hash_assignment_priv ha(*this, key);

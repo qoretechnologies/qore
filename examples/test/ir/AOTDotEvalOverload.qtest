@@ -76,6 +76,98 @@ public namespace AOTDotEvalOverloadMod {
         return receiver.apply(value);
     }
 
+    class ContextProbe {
+        private:internal {
+            int bias;
+        }
+
+        constructor(int value) { bias = value; }
+        int unused(int value, ...) { return value + 3; }
+        ContextProbe identity() { return self; }
+        int read(int value) { return bias + value; }
+        code<int(int)> capture() {
+            return int sub(int value) { return bias + value; };
+        }
+        int recursive(int depth) {
+            return depth ? self.recursive(depth - 1) + 1 : bias;
+        }
+        int viaOther(auto other, int value) {
+            int result = other.unused(value);
+            return self.read(result);
+        }
+        int excess(int value) { return value + int(argv[0]); }
+        int throwing(int value, ...) {
+            if (value < 0) { throw \"CONTEXT-PROBE\", \"expected\"; }
+            return value;
+        }
+    }
+
+    class ContextProbeB inherits ContextProbe {
+        constructor(int value) : ContextProbe(value) { }
+        int unused(int value, ...) { return value + 4; }
+    }
+
+    class ArgLifetime {
+        public {
+            static int destroyed = 0;
+        }
+        destructor() { ++ArgLifetime::destroyed; }
+    }
+
+    int sub callerArgv(auto receiver, int value, ...) {
+        int before = int(argv[0]);
+        int result = receiver.unused(value);
+        return before + int(argv[0]) + result;
+    }
+
+    public string sub verifyContexts() {
+        ContextProbe left(7);
+        ContextProbeB right(11);
+        int unused = 0;
+        int reads = 0;
+        int identities = 0;
+        int captures = 0;
+        int recursive = 0;
+        int nested = 0;
+        int excess = 0;
+        int errors = 0;
+        int unused_excess = 0;
+        int lifetime = 0;
+        int outer_argv = 0;
+        for (int i = 0; i < 8; ++i) {
+            auto receiver = i % 2 ? right : left;
+            auto other = i % 2 ? left : right;
+            unused += receiver.unused(i);
+            reads += receiver.read(i);
+            identities += int(receiver.identity() === receiver);
+            code<int(int)> callback = receiver.capture();
+            captures += callback(i);
+            recursive += receiver.recursive(2);
+            nested += receiver.viaOther(other, i);
+            excess += receiver.excess(i, 2);
+            unused_excess += receiver.unused(i, new ArgLifetime());
+            lifetime += int(ArgLifetime::destroyed == i * 2 + 1);
+            outer_argv += callerArgv(receiver, i, 7);
+            try {
+                receiver.throwing(-1, new ArgLifetime());
+            } catch (hash<auto> ex) {
+                errors += int(ex.err == \"CONTEXT-PROBE\");
+            }
+            lifetime += int(ArgLifetime::destroyed == i * 2 + 2);
+            # The same cached call site alternates success and failure.
+            for (int j = 0; j < 2; ++j) {
+                try {
+                    receiver.throwing(j ? -1 : i);
+                } catch (hash<auto> ex) {
+                    errors += int(ex.err == \"CONTEXT-PROBE\");
+                }
+            }
+        }
+        return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\", unused, reads,
+            identities, captures, recursive, nested, excess, errors,
+            unused_excess, lifetime, outer_argv);
+    }
+
     public string sub verify(softint wfiid) {
         B b();
         DispatchA left();
@@ -96,9 +188,11 @@ public namespace AOTDotEvalOverloadMod {
 ";
     }
 
-    private string runModule(string module_dir, string script_path, bool disable_cache = False) {
-        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s%s -b --enable-debug %s 2>&1",
+    private string runModule(string module_dir, string script_path, bool disable_cache = False,
+            bool disable_context = False) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s%s%s -b --enable-debug %s 2>&1",
             libqore_dir, module_dir, disable_cache ? "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 " : "",
+            disable_context ? "QORE_DISABLE_IR_CONTEXT_ELISION=1 " : "",
             qore_bin, script_path));
     }
 
@@ -120,7 +214,8 @@ public namespace AOTDotEvalOverloadMod {
         File script();
         script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
         script.write("%modern\n%requires AOTDotEvalOverloadMod\nprintf(\"%s\\n\", "
-            "AOTDotEvalOverloadMod::verify(1));\n");
+            "AOTDotEvalOverloadMod::verify(1));\nprintf(\"%s\\n\", "
+            "AOTDotEvalOverloadMod::verifyContexts());\n");
         script.close();
 
         string qmod_path = qmod_dir + "/AOTDotEvalOverloadMod.qmod";
@@ -128,12 +223,14 @@ public namespace AOTDotEvalOverloadMod {
             libqore_dir, qore_bin, qmod_path, qm_path));
         assertTrue(is_file(qmod_path), "compiled dot-eval overload module: " + compile_out);
 
-        string expected = "base:orders/1/cancel|40|472|base:copy\n";
+        string expected = "base:orders/1/cancel|40|472|base:copy\n56:100:8:100:88:128:44:16:56:16:168\n";
         assertEq(expected, runModule(src_dir, script_path),
             "source module uses runtime overload dispatch");
         assertEq(expected, runModule(qmod_dir, script_path),
             "AOT qmod uses cached runtime overload dispatch");
         assertEq(expected, runModule(qmod_dir, script_path, True),
             "AOT qmod cache-disabled fallback preserves runtime dispatch");
+        assertEq(expected, runModule(qmod_dir, script_path, False, True),
+            "AOT qmod eager context control preserves self, closure, argv and exception behavior");
     }
 }

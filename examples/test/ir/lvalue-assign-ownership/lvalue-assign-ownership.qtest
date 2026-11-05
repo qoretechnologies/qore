@@ -59,6 +59,10 @@ class LValueAssignOwnershipTest inherits QUnit::Test {
             # new nodes appended to a graph do not make the scans their constructors deferred (debug builds count
             # the objects the scans enter; 33152 for 256 nodes when the compiled tiers released them after linking)
             "append-scans": "0",
+            # the same from a frame whose calls are invokes, which end their blocks, so each new node is used in the
+            # block after the one creating it (32 calls entered 11392 objects when the compiled tiers handed over
+            # only a value defined in the block using it)
+            "invoke-frame-scans": "0",
         };
 
         #! the execution modes that the worker is run in

@@ -1,5 +1,7 @@
 # Declaration ownership for binary modules
 
+Copyright 2026 Qore Technologies, s.r.o.
+
 Issue: <https://github.com/qoretechnologies/qore/issues/5517>.
 
 `TypedHashDecl::getProgram()` and `QoreEnumDecl::getProgram()` expose the same

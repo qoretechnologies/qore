@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IntScalarCallbacksTest
+
+class IntScalarCallbacksTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        const Expected = "int-scalar-callbacks: ok\n";
+    }
+    constructor() : Test("integer scalar callbacks", "1.0", \ARGV) {
+        addTestCase("native summaries and checked fallbacks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        TmpDir dir("qore-int-scalar-");
+        string source = get_script_dir() + "/AOTIntScalarCallbacks.qr";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        foreach string prefix in (("", "QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE=1 ",
+                "QORE_DISABLE_AOT_CFG_SELECT_IMPORT=1 ", "QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY=1 ",
+                "QORE_DISABLE_AOT_TYPED_FUNCREF_CALL=1 ", "QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ", "QORE_AOT_EH=1 ",
+                "QORE_AOT_NO_DEBUG_INFO=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", exe, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool typed = !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY")
+                    && !prefix.startsWith("QORE_DISABLE_AOT_TYPED_FUNCREF_CALL");
+                foreach string name in (("scalarAdd", "scalarSub", "scalarMul", "scalarAnd", "scalarOr",
+                        "scalarXor", "scalarAffine", "scalarMin", "scalarMax", "scalarEq", "scalarNe",
+                        "scalarLt", "scalarLe", "scalarGt", "scalarGe", "scalarRight", "scalarBranch")) {
+                    # Disabling CFG summaries admits the existing general
+                    # expression proof instead; native eligibility survives.
+                    bool explicit_context = typed
+                        && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_CALLEE_RUNTIME_CONFIG")
+                        && !prefix.startsWith("QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE");
+                    assertEq(typed, regex(ir, name + "[^\n]*funcref_typed_v1"), "typed: " + name);
+                    assertEq(explicit_context, regex(ir, name + "[^\n]*funcref_typed_v2"), "context: " + name);
+                    assertEq(explicit_context && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK"),
+                        regex(ir, name + "[^\n]*funcref_typed_v3"), "stack: " + name);
+                }
+                foreach string name in (("scalarDivision", "scalarModulo", "scalarEffect", "scalarConditionalDivision")) {
+                    assertEq(False, regex(ir, name + "[^\n]*funcref_typed_v[123]"), "fallback: " + name);
+                }
+                assertEq(False, ir =~ /scalarTwo[^\n]*funcref_typed_v[123]/, "two-argument boxed adapter");
+                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_NATIVE_ENTRY"),
+                    ir =~ /define internal i64 @scalarTwo[^\n]*_funcref\(ptr/,
+                    "two-argument native boxed entry");
+                assertEq(Expected, run((exe,)), "AOT " + level);
+                assertEq(Expected, run((exe,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "runtime fallback");
+            }
+        }
+    }
+}

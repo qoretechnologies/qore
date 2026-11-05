@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "METHOD-RETURN-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+thread_local int destroyed = 0;
+class ReturnOwner {
+    destructor() { ++destroyed; }
+}
+enum ReturnCode : int { Sample = 19 }
+
+# The member update and auto parameter retain the generic method body/dispatch path.
+class MethodReturns {
+    private {
+        int calls = 0;
+    }
+    int asInt(auto value) { ++calls; return value; }
+    float asFloat(auto value) { ++calls; return value; }
+    bool asBool(auto value) { ++calls; return value; }
+    softint asSoftInt(auto value) { ++calls; return value; }
+    softfloat asSoftFloat(auto value) { ++calls; return value; }
+    softbool asSoftBool(auto value) { ++calls; return value; }
+    *int asOptionalInt(auto value) { ++calls; return value; }
+    softlist<int> asList(auto value) { ++calls; return value; }
+    timeout asTimeout(auto value) { ++calls; return value; }
+    ReturnCode asEnum(auto value) { ++calls; return value; }
+    int withOwner(auto value) { ReturnOwner owner(); ++calls; return value; }
+    int missing(bool take_return) { ++calls; if (take_return) { return 4; } }
+    int total() { return calls; }
+    int forwarded(int value) { return self.asInt(value); }
+}
+class DerivedReturns inherits MethodReturns {
+    int asInt(auto value) { return int(value) + 10; }
+}
+class GenericReturns<T> {
+    T asGeneric(T value) { return value; }
+}
+
+sub checkRound(auto methods, auto generic_int, auto generic_list, auto derived) {
+    foreach int value in ((0, 1, -1, 140737488355327, -140737488355328,
+            140737488355328, -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value, methods.asInt(value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.0e308, -1.5e307, -3.0e307, -6.0e307,
+            1.0e308, @inf@, -@inf@)) {
+        expect(value, methods.asFloat(value));
+    }
+    expect("-0.0", sprintf("%.1f", methods.asFloat(-0.0)));
+    expect(True, methods.asFloat(@nan@).nanp());
+    expect(True, methods.asFloat(-@nan@).nanp());
+    expect(True, methods.asBool(True));
+    expect(False, methods.asBool(False));
+    expect(7.0, methods.asFloat(7));
+    expect(42, methods.asSoftInt("42"));
+    expect(2.5, methods.asSoftFloat("2.5"));
+    expect(False, methods.asSoftBool(""));
+    expect(NOTHING, methods.asOptionalInt(NOTHING));
+    expect(NOTHING, methods.asOptionalInt(NULL));
+    expect(9, methods.asOptionalInt(9));
+    expect((17,), methods.asList(17));
+    expect((), methods.asList(NOTHING));
+    expect(1000, methods.asTimeout(1s));
+    expect(ReturnCode::Sample, methods.asEnum(ReturnCode::Sample));
+    int reference_int = 23;
+    float reference_float = 1.25;
+    bool reference_bool = True;
+    expect(23, methods.asInt(\reference_int));
+    expect(1.25, methods.asFloat(\reference_float));
+    expect(True, methods.asBool(\reference_bool));
+    expect(9, methods.withOwner(9));
+    expect(4, methods.missing(True));
+    expect(9, methods.forwarded(9));
+    expect(19, derived.forwarded(9));
+    expect(23, generic_int.asGeneric(23));
+    expect((23,), generic_list.asGeneric(23));
+    foreach string method in (("asInt", "asFloat", "asBool", "withOwner")) {
+        foreach auto invalid in ((NOTHING, "short", "a long string requiring node ownership", (1, 2))) {
+            try {
+                switch (method) {
+                    case "asInt": methods.asInt(invalid); break;
+                    case "asFloat": methods.asFloat(invalid); break;
+                    case "asBool": methods.asBool(invalid); break;
+                    case "withOwner": methods.withOwner(invalid); break;
+                }
+                throw "METHOD-RETURN-TEST", "invalid return must throw";
+            } catch (hash<ExceptionInfo> ex) {
+                expect("RUNTIME-TYPE-ERROR", ex.err);
+            }
+        }
+    }
+    ReturnOwner invalid_object();
+    foreach string method in (("asInt", "asFloat", "asBool", "withOwner")) {
+        try {
+            switch (method) {
+                case "asInt": methods.asInt(invalid_object); break;
+                case "asFloat": methods.asFloat(invalid_object); break;
+                case "asBool": methods.asBool(invalid_object); break;
+                case "withOwner": methods.withOwner(invalid_object); break;
+            }
+            throw "METHOD-RETURN-TEST", "object return must throw";
+        } catch (hash<ExceptionInfo> ex) {
+            expect("RUNTIME-TYPE-ERROR", ex.err);
+        }
+    }
+    delete invalid_object;
+    try {
+        methods.missing(False);
+        throw "METHOD-RETURN-TEST", "missing return must throw";
+    } catch (hash<ExceptionInfo> ex) {
+        expect("RUNTIME-TYPE-ERROR", ex.err);
+        expect(True, ex.desc.find("block missing return statement") >= 0);
+    }
+}
+
+auto methods = new MethodReturns();
+auto generic_int = new GenericReturns<int>();
+auto generic_list = new GenericReturns<softlist<int>>();
+auto derived = new DerivedReturns();
+for (int round = 0; round < 40; ++round) {
+    checkRound(methods, generic_int, generic_list, derived);
+    # Check callee-owned locals and the explicitly deleted invalid object value.
+    expect((round + 1) * 7, destroyed);
+}
+expect(True, methods.total() > 1000);
+printf("method-scalar-return: ok\n");

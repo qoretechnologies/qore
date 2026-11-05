@@ -140,6 +140,11 @@ struct qore_ds_private : public QoreDbiForkObject {
     // interface for the parent class
     DatasourceStatementHelper* dsh;
     std::map<std::string, const TypedHashDecl*> typed_result_hashdecl_cache;
+    //! protected by m; set by the fork child handler, before any other child thread can run
+    /** The cache can be copied during insertion or cleanup, even after isopen became false.  It must be
+        abandoned without traversing its nodes before it is read, cleared or destroyed in the child.
+    */
+    bool typed_result_hashdecl_cache_inherited = false;
 
     //! returns the autocommit flag; see autocommit
     DLLLOCAL bool getAutoCommit() const {
@@ -203,6 +208,7 @@ struct qore_ds_private : public QoreDbiForkObject {
     //! initializes the lock again in a child process created with fork(); see QoreDbiForkObject
     DLLLOCAL void forkChild() noexcept override {
         m.reinitAfterFork();
+        typed_result_hashdecl_cache_inherited = true;
     }
 
     //! returns true if the connection is open and was opened by an ancestor of this process
@@ -303,6 +309,9 @@ struct qore_ds_private : public QoreDbiForkObject {
     DLLLOCAL void statementExecuted(int rc);
 
     DLLLOCAL void clearTypedResultHashDeclCache();
+
+    //! abandons a cache inherited from the parent without traversing it; caller holds m
+    DLLLOCAL bool discardInheritedTypedResultHashDeclCache();
 
     DLLLOCAL const TypedHashDecl* getTypedResultHashDecl(const char* driver_name, const std::string& signature,
             const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink);

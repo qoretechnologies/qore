@@ -2956,11 +2956,13 @@ public const hash<auto> ExtendedExpressionImplementations = {
                 "everywhere else, so `exists` is how records of different shapes are told apart: "
                 "`exists @type && @type == \"return\"` is `False` for a record without `type`, while "
                 "`@type == \"return\"` raises an error for it.\n\n"
+                "**Field paths**:\n"
                 "- `exists @a.b` and `exists @a{b}`: the record has `a`, which is a hash with the key `b`\n"
                 "- `exists @a[0]`: the record has `a`, which is a list with an element at that position, or a string "
                 "with a character there; a negative position counts from the end\n"
                 "- a wildcard (`[*]`, `{*}`), a range, or several positions or keys are not accepted; test each item "
                 "with `any` or `all` instead, such as `any exists @id, @orders`\n\n"
+                "**Values and database searches**:\n"
                 "Whether a field has a value is tested with `isNotNull(@field)`, which needs the record to have the "
                 "field.  Databases cannot search with `exists`, as every row has every column: it is evaluated on "
                 "the records read",

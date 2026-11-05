@@ -23,6 +23,8 @@
 */
 
 %modern
+%allow-weak-references
+%allow-opaque-references
 
 module DgcRemoveScanChecks {
     version = "1.0";
@@ -312,6 +314,99 @@ public hash<string, int> sub get_scan_counts() {
 */
 public hash<string, int> sub get_cycle_results() {
     hash<string, int> rv = {};
+
+    # The parent still holds the child after its last object-valued member is removed.  Repeat the
+    # transition to expose an incorrect decrement of the parent's count, then give the empty child a
+    # back edge: the parent must still be scanned and the resulting cycle must be collected.
+    foreach string operation in (("single", "slice", "delete", "api")) {
+        if (operation == "api" && !have_scan_count()) {
+            continue;
+        }
+        Tracked::destroyed = 0;
+        {
+            Tracked holder();
+            holder.peer = new Tracked();
+            for (int i = 0; i < 8; ++i) {
+                holder.peer.other = new Tracked();
+                if (operation == "single") {
+                    remove holder.peer.other;
+                } else if (operation == "slice") {
+                    remove holder.peer.("other", "missing");
+                } else if (operation == "delete") {
+                    delete holder.peer.other;
+                } else {
+                    call_function("dbg_ref_remove_key", \holder.peer, "other");
+                }
+            }
+            rv{"repeat-member-" + operation + "-held"} = Tracked::destroyed;
+            holder.peer.other = holder;
+        }
+        rv{"repeat-member-" + operation + "-cycle"} = Tracked::destroyed;
+    }
+
+    # A child object stored in a hash or list remains a scan-relevant element too, even when empty.
+    Tracked::destroyed = 0;
+    {
+        Tracked holder();
+        holder.cx = {"child": new Tracked()};
+        for (int i = 0; i < 8; ++i) {
+            holder.cx.child.other = new Tracked();
+            remove holder.cx.child.other;
+        }
+        rv."repeat-hash-member-held" = Tracked::destroyed;
+        holder.cx.child.other = holder;
+    }
+    rv."repeat-hash-member-cycle" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked holder();
+        holder.l = (new Tracked(),);
+        for (int i = 0; i < 8; ++i) {
+            holder.l[0].other = new Tracked();
+            remove holder.l[0].("other", "missing");
+        }
+        rv."repeat-list-member-held" = Tracked::destroyed;
+        holder.l[0].other = holder;
+    }
+    rv."repeat-list-member-cycle" = Tracked::destroyed;
+
+    # The parent's edge to the child may itself be excluded from scanning.  Removing a member of
+    # that child must not subtract from the parent's zero count or invalidate objects held elsewhere.
+    foreach string kind in (("strong", "weak", "opaque")) {
+        foreach bool slice in ((False, True)) {
+            Tracked::destroyed = 0;
+            list<Tracked> held;
+            {
+                Tracked a();
+                Tracked b();
+                a.id = 10;
+                b.id = 20;
+                a.peer = b;
+                b.peer = a;
+                held = (a, b);
+            }
+            hash<auto> parent = {};
+            if (kind == "weak") {
+                parent.child := held[0];
+            } else if (kind == "opaque") {
+                parent.child @= held[0];
+            } else {
+                parent.child = held[0];
+            }
+            if (slice) {
+                remove parent.child.("peer", "missing");
+            } else {
+                remove parent.child.peer;
+            }
+            string label = "edge-" + kind + (slice ? "-slice" : "-single");
+            rv{label + "-held"} = Tracked::destroyed;
+            rv{label + "-ids"} = held[0].id + held[1].id;
+            parent = {};
+            held = ();
+            rv{label + "-total"} = Tracked::destroyed;
+        }
+    }
 
     Tracked::destroyed = 0;
     {

@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "SCALAR-RETURN-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+int sub returnInt(auto value) { return value; }
+float sub returnFloat(auto value) { return value; }
+bool sub returnBool(auto value) { return value; }
+softint sub returnSoftInt(auto value) { return value; }
+softfloat sub returnSoftFloat(auto value) { return value; }
+softbool sub returnSoftBool(auto value) { return value; }
+*int sub returnOptionalInt(auto value) { return value; }
+timeout sub returnTimeout(auto value) { return value; }
+enum ReturnKind : int { Sample = 19 }
+ReturnKind sub returnEnum(auto value) { return value; }
+
+thread_local int destroyed = 0;
+class ReturnOwned {
+    destructor() { ++destroyed; }
+}
+
+class ReturnStep {
+    int next(int value) { return value + 7; }
+    int nested(int value) { return self.next(value); }
+}
+class ReturnDerived inherits ReturnStep {
+    int next(int value) { return value + 17; }
+}
+
+# Keep an owned local live across both guarded and filtered returns.
+int sub ownedReturn(auto value) {
+    ReturnOwned owned();
+    return value;
+}
+
+int sub protectedReturn(auto value) {
+    try {
+        return returnInt(value);
+    } catch (hash<ExceptionInfo> ex) {
+        expect("RUNTIME-TYPE-ERROR", ex.err);
+        return 41;
+    }
+}
+
+for (int round = 0; round < 40; ++round) {
+    foreach int value in ((0, 1, -1, 140737488355327, -140737488355328,
+            140737488355328, -140737488355329, 9223372036854775807, -9223372036854775807 - 1)) {
+        expect(value, returnInt(value));
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -1.0e308, -1.5e307, -3.0e307, -6.0e307,
+            1.0e308, @inf@, -@inf@)) {
+        expect(value, returnFloat(value));
+    }
+    expect("-0.0", sprintf("%.1f", returnFloat(-0.0)));
+    expect(True, returnFloat(@nan@).nanp());
+    expect(True, returnFloat(-@nan@).nanp());
+    expect(True, returnBool(True));
+    expect(False, returnBool(False));
+    expect(7.0, returnFloat(7));
+    expect(42, returnSoftInt("42"));
+    expect(2.5, returnSoftFloat("2.5"));
+    expect(False, returnSoftBool(""));
+    expect(NOTHING, returnOptionalInt(NOTHING));
+    expect(9, returnOptionalInt(9));
+    expect(1000, returnTimeout(1s));
+    expect(ReturnKind::Sample, returnEnum(ReturnKind::Sample));
+    int reference_value = 23;
+    expect(23, returnInt(\reference_value));
+    expect(9, ownedReturn(9));
+    expect(9, protectedReturn(9));
+    expect(41, protectedReturn("bad"));
+    foreach code<auto(auto)> fn in ((\returnInt(), \returnFloat(), \returnBool(), \ownedReturn())) {
+        foreach auto invalid in ((NOTHING, "short", "a long string requiring node ownership", (1, 2), new ReturnOwned())) {
+            try {
+                fn(invalid);
+                throw "SCALAR-RETURN-TEST", "invalid return must throw";
+            } catch (hash<ExceptionInfo> ex) {
+                expect("RUNTIME-TYPE-ERROR", ex.err);
+            }
+        }
+    }
+    expect((round + 1) * 10, destroyed);
+    ReturnStep exact();
+    ReturnStep derived = new ReturnDerived();
+    expect(10, exact.nested(3));
+    expect(20, derived.nested(3));
+}
+printf("scalar-return-guard: ok\n");

@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+# A local read in an expression keeps the value it had when it was read, even if a later part of the same
+# expression changes the local in place: the change separates the local from the value (copy-on-write).  A change
+# whose operand is the lvalue's own value (as in push l, l) uses the value the operand had when it was evaluated.
+
+class Holder {
+    public {
+        list l = (1, 2, 3, 4);
+        hash<auto> h = {"a": 1, "b": 2};
+    }
+
+    list<auto> memberExtract() {
+        return (l, extract l, 0, 1);
+    }
+
+    list<auto> memberPush() {
+        return (self.l, push self.l, 5);
+    }
+
+    list<auto> memberRemove() {
+        return (h, remove h.a);
+    }
+}
+
+our list global_list = (1, 2, 3, 4);
+
+sub fail() {
+    throw "FAIL", "after the change";
+}
+
+list<auto> sub exact_extract() { list<auto!> l = (1, 2, 3, 4); return (l, extract l, 0, 1); }
+list<auto> sub untyped_extract() { list l = (1, 2, 3, 4); return (l, extract l, 0, 1); }
+list<auto> sub auto_splice() { auto l = (1, 2, 3); return (l, splice l, 0, 1); }
+list<auto> sub exact_splice() { list<auto!> l = (1, 2, 3, 4); return (l, splice l, 0, 1); }
+list<auto> sub exact_push() { list<auto!> l = (1, 2, 3, 4); return (l, push l, 5); }
+list<auto> sub exact_pop() { list<auto!> l = (1, 2, 3, 4); return (l, pop l); }
+list<auto> sub exact_shift() { list<auto!> l = (1, 2, 3, 4); return (l, shift l); }
+list<auto> sub exact_unshift() { list<auto!> l = (1, 2, 3, 4); return (l, unshift l, 0); }
+list<auto> sub int_unshift() { list<int> l = (1, 2, 3); return (l, unshift l, 0); }
+list<auto> sub int_extract() { list<int> l = (1, 2, 3, 4); return (l, extract l, 0, 1); }
+list<auto> sub exact_remove() { list<auto!> l = (1, 2, 3, 4); return (l, remove l[0]); }
+list<auto> sub exact_add() { list<auto!> l = (1, 2, 3, 4); return (l, l += 5); }
+list<auto> sub exact_element() { list<auto!> l = (1, 2, 3, 4); return (l, l[0] = 9); }
+list<auto> sub exact_element_add() { list<auto!> l = (1, 2, 3); return (l, l[1] += 5); }
+list<auto> sub exact_element_inc() { list<auto!> l = (1, 2, 3, 4); return (l, l[0]++); }
+list<auto> sub soft_extract() { softlist<auto> l = (1, 2, 3); return (l, extract l, 0, 1); }
+list<auto> sub maybe_push() { *list<int> l; return (l, push l, 1); }
+list<auto> sub empty_push() { list<int> l = (); return (l, push l, 1); }
+list<auto> sub self_add() { list l = (1, 2); return (l, l += l); }
+list<auto> sub assign() { list l = (1, 2, 3, 4); return (l, l = (5,)); }
+list<auto> sub assign_derived() { list l = (1, 2, 3); return (l, l = l + (4,), l); }
+list<auto> sub hash_remove() { hash<auto> h = {"a": 1, "b": 2}; return (h, remove h.a); }
+list<auto> sub hash_store() { hash<auto> h = {"a": 1, "b": 2}; return (h, h.c = 3); }
+list<auto> sub hash_add() { hash<auto> h = {"a": 1}; return (h, h += {"b": 2}); }
+hash<auto> sub hash_literal() { hash h = {"a": 1}; return {"x": h, "y": (h.b = 2)}; }
+hash<auto> sub hash_literal_extract() { list<auto!> l = (1, 2, 3, 4); return {"a": l, "b": extract l, 0, 1}; }
+hash<auto> sub nested_extract() {
+    hash h = {"a": (1, 2)};
+    return {"h": h, "x": (extract h.a, 0, 1), "after": h};
+}
+list<auto> sub element_extract() { list l = ((1, 2), (3, 4)); return (l[0], extract l, 0, 1); }
+list<auto> sub element_assign() { list l = ((1, 2), (3, 4)); return (l[0], l[0] = 5); }
+list<auto> sub element_push() { list l = ((1, 2), (3, 4)); return (l[0], push l[0], 9); }
+list<auto> sub member_push() { hash h = {"a": (1, 2)}; return (h.a, push h.a, 3); }
+list<auto> sub string_append() { string s = "ab"; return (s, s += "c"); }
+list<auto> sub string_splice() { string s = "abc"; return (s, splice s, 0, 1); }
+list<auto> sub binary_splice() { binary b = binary("abc"); return (b, splice b, 0, 1); }
+list<auto> sub repeated() { list l = (1, 2, 3); return (l, (extract l, 0, 1), (extract l, 0, 1)); }
+list<auto> sub interleaved() { list l = (1, 2, 3); return (l, pop l, l, shift l, l); }
+list<auto> sub alias() { list l = (1, 2, 3); auto a = l; return (a, l, (extract l, 0, 1), a); }
+list<auto> sub conditional_change(bool c) { list l = (1, 2, 3); return (l, c ? (extract l, 0, 1) : 0); }
+list<auto> sub conditional_read(bool c) { list l = (1, 2, 3); return (c ? l : (), extract l, 0, 1); }
+list<auto> sub coalesce() { *list l = (1, 2, 3); return (l ?? (), extract l, 0, 1); }
+list<auto> sub cast_read() { list l = (1, 2, 3); return (cast<softlist<auto>>(l), extract l, 0, 1); }
+list<auto> sub in_loop() {
+    list l = (1, 2, 3);
+    list r = ();
+    for (int i = 0; i < 2; ++i) {
+        r += (l, extract l, 0, 1);
+    }
+    return r;
+}
+list<auto> sub global_extract() { return (global_list, extract global_list, 0, 1); }
+string sub exception_after_change() {
+    list l = (1, 2, 3);
+    try {
+        list<auto> r = (l, (extract l, 0, 1), fail());
+        return sprintf("no exception: %y", r);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %y", ex.err, l);
+    }
+}
+# changes whose operand is the lvalue's own value: the value used is the one the operand had when it was evaluated
+list<auto> sub self_push() { list l = (1, 2); push l, l; return l; }
+list<auto> sub self_unshift() { list l = (1, 2); unshift l, l; return l; }
+list<auto> sub self_push_auto() { list<auto> l = (1, "x"); push l, l; return l; }
+list<auto> sub self_unshift_untyped() { auto l = (1, "x"); unshift l, l; return l; }
+list<auto> sub self_push_twice() { list l = (1, 2); push l, l; push l, l; return l; }
+list<auto> sub self_push_empty() { list l = (); push l, l; return l; }
+list<auto> sub self_push_member() { hash<auto> h = {"a": (1, "x")}; push h.a, h.a; return h.a; }
+list<auto> sub self_push_element() { list l = ((1, "x"),); push l[0], l[0]; return l; }
+list<auto> sub self_push_alias() { list l = (1, 2); list a = l; push l, l; unshift a, a; return (l, a); }
+list<auto> sub self_add_nested() { list l = (1, 2); l += (l,); return l; }
+hash<auto> sub self_hash_add() { hash<auto!> h = {"a": 1}; h += {"b": h}; return h; }
+string sub self_string_add() { string s = "ab"; s += s; return s; }
+list<auto> sub self_splice() { list l = (1, 2); splice l, 0, 0, l; return l; }
+list<auto> sub self_element() { list l = (1, 2); l[2] = l; return l; }
+
+# loops that change a local in place: the change keeps changing the local's own value
+int sub push_loop(int count) {
+    list<int> l = ();
+    for (int i = 0; i < count; ++i) {
+        push l, i;
+        l[i] += 1;
+    }
+    return l.size() + l[count - 1];
+}
+
+list<string> names = ("exact_extract", "untyped_extract", "auto_splice", "exact_splice", "exact_push",
+    "exact_pop", "exact_shift", "exact_unshift", "int_unshift", "int_extract", "exact_remove", "exact_add",
+    "exact_element", "exact_element_add", "exact_element_inc", "soft_extract", "maybe_push", "empty_push",
+    "self_add", "assign", "assign_derived", "hash_remove", "hash_store", "hash_add", "hash_literal",
+    "hash_literal_extract", "nested_extract", "element_extract", "element_assign", "element_push", "member_push",
+    "string_append", "string_splice", "binary_splice", "repeated", "interleaved", "alias", "coalesce", "cast_read",
+    "in_loop", "global_extract", "exception_after_change", "self_push", "self_unshift", "self_push_auto",
+    "self_unshift_untyped", "self_push_twice", "self_push_empty", "self_push_member", "self_push_element",
+    "self_push_alias", "self_add_nested", "self_hash_add", "self_string_add", "self_splice", "self_element");
+foreach string name in (names) {
+    printf("%s: %y\n", name, call_function(name));
+}
+foreach bool c in ((True, False)) {
+    printf("conditional_change %y: %y\n", c, conditional_change(c));
+    printf("conditional_read %y: %y\n", c, conditional_read(c));
+}
+foreach string method in (("memberExtract", "memberPush", "memberRemove")) {
+    Holder holder();
+    printf("%s: %y\n", method, call_object_method(holder, method));
+}
+printf("push_loop: %d\n", push_loop(10000));

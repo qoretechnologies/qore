@@ -6,6 +6,7 @@
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
 %requires ../ExecModeHarness.qm
+%requires ../LlvmConfig.qm
 %exec-class RecursiveClosureLocalsTest
 
 class RecursiveClosureLocalsTest inherits QUnit::Test {
@@ -48,103 +49,6 @@ class RecursiveClosureLocalsTest inherits QUnit::Test {
         throw "TEST-SETUP-ERROR", "cannot locate executable " + name;
     }
 
-    #! Returns the toolchain roots that hold a versioned LLVM install, newest version first
-    /** Distributions that ship several LLVM versions side by side keep each one in its own
-        prefix and do not link its driver into a PATH directory: alpine uses
-        \c /usr/lib/llvm<major>, MacPorts \c /opt/local/libexec/llvm-<major> and Homebrew
-        \c /opt/homebrew/opt/llvm@<major>.  These are the same families
-        examples/test/docker_test/test-alpine.sh and test-macos.sh search when they configure
-        the build.  Several versions can be installed: llvmConfigPath() takes the one whose version is
-        Qore::LLVMVersion.
-    */
-    private static list<string> llvmPrefixes() {
-        list<string> prefixes = ();
-        foreach string parent in (("/usr/lib", "/usr/lib64", "/usr/local/lib", "/usr/local/lib64",
-            "/opt/homebrew/opt", "/usr/local/opt", "/opt/local/libexec")) {
-            foreach string candidate in (glob(parent + "/llvm*") ?? ()) {
-                if (is_dir(candidate)) {
-                    prefixes += candidate;
-                }
-            }
-        }
-        # newest first; an unversioned prefix (Homebrew's plain "llvm") sorts last
-        return sort_descending(prefixes, int sub (string l, string r) {
-            int lv = llvmPrefixVersion(l);
-            int rv = llvmPrefixVersion(r);
-            return lv == rv ? (l < r ? -1 : (l == r ? 0 : 1)) : (lv < rv ? -1 : 1);
-        });
-    }
-
-    #! Returns the major LLVM version encoded in a prefix directory name, or 0 if it has none
-    private static int llvmPrefixVersion(string prefix) {
-        *list<*string> match = (basename(prefix) =~ x/([0-9]+)/);
-        return match[0].toInt();
-    }
-
-    #! Returns the "<major>.<minor>" part of an LLVM version, which names the LLVM library's ABI
-    private static string llvmVersionKey(string version) {
-        *list<*string> m = (version =~ x/^([0-9]+\.[0-9]+)/);
-        return m ? m[0] : version;
-    }
-
-    #! Returns the LLVM version that the given llvm-config reports, or nothing if it cannot be run
-    private static *string llvmConfigVersion(string path) {
-        int rc;
-        string out = backquote(quote(path) + " --version 2>/dev/null", \rc);
-        if (rc) {
-            return;
-        }
-        return trim(out);
-    }
-
-    #! Returns the path to the llvm-config of the LLVM this qore was built with (Qore::LLVMVersion)
-    /** The driver includes the library's JIT header, which includes LLVM's headers, and links LLVM: built with
-        another LLVM than libqore's, it has two LLVMs in one process and crashes (SIGSEGV in LLVM, exit 139).
-
-        \c llvm-config is only in the \c PATH where the distribution ships a single LLVM;
-        everywhere else it lives in the versioned prefix, so a PATH-only lookup fails on
-        exactly the platforms where the JIT is fully functional (alpine in CI, MacPorts and
-        Homebrew locally).  Of the llvm-config found in the \c PATH and in the prefixes, the first whose version
-        matches is taken; \c LLVM_CONFIG overrides the search and must name a matching one.
-    */
-    private static string llvmConfigPath() {
-        string want = llvmVersionKey(Qore::LLVMVersion);
-        if (ENV.LLVM_CONFIG) {
-            string path = executablePath(ENV.LLVM_CONFIG);
-            *string version = llvmConfigVersion(path);
-            if (!version || llvmVersionKey(version) != want) {
-                throw "TEST-SETUP-ERROR", sprintf("LLVM_CONFIG names %s, which reports LLVM %s, but this qore was "
-                    "built with LLVM %s; set LLVM_CONFIG to the llvm-config of LLVM %s", path,
-                    version ?? "<no version>", Qore::LLVMVersion, Qore::LLVMVersion);
-            }
-            return path;
-        }
-        list<string> candidates = ();
-        foreach string directory in (split(":", ENV.PATH ?? "")) {
-            string path = (directory ? directory : ".") + "/llvm-config";
-            if (is_executable(path)) {
-                candidates += realpath(path);
-            }
-        }
-        foreach string prefix in (llvmPrefixes()) {
-            string path = prefix + "/bin/llvm-config";
-            if (is_executable(path)) {
-                candidates += realpath(path);
-            }
-        }
-        list<string> found = ();
-        foreach string path in (candidates) {
-            *string version = llvmConfigVersion(path);
-            if (version && llvmVersionKey(version) == want) {
-                return path;
-            }
-            found += sprintf("%s (%s)", path, version ?? "cannot be run");
-        }
-        throw "TEST-SETUP-ERROR", sprintf("this qore was built with LLVM %s, but no llvm-config of that version was "
-            "found (%s); set LLVM_CONFIG to the llvm-config of LLVM %s", Qore::LLVMVersion,
-            found ? "found: " + found.join(", ") : "none found", Qore::LLVMVersion);
-    }
-
     #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
     private string run(list<string> args) {
         string command = "LD_LIBRARY_PATH=" + quote(lib_dir)
@@ -168,7 +72,7 @@ class RecursiveClosureLocalsTest inherits QUnit::Test {
 
     private nativeCalls() {
         TmpDir dir("qore-recursive-locals-native-");
-        string llvm_config = llvmConfigPath();
+        string llvm_config = LlvmConfig::llvm_config_path();
         string llvm_include = trim(run((llvm_config, "--includedir")));
         string llvm_lib = trim(run((llvm_config, "--libdir")));
         list<string> llvm_link = split(" ", trim(run((llvm_config, "--libs"))));

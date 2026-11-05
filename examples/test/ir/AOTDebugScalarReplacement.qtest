@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTDebugScalarReplacementTest
+
+class AOTDebugScalarReplacementTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("Separate native and debug AOT aggregate IR", "1.0", \ARGV) {
+        addTestCase("native allocation elimination and debugger local mutation", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTDebugScalarReplacement.qr";
+        File file();
+        file.open2(source, O_RDONLY);
+        list<string> lines = file.read(-1).split("\n");
+        list<string> watched = ();
+        for (int i = 0; i < lines.size(); ++i) {
+            if (regex(lines[i], "# WATCH_")) { push watched, string(i + 1); }
+        }
+        assertEq(4, watched.size());
+        hash<string, string> expected = {"0": "[248, 248, 248, 248] changed=0\n",
+            "1": "[101, 201, 101, 101] changed=4\n"};
+        foreach string attached in (("0", "1")) {
+            assertEq(expected{attached}, run((qore, "--exec-mode=ast", source, attached) + watched));
+        }
+        TmpDir dir("qore-aot-debug-scalar-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            string executable = dir.path + "/fixture";
+            string ir = run((qcc, "-O3", "--strip-source", "-o", executable, source),
+                prefix + "QORE_DUMP_LLVM_IR=1 ");
+            foreach string name in (("listProbe", "hashProbe")) {
+                *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                    + "_[^\n]*\n(.*?)\n\\}");
+                assertTrue(!!body, name + " LLVM definition");
+                assertFalse(regex(body[0] ?? "", "(?:call|invoke) [^\n]*@qore_rt_make_(?:list|hash)"),
+                    name + " native allocation elimination");
+            }
+            foreach string native in (("", "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ")) {
+                foreach string attached in (("0", "1")) {
+                    assertEq(expected{attached}, run((executable, attached) + watched, native),
+                        prefix + native + attached);
+                }
+            }
+        }
+    }
+}

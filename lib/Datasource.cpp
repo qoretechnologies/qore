@@ -469,8 +469,25 @@ void qore_ds_private::statementExecuted(int rc) {
         active_transaction = true;
 }
 
+bool qore_ds_private::discardInheritedTypedResultHashDeclCache() {
+    if (!typed_result_hashdecl_cache_inherited) {
+        return false;
+    }
+    // Even an apparently empty cache can have been copied during a map update.
+    // Its nodes and hashdecl pointers are never inspected or destroyed in the child.
+    using cache_t = decltype(typed_result_hashdecl_cache);
+    std::unique_ptr<cache_t> old(new cache_t);
+    old->swap(typed_result_hashdecl_cache);
+    qore_dbi_keep_abandoned(old.release());
+    typed_result_hashdecl_cache_inherited = false;
+    return true;
+}
+
 void qore_ds_private::clearTypedResultHashDeclCache() {
     AutoLocker al(m);
+    if (discardInheritedTypedResultHashDeclCache()) {
+        return;
+    }
     size_t count = 0;
     for (auto& i : typed_result_hashdecl_cache) {
         if (count && !(count % 100)) {
@@ -485,6 +502,7 @@ void qore_ds_private::clearTypedResultHashDeclCache() {
 const TypedHashDecl* qore_ds_private::getTypedResultHashDecl(const char* driver_name, const std::string& signature,
         const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink) {
     AutoLocker al(m);
+    discardInheritedTypedResultHashDeclCache();
 
     auto i = typed_result_hashdecl_cache.find(signature);
     if (i != typed_result_hashdecl_cache.end()) {

@@ -30,6 +30,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         addTestCase("symbol hash behavior", \testHashBehavior());
         addTestCase("complex constant value hashing", \testComplexConstantValueHashing());
         addTestCase("symbol index JSON dump", \testDumpIndexJson());
+        addTestCase("single-file batches publish consumed body contracts", \testSingleFileBatchBodyContracts());
         addTestCase("slot-map dump parses global slot flags", \testDumpInfoGlobalSlotFlags());
         addTestCase("source parse defines in symbol index", \testSourceParseDefines());
         addTestCase("standalone global import resolves at link time", \testStandaloneGlobalImport());
@@ -156,8 +157,8 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         if (ENV.QORE_MODULE_DIR) {
             module_dir += ":" + ENV.QORE_MODULE_DIR;
         }
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s",
-            libqore_dir, libqore_dir, module_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s",
+            libqore_dir, libqore_dir, libqore_dir, module_dir);
         return tmp;
     }
 
@@ -295,6 +296,29 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             "JSON dump includes constant path: " + json);
         assertTrue(json.find("\"native_body_hash\": \"xxh64:") != -1,
             "JSON dump includes native body hash: " + json);
+    }
+
+    testSingleFileBatchBodyContracts() {
+        TmpDir tmp = initDirs();
+        string source = tmp_dir + "/single.qc";
+        write(source, "%modern\nint sub main() { printf(\"ok\\n\"); return 0; }\n");
+        foreach string control in (("", "QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES=1 ")) {
+            string out_dir = tmp_dir + (control ? "/disabled" : "/default");
+            mkdir(out_dir);
+            string compiled = run(sprintf("%s%s %y -c --batch-build-sidecars --output-dir=%y"
+                " --depfile-dir=%y %y", control, env, qcc_bin, out_dir, out_dir, source));
+            *string object = batchObject(out_dir, "single");
+            assertTrue(exists object, "single-file batch compiles: " + compiled);
+            if (!exists object) {
+                continue;
+            }
+            string exe = out_dir + "/app";
+            string linked = run(sprintf("%s %y -o %y %y", env, qcc_bin, exe, object));
+            assertTrue(is_file(exe), "the body's consumed contract is exported: " + linked);
+            if (is_file(exe)) {
+                assertEq("ok\n", run(sprintf("%s %y", env, exe)), "linked single-file batch executes");
+            }
+        }
     }
 
     testDumpInfoGlobalSlotFlags() {

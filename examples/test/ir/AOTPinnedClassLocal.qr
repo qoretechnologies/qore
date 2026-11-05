@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+thread_local list<int> pinnedDrops = ();
+thread_local int pinnedExitValue = 0;
+class PinnedValue {
+    public { int id; }
+    constructor(int id) { self.id = id; }
+    int touch() { return self.id; }
+    int next(int value) { return value + 1; }
+    destructor() { push pinnedDrops, self.id; }
+}
+class PinnedHook inherits PinnedValue {
+    constructor(int id) : PinnedValue(id) { }
+    int touch() {
+        set_local_var_value(1, "source", new PinnedValue(80));
+        set_local_var_value(1, "receiver", new PinnedValue(90));
+        return self.id;
+    }
+}
+class PinnedCycle inherits PinnedValue {
+    public { *PinnedCycle peer; }
+    constructor(int id) : PinnedValue(id) { }
+}
+
+class PinnedNextB inherits PinnedValue {
+    constructor(int id) : PinnedValue(id) { }
+    int next(int value) { return value + 20; }
+}
+class PinnedNextC inherits PinnedValue {
+    constructor(int id) : PinnedValue(id) { }
+    int next(int value) { return value + 300; }
+}
+
+sub replacePinnedSource(PinnedValue replacement) {
+    set_local_var_value(1, "source", replacement);
+}
+
+int sub pinnedPhi(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        result += receiver.touch();
+    }
+    return result;
+}
+
+sub replacePinnedReceiver(PinnedValue replacement) {
+    set_local_var_value(1, "receiver", replacement);
+}
+
+sub replacePinnedPhiSource(PinnedValue replacement) {
+    set_local_var_value(1, "a", replacement);
+}
+
+sub deletePinnedReceiver(PinnedValue receiver) {
+    delete receiver;
+}
+
+int sub pinnedPhiReceiverChanged(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue replacement = i % 2 ? a : new PinnedNextC(10);
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        # Both a different retained owner and a new object must invalidate the
+        # selected source hint; the actual loaded receiver decides dispatch.
+        replacePinnedReceiver(replacement);
+        result += receiver.next(0);
+    }
+    return result;
+}
+
+int sub pinnedPhiSourceChanged(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        if (i == 2) {
+            replacePinnedPhiSource(c);
+        }
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        result += receiver.next(0);
+    }
+    return result;
+}
+
+# Keep the receiver load in the same block as its assignment. The caller
+# catches the exception so the normal loop body exercises the live status guard.
+int sub pinnedDeleteLocalLoop(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        deletePinnedReceiver(receiver);
+        result += receiver.next(0);
+    }
+    return result;
+}
+
+int sub pinnedPhiDeleted(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        try {
+            result += pinnedDeleteLocalLoop(1, i % 3 == 0 ? a : i % 3 == 1 ? b : c, b, c);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+            result += 100;
+        }
+    }
+    return result;
+}
+
+int sub pinnedLocalStep(int count, PinnedValue a, PinnedValue b, PinnedValue c) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        PinnedValue receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        result += receiver.next(i);
+    }
+    return result;
+}
+
+int sub pinnedReflect(PinnedValue source) {
+    PinnedValue receiver = source;
+    int first = receiver.touch();
+    return first * 100 + receiver.id;
+}
+
+int sub pinnedReflectReplaced(PinnedValue source) {
+    replacePinnedSource(new PinnedHook(12));
+    PinnedValue receiver = source;
+    int first = receiver.touch();
+    return first * 100 + receiver.id;
+}
+
+int sub pinnedChanging(PinnedValue source, PinnedValue original) {
+    int result = 0;
+    for (int i = 0; i < 6; ++i) {
+        if (i == 2) {
+            replacePinnedSource(new PinnedValue(20));
+        } else if (i == 4) {
+            replacePinnedSource(original);
+        }
+        PinnedValue receiver = source;
+        result += receiver.touch();
+    }
+    return result;
+}
+
+PinnedCycle sub makePinnedCycle() {
+    PinnedCycle value(50);
+    value.peer = value;
+    return value;
+}
+
+int sub pinnedCycle(PinnedValue source) {
+    PinnedValue receiver = source;
+    replacePinnedSource(new PinnedValue(81));
+    return receiver.touch();
+}
+
+PinnedValue sub pinnedReturn(PinnedValue source) {
+    PinnedValue receiver = source;
+    replacePinnedSource(new PinnedValue(81));
+    on_exit pinnedExitValue = receiver.id;
+    return receiver;
+}
+
+sub pinnedLifetime(PinnedValue source, bool unwind) {
+    auto older = new PinnedValue(31);
+    PinnedValue receiver = source;
+    auto younger = new PinnedValue(32);
+    if (unwind) {
+        throw "PINNED-UNWIND", "test";
+    }
+}
+
+int sub notPinned() {
+    PinnedValue source(7);
+    PinnedValue receiver = source;
+    return receiver.id;
+}
+
+# Every recursive invocation owns distinct pre-instantiated storage. The outer
+# handle must survive nested frames growing and shrinking the local-stack blocks.
+int sub pinnedRecursive(PinnedValue source, int depth) {
+    int result = 0;
+    for (int i = 0; i < 2; ++i) {
+        PinnedValue receiver = source;
+        if (depth && !i) {
+            result += pinnedRecursive(source, depth - 1);
+        }
+        result += receiver.touch();
+    }
+    return result;
+}
+
+printf("%d:%d:%d:%d\n", pinnedPhi(6, new PinnedValue(1), new PinnedValue(2), new PinnedValue(3)),
+    pinnedReflect(new PinnedHook(11)), pinnedReflectReplaced(new PinnedValue(10)), notPinned());
+printf("%d:%d:%d:%d\n",
+    pinnedPhiReceiverChanged(6, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)),
+    pinnedPhiSourceChanged(6, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)),
+    pinnedPhiDeleted(3, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)),
+    pinnedLocalStep(6, new PinnedValue(1), new PinnedNextB(2), new PinnedNextC(3)));
+PinnedValue returned = pinnedReturn(new PinnedValue(40));
+printf("%d:%d\n", returned.id, pinnedExitValue);
+foreach bool unwind in ((False, True)) {
+    pinnedDrops = ();
+    try {
+        pinnedLifetime(new PinnedValue(30), unwind);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "PINNED-UNWIND") {
+            rethrow;
+        }
+    }
+    printf("%s\n", (map string($1), pinnedDrops).join(","));
+}
+PinnedValue original(8);
+int changing = pinnedChanging(original, original);
+pinnedDrops = ();
+int cycle = pinnedCycle(makePinnedCycle());
+printf("%d:%d:%d\n", changing, cycle, (select pinnedDrops, $1 == 50).size());
+if (pinnedRecursive(new PinnedValue(7), 64) != 910) {
+    throw "PINNED-RECURSIVE", "body-local slot changed across nested frames";
+}
+printf("pinned-class-local: ok\n");

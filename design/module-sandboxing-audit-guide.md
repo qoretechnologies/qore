@@ -20,14 +20,13 @@ Qore's sandboxing system enables **safe execution of untrusted or partially trus
 
 The sandbox defends against malicious or buggy user code attempting to:
 
-| Threat | Mitigation |
-|--------|------------|
-| **Read sensitive files** (credentials, configs, other users' data) | Filesystem security manager |
-| **Write/delete files** (corruption, defacement, persistence) | Filesystem security manager |
-| **SSRF attacks** (accessing internal services, cloud metadata) | Network security manager |
-| **Data exfiltration** (sending data to external servers) | Network security manager |
-| **Denial of service** (infinite loops, memory exhaustion, fork bombs) | Resource limits |
-| **Hanging the system** (blocking operations that never complete) | Interrupt mechanism + timeouts |
+|!Threat|!Mitigation
+|**Read sensitive files** (credentials, configs, other users' data)|Filesystem security manager
+|**Write/delete files** (corruption, defacement, persistence)|Filesystem security manager
+|**SSRF attacks** (accessing internal services, cloud metadata)|Network security manager
+|**Data exfiltration** (sending data to external servers)|Network security manager
+|**Denial of service** (infinite loops, memory exhaustion, fork bombs)|Resource limits
+|**Hanging the system** (blocking operations that never complete)|Interrupt mechanism + timeouts
 
 ### Security Principle
 
@@ -39,12 +38,11 @@ The sandbox defends against malicious or buggy user code attempting to:
 
 Qore's sandboxing system consists of four subsystems, all managed through `QoreSandboxManager`:
 
-| Subsystem | Class | Purpose |
-|-----------|-------|---------|
-| Filesystem Security | `QoreFilesystemSecurityManager` | Controls file/directory access |
-| Network Security | `QoreNetworkSecurityManager` | Controls network connections |
-| Resource Limits | `QoreSandboxManager` | Memory, CPU, threads, recursion |
-| Interrupt Mechanism | `QoreSandboxManager` | Graceful termination of operations |
+|!Subsystem|!Class|!Purpose
+|Filesystem Security|`QoreFilesystemSecurityManager`|Controls file/directory access
+|Network Security|`QoreNetworkSecurityManager`|Controls network connections
+|Resource Limits|`QoreSandboxManager`|Memory, CPU, threads, recursion
+|Interrupt Mechanism|`QoreSandboxManager`|Graceful termination of operations
 
 ### How Sandboxing is Activated
 
@@ -257,38 +255,36 @@ Search for these patterns that require filesystem security checks:
 
 #### C++ Modules
 
-| Pattern to Find | Required Check |
-|-----------------|----------------|
-| `fopen`, `open`, `creat` | `checkAccess()` with appropriate mode |
-| `stat`, `lstat`, `fstat`, `access` | `checkAccess()` with `QSEC_READ` |
-| `unlink`, `remove` | `checkAccess()` with `QSEC_DELETE` |
-| `rename` | `checkAccess()` on both paths |
-| `mkdir`, `mkdtemp` | `checkAccess()` with `QSEC_CREATE` on parent |
-| `rmdir` | `checkAccess()` with `QSEC_DELETE` |
-| `opendir`, `readdir` | `checkAccess()` with `QSEC_READ` |
-| `chmod`, `chown`, `utime` | `checkAccess()` with `QSEC_WRITE` |
-| `link`, `symlink` | `checkAccess()` with `QSEC_CREATE` on target |
-| `readlink` | `checkAccess()` with `QSEC_READ` |
-| `truncate`, `ftruncate` | `checkAccess()` with `QSEC_WRITE` |
-| `mmap` with file | `checkAccess()` based on mmap flags |
-| `execve`, `execl`, `system` | `checkAccess()` with `QSEC_EXECUTE` |
-| `dlopen` | `checkAccess()` with `QSEC_EXECUTE` |
-| `QoreFile::open` | Should already check (verify) |
-| `QoreDir` operations | Should already check (verify) |
+|!Pattern to Find|!Required Check
+|`fopen`, `open`, `creat`|`checkAccess()` with appropriate mode
+|`stat`, `lstat`, `fstat`, `access`|`checkAccess()` with `QSEC_READ`
+|`unlink`, `remove`|`checkAccess()` with `QSEC_DELETE`
+|`rename`|`checkAccess()` on both paths
+|`mkdir`, `mkdtemp`|`checkAccess()` with `QSEC_CREATE` on parent
+|`rmdir`|`checkAccess()` with `QSEC_DELETE`
+|`opendir`, `readdir`|`checkAccess()` with `QSEC_READ`
+|`chmod`, `chown`, `utime`|`checkAccess()` with `QSEC_WRITE`
+|`link`, `symlink`|`checkAccess()` with `QSEC_CREATE` on target
+|`readlink`|`checkAccess()` with `QSEC_READ`
+|`truncate`, `ftruncate`|`checkAccess()` with `QSEC_WRITE`
+|`mmap` with file|`checkAccess()` based on mmap flags
+|`execve`, `execl`, `system`|`checkAccess()` with `QSEC_EXECUTE`
+|`dlopen`|`checkAccess()` with `QSEC_EXECUTE`
+|`QoreFile::open`|Should already check (verify)
+|`QoreDir` operations|Should already check (verify)
 
 #### Qore-Language Modules
 
-| Pattern to Find | Required Check |
-|-----------------|----------------|
-| `File::open()`, `open_file()` | Uses QoreFile (verify checks) |
-| `ReadOnlyFile` constructor | Uses QoreFile (verify checks) |
-| `Dir` operations | Uses QoreDir (verify checks) |
-| `stat()`, `lstat()`, `hstat()` | Verify sandbox check |
-| `unlink()`, `remove_file()` | Verify sandbox check |
-| `rename()`, `move_file()` | Verify sandbox check |
-| `mkdir()`, `rmdir()` | Verify sandbox check |
-| `glob()` | Verify sandbox check |
-| `system()`, `backquote` | Verify sandbox check on executable |
+|!Pattern to Find|!Required Check
+|`File::open()`, `open_file()`|Uses QoreFile (verify checks)
+|`ReadOnlyFile` constructor|Uses QoreFile (verify checks)
+|`Dir` operations|Uses QoreDir (verify checks)
+|`stat()`, `lstat()`, `hstat()`|Verify sandbox check
+|`unlink()`, `remove_file()`|Verify sandbox check
+|`rename()`, `move_file()`|Verify sandbox check
+|`mkdir()`, `rmdir()`|Verify sandbox check
+|`glob()`|Verify sandbox check
+|`system()`, `backquote`|Verify sandbox check on executable
 
 ### 1.4 Implementation Pattern - Filesystem Check
 
@@ -358,29 +354,27 @@ Search for these patterns that require network security checks:
 
 #### C++ Modules
 
-| Pattern to Find | Required Check |
-|-----------------|----------------|
-| `connect()` | `checkConnect()` |
-| `bind()` | `checkBind()` / `checkNetworkBind()` |
-| `socket()` + connection | Check before connect |
-| `getaddrinfo()` + connect | `checkHostname()` before DNS, `checkConnect()` after |
-| `gethostbyname()` + connect | `checkHostname()` before DNS, `checkConnect()` after |
-| `QoreSocket::connect` | Should already check (verify) |
-| `QoreHttpClientObject` | Should already check (verify) |
-| HTTP client libraries (curl, etc.) | Must wrap with checks |
-| Database client libraries | Must check connection endpoints |
-| Message queue clients | Must check broker endpoints |
-| `sendto()` with address | `checkConnect()` on destination |
+|!Pattern to Find|!Required Check
+|`connect()`|`checkConnect()`
+|`bind()`|`checkBind()` / `checkNetworkBind()`
+|`socket()` + connection|Check before connect
+|`getaddrinfo()` + connect|`checkHostname()` before DNS, `checkConnect()` after
+|`gethostbyname()` + connect|`checkHostname()` before DNS, `checkConnect()` after
+|`QoreSocket::connect`|Should already check (verify)
+|`QoreHttpClientObject`|Should already check (verify)
+|HTTP client libraries (curl, etc.)|Must wrap with checks
+|Database client libraries|Must check connection endpoints
+|Message queue clients|Must check broker endpoints
+|`sendto()` with address|`checkConnect()` on destination
 
 #### Qore-Language Modules
 
-| Pattern to Find | Required Check |
-|-----------------|----------------|
-| `Socket::connect()` | Uses QoreSocket (verify checks) |
-| `HTTPClient` constructor/connect | Verify sandbox check |
-| `FtpClient` | Verify sandbox check |
-| Database connections (`Datasource`) | Verify sandbox check |
-| Any URL-based operations | Verify sandbox check |
+|!Pattern to Find|!Required Check
+|`Socket::connect()`|Uses QoreSocket (verify checks)
+|`HTTPClient` constructor/connect|Verify sandbox check
+|`FtpClient`|Verify sandbox check
+|Database connections (`Datasource`)|Verify sandbox check
+|Any URL-based operations|Verify sandbox check
 
 ### 2.3 Implementation Pattern - Network Check
 
@@ -486,9 +480,8 @@ if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host, addr, len, QSE
 
 The thread limit is the only resource limit; the Qore runtime enforces it, but modules can bypass it:
 
-| Limit | Enforcement Point | Module Responsibility |
-|-------|-------------------|----------------------|
-| Threads (`max_threads`) | Thread creation | Use Qore's threading APIs |
+|!Limit|!Enforcement Point|!Module Responsibility
+|Threads (`max_threads`)|Thread creation|Use Qore's threading APIs
 
 Code that runs too long is stopped by an interrupt (`requestInterrupt()`), which a module honors by waiting
 interruptibly (see the interrupt sections of this guide).
@@ -497,17 +490,15 @@ interruptibly (see the interrupt sections of this guide).
 
 #### C++ Modules
 
-| Pattern to Find | Concern |
-|-----------------|---------|
-| Tight loops that never check for an interrupt | Cannot be interrupted |
-| `sleep()`, blocking syscalls | Cannot be interrupted unless the wait is interruptible |
-| `pthread_create` | May bypass thread limits |
+|!Pattern to Find|!Concern
+|Tight loops that never check for an interrupt|Cannot be interrupted
+|`sleep()`, blocking syscalls|Cannot be interrupted unless the wait is interruptible
+|`pthread_create`|May bypass thread limits
 
 #### Qore-Language Modules
 
-| Pattern to Find | Concern |
-|-----------------|---------|
-| `background` statements | Thread creation |
+|!Pattern to Find|!Concern
+|`background` statements|Thread creation
 
 ### 3.3 Implementation Pattern - Resource Awareness
 
@@ -558,29 +549,27 @@ Interrupts should be checked:
 
 #### C++ Modules
 
-| Pattern to Find | Required Interrupt Support |
-|-----------------|---------------------------|
-| `read()`, `recv()`, `recvfrom()` | Poll with timeout, check interrupt |
-| `write()`, `send()`, `sendto()` | Poll with timeout, check interrupt |
-| `select()`, `poll()`, `epoll_wait()` | Use short timeout, check interrupt |
-| `accept()` | Poll with timeout, check interrupt |
-| `flock()`, `lockf()` | Poll with timeout, check interrupt |
-| `waitpid()` | Use `WNOHANG` + poll, check interrupt |
-| `sem_wait()`, `pthread_mutex_lock()` | Use timed variants, check interrupt |
-| `sleep()`, `usleep()`, `nanosleep()` | Break into chunks, check interrupt |
-| Database queries | Use async API or cancel callback |
-| HTTP requests | Use timeouts, check interrupt |
-| Any blocking library call | Wrap with polling/timeout |
+|!Pattern to Find|!Required Interrupt Support
+|`read()`, `recv()`, `recvfrom()`|Poll with timeout, check interrupt
+|`write()`, `send()`, `sendto()`|Poll with timeout, check interrupt
+|`select()`, `poll()`, `epoll_wait()`|Use short timeout, check interrupt
+|`accept()`|Poll with timeout, check interrupt
+|`flock()`, `lockf()`|Poll with timeout, check interrupt
+|`waitpid()`|Use `WNOHANG` + poll, check interrupt
+|`sem_wait()`, `pthread_mutex_lock()`|Use timed variants, check interrupt
+|`sleep()`, `usleep()`, `nanosleep()`|Break into chunks, check interrupt
+|Database queries|Use async API or cancel callback
+|HTTP requests|Use timeouts, check interrupt
+|Any blocking library call|Wrap with polling/timeout
 
 #### Qore-Language Modules
 
-| Pattern to Find | Required Interrupt Support |
-|-----------------|---------------------------|
-| `sleep()`, `usleep()` | Runtime handles (verify) |
-| `Mutex::lock()` | Runtime handles (verify) |
-| `Queue::get()` | Runtime handles (verify) |
-| `Counter::waitForZero()` | Runtime handles (verify) |
-| Blocking I/O | Uses Qore I/O classes (verify) |
+|!Pattern to Find|!Required Interrupt Support
+|`sleep()`, `usleep()`|Runtime handles (verify)
+|`Mutex::lock()`|Runtime handles (verify)
+|`Queue::get()`|Runtime handles (verify)
+|`Counter::waitForZero()`|Runtime handles (verify)
+|Blocking I/O|Uses Qore I/O classes (verify)
 
 ### 4.4 Implementation Patterns - Interrupt Support
 
@@ -793,11 +782,10 @@ grep -rn "sleep\|Mutex\|lock\|Queue\|Counter\|wait" src/*.qm src/*.q
 
 ## Specific Findings
 
-| # | Location | Description | Severity | Remediation |
-|---|----------|-------------|----------|-------------|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
+|!#|!Location|!Description|!Severity|!Remediation
+|1||||&nbsp;
+|2||||&nbsp;
+|3||||&nbsp;
 ```
 
 ---
@@ -838,13 +826,12 @@ These are lower risk but should still be addressed for defense in depth:
 
 ## Appendix A: Exception Reference
 
-| Exception | Subsystem | Meaning |
-|-----------|-----------|---------|
-| `FILESYSTEM-ACCESS-DENIED` | Filesystem | Path access blocked by policy |
-| `NETWORK-ACCESS-DENIED` | Network | Connection blocked by policy |
-| `PROGRAM-INTERRUPTED` | Interrupt | Operation interrupted by request |
-| `THREAD-CREATION-FAILURE` | Resources | Thread creation would exceed the thread limit |
-| `SANDBOX-PATH-ERROR` | Filesystem | Path canonicalization failed |
+|!Exception|!Subsystem|!Meaning
+|`FILESYSTEM-ACCESS-DENIED`|Filesystem|Path access blocked by policy
+|`NETWORK-ACCESS-DENIED`|Network|Connection blocked by policy
+|`PROGRAM-INTERRUPTED`|Interrupt|Operation interrupted by request
+|`THREAD-CREATION-FAILURE`|Resources|Thread creation would exceed the thread limit
+|`SANDBOX-PATH-ERROR`|Filesystem|Path canonicalization failed
 
 ## Appendix B: Header Reference
 

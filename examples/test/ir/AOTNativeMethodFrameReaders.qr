@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+hashdecl NativeMethodFrameReadResult {
+    #! frames read that are not as expected
+    list<string> errors;
+}
+
+class NativeReaderA {
+    int next(int value) { return (value + 17) & 65535; }
+    int forward(int value) { return self.next(value); } # Keep line 13 for reader checks below.
+}
+class NativeReaderB inherits NativeReaderA {
+    int next(int value) { return (value + 19) & 65535; }
+}
+
+int sub nativeMethodReaderBatch(NativeReaderA first, NativeReaderA second, bool replace) {
+    int value = 0;
+    for (int i = 0; i < 4096; ++i) {
+        NativeReaderA receiver = replace && (i & 1) ? first : second;
+        if (replace) {
+            value = receiver.forward(value);
+        } else {
+            value = receiver.next(value);
+        }
+    }
+    return value;
+}
+
+sub nativeMethodReaderCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    NativeReaderA first();
+    NativeReaderB second();
+    # Populate both forwarded target keys before readers inspect the optimized path.
+    for (int warmup = 0; warmup < 16; ++warmup) {
+        if (nativeMethodReaderBatch(first, second, True) != 8192) {
+            failures.push("incorrect forwarding warmup result");
+        }
+    }
+    started.dec();
+    bool replace = False;
+    while (readers.getCount()) {
+        int actual = nativeMethodReaderBatch(first, second, replace);
+        if (actual != (replace ? 8192 : 12288)) {
+            failures.push("incorrect callback result");
+            return;
+        }
+        replace = !replace;
+    }
+}
+
+sub nativeMethodReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<NativeMethodFrameReadResult> result();
+    result.errors = ();
+    bool precise_forward_loc = !!ENV.QORE_TEST_FORWARD_FRAME_LOC;
+    for (int i = 0; i < 400; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            bool caller = False;
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.function == "nativeMethodReaderCaller") {
+                    caller = True;
+                    break;
+                }
+            }
+            if (!caller) {
+                continue;
+            }
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                # Baseline compiled background scopes can have an empty name;
+                # AST method frames use bare "next". Validate named method
+                # frames without treating those existing representations as new failures.
+                if (frame.type == "user" && !frame.function.empty()
+                        && frame.function != "nativeMethodReaderCaller"
+                        && frame.function != "nativeMethodReaderBatch" && frame.function != "NativeReaderA::next"
+                        && frame.function != "NativeReaderB::next" && frame.function != "next"
+                        && frame.function != "NativeReaderA::forward" && frame.function != "forward") {
+                    result.errors += sprintf("unexpected caller frame: %y", frame);
+                }
+                if (frame.function == "NativeReaderA::next" || frame.function == "NativeReaderB::next"
+                        || frame.function == "next") {
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid native frame: %y", frame);
+                    }
+                }
+            }
+            for (int j = 0; j + 1 < tid_stack.value.size(); ++j) {
+                hash<CallStackInfo> leaf = tid_stack.value[j];
+                hash<CallStackInfo> forward_caller = tid_stack.value[j + 1];
+                # Only the explicitly requested, warmed AOT shortcut promises an exact
+                # foreign-thread call site; IR/JIT can expose the callee's eager location.
+                if (precise_forward_loc
+                        && (leaf.function == "NativeReaderA::next" || leaf.function == "NativeReaderB::next")
+                        && forward_caller.function == "NativeReaderA::forward" && leaf.line != 13) {
+                    result.errors += sprintf("incorrect forwarded call site: %y", leaf);
+                }
+            }
+        }
+    }
+    results.push(result);
+}
+
+#! Returns the stack of a caller read while it is in a leaf frame called by one of the given frames
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub nativeMethodParkedStack(list<string> callers) {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame",
+        ("NativeReaderA::next", "NativeReaderB::next", "next"), callers, 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    hash<CallStackInfo> leaf = stack[0];
+    if (leaf.type != "user" || leaf.file.empty() || leaf.line < 0 || leaf.endline < leaf.line
+            || !callers.contains(stack[1].function) || !(select stack, $1.function == "nativeMethodReaderCaller")) {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("invalid parked native frame: %y", stack);
+    }
+    # the warmed AOT shortcut publishes the forwarded leaf with a deferred context, at the exact call site
+    bool forwarded = stack[1].function == "NativeReaderA::forward";
+    if (ENV.QORE_TEST_FORWARD_FRAME_LOC && forwarded && (parked.kind != "native-leaf" || leaf.line != 13)) {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("incorrect forwarded %y frame: %y", parked.kind, leaf);
+    }
+    # native code publishes the frames of the calls it makes itself
+    if (ENV.QORE_TEST_NATIVE_FRAME && parked.kind == "ordinary") {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("leaf frame published by an ordinary call: %y", stack);
+    }
+    return stack;
+}
+
+Counter started(4);
+# the concurrent readers and the parked reads below
+Counter readers(3);
+Counter callers_done(4);
+Counter readers_done(2);
+Queue failures();
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background nativeMethodReaderCaller(started, readers, callers_done, failures);
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background nativeMethodReader(readers, readers_done, results);
+}
+{
+    on_exit readers.dec();
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        nativeMethodParkedStack(("nativeMethodReaderBatch",));
+        nativeMethodParkedStack(("NativeReaderA::forward", "forward"));
+    }
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    hash<NativeMethodFrameReadResult> result = results.get(10000);
+    if (result.errors) {
+        throw "NATIVE-METHOD-FRAME-TEST", result.errors.join("\n");
+    }
+}
+if (failures.size()) {
+    throw "NATIVE-METHOD-FRAME-TEST", sprintf("%d caller failures", failures.size());
+}
+printf("native-method-frame-readers: ok\n");

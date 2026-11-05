@@ -4,10 +4,9 @@
 
 Qore provides cooperative cancellation at two levels:
 
-| Level | Scope | Requested by | Exception |
-|-------|-------|-------------|-----------|
-| **Program interrupt** | All threads in a program | Sandbox controller via `SandboxManager::requestInterrupt()` | `PROGRAM-INTERRUPTED` |
-| **Thread cancellation** | One specific thread | Any thread in scope (see [Program Scope](#program-scope-who-can-cancel-whom)) via `cancel_thread(tid)` | `THREAD-CANCELLED` |
+|!Level|!Scope|!Requested by|!Exception
+|**Program interrupt**|All threads in a program|Sandbox controller via `SandboxManager::requestInterrupt()`|`PROGRAM-INTERRUPTED`
+|**Thread cancellation**|One specific thread|Any thread in scope (see [Program Scope](#program-scope-who-can-cancel-whom)) via `cancel_thread(tid)`|`THREAD-CANCELLED`
 
 Both levels are checked at the same **cancellation points** through a single C++ function. This document covers the architecture, the C++ and Qore APIs, and the implementation guide for binary modules.
 
@@ -36,9 +35,10 @@ DLLEXPORT bool qore_check_cancel(ExceptionSink* xsink,
 
 This function:
 1. Checks the per-thread cancellation flag (one atomic load — cheap)
-2. Checks the program-level interrupt via `QoreSandboxManagerHelper`
+2. If any program interrupt may be pending, resolves the governing manager via
+   `QoreSandboxManagerHelper` and checks its interrupt flag
 3. Raises the appropriate exception (`THREAD-CANCELLED` or `PROGRAM-INTERRUPTED`) if either is set
-4. Returns `false` with zero overhead when neither is active
+4. Returns `false` when neither is active; the common path avoids manager resolution
 
 **This replaces `qore_check_io_interrupt()`**.  The old function remains
 exported as a deprecated binary-compatibility wrapper that delegates to
@@ -306,15 +306,14 @@ while (db_fetch_row(stmt)) {
 
 ### Common DB Library Cancellation APIs
 
-| Database | Cancellation API | Notes |
-|----------|------------------|-------|
-| Oracle OCI | `OCIBreak(svchp, errhp)` | Cancels current operation on service context |
-| MySQL | `mysql_kill(conn, thread_id)` | Kills query from another connection |
-| PostgreSQL | `PQcancel(cancel, errbuf, len)` | Requires PGcancel object from `PQgetCancel()` |
-| SQLite | `sqlite3_interrupt(db)` | Safe to call from any thread |
-| ODBC | `SQLCancel(stmt)` | Cancels statement execution |
-| FreeTDS/Sybase | `ct_cancel(conn, cmd, CS_CANCEL_ALL)` | Cancels current command batch |
-| JDBC (via JNI) | `Statement.cancel()` | Thread-safe query cancellation |
+|!Database|!Cancellation API|!Notes
+|Oracle OCI|`OCIBreak(svchp, errhp)`|Cancels current operation on service context
+|MySQL|`mysql_kill(conn, thread_id)`|Kills query from another connection
+|PostgreSQL|`PQcancel(cancel, errbuf, len)`|Requires PGcancel object from `PQgetCancel()`
+|SQLite|`sqlite3_interrupt(db)`|Safe to call from any thread
+|ODBC|`SQLCancel(stmt)`|Cancels statement execution
+|FreeTDS/Sybase|`ct_cancel(conn, cmd, CS_CANCEL_ALL)`|Cancels current command batch
+|JDBC (via JNI)|`Statement.cancel()`|Thread-safe query cancellation
 
 ### Implementation Strategy by Library Type
 
@@ -343,22 +342,21 @@ while (db_fetch_row(stmt)) {
 
 ### Current Module Status
 
-| Module | Cancel API Used | Cancel Callback | Pre-Checks | Periodic Fetch Checks |
-|--------|----------------|-----------------|------------|----------------------|
-| module-oracle | `OCIBreak()` | `QoreOracleCancelHelper` | Yes | Yes (rows + LOB chunks) |
-| module-pgsql | `PQcancel()` | `QorePGCancelHelper` | Yes | — |
-| module-sybase | `ct_cancel()` | `QoreSybaseCancelHelper` | Yes | Yes (every 100 rows) |
-| module-mysql | — | **TODO** | Yes | Yes (every 100 rows) |
-| module-odbc | — | **TODO**: `SQLCancel()` | Yes | Yes (every 100 rows) |
-| module-sqlite3 | — | **TODO**: `sqlite3_interrupt()` | **TODO** | **TODO** |
-| module-ssh2 | N/A (polling) | N/A | Yes | Yes (wait loop) |
-| module-openldap | — | **TODO**: `ldap_abandon_ext()` | Yes | — |
-| module-zmq | N/A (polling) | N/A | Yes | Yes (poll loop) |
-| module-process | — | **TODO**: `terminate()` | **TODO** | **TODO** |
-| module-jni | — | **TODO**: `Statement.cancel()` | Minimal | — |
-| module-python | — | **TODO**: `PyErr_SetInterrupt()` | GIL-level | — |
-| module-v8 | — | **TODO**: `TerminateExecution()` | **TODO** | **TODO** |
-| mongodb (in-tree) | N/A (own socket stream, `qore_cancellable_poll()`) | N/A | Yes | Woken directly |
+|!Module|!Cancel API Used|!Cancel Callback|!Pre-Checks|!Periodic Fetch Checks
+|module-oracle|`OCIBreak()`|`QoreOracleCancelHelper`|Yes|Yes (rows + LOB chunks)
+|module-pgsql|`PQcancel()`|`QorePGCancelHelper`|Yes|—
+|module-sybase|`ct_cancel()`|`QoreSybaseCancelHelper`|Yes|Yes (every 100 rows)
+|module-mysql|—|**TODO**|Yes|Yes (every 100 rows)
+|module-odbc|—|**TODO**: `SQLCancel()`|Yes|Yes (every 100 rows)
+|module-sqlite3|—|**TODO**: `sqlite3_interrupt()`|**TODO**|**TODO**
+|module-ssh2|N/A (polling)|N/A|Yes|Yes (wait loop)
+|module-openldap|—|**TODO**: `ldap_abandon_ext()`|Yes|—
+|module-zmq|N/A (polling)|N/A|Yes|Yes (poll loop)
+|module-process|—|**TODO**: `terminate()`|**TODO**|**TODO**
+|module-jni|—|**TODO**: `Statement.cancel()`|Minimal|—
+|module-python|—|**TODO**: `PyErr_SetInterrupt()`|GIL-level|—
+|module-v8|—|**TODO**: `TerminateExecution()`|**TODO**|**TODO**
+|mongodb (in-tree)|N/A (own socket stream, `qore_cancellable_poll()`)|N/A|Yes|Woken directly
 
 All modules with existing `qore_check_io_interrupt()` calls need a mechanical replacement to `qore_check_cancel()`.
 The old symbol must remain exported until compatible module rebuilds are no longer required.
@@ -475,26 +473,24 @@ wakes a blocked thread directly; no core wait has a periodic timeout for cancell
 mechanisms, one per kind of wait, and both use the same lost-wakeup protocol (see "Race avoidance"
 below):
 
-| Wait | Mechanism | Registered in |
-|---|---|---|
-| condition variable (`QoreCondition`) | broadcast the condition after holding its mutex | `ThreadEntry::waiting_on` / `waiting_mutex` |
-| descriptor (`poll()`) | signal the thread's wakeup channel, which is polled with the caller's descriptors | `ThreadEntry::waiting_fd` |
+|!Wait|!Mechanism|!Registered in
+|condition variable (`QoreCondition`)|broadcast the condition after holding its mutex|`ThreadEntry::waiting_on` / `waiting_mutex`
+|descriptor (`poll()`)|signal the thread's wakeup channel, which is polled with the caller's descriptors|`ThreadEntry::waiting_fd`
 
 Converted waits:
 
-| Wait | How it waits now |
-|---|---|
-| backquote / `backquote()` output read | `qore_cancellable_poll()` |
-| `File` reads and `File::isDataAvailable()` on pipes, FIFOs and terminals | `qore_cancellable_poll()` |
-| blocked writes to stdout / stderr streams | `qore_cancellable_poll()` |
-| `sleep()`, `usleep()`, `File` read backoff, `File::lock()` retry interval | `qore_cancellable_sleep()` |
-| `StreamPipe` reads, writes and close | `QoreCondition::waitWithInterrupt()` |
-| `Datasource` transaction lock wait | `QoreCondition::waitWithInterrupt()` |
-| `channel_select()` (with and without a timeout) | `QoreCondition::waitWithInterrupt()` |
-| `Mutex`, `RWLock`, `Gate`, `AutoLock`, `AutoReadLock`, `AutoWriteLock`, `AutoGate`, `Condition::wait()` | `VLockCancellationPoint` |
-| `Queue`, `Counter`, `AutoSemaphore` | `QoreCondition::waitWithInterrupt()` (the redundant outer poll loops were removed) |
-| socket, TLS, HTTP/1, HTTP/2 and HTTP/3 synchronous operations | the caller waits for the async I/O controller's result on a `Queue` (`QoreCondition::waitWithInterrupt()`) |
-| process waits (`system()`, backquote child exit) | `QoreChildWait` on a `QoreCondition` |
+|!Wait|!How it waits now
+|backquote / `backquote()` output read|`qore_cancellable_poll()`
+|`File` reads and `File::isDataAvailable()` on pipes, FIFOs and terminals|`qore_cancellable_poll()`
+|blocked writes to stdout / stderr streams|`qore_cancellable_poll()`
+|`sleep()`, `usleep()`, `File` read backoff, `File::lock()` retry interval|`qore_cancellable_sleep()`
+|`StreamPipe` reads, writes and close|`QoreCondition::waitWithInterrupt()`
+|`Datasource` transaction lock wait|`QoreCondition::waitWithInterrupt()`
+|`channel_select()` (with and without a timeout)|`QoreCondition::waitWithInterrupt()`
+|`Mutex`, `RWLock`, `Gate`, `AutoLock`, `AutoReadLock`, `AutoWriteLock`, `AutoGate`, `Condition::wait()`|`VLockCancellationPoint`
+|`Queue`, `Counter`, `AutoSemaphore`|`QoreCondition::waitWithInterrupt()` (the redundant outer poll loops were removed)
+|socket, TLS, HTTP/1, HTTP/2 and HTTP/3 synchronous operations|the caller waits for the async I/O controller's result on a `Queue` (`QoreCondition::waitWithInterrupt()`)
+|process waits (`system()`, backquote child exit)|`QoreChildWait` on a `QoreCondition`
 
 #### Wakeup descriptor
 
@@ -604,11 +600,14 @@ not set, and resume waiting.
 
 ### `qore_check_cancel()` Implementation
 
+The sketch below shows ordering only; the implementation in `lib/thread.cpp`
+also checks deferral first, supports a null sink, and validates thread/scope state.
+
 ```cpp
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     // 1. Check thread-level cancellation (cheap: one atomic load)
     int tid = q_gettid();
-    if (tid >= 0 && thread_list.entry[tid].cancel_requested.load(std::memory_order_acquire)) {
+    if (tid >= 0 && thread_list.entry[tid].cancel_requested.load(std::memory_order_seq_cst)) {
         QoreStringNode* reason = thread_list.entry[tid].cancel_reason;
         if (reason) {
             xsink->raiseException("THREAD-CANCELLED",
@@ -621,7 +620,11 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
         return true;
     }
 
-    // 2. Check program-level interrupt
+    // 2. Skip manager resolution only when no program interrupt can be pending.
+    if (!qore_pending_program_interrupts.load(std::memory_order_seq_cst)) {
+        return false;
+    }
+    // Resolve the actual manager; another program's interrupt is not ours.
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     if (smh && smh->checkIOInterrupt(xsink, operation)) {
         return true;
@@ -630,6 +633,61 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     return false;
 }
 ```
+
+### Generated native-loop polling
+
+JIT/AOT loops can inline the no-pending-request part of the check without
+reducing checkpoint frequency. `qore_rt_get_cancel_poll_state_v1` supplies a
+versioned three-pointer descriptor from the invocation's live RuntimeConfig:
+deferral depth, the current thread's fixed-slot request flag, and the global
+pending-Program-interrupt count. Only addresses are retained. Every checkpoint
+reads deferral first, then performs seq_cst loads of the thread flag and global
+count in that order. A nonzero deferral skips cancellation, as in the full
+helper; a nonzero request/count calls `qore_rt_check_cancel_v2` to resolve
+scope, governing manager, priority and diagnostics. The global count is only
+a conservative zero test, never evidence that this Program is interrupted.
+
+The runtime returns all-null fields if thread context is unavailable or the
+documented native primitive size/alignment/lock-free atomic requirements do
+not hold. A null descriptor selects the full nullable-context helper rather
+than skipping a poll. Thread-local addresses cannot outlive the acquiring
+thread's invocation or survive thread teardown/re-registration. The global
+counter's request-before-publication and clear-before-decrement ordering is
+unchanged. Pending requests are always rechecked by the full helper, and
+exception-sink checking remains after the merged fast/slow paths except for the
+proven-clear AOT edges described below.
+
+Ordinary language loops still poll every iteration; fused internal loops keep
+their existing 100-element interval. `QORE_DISABLE_LLVM_INLINE_CANCEL_POLL`
+retains helper calls for comparison, while
+`QORE_DISABLE_LLVM_CANCEL_RUNTIME_CONFIG` selects the original TLS entry.
+These are compilation controls. The interpreter and previously compiled AOT
+artifacts retain their existing cancellation paths.
+
+### Proven-clear AOT cancellation sink checks
+
+After the main LLVM optimization pipeline, AOT can bypass a redundant full sink
+predicate on an edge proved clear by an earlier cancellation checkpoint. It
+recognizes the actual private-pointer, exception-head and thread-exit loads,
+with compiler provenance and one function-argument sink. Entry, unknown calls,
+unknown writes and failure edges invalidate the fact. Only current full
+cancellation checks reestablish it; ordinary post-call checks do not seed this
+optimization. The forward must-analysis handles loops by induction from their
+real entry edges. Atomic polling reads preserve the fact without changing their
+ordering.
+
+Only a standalone check whose definitions do not escape can be bypassed. Its
+successor must have no PHIs; expanding loop merges did not give a stable
+performance tradeoff. ThreadData location stores are retained and recognized
+only through compiler-authored provenance. Checks on unproved entry paths,
+slow-helper checks, seq_cst thread/program polls, deferral behavior, source
+locations and checkpoint frequencies remain. No invariant-memory annotation or
+new alias assumption is introduced. Missing proof leaves the original CFG.
+
+`QORE_DISABLE_LLVM_CLEAR_CANCEL_SINK` retains the original checks for compilation
+comparisons. Interpreter/JIT execution and existing AOT artifacts are unchanged.
+See `bench/runtime-comparison/results-clear-cancellation-sink-macos-arm64.json`
+for the retained narrow transform, rejected broader prototype and measurements.
 
 ### `qore_cancel_thread()` Implementation
 
@@ -807,16 +865,15 @@ push a cancellation deferral that is never popped, so a request delivered *while
 already running cannot abort it either; the deferral lives in the thread data and dies with it.  A
 pooled worker must stay cancellable for its next task, so its per-task sites clear only.
 
-| Site | Covers | `terminating` |
-|---|---|---|
-| `op_background_thread()`, after `btp->exec()` | `background` threads | yes |
-| `q_run_thread()`, after `ta->run()` | `q_start_thread()` threads (including pool worker threads) | yes |
-| `q_deregister_foreign_thread()` | foreign threads | yes |
-| `q_deregister_reserved_foreign_thread()` | foreign threads keeping a reserved TID | yes |
-| `delete_thread_local_data()` | the initial thread at process exit | yes |
-| `clear_all_program_thread_local_data()` | worker recycling (backstop for both pools) | no |
-| `ThreadPoolThread::worker()`, after the task's `handleExceptions()` | `ThreadPool` tasks | no |
-| `QoreCallDispatcher::workerLoop()`, after the dispatch | async I/O work items | no |
+|!Site|!Covers|!`terminating`
+|`op_background_thread()`, after `btp->exec()`|`background` threads|yes
+|`q_run_thread()`, after `ta->run()`|`q_start_thread()` threads (including pool worker threads)|yes
+|`q_deregister_foreign_thread()`|foreign threads|yes
+|`q_deregister_reserved_foreign_thread()`|foreign threads keeping a reserved TID|yes
+|`delete_thread_local_data()`|the initial thread at process exit|yes
+|`clear_all_program_thread_local_data()`|worker recycling (backstop for both pools)|no
+|`ThreadPoolThread::worker()`, after the task's `handleExceptions()`|`ThreadPool` tasks|no
+|`QoreCallDispatcher::workerLoop()`, after the dispatch|async I/O work items|no
 
 `ThreadEntry::activate()` additionally clears the state on every activation.  A `QTS_RESERVED`
 entry is reactivated *without* passing through `ThreadEntry::cleanup()`, so without this a
@@ -832,11 +889,10 @@ Self-cancellation (cancelling the current thread) is an error — use `throw "TH
 Otherwise a request carries a **scope**, computed on the requesting thread by
 `get_cancel_scope_pgm_id()`:
 
-| Requesting context | Scope | Effect |
-|---|---|---|
-| host (C++) code with no `Program` context | `0` (unscoped) | applies to any thread |
-| an unrestricted `Program` — no `SandboxManager` on it or any enclosing caller `Program` | `0` (unscoped) | applies to any thread |
-| a sandboxed `Program` | that program's ID | applies only to threads executing in it or under a call that originated in it |
+|!Requesting context|!Scope|!Effect
+|host (C++) code with no `Program` context|`0` (unscoped)|applies to any thread
+|an unrestricted `Program` — no `SandboxManager` on it or any enclosing caller `Program`|`0` (unscoped)|applies to any thread
+|a sandboxed `Program`|that program's ID|applies only to threads executing in it or under a call that originated in it
 
 The scope is the `Program` that the governing `SandboxManager` was found on, resolved with the same
 order as the manager lookup itself (`find_thread_sandbox_manager_ref_intern()`: current `Program` →
@@ -883,11 +939,30 @@ stops *every* thread in the target program — remained unrestricted.
 
 ## Performance
 
-**Loop checks**: `qore_check_cancel()` first does one atomic load for the thread cancel
-flag (seq_cst on the load — required by the wait/cancel race; on x86 this is identical to a
-plain load, on weak-memory architectures it adds one fence per check).  Only if that passes
-does it construct the `QoreSandboxManagerHelper` RAII helper for the program interrupt check.
-For the common case (not cancelled), the cost is one TLS read + one atomic load.
+**Loop checks**: after checking cancellation deferral and the per-thread cancel
+flag, `qore_check_cancel()` reads the process-wide conservative pending-program
+interrupt count. A zero count skips `QoreSandboxManagerHelper` construction and
+context-stack resolution, including when a sandbox exists but is not interrupted.
+This is low overhead, not zero overhead: TLS/context checks and atomic loads remain.
+Both cancellation loads use sequential consistency for the wait/cancel handshake;
+the target architecture determines their instruction cost.
+
+`QoreSandboxInterrupt.h` declares the internal count. Each `requestInterrupt()`
+increments it **before** publishing its manager's flag with an exchange; a repeated
+request then relinquishes its provisional count. `clearInterrupt()` exchanges the
+flag to false **before** relinquishing the count, and destruction of an interrupted
+manager relinquishes its count as well. All these operations are sequentially
+consistent. The count is therefore an upper bound on set manager flags, including
+in-flight publications, even when requests and clears race. False positives only
+take the existing slow path. A zero observed before a new publication is safe:
+the subsequent wake-all operation observes registered waiters, preserving the
+lost-wakeup ordering. Do not weaken the ordering independently of that protocol.
+
+When the count is nonzero, full manager resolution still decides whether this
+context is interrupted; another program's interrupt does not cancel it. Thread
+cancellation retains priority, deferral still suppresses both cancellation types,
+and policy barriers still do not suppress program interruption. No sandbox
+permission checks, cancellation points, or polling frequencies are removed.
 
 **Blocking waits**: `waitWithInterrupt()` does a single `pthread_cond_wait` /
 `pthread_cond_timedwait`, no polling.  Per-wait overhead is two acquisitions of the wait registry
@@ -1005,7 +1080,7 @@ do_io_operation();  # Works normally, no overhead
 - [ ] Wait on descriptors with `qore_cancellable_poll()`, or add the descriptor from `qore_cancel_wakeup_register()` to a library's own event loop; never poll with `QORE_IO_POLL_INTERVAL_MS` slices
 - [ ] Register cancel callback via `QoreSandboxManagerHelper` if library has a cancel API
 - [ ] Check every ~100 rows in fetch loops
-- [ ] Ensure zero overhead when no cancellation is active
+- [ ] Keep the inactive cancellation path cheap without weakening wait/cancel ordering
 - [ ] Add tests for pre-requested and runtime cancellation
 - [ ] Document any limitations (e.g., "interrupt may not be immediate")
 

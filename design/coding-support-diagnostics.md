@@ -51,11 +51,10 @@ These appear in ordinary error/warning output with no flag:
 Machine-readable capture of all parse errors/warnings is available three ways, all
 opt-in and default-off with zero overhead otherwise:
 
-| Channel | How to enable | Output |
-|---|---|---|
-| Per-`Program` API | `Program::setParseDiagnosticsCollected(True)`, then `Program::getParseDiagnostics()` | `list<hash<ParseDiagnosticInfo>>` |
-| CLI JSON | `qore --diag-format=json` / `QORE_DIAG_FORMAT=json` | JSON array on stdout, parse-only, exit 2 on error |
-| CLI code frames | `qore --code-frames` / `QORE_CODE_FRAMES=1` | Rust-style `file:line:col` + source line + caret, parse-only |
+|!Channel|!How to enable|!Output
+|Per-`Program` API|`Program::setParseDiagnosticsCollected(True)`, then `Program::getParseDiagnostics()`|`list<hash<ParseDiagnosticInfo>>`
+|CLI JSON|`qore --diag-format=json` / `QORE_DIAG_FORMAT=json`|JSON array on stdout, parse-only, exit 2 on error
+|CLI code frames|`qore --code-frames` / `QORE_CODE_FRAMES=1`|Rust-style `file:line:col` + source line + caret, parse-only
 
 Capture is wired at the single chokepoint (`makeParseException` /
 `makeParseWarning`), so **every** parse error/warning — the always-on

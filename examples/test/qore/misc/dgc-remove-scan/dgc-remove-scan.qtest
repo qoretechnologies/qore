@@ -79,6 +79,34 @@ class DgcRemoveScanTest inherits QUnit::Test {
 
         #! the number of objects expected to be destroyed at each cycle check
         const ExpectedCycleResults = {
+            "edge-strong-single-held": 0,
+            "edge-strong-single-ids": 30,
+            "edge-strong-single-total": 2,
+            "edge-strong-slice-held": 0,
+            "edge-strong-slice-ids": 30,
+            "edge-strong-slice-total": 2,
+            "edge-weak-single-held": 0,
+            "edge-weak-single-ids": 30,
+            "edge-weak-single-total": 2,
+            "edge-weak-slice-held": 0,
+            "edge-weak-slice-ids": 30,
+            "edge-weak-slice-total": 2,
+            "edge-opaque-single-held": 0,
+            "edge-opaque-single-ids": 30,
+            "edge-opaque-single-total": 2,
+            "edge-opaque-slice-held": 0,
+            "edge-opaque-slice-ids": 30,
+            "edge-opaque-slice-total": 2,
+            "repeat-member-single-held": 8,
+            "repeat-member-single-cycle": 10,
+            "repeat-member-slice-held": 8,
+            "repeat-member-slice-cycle": 10,
+            "repeat-member-delete-held": 8,
+            "repeat-member-delete-cycle": 10,
+            "repeat-hash-member-held": 8,
+            "repeat-hash-member-cycle": 10,
+            "repeat-list-member-held": 8,
+            "repeat-list-member-cycle": 10,
             "cycle-hash-scalar-key": 1,
             "cycle-hash-slice-scalars": 1,
             "cycle-list-scalars": 1,
@@ -95,10 +123,12 @@ class DgcRemoveScanTest inherits QUnit::Test {
         };
 
         #! the execution modes that the worker is run in
-        const ExecModes = ("ast", "ir", "jit");
+        const ExecModes = ("ast", "ir", "jit", "tiered");
 
         #! cycle checks that call debug functions and are only made in debug builds
         const DebugCycleResults = {
+            "repeat-member-api-held": 8,
+            "repeat-member-api-cycle": 10,
             "cycle-api-remove-while-changed": 0,
             "cycle-api-remove": 2,
         };
@@ -148,12 +178,16 @@ class DgcRemoveScanTest inherits QUnit::Test {
         TmpDir tmp("qore-dgc-remove-scan-");
         string qmod_path = tmp.path + DirSep + "DgcRemoveScanChecks.qmod";
         string src_path = get_script_dir() + DirSep + "DgcRemoveScanChecks.qm";
-        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
-            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
-        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+        foreach int level in ((0, 2, 3)) {
+            int status;
+            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source "
+                "--opt-level=%d --output %s %s 2>&1", libqore_dir, qore_bin, level, qmod_path, src_path), \status);
+            assertEq(0, status, "compiled checks module: " + compile_out);
+            assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
 
-        # the directory holds only the compiled module, so the worker cannot load the source instead
-        checkWorkerOutput("aot", runWorker(tmp.path));
+            # the directory holds only the compiled module, so the worker cannot load the source instead
+            checkWorkerOutput(sprintf("aot-O%d", level), runWorker(tmp.path));
+        }
     }
 
     #! runs the worker with the checks module loaded from the given directory and returns its output

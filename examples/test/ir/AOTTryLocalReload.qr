@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+# Try statements in functions with and without on_exit/on_error handlers: the locals that callees change through
+# references, that handlers assign, and that catch blocks read must have the same values, and object locals must be
+# destroyed in the same order, in every mode as in the interpreter
+
+our list<string> events = ();
+
+class Tracked {
+    private {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+    }
+    destructor() {
+        push events, "~" + name;
+    }
+    string get() {
+        return name;
+    }
+}
+
+sub set_int(reference<int> r, int v) {
+    r = v;
+    throw "INT";
+}
+
+sub set_obj(reference<Tracked> r, string name) {
+    r = new Tracked(name);
+    throw "OBJ";
+}
+
+sub set_hash(reference<hash<auto>> h) {
+    h.a = 2;
+    throw "HASH";
+}
+
+sub ok(reference<int> r) {
+    r += 100;
+}
+
+# no handlers: a throwing callee changes a local, which the catch block reads
+int sub no_handlers_int() {
+    int x = 1;
+    try {
+        set_int(\x, 5);
+    } catch (hash<ExceptionInfo> ex) {
+        return x;
+    }
+    return -1;
+}
+
+string sub no_handlers_obj() {
+    Tracked t("old");
+    try {
+        set_obj(\t, "new");
+    } catch (hash<ExceptionInfo> ex) {
+        push events, "caught " + t.get();
+        return t.get();
+    }
+    return "none";
+}
+
+int sub no_handlers_hash() {
+    hash<auto> h = {"a": 1};
+    int y = 0;
+    try {
+        y = 3;
+        set_hash(\h);
+    } catch (hash<ExceptionInfo> ex) {
+        y += h.a;
+    }
+    return y;
+}
+
+# no handlers: many try statements each declaring locals, with and without exceptions
+int sub no_handlers_many(int seed) {
+    int total = 0;
+    for (int i = 0; i < 4; ++i) {
+        try {
+            Tracked a("a" + i);
+            Tracked b("b" + i);
+            ok(\total);
+            if (i % 2) {
+                set_int(\total, total + seed);
+            }
+            total += a.get().size() + b.get().size();
+        } catch (hash<ExceptionInfo> ex) {
+            total -= 1;
+        }
+        try {
+            string s = sprintf("%d", seed + i);
+            ok(\total);
+            total += s.size();
+        } catch (hash<ExceptionInfo> ex) {
+            total -= 1000;
+        }
+    }
+    return total;
+}
+
+# handlers assign locals in a try, on the normal path and on the exception path
+int sub handlers_try(bool fail) {
+    int x = 1;
+    Tracked t("h0");
+    try {
+        on_exit {
+            x += 10;
+            t = new Tracked("h1");
+        }
+        on_error {
+            x += 100;
+        }
+        if (fail) {
+            set_int(\x, x + 5);
+        }
+        ok(\x);
+    } catch (hash<ExceptionInfo> ex) {
+        push events, "caught " + t.get();
+        x += 1000;
+    }
+    push events, "after " + t.get();
+    return x;
+}
+
+# a handler outside the try sees the value that the catch block assigned
+int sub handlers_outer() {
+    int x = 1;
+    on_exit {
+        push events, "outer exit " + x;
+    }
+    try {
+        set_int(\x, 7);
+    } catch (hash<ExceptionInfo> ex) {
+        x *= 3;
+    }
+    return x;
+}
+
+list<auto> results = ();
+results += no_handlers_int();
+results += no_handlers_obj();
+results += no_handlers_hash();
+results += no_handlers_many(7);
+results += handlers_try(False);
+results += handlers_try(True);
+results += handlers_outer();
+printf("results: %y\n", results);
+printf("events: %y\n", events);
+printf("aot-try-local-reload: ok\n");

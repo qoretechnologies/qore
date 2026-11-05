@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+enum SignatureNumber : int { Seven = 7, Wide = 1125899906842624, }
+
+code<int(int)> sub signatureExactFactory() {
+    return int sub (int value) { return value; };
+}
+code<int(int)> sub signatureCapturedFactory(int offset) {
+    return int sub (int value) { return value + offset; };
+}
+code<int(softint)> sub signatureSoftParameterFactory() {
+    return int sub (softint value) { return value; };
+}
+code<softint(int)> sub signatureSoftReturnFactory() {
+    return softint sub (int value) { return value; };
+}
+code<int(*int)> sub signatureOptionalParameterFactory() {
+    return int sub (*int value) { return value ?? 17; };
+}
+code<*int(int)> sub signatureOptionalReturnFactory() {
+    return *int sub (int value) { return value; };
+}
+code<auto(int)> sub signatureAutoReturnFactory() {
+    return auto sub (int value) { return value; };
+}
+code<int(auto)> sub signatureAutoParameterFactory() {
+    return int sub (auto value) { return int(value); };
+}
+code<SignatureNumber(SignatureNumber)> sub signatureEnumFactory() {
+    return SignatureNumber sub (SignatureNumber value) { return value; };
+}
+code<float(float)> sub signatureFloatFactory() {
+    return float sub (float value) { return value; };
+}
+code<int()> sub signatureZeroFactory() {
+    return int sub () { return 41; };
+}
+code<int(int, int)> sub signatureBinaryFactory() {
+    return int sub (int left, int right) { return left + right; };
+}
+
+int sub signatureExactCall(code<int(int)> callback, int value, int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result = callback(value);
+    }
+    return result;
+}
+sub signatureExpect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "CLOSURE-SIGNATURE-TEST", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+code<int(int)> exact = signatureExactFactory();
+code<int(int)> captured = signatureCapturedFactory(17);
+code<int(softint)> soft_parameter = signatureSoftParameterFactory();
+code<softint(int)> soft_return = signatureSoftReturnFactory();
+code<int(*int)> optional_parameter = signatureOptionalParameterFactory();
+code<*int(int)> optional_return = signatureOptionalReturnFactory();
+code<auto(int)> auto_return = signatureAutoReturnFactory();
+code<int(auto)> auto_parameter = signatureAutoParameterFactory();
+code<SignatureNumber(SignatureNumber)> enumeration = signatureEnumFactory();
+code<float(float)> floating = signatureFloatFactory();
+code<int()> zero = signatureZeroFactory();
+code<int(int, int)> binary = signatureBinaryFactory();
+foreach int value in ((0, 1, -1, 1125899906842624, -1125899906842624,
+        9223372036854775807, -9223372036854775807 - 1)) {
+    foreach int count in ((0, 1, 16)) {
+        signatureExpect(count ? value : 0, signatureExactCall(exact, value, count));
+        signatureExpect(count ? value + 17 : 0, signatureExactCall(captured, value, count));
+    }
+    for (int round = 0; round < 4; ++round) {
+        signatureExpect(value, soft_parameter(value));
+        signatureExpect(value, soft_return(value));
+        signatureExpect(value, optional_parameter(value));
+        signatureExpect(value, optional_return(value));
+        signatureExpect(value, auto_return(value));
+        signatureExpect(value, auto_parameter(value));
+        signatureExpect(value + 31, binary(value, 31));
+        signatureExpect(41, zero());
+        signatureExpect(17, optional_parameter(NOTHING));
+        signatureExpect(43, soft_parameter("43"));
+        signatureExpect(47, auto_parameter("47"));
+        signatureExpect(1.25, floating(1.25));
+        signatureExpect(-3.0e307, floating(-3.0e307));
+        signatureExpect(SignatureNumber::Seven, enumeration(SignatureNumber::Seven));
+        auto wide = enumeration(SignatureNumber::Wide);
+        signatureExpect(True, wide.isEnum());
+        signatureExpect("enum<SignatureNumber>", wide.fullType());
+    }
+}
+printf("closure-signature-proof: ok\n");

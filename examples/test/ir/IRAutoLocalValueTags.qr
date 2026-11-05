@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-weak-references
+%allow-opaque-references
+
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "AUTO-LOAD-TEST", sprintf("expected %y (%s), got %y (%s)",
+            expected, expected.fullType(), actual, actual.fullType());
+    }
+}
+auto sub readUntyped(auto value) {
+    auto result = NOTHING;
+    for (int i = 0; i < 4; ++i) { result = value; }
+    return result;
+}
+int sub referenceLoadIdentity(int value) { return value; }
+auto sub readWithScalarCall(auto value, code<int(int)> fn) {
+    auto result = value;
+    for (int i = 0; i < 4; ++i) {
+        expect(i, fn(i));
+        expect(value, result);
+        result = value;
+    }
+    return result;
+}
+auto sub readIteratorWithScalarCall(ListIterator<auto> iterator, code<int(int)> fn) {
+    auto value = iterator.getValue();
+    expect(7, fn(7));
+    return value;
+}
+auto sub readIteratorLocal(ListIterator<auto> iterator) {
+    auto value = iterator.getValue();
+    return value;
+}
+auto sub readIterator(ListIterator<auto> iterator) {
+    # The baseline IR-only local store above raises LVALUE-ERROR for a raw
+    # reference; AST/JIT/AOT explicitly exercise that local form with this flag.
+    if (ARGV[0] == "raw-local") {
+        auto result = readIteratorLocal(iterator);
+        expect(result, readIteratorWithScalarCall(iterator, \referenceLoadIdentity()));
+        return result;
+    }
+    return readUntyped(iterator.getValue());
+}
+int sub callUntyped(auto receiver, int value) { return int(receiver.next(value)); }
+float sub floatFromUntyped(auto value) { return float(value); }
+thread_local int destroyed = 0;
+class LoadTarget {
+    public { int value; }
+    constructor(int v) { value = v; }
+    int next(int arg) { return value + arg; }
+    destructor() { ++destroyed; }
+}
+enum LoadInt : int { First = 7, Second = 1125899906842624, }
+enum LoadString : string { Short = "abc", Long = "long enum member string", }
+enum LoadFloat : float { Ordinary = 1.25, Tagged = -3.0e307, }
+enum LoadNumber : number { Value = 123456789012345678901234567890n, }
+
+for (int round = 0; round < 12; ++round) {
+    list<auto> values = (NOTHING, NULL, False, True, 0, 1, -1,
+        140737488355327, 140737488355328, -140737488355328, -140737488355329,
+        9223372036854775807, -9223372036854775807 - 1,
+        1.25, -1.25, 1.0e308, -3.0e307, -6.0e307,
+        "", "abcdef", "abcdefg", "a longer heap-allocated string",
+        c'A', c'\u{1F600}', 123456789012345678901234567890n,
+        (1, 2), {"key": "value"}, \readUntyped());
+    foreach auto value in (values) {
+        expect(value, readUntyped(value));
+        expect(value, readWithScalarCall(value, \referenceLoadIdentity()));
+        expect(value, readWithScalarCall(\value, \referenceLoadIdentity()));
+        expect(value.fullType(), readUntyped(value).fullType());
+        expect(value, readUntyped(\value));
+    }
+    foreach auto value in ((LoadInt::First, LoadInt::Second, LoadString::Short,
+            LoadString::Long, LoadFloat::Ordinary, LoadFloat::Tagged, LoadNumber::Value)) {
+        auto result = readUntyped(value);
+        expect(True, result.isEnum());
+        expect(value.fullType(), result.fullType());
+        expect(value, result);
+        expect(value, readWithScalarCall(value, \referenceLoadIdentity()));
+        expect(True, readUntyped(\value).isEnum());
+    }
+    foreach float value in ((0.0, -0.0, @inf@, -@inf@, @nan@, -@nan@)) {
+        float result = floatFromUntyped(value);
+        expect(sprintf("%g", value), sprintf("%g", result));
+        result = floatFromUntyped(\value);
+        expect(sprintf("%g", value), sprintf("%g", result));
+    }
+
+    # Iterator results can carry raw references into an otherwise ordinary auto local.
+    int integer = 7;
+    string text = "original";
+    LoadTarget target(10);
+    list<auto> references = (\integer, \text, \target);
+    ListIterator<auto> iterator(references);
+    expect(True, iterator.next());
+    expect(7, readIterator(iterator));
+    integer = 1125899906842624;
+    expect(integer, readIterator(iterator));
+    expect(True, iterator.next());
+    expect(text, readIterator(iterator));
+    text = "changed long string";
+    expect(text, readIterator(iterator));
+    expect(True, iterator.next());
+    expect(target, readIterator(iterator));
+    expect(17, callUntyped(readIterator(iterator), 7));
+    expect(17, callUntyped(\target, 7));
+    target.value = 20;
+    expect(27, callUntyped(readIterator(iterator), 7));
+
+    # Repeated untyped reads must not acquire or drop an extra owning reference.
+    int before = destroyed;
+    {
+        auto strong = new LoadTarget(30);
+        auto weak := strong;
+        auto opaque @= strong;
+        for (int i = 0; i < 20; ++i) {
+            expect(strong, readUntyped(strong));
+            expect(strong, readUntyped(weak));
+            expect(strong, readUntyped(opaque));
+            expect(strong, readWithScalarCall(opaque, \referenceLoadIdentity()));
+            expect(30 + i, callUntyped(opaque, i));
+        }
+        strong = NOTHING;
+        expect(before, destroyed);
+        expect(31, callUntyped(opaque, 1));
+        opaque = NOTHING;
+        expect(before + 1, destroyed);
+        # Deleted weak targets retain their distinct deleted-object value tag.
+        expect(weak, readUntyped(weak));
+        expect(weak, readWithScalarCall(weak, \referenceLoadIdentity()));
+    }
+    expect(before + 1, destroyed);
+    before = destroyed;
+    {
+        auto opaque_list @= (new LoadTarget(40),);
+        auto opaque_hash @= {"value": new LoadTarget(50)};
+        expect(41, callUntyped(readUntyped(opaque_list)[0], 1));
+        expect(51, callUntyped(readUntyped(opaque_hash).value, 1));
+        expect(41, callUntyped(readWithScalarCall(opaque_list, \referenceLoadIdentity())[0], 1));
+        expect(51, callUntyped(readWithScalarCall(opaque_hash, \referenceLoadIdentity()).value, 1));
+    }
+    expect(before + 2, destroyed);
+}
+printf("auto-local-value-tags: ok\n");

@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class NativeRefSelfTest
+
+class NativeRefSelfTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTNativeRefSelf.qr";
+    }
+    constructor() : Test("AOT native scalar snapshots", "1.0", \ARGV) {
+        addTestCase("native and boxed snapshots across cleanup", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_REFSELF=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq("native-refself: ok\n",
+                    run((qore, "--exec-mode=" + mode, behavior), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-native-refself-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_NATIVE_REFSELF=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                if (level == "-O3") {
+                    foreach string name in (("localFloat", "localBool", "nativeFloatLoop", "floatLoop", "localInt", "boxedCopy")) {
+                        bool selected = !prefix.startsWith("QORE_DISABLE_")
+                            && (name == "localFloat" || name == "localBool" || name == "nativeFloatLoop");
+                        int found = 0;
+                        foreach string definition in (generated.split("\ndefine ")) {
+                            string body = definition.split("\n}")[0];
+                            if (!body.split("\n")[0].contains("@" + name + "_")) { continue; }
+                            ++found;
+                            assertEq(!selected, body.contains("@qore_rt_refself("),
+                                "retained snapshot " + name + " " + prefix);
+                            if (selected && body.split("\n")[0].contains("_fast_")) {
+                                assertFalse(body.contains("@qore_rt_box_float("), "native return " + name);
+                            }
+                        }
+                        assertTrue(found > 0, "inspected function " + name);
+                    }
+                }
+                assertEq("native-refself: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

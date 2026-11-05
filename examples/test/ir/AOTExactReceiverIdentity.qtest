@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ExactReceiverIdentityTest
+
+class ExactReceiverIdentityTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT exact receiver identity", "1.0", \ARGV) {
+        addTestCase("reflective replacement invalidates cached class checks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTExactReceiverIdentity.qr";
+        string expected = "110:1001:101:101:24:110\n110\nexact-receiver-identity: ok\n";
+        # The baseline IR/JIT frame lookup cannot expose this uncaptured
+        # caller parameter to reflection (UNKNOWN-VARIABLE). This regression
+        # compares the supported AOT path with the AST reference semantics.
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-exact-receiver-identity-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST=1 ",
+                "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ",
+                "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ",
+                "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ",
+                "QORE_DISABLE_AOT_PINNED_RECEIVER_PHI=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("identityOnce", "identityLoop", "identityInvoke",
+                        "identityCrossProgram", "identityDeleted", "identityDuringDestructor")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    bool stable = !prefix.startsWith("QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST");
+                    assertEq(stable,
+                        regex(body[0] ?? "", "stable_exact_receiver_unchanged"),
+                        name + " identity guard " + prefix + level);
+                    bool inline_validity = stable
+                        && !prefix.startsWith("QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY");
+                    assertEq(inline_validity,
+                        regex(body[0] ?? "", "stable_receiver_status_view[^\n]*call ptr @qore_rt_get_object_status_view_v1"),
+                        name + " borrowed status view " + prefix + level);
+                    assertEq(inline_validity,
+                        regex(body[0] ?? "", "receiver_live_status[^\\n]*load atomic i32,[^\\n]*seq_cst"),
+                        name + " live sequentially consistent validity " + prefix + level);
+                }
+                foreach string selected_name in (("identitySelectedLoop", "identityNestedSelectedLoop")) {
+                    *list<*string> selected = regex_extract(ir,
+                        "(?s)define [^\\n]*@" + selected_name + "_[^\\n]*\\{(.*?)\\n\\}");
+                    assertTrue(!!selected, "selected receiver LLVM definition");
+                    bool pinned = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                        && prefix != "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ";
+                    assertEq(pinned, regex(selected[0] ?? "", "pinned_override_same_receiver|pinned_override_phi_same_receiver"),
+                        "selected receiver identity guard " + prefix + level);
+                    assertEq(pinned, regex(selected[0] ?? "", "pinned_override_live_status"),
+                        "selected receiver live validity " + prefix + level);
+                    bool pinned_base = prefix != "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "
+                        && prefix != "QORE_DISABLE_AOT_PINNED_BASE_CLASS=1 ";
+                    assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_receiver_known|pinned_base_phi_same_receiver"),
+                        "selected base receiver identity " + prefix + level);
+                    assertEq(pinned_base, regex(selected[0] ?? "", "pinned_base_live_status"),
+                        "selected base live validity " + prefix + level);
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 "),
+                    "generic method fallback " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "full context " + prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 "),
+                    "null status view fallback " + prefix + level);
+            }
+        }
+    }
+}

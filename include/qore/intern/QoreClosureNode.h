@@ -65,7 +65,10 @@ public:
 
 class QoreClosureSelfContextHelper {
 private:
+    friend class RuntimeConfigNativeClosureContext;
     const QoreObject* prev;
+    // Used only by invocation-owned RAII scopes, including materialized closure-v2 frames.
+    DLLLOCAL static const QoreObject* exchange(const QoreObject* obj);
 
 public:
     DLLLOCAL QoreClosureSelfContextHelper(const QoreObject* obj);

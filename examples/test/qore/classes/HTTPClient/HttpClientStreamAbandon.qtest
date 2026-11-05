@@ -221,7 +221,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server);
-        code recv = sub (hash<auto> h) {
+        code<nothing(hash<auto>)> recv = sub (hash<auto> h) {
             if (h.data) {
                 throw "CALLBACK-ERROR", "the receive callback stops the response";
             }
@@ -243,7 +243,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         on_exit server.shutdown();
         HTTPClient hc = getClient(server, {"timeout": 500ms});
         int chunks = 0;
-        code recv = sub (hash<auto> h) {
+        code<nothing(hash<auto>)> recv = sub (hash<auto> h) {
             if (h.data) {
                 ++chunks;
             }

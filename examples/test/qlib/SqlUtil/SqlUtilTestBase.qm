@@ -13,15 +13,16 @@ module SqlUtilTestBase {
     license = "MIT";
 }
 
-%requires(reexport) ../../../../qlib/Util.qm
-%requires(reexport) ../../../../qlib/QUnit.qm
-%requires(reexport) ../../../../qlib/Logger.qm
-%requires(reexport) ../../../../qlib/DataProvider
-%requires(reexport) ../../../../qlib/SqlUtil
-%requires(reexport) ../../../../qlib/BulkSqlUtil
-%requires(reexport) ../../../../qlib/Schema
-%requires(reexport) ../../../../qlib/DbDataProvider
-%requires(reexport) ../../../../qlib/Mapper.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires(reexport) Util
+%requires(reexport) QUnit
+%requires(reexport) Logger
+%requires(reexport) DataProvider
+%requires(reexport) SqlUtil
+%requires(reexport) BulkSqlUtil
+%requires(reexport) Schema
+%requires(reexport) DbDataProvider
+%requires(reexport) Mapper
 
 public class SqlUtilTestSchema inherits AbstractSchema {
     private {

@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+class ResolvedInt {
+    int step(int value) { return value * 3 + 7; }
+    int next(int value) { return self.step(value) + self.step(value + 1); }
+    auto boxed(auto value) { return self.step(value); }
+    auto guarded(int value) {
+        try { return self.step(value) + self.step(value + 1); }
+        catch (hash<ExceptionInfo> e) { return e.err; }
+    }
+    int reflected(int value) {
+        auto other = 0;
+        int first = self.step(value);
+        return first + int(other);
+    }
+    auto reflectedGuard(int value) {
+        auto other = 0;
+        try {
+            int first = self.step(value);
+            return first + int(other);
+        } catch (hash<ExceptionInfo> e) { return e.err; }
+    }
+}
+class ResolvedDerived inherits ResolvedInt {
+    int step(int value) { return value * 5 + 11; }
+}
+class ResolvedReflect inherits ResolvedInt {
+    int step(int value) {
+        set_local_var_value(1, "other", 100);
+        return value + 1;
+    }
+}
+class ResolvedThrow inherits ResolvedInt {
+    int step(int value) { throw "RESOLVED-EXPECTED", "nested fallback"; }
+}
+class ResolvedFloat {
+    float step(float value) { return -value; }
+    float next(float value) { return self.step(value) + self.step(value + 1.0); }
+    auto boxed(auto value) { return self.step(value); }
+    auto guarded(float value) {
+        try { return self.step(value) + self.step(value + 1.0); }
+        catch (hash<ExceptionInfo> e) { return e.err; }
+    }
+}
+class ResolvedFloatDerived inherits ResolvedFloat {
+    float step(float value) { return value + 2.0; }
+}
+class ResolvedFloatThrow inherits ResolvedFloat {
+    float step(float value) { throw "RESOLVED-FLOAT-EXPECTED", "nested fallback"; }
+}
+class ResolvedOverload {
+    int step(int value) { return value + 17; }
+    int step(float value) { return 31; }
+    int next(int value) { return self.step(value) + self.step(value + 1); }
+    int floating(float value) { return self.step(value); }
+}
+class ResolvedExcluded {
+    T identity<T>(T value) { return value; }
+    static int scalar(int value) { return value + 1; }
+    int next(int value) { return self.identity<int>(value) + scalar(value); }
+}
+sub checkFloat(float expected, float actual) {
+    if (expected.nanp() ? !actual.nanp() : expected != actual) {
+        throw "RESOLVED-FLOAT-MISMATCH", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+ResolvedInt base(); ResolvedDerived derived(); ResolvedReflect reflect(); ResolvedThrow throwing();
+ResolvedFloat floating(); ResolvedFloatDerived float_derived(); ResolvedFloatThrow float_throwing();
+ResolvedOverload overloaded(); ResolvedExcluded excluded();
+for (int round = 0; round < 16; ++round) {
+    foreach int value in ((0, 1, -7, 1125899906842624, -1125899906842624)) {
+        if (base.next(value) != value * 6 + 17 || base.guarded(value) != value * 6 + 17
+                || derived.next(value) != value * 10 + 27 || derived.guarded(value) != value * 10 + 27
+                || base.boxed(value) != value * 3 + 7 || derived.boxed(value) != value * 5 + 11
+                || overloaded.next(value) != value * 2 + 35 || overloaded.floating(float(value)) != 31
+                || excluded.next(value) != value * 2 + 1) {
+            throw "RESOLVED-INTEGER-MISMATCH", sprintf("value %d", value);
+        }
+    }
+    foreach float value in ((0.0, -0.0, 1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@)) {
+        checkFloat(-value - (value + 1.0), floating.next(value));
+        checkFloat(-value - (value + 1.0), floating.guarded(value));
+        checkFloat(-value, floating.boxed(value));
+        checkFloat(value + 2.0 + (value + 1.0 + 2.0), float_derived.next(value));
+        checkFloat(value + 2.0, float_derived.boxed(value));
+    }
+    if (reflect.reflected(2) != 103 || reflect.reflectedGuard(2) != 103) {
+        throw "RESOLVED-REFLECTION-MISMATCH", "nested fallback did not reload the caller local";
+    }
+    if (throwing.guarded(2) != "RESOLVED-EXPECTED"
+            || float_throwing.guarded(2.0) != "RESOLVED-FLOAT-EXPECTED"
+            || "nested".substr(1) != "ested") {
+        throw "RESOLVED-FALLBACK-MISMATCH", "reflection, exception or pseudo call mismatch";
+    }
+}
+# An imported copy has the same class ID but a different Program. Preserve its
+# ordinary context transition, and then verify the warmed local call again.
+Program foreign(PO_NO_INHERIT_USER_CLASSES | PO_NO_CHILD_PO_RESTRICTIONS);
+foreign.importClass("ResolvedInt");
+foreign.importClass("ResolvedDerived");
+foreign.setExecMode(EM_IR);
+foreign.parse("%modern\nResolvedDerived sub make() { return new ResolvedDerived(); }\n",
+    "resolved-native-foreign");
+ResolvedInt imported = foreign.callFunction("make");
+for (int value = 0; value < 16; ++value) {
+    if (imported.next(value) != value * 10 + 27 || derived.next(value) != value * 10 + 27) {
+        throw "RESOLVED-PROGRAM-MISMATCH", "imported or local nested call mismatch";
+    }
+}
+printf("resolved-native-method: ok\n");

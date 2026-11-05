@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub faultDivide(int value) {
+    int numerator = 100;
+    return numerator / value;
+}
+int sub faultOuter(int value) {
+    return faultDivide(value);
+}
+int sub faultNested(int value) {
+    return faultOuter(value);
+}
+int sub faultModulo(int value) {
+    return 100 % value;
+}
+int sub faultModuloOuter(int value) {
+    return faultModulo(value);
+}
+int sub faultModuloNested(int value) {
+    return faultModuloOuter(value);
+}
+float sub faultFloat(float value) {
+    return 100.0 / value;
+}
+float sub faultFloatOuter(float value) {
+    return faultFloat(value);
+}
+float sub faultFloatNested(float value) {
+    return faultFloatOuter(value);
+}
+int sub faultBeforeReturn(int value) {
+    int result = 100 / value;
+    return result + 1;
+}
+int sub faultBeforeReturnOuter(int value) {
+    return faultBeforeReturn(value);
+}
+int sub faultBeforeReturnNested(int value) {
+    return faultBeforeReturnOuter(value);
+}
+sub show(hash<ExceptionInfo> ex) {
+    printf("%s:%d:%s\n", ex.err, ex.line,
+        (map sprintf("%s:%d", $1.function, $1.line), ex.callstack,
+            ($1.function.startsWith("fault") || $1.function.startsWith("FaultMethods::"))).join(","));
+}
+int caught = 0;
+foreach code<int(int)> fn in ((\faultDivide(), \faultOuter(), \faultNested(),
+        \faultModulo(), \faultModuloOuter(), \faultModuloNested(),
+        \faultBeforeReturn(), \faultBeforeReturnOuter(), \faultBeforeReturnNested())) {
+    # Re-enter each call after the exception and check the ordinary result too.
+    fn(2);
+    try { fn(0); }
+    catch (hash<ExceptionInfo> ex) { ++caught; show(ex); }
+    fn(2);
+}
+foreach code<float(float)> fn in ((\faultFloat(), \faultFloatOuter(), \faultFloatNested())) {
+    fn(2.0);
+    try { fn(0.0); }
+    catch (hash<ExceptionInfo> ex) { ++caught; show(ex); }
+    fn(2.0);
+}
+if (caught != 12) {
+    throw "THROW-LOCATION-TEST", sprintf("expected 12 exceptions, got %d", caught);
+}
+
+# An exact receiver has an unwind edge even when its method summary is imported.
+final class FaultMethods {
+    int divide(int value) { return 100 / value; }
+    float divideFloat(float value) { return 100.0 / value; }
+}
+sub faultMethods() {
+    FaultMethods receiver();
+    try { receiver.divide(0); }
+    catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { receiver.divideFloat(0.0); }
+    catch (hash<ExceptionInfo> ex) { show(ex); }
+    if (receiver.divide(2) != 50 || receiver.divideFloat(2.0) != 50.0) {
+        throw "METHOD-REENTRY", "method call after an exception failed";
+    }
+}
+faultMethods();

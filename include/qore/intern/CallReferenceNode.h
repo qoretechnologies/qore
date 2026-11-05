@@ -34,10 +34,39 @@
 #define _QORE_INTERN_FUNCTIONREFERENCENODE_H
 
 #include <string>
+#include <memory>
 
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
 class RuntimeConfig;
+struct QoreAOTContext;
+class AbstractQoreFunctionVariant;
+class UserVariantBase;
+class UserSignature;
+
+// Immutable once the reference is published. Only finalized single-variant
+// functions with ordinary exact binding can populate this descriptor. A body
+// with a different Program owner additionally requires a live exact native
+// binding at dispatch; these signature facts never authorize an owner switch.
+struct QoreFunctionRefCallMetadata {
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const UserVariantBase* uvb = nullptr;
+    const UserSignature* signature = nullptr;
+    unsigned num_params = 0;
+    // Two bits per parameter: 0 = general exact type, 1 = int, 2 = float, 3 = bool.
+    uint32_t scalar_params = 0;
+};
+
+// Optional AOT function-reference ABI. Arguments are borrowed NaN-boxed values;
+// the result is owned. Only context-independent typed entries may implement it.
+using QoreFunctionRefNativeEntry = uint64_t (*)(const uint64_t*, QoreAOTContext*, ExceptionSink*);
+
+// Scalar typed-reference ABI v1: zero or one strict scalar argument, scalar
+// result. Bool uses an int64_t carrier (0/1), avoiding platform-specific i1 ABI
+// attributes. Signature bits [1:0] = result, [3:2] = argument (0 = no argument).
+enum class QoreFunctionRefScalarKind : uint32_t { None = 0, Int = 1, Float = 2, Bool = 3 };
+using QoreFunctionRefTypedEntry = void (*)();
+DLLLOCAL uint32_t qore_function_ref_scalar_kind(const QoreTypeInfo* type);
 
 struct CallReferenceNodeLocation {
     const QoreProgramLocation* loc;
@@ -261,7 +290,11 @@ public:
 //! a call reference to a user function from within the same QoreProgram object
 class LocalFunctionCallReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
-    DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf);
+    DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
+        std::shared_ptr<const std::string> n_function_path = {});
+
+    //! The resolved namespace/alias path, retained for AOT serialization; global unaliased functions use their name.
+    DLLLOCAL const char* getFunctionPath() const;
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -277,10 +310,12 @@ public:
 
 protected:
     const QoreFunction* uf;
+    //! Immutable binding identity, shared by evaluated references so it does not borrow a namespace's lifetime.
+    std::shared_ptr<const std::string> function_path;
 
     // constructor for subclasses
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
-            bool n_needs_eval);
+            bool n_needs_eval, std::shared_ptr<const std::string> n_function_path = {});
 
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool &needs_deref, ExceptionSink* xsink) const;
@@ -290,12 +325,7 @@ protected:
 class FunctionCallReferenceNode : public LocalFunctionCallReferenceNode {
 public:
     DLLLOCAL FunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf,
-            QoreProgram* n_pgm) : LocalFunctionCallReferenceNode(loc, n_uf, false), pgm(n_pgm) {
-        assert(pgm);
-        // make a weak reference to the Program - a strong reference (QoreProgram::ref()) could cause a recursive
-        // reference
-        pgm->depRef();
-    }
+        QoreProgram* n_pgm, std::shared_ptr<const std::string> n_function_path = {});
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -303,8 +333,92 @@ public:
         return pgm;
     }
 
+    // Set only before publishing the newly created reference. Keep the normal
+    // entry as an identity guard: a name/signature alone cannot identify code.
+    DLLLOCAL void setNativeEntry(QoreFunctionRefNativeEntry entry,
+            uint64_t (*normal)(QoreAOTContext*, ExceptionSink*)) {
+        native_entry = entry;
+        normal_entry = normal;
+    }
+
+    DLLLOCAL QoreFunctionRefNativeEntry getNativeEntry() const {
+        return native_entry;
+    }
+
+    DLLLOCAL auto getNormalEntry() const -> uint64_t (*)(QoreAOTContext*, ExceptionSink*) {
+        return normal_entry;
+    }
+
+    DLLLOCAL const QoreFunctionRefCallMetadata& getFastCallMetadata() const {
+        return fast_call;
+    }
+
+    DLLLOCAL void setTypedEntry(QoreFunctionRefTypedEntry entry, uint32_t signature,
+            uint64_t (*normal)(QoreAOTContext*, ExceptionSink*)) {
+        typed_entry = entry;
+        // A replacement v1 binding cannot keep an adapter for a previous body.
+        typed_runtime_config_entry = nullptr;
+        typed_inline_stack_entry = nullptr;
+        typed_signature = signature;
+        normal_entry = normal;
+    }
+
+    DLLLOCAL QoreFunctionRefTypedEntry getTypedEntry(uint32_t signature) const {
+        return typed_signature == signature ? typed_entry : nullptr;
+    }
+
+    // Additive entry ABI: the same native signature with RuntimeConfig* after
+    // the AOT context and sink. Bound only after v1, before publication.
+    DLLLOCAL void setTypedRuntimeConfigEntry(QoreFunctionRefTypedEntry entry) {
+        typed_runtime_config_entry = entry;
+        typed_inline_stack_entry = nullptr;
+    }
+
+    DLLLOCAL QoreFunctionRefTypedEntry getTypedRuntimeConfigEntry(uint32_t signature) const {
+        return typed_signature == signature ? typed_runtime_config_entry : nullptr;
+    }
+
+    //! Read a v2 entry after a prepared target has validated its immutable signature.
+    /** @param signature the signature validated when populating this invocation's owned cache
+        @return the optional v2 entry, or nullptr if only the legacy entry was bound
+        @note Only for a prepared slot belonging to this exact reference and signature.
+    */
+    DLLLOCAL QoreFunctionRefTypedEntry getPreparedTypedRuntimeConfigEntry(
+            [[maybe_unused]] uint32_t signature) const {
+        assert(typed_signature == signature);
+        return typed_runtime_config_entry;
+    }
+
+    // Optional v3 callee ABI appends a borrowed live stack-limit address to v2.
+    // A null address requires the complete v2 stack check, never an unchecked call.
+    DLLLOCAL void setTypedInlineStackEntry(QoreFunctionRefTypedEntry entry) {
+        typed_inline_stack_entry = entry;
+    }
+
+    DLLLOCAL QoreFunctionRefTypedEntry getTypedInlineStackEntry(uint32_t signature) const {
+        return typed_signature == signature ? typed_inline_stack_entry : nullptr;
+    }
+
+    //! Read a v3 entry after a prepared target has validated its immutable signature.
+    /** @param signature the signature validated when populating this invocation's owned cache
+        @return the optional v3 entry, or nullptr if only an older entry was bound
+        @note Bindings are immutable after publication; live Program/debugger/body checks remain required.
+    */
+    DLLLOCAL QoreFunctionRefTypedEntry getPreparedTypedInlineStackEntry(
+            [[maybe_unused]] uint32_t signature) const {
+        assert(typed_signature == signature);
+        return typed_inline_stack_entry;
+    }
+
 protected:
     QoreProgram* pgm;
+    QoreFunctionRefNativeEntry native_entry = nullptr;
+    uint64_t (*normal_entry)(QoreAOTContext*, ExceptionSink*) = nullptr;
+    QoreFunctionRefCallMetadata fast_call;
+    QoreFunctionRefTypedEntry typed_entry = nullptr;
+    QoreFunctionRefTypedEntry typed_runtime_config_entry = nullptr;
+    QoreFunctionRefTypedEntry typed_inline_stack_entry = nullptr;
+    uint32_t typed_signature = 0;
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 };

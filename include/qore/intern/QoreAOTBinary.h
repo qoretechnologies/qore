@@ -329,7 +329,29 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the table; a v9-v20 record's table is skipped.  The PC-to-location maps that AOT artifacts carried in a
 //!      trailer and in a `qore_aot_pcloc` section are no longer written or read either.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 21;
+//! v22: the merged performance format adds closure entry locations and lexical parse options, plus
+//!      a bound-variant flag and exact constructor signature for VT_NEW_OBJECT defaults. This uses a
+//!      fresh version because development versions 20 and 21 had different payloads on the performance branch.
+//!      Opcodes 409/410 retain SnapshotInt/SnapshotFloat. CheckReturnValue is 411;
+//!      IteratorRelease/ReleaseOwnedTemp are appended as 412/413, DebugStatement as 414, and
+//!      result-type instructions as 415..418. The reader maps upstream v21 opcodes 409..416
+//!      (header maximum 409 or 411..416) forward by two. For upstream maximum 417, operand counts
+//!      distinguish the old CommonTypeFold (414, three operands) from HashSetKeyValueFold (414,
+//!      five operands), and old/current ListAppendElement (417, two/three operands). New map opcodes
+//!      use 419/420 here; compatibility-only two-operand append uses 421. Older performance files
+//!      with maximum 410 retain snapshots. Existing v22 opcode assignments remain unchanged;
+//!      CatchUnwind, KeysIteratorSource and ReleaseOperandTemp are appended as 422..424.
+//! v23: the LValuePath instruction count in the header of a SLOT_MAPS function record is a u32, not a u8.  The u8
+//!      kept only the low 8 bits of the count, so a function with 256 or more LValuePath instructions (such as
+//!      256 `remove` statements) was read back with fewer entries than its code refers to, and the bytes of the
+//!      unread entries were parsed as the fields that follow them.  A v9-v22 record has the u8 count.
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 23;
+//! First format version whose SLOT_MAPS function records hold their LValuePath instruction count as a u32 (see
+//! v23 above).
+constexpr uint16_t QORE_AOT_WIDE_LV_PATH_COUNT_VERSION = 23;
+constexpr uint16_t QORE_AOT_OBJECT_DEFAULT_VARIANT_VERSION = 22;
+constexpr uint16_t QORE_AOT_CLOSURE_ENTRY_VERSION = 22;
+constexpr size_t QORE_AOT_CLOSURE_ENTRY_BYTES = 40;
 //! First format version whose function records have no location table (see v21 above).
 constexpr uint16_t QORE_AOT_NO_LOCATION_TABLE_VERSION = 21;
 //! First format version in which a serialized background instruction can be of the helper kind.
@@ -802,7 +824,7 @@ enum class QoreAOTValueTag : uint8_t {
     VT_ABS_DATE_REGION = 13,
     //! Enum value: namespace path + member name
     VT_ENUM = 14,
-    //! New object constructor call expression: class path + serialized constructor args
+    //! New object constructor call expression: class path + optional exact variant + serialized constructor args
     //! Used for member initializers like "Mutex m()" that need runtime evaluation
     VT_NEW_OBJECT = 15,
     //! Reference to another constant by fully-qualified name.
@@ -2413,6 +2435,7 @@ struct AOTSlotIdentities {
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
 };
 
+
 //! Descriptor for a compiled function with slot identities
 struct AOTCompiledFuncWithSlots {
     std::string name;                //!< AOT function name (e.g. "myFunc", "MyClass::method")
@@ -2791,6 +2814,8 @@ class QoreAOTBinaryDeserializer {
         //! registered. Resolved into a ScopedObjectCallNode and installed
         //! into default_val in the second pass, after all classes exist.
         std::string pending_new_class_path;
+        bool pending_new_has_variant = false;
+        std::string pending_new_variant;
         //! Evaluated constructor args for pending_new_class_path (owned).
         std::vector<QoreValue> pending_new_args;
         //! When set, the member init references an enum member that was not
@@ -2833,6 +2858,8 @@ class QoreAOTBinaryDeserializer {
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
         std::string pending_new_class_path;
+        bool pending_new_has_variant = false;
+        std::string pending_new_variant;
         std::vector<QoreValue> pending_new_args;
         //! Same deferred-enum channel as PendingInstanceMember.
         std::string pending_enum_path;
@@ -2898,7 +2925,6 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
         QoreValue default_val;
-        QoreAOTDeferredValueBlob value_blob;
 
         // Deferred VT_ENUM: pending_enum_path::pending_enum_member.
         // Resolved via QoreProgram::findEnum + QoreEnumDecl::findMember.
@@ -2909,6 +2935,8 @@ class QoreAOTBinaryDeserializer {
         // Class was not yet registered at hashdecl-read time.  Resolved
         // into a ScopedObjectCallNode after all classes exist.
         std::string pending_new_class_path;
+        bool pending_new_has_variant = false;
+        std::string pending_new_variant;
         std::vector<QoreValue> pending_new_args;
 
         // Deferred VT_NEW_COMPLEX_DEFAULT: kind 0=complex list,
@@ -2925,6 +2953,8 @@ class QoreAOTBinaryDeserializer {
         std::string pending_const_ref_path;
         // Deferred VT_EXPR_NATIVE member default.
         std::vector<uint8_t> pending_expr_native_blob;
+        //! Preserve the complete default until constant shells and all types exist.
+        QoreAOTDeferredValueBlob value_blob;
     };
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
@@ -4207,6 +4237,41 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     //! For a nested handler: the slot-id -> LocalVar map of the IR function containing it.  A nested
     //! handler's slots below its parent_slot_count are the containing function's slots with the same ids.
     const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals = nullptr);
+
+//! Source-stripped closure entry metadata, borrowed from the reader until attached.
+struct QoreAOTClosureEntry {
+    const char* file = nullptr;
+    const char* source = nullptr;
+    int offset = 0;
+    int first_line = 0;
+    int last_line = 0;
+    QoreParseOptions parse_options;
+    bool present = false;
+};
+
+//! Write the version-22 closure entry payload before its capture table.
+/** @param writer output metadata writer
+    @param variant closure whose location and lexical parse options are preserved
+*/
+DLLLOCAL void qore_aot_write_closure_entry(QoreAOTBinaryWriter& writer, const UserVariantBase& variant);
+//! Read and validate a closure entry; older binaries have no payload.
+/** @param reader owner of the decoded string pool
+    @param ptr input cursor, advanced over the payload when present
+    @param end end of the containing record
+    @param entry output metadata; string pointers remain borrowed until attachment
+    @param error diagnostic on invalid metadata
+    @return true for valid metadata or an older format without an entry payload
+*/
+DLLLOCAL bool qore_aot_read_closure_entry(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+    const uint8_t* end, QoreAOTClosureEntry& entry, std::string& error);
+//! Attach immutable, variant-owned debugger metadata before the closure is published.
+/** @param pgm owning Program, kept alive by the caller
+    @param variant unpublished closure receiving the entry statement
+    @param entry validated metadata whose strings are interned in the owning Program
+    @note Holds only the Program metadata registry lock, not parse ownership.
+*/
+DLLLOCAL void qore_aot_attach_closure_entry(QoreProgram* pgm, UserVariantBase& variant,
+    const QoreAOTClosureEntry& entry);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

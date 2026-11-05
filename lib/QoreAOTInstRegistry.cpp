@@ -1029,7 +1029,11 @@ static bool writeBackground(AOTInstWriteCtx& ctx) {
         }
         ctx.writer.writeU8(bi->helper_uses_self ? 1 : 0);
         ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_params.size()));
+        size_t count = 0;
         for (LocalVar* lv : bi->helper_params) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT background parameter serialization")) {
+                return false;
+            }
             auto i = bi->helper_ir->local_var_slots.find(lv);
             if (i == bi->helper_ir->local_var_slots.end()) {
                 return false;
@@ -1055,6 +1059,7 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     std::unique_ptr<QoreIRFunction> helper_ir;
     std::vector<LocalVar*> helper_params;
     bool helper_uses_self = false;
+    size_t count = 0;
     if (kind == QoreIRBackgroundKind::Helper) {
         helper_uses_self = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
         uint32_t num_params = QoreAOTBinaryReader::readU32(ctx.ptr);
@@ -1065,6 +1070,10 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
         std::vector<uint32_t> param_slots;
         param_slots.reserve(num_params);
         for (uint32_t i = 0; i < num_params; ++i) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT background parameter deserialization")) {
+                ctx.error = "background parameter deserialization cancelled";
+                return nullptr;
+            }
             param_slots.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
         }
         // the helper's locals bind to the variables of the enclosing context (its parameters are all such), as the
@@ -1080,10 +1089,18 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
         helper_ir->computeSlotIdsAndEmbed();
         std::unordered_map<uint32_t, LocalVar*> helper_slots;
         for (const auto& [lv, slot_id] : helper_ir->local_var_slots) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT background parameter deserialization")) {
+                ctx.error = "background parameter deserialization cancelled";
+                return nullptr;
+            }
             helper_slots.emplace(slot_id, const_cast<LocalVar*>(lv));
         }
         helper_params.reserve(num_params);
         for (uint32_t slot : param_slots) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT background parameter deserialization")) {
+                ctx.error = "background parameter deserialization cancelled";
+                return nullptr;
+            }
             auto i = helper_slots.find(slot);
             if (i == helper_slots.end() || !i->second) {
                 ctx.error = "background helper parameter slot " + std::to_string(slot) + " has no local variable";

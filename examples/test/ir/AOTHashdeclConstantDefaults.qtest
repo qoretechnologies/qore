@@ -1,25 +1,155 @@
 #!/usr/bin/env qore
-# -*- mode: qore; indent-tabs-mode: nil -*-
-# Copyright (C) 2026 Qore Technologies, s.r.o.
-
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%exec-class HashdeclConstantDefaultsTest
 
-%exec-class AOTHashdeclConstantDefaultsTest
-
-class AOTHashdeclConstantDefaultsTest inherits QUnit::Test {
+class HashdeclConstantDefaultsTest inherits QUnit::Test {
     private {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qore_bin = qore;
+        string qcc = ENV.QCC ?? libdir + "/qcc";
     }
-
-    constructor() : QUnit::Test("AOTHashdeclConstantDefaultsTest", "1.0", \ARGV) {
-        addTestCase("compiled hashdecl defaults bind same-module constants", \testDefaults());
+    constructor() : Test("AOT hashdecl constant defaults", "1.0", \ARGV) {
+        addTestCase("same-module and nested constant defaults load without source", \check());
+        addTestCase("failed loading releases transferred defaults once", \checkFailure());
+        addTestCase("generic and split-object defaults bind constants", \testDefaults());
         set_return_value(main());
     }
-
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string path, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR=" + quote(path)
+            + " " + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertFalse(regex(output, "failed to load|loading source module"), output);
+        return output;
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        file.write(value);
+    }
+    private check() {
+        TmpDir tmp("qore-hashdecl-constant-defaults-");
+        string source = tmp.path + "/source";
+        string compiled = tmp.path + "/compiled";
+        mkdir(source);
+        mkdir(compiled);
+        string module = source + "/HashdeclDefaults.qm";
+        HashdeclConstantDefaultsTest::write(module, "%modern
+module HashdeclDefaults {
+    version = \"1.0\";
+    desc = \"hashdecl constant default regression\";
+    author = \"Qore Technologies\";
+    license = \"MIT\";
+}
+public namespace HashdeclDefaults {
+    public namespace Values {
+        public const Names = (\"alpha\", \"beta\");
+        public const Counts = {\"value\": 17};
+        public class Extra {
+            public { const Names = (\"gamma\", \"delta\"); }
+        }
+        public hashdecl Options {
+            list<string> names = Names;
+            hash<string, int> counts = Counts;
+            list<string> extra = Extra::Names;
+            list<auto> nested = (Names, Counts);
+            hash<auto> nestedHash = {\"names\": Names, \"counts\": Counts};
+        }
+        public const DefaultOptions = <Options>{};
+        public Options sub make() { return <Options>{}; }
+    }
+}
+");
+        string host = tmp.path + "/host.qr";
+        HashdeclConstantDefaultsTest::write(host, "%modern
+%requires HashdeclDefaults
+hash<HashdeclDefaults::Values::Options> first = HashdeclDefaults::Values::make();
+first.names[0] = \"changed\";
+hash<HashdeclDefaults::Values::Options> second = HashdeclDefaults::Values::make();
+printf(\"%s|%s|%s|%d|%s|%s|%d|%s\\n\", first.names[0], second.names[0],
+    second.names.fullType(), second.counts.value, second.extra[0],
+    second.nested[0][1], second.nested[1].value,
+    HashdeclDefaults::Values::DefaultOptions.names[0]);
+printf(\"%s|%d\\n\", second.nestedHash.names[0], second.nestedHash.counts.value);
+");
+        string expected = "changed|alpha|list<string>|17|gamma|beta|17|alpha\nalpha|17\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, host), source), mode);
+        }
+        foreach string prefix in (("", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string artifact = compiled + "/HashdeclDefaults.qmod";
+                run((qcc, level, "-m", "--strip-source", "-o", artifact, module), source, prefix);
+                assertTrue(is_file(artifact));
+                # The load path contains only the qmod, so source fallback cannot hide a failure.
+                foreach string control in (("", "QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP=1 ")) {
+                    assertEq(expected, run((qore, host), compiled, control), prefix + level + control);
+                }
+                string executable = tmp.path + "/host";
+                run((qcc, level, "--strip-source", "-o", executable, host), compiled, prefix);
+                assertEq(expected, run((executable,), compiled), "AOT consumer " + prefix + level);
+            }
+        }
+    }
+    private checkFailure() {
+        TmpDir tmp("qore-hashdecl-default-failure-");
+        string compiled = tmp.path + "/compiled";
+        mkdir(compiled);
+        string module = tmp.path + "/OwnershipDefaults.qm";
+        HashdeclConstantDefaultsTest::write(module, "%modern
+module OwnershipDefaults { version = \"1.0\"; desc = \"default ownership\"; author = \"Test\"; }
+public namespace OwnershipDefaults {
+    public const Names = (\"alpha\", \"beta\");
+    public hashdecl Options {
+        list<string> names = Names;
+        hash<string, int> counts = {\"value\": 17};
+    }
+}
+");
+        string artifact = compiled + "/OwnershipDefaults.qmod";
+        run((qcc, "-O3", "-m", "--strip-source", "--aot-metadata-compression=none",
+            "-o", artifact, module), compiled);
+        # Make the second default fail after the first has transferred to its hashdecl.
+        binary data = File::readBinaryFile(artifact);
+        string type = "hash<string, int>";
+        int offset = data.find(type);
+        assertTrue(offset >= 0);
+        assertEq(-1, data.find(type, offset + 1), "unique serialized type path");
+        {
+            File file();
+            file.open2(artifact, O_RDWR);
+            file.setPos(offset);
+            file.write("hash<string, zzz>");
+        }
+        # Restore the platform signature so the loader reaches the changed metadata.
+        if (PlatformOS == "Darwin") {
+            run(("codesign", "-f", "-s", "-", artifact), compiled);
+        }
+        string script = "%modern
+for (int i = 0; i < 2; ++i) {
+    try {
+        load_module(\"OwnershipDefaults\");
+        throw \"EXPECTED-LOAD-FAILURE\", \"invalid type was accepted\";
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"MODULE-LOAD-ERROR\" || ex.desc.find(\"Options::counts\") < 0) {
+            rethrow;
+        }
+        printf(\"rejected\\n\");
+    }
+}
+";
+        assertEq("rejected\nrejected\n", run((qore, "-ne", script), compiled));
+    }
     private static writeFile(string path, string text) {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);

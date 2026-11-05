@@ -25,6 +25,7 @@
 
 string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? dirname(qore_bin) + "/qcc";
 
 string code = "%new-style
 %require-types
@@ -61,11 +62,33 @@ string expected = "COMPUTED=15\nSORTED=12345\nB1=14\nC1=101\n";
 
 int errors = 0;
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
-    string actual = ExecModeHarness::run(sprintf(
+    hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(sprintf(
         "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
         libqore_dir, libqore_dir, qore_bin, mode, script_path));
-    if (actual != expected) {
-        printf("mismatch in %s mode\nexpected:\n%sactual:\n%s", mode, expected, actual);
+    ExecModeHarness::check_native(result);
+    if (result.rc || result.out != expected) {
+        printf("mismatch in %s mode (exit %d)\nexpected:\n%sactual:\n%s", mode, result.rc, expected, result.out);
+        errors += 1;
+    }
+}
+
+# qcc evaluates these constants during its own parse-commit, before native code is emitted.
+foreach int level in ((0, 3)) {
+    string executable = sprintf("%s-O%d", script_path, level);
+    on_exit unlink(executable);
+    hash<ExecModeHarness::ModeRunResult> compiled = ExecModeHarness::run_command(sprintf(
+        "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s",
+        libqore_dir, libqore_dir, qcc_bin, level, executable, script_path));
+    if (compiled.rc) {
+        printf("compile failed at O%d (exit %d):\n%s", level, compiled.rc, compiled.out);
+        errors += 1;
+        continue;
+    }
+    hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(sprintf(
+        "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, executable));
+    if (result.rc || result.out != expected) {
+        printf("mismatch at AOT O%d (exit %d)\nexpected:\n%sactual:\n%s",
+            level, result.rc, expected, result.out);
         errors += 1;
     }
 }

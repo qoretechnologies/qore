@@ -198,6 +198,7 @@
 #include <chrono>
 #include <deque>
 #include <map>
+#include <set>
 #include <limits>
 #include <optional>
 #include <unordered_map>
@@ -2769,6 +2770,13 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         } else {
             QoreAOTBinaryReader::readU8(p);  // legacy varargs
         }
+        if (rdr.getHeader().version >= QORE_AOT_CLOSURE_ENTRY_VERSION) {
+            if (p > e || static_cast<size_t>(e - p) < QORE_AOT_CLOSURE_ENTRY_BYTES) {
+                p = e;
+                return;
+            }
+            p += QORE_AOT_CLOSURE_ENTRY_BYTES;
+        }
         uint16_t nc = QoreAOTBinaryReader::readU16(p);
         for (uint16_t i = 0; i < nc; ++i) {
             rdr.readStringRef(p);  // captured name
@@ -3434,9 +3442,12 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
-    uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    // a u8 before QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+    uint32_t num_lv_path_insts = reader.getHeader().version >= QORE_AOT_WIDE_LV_PATH_COUNT_VERSION
+        ? QoreAOTBinaryReader::readU32(ptr)
+        : QoreAOTBinaryReader::readU8(ptr);
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
-    printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
+    printd(5, "AOT buildCtx '%s': num_lv_path=%u (from binary)\n", name, num_lv_path_insts);
     QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
     const char* trace_slot_reg_env = trace_slot_reg_env_holder.c_str();
     const bool trace_slot_reg = trace_slot_reg_env
@@ -3473,6 +3484,13 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (trace_slot_reg) {
             fprintf(stderr, "[aot-slot-reg] slot count mismatch for '%s'\n", name);
         }
+        return nullptr;
+    }
+    // each LValuePath entry has at least 10 bytes: its opcode, five operation bytes, the reference flag, the
+    // pattern flag and the step count
+    if (static_cast<size_t>(num_lv_path_insts) * 10 > static_cast<size_t>((entry_end ? entry_end : end) - ptr)) {
+        setBuildError("the LValuePath instruction count " + std::to_string(num_lv_path_insts)
+            + " exceeds the slot map entry");
         return nullptr;
     }
 
@@ -3690,6 +3708,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             printd(3, "AOT v2: '%s' local[%d] = '%s' (flags=0x%x param_idx=%d) -> %p\n",
                 name, i, lname ? lname : "", lflags, param_idx, static_cast<void*>(lv));
+        } else if (((lflags & 0x08) && (!sig || !ctx->uses_argv)) || ((lflags & 0x04) && (!sig || !ctx->uses_self))) {
+            // Canonical local slot numbering (design/ir-local-slot-numbering.md) reserves the argv and self slots of
+            // every function, also of one that never refers to them.  An init function (a module's init closure) has
+            // no signature to bind them to: it is run with no arguments and no object, and an empty slot reads as
+            // NOTHING, as argv does in the closure's AST.  Either way the slot stays empty.
+            printd(5, "AOT v2: '%s' %s slot %d left unbound\n", name, (lflags & 0x08) ? "argv" : "self", i);
         } else {
             printd(0, "AOT v2: '%s' unresolved local slot %d ('%s' flags=0x%x param_idx=%d)\n",
                 name, i, lname ? lname : "", lflags, param_idx);
@@ -4243,8 +4267,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (fe) {
                         QoreFunction* f = fe->getFunction();
                         if (f) {
-                            ctx->exprs[i] = toBitsNB(QoreValue(
-                                new LocalFunctionCallReferenceNode(&loc_builtin, f)));
+                            ctx->exprs[i] = toBitsNB(QoreValue(fe->makeCallReference(&loc_builtin)));
                             continue;
                         }
                     }
@@ -5625,6 +5648,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_needs_extra_args = old_varargs;
                 }
 
+                QoreAOTClosureEntry closure_entry;
+                std::string entry_error;
+                if (!qore_aot_read_closure_entry(reader, ptr, entry_end ? entry_end : end,
+                        closure_entry, entry_error)) {
+                    setClosureIRError(entry_error);
+                    closure_ir_missing = true;
+                    ptr = entry_end ? entry_end : end;
+                    continue;
+                }
+
                 // Read captured variable names and parent slot indices
                 uint16_t num_captured = QoreAOTBinaryReader::readU16(ptr);
                 std::vector<std::string> captured_names(num_captured);
@@ -5687,7 +5720,8 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
                 // so signature locals are available for IR deserialization.
-                auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
+                auto closure_owner = std::make_unique<UserClosureFunction>(nullptr, 0, 0, QoreValue(), nullptr);
+                auto* ucf = closure_owner.get();
                 auto* closure_variant = static_cast<UserClosureVariant*>(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
                 UserSignature* closure_sig = closure_variant->getUserSignature();
@@ -5818,7 +5852,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (trace_slot_reg) {
                         fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
-                    delete ucf;
                     closure_ir_missing = true;
                     continue;
                 }
@@ -5910,7 +5943,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     if (parameter_restore_cancelled) {
                         setClosureIRError("closure parameter metadata restoration was cancelled");
-                        delete ucf;
                         closure_ir_missing = true;
                         continue;
                     }
@@ -5941,6 +5973,10 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Create QoreClosureParseNode
                 auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+                closure_owner.release();
+                SimpleRefHolder<QoreClosureParseNode> closure_holder(closure_node);
+                qore_aot_attach_closure_entry(pgm, *closure_variant, closure_entry);
+                closure_holder.release();
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;
             }
@@ -6278,7 +6314,7 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Deserialize LValuePath instructions
     if (num_lv_path_insts > 0) {
-        for (int i = 0; i < num_lv_path_insts; ++i) {
+        for (uint32_t i = 0; i < num_lv_path_insts; ++i) {
             uint16_t opcode = QoreAOTBinaryReader::readU16(ptr);
             auto pi = std::make_unique<QoreIRLValuePathInstruction>(
                 static_cast<QoreIROpcode>(opcode));
@@ -6464,6 +6500,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 name, num_loc_entries, static_cast<size_t>(ptr - entry_payload_start));
         }
         for (uint32_t i = 0; i < num_loc_entries && ptr < loc_boundary; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT legacy location table")) {
+                setBuildError("cancelled while skipping legacy source locations");
+                delete ctx;
+                return nullptr;
+            }
             qore_aot_read_line(reader, ptr);
             qore_aot_read_line(reader, ptr);
             reader.readStringRef(ptr);
@@ -6654,6 +6695,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         return nullptr;
     }
 
+    ctx->native_body_fn = aot_func.fn_ptr;
     return ctx;
 }
 
@@ -6693,7 +6735,6 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
-    auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;
     }
@@ -6717,6 +6758,28 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
         num_operands = QoreAOTBinaryReader::readU8(ptr);
     }
+    // Preserve both histories: upstream v21 used 409 onward for return/cleanup and map operations;
+    // performance v20/v21 maximum 410 and all v22 files use the snapshot-prefixed encoding.
+    // Upstream reused 414 and changed 417 without changing the header. Their operand counts disambiguate
+    // the old separate fold/two-operand append from the fused hash store/three-operand append.
+    uint16_t max_opcode = reader.getHeader().max_opcode_id;
+    if (reader.getHeader().version == 21
+            && (max_opcode == 409 || (max_opcode >= 411 && max_opcode <= 417))
+            && opcode_raw >= 409 && opcode_raw <= max_opcode) {
+        if (max_opcode == 417 && opcode_raw == 414 && num_operands == 5) {
+            opcode_raw = static_cast<uint16_t>(QoreIROpcode::HashSetKeyValueFold);
+        } else if (opcode_raw == 417) {
+            if (num_operands != 2 && num_operands != 3) {
+                error = "invalid upstream v21 ListAppendElement operand count";
+                return nullptr;
+            }
+            opcode_raw = static_cast<uint16_t>(num_operands == 2 ? QoreIROpcode::LegacyListAppendElement
+                : QoreIROpcode::ListAppendElement);
+        } else {
+            opcode_raw += 2;
+        }
+    }
+    auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (num_operands > 0 && !need(static_cast<size_t>(num_operands) * 4, "operands")) {
         return nullptr;
     }
@@ -7904,6 +7967,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     }
 
     auto func = std::make_unique<QoreIRFunction>(func_name ? func_name : "");
+    func->legacy_debug_steps = true;
     func->max_value_id = max_value_id;
     func->max_local_slot_id = max_local_slot_id;
     func->num_guards = num_guards;
@@ -8343,6 +8407,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                         static_cast<size_t>(ptr - func_start));
                 }
             }
+            if (inst->opcode == QoreIROpcode::DebugStatement) {
+                // New serialized IR carries complete statement events. Do not also synthesize legacy
+                // PushTempMark steps, including when both representations use the same format version.
+                func->legacy_debug_steps = false;
+            }
             func->blocks[i]->instructions.push_back(std::move(inst));
         }
     }
@@ -8465,8 +8534,10 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
         return nullptr;
     }
     const uint8_t* entry_end = ptr + entry_size;
-    // name_ref + six slot counts + unsupported/lvalue-path bytes
-    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 2) {
+    // name_ref + six slot counts + the unsupported byte + the lvalue-path count (a u8 before
+    // QORE_AOT_WIDE_LV_PATH_COUNT_VERSION)
+    if (entry_size < sizeof(uint32_t) + 6 * sizeof(uint16_t) + 1
+            + (reader.getHeader().version >= QORE_AOT_WIDE_LV_PATH_COUNT_VERSION ? sizeof(uint32_t) : 1)) {
         error = "serialized function slot entry has a truncated header";
         return nullptr;
     }
@@ -8718,6 +8789,7 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
         aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
         qore_aot_func_num_regex_cases(aot_func));
     if (ctx) {
+        ctx->native_body_fn = aot_func.fn_ptr;
         ctx->pgm = pgm;
         ctx->uses_argv = qore_aot_func_uses_argv(aot_func);
         ctx->uses_self = qore_aot_func_uses_self(aot_func);
@@ -11522,17 +11594,24 @@ struct AotModuleState {
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
 
 //! Returns the names of the modules that an AOT module requires: its providers and its imports
-static std::vector<std::string> aotModuleDependencyNames(const std::vector<std::string>& providers,
+static bool aotModuleDependencyNames(std::vector<std::string>& rv, const std::vector<std::string>& providers,
         const std::vector<std::string>* imports = nullptr) {
-    std::vector<std::string> rv = providers;
-    if (imports) {
-        for (const std::string& dep : *imports) {
-            if (std::find(rv.begin(), rv.end(), dep) == rv.end()) {
+    std::unordered_set<std::string> seen;
+    size_t count = 0;
+    for (const auto* names : {&providers, imports}) {
+        if (!names) {
+            continue;
+        }
+        for (const std::string& dep : *names) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT module dependency collection")) {
+                return false;
+            }
+            if (seen.insert(dep).second) {
                 rv.push_back(dep);
             }
         }
     }
-    return rv;
+    return true;
 }
 
 static bool useAOTSharedInitMetadata() {
@@ -13423,6 +13502,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
             mod_name, registered, num_functions);
     }
 
+    std::vector<std::string> module_dependencies;
+    if (!aotModuleDependencyNames(module_dependencies, deps)) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return new QoreStringNode("AOT module dependency collection cancelled");
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for modules that call ns_init during their own init
     // before being stored in the map.
@@ -13439,7 +13524,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
-        state.deps = aotModuleDependencyNames(deps);
+        state.deps = std::move(module_dependencies);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
     }
@@ -14053,6 +14138,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         }
     }
 
+    std::vector<std::string> module_dependencies;
+    if (!aotModuleDependencyNames(module_dependencies, deps, &import_deps)) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return new QoreStringNode("AOT module dependency collection cancelled");
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for early ns_init entry.
     {
@@ -14068,7 +14159,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
-        state.deps = aotModuleDependencyNames(deps, &import_deps);
+        state.deps = std::move(module_dependencies);
         state.path = label ? label : "";
         aot_module_map[mod_name] = std::move(state);
     }
@@ -15962,6 +16053,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             deserializer.getEmbeddedSourceLen());
     }
 
+    std::vector<std::string> module_dependencies;
+    if (!aotModuleDependencyNames(module_dependencies, deps, &import_deps)) {
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return new QoreStringNode("AOT module dependency collection cancelled");
+    }
+
     // Store per-module state so ns_init can find the correct program.
     // Also update globals for early ns_init entry.
     {
@@ -15977,7 +16074,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
-        state.deps = aotModuleDependencyNames(deps, &import_deps);
+        state.deps = std::move(module_dependencies);
         if (!init_descriptors.empty()) {
             state.init_descriptors = std::make_shared<const std::vector<AOTInitFuncDescriptor>>(
                 std::move(init_descriptors));

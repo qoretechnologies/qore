@@ -341,12 +341,16 @@ std::atomic<uint64_t> scan_id_seq{0};
 struct ScanDoneWait {
     std::mutex lock;
     std::condition_variable cond;
+    QoreForkStdMutex fork_handler{lock, QFLR_LEAF, "scan_done_wait", QFLM_ACQUIRE, {&cond}};
 };
 
-//! Returns the lock and condition, created once and never destroyed, as scans run during process exit
+// Construct and register before threads start, without a function-local static initialization guard that a
+// forked child could inherit from another thread. Keep the state alive for scans during process exit.
+ScanDoneWait* const scan_done_wait_state = new ScanDoneWait;
+
+//! Returns the process-lifetime lock and condition, both reinitialized by the fork handler in a child
 ScanDoneWait& scan_done_wait() {
-    static ScanDoneWait* wait = new ScanDoneWait;
-    return *wait;
+    return *scan_done_wait_state;
 }
 
 //! Returns the slot of a thread, or nullptr for a TID that has none

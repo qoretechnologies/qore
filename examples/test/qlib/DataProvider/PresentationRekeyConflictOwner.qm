@@ -48,7 +48,7 @@ module PresentationRekeyConflictOwner {
             "logo_file_name": "rekey-conflict-provider.svg",
         });
 
-        code address = HashDataType sub (string city_desc) {
+        code<HashDataType(string)> address = HashDataType sub (string city_desc) {
             return new HashDataType("RekeyAddress", {
                 "city": new QoreDataField(<auto>{
                     "name": "city",

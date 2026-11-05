@@ -7354,8 +7354,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return new SchemaObject(name, oh, openapi3, hash_str, require_items, composed, location);
     }
 
-    #! throws an \c "INVALID-FIELD-TYPE" exception
-    /** @throws INVALID-FIELD-TYPE due to a type error in the call
+    #! Throws an \c "INVALID-FIELD-TYPE" exception for a non-hash schema definition
+    /** @param name the name of the object
+        @param error the invalid schema definition to identify in the exception
+        @param openapi3 the REST schema; unused because this overload always throws
+        @param require_items the array-item requirement; unused because this overload always throws
+        @param composed the composition context; unused because this overload always throws
+        @param location the schema location; unused because this overload always throws
+
+        @throws INVALID-FIELD-TYPE the schema definition is not a hash
     */
     static SchemaObject newSchemaObject(string name, auto error, OpenApi3Schema openapi3, *bool require_items,
             *bool composed, *string location) {

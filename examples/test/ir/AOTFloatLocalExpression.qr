@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+
+sub expect(auto expected, auto actual) {
+    if (type(expected) != type(actual) || (type(expected) == "float"
+            ? (expected.nanp() ? !actual.nanp() : expected != actual
+                || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))
+            : expected != actual)) {
+        throw "FLOAT-LOCAL-EXPRESSION", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+float sub localIdentity(float value) { float result = value; return result; }
+float sub localAffine(float value) { float result = 65535.0 - value; return result; }
+float sub localConstant() { float result = 17.5; return result; }
+float sub localCopies(float value) {
+    float first = value;
+    float second = first;
+    first = 123.0;
+    return second;
+}
+float sub localReassign(float value) { float result = 123.0; result = value; return result; }
+float sub localParameter(float value) { value = 65535.0 - value; float result = value; return result; }
+float sub localAuto(float value) { auto result = value; return result; }
+*float sub localOptional(*float value) { *float result = value; return result; }
+float sub localLoop(float value) {
+    float result = value;
+    for (int i = 0; i < 2; ++i) { result = result * 1.0; }
+    return result;
+}
+float sub localDivide(float value) { float result = 1.0 / value; return result; }
+thread_local int effects = 0;
+thread_local int destroyed = 0;
+float sub localEffect(float value) { float result = value; ++effects; return result; }
+class LocalOwner {
+    destructor() { ++destroyed; }
+}
+float sub localOwned(float value) { LocalOwner owner(); float result = value; return result; }
+float sub localExit(float value) { float result = value; on_exit { result = 123.0; ++effects; } return result; }
+float sub localExitFailure(float value) {
+    float result = value;
+    on_exit { ++effects; throw "EXPECTED", "cleanup"; }
+    return result;
+}
+float sub localReference(reference<float> value) {
+    float result = value;
+    value = 99.0;
+    return result;
+}
+float sub localCapture(float value) {
+    float result = value;
+    code<float()> read = float sub () { return result; };
+    float saved = read();
+    result = 123.0;
+    expect(123.0, read());
+    return saved;
+}
+float sub invokeUnary(code<float(float)> callback, float value) { return callback(value); }
+float sub invokeResult(code<float()> callback) { return callback(); }
+
+list<float> values = (0.0, -0.0, 1.5, -1.5, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@);
+foreach float value in (values) {
+    expect(value, localIdentity(value));
+    expect(65535.0 - value, localAffine(value));
+    expect(value, localCopies(value));
+    expect(value, localReassign(value));
+    expect(65535.0 - value, localParameter(value));
+    expect(value, localAuto(value));
+    expect(value, localOptional(value));
+    expect(value, localCapture(value));
+    # Reuse one dynamic call site across native candidates and observable fallbacks.
+    foreach code<float(float)> callback in ((\localIdentity(), \localEffect(), \localCopies(),
+            \localOwned(), \localReassign(), \localExit(), \localLoop(), \localAuto(), \localCapture())) {
+        expect(value, invokeUnary(callback, value));
+    }
+    expect(65535.0 - value, invokeUnary(\localAffine(), value));
+    float original = value;
+    expect(value, localReference(\original));
+    expect(99.0, original);
+    bool caught = False;
+    try { invokeUnary(\localExitFailure(), value); }
+    catch (hash<ExceptionInfo> e) { if (e.err != "EXPECTED") { rethrow; } caught = True; }
+    expect(True, caught);
+}
+expect(values.size() * 3, effects);
+expect(values.size(), destroyed);
+expect(NOTHING, localOptional(NOTHING));
+expect(17.5, localConstant());
+expect(17.5, invokeResult(\localConstant()));
+expect(0.25, invokeUnary(\localDivide(), 4.0));
+foreach float zero in ((0.0, -0.0)) {
+    bool caught = False;
+    try { invokeUnary(\localDivide(), zero); }
+    catch (hash<ExceptionInfo> e) { if (e.err != "DIVISION-BY-ZERO") { rethrow; } caught = True; }
+    expect(True, caught);
+}
+printf("float-local-expression: ok\n");

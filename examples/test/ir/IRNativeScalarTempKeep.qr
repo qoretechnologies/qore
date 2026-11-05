@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+sub expect(auto expected, auto actual) {
+    if (expected !== actual) { throw "SCALAR-TEMP-KEEP", sprintf("expected %y, got %y", expected, actual); }
+}
+sub expectFloat(float expected, auto actual) {
+    if (type(actual) != "float" || (expected.nanp() ? !actual.nanp()
+            : expected != actual || (expected == 0.0 && sprintf("%g", expected) != sprintf("%g", actual)))) {
+        throw "SCALAR-TEMP-KEEP-FLOAT", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+list<auto> sub integerValue(int value) {
+    list<int> input = (0,);
+    list<auto!> output = (NOTHING,);
+    auto result = (output[0] = value + input[0]);
+    return (result, output[0]);
+}
+list<auto> sub floatingValue(float value) {
+    list<float> input = (1.0,);
+    list<auto!> output = (NOTHING,);
+    auto result = (output[0] = value * input[0]);
+    return (result, output[0]);
+}
+bool sub booleanLeaf(list<bool> input, bool value) { return value; }
+list<auto> sub booleanValue(bool value) {
+    list<bool> input = (True,);
+    list<auto!> output = (NOTHING,);
+    auto result = (output[0] = booleanLeaf(input, value));
+    return (result, output[0]);
+}
+auto sub integerOnce(int value) {
+    list<int> input = (0,);
+    list<auto!> output = ();
+    push output, value + input[0];
+    return output[0];
+}
+auto sub floatingOnce(float value) {
+    list<float> input = (1.0,);
+    list<auto!> output = ();
+    push output, value * input[0];
+    return output[0];
+}
+auto sub booleanOnce(bool value) {
+    list<bool> input = (True,);
+    list<auto!> output = ();
+    push output, booleanLeaf(input, value);
+    return output[0];
+}
+foreach int value in ((0, 1, -1, 1125899906842624, -1125899906842624, 0x7fffffffffffffff, -9223372036854775807 - 1)) {
+    list<auto> result = integerValue(value);
+    expect(value, result[0]); expect(value, result[1]);
+    expect(value, integerOnce(value));
+}
+foreach float value in ((0.0, -0.0, 1.25, -1.25, -3.0e307, -6.0e307, @inf@, -@inf@, @nan@, -@nan@)) {
+    list<auto> result = floatingValue(value);
+    expectFloat(value, result[0]); expectFloat(value, result[1]);
+    expectFloat(value, floatingOnce(value));
+}
+foreach bool value in ((True, False)) {
+    list<auto> result = booleanValue(value);
+    expect(value, result[0]); expect(value, result[1]);
+    expect(value, booleanOnce(value));
+}
+# Typed list reads retain their original boxed source; sparse NOTHING must not become numeric zero.
+list<auto> sub sparseInt(list<int> input) {
+    list<auto!> sink = (NOTHING,);
+    return map (sink[0] = $1), input;
+}
+list<auto> sub sparseFloat(list<float> input) {
+    list<auto!> sink = (NOTHING,);
+    return map (sink[0] = $1), input;
+}
+list<int> ints = (0x7fffffffffffffff,); ints[3] = -1125899906842624;
+list<float> floats = (-3.0e307,); floats[3] = -6.0e307;
+expect((0x7fffffffffffffff, NOTHING, NOTHING, -1125899906842624), sparseInt(ints));
+expect((-3.0e307, NOTHING, NOTHING, -6.0e307), sparseFloat(floats));
+list<auto> sub sparseIntLoop(list<int> input) {
+    list<auto!> output = ();
+    for (int i = 0; i < input.size(); ++i) { push output, input[i]; }
+    return output;
+}
+list<auto> sub sparseFloatLoop(list<float> input) {
+    list<auto!> output = ();
+    for (int i = 0; i < input.size(); ++i) { push output, input[i]; }
+    return output;
+}
+expect((0x7fffffffffffffff, NOTHING, NOTHING, -1125899906842624), sparseIntLoop(ints));
+expect((-3.0e307, NOTHING, NOTHING, -6.0e307), sparseFloatLoop(floats));
+printf("native-scalar-temp-keep: ok\n");

@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class FunctionReferencePathTest
+
+class FunctionReferencePathTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("Qualified AOT function references", "1.0", \ARGV) {
+        addTestCase("nested function references survive module serialization", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string module_path, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(
+            prefix + "QORE_MODULE_DIR=" + quote(module_path) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " " + (map quote($1), args).join(" "));
+        # The consumer is top-level code; its module functions are already AOT compiled.
+        if (result.mode) { ExecModeHarness::check_native(result, ExecModeHarness::NativeCheck::Jit); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        TmpDir dir("qore-function-reference-path-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/source/AOTReferencePaths.qm";
+        write(source, "%modern
+module AOTReferencePaths {
+    version = \"1.0\"; desc = \"Qualified function reference regression\";
+    author = \"Qore\"; license = \"MIT\";
+}
+public namespace AOTReferencePaths {
+    public int sub step(int value) { return value + 100; }
+    public namespace Nested {
+        public int sub step(int value) { return value + 200; }
+        int sub privateStep(int value) { return value + 300; }
+    }
+    public code<int(int)> sub make() { return \\Nested::step(); }
+    public code<int(int)> sub makePrivate() { return \\Nested::privateStep(); }
+    public code<int(int)> sub makePrivateCaught() {
+        try { return \\Nested::privateStep(); }
+        catch (hash<ExceptionInfo> ex) { throw ex; }
+    }
+    public int sub privateDirect(int value) { return Nested::privateStep(value); }
+    public int sub defaulted(code<int(int)> fn = \\Nested::step()) { return fn(3); }
+    public list<auto> sub refs() { return (\\step(), \\Nested::step()); }
+    public class Holder {
+        private {
+            code<int(int)> callback = \\Nested::step();
+        }
+        public int value() { return callback(3); }
+    }
+}
+");
+        string consumer = dir.path + "/consumer.qr";
+        write(consumer, "%modern
+%no-child-restrictions
+%requires AOTReferencePaths
+int sub step(int value) { return value + 1; }
+namespace AOTReferencePaths {
+    namespace Nested { int sub privateStep(int value) { return value + 900; } }
+}
+code<int(int)> callback = AOTReferencePaths::make();
+list<auto> refs = AOTReferencePaths::refs();
+AOTReferencePaths::Holder holder();
+printf(\"%d %d %d %d %d\\n\", callback(3), AOTReferencePaths::defaulted(), refs[0](3), refs[1](3), holder.value());
+Program child(PO_NO_CHILD_PO_RESTRICTIONS);
+child.setExecMode(EM_IR);
+child.importFunction(\"AOTReferencePaths::Nested::step\", \"renamed\");
+child.parse(\"%modern\\ncode<int(int)> sub make() { return \\\\renamed(); }\", \"alias reference\");
+code<int(int)> alias = child.callFunction(\"make\");
+printf(\"%d\\n\", alias(3));
+code<int(int)> private_callback = AOTReferencePaths::makePrivate();
+code<int(int)> caught_callback = AOTReferencePaths::makePrivateCaught();
+printf(\"%d %d %d %d\\n\", private_callback(3), AOTReferencePaths::privateDirect(3),
+    caught_callback(3), AOTReferencePaths::Nested::privateStep(3));
+Program private_owner(PO_NO_CHILD_PO_RESTRICTIONS);
+private_owner.loadModule(\"AOTReferencePaths\");
+code<int(int)> retained_private = private_owner.callFunction(\"AOTReferencePaths::makePrivate\");
+printf(\"%d\\n\", retained_private(3));
+delete private_owner;
+try { retained_private(3); printf(\"deleted owner remained callable\\n\"); }
+catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }
+");
+        string expected = "203 203 103 203 203\n203\n303 303 303 903\n303\nPROGRAM-ERROR\n";
+        string tail = ":" + (ENV.QORE_MODULE_DIR ?? "");
+        assertEq(expected, run((qore, "--exec-mode=ast", consumer), dir.path + "/source" + tail));
+        string artifact = dir.path + "/modules/AOTReferencePaths.qmod";
+        string modules = dir.path + "/modules" + tail;
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                run((qcc, level, "--strip-source", "-m", "-o", artifact, source),
+                    dir.path + "/source" + tail, prefix);
+                assertTrue(is_file(artifact));
+                foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                    assertEq(expected, run((qore, "--exec-mode=" + mode, consumer), modules), mode);
+                }
+                string executable = dir.path + "/consumer";
+                run((qcc, level, "--strip-source", "-o", executable, consumer), modules, prefix);
+                assertEq(expected, run((executable,), modules), level);
+            }
+        }
+    }
+}

@@ -1,0 +1,463 @@
+/* Copyright (c) 2026 Qore Technologies, s.r.o.
+ * SPDX-License-Identifier: MIT
+ */
+#define _QORE_LIB_INTERN
+#define XXH_INLINE_ALL
+#include <qore/intern/xxhash/xxhash.h>
+#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <qore/intern/QoreAOT.h>
+#include <qore/intern/JITRuntime.h>
+#include <qore/intern/QoreClosureNode.h>
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <initializer_list>
+#include <string>
+#include <utility>
+#if defined(__aarch64__)
+#include <qore/macros-aarch64.h>
+#elif defined(__x86_64__)
+#include <qore/macros-x86_64.h>
+#endif
+#include "fixture_worker_thread.h"
+
+extern "C" void init_CLOSURE_DEFERRED_CONTEXT_qo(QoreProgram*);
+
+class CrossProgramStackProbe final : public QoreExternalRuntimeStackLocationHelper {
+public:
+    const QoreProgramLocation& getLocation() const override {
+        static const QoreProgramLocation loc("cross-program-closure-probe", 1, 1);
+        return loc;
+    }
+    const std::string& getCallName() const override {
+        static const std::string name("cross-program-closure-probe");
+        return name;
+    }
+    qore_call_t getCallType() const override { return CT_USER; }
+};
+
+// Each worker owns a separate Program; this test-only adapter wraps the real
+// compiler-proven entry and changes its live limit only after frame publication.
+struct ClosureProbe {
+    QoreAOTContext* ctx;
+    QoreAOTContext::NativeIntUnaryClosureEntry target;
+    QoreAOTContext::NativeIntUnaryClosureEntry original_v2;
+    bool v2;
+    QoreObject* caller_object;
+    const qore_class_private* caller_class;
+    bool overflow = false;
+    bool replace_impl = false;
+    bool reject = false;
+    bool live_object = false;
+    QoreProgram* expected_program = nullptr;
+    QoreProgram* expected_caller = nullptr;
+    unsigned expected_thread_count = 0;
+    unsigned calls = 0;
+    static thread_local ClosureProbe* current;
+    ClosureProbe(QoreAOTContext* ctx, bool v2, RuntimeConfig& rc) : ctx(ctx),
+            target(v2 ? ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire)
+                : ctx->native_int_unary_closure_entry.load(std::memory_order_acquire)),
+            original_v2(ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire)),
+            v2(v2), caller_object(rc.getObject()), caller_class(rc.getClass()) {
+        assert(target && !current);
+        current = this;
+        if (v2) {
+            ctx->native_int_unary_closure_entry_v2.store(invoke, std::memory_order_release);
+        } else {
+            // Exercise old-module semantics in the same process as v2 modules.
+            ctx->native_int_unary_closure_entry_v2.store(nullptr, std::memory_order_release);
+            ctx->native_int_unary_closure_entry.store(invoke, std::memory_order_release);
+        }
+    }
+    ~ClosureProbe() {
+        if (!v2) {
+            ctx->native_int_unary_closure_entry.store(target, std::memory_order_release);
+        }
+        ctx->native_int_unary_closure_entry_v2.store(original_v2, std::memory_order_release);
+        current = nullptr;
+    }
+    static int64_t invoke(int64_t arg, const QoreClosureBase* closure, RuntimeConfig* rc,
+            int* accepted, QoreAOTContext* ctx, ExceptionSink* xsink) {
+        auto& probe = *current;
+        assert(ctx == probe.ctx);
+        ++probe.calls;
+        if (probe.v2) {
+            assert(rc->getObject() == probe.caller_object && rc->getClass() == probe.caller_class);
+        } else {
+            assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+        }
+        if (probe.expected_program) {
+            assert(::getProgram() == probe.expected_program);
+            assert(probe.expected_program->getThreadCount() == probe.expected_thread_count);
+            // Inspect the published native frame through a nested public stack
+            // helper. Its Program must describe the caller, as the generic frame does.
+            CrossProgramStackProbe stack_probe;
+            const QoreStackLocation* frame = stack_probe.getNext();
+            assert(frame && frame->getCallName() == "<anonymous closure>");
+            assert(frame->getProgram() == probe.expected_caller);
+        }
+        if (probe.replace_impl) {
+            // The helper must restore the current implementation, not an Impl
+            // pointer retained across the callee. Keep the native view valid.
+            RuntimeConfig replacement(*rc);
+            *rc = std::move(replacement);
+            assert(!replacement.getObject() && !replacement.getClass());
+            replacement.setObject(closure->getObject());
+            replacement.setClass(closure->getClassCtx());
+            assert(replacement.getObject() == closure->getObject());
+            assert(replacement.getClass() == closure->getClassCtx());
+        }
+        assert((closure->getObject() && closure->getObject()->isValid()) == probe.live_object);
+        if (probe.live_object && !probe.v2) {
+            uint64_t bits = qore_rt_load_self_member("contextMarker", xsink);
+            QoreValue value;
+            std::memcpy(&value, &bits, sizeof(value));
+            ValueHolder marker(value, xsink);
+            assert(!*xsink && marker->getAsBigInt() == 927);
+        }
+        if (probe.reject) {
+            *accepted = 0;
+            return 0;
+        }
+        struct RestoreLimit {
+            size_t* address = nullptr;
+            size_t saved = 0;
+            ~RestoreLimit() { if (address) { *address = saved; } }
+        } restore;
+        if (probe.overflow) {
+#if defined(__aarch64__) || defined(__x86_64__)
+            restore.address = const_cast<size_t*>(qore_rt_get_stack_limit_v1(rc));
+            assert(restore.address);
+            restore.saved = *restore.address;
+            *restore.address = get_stack_pos() + 4096;
+#else
+            assert(false && "requires native stack view");
+#endif
+        }
+        int64_t result = probe.target(arg, closure, rc, accepted, ctx, xsink);
+        if (probe.overflow) {
+            assert(*xsink && qore_get_call_program_context() == closure->getProgram());
+            assert(rc->getObject() == closure->getObject() && rc->getClass() == closure->getClassCtx());
+            if (probe.replace_impl) {
+                // Materialization must also restore the current Impl after a cold-path move.
+                RuntimeConfig replacement(*rc);
+                *rc = std::move(replacement);
+                assert(!replacement.getObject() && !replacement.getClass());
+            }
+        }
+        return result;
+    }
+};
+thread_local ClosureProbe* ClosureProbe::current = nullptr;
+
+// Reports any exception in the sink before the assertion that it is empty fails,
+// so a failing fixture shows what was raised.
+static void checkNoException(ExceptionSink& xsink, const char* action) {
+    if (!xsink) {
+        return;
+    }
+    QoreValue err = xsink.getExceptionErr();
+    QoreValue desc = xsink.getExceptionDesc();
+    const QoreStringNode* err_str = err.getType() == NT_STRING ? err.get<const QoreStringNode>() : nullptr;
+    const QoreStringNode* desc_str = desc.getType() == NT_STRING ? desc.get<const QoreStringNode>() : nullptr;
+    std::fprintf(stderr, "%s raised %s: %s\n", action, err_str ? err_str->c_str() : "<non-string error>",
+        desc_str ? desc_str->c_str() : "<non-string description>");
+    std::fflush(stderr);
+    assert(!xsink);
+}
+
+static void sameContext(const RuntimeConfig& before) {
+    RuntimeConfig after = *qore_rt_get_fast_runtime_config();
+    assert(before.getProgram() == after.getProgram());
+    assert(before.getLocation() == after.getLocation());
+    assert(before.getStatement() == after.getStatement());
+    assert(before.getParseOptions() == after.getParseOptions());
+    assert(before.getObject() == after.getObject() && before.getClass() == after.getClass());
+    assert(before.getClosureEnv() == after.getClosureEnv());
+    assert(before.getStackLocation() == after.getStackLocation());
+}
+
+struct Invocation {
+    uint64_t bits;
+    QoreAOTContext* ctx;
+    QorePreparedFunctionRefV3 cache{};
+    QoreObject* snapshot_object = nullptr;
+    bool live_object = false;
+    bool v2 = false;
+    unsigned helper_version = 3;
+    QorePreparedFunctionRefFrameV4 frame{};
+
+    int call(int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc) {
+        if (helper_version == 9) {
+            assert(!cache.owner); // borrowed closures never populate this descriptor
+            return qore_rt_try_funcref_int_int_v9(bits, 7, result, xsink, rc, &cache, &frame);
+        }
+        if (helper_version == 5) {
+            return qore_rt_try_funcref_int_int_v5(bits, 7, result, xsink, rc, &cache, &frame);
+        }
+        if (helper_version == 4) {
+            return qore_rt_try_funcref_int_int_v4(bits, 7, result, xsink, rc, &cache, &frame);
+        }
+        return qore_rt_try_funcref_int_int_v3(bits, 7, result, xsink, rc, &cache);
+    }
+};
+
+static uint64_t wrongClosureBody(QoreAOTContext*, ExceptionSink*) {
+    assert(false && "identity-mismatched binding must never be called");
+    return 0;
+}
+
+static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, ExceptionSink* xsink) {
+    auto& invocation = *static_cast<Invocation*>(const_cast<void*>(ptr));
+    RuntimeConfig* rc = qore_rt_get_fast_runtime_config();
+    QoreObject* old_object = rc->getObject();
+    const qore_class_private* old_class = rc->getClass();
+    assert(invocation.snapshot_object && invocation.snapshot_object != old_object);
+    // Only alter the compatibility snapshot. Live thread context is independent.
+    rc->setObject(invocation.snapshot_object);
+    rc->setClass(qore_class_private::get(*invocation.snapshot_object->getClass()));
+    RuntimeConfig before = *rc;
+    QoreProgram* caller = qore_get_call_program_context();
+    ClosureProbe probe(invocation.ctx, invocation.v2, *rc);
+    probe.live_object = invocation.live_object;
+    for (bool replace_impl : {false, true}) {
+        probe.replace_impl = replace_impl;
+        for (bool request_overflow : {false, true, false}) {
+            // Unsupported native views still exercise ordinary calls/restoration;
+            // the production full stack guard remains enabled on those targets.
+            bool overflow = request_overflow && qore_rt_get_stack_limit_v1(rc);
+            probe.overflow = overflow;
+            int64_t result = 123;
+            assert(invocation.call(&result, xsink, rc) == 1);
+            assert(result == (overflow ? 0 : 24) && static_cast<bool>(*xsink) == overflow);
+            sameContext(before);
+            assert(qore_get_call_program_context() == caller);
+            if (overflow) {
+                assert(xsink->getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink->getExceptionInfo(), xsink);
+                assert(!*xsink);
+                const auto* stack = info->getKeyValue("callstack").get<const QoreListNode>();
+                assert(stack);
+                unsigned closures = 0;
+                for (size_t i = 0; i < stack->size(); ++i) {
+                    const auto* frame = stack->retrieveEntry(i).get<const QoreHashNode>();
+                    const auto* name = frame->getKeyValue("function").get<const QoreStringNode>();
+                    if (name && name->equal("<anonymous closure>")) {
+                        ++closures;
+                        assert(frame->getKeyValue("file").get<const QoreStringNode>()->strlen());
+                    }
+                    if (!(i % 100)) { assert(!qore_check_cancel(xsink, "closure overflow stack inspection")); }
+                }
+                assert(closures == 1);
+            }
+        }
+        probe.overflow = false;
+        probe.reject = true;
+        int64_t rejected = 123;
+        assert(invocation.call(&rejected, xsink, rc) == 0);
+        assert(!*xsink && rejected == 0);
+        sameContext(before);
+        assert(qore_get_call_program_context() == caller);
+        probe.reject = false;
+    }
+    assert(probe.calls == 8);
+    xsink->raiseException("CLOSURE-PENDING", "pending sink must prevent entry");
+    int64_t result = 123;
+    assert(invocation.call(&result, xsink, rc) == 1);
+    assert(*xsink && result == 0 && probe.calls == 8);
+    xsink->clear();
+    sameContext(before);
+    auto normal = invocation.ctx->native_body_fn;
+    assert(normal);
+    invocation.ctx->native_body_fn = nullptr;
+    result = 123;
+    int handled = invocation.call(&result, xsink, rc);
+    invocation.ctx->native_body_fn = normal;
+    assert(!handled && !*xsink && result == 123 && probe.calls == 8);
+    sameContext(before);
+    rc->setObject(old_object);
+    rc->setClass(old_class);
+    return QoreValue(int64_t(24));
+}
+
+static void check(unsigned helper_version) {
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_MODERN, xsink);
+    Invocation invocation{};
+    invocation.helper_version = helper_version;
+    QoreValue empty;
+    uint64_t empty_bits;
+    std::memcpy(&empty_bits, &empty, sizeof(empty_bits));
+    invocation.cache.owner = empty_bits;
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        assert(parse);
+        program->getRootNS()->addBuiltinVariant(&invocation, "runClosureSweep", sweep,
+            QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
+    }
+    qore_aot_script_begin_batch(*program);
+    init_CLOSURE_DEFERRED_CONTEXT_qo(*program);
+    assert(!qore_aot_script_end_batch(*program));
+    QoreExternalProgramContextHelper context(&xsink, *program);
+    // Caller locals and captures span variable-stack allocation boundaries.
+    std::string source = "%modern\n";
+    for (unsigned padding : {0, 31, 32, 33, 63, 64, 65, 70}) {
+        source += "int sub padded" + std::to_string(padding) + "() {\n";
+        for (unsigned i = 0; i <= padding; ++i) {
+            source += "string local" + std::to_string(i) + " = \"preserved\";\n";
+            source += "int capture" + std::to_string(i) + " = 17;\n";
+        }
+        source += "code<int()> callback = int sub() { return capture0";
+        for (unsigned i = 1; i <= padding; ++i) { source += " + capture" + std::to_string(i); }
+        source += "; };\nint result = runClosureSweep();\n";
+        source += "if (callback() != " + std::to_string(17 * (padding + 1))
+            + ") { throw \"CLOSURE-CONTEXT\", \"capture changed\"; }\n";
+        for (unsigned i = 0; i <= padding; ++i) {
+            source += "if (local" + std::to_string(i)
+                + " != \"preserved\") { throw \"CLOSURE-CONTEXT\", \"local changed\"; }\n";
+        }
+        source += "return result;\n}\n";
+    }
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        assert(parse);
+        program->parse(source.c_str(), "closure-context-padded", &xsink);
+        checkNoException(xsink, "parsing the padded callers");
+    }
+    ValueHolder snapshot(program->callFunction("closureContextOwnedObject", nullptr, &xsink), &xsink);
+    assert(!xsink && snapshot->getType() == NT_LIST && snapshot->get<QoreListNode>()->size() == 2);
+    invocation.snapshot_object = snapshot->get<QoreListNode>()->retrieveEntry(0).get<QoreObject>();
+    assert(invocation.snapshot_object && invocation.snapshot_object->isValid());
+    for (const char* factory : {"closureContextPlain", "closureContextCaptured", "closureContextObject",
+            "closureContextOwnedObject"}) {
+        invocation.live_object = !std::strcmp(factory, "closureContextOwnedObject");
+        ValueHolder owner(program->callFunction(factory, nullptr, &xsink), &xsink);
+        assert(!xsink);
+        if (invocation.live_object) {
+            assert(owner->getType() == NT_LIST && owner->get<QoreListNode>()->size() == 2);
+        }
+        ValueHolder ref(invocation.live_object
+            ? owner->get<QoreListNode>()->retrieveEntry(1).refSelf() : owner->refSelf(), &xsink);
+        assert(!xsink && ref->getType() == NT_RUNTIME_CLOSURE);
+        const auto* closure = static_cast<const QoreClosureBase*>(ref->getInternalNode());
+        const auto* uvb = closure->getFunction()->first()->getUserVariantBase();
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push(ref->refSelf(), &xsink);
+        args->push(QoreValue(int64_t(7)), &xsink);
+        assert(!xsink);
+        ValueHolder warm(program->callFunction("closureContextCaller", *args, &xsink), &xsink);
+        assert(!xsink && warm->getAsBigInt() == 24);
+        invocation.ctx = uvb->getCachedAOTContext();
+        assert(invocation.ctx && invocation.ctx->native_int_unary_closure_entry.load(std::memory_order_acquire));
+        assert(invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire));
+        auto v2_entry = invocation.ctx->native_int_unary_closure_entry_v2.exchange(nullptr, std::memory_order_acq_rel);
+        auto normal = invocation.ctx->native_body_fn;
+        qore_rt_bind_closure_int_unary_v2(nullptr, normal, v2_entry);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, nullptr, v2_entry);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, nullptr);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, wrongClosureBody, v2_entry);
+        assert(!invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire));
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, v2_entry);
+        qore_rt_bind_closure_int_unary_v2(invocation.ctx, normal, ClosureProbe::invoke);
+        assert(invocation.ctx->native_int_unary_closure_entry_v2.load(std::memory_order_acquire) == v2_entry);
+        std::memcpy(&invocation.bits, &*ref, sizeof(invocation.bits));
+        qore_exec_mode_t mode = program->getExecMode();
+        program->setExecMode(QEM_AST, true);
+        for (bool v2 : {false, true, false}) {
+            if (v2 && (std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2")
+                    || std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT"))) {
+                continue;
+            }
+            invocation.v2 = v2;
+            for (unsigned padding : {0, 31, 32, 33, 63, 64, 65, 70}) {
+                std::string name = "padded" + std::to_string(padding);
+                ValueHolder value(program->callFunction(name.c_str(), nullptr, &xsink), &xsink);
+                assert(!xsink && value->getAsBigInt() == 24 && invocation.cache.owner == empty_bits);
+            }
+        }
+        program->setExecMode(mode, true);
+        QoreProgramHelper other(PO_MODERN, xsink);
+        QoreExternalProgramContextHelper other_context(&xsink, *other);
+        int64_t result = 123;
+        assert(invocation.call(&result, &xsink, qore_rt_get_fast_runtime_config()) == 0);
+        assert(!xsink && result == 123 && invocation.cache.owner == empty_bits);
+        assert(!invocation.frame.frame); // borrowed closures never construct reusable function-ref frames
+
+        // The scalar helper still misses across Programs. An ordinary closure
+        // call may use its native body only after the complete Program transition.
+        bool native_cross = !std::getenv("QORE_DISABLE_AOT_CROSS_PROGRAM_CLOSURE_ENTRY");
+        unsigned owner_threads = program->getThreadCount();
+        unsigned caller_threads = other->getThreadCount();
+        for (bool v2 : {false, true}) {
+            if (v2 && (std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2")
+                    || std::getenv("QORE_DISABLE_AOT_DYNAMIC_CLOSURE_DEFERRED_CONTEXT"))) {
+                continue;
+            }
+            RuntimeConfig before = *qore_rt_get_fast_runtime_config();
+            ClosureProbe probe(invocation.ctx, v2, *qore_rt_get_fast_runtime_config());
+            probe.live_object = invocation.live_object;
+            probe.expected_program = *program;
+            probe.expected_caller = *other;
+            probe.expected_thread_count = owner_threads + 1;
+            QoreValue arg(int64_t(7));
+            uint64_t arg_bits;
+            std::memcpy(&arg_bits, &arg, sizeof(arg_bits));
+            for (bool reject : {false, true}) {
+                probe.reject = reject;
+                probe.calls = 0;
+                uint64_t bits = qore_rt_call_closure_fast(invocation.bits, &arg_bits, 1, &xsink);
+                QoreValue value;
+                std::memcpy(&value, &bits, sizeof(value));
+                ValueHolder holder(value, &xsink);
+                assert(!xsink && holder->getAsBigInt() == 24);
+                assert(probe.calls == (native_cross ? 1u : 0u));
+                assert(::getProgram() == *other);
+                assert(program->getThreadCount() == owner_threads && other->getThreadCount() == caller_threads);
+                sameContext(before);
+            }
+            if (native_cross) {
+                // The deliberate generic fallback above executes the normal
+                // body's binders, which may republish v2. Keep this v1 test on
+                // its instrumented entry for the following overflow check.
+                if (!v2) {
+                    invocation.ctx->native_int_unary_closure_entry_v2.store(nullptr, std::memory_order_release);
+                }
+                probe.reject = false;
+                probe.overflow = true;
+                probe.calls = 0;
+                uint64_t bits = qore_rt_call_closure_fast(invocation.bits, &arg_bits, 1, &xsink);
+                QoreValue value;
+                std::memcpy(&value, &bits, sizeof(value));
+                ValueHolder holder(value, &xsink);
+                assert(xsink && probe.calls == 1);
+                assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("STACK-LIMIT-EXCEEDED"));
+                ReferenceHolder<QoreHashNode> info(xsink.getExceptionInfo(), &xsink);
+                assert(!xsink);
+                assert(::getProgram() == *other);
+                assert(program->getThreadCount() == owner_threads && other->getThreadCount() == caller_threads);
+                sameContext(before);
+            }
+        }
+    }
+}
+
+int main() {
+    qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
+    for (unsigned version : {3, 4, 5, 9}) {
+        check(version);
+        // the worker parses Qore code: see fixture_worker_thread.h
+        run_in_fixture_worker([version]() {
+            for (unsigned i = 0; i < 3; ++i) {
+                QoreForeignThreadHelper foreign;
+                check(version);
+            }
+        });
+    }
+    qore_cleanup();
+    std::puts("closure-deferred-context: ok");
+}

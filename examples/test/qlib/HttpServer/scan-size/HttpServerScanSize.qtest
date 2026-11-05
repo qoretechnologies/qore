@@ -128,8 +128,11 @@ class HttpServerScanSizeTest inherits QUnit::Test {
     private hash<ScanSizeResult> runWorker(string dir, int connections) {
         string worker = get_script_dir() + DirSep + "HttpServerScanSizeWorker.q";
         string stats = dir + DirSep + "stats";
-        string out = backquote(sprintf("env QORE_SCAN_STATS=%s LD_LIBRARY_PATH=%s %s -b %s %d 2>&1", stats,
-            libqore_dir, qore_bin, worker, connections));
+        int status;
+        string out = backquote(sprintf("env QORE_SCAN_STATS=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "%s -b %s %d 2>&1", quote(stats), quote(libqore_dir), quote(libqore_dir), quote(qore_bin),
+            quote(worker), connections), \status);
+        assertEq(0, status, out);
         hash<ScanSizeResult> rv();
         foreach string line in (out.split("\n")) {
             if (!line.val()) {
@@ -151,5 +154,9 @@ class HttpServerScanSizeTest inherits QUnit::Test {
             };
         }
         return rv;
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 }

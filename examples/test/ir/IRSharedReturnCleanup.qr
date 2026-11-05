@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%disable-warning unreferenced-variable
+# Functions with many returns share the cleanup of the scopes that their returns leave; every return must release
+# the locals, temporaries, catch blocks and loops it leaves and run the handlers registered before it, in the order of
+# the interpreter, in every mode
+
+our list<string> events = ();
+our hash<string, int> released = {};
+our int created = 0;
+
+class Tracker {
+    public {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+        ++created;
+    }
+    destructor() {
+        events += name;
+        released{name} = (released{name} ?? 0) + 1;
+    }
+    string id() {
+        return name;
+    }
+}
+
+list<auto> sub mkl(string prefix) {
+    return (new Tracker(prefix + "0"), new Tracker(prefix + "1"), new Tracker(prefix + "2"));
+}
+
+sub raise(string err) {
+    throw err, err, new Tracker("arg" + err);
+}
+
+# returns between locals and in nested blocks
+*string sub nested(int which) {
+    Tracker a("a");
+    if (which == 0) { return "r0" + a.id(); }
+    Tracker b("b");
+    {
+        Tracker c("c");
+        if (which == 1) { return "r1" + c.id(); }
+        {
+            Tracker d("d");
+            if (which == 2) { return "r2" + d.id(); }
+        }
+        if (which == 3) { return "r3"; }
+    }
+    Tracker e("e");
+    if (which == 4) { return "r4" + e.id(); }
+    if (which == 5) { return; }
+    return "end";
+}
+
+# returns from loops: foreach over temporary lists, nested loops, while and for loops
+string sub loops(int which) {
+    Tracker a("la");
+    foreach Tracker t in (mkl("f")) {
+        Tracker fi("fi" + t.id());
+        if (which == 0 && t.id() == "f1") { return "r0" + fi.id(); }
+        foreach Tracker u in (mkl("g" + t.id())) {
+            Tracker gi("gi" + u.id());
+            if (which == 1 && u.id() == "gf11") { return "r1"; }
+        }
+    }
+    int i = 0;
+    while (i < 3) {
+        Tracker w("w" + i);
+        if (which == 2 && i == 1) { return "r2" + w.id(); }
+        ++i;
+    }
+    for (int j = 0; j < 3; ++j) {
+        Tracker f("for" + j);
+        if (which == 3 && j == 2) { return "r3"; }
+    }
+    foreach string k in (keys {"x": new Tracker("kx"), "y": new Tracker("ky")}) {
+        Tracker kl("kl" + k);
+        if (which == 4 && k == "y") { return "r4" + k; }
+    }
+    return "end";
+}
+
+# returns from try and catch blocks
+string sub catches(int which) {
+    Tracker a("ca");
+    try {
+        Tracker t("try");
+        if (which == 0) { return "r0" + t.id(); }
+        raise("A");
+    } catch (hash<ExceptionInfo> ex) {
+        Tracker c("catch");
+        if (which == 1) { return "r1" + ex.err; }
+        try {
+            raise("B");
+        } catch (hash<ExceptionInfo> ex2) {
+            Tracker c2("catch2");
+            if (which == 2) { return "r2" + ex2.err; }
+        }
+        if (which == 3) { return "r3"; }
+    }
+    switch (which) {
+        case 4: {
+            Tracker s("sw");
+            return "r4" + s.id();
+        }
+        case 5:
+            return "r5";
+    }
+    return "end";
+}
+
+# returns before and after handlers are registered, and from a handler
+string sub handlers(int which) {
+    Tracker a("ha");
+    if (which == 0) { return "r0"; }
+    on_exit { events += "on_exit"; }
+    if (which == 1) { return "r1"; }
+    Tracker b("hb");
+    on_error { events += "on_error"; }
+    on_success { events += "on_success"; }
+    if (which == 2) { return "r2"; }
+    {
+        Tracker c("hc");
+        on_exit { events += "inner_exit " + c.id(); }
+        if (which == 3) { return "r3" + c.id(); }
+        Tracker d("hd");
+        if (which == 4) { return "r4" + d.id(); }
+    }
+    if (which == 5) { return "r5"; }
+    return "end";
+}
+
+# a return in a handler leaves the function from the handler
+*string sub handlerReturn(int which) {
+    Tracker a("hra");
+    on_exit {
+        Tracker h("in_handler");
+        if (which == 0) { return; }
+        events += "handler end";
+    }
+    if (which == 1) { return "r1"; }
+    if (which == 2) { return "r2"; }
+    if (which == 3) { return "r3"; }
+    return "end";
+}
+
+# returns from a reference foreach and from a loop that changes the returned variable
+string sub refLoop(int which) {
+    list<int> l = (1, 2, 3);
+    Tracker a("ra");
+    foreach int v in (\l) {
+        v += 10;
+        if (which == 0 && v == 12) { return sprintf("r0 %y", l); }
+    }
+    if (which == 1) { return sprintf("r1 %y", l); }
+    if (which == 2) { return "r2"; }
+    if (which == 3) { return "r3"; }
+    return sprintf("end %y", l);
+}
+
+sub check(string label, code test) {
+    events = ();
+    released = {};
+    int start = created;
+    try {
+        events += "result " + (test() ?? "NOTHING");
+    } catch (hash<ExceptionInfo> ex) {
+        events += "caught " + ex.err;
+    }
+    int total = 0;
+    foreach int n in (released.values()) {
+        total += n;
+    }
+    if (created - start != total) {
+        throw "COUNT-ERROR", sprintf("%s: created %d, released %d: %y", label, created - start, total, events);
+    }
+    foreach hash<auto> i in (released.pairIterator()) {
+        if (i.value != 1) {
+            throw "DOUBLE-RELEASE", sprintf("%s: %s released %d times", label, i.key, i.value);
+        }
+    }
+    printf("%s: %y\n", label, events);
+}
+
+for (int i = 0; i <= 6; ++i) {
+    check("nested " + i, *string sub () { return nested(i); });
+}
+for (int i = 0; i <= 5; ++i) {
+    check("loops " + i, *string sub () { return loops(i); });
+}
+for (int i = 0; i <= 6; ++i) {
+    check("catches " + i, *string sub () { return catches(i); });
+}
+for (int i = 0; i <= 6; ++i) {
+    check("handlers " + i, *string sub () { return handlers(i); });
+}
+for (int i = 0; i <= 4; ++i) {
+    check("handler return " + i, *string sub () { return handlerReturn(i); });
+}
+for (int i = 0; i <= 4; ++i) {
+    check("ref loop " + i, *string sub () { return refLoop(i); });
+}
+printf("ir-shared-return-cleanup: ok\n");

@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class SerializedDebugStepsTest
+
+class SerializedDebugStepsTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        const Source = '%modern
+%allow-debugger
+
+code<int(int)> sub make() {
+    return int sub (int x) {
+        int value = x + 1;                 # WATCH
+        string marker = sprintf("%d", x); # WATCH
+        return value + marker.size();     # WATCH
+    };
+}
+code<int(int)> sub makeScoped(int delta) {
+    return int sub (int x) {
+        int total = 0;
+        {
+            string marker = sprintf("%d", x);
+            on_exit { total += marker.size(); }
+        }
+        {
+            string marker = sprintf("%d", x + delta);
+            on_exit { total += marker.size(); }
+        }
+        return total;
+    };
+}
+int sub warm() {
+    code<int(int)> fn = make();
+    code<int(int)> scoped = makeScoped(10);
+    int result = 0;
+    for (int i = 0; i < 5; ++i) { result += fn(i) + scoped(i); }
+    return result;
+}
+# Warm both closures before serialization; fresh debug IR must still preserve every statement.
+const Warmup = warm();
+
+class Recorder inherits DebugProgram {
+    public { list<int> lines = (); }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int block, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        if (sid) {
+            int line = pgm.getStatementIdInfo(sid).start_line;
+            if (line >= __FIRST__ && line <= __LAST__) { push lines, line; }
+        }
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+code<int(int)> fn = make();
+code<int(int)> scoped = makeScoped(10);
+Recorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+bool attached = ENV.QORE_TEST_ATTACH_DEBUGGER != "0";
+bool legacy = ENV.QORE_TEST_LEGACY_STEPS == "1";
+if (attached) { recorder.addProgram(pc); }
+int result = fn(17);
+int scoped_result = scoped(17);
+if (attached) { recorder.removeProgram(pc); }
+if (result != 20 || scoped_result != 4
+        || recorder.lines != (attached ? (legacy ? __LEGACY__ : __EXPECTED__) : ())) {
+    throw "SERIALIZED-DEBUG-STEPS", sprintf("result=%d scoped=%d lines=%y", result, scoped_result, recorder.lines);
+}
+printf("serialized-debug-steps: ok");
+';
+    }
+
+    constructor() : Test("serialized AOT statement events", "1.0", \ARGV) {
+        addTestCase("explicit events do not also emit legacy line steps", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, bool attached = True, bool native = True, bool legacy = False) {
+        int status;
+        string output = backquote("QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 QORE_JIT_SYNC_COMPILE=1 "
+            + "QORE_TEST_ATTACH_DEBUGGER=" + (attached ? "1 " : "0 ")
+            + "QORE_TEST_LEGACY_STEPS=" + (legacy ? "1 " : "0 ")
+            + (native ? "" : "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 ")
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        list<string> lines = Source.split("\n");
+        list<int> watched = ();
+        for (int i = 0; i < lines.size(); ++i) {
+            if (lines[i].endsWith("# WATCH")) { push watched, i + 1; }
+        }
+        assertEq(3, watched.size());
+        string code = replace(replace(replace(Source, "__FIRST__", string(watched[0])),
+            "__LAST__", string(watched[2])), "__EXPECTED__", "(" + (map string($1), watched).join(",") + ")");
+        # Keep the old cleanup-line expectation available for compatibility probes of already compiled
+        # artifacts. Fresh serialization must emit all three events with native closures enabled or disabled.
+        code = replace(code, "__LEGACY__", sprintf("(%d,%d)", watched[1], watched[2]));
+        TmpDir dir("qore-serialized-debug-steps-");
+        string source = dir.path + "/fixture.qr";
+        {
+            File file();
+            file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+            file.write(code);
+        }
+        string expected = "serialized-debug-steps: ok";
+        foreach string mode in (("ast", "ir", "tiered", "jit")) {
+            foreach bool attached in ((False, True)) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), attached), mode);
+            }
+        }
+        foreach string level in (("-O0", "-O3")) {
+            foreach bool stripped in ((False, True)) {
+                string executable = dir.path + "/fixture";
+                list<string> args = (qcc, "--parse-option=PO_ALLOW_DEBUGGER", level);
+                if (stripped) { push args, "--strip-source"; }
+                run(args + ("-o", executable, source));
+                foreach bool native in ((False, True)) {
+                    foreach bool attached in ((False, True)) {
+                        assertEq(expected, run((executable,), attached, native),
+                            sprintf("%s stripped=%y native=%y attached=%y", level, stripped, native, attached));
+                    }
+                }
+            }
+        }
+    }
+}

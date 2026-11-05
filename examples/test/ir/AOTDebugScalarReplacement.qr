@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub listProbe(int seed) {
+    seed = (seed * 33 + 17) & 65535;
+    list<int> pair = (seed, seed + 1);
+    return pair[seed & 1]; # WATCH_LIST
+}
+
+int sub hashProbe(int seed) {
+    seed = (seed * 33 + 17) & 65535;
+    hash<string, int> pair = {"left": seed, "right": seed + 1};
+    string key = seed & 1 ? "right" : "left";
+    return pair{key}; # WATCH_HASH
+}
+
+class Probe {
+    int method(int seed) {
+        seed = (seed * 33 + 17) & 65535;
+        list<int> pair = (seed, seed + 1);
+        return pair[seed & 1]; # WATCH_METHOD
+    }
+}
+
+code<int(int)> sub makeProbe() {
+    return int sub (int seed) {
+        seed = (seed * 33 + 17) & 65535;
+        list<int> pair = (seed, seed + 1);
+        return pair[seed & 1]; # WATCH_CLOSURE
+    };
+}
+
+class Recorder inherits DebugProgram {
+    public { int changed = 0; }
+    private { list<int> lines; }
+    constructor(list<int> watched) { lines = watched; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onStep(ProgramControl pgm, int block, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        if (sid) {
+            int line = pgm.getStatementIdInfo(sid).start_line;
+            if (inlist(line, lines)) {
+                hash<auto> locals = get_local_vars(1);
+                if (locals.seed.value != 248) {
+                    throw "DEBUG-SCALAR-LOCALS", sprintf("seed=%y", locals.seed.value);
+                }
+                if (line == lines[1]) {
+                    if (locals.pair.value != {"left": 248, "right": 249}) {
+                        throw "DEBUG-SCALAR-HASH", sprintf("pair=%y", locals.pair.value);
+                    }
+                    hash<string, int> replacement = {"left": 201, "right": 202};
+                    set_local_var_value(1, "pair", replacement);
+                } else {
+                    if (locals.pair.value != (248, 249)) {
+                        throw "DEBUG-SCALAR-LIST", sprintf("pair=%y", locals.pair.value);
+                    }
+                    list<int> replacement = (101, 102);
+                    set_local_var_value(1, "pair", replacement);
+                }
+                ++changed;
+            }
+        }
+        rs = DebugStep;
+    }
+}
+
+bool attached = ARGV[0] == "1";
+Recorder recorder(map $1.toInt(), ARGV[1..4]);
+ProgramControl pc = ProgramControl::getProgram();
+Probe probe();
+code<int(int)> closure = makeProbe();
+if (attached) { recorder.addProgram(pc); }
+list<int> results = (call_function("listProbe", 7), call_function("hashProbe", 7), probe.method(7), closure(7));
+if (attached) { recorder.removeProgram(pc); }
+printf("%y changed=%d\n", results, recorder.changed);

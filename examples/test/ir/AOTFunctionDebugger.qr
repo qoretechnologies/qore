@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# AOT code calls these user functions and static methods natively (fast entries, inline body summaries, the
+# self-recursive entry); while a debugger is attached, every call must report the function events of the ordinary
+# call, also when the debugger is attached during a loop of a caller that is already running natively.  The lines
+# of the callees' statements below are matched by FunctionRecorder; keep them in place.
+
+our int Effects = 0;
+
+int sub fnPure(int v) {
+    return v + 3; # FN_PURE line 15
+}
+int sub fnEffect(int v) {
+    ++Effects; # FN_EFFECT line 18
+    return v + 5;
+}
+int sub fnRec(int n) {
+    return n <= 0 ? 0 : fnRec(n - 1) + 1; # FN_REC line 22
+}
+float sub fnFloat(float v) {
+    return v * 0.5; # FN_FLOAT line 25
+}
+int sub fnRecAttach(int n) {
+    maybeAttach(n); return n <= 0 ? 0 : fnRecAttach(n - 1) + 1; # FN_REC_ATTACH line 28
+}
+class StaticCallee {
+    static int pure(int v) {
+        return v * 2; # ST_PURE line 32
+    }
+    static int effect(int v) {
+        ++Effects; # ST_EFFECT line 35
+        return v * 3;
+    }
+}
+# called with a temporary argument, which the call consumes
+int sub fnStr(string s) {
+    return s.size(); # FN_STR line 41
+}
+
+const Lines = {
+    "15": "fn-pure", "18": "fn-effect", "22": "fn-rec", "25": "fn-float",
+    "28": "fn-rec-attach", "32": "st-pure", "35": "st-effect", "41": "fn-str",
+};
+
+class FunctionRecorder inherits DebugProgram {
+    public {
+        hash<string, int> entries = {};
+        hash<string, int> exits = {};
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        *string key = Lines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++entries{key};
+        }
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+        *string key = Lines{pgm.getStatementIdInfo(sid).start_line.toString()};
+        if (key) {
+            ++exits{key};
+        }
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+
+FunctionRecorder recorder();
+ProgramControl pc = ProgramControl::getProgram();
+int attach_at = -1;
+
+sub maybeAttach(int i) {
+    if (i == attach_at) {
+        recorder.addProgram(pc);
+    }
+}
+
+# one call of each callee
+int sub callOnce(int v) {
+    return fnPure(v) + fnEffect(v) + StaticCallee::pure(v) + StaticCallee::effect(v) + fnRec(2)
+        + (fnFloat(v) * 2.0).toInt() + fnStr(sprintf("%d", v % 10));
+}
+# the same calls in a try block
+int sub callTry(int v) {
+    try {
+        return fnPure(v) + fnEffect(v) + StaticCallee::pure(v) + StaticCallee::effect(v) + fnRec(2)
+            + (fnFloat(v) * 2.0).toInt() + fnStr(sprintf("%d", v % 10));
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+# the calls in a loop that can attach the debugger
+int sub callLoop(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        maybeAttach(i);
+        total += fnPure(i) + fnEffect(i) + StaticCallee::pure(i) + StaticCallee::effect(i)
+            + (fnFloat(i) * 2.0).toInt() + fnStr(sprintf("%d", i % 10));
+    }
+    return total;
+}
+# the same loop in a try block
+int sub callLoopTry(int n) {
+    int total = 0;
+    try {
+        for (int i = 0; i < n; ++i) {
+            maybeAttach(i);
+            total += fnPure(i) + fnEffect(i) + StaticCallee::pure(i) + StaticCallee::effect(i)
+                + (fnFloat(i) * 2.0).toInt() + fnStr(sprintf("%d", i % 10));
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return total;
+}
+
+sub check(bool cond, string msg) {
+    if (!cond) {
+        throw "FUNCTION-DEBUGGER-TEST", msg;
+    }
+}
+
+sub checkEvents(hash<string, int> expected, string label) {
+    foreach string key in (Lines.iterator()) {
+        int want = expected{key} ?? 0;
+        # the frames of a recursion that was running when the debugger was attached may report their exit
+        int want_exits = key == "fn-rec-attach" ? (recorder.exits{key} ?? 0) : want;
+        check((recorder.entries{key} ?? 0) == want && (recorder.exits{key} ?? 0) == want_exits,
+            sprintf("%s: %s entry/exit events: %d/%d, expected %d", label, key, recorder.entries{key} ?? 0,
+                recorder.exits{key} ?? 0, want));
+    }
+    recorder.entries = {};
+    recorder.exits = {};
+}
+
+int sub onceResult(int v) {
+    return (v + 3) + (v + 5) + v * 2 + v * 3 + 2 + v + 1;
+}
+int sub loopResult(int n) {
+    int total = 0;
+    for (int i = 0; i < n; ++i) {
+        total += onceResult(i) - 2;
+    }
+    return total;
+}
+
+sub runAll(int n) {
+    int effects = Effects;
+    check(callOnce(4) == onceResult(4), "call");
+    check(callTry(4) == onceResult(4), "try call");
+    check(callLoop(n) == loopResult(n), "loop");
+    check(callLoopTry(n) == loopResult(n), "try loop");
+    check(Effects == effects + 4 + 4 * n, sprintf("effects: %d", Effects - effects));
+}
+
+# warm up (and verify the results of) every call site without a debugger
+for (int i = 0; i < 32; ++i) {
+    runAll(8);
+    check(fnRecAttach(4) == 4, "recursion");
+}
+checkEvents({}, "no debugger");
+
+# debugger attached before the calls: two single calls and two loops of 8
+recorder.addProgram(pc);
+runAll(8);
+recorder.removeProgram(pc);
+# fnRec(2) recurses with 2, 1 and 0
+checkEvents({
+    "fn-pure": 2 + 16, "fn-effect": 2 + 16, "st-pure": 2 + 16, "st-effect": 2 + 16, "fn-float": 2 + 16,
+    "fn-str": 2 + 16,
+    "fn-rec": 2 * 3,
+}, "attached before");
+
+# detaching restores the native calls without events
+runAll(8);
+checkEvents({}, "detached");
+
+# debugger attached during loops of callers that are already running natively: iterations 5 to 11
+attach_at = 5;
+check(callLoop(12) == loopResult(12), "attach loop");
+recorder.removeProgram(pc);
+check(callLoopTry(12) == loopResult(12), "attach try loop");
+recorder.removeProgram(pc);
+checkEvents({
+    "fn-pure": 14, "fn-effect": 14, "st-pure": 14, "st-effect": 14, "fn-float": 14, "fn-str": 14,
+}, "attached during loop");
+
+# debugger attached in a recursion running natively: the calls with 1 and 0 follow the attachment
+attach_at = 2;
+check(fnRecAttach(4) == 4, "attach recursion");
+recorder.removeProgram(pc);
+checkEvents({"fn-rec-attach": 2}, "attached during recursion");
+
+attach_at = -1;
+runAll(8);
+check(fnRecAttach(4) == 4, "restored recursion");
+checkEvents({}, "restored");
+printf("function-debugger: ok\n");

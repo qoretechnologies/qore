@@ -75,7 +75,15 @@ int YamlStreamReadHandler::readText(size_t size, std::string& utf8) {
         }
         ReferenceHolder<QoreListNode> cargs(new QoreListNode(autoTypeInfo), &xsink);
         cargs->push(stream->refSelf(), &xsink);
+        if (xsink) {
+            setError(xsink, "cannot prepare a StreamReader");
+            return -1;
+        }
         cargs->push(new QoreStringNode(encoding->getCode()), &xsink);
+        if (xsink) {
+            setError(xsink, "cannot prepare a StreamReader");
+            return -1;
+        }
         reader = cls->execConstructor(*cargs, &xsink);
         if (xsink) {
             if (reader) {
@@ -95,7 +103,11 @@ int YamlStreamReadHandler::readText(size_t size, std::string& utf8) {
     }
     // whole characters, at most four UTF-8 bytes each, so that the text fits the buffer
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
-    args->push((int64)(size >= 4 ? size / 4 : 1), &xsink);
+    args->push(static_cast<int64>(size >= 4 ? size / 4 : 1), &xsink);
+    if (xsink) {
+        setError(xsink, "cannot prepare a text read");
+        return -1;
+    }
     ValueHolder rv(reader->evalMethod("readString", *args, &xsink), &xsink);
     if (xsink) {
         setError(xsink, "stream read error");

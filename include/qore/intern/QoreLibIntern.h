@@ -358,11 +358,16 @@ private:
 DLLLOCAL int parse_init_value(QoreValue& val, QoreParseContext& parse_context);
 
 //! The stack that parse initialization keeps free above the thread's stack limit
-/** Parse initialization recurses with the nesting of the code; each check leaves room for a few levels of nesting
+/** Parse initialization recurses with the nesting of the code and checks the stack at every level, and the stack
+    that it uses below the point where a check fails (up to 3.6KB measured, including raising the parse error) is
+    held by the stack guard (QORE_STACK_GUARD), as for the code that runs between the stack checks of execution, so
+    parsing stops at the thread's stack limit itself.  A reserve keeps that much stack of a thread from parsing: with a
+    64KB reserve and an 80KB guard, a thread with a 128KB stack (musl's default thread stack) could not parse any
+    code.
 */
-constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
+constexpr size_t QORE_PARSE_STACK_RESERVE = 0;
 
-//! Raises a parse error and returns -1 if the thread's stack has reached QORE_PARSE_STACK_RESERVE, otherwise 0
+//! Raises a parse error and returns -1 if the stack has reached its limit plus QORE_PARSE_STACK_RESERVE, otherwise 0
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
@@ -1114,6 +1119,33 @@ public:
         value_list->push_back(v);
     }
 
+    //! hands each value saved to the given function, which takes over its reference, and forgets them
+    /** For a caller that holds a lock beyond the life of this object: the function saves the values for releasing
+        once the lock has been released.  A function that throws leaves the values not yet handed over to the
+        destructor.
+    */
+    template <typename F>
+    DLLLOCAL void handOver(F&& take) {
+        if (!value_list) {
+            return;
+        }
+        // in the order saved, as the destructor releases them
+        size_t i = 0;
+        ON_BLOCK_EXIT([&] () {
+            // a value not handed over stays for the destructor
+            value_list->erase(value_list->begin(), value_list->begin() + i);
+            if (value_list->empty()) {
+                delete value_list;
+                value_list = nullptr;
+            }
+        });
+        for (size_t e = value_list->size(); i < e;) {
+            QoreValue v = (*value_list)[i];
+            take(v);
+            ++i;
+        }
+    }
+
 protected:
     ExceptionSink* xsink;
     arg_vec_t* value_list = nullptr;
@@ -1124,6 +1156,102 @@ class QoreParseListNode;
 class DeferredCodeObject {
 public:
     DLLLOCAL virtual int parseInitDeferred() = 0;
+};
+
+// Environment settings are used by inline local-variable helpers below.
+//! returns true if the given environment variable is set, even to an empty value
+/** Reads the environment under the process environment lock (see SystemEnvironment); never call \c getenv()
+    directly in the library: a concurrent change to the environment can free the memory it reads and returns.
+    Use QoreEnvironmentValue to read a value.
+
+    This calls the exported SystemEnvironment::isSet(), so that inline functions of internal headers that use it
+    also link in the executables and modules that include them.
+*/
+static inline bool q_env_is_set(const char* name) {
+    return SystemEnvironment::isSet(name);
+}
+
+//! a flag read from the environment the first time it is needed, without a static initialization guard
+/** A function-local static is initialized under a guard of the C++ runtime: a child process created with fork()
+    while another thread was initializing it (for example, waiting for the environment lock, which the fork handlers
+    hold while the process is copied) waits for the guard forever.  This object is constant-initialized instead;
+    declare it \c constinit, as a function-local static or at namespace scope:
+    @code{.cpp}
+    static constinit QoreEnvFlag disable_env("QORE_DISABLE_X");
+    const bool disable = disable_env.get();
+    @endcode
+
+    Threads that read the flag for the first time at the same time all return the value that the first of them
+    stored.
+*/
+class QoreEnvFlag {
+public:
+    //! the name must be a string literal
+    constexpr QoreEnvFlag(const char* name) : name(name) {
+    }
+
+    //! returns true if the variable is set (even to an empty value)
+    DLLLOCAL bool get() const {
+        int v = state.load(std::memory_order_acquire);
+        if (v < 0) {
+            v = q_env_is_set(name) ? 1 : 0;
+            int expected = -1;
+            if (!state.compare_exchange_strong(expected, v, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                v = expected;
+            }
+        }
+        return v != 0;
+    }
+
+private:
+    const char* name;
+    //! -1 = not read yet, 0 = not set, 1 = set
+    mutable std::atomic<int> state{-1};
+};
+
+//! a value computed the first time it is needed, without a static initialization guard
+/** For settings computed from the environment; see QoreEnvFlag.  Declare it \c constinit:
+    @code{.cpp}
+    static constinit QoreLazyValue<size_t> budget_setting([]() -> size_t {
+        QoreEnvironmentValue env("QORE_X_BUDGET");
+        return env ? strtoull(env.c_str(), nullptr, 10) : 4096;
+    });
+    const size_t budget = budget_setting.get();
+    @endcode
+
+    Threads that call get() for the first time at the same time can all run the function, so it must have no
+    effects other than computing the value; they all return the value that the first of them stored, which is kept
+    for the life of the process.
+*/
+template <typename T>
+class QoreLazyValue {
+public:
+    //! the type of the function that computes the value
+    using compute_t = T (*)();
+
+    constexpr QoreLazyValue(compute_t compute) : compute(compute) {
+    }
+
+    //! returns the value, computing it the first time
+    DLLLOCAL const T& get() const {
+        const T* p = value.load(std::memory_order_acquire);
+        if (!p) {
+            T* v = new T(compute());
+            const T* expected = nullptr;
+            if (value.compare_exchange_strong(expected, v, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                p = v;
+            } else {
+                delete v;
+                p = expected;
+            }
+        }
+        return *p;
+    }
+
+private:
+    compute_t compute;
+    //! the value; never freed, so that it is valid during static destruction
+    mutable std::atomic<const T*> value{nullptr};
 };
 
 #include "qore/intern/NamedScope.h"
@@ -1273,101 +1401,6 @@ DLLLOCAL void qore_network_init_once();
 DLLLOCAL void qore_quic_init_once();
 //! runs the one-time initializations of the AOT runtime when the library is initialized (see QoreForkHandlers.h)
 DLLLOCAL void qore_aot_runtime_init_once();
-
-//! returns true if the given environment variable is set, even to an empty value
-/** Reads the environment under the process environment lock (see SystemEnvironment); never call \c getenv()
-    directly in the library: a concurrent change to the environment can free the memory it reads and returns.
-    Use QoreEnvironmentValue to read a value.
-
-    This calls the exported SystemEnvironment::isSet(), so that inline functions of internal headers that use it
-    also link in the executables and modules that include them.
-*/
-static inline bool q_env_is_set(const char* name) {
-    return SystemEnvironment::isSet(name);
-}
-
-//! a flag read from the environment the first time it is needed, without a static initialization guard
-/** A function-local static is initialized under a guard of the C++ runtime: a child process created with fork()
-    while another thread was initializing it (for example, waiting for the environment lock, which the fork handlers
-    hold while the process is copied) waits for the guard forever.  This object is constant-initialized instead;
-    declare it \c constinit, as a function-local static or at namespace scope:
-    @code{.cpp}
-    static constinit QoreEnvFlag disable_env("QORE_DISABLE_X");
-    const bool disable = disable_env.get();
-    @endcode
-
-    Threads that read the flag for the first time at the same time all return the value that the first of them
-    stored.
-*/
-class QoreEnvFlag {
-public:
-    //! the name must be a string literal
-    constexpr QoreEnvFlag(const char* name) : name(name) {
-    }
-
-    //! returns true if the variable is set (even to an empty value)
-    DLLLOCAL bool get() const {
-        int v = state.load(std::memory_order_acquire);
-        if (v < 0) {
-            v = q_env_is_set(name) ? 1 : 0;
-            int expected = -1;
-            if (!state.compare_exchange_strong(expected, v, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                v = expected;
-            }
-        }
-        return v != 0;
-    }
-
-private:
-    const char* name;
-    //! -1 = not read yet, 0 = not set, 1 = set
-    mutable std::atomic<int> state{-1};
-};
-
-//! a value computed the first time it is needed, without a static initialization guard
-/** For settings computed from the environment; see QoreEnvFlag.  Declare it \c constinit:
-    @code{.cpp}
-    static constinit QoreLazyValue<size_t> budget_setting([]() -> size_t {
-        QoreEnvironmentValue env("QORE_X_BUDGET");
-        return env ? strtoull(env.c_str(), nullptr, 10) : 4096;
-    });
-    const size_t budget = budget_setting.get();
-    @endcode
-
-    Threads that call get() for the first time at the same time can all run the function, so it must have no
-    effects other than computing the value; they all return the value that the first of them stored, which is kept
-    for the life of the process.
-*/
-template <typename T>
-class QoreLazyValue {
-public:
-    //! the type of the function that computes the value
-    using compute_t = T (*)();
-
-    constexpr QoreLazyValue(compute_t compute) : compute(compute) {
-    }
-
-    //! returns the value, computing it the first time
-    DLLLOCAL const T& get() const {
-        const T* p = value.load(std::memory_order_acquire);
-        if (!p) {
-            T* v = new T(compute());
-            const T* expected = nullptr;
-            if (value.compare_exchange_strong(expected, v, std::memory_order_acq_rel, std::memory_order_acquire)) {
-                p = v;
-            } else {
-                delete v;
-                p = expected;
-            }
-        }
-        return *p;
-    }
-
-private:
-    compute_t compute;
-    //! the value; never freed, so that it is valid during static destruction
-    mutable std::atomic<const T*> value{nullptr};
-};
 
 DLLLOCAL QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg);
 

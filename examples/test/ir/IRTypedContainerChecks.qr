@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub expect(bool ok, string message) {
+    if (!ok) {
+        throw "TEST-FAILURE", message;
+    }
+}
+
+hashdecl ContainerItem {
+    int value;
+}
+
+list<int> sub integers(int seed) {
+    return (seed, seed + 1);
+}
+
+list<*int> sub optionalIntegers(int seed) {
+    return (seed, NOTHING, seed + 1);
+}
+
+hash<string, *int> sub optionalHash(int seed, string key) {
+    return {key: seed, "empty": NOTHING, "last": seed + 1};
+}
+
+list<softint> sub convertedList(auto first, auto second) {
+    return (first, second);
+}
+
+hash<string, softint> sub convertedHash(auto first, auto second) {
+    return {"first": first, "second": second};
+}
+
+sub pushThroughReference(reference<list<int>> values, int value) {
+    push values, value;
+}
+
+sub checks(int seed) {
+    # Small and boxed full-width integers must both follow the same type rule.
+    list<int> values = integers(seed);
+    list<int> alias = values;
+    push values, seed + 2;
+    pushThroughReference(\values, seed + 3);
+    expect(values == (seed, seed + 1, seed + 2, seed + 3), "exact integer type");
+    expect(alias == (seed, seed + 1), "copy-on-write and reference mutation");
+    expect(values.fullType() == "list<int>", "integer list type retained");
+
+    list<*int> optional = optionalIntegers(seed);
+    push optional, NOTHING;
+    push optional, seed + 2;
+    expect(optional == (seed, NOTHING, seed + 1, NOTHING, seed + 2), "optional elements");
+    expect(optional.fullType() == "list<*int>", "optional list type retained");
+    hash<string, *int> mapping = optionalHash(seed, "first");
+    expect(mapping.first == seed && mapping.empty === NOTHING && mapping.last == seed + 1,
+        "dynamic-key optional hash");
+    expect(mapping.fullType() == "hash<string, *int>", "declared hash type retained");
+
+    list<string> strings = (string(seed), "tail");
+    push strings, "more";
+    list<float> floats = (1.5, 2.5);
+    push floats, 3.5;
+    list<bool> flags = (True, False);
+    push flags, True;
+    expect(strings[0] == string(seed) && strings[2] == "more", "owned string elements");
+    expect(floats == (1.5, 2.5, 3.5) && flags == (True, False, True), "float/bool elements");
+
+    expect(convertedList("42", 7.5) == (42, 7), "soft list conversion is not skipped");
+    hash<string, softint> converted = convertedHash("42", 7.5);
+    expect(converted.first === 42 && converted.second === 7, "soft hash conversion is not skipped");
+
+    # A failed conversion must leave an existing list and its semantic alias intact.
+    auto! bad = "not an integer";
+    bool rejected = False;
+    try {
+        push values, bad;
+    } catch (hash<ExceptionInfo> ex) {
+        rejected = ex.err == "RUNTIME-TYPE-ERROR";
+    }
+    expect(rejected && values.size() == 4 && alias.size() == 2, "invalid append cleanup");
+
+    hash<ContainerItem> item = <ContainerItem>{"value": seed};
+    list<hash<ContainerItem>> items = (item,);
+    push items, item;
+    list<list<int>> nested = (integers(seed),);
+    push nested, integers(seed + 2);
+    expect(items[1].value == seed && items[1].fullType() == "hash<ContainerItem>",
+        "hashdecl element remains typed");
+    expect(nested[1] == (seed + 2, seed + 3), "nested list elements");
+
+    list<auto!> heterogeneous = (seed, "text");
+    push heterogeneous, NOTHING;
+    hash<auto!> heterogeneousHash = {"first": seed, "second": "text"};
+    heterogeneousHash.last = integers(seed);
+    expect(heterogeneous.size() == 3 && heterogeneous[1] == "text", "untyped list fallback");
+    expect(heterogeneousHash.last == (seed, seed + 1), "untyped hash fallback");
+
+    auto inferred = (seed, NOTHING, seed + 1);
+    auto inferredHash = {"first": seed, "empty": NOTHING, "last": seed + 1};
+    expect(inferred.fullType() == "list<*int>", "inferred optional list");
+    expect(inferredHash.fullType() == "hash<string, *int>", "inferred optional hash");
+
+    list<int> empty = ();
+    hash<string, int> emptyHash = {};
+    expect(empty.fullType() == "list<int>" && emptyHash.fullType() == "hash<string, int>",
+        "empty declared containers");
+}
+
+checks(7);
+checks(1152921504606846976);
+checks(-1152921504606846976);
+printf("typed-containers: ok\n");

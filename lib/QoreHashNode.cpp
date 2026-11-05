@@ -850,6 +850,25 @@ QoreValue QoreHashNode::evalImpl(bool &needs_deref, ExceptionSink* xsink) const 
     return priv->evalImpl(xsink);
 }
 
+QoreHashNode* qore_hash_private::evalImpl(ExceptionSink* xsink) const {
+    QoreHashNodeHolder result(getCopy(), xsink);
+    size_t count = 0;
+    for (const auto* member : member_list) {
+        if (++count % 10 == 0 && qore_check_cancel(xsink, "hash expression evaluation")) {
+            return nullptr;
+        }
+        ValueEvalOptimizedRefHolder value(member->val, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        result->priv->setKeyValue(member->key, value.takeReferencedValue(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return result.release();
+}
+
 // does a "soft" compare (values of different types are converted if necessary and then compared)
 // 0 = equal, 1 = not equal
 bool QoreHashNode::compareSoft(const QoreHashNode* h, ExceptionSink* xsink) const {

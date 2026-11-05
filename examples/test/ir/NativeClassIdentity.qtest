@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NativeClassIdentityTest
+
+class NativeClassIdentityTest inherits QUnit::Test {
+    constructor() : Test("native class lookup identity", "1.0", \ARGV) {
+        addTestCase("canonical handles and copied base edges", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private check() {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        # Frozen compatible libraries can use the original build's generated headers.
+        string builddir = realpath(ENV.QORE_BUILD_DIR ?? libdir);
+        TmpDir dir("qore-native-class-identity-");
+        string executable = dir.path + "/identity-test";
+        string env = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " ";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + builddir + "/include", "-I" + builddir,
+            get_script_dir() + "/native_class_identity.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", executable);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        foreach string level in (("-O0", "-O3")) {
+            int status;
+            string output = backquote(env + (map quote($1), args + level).join(" ") + " 2>&1", \status);
+            assertEq(0, status, output);
+            output = backquote(env + quote(executable) + " 2>&1", \status);
+            assertEq(0, status, output);
+            assertEq("native-class-identity: ok\n", output, level);
+        }
+    }
+}

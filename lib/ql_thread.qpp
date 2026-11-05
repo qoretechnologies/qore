@@ -904,7 +904,7 @@ int stack_size = set_default_thread_stack_size(2 * 1024 * 1024);
     @return the value actually set
 
     @throw SET-DEFAULT-THREAD-STACK-SIZE-ERROR an error occurred setting the default thread stack size, or the size
-    is not larger than the stack that is reserved at the end of each thread's stack for the stack guard (80KB on
+    is not larger than the stack that is reserved at the end of each thread's stack for the stack guard (40KB on
     x86_64 and aarch64), which would leave no stack for the thread to run code
 
     @since %Qore 0.9.0
@@ -930,10 +930,11 @@ int size = get_stack_size();
 
     @return the current thread's stack size in bytes
 
-    @note on Linux, this always returns 8MB for TID 1 (the initial thread) even if the actual stack
-    size is smaller, as Linux automatically extends the initial thread's stack when there is a stack
-    overflow; once a runtime that enforces the initial thread's stack size, such as a JVM, has been started, this
-    returns the stack size that the runtime lets the thread use
+    @note on Linux, for TID 1 (the initial thread), whose stack Linux extends automatically, this returns the size
+    that the stack can grow to: the stack resource limit less the size of the arguments and the environment that lie
+    above the stack, which the limit also bounds (or 8MB if the stack has no resource limit), even if the part of the
+    stack mapped so far is smaller; once a runtime that enforces the initial thread's stack size, such as a JVM, has
+    been started, this returns the stack size that the runtime lets the thread use
 
     @since %Qore 0.9.0
  */

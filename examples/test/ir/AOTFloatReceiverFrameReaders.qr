@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+hashdecl ForwardFloatMethodFrameReadResult {
+    #! frames read that are not as expected
+    list<string> errors;
+}
+
+class ForwardFloatReaderA {
+    float next(float value) { return 65535.0 - value; }
+    float forward(float value) { return self.next(value); }
+}
+class ForwardFloatReaderB inherits ForwardFloatReaderA {
+    float next(float value) { return 65537.0 - value; }
+}
+
+float sub forwardFloatMethodReaderBatch(ForwardFloatReaderA first, ForwardFloatReaderA second, bool replace) {
+    float value = 0.0;
+    for (int i = 0; i < 4096; ++i) {
+        ForwardFloatReaderA receiver = replace && (i & 1) ? first : second;
+        value = receiver.forward(value);
+    }
+    return value;
+}
+
+float sub forwardFloatGenericMethodReaderBatch(auto first, auto second, bool replace) {
+    auto value = 0.0;
+    for (int i = 0; i < 4096; ++i) {
+        value = (replace && (i & 1) ? first : second).forward(value);
+    }
+    return value;
+}
+
+sub forwardFloatMethodReaderCaller(Counter started, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    ForwardFloatReaderA first();
+    ForwardFloatReaderB second();
+    started.dec();
+    bool replace = False;
+    bool generic = !!ARGV;
+    while (readers.getCount()) {
+        float actual = generic ? forwardFloatGenericMethodReaderBatch(first, second, replace)
+            : forwardFloatMethodReaderBatch(first, second, replace);
+        if (actual != (replace ? -4096.0 : 0.0)) {
+            failures.push("incorrect callback result");
+            return;
+        }
+        replace = !replace;
+    }
+}
+
+sub forwardFloatMethodReader(Counter readers, Counter done, Queue results) {
+    on_exit {
+        readers.dec();
+        done.dec();
+    }
+    hash<ForwardFloatMethodFrameReadResult> result();
+    result.errors = ();
+    for (int i = 0; i < 400; ++i) {
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+            bool caller = False;
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                if (frame.function == "forwardFloatMethodReaderCaller") {
+                    caller = True;
+                    break;
+                }
+            }
+            if (!caller) {
+                continue;
+            }
+            int frame_index = 0;
+            foreach hash<CallStackInfo> frame in (tid_stack.value) {
+                # Baseline compiled background scopes can have an empty name;
+                # AST method frames use bare "next". Validate named method
+                # frames without treating those existing representations as new failures.
+                if (frame.type == "user" && !frame.function.empty()
+                        && frame.function != "forwardFloatMethodReaderCaller"
+                        && frame.function != "forwardFloatGenericMethodReaderBatch"
+                        && frame.function != "forwardFloatMethodReaderBatch" && frame.function != "ForwardFloatReaderA::next"
+                        && frame.function != "ForwardFloatReaderB::next" && frame.function != "next"
+                        && frame.function != "ForwardFloatReaderA::forward" && frame.function != "forward") {
+                    result.errors += sprintf("unexpected caller frame: %y", frame);
+                }
+                if (frame.function == "ForwardFloatReaderA::next" || frame.function == "ForwardFloatReaderB::next"
+                        || frame.function == "next") {
+                    if (frame_index + 1 >= tid_stack.value.size()
+                            || (tid_stack.value[frame_index + 1].function != "ForwardFloatReaderA::forward"
+                                && tid_stack.value[frame_index + 1].function != "forward")) {
+                        result.errors += sprintf("leaf lost its forwarding caller: %y", tid_stack.value);
+                    }
+                }
+                if (frame.function == "ForwardFloatReaderA::next" || frame.function == "ForwardFloatReaderB::next"
+                        || frame.function == "next" || frame.function == "ForwardFloatReaderA::forward"
+                        || frame.function == "forward") {
+                    if (frame.type != "user" || frame.file.empty() || frame.line < 0
+                            || frame.endline < frame.line) {
+                        result.errors += sprintf("invalid native frame: %y", frame);
+                    }
+                }
+                ++frame_index;
+            }
+        }
+    }
+    results.push(result);
+}
+
+#! Returns the stack of a caller read while it is in the leaf frame of a forwarded call
+/** A concurrent reader sees a leaf frame only if it is the current one when the reader reads the stack: a native leaf
+    call is far shorter than that, so the readers above rarely see one, and where the reader's memory barrier takes
+    longer than a call (membarrier() on Linux), never (see QoreThreadList::walkCallStack()).  A DEBUG build parks the
+    caller right after it has published the leaf frame, while the stacks are read, so the frame is seen for certain.
+*/
+list<hash<CallStackInfo>> sub forwardFloatMethodParkedStack() {
+    hash<auto> parked = call_function("dbg_read_stacks_at_frame",
+        ("ForwardFloatReaderA::next", "ForwardFloatReaderB::next", "next"),
+        ("ForwardFloatReaderA::forward", "forward"), 60000);
+    list<hash<CallStackInfo>> stack = parked.stacks{parked.tid};
+    foreach hash<CallStackInfo> frame in (stack[0..1]) {
+        if (frame.type != "user" || frame.file.empty() || frame.line < 0 || frame.endline < frame.line) {
+            throw "NATIVE-METHOD-FRAME-TEST", sprintf("invalid parked native frame: %y", stack);
+        }
+    }
+    if ((stack[2].function != "forwardFloatMethodReaderBatch"
+                && stack[2].function != "forwardFloatGenericMethodReaderBatch")
+            || !(select stack, $1.function == "forwardFloatMethodReaderCaller")) {
+        throw "NATIVE-METHOD-FRAME-TEST", sprintf("forwarding caller lost its caller: %y", stack);
+    }
+    return stack;
+}
+
+Counter started(4);
+# the concurrent readers and the parked read below
+Counter readers(3);
+Counter callers_done(4);
+Counter readers_done(2);
+Queue failures();
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background forwardFloatMethodReaderCaller(started, readers, callers_done, failures);
+}
+started.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    background forwardFloatMethodReader(readers, readers_done, results);
+}
+{
+    on_exit readers.dec();
+    if (exists_function("dbg_read_stacks_at_frame")) {
+        forwardFloatMethodParkedStack();
+    }
+}
+readers_done.waitForZero();
+callers_done.waitForZero();
+for (int i = 0; i < 2; ++i) {
+    hash<ForwardFloatMethodFrameReadResult> result = results.get(10000);
+    if (result.errors) {
+        throw "NATIVE-METHOD-FRAME-TEST", result.errors.join("\n");
+    }
+}
+if (failures.size()) {
+    throw "NATIVE-METHOD-FRAME-TEST", sprintf("%d caller failures", failures.size());
+}
+printf("float-forward-frame-readers: ok\n");

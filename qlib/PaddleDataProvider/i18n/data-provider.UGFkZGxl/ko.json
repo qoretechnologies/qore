@@ -3148,7 +3148,7 @@
           "message": "이 Paddle 계정의 거래 목록 조회"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
-          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, and cannot be more than 30, because a transaction is a large object.",
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 and cannot exceed 30, because a transaction is a large object.",
           "message": "수익을 계산하고 캡처하는 레코드인 거래 목록을 조회합니다.\n\n`status`(으)로 필터링하여 결제 완료된 내역(`completed`, `paid`)과 미결제 내역(`billed`, `past_due`) 또는 임시 저장 내역(`draft`, `ready`)을 구분할 수 있습니다. `created_at`, `updated_at`, `billed_at`은(는) `updated_at[GT]=2026-01-01T00:00:00Z`과(와) 같이 연산자 접미사를 사용할 수 있으며, 이를 통해 증분 동기화에서 변경된 내용만 가져올 수 있습니다.\n\n거래는 큰 객체이므로 여기에서 `per_page`의 기본값은 50이 아닌 30이며 30을 초과할 수 없습니다."
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {

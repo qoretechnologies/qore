@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../NativeFixture.qm
+%exec-class ImportedBodyLocalSlotTest
+
+class ImportedBodyLocalSlotTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("prepared local storage in imported AOT functions", "1.0", \ARGV) {
+        addTestCase("native admission and recursive slot identity", \checkNative());
+        addTestCase("imported lifetime, reflection and mutation", \checkImported());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+    private string run(list<string> args, string modules, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "QORE_MODULE_DIR=" + quote(modules)
+            + " LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        assertFalse(output.contains("loading source module"));
+        return output;
+    }
+    private checkNative() {
+        TmpDir dir("qore-imported-body-slot-native-");
+        mkdir(dir.path + "/modules");
+        string source = dir.path + "/ImportedBodySlots.qm";
+        write(source, "# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT\n%modern\nmodule ImportedBodySlots { version = \"1.0\"; desc = \"Imported body slot diagnostic\"; author = \"Qore\"; license = \"MIT\"; }\npublic namespace ImportedBodySlots {\n    public class Item { public { int marker; } constructor(int marker) { self.marker = marker; } }\n    public int sub run(code<int(int)> callback, int depth) {\n        auto slot_auto = depth;\n        list<int> slot_list = ();\n        for (int i = 0; i <= depth; ++i) { push slot_list, depth; }\n        slot_list[0] += 17;\n        Item slot_object = new Item(depth);\n        int result = callback(depth);\n        if (depth) { result += run(callback, depth - 1); }\n        result += callback(depth);\n        if (slot_auto != depth || slot_list[0] != depth + 17 || slot_object.marker != depth) {\n            throw \"SLOT-RESTORATION\", \"recursive local changed\";\n        }\n        return result;\n    }\n}\n");
+        string probe = dir.path + "/probe";
+        run((ENV.CXX ?? "c++", "-std=c++20", "-O3", "-DNDEBUG", "-pthread", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/imported_body_local_slot.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", probe), dir.path);
+        bool enabled = !ENV.QORE_TEST_EXPECT_IMPORTED_BODY_SLOT_REJECTION;
+        foreach string level in (("-O0", "-O3")) {
+            foreach string compile_prefix in (("", "QORE_AOT_EH=1 ")) {
+                string ir = run((qcc, level, "--strip-source", "-m", "-o",
+                    dir.path + "/modules/ImportedBodySlots.qmod", source), dir.path,
+                    compile_prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string family in (("reload", "auto", "class")) {
+                    assertRegex("call ptr @qore_rt_get_" + family + "_local_slot_aot_v", ir, family);
+                }
+                foreach hash<auto> control in (({"env": "", "admitted": 50},
+                        {"env": "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ", "admitted": 20},
+                        {"env": "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ", "admitted": 40},
+                        {"env": "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ", "admitted": 40},
+                        {"env": "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ", "admitted": 0})) {
+                    int admitted = enabled ? control.admitted : 0;
+                    assertEq(sprintf("imported-body-slots: 10 callbacks, %d admitted, %d rejected; recursive storage preserved\n",
+                        admitted, 50 - admitted), run((probe, enabled ? "1" : "0"),
+                        dir.path + "/modules", control.env));
+                }
+            }
+        }
+    }
+    private checkImported() {
+        TmpDir dir("qore-imported-body-slot-fixtures-");
+        mkdir(dir.path + "/source");
+        mkdir(dir.path + "/modules");
+        list<hash<auto>> cases = (
+            {"kind": "Auto", "fixture": "AOTAutoLocalSlot.qr",
+                "marker": "\nexpect(73, autoSlotRecursive(72));", "args": (("inspect",),)},
+            {"kind": "Reload", "fixture": "AOTRuntimeLocalReload.qr", "marker": "\nstring caller = ARGV[0];",
+                "args": (("reloadParameter",), ("reloadParameterThrow",), ("reloadBody",), ("reloadBodyThrow",),
+                    ("reloadValueParameter",), ("reloadValueBody",), ("reloadAssignedString",), ("reloadAssignedList",))},
+            {"kind": "Pinned", "fixture": "AOTPinnedClassLocal.qr",
+                "marker": "\nprintf(\"%d:%d:%d:%d\\n\", pinnedPhi", "args": ((),)},
+            {"kind": "Class", "fixture": "AOTClassLocalAssignment.qr",
+                "marker": "\nClassLocalValue left(3);", "args": ((),)},
+            {"kind": "Indexed", "fixture": "AOTPreparedIndexedIntAdd.qr",
+                "marker": "\nforeach int count in ((0, 1, 16, 1024)) {", "args": ((),)});
+        foreach hash<auto> spec in (cases) {
+            string original = get_script_dir() + "/" + spec.fixture;
+            string source = File::readTextFile(original);
+            string module = "ImportedBody" + spec.kind;
+            string function = "run" + module;
+            list<string> lines = ();
+            list<string> initializers = ();
+            list<string> directives = ();
+            foreach string line in (source.split("\n")) {
+                if (line.startsWith("#!")) { continue; }
+                if (spec.kind == "Auto" && line == "thread_local bool inspect = !!ARGV;") {
+                    line = "thread_local bool inspect = True;";
+                }
+                *list<*string> init = regex_extract(line, "^thread_local (\\S+) (\\w+) = (.*);$");
+                if (init) {
+                    push initializers, (init[1] ?? "") + " = " + (init[2] ?? "") + ";";
+                    line = "thread_local " + (init[0] ?? "") + " " + (init[1] ?? "") + ";";
+                }
+                if (regex(line, "^(?:(?:\\S+ )?sub |class |enum )")) { line = "public " + line; }
+                if (line.startsWith("%allow-")) { push directives, line; }
+                push lines, line;
+                if (line == "%modern") {
+                    push lines, "module " + module + " { version = \"1.0\"; desc = \"Imported body local regression\";"
+                        + " author = \"Qore\"; license = \"MIT\"; }";
+                }
+            }
+            source = lines.join("\n");
+            assertTrue(source.contains(spec.marker));
+            source = replace(source, spec.marker, "\npublic sub " + function + "() {\n"
+                + initializers.join("\n") + spec.marker) + "}\n";
+            string path = dir.path + "/source/" + module + ".qm";
+            write(path, source);
+            string host = dir.path + "/host.qr";
+            write(host, "%modern\n" + directives.join("\n") + "\n%requires " + module + "\n" + function + "();\n");
+            list<string> expected = ();
+            foreach list<string> args in (spec.args) {
+                push expected, run((qore, "--exec-mode=ast", original) + args, dir.path + "/source");
+                foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                    assertEq(expected[-1], run((qore, "--exec-mode=" + mode, host) + args,
+                        dir.path + "/source"), spec.kind + mode);
+                }
+            }
+            foreach string level in (("-O0", "-O3")) {
+                foreach string compile_prefix in (("", "QORE_AOT_EH=1 ")) {
+                    run((qcc, level, "--strip-source", "-m", "-o", dir.path + "/modules/" + module + ".qmod", path),
+                        dir.path + "/source", compile_prefix);
+                    int i = 0;
+                    foreach list<string> args in (spec.args) {
+                        foreach string mode in (("ast", "ir")) {
+                            foreach string control in (("", "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 ",
+                                    "QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 ", "QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ",
+                                    "QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD=1 QORE_DISABLE_AOT_AUTO_LOCAL_SLOT=1 QORE_DISABLE_AOT_CLASS_LOCAL_SLOT=1 ")) {
+                                assertEq(expected[i], run((qore, "--exec-mode=" + mode, host) + args,
+                                    dir.path + "/modules", control), spec.kind + level + mode + control);
+                            }
+                        }
+                        ++i;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -91,17 +91,16 @@ accepted. In practice that means:
 
 Leaving a field as `string` is the correct outcome when the value is legitimately looser than the regex:
 
-| Left as `string` | Count | Why |
-|------------------|-------|-----|
-| Human-entered URL fields (CRM "website", social-profile URLs, a BigCommerce blog `url` **slug**) | 17 | `uri` requires a scheme; `www.example.com` is a legitimate thing for a user to type |
-| Phone input fields | 31 | the regex rejects extensions (`555-1234 x89`) and free-text placeholders these APIs accept |
-| Bitly `guid`/`group_guid`/`organization_guid` | 13 | Bitly GUIDs are opaque base62 ids (`Bg7ay8wPvXW`), not RFC-4122 |
-| Elasticsearch/OpenSearch `index_uuid` | 2 | base64url ids; the in-repo `example_value` `"aXNkZXhfMQ"` fails the RFC-4122 regex |
-| A `link` authored into a generated PDF | 1 | PDF.co never dereferences it, so it may hold anything |
-| Fields with no documented format (ClickFunnels/EmpathicBuilding `uuid`) | 2 | no evidence either way |
-| Gorgias `uri` fields | 4 | hold a relative path (`/api/...`), not a URI |
-| Firecrawl `link` | 1 | holds a hex colour value |
-| `SoftString*`-declared fields | 73 | see below |
+|!Left as `string`|!Count|!Why
+|Human-entered URL fields (CRM "website", social-profile URLs, a BigCommerce blog `url` **slug**)|17|`uri` requires a scheme; `www.example.com` is a legitimate thing for a user to type
+|Phone input fields|31|the regex rejects extensions (`555-1234 x89`) and free-text placeholders these APIs accept
+|Bitly `guid`/`group_guid`/`organization_guid`|13|Bitly GUIDs are opaque base62 ids (`Bg7ay8wPvXW`), not RFC-4122
+|Elasticsearch/OpenSearch `index_uuid`|2|base64url ids; the in-repo `example_value` `"aXNkZXhfMQ"` fails the RFC-4122 regex
+|A `link` authored into a generated PDF|1|PDF.co never dereferences it, so it may hold anything
+|Fields with no documented format (ClickFunnels/EmpathicBuilding `uuid`)|2|no evidence either way
+|Gorgias `uri` fields|4|hold a relative path (`/api/...`), not a URI
+|Firecrawl `link`|1|holds a hex colour value
+|`SoftString*`-declared fields|73|see below
 
 **`SoftString*` fields are never converted.** The semantic types are backed by `StringType`, and there is no
 soft variant, so replacing `SoftStringOrNothingType` with `UriOrNothingType` would silently drop the field's

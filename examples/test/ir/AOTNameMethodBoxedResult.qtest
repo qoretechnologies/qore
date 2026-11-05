@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class NameMethodBoxedResultTest
+
+class NameMethodBoxedResultTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("native name-method calls with boxed results", "1.0", \ARGV) {
+        addTestCase("boxed return and fallback contracts", \check());
+        addTestCase("debugger and concurrent frame readers", \checkObservation());
+        addTestCase("boxed-argument debugger and concurrent frame readers", \checkBoxedObservation());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTNameMethodBoxedResult.qr";
+        string expected = "name-method-boxed-result: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        # Existing IR/JIT caller-frame visibility is not claimed fixed here.
+        assertEq(expected, run((qore, "--exec-mode=ast", source, "reflection")), "AST reflection reference");
+        TmpDir dir("qore-boxed-method-result-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ",
+                "QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT=1 ",
+                "QORE_DISABLE_AOT_NAME_METHOD_BOXED_RESULT=1 ",
+                "QORE_DISABLE_AOT_NAME_METHOD_NATIVE_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("boxedIntResult", "boxedIntInvoke", "boxedIntConvert",
+                        "boxedIntToFloat", "boxedOwnedResult", "boxedDeletedResult",
+                        "boxedMutation", "boxedMutationInvoke", "boxedFloatResult", "boxedFloatInvoke",
+                        "boxedFloatConvert", "boxedSpecialFloat")) {
+                    bool floating = name.startsWith("boxedFloat") || name == "boxedSpecialFloat";
+                    bool enabled = !prefix.startsWith("QORE_DISABLE_")
+                        || prefix == "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 "
+                        || prefix == "QORE_DISABLE_AOT_NAME_METHOD_BOXED_ARGUMENT=1 "
+                        || (!floating && prefix == "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ");
+                    string entry = body(ir, name);
+                    assertEq(enabled, regex(entry, "call i32 @qore_rt_try_method_"
+                        + (floating ? "float" : "int") + "_unary_v1"), name + prefix + level);
+                    bool conversion = enabled && prefix != "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 "
+                        && (name == "boxedIntConvert" || name == "boxedFloatConvert"
+                            || name == "boxedMutation" || name == "boxedMutationInvoke");
+                    assertEq(conversion, regex(entry, "name_method_native_value"), name + " native conversion selection");
+                    assertEq(conversion, regex(entry, "native_call_converted_value"), name + " conversion consumer");
+                    assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", entry,
+                        name + " retains ordinary boxed fallback");
+                }
+                foreach string name in (("boxedResultArgument", "boxedOptionalArgument",
+                        "boxedArgumentInvoke", "boxedArgumentConvert", "boxedArgumentMutation",
+                        "boxedArgumentMutationInvoke", "boxedArgumentDeletedResult")) {
+                    bool enabled = !prefix.startsWith("QORE_DISABLE_")
+                        || prefix == "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 "
+                        || prefix == "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ";
+                    string entry = body(ir, name);
+                    assertEq(enabled, regex(entry, "call i32 @qore_rt_try_method_int_unary_v2"),
+                        name + " guarded integer argument " + prefix + level);
+                    assertEq(enabled && prefix != "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        regex(entry, "call i32 @qore_rt_try_method_float_unary_v2"),
+                        name + " guarded floating argument " + prefix + level);
+                    assertEq(enabled, regex(entry, "name_method_int_argument"), name + " representation guard");
+                    assertEq(enabled, regex(entry, "name_method_matched_result"), name + " owned matched fallback");
+                    assertFalse(regex(entry, "name_method_native_value"), name + " no guessed scalar side channel");
+                    assertRegex("(?:call|invoke) i64 @qore_rt_dot_eval_method_direct_aot", entry,
+                        name + " retains ordinary argument and result fallback");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_GENERIC_NATIVE_FLOAT_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable, "reflection"), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private checkBoxedObservation() { checkObservation(True); }
+    private checkObservation(bool boxed_argument = False) {
+        TmpDir dir("qore-boxed-method-observation-");
+        foreach string name in (("AOTNativeMethodDebugger", "AOTNativeFloatMethodDebugger",
+                "AOTNativeMethodFrameReaders", "AOTNativeFloatMethodFrameReaders")) {
+            bool floating = name.find("Float") >= 0;
+            bool readers = name.endsWith("FrameReaders");
+            string source = File::readTextFile(get_script_dir() + "/" + name + ".qr");
+            string caller;
+            if (floating && readers) {
+                caller = "nativeFloatGenericMethodReaderBatch";
+                assertRegex("auto value = 0.0;", source);
+                if (!boxed_argument) {
+                    source = replace(source, "auto value = 0.0;", "float value = 0.0;");
+                }
+                string original = "value = (replace && (i & 1) ? first : second).next(value);";
+                assertTrue(source.find(original) >= 0);
+                source = replace(source, original,
+                    "value = float((replace && (i & 1) ? first : second).next(value));");
+            } else if (readers) {
+                caller = "nativeMethodReaderBatch";
+                assertTrue(source.find("NativeReaderA receiver =") >= 0);
+                source = replace(source, "NativeReaderA receiver =", "auto receiver =");
+                assertTrue(source.find("value = receiver.next(value);") >= 0);
+                source = replace(source, "value = receiver.next(value);", "value = int(receiver.next(value));");
+                assertTrue(source.find("value = receiver.forward(value);") >= 0);
+                source = replace(source, "value = receiver.forward(value);", "value = int(receiver.forward(value));");
+                if (boxed_argument) {
+                    assertTrue(source.find("int value = 0;") >= 0);
+                    source = replace(source, "int value = 0;", "auto value = 0;");
+                }
+            } else if (floating) {
+                caller = "nativeFloatGenericDebugCall";
+                string original = "auto sub nativeFloatGenericDebugCall(auto receiver, float value) {\n"
+                    "    return receiver.next(value);\n}";
+                assertTrue(source.find(original) >= 0);
+                source = replace(source, original, replace(original, "return receiver.next(value);",
+                    "return float(receiver.next(value));"));
+                if (boxed_argument) {
+                    source = replace(source, "nativeFloatGenericDebugCall(auto receiver, float value)",
+                        "nativeFloatGenericDebugCall(auto receiver, auto value)");
+                    source = replace(source, "nativeFloatGenericDebugCall(object, i)",
+                        "nativeFloatGenericDebugCall(object, float(i))");
+                    source = replace(source, "nativeFloatGenericDebugCall(late, i)",
+                        "nativeFloatGenericDebugCall(late, float(i))");
+                }
+            } else {
+                caller = "nativeDebugCall";
+                assertTrue(source.find("NativeDebugBase receiver =") >= 0);
+                source = replace(source, "NativeDebugBase receiver =", "auto receiver =");
+                source = replace(source, "return receiver.next(value);", "return int(receiver.next(value));");
+                if (boxed_argument) {
+                    source = replace(source, "nativeDebugCall(NativeDebugBase input, int value)",
+                        "nativeDebugCall(NativeDebugBase input, auto value)");
+                }
+            }
+            string fixture = dir.path + "/" + name + ".qr";
+            File file();
+            file.open(fixture, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            file.write(source);
+            file.close();
+            string expected = floating ? "native-float-method-" : "native-method-";
+            expected += readers ? "frame-readers: ok\n" : "debugger: ok\n";
+            foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
+                        prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    string entry = body(ir, caller);
+                    assertRegex("call i32 @qore_rt_try_method_" + (floating ? "float" : "int")
+                        + (boxed_argument ? "_unary_v2" : "_unary_v1"), entry);
+                    bool conversion = !boxed_argument && prefix != "QORE_DISABLE_AOT_NATIVE_CALL_CONVERSION=1 ";
+                    assertEq(conversion, regex(entry, "name_method_native_value"), caller + " native result");
+                    assertEq(conversion, regex(entry, "native_call_converted_value"), caller + " conversion consumer");
+                    list<string> args = floating && readers ? (executable, "generic") : (executable,);
+                    foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_CONTINUATION=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
+                        assertEq(expected, run(args, runtime), name + prefix + level + runtime);
+                    }
+                }
+            }
+        }
+    }
+}

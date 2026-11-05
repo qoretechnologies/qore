@@ -75,7 +75,32 @@ class ModuleTeardownTest inherits QUnit::Test {
         addTestCase("exit status after an unhandled exception at teardown", \testTeardownExitStatus());
         addTestCase("exit status of an AOT program after an unhandled exception at teardown",
             \testAotTeardownExitStatus());
+        addTestCase("a destructor loads a source module before its AOT provider is deleted", \testLateModuleLoad());
         set_return_value(main());
+    }
+
+    #! A compiled module's constant destructor loads a source module during final dependency-ordered teardown.
+    testLateModuleLoad() {
+        string dir = tmp.path + DirSep + "late-load";
+        mkdir(dir, 0700);
+        foreach string mod in (("TdBbbKeep", "TdAaaLoader")) {
+            string qmod = dir + DirSep + mod + ".qmod";
+            int rc;
+            string out = backquote(sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                "QORE_MODULE_DIR=%s %s -O3 --module --strip-source -o %s %s 2>&1",
+                ModuleTeardownTest::shellQuote(libqore_dir), ModuleTeardownTest::shellQuote(libqore_dir),
+                ModuleTeardownTest::shellQuote(libqore_dir), ModuleTeardownTest::shellQuote(get_script_dir()),
+                ModuleTeardownTest::shellQuote(qcc_bin), ModuleTeardownTest::shellQuote(qmod),
+                ModuleTeardownTest::shellQuote(get_script_dir() + mod + ".qm")), \rc);
+            assertEq(0, rc, "compile late-load fixture: " + out);
+            assertTrue(is_file(qmod), "compiled late-load fixture exists");
+        }
+        ModuleTeardownTest::copyFile(get_script_dir() + "TdZzzLate.qm", dir + DirSep + "TdZzzLate.qm");
+        hash<TeardownRunResult> r = runQore(dir, "module-teardown-late.q", ());
+        assertEq(0, r.rc, "late-load exit status: " + r.err);
+        assertEq("", r.err, "late-load stderr");
+        assertEq("main done\nloader destroyed\nlate destroyed\nkeep destroyed\n", r.out,
+            "late source module is deleted before its AOT provider");
     }
 
     #! returns the code of a test case; each case has its own copy of the arguments

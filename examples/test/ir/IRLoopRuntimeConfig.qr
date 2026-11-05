@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+int sub spin(int kind, Counter ready, Counter requested) {
+    int i = 0;
+    int value = 7;
+    list<int> values;
+    if (kind == 3) { values = (0..999999); }
+    ready.dec();
+    # the cancellation is requested before the loop starts, so the loop's own polling must deliver it however long the
+    # loop takes to run; a finite bound also lets a broken polling implementation terminate
+    defer_thread_cancel(sub () { requested.waitForZero(); });
+    if (kind == 0) {
+        while (i < 50000000) { value = (value * 33 + 17) & 65535; ++i; }
+    } else if (kind == 1) {
+        for (; i < 50000000; ++i) { value = (value * 33 + 17) & 65535; }
+    } else if (kind == 2) {
+        do { value = (value * 33 + 17) & 65535; ++i; } while (i < 50000000);
+    } else {
+        foreach int element in (values) { value = (value * 33 + element) & 65535; }
+    }
+    return value;
+}
+
+# the line of each kind's loop in spin(); a cancellation must be delivered by the loop's polling
+const LoopLines = (16, 18, 20, 22);
+
+bool sub inLoop(int kind, *int line) {
+    return line == LoopLines[kind];
+}
+
+int sub cleanupWork() {
+    int total = 0;
+    for (int i = 0; i < 1000; ++i) { total += i; }
+    return total;
+}
+
+sub checkLoop(int kind) {
+    Counter ready(1);
+    Counter requested(1);
+    Counter done(1);
+    int tid;
+    string error = "NO-CANCELLATION";
+    *int line;
+    int cleaned = 0;
+    int resumed = 0;
+    bool pending = False;
+    background sub () {
+        on_exit done.dec();
+        tid = gettid();
+        try {
+            spin(kind, ready, requested);
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex.err;
+            line = ex.line;
+            cleaned = defer_thread_cancel(\cleanupWork());
+            pending = thread_cancelled();
+            clear_thread_cancel();
+            resumed = cleanupWork();
+        }
+    }();
+    if (ready.waitForZero(30s)) { throw "LOOP-CONTEXT-TEST", "worker did not start"; }
+    cancel_thread(tid, "compiled loop context");
+    requested.dec();
+    if (done.waitForZero(30s)) { throw "LOOP-CONTEXT-TEST", "worker did not finish"; }
+    if (error != "THREAD-CANCELLED" || cleaned != 499500 || resumed != 499500 || !pending
+            || !inLoop(kind, line)) {
+        throw "LOOP-CONTEXT-TEST", sprintf("kind=%d error=%s line=%y cleanup=%d resumed=%d pending=%y",
+            kind, error, line, cleaned, resumed, pending);
+    }
+}
+
+for (int kind = 0; kind < 4; ++kind) { checkLoop(kind); }
+printf("loop-runtime-config: ok\n");

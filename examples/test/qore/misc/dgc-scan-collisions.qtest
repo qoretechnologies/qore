@@ -174,7 +174,7 @@ public class DgcScanCollisionsTest inherits QUnit::Test {
             done.waitForZero();
         }
 
-        code scan = sub (string name, int i) {
+        code<nothing(string, int)> scan = sub (string name, int i) {
             on_exit scanDone(done);
             hash<auto> h = call_function("dbg_rset_scan", graph, i, True);
             m.lock();

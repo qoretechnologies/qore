@@ -94,6 +94,12 @@ public:
     //! QoreIROpcode::HashSetKeyValueFold
     QoreIRInstruction* createHashSetKeyValueFold(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
         QoreIRValue state, QoreIRValue index, const QoreProgramLocation* loc = nullptr);
+    //! Folds the type of a map or hash map value into the common value type; see QoreIROpcode::CommonTypeFold
+    /** @param index the index of the source element for a hash map, or an invalid value for a list
+    */
+    QoreIRInstruction* createCommonTypeFold(QoreIRValue state, QoreIRValue value, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+
     //! Sets the type of a hash map result from the common value type; see QoreIROpcode::HashSetCommonType
     QoreIRInstruction* createHashSetCommonType(QoreIRValue hash, QoreIRValue state,
         const QoreProgramLocation* loc = nullptr);
@@ -302,6 +308,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchCleanup(const QoreProgramLocation* loc = nullptr);
+    //! Ends the catch scopes of the frame beyond \a depth (see QoreIROpcode::CatchUnwind)
+    QoreIRInstruction* createCatchUnwind(int depth, const QoreProgramLocation* loc = nullptr);
     //! Create an independently owned reference to value.
     /** @param value the IR value to retain
         @param loc optional source location for diagnostics
@@ -377,6 +385,8 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    //! Releases the temporary value of an operand that an operator has consumed (QoreIROpcode::ReleaseOperandTemp)
+    QoreIRInstruction* createReleaseOperandTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 

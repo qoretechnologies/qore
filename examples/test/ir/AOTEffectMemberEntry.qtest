@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class EffectMemberEntryTest
+
+class EffectMemberEntryTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("effect-aware native AOT member entries", "1.0", \ARGV) {
+        addTestCase("resume without repeating earlier member updates", \check());
+        addTestCase("effectful debugger and foreign-thread frame observation", \checkObservation());
+        addTestCase("concurrent effects and cancellation", \checkThreads());
+        addTestCase("ordinary lvalue bodies with many parameters", \checkManyParameters());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTEffectMemberEntry.qr";
+        string expected = "effect-member-entry: ok\n";
+        foreach string mode in (("ast", "ir")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-effect-member-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ", "QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH=1 ",
+                "QORE_DISABLE_AOT_PREHASHED_KEYS=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = prefix != "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ";
+                assertEq(enabled, regex(ir, "call void @qore_rt_bind_effect_member_int_v1"));
+                bool prehashed = enabled && prefix.find("PREHASH") < 0;
+                assertEq(prehashed, regex(ir, "call i32 @qore_rt_try_update_member_int_prehashed_v1"));
+                assertEq(enabled && !prehashed, regex(ir, "call i32 @qore_rt_try_update_member_int_v1"));
+                assertRegex("call i32 @qore_rt_try_method_int_unary_v2", ir);
+                foreach string name in (("EffectPrefix", "EffectReadReference", "EffectReturnInvalid")) {
+                    assertEq(enabled, regex(ir, "call void @qore_rt_bind_effect_member_int_v1[^\n]*" + name));
+                }
+                assertFalse(regex(ir, "call void @qore_rt_bind_effect_member_int_v1[^\n]*EffectLate"));
+                assertFalse(regex(ir, "call void @qore_rt_bind_effect_member_int_v1[^\n]*EffectOrdinary"));
+                foreach string runtime in (("", "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_EFFECT_MEMBER_PREHASH=1 ",
+                        "QORE_DISABLE_AOT_SCALAR_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+    private checkManyParameters() {
+        # The ordinary AOT parameter-classification scan is not limited by
+        # the unary companion proof. Cross its 100-entry cancellation interval.
+        list<string> parameters = ("auto receiver",);
+        list<string> arguments = ("receiver",);
+        for (int i = 0; i < 128; ++i) {
+            push parameters, "int p" + string(i);
+            push arguments, string(i);
+        }
+        string source = "%modern\nclass EffectManyCounter { public { int count = 0; } }\n"
+            + "int sub effectMany(" + parameters.join(", ")
+            + ") { ++receiver.count; return p127; }\n"
+            + "EffectManyCounter receiver();\nif (effectMany(" + arguments.join(", ")
+            + ") != 127 || receiver.count != 1) { throw \"EFFECT-PARAMETER-TEST\", \"parameter mismatch\"; }\n"
+            + "printf(\"effect-many-parameters: ok\\n\");\n";
+        TmpDir dir("qore-effect-many-parameters-");
+        string fixture = dir.path + "/many.qr";
+        File file();
+        file.open(fixture, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        file.write(source);
+        file.close();
+        string expected = "effect-many-parameters: ok\n";
+        foreach string mode in (("ast", "ir")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, fixture)), mode);
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/many";
+                run((qcc, level, "--strip-source", "-o", executable, fixture), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+    private string change(string source, string before, string after) {
+        assertTrue(source.find(before) >= 0, before);
+        return replace(source, before, after);
+    }
+    private checkObservation() {
+        TmpDir dir("qore-effect-observation-");
+        foreach string name in (("AOTNativeMethodDebugger", "AOTNativeMethodFrameReaders")) {
+            bool readers = name.endsWith("FrameReaders");
+            string source = File::readTextFile(get_script_dir() + "/" + name + ".qr");
+            list<string> classes = readers ? ("NativeReaderA", "NativeReaderB")
+                : ("NativeDebugBase", "NativeDebugDerived", "NativeDebugLateDerived");
+            for (int i = 0; i < classes.size(); ++i) {
+                string declaration = "class " + classes[i] + (i ? " inherits " + classes[0] : "") + " {";
+                string value = string(i == 2 ? 23 : 17 + 2 * i);
+                # Preserve the source marker lines used by the debugger fixture.
+                source = change(source, declaration, declaration
+                    + (i ? "" : " public { auto calls = 0; auto reverse = 0; }")
+                    + " private:internal { auto delta = " + value + "; }");
+                source = change(source, "return " + (readers ? "(" : "") + "value + " + value
+                        + (readers ? ") & 65535;" : ";"),
+                    "++calls; --reverse; return " + (readers ? "(" : "") + "value + delta"
+                        + (readers ? ") & 65535;" : ";"));
+            }
+            if (readers) {
+                source = change(source, "NativeReaderA receiver =", "auto receiver =");
+                source = change(source, "int value = 0;", "int before = first.calls + second.calls; auto value = 0;");
+                source = change(source, "    return value;", "    if (first.calls + second.calls != before + 4096"
+                    + " || first.calls + first.reverse || second.calls + second.reverse)"
+                    + " { throw \"EFFECT-READER-TEST\", \"repeated or lost updates\"; }\n    return value;");
+            } else {
+                source = change(source, "NativeDebugBase receiver =", "auto receiver =");
+                source = change(source, "nativeDebugCall(NativeDebugBase input, int value)",
+                    "nativeDebugCall(NativeDebugBase input, auto value)");
+                source = change(source, "printf(\"native-method-debugger: ok\\n\");",
+                    "if (object.calls != 64 || object.reverse != -64 || late.calls != 32 || late.reverse != -32)"
+                    + " { throw \"EFFECT-DEBUG-TEST\", \"repeated or lost updates\"; }\n"
+                    + "printf(\"native-method-debugger: ok\\n\");");
+            }
+            string fixture = dir.path + "/" + name + ".qr";
+            File file();
+            file.open(fixture, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            file.write(source);
+            file.close();
+            string expected = readers ? "native-method-frame-readers: ok\n" : "native-method-debugger: ok\n";
+            assertEq(expected, run((qore, "--exec-mode=ast", fixture)), name + " AST reference");
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    string ir = run((qcc, level, "--strip-source", "-o", executable, fixture),
+                        prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    foreach string cls in (classes) {
+                        assertRegex("call void @qore_rt_bind_effect_member_int_v1[^\n]*" + cls + "__next", ir);
+                    }
+                    assertRegex("call i32 @qore_rt_try_method_int_unary_v2", ir);
+                    foreach string runtime in (("", "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ",
+                            "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
+                        assertEq(expected, run((executable,), runtime), name + prefix + level + runtime);
+                    }
+                }
+            }
+        }
+    }
+    private checkThreads() {
+        string source = get_script_dir() + "/AOTEffectMemberThreads.qr";
+        string expected = "effect-member-threads: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source), "QORE_JIT_SYNC_COMPILE=1 "), mode);
+        }
+        TmpDir dir("qore-effect-threads-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("call void @qore_rt_bind_effect_member_int_v1[^\n]*EffectThreadCounter", ir);
+                foreach string runtime in (("", "QORE_DISABLE_AOT_EFFECT_MEMBER_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

@@ -1004,6 +1004,9 @@ public:
     //! Returns whether this class has an external member write gate
     /** @return true if this class or an initialized base supplies a gate
         @throw none
+        @par Example
+        A record adapter can inspect \c record_class->hasMemberWriteGate() after initialization
+        to determine whether undeclared fields use external storage.
         @since %Qore 3.0
     */
     DLLEXPORT bool hasMemberWriteGate() const;

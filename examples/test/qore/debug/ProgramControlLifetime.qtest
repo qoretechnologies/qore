@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+# Hold a ProgramControl's final release while another thread asks for a new wrapper.
+# Each lookup must return its own live object, independent of the retiring wrapper.
+if (!Option::HAVE_LIBRARY_DEBUGGING) {
+    printf("SKIP: deterministic reference-release hooks require a Debug build\n");
+    return;
+}
+
+foreach bool enumerate in ((False, True)) {
+    Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+    int id = pgm.getProgram().getProgramId();
+    Counter held(1);
+    Counter release(1);
+    Counter done(1);
+    on_exit {
+        if (release.getCount()) {
+            release.dec();
+        }
+        done.waitForZero();
+    }
+    call_function("dbg_hold_deref_marked", "ProgramControl", held, release);
+    background sub () {
+        on_exit done.dec();
+        ProgramControl control = pgm.getProgram();
+    }();
+    if (held.waitForZero(30s)) {
+        throw "TEST-ERROR", "the final ProgramControl release did not reach the hold";
+    }
+    *ProgramControl replacement;
+    if (enumerate) {
+        foreach ProgramControl control in (ProgramControl::getAllPrograms()) {
+            if (control.getProgramId() == id) {
+                replacement = control;
+                break;
+            }
+        }
+    } else {
+        replacement = pgm.getProgram();
+    }
+    release.dec();
+    done.waitForZero();
+    if (!replacement || replacement.getProgramId() != id) {
+        throw "TEST-ERROR", "the replacement ProgramControl was deleted with the old wrapper";
+    }
+    # Lookups return distinct objects that keep the same Program alive independently.
+    ProgramControl again = pgm.getProgram();
+    if (again === replacement || again.getProgramId() != id) {
+        throw "TEST-ERROR", "the new lookup did not return an independent ProgramControl";
+    }
+    delete again;
+    if (replacement.getProgramId() != id) {
+        throw "TEST-ERROR", "deleting another wrapper invalidated the retained ProgramControl";
+    }
+}
+printf("OK\n");

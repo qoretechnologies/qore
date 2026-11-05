@@ -4715,6 +4715,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @param oh deserialized hash from the source schema description describing an object in the schema
         @param swagger the REST schema for resolving references
         @param require_items if @ref True, require \c items for array types
+        @param location the location of the schema in its document, if known; a reference is identified by the
+        schema it refers to, and a schema with the same name and content as one parsed before is that schema,
+        with its location; see
+        @ref RestSchemaValidator::AbstractRestSchemaObject::getSchemaIdentity() "getSchemaIdentity()"
+
+        @return the resolved or cached schema object, or a newly parsed object
 
         @throws INVALID-FIELD-FORMAT field has invalid format
         @throws INVALID-FIELD-TYPE field has invalid type
@@ -4736,8 +4742,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return new SchemaObject(name, oh, swagger, hash_str, require_items, location);
     }
 
-    #! throws an \c "INVALID-FIELD-TYPE" exception
-    /** @throws INVALID-FIELD-TYPE due to a type error in the call
+    #! Throws an \c "INVALID-FIELD-TYPE" exception for a non-hash schema definition
+    /** @param name the name of the object
+        @param error the invalid schema definition to identify in the exception
+        @param swagger the REST schema; unused because this overload always throws
+        @param require_items the array-item requirement; unused because this overload always throws
+        @param location the schema location; unused because this overload always throws
+
+        @throws INVALID-FIELD-TYPE the schema definition is not a hash
     */
     static SchemaObject newSchemaObject(string name, auto error, SwaggerSchema swagger, *bool require_items,
             *string location) {

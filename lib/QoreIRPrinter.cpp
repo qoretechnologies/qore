@@ -74,6 +74,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ListSetValue: return "list.set.value";
         case QoreIROpcode::ListSetLength: return "list.set.length";
         case QoreIROpcode::ListSetCommonType: return "list.set.common.type";
+        case QoreIROpcode::CommonTypeFold: return "common.type.fold";
+        case QoreIROpcode::LegacyListAppendElement: return "list.append.element.legacy";
         case QoreIROpcode::HashSetKeyValueFold: return "hash.set.key.value.fold";
         case QoreIROpcode::ListSetScannedType: return "list.set.scanned.type";
         case QoreIROpcode::ListAppendElement: return "list.append.element";
@@ -409,6 +411,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::LandingPad: return "landingpad";
         case QoreIROpcode::CatchException: return "catch.exception";
         case QoreIROpcode::CatchCleanup: return "catch.cleanup";
+        case QoreIROpcode::CatchUnwind: return "catch.unwind";
+        case QoreIROpcode::KeysIteratorSource: return "keys.iterator.source";
         case QoreIROpcode::Rethrow: return "rethrow";
         case QoreIROpcode::Throw: return "throw";
         case QoreIROpcode::InvokeSimError: return "invoke.sim.error";
@@ -419,10 +423,13 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ScopeExit: return "scope.exit";
         case QoreIROpcode::DiscardTemps: return "discard.temps";
         case QoreIROpcode::DiscardTempsKeep: return "discard.temps.keep";
+        case QoreIROpcode::SnapshotInt: return "snapshot.int";
+        case QoreIROpcode::SnapshotFloat: return "snapshot.float";
         case QoreIROpcode::UnwindTemps: return "unwind.temps";
         case QoreIROpcode::CheckReturnValue: return "check.return";
         case QoreIROpcode::IteratorRelease: return "iterator.release";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
+        case QoreIROpcode::ReleaseOperandTemp: return "release.operand.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::CallAOTHelper: return "call.aot.helper";
         case QoreIROpcode::RefForeachInit: return "ref.foreach.init";
@@ -507,6 +514,7 @@ static void printConstant(const QoreIRConstInstruction& inst, std::ostream& out)
 }
 
 void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
+    size_t background_count = 0;
     out << "func @" << func.name << "\n";
     for (const auto& block : func.blocks) {
         out << block->name << ":\n";
@@ -692,6 +700,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " helper @" << (bg_inst->helper_ir ? bg_inst->helper_ir->name : std::string("<none>"))
                         << " params(";
                     for (size_t i = 0; i < bg_inst->helper_params.size(); ++i) {
+                        if (++background_count % 100 == 0 && qore_check_cancel(nullptr, "IR background printing")) {
+                            return;
+                        }
                         out << (i ? ", @" : "@") << bg_inst->helper_params[i]->getName();
                     }
                     out << ")";
@@ -969,7 +980,13 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
 
     // the helpers of the background expressions of the function
     for (const auto& block : func.blocks) {
+        if (++background_count % 100 == 0 && qore_check_cancel(nullptr, "IR background printing")) {
+            return;
+        }
         for (const auto& inst : block->instructions) {
+            if (++background_count % 100 == 0 && qore_check_cancel(nullptr, "IR background printing")) {
+                return;
+            }
             auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
             if (bg_inst && bg_inst->helper_ir) {
                 print(*bg_inst->helper_ir, out);

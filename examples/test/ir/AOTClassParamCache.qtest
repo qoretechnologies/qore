@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ClassParamCacheTest
+
+class ClassParamCacheTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("guarded AOT class parameter caches", "1.0", \ARGV) {
+        addTestCase("mutation, aliases, cleanup and cache admission", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTClassParamCache.qr";
+        string expected = "6:1022:1:RUNTIME-TYPE-ERROR:1:101:110:15\n10:10:1:10\n60\n51\n1\n110:102:110\n"
+            "1:OBJECT-ALREADY-DELETED\nclass-param-cache: ok\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        # run() sets QORE_JIT_SYNC_COMPILE=1, so the JIT compiles each function before it runs; thresholds of 1
+        # make the tiered mode compile the functions too
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source), "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "),
+                mode);
+        }
+        TmpDir dir("qore-class-param-cache-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_CLASS_PARAM_CACHE=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                foreach string name in (("cacheStable", "cacheReference", "cacheInvalid", "cacheFailedWrite",
+                        "cacheDestructor", "cacheRecursive", "cacheFailedAliasWrite", "cacheDeleted", "cacheOptional")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(body[0] ?? "", "call ptr @qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " admitted parameter " + prefix + level);
+                    assertEq(!prefix.startsWith("QORE_DISABLE_"),
+                        regex(body[0] ?? "", "class_param_mutation_epoch"),
+                        name + " live invalidation guard " + prefix + level);
+                }
+                foreach string name in (("cachePassthrough", "cacheWritten", "cacheCaptured", "cacheByReference",
+                        "cacheGeneric")) {
+                    *list<*string> body = regex_extract(ir,
+                        "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, name + " LLVM definition");
+                    assertFalse(regex(body[0] ?? "", "call ptr @qore_rt_get_class_param_epoch_aot_v1"),
+                        name + " no unnecessary or unsafe admission " + prefix + level);
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+                assertEq(expected, run((executable,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "full context " + prefix + level);
+            }
+        }
+    }
+}

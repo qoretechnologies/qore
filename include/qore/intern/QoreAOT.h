@@ -42,8 +42,10 @@
 #include <functional>
 #include <memory>
 #include <list>
+#include <map>
 #include <mutex>
 #include <string>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -52,6 +54,8 @@
 #include "qore/intern/qore_aot_deps.h"
 
 class AbstractStatement;
+struct QoreAOTContext;
+struct QoreAOTEffectMemberIntEntryV1;
 
 //! Map a path for final AOT output without changing the physical source used by the compiler.
 /** @param path physical source path, or nullptr for an absent location
@@ -65,6 +69,7 @@ class ExceptionSink;
 class FunctionEntry;
 class LocalVar;
 class QoreClass;
+class QoreClosureBase;
 class QoreFunction;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
@@ -78,11 +83,13 @@ class QoreRecursiveThreadLock;
 class QoreStringNode;
 class QoreTypeInfo;
 class QoreValue;
+class RuntimeConfig;
 struct QoreModuleInitContext;
 struct QoreAOTDebugMetadata;
 struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 class StatementBlock;
+struct QoreAOTReceiverIntForwardEntryV3;
 class TypedHashDecl;
 class UserVariantBase;
 
@@ -141,6 +148,54 @@ const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
 //! Create a dynamic call_function() fallback for an unresolved serialized function call.
 QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args);
 
+//! Returns true while the code of a per-file object (\c qcc \c -c) is generated in this thread
+/** The object is linked into a module by a metadata-only compile (\c qcc \c -m \c --from-objects), which writes
+    the slot tables of its code from the slot map walk alone, so its code can use only the slots that the walk
+    assigns (see AOTSlotMap::beginCodegen())
+*/
+DLLLOCAL bool qore_aot_compiling_per_file_object();
+
+//! Marks the generation of the code of a per-file object in this thread for its lifetime; see
+//! qore_aot_compiling_per_file_object()
+class QoreAOTPerFileObjectGuard {
+public:
+    //! Marks the code generated in this thread as that of a per-file object if \a per_file is true
+    DLLLOCAL explicit QoreAOTPerFileObjectGuard(bool per_file);
+
+    //! Restores the previous state
+    DLLLOCAL ~QoreAOTPerFileObjectGuard();
+
+    QoreAOTPerFileObjectGuard(const QoreAOTPerFileObjectGuard&) = delete;
+    QoreAOTPerFileObjectGuard& operator=(const QoreAOTPerFileObjectGuard&) = delete;
+
+private:
+    bool prev;
+};
+
+class QoreRegex;
+class QoreCastOperatorNode;
+
+//! Returns the regex of a regex operator expression that AOT code lowers from its pattern string
+/** The slot map walk and the code generator must agree on whether the expression needs an expression slot (see
+    AOTSlotMap::beginCodegen()), so both use this function
+
+    @param expr the expression of a regex match, nonmatch or extract instruction
+
+    @return the regex if the code is generated from its pattern string, or nullptr if the code uses the expression's
+    slot (ex: the expression is no regex operator, or the pattern string is not available)
+*/
+DLLLOCAL const QoreRegex* qore_aot_get_pattern_regex(const QoreValue& expr);
+
+//! Returns the cast expression of a cast instruction that AOT code lowers from its type path
+/** As for qore_aot_get_pattern_regex(), the slot map walk and the code generator both use this function
+
+    @param expr the expression of a cast instruction
+
+    @return the cast expression if the code is generated from its type path, or nullptr if the code uses the
+    expression's slot
+*/
+DLLLOCAL const QoreCastOperatorNode* qore_aot_get_type_path_cast(const QoreValue& expr);
+
 //! Key for source-stripped AOT hashdecl path resolution.
 /** A serialized hashdecl path can contain generic receiver type variables; the same
     path must therefore be cached separately for each active receiver type context. */
@@ -180,10 +235,35 @@ struct QoreAOTMethodDispatchCacheEntry {
     const QoreMethod* method = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreParseOptions parse_options;
+    std::string call_name; //!< Stable diagnostic name for a native method frame
     uint64_t dispatch_epoch = 0;
     std::array<const QoreTypeInfo*, MAX_ARGS> arg_types{};
     std::array<uint8_t, MAX_ARGS> arg_states{};
     uint8_t nargs = 0;
+
+    //! Immutable homogeneous unary int/float admission facts for this resolved variant and Program key.
+    //! A null variant keeps the ordinary path; body/readiness/debugger/value guards stay live.
+    //! Dispatch must also find the matching typed companion in the live, exact-body AOT context.
+    const UserVariantBase* native_scalar_uvb = nullptr;
+    QoreProgram* native_scalar_program = nullptr;
+    //! Program address plus canonical argument kind, proved before PIC publication.
+    //! Low bit 0/1 means int/float; alignment is checked by the key builder.
+    //! Nonzero proves unary native admission and zero argument state. This is
+    //! an integer comparison key, never a tagged QoreProgram pointer to dereference.
+    //! Zero retains the ordinary Program/type/state checks (including enum keys).
+    uintptr_t native_scalar_match_key = 0;
+    const qore_class_private* native_scalar_class_ctx = nullptr;
+    //! Defining-class context normalized for this exact receiver's committed hierarchy.
+    //! Used only for nested dispatch lookup; cold frame materialization needs the original context above.
+    //! Immutable before PIC publication and valid only under the full receiver/dispatch-epoch key.
+    const qore_class_private* native_scalar_dispatch_class_ctx = nullptr;
+
+    //! Static eligibility for the ordinary fast method entry, independent of native scalar companions.
+    //! Exact-key hits may reuse this variant; body/readiness/debugger/context guards remain live.
+    const UserVariantBase* generic_fast_uvb = nullptr;
+    //! Every supplied argument exactly matches a canonical hard int/float/bool parameter; no missing/excess args.
+    //! Binding still acquires argument ownership and instantiates ordinary TLS locals.
+    bool generic_scalar_params = false;
 };
 
 //! Bounded polymorphic cache owned by one AOT call target.
@@ -294,6 +374,11 @@ struct QoreAOTContext {
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
         type_path_cache;
 
+    //! Immutable identity of the normal native body, set before this context is published.
+    //! Companions may bind only from this body; no source-location registry is involved.
+    using NativeBodyFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+    NativeBodyFunctionPtr native_body_fn = nullptr;
+
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
     //! Offset of this function's debug IR payload from its containing metadata section.
@@ -333,6 +418,84 @@ struct QoreAOTContext {
     //! Metadata-only statements registered for source-stripped ProgramControl lookups.
     std::vector<AbstractStatement*> owned_debug_statements;
 
+    //! Optional whole-body-proven scalar method entry, published by its normal entry.
+    //! Appended to preserve existing generated-code field offsets; no serialized ABI change.
+    //! native_body_fn identifies the same body; Program/context lifetime bounds the borrowed pointer.
+    using NativeIntUnaryMethodEntry = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*);
+    std::atomic<NativeIntUnaryMethodEntry> native_int_unary_method_entry{nullptr};
+
+    //! Pure dynamic closure companion; captures belong to the borrowed invocation, never this shared context.
+    //! A zero accepted output requests effect-free fallback; context/sink remain the final ABI arguments.
+    using NativeIntUnaryClosureEntry = int64_t (*)(int64_t, const QoreClosureBase*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    std::atomic<NativeIntUnaryClosureEntry> native_int_unary_closure_entry{nullptr};
+
+    //! Optional scalar method companion using the caller's live thread view.
+    //! Append-only: retain the v1 entry and all existing generated field offsets.
+    using NativeIntUnaryMethodEntryV2 = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+    std::atomic<NativeIntUnaryMethodEntryV2> native_int_unary_method_entry_v2{nullptr};
+
+    //! Additive scalar method companion with the live stack-limit view from qore_rt_get_stack_limit_v1.
+    //! A null view or failed inline check must tail-call v2's full native guard before executing the body.
+    using NativeIntUnaryMethodEntryV3 = int64_t (*)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*,
+        const size_t*);
+    std::atomic<NativeIntUnaryMethodEntryV3> native_int_unary_method_entry_v3{nullptr};
+
+    //! Additive float(float) companions; retain all existing generated field offsets and integer ABIs.
+    //! Published only for the exact normal body with a complete non-throwing, context-independent proof.
+    using NativeFloatUnaryMethodEntry = double (*)(double, QoreAOTContext*, ExceptionSink*);
+    std::atomic<NativeFloatUnaryMethodEntry> native_float_unary_method_entry{nullptr};
+    using NativeFloatUnaryMethodEntryV2 = double (*)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*);
+    std::atomic<NativeFloatUnaryMethodEntryV2> native_float_unary_method_entry_v2{nullptr};
+    //! The inline stack guard must fall back to v2 before body execution on a null/failed limit view.
+    using NativeFloatUnaryMethodEntryV3 = double (*)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*,
+        const size_t*);
+    std::atomic<NativeFloatUnaryMethodEntryV3> native_float_unary_method_entry_v3{nullptr};
+
+    //! Forwarding-method companion: native argument, borrowed boxed self, live context, owned boxed result.
+    //! The caller retains the ordinary observable frame and signature slots. The whole body is lowered;
+    //! this is not a pure-leaf entry and must not use deferred native-leaf frame/context setup.
+    using ReceiverIntMethodEntryV1 = uint64_t (*)(int64_t, uint64_t, RuntimeConfig*,
+        QoreAOTContext*, ExceptionSink*);
+    std::atomic<ReceiverIntMethodEntryV1> receiver_int_method_entry_v1{nullptr};
+
+    //! Immutable image-owned scalar forwarding proof, published by the exact normal body.
+    //! The legacy field/layout also holds float-v2 descriptors with a null integer companion.
+    //! A live matching typed inner pure-leaf entry is required before eliding outer signature slots.
+    std::atomic<const QoreAOTReceiverIntForwardEntryV3*> receiver_int_forward_entry{nullptr};
+
+    //! Whole-body-proven scalar companions. Receiver and defining class are borrowed;
+    //! each source member operation is synchronized. accepted starts at one for success;
+    //! zero requests an effect-free ordinary fallback, and values above one resume an update prefix.
+    //! Append-only; no serialized layout change or value cached in this shared context.
+    using ScalarMemberIntEntry = int64_t (*)(int64_t, QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    using ScalarMemberFloatEntry = double (*)(double, QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    std::atomic<ScalarMemberIntEntry> scalar_member_int_entry{nullptr};
+    std::atomic<ScalarMemberFloatEntry> scalar_member_float_entry{nullptr};
+
+    //! A bounded update-prefix/scalar-suffix proof. Fast misses report completed updates + 2;
+    //! the cold entry skips exactly those statements, using ordinary runtime-bound parameters.
+    //! accepted remains one when the native result is final. Neither path replays completed effects.
+    //! Immutable module-owned metadata, published before scalar_member_int_entry by the matching body.
+    std::atomic<const QoreAOTEffectMemberIntEntryV1*> effect_member_int_entry{nullptr};
+
+    //! Additive closure contract: the complete lowered body cannot inspect implicit object/class/self context.
+    //! The live stack guard materializes it before exception work; capture reads stay synchronized.
+    //! Append-only; v1 retains its eager object/class/self context and all existing field offsets.
+    std::atomic<NativeIntUnaryClosureEntry> native_int_unary_closure_entry_v2{nullptr};
+
+    //! Append-only zero-argument, read-only scalar getter contract, independent of unary member entries.
+    //! Receiver/class/RuntimeConfig are borrowed for this invocation; accepted zero requests effect-free fallback.
+    //! Exactly one synchronized member read, no reentry or effects; published only by the exact normal body.
+    using ScalarGetterIntEntryV1 = int64_t (*)(QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    using ScalarGetterFloatEntryV1 = double (*)(QoreObject*, const qore_class_private*, RuntimeConfig*,
+        int*, QoreAOTContext*, ExceptionSink*);
+    std::atomic<ScalarGetterIntEntryV1> scalar_getter_int_entry_v1{nullptr};
+    std::atomic<ScalarGetterFloatEntryV1> scalar_getter_float_entry_v1{nullptr};
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();
@@ -367,6 +530,21 @@ struct QoreAOTContext {
     }
 };
 
+//! Immutable forwarding descriptor; retain the legacy integer name and layout for generated images.
+//! Float-v2 descriptors have a null integer companion; their separately typed inner entry is checked live.
+struct QoreAOTReceiverIntForwardEntryV3 {
+    QoreAOTContext::ReceiverIntMethodEntryV1 entry;
+    int32_t slot;
+    const QoreProgramLocation* loc;
+};
+
+//! Immutable versioned pair emitted in native module storage, never a per-call allocation.
+struct QoreAOTEffectMemberIntEntryV1 {
+    QoreAOTContext::ScalarMemberIntEntry fast;
+    uint64_t (*resume)(int32_t, QoreAOTContext*, ExceptionSink*);
+    uint32_t updates;
+};
+
 //! Compile-time slot assignment map for AOT pointer indirection.
 /** Assigns monotonically increasing slot indices to each unique pointer encountered
     during IR lowering. The same source produces the same AST produces the same IR
@@ -390,8 +568,68 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
     std::unordered_map<uint64_t, DotEvalDirectTarget> dot_eval_direct_targets; //!< expr bits -> IR-selected target
+    //! Additional compile-selected targets have no AST expression; their slots share the expression index space.
+    std::map<int32_t, DotEvalDirectTarget> additional_method_targets;
+    std::unordered_map<const AbstractQoreFunctionVariant*, int32_t> additional_method_slots;
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
     std::unordered_map<uint64_t, QoreAOTCallRelocationTargetKind> call_relocation_kinds; //!< expr bits -> direct call relocation target kind
+
+    //! Kinds of the slots of the map, for the diagnostic of a slot assigned while native code is generated
+    enum class SlotKind {
+        Local,
+        Global,
+        Expression,
+        AdditionalMethod,
+        LValuePath,
+        RegexCase,
+    };
+
+    //! A slot assigned while native code is generated from the map (see beginCodegen())
+    struct CodegenAllocation {
+        SlotKind kind;
+        //! the key of the slot: the expression's NaN-boxed bits, or the pointer for the other kinds
+        uint64_t key;
+        //! the IR opcode diagnostic given for an expression slot, if any
+        std::string source;
+        //! the line of the call in the code generator
+        int line;
+    };
+
+    //! Starts native code generation from the map; calls nest
+    /** Every slot that native code uses must be assigned by the slot map walk (buildAOTSlotMap() and the walks
+        that run in every compile mode), as a metadata-only compile (ex: \c qcc \c -m \c --from-objects) writes
+        the slot tables of the code of separately compiled objects from the walk alone, without generating the code
+        again.  A slot assigned while code is generated would be missing there, and the code of the object would
+        use an index that the table of the linked module does not have, so each one is recorded and the compile
+        fails (see endCodegen()).
+    */
+    void beginCodegen() {
+        ++codegen_depth;
+    }
+
+    //! Ends native code generation started with beginCodegen()
+    /** @return the slots assigned by code generation since the outermost beginCodegen(), if this ends it; the
+        list is cleared
+    */
+    std::vector<CodegenAllocation> endCodegen() {
+        assert(codegen_depth > 0);
+        std::vector<CodegenAllocation> rv;
+        if (!--codegen_depth) {
+            rv.swap(codegen_allocations);
+        }
+        return rv;
+    }
+
+    //! Returns true while native code is generated from the map
+    bool inCodegen() const {
+        return codegen_depth > 0;
+    }
+
+    //! Returns a description of a slot assigned while native code was generated, for a compile error
+    DLLLOCAL static std::string describeCodegenAllocation(const CodegenAllocation& alloc);
+
+    //! Returns a description of the slots assigned while native code was generated, for a compile error
+    DLLLOCAL static std::string describeCodegenAllocations(const std::vector<CodegenAllocation>& allocations);
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {
@@ -399,32 +637,55 @@ struct AOTSlotMap {
     }
 
     //! Get or assign a slot for a LocalVar*
-    int32_t getLocalSlot(const void* local) {
+    //! @throw std::length_error if another slot cannot fit in the signed context size
+    int32_t getLocalSlot(const void* local, int line = __builtin_LINE()) {
         auto it = local_slots.find(local);
         if (it != local_slots.end()) {
             return it->second;
         }
-        int32_t slot = 0;
-        for (const auto& i : local_slots) {
-            slot = std::max(slot, i.second + 1);
+        noteCodegenAllocation(SlotKind::Local, reinterpret_cast<uintptr_t>(local), std::string(), line);
+        if (next_local_slot == INT32_MAX) {
+            throw std::length_error("AOT local slot table exceeds the context size limit");
         }
+        int32_t slot = next_local_slot;
         local_slots[local] = slot;
+        ++next_local_slot;
         return slot;
     }
 
+    //! Recompute the next free index after bulk seeding/replacing local_slots, before allocating more slots.
+    //! @return false on cancellation or an invalid seed; the previous bound is unchanged on failure
+    bool refreshLocalSlotBound() {
+        int32_t next = 0;
+        size_t count = 0;
+        for (const auto& [local, slot] : local_slots) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT local slot bound")) {
+                return false;
+            }
+            if (slot < 0 || slot == INT32_MAX) {
+                return false;
+            }
+            next = std::max(next, slot + 1);
+        }
+        next_local_slot = next;
+        return true;
+    }
+
     //! Get or assign a slot for a Var* (global or thread-local)
-    int32_t getGlobalSlot(const void* var) {
+    int32_t getGlobalSlot(const void* var, int line = __builtin_LINE()) {
         auto it = global_slots.find(var);
         if (it != global_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::Global, reinterpret_cast<uintptr_t>(var), std::string(), line);
         int32_t slot = static_cast<int32_t>(global_slots.size());
         global_slots[var] = slot;
         return slot;
     }
 
     //! Get or assign a slot for an expression (NaN-boxed QoreValue bits)
-    int32_t getExprSlot(uint64_t expr_bits, const std::string& source = std::string()) {
+    //! @throw std::length_error if another slot cannot fit in the signed context size
+    int32_t getExprSlot(uint64_t expr_bits, const std::string& source = std::string(), int line = __builtin_LINE()) {
         if (!source.empty() && expr_slot_sources.find(expr_bits) == expr_slot_sources.end()) {
             expr_slot_sources[expr_bits] = source;
         }
@@ -432,31 +693,80 @@ struct AOTSlotMap {
         if (it != expr_slots.end()) {
             return it->second;
         }
-        int32_t slot = static_cast<int32_t>(expr_slots.size());
+        noteCodegenAllocation(SlotKind::Expression, expr_bits, source, line);
+        int32_t slot = allocateExprSlot();
         expr_slots[expr_bits] = slot;
         return slot;
     }
 
+    //! Get or assign a load-bound exact method target without fabricating an expression.
+    //! @param target complete class/method/variant identity, owned by the compilation
+    //! @return its index in the expression and call-target tables
+    //! @throw std::length_error if another slot cannot fit in the signed context size
+    int32_t getAdditionalMethodSlot(const DotEvalDirectTarget& target, int line = __builtin_LINE()) {
+        assert(target.qc && target.method && target.variant && !target.pseudo);
+        auto it = additional_method_slots.find(target.variant);
+        if (it != additional_method_slots.end()) {
+            return it->second;
+        }
+        noteCodegenAllocation(SlotKind::AdditionalMethod, reinterpret_cast<uintptr_t>(target.method),
+            std::string(), line);
+        int32_t slot = allocateExprSlot();
+        additional_method_targets.emplace(slot, target);
+        additional_method_slots.emplace(target.variant, slot);
+        return slot;
+    }
+
+    //! Return the expression-table bound, including targets without AST expressions.
+    //! @return the required size of the expression and call-target tables
+    int32_t getNumExprSlots() const {
+        return next_expr_slot;
+    }
+
     //! Get or assign a slot for a QoreIRLValuePathInstruction*
-    int32_t getLVPathSlot(const void* inst) {
+    int32_t getLVPathSlot(const void* inst, int line = __builtin_LINE()) {
         auto it = lv_path_slots.find(inst);
         if (it != lv_path_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::LValuePath, reinterpret_cast<uintptr_t>(inst), std::string(), line);
         int32_t slot = static_cast<int32_t>(lv_path_slots.size());
         lv_path_slots[inst] = slot;
         return slot;
     }
 
     //! Get or assign a slot for a CaseNodeRegex* (SwitchRegexMatch)
-    int32_t getRegexCaseSlot(const void* regex_case) {
+    int32_t getRegexCaseSlot(const void* regex_case, int line = __builtin_LINE()) {
         auto it = regex_case_slots.find(regex_case);
         if (it != regex_case_slots.end()) {
             return it->second;
         }
+        noteCodegenAllocation(SlotKind::RegexCase, reinterpret_cast<uintptr_t>(regex_case), std::string(), line);
         int32_t slot = static_cast<int32_t>(regex_case_slots.size());
         regex_case_slots[regex_case] = slot;
         return slot;
+    }
+
+private:
+    int32_t next_local_slot = 0;
+    int32_t next_expr_slot = 0;
+    //! the nesting depth of beginCodegen()
+    int codegen_depth = 0;
+    //! the slots assigned while native code was generated
+    std::vector<CodegenAllocation> codegen_allocations;
+
+    //! Records a slot assigned while native code is generated
+    void noteCodegenAllocation(SlotKind kind, uint64_t key, const std::string& source, int line) {
+        if (codegen_depth) {
+            codegen_allocations.push_back(CodegenAllocation{kind, key, source, line});
+        }
+    }
+
+    int32_t allocateExprSlot() {
+        if (next_expr_slot == INT32_MAX) {
+            throw std::length_error("AOT expression slot table exceeds the context size limit");
+        }
+        return next_expr_slot++;
     }
 };
 
@@ -801,6 +1111,16 @@ public:
         @return the flags, without surrounding spaces, or an empty string
     */
     static std::string getLinkTargetFlags();
+
+    //! Return the target triple AOT code is compiled for when no target is given
+    /** This is LLVM's default (host) triple, except on macOS, where the OS version is the version the native links
+        target (see getLinkTargetFlags()): an explicit \c MACOSX_DEPLOYMENT_TARGET, or else the version libqore was
+        built for.  The host's own version can be newer than that, and an object file built for a newer macOS than
+        its link makes the linker warn on every link.
+
+        @return the target triple, e.g. \c "arm64-apple-macosx26.6"
+    */
+    static std::string getDefaultTargetTriple();
 
     //! Return the configured runtime-library search-path policy for native AOT links
     /** @return true unless the CMake-generated link configuration disables RPATH
@@ -1304,7 +1624,8 @@ public:
 */
 //! @param seed_ir_local_slots true to give the function's locals their IR slot ids; false for the helper of a
 //! background expression, which shares the slot table of the function containing it
-void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir_local_slots = true);
+//! @return false on cancellation or invalid local slot numbering; the caller must discard the partial map
+bool buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir_local_slots = true);
 
 //! Build a QoreAOTContext by walking a freshly-lowered IR function in the same order.
 /** The fresh IR must have been produced from the same source as the compile-time IR,

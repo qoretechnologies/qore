@@ -25,6 +25,10 @@ newer version 26.6
 
     which failed every test that rejects unexpected output from a qcc run.  qcc now passes the version the
     compiler reported while building libqore, unless MACOSX_DEPLOYMENT_TARGET chooses one explicitly.
+
+    The object files qcc emits follow the same version: they were built for LLVM's host triple, so on a host
+    newer than libqore's version every link warned that an object was built for a newer macOS than the link.
+    The cases that test the default clear MACOSX_DEPLOYMENT_TARGET, which the caller's environment may set.
 */
 class AOTLinkDeploymentTargetTest inherits QUnit::Test {
     private {
@@ -41,6 +45,7 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
         otool = trim(backquote("command -v otool 2>/dev/null || true"));
         addTestCase("an executable targets libqore's macOS version", \executable());
         addTestCase("a module targets libqore's macOS version", \module());
+        addTestCase("an object file targets libqore's macOS version", \object());
         addTestCase("MACOSX_DEPLOYMENT_TARGET is still honored", \explicitTarget());
         set_return_value(main());
     }
@@ -51,7 +56,8 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
         string script = tmp.path + "/hello.q";
         write(script, "%modern\nprintf(\"hello\\n\");\n");
         string exe = tmp.path + "/hello";
-        string out = run(sprintf("%s -o %s %s", shellQuote(qcc_bin), shellQuote(exe), shellQuote(script)));
+        string out = run(sprintf("env -u MACOSX_DEPLOYMENT_TARGET %s -o %s %s", shellQuote(qcc_bin),
+            shellQuote(exe), shellQuote(script)));
         assertTrue(is_file(exe), "qcc linked the executable: " + out);
         assertEq(-1, out.find("ld: warning"), "the link does not warn: " + out);
         assertEq(libqoreMinOS(), minOS(exe), "the executable targets libqore's macOS version");
@@ -66,10 +72,23 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
             "url = \"https://qore.org\"; }\npublic namespace LinkTargetMod { public string sub hello() { "
             "return \"hello\"; } }\n");
         string qmod = tmp.path + "/LinkTargetMod.qmod";
-        string out = run(sprintf("%s -m -o %s %s", shellQuote(qcc_bin), shellQuote(qmod), shellQuote(source)));
+        string out = run(sprintf("env -u MACOSX_DEPLOYMENT_TARGET %s -m -o %s %s", shellQuote(qcc_bin),
+            shellQuote(qmod), shellQuote(source)));
         assertTrue(is_file(qmod), "qcc linked the module: " + out);
         assertEq(-1, out.find("ld: warning"), "the link does not warn: " + out);
         assertEq(libqoreMinOS(), minOS(qmod), "the module targets libqore's macOS version");
+    }
+
+    object() {
+        checkPlatform();
+        TmpDir tmp("qore-aot-link-target-");
+        string script = tmp.path + "/hello.q";
+        write(script, "%modern\nprintf(\"hello\\n\");\n");
+        string obj = tmp.path + "/hello.o";
+        string out = run(sprintf("env -u MACOSX_DEPLOYMENT_TARGET %s -c -o %s %s", shellQuote(qcc_bin),
+            shellQuote(obj), shellQuote(script)));
+        assertTrue(is_file(obj), "qcc emitted the object file: " + out);
+        assertEq(libqoreMinOS(), minOS(obj), "the object file targets libqore's macOS version");
     }
 
     explicitTarget() {
@@ -87,6 +106,8 @@ class AOTLinkDeploymentTargetTest inherits QUnit::Test {
         string out = run(sprintf("MACOSX_DEPLOYMENT_TARGET=%s %s -o %s %s", older, shellQuote(qcc_bin),
             shellQuote(exe), shellQuote(script)));
         assertTrue(is_file(exe), "qcc linked the executable: " + out);
+        # libqore targets a newer macOS, which the linker reports, but no object file may disagree with the link
+        assertEq(-1, out.find("ld: warning: object file"), "the objects follow the link's version: " + out);
         assertEq(older, minOS(exe), "the executable follows MACOSX_DEPLOYMENT_TARGET");
     }
 

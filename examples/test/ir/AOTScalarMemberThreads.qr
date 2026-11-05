@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+class ScalarMemberThreadInt {
+    public { auto delta = 17; }
+    int next(int value) { return value + delta; }
+    set(auto value) { delta = value; }
+}
+class ScalarMemberThreadFloat {
+    public { auto delta = 0.5; }
+    float next(float value) { return value + delta; }
+    set(auto value) { delta = value; }
+}
+class ScalarMemberThreadInternalInt inherits ScalarMemberThreadInt {
+    private:internal { auto internal_delta = 17; }
+    int next(int value) { return value + internal_delta; }
+    set(auto value) { internal_delta = value; }
+}
+class ScalarMemberThreadInternalFloat inherits ScalarMemberThreadFloat {
+    private:internal { auto internal_delta = 0.5; }
+    float next(float value) { return value + internal_delta; }
+    set(auto value) { internal_delta = value; }
+}
+auto sub scalarMemberThreadCall(auto receiver, auto value) { return receiver.next(value); }
+
+sub scalarMemberWriter(ScalarMemberThreadInt integer, ScalarMemberThreadFloat floating,
+        Counter start, Counter readers, Counter done, Queue failures) {
+    on_exit done.dec();
+    try {
+        start.dec();
+        if (start.waitForZero(10000)) { throw "MEMBER-THREAD-TEST", "writer start timeout"; }
+        for (int i = 0; i < 200000; ++i) {
+            # Alternate immediate and node-backed representations. Every scalar
+            # read must complete under the ordinary object lock before replacement.
+            integer.set(i & 1 ? 17 : 1125899906842624);
+            floating.set(i & 1 ? 0.5 : -9.0e307);
+            if (!readers.getCount()) { return; }
+        }
+        throw "MEMBER-THREAD-TEST", "readers did not finish";
+    } catch (hash<ExceptionInfo> ex) { failures.push(ex); }
+}
+sub scalarMemberReader(auto integer, auto floating, Counter start, Counter readers,
+        Counter done, Queue failures) {
+    on_exit { readers.dec(); done.dec(); }
+    try {
+        start.dec();
+        if (start.waitForZero(10000)) { throw "MEMBER-THREAD-TEST", "reader start timeout"; }
+        for (int i = 0; i < 8000; ++i) {
+            auto iv = scalarMemberThreadCall(integer, 1);
+            auto fv = scalarMemberThreadCall(floating, 1.0);
+            if (type(iv) != "integer" || (iv != 18 && iv != 1125899906842625)) {
+                throw "MEMBER-THREAD-TEST", sprintf("invalid integer: %y", iv);
+            }
+            if (type(fv) != "float" || (fv != 1.5 && fv != -9.0e307)) {
+                throw "MEMBER-THREAD-TEST", sprintf("invalid float: %y", fv);
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) { failures.push(ex); }
+}
+
+ScalarMemberThreadInt integer = ARGV[0] == "internal"
+    ? new ScalarMemberThreadInternalInt() : new ScalarMemberThreadInt();
+ScalarMemberThreadFloat floating = ARGV[0] == "internal"
+    ? new ScalarMemberThreadInternalFloat() : new ScalarMemberThreadFloat();
+for (int i = 0; i < 16; ++i) {
+    if (scalarMemberThreadCall(integer, 1) != 18 || scalarMemberThreadCall(floating, 1.0) != 1.5) {
+        throw "MEMBER-THREAD-TEST", "warmup failed";
+    }
+}
+Counter start(5);
+Counter readers(4);
+Counter done(5);
+Queue failures();
+background scalarMemberWriter(integer, floating, start, readers, done, failures);
+for (int i = 0; i < 4; ++i) {
+    background scalarMemberReader(integer, floating, start, readers, done, failures);
+}
+if (done.waitForZero(60000)) { throw "MEMBER-THREAD-TEST", "completion timeout"; }
+if (failures.size()) { throw "MEMBER-THREAD-TEST", failures.get(1000); }
+printf("scalar-member-threads: ok\n");

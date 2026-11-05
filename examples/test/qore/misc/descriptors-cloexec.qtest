@@ -2,10 +2,9 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
 %requires FsUtil

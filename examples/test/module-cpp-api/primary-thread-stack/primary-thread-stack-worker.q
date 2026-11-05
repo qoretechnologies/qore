@@ -96,6 +96,8 @@ int sub get_arg(int i) {
 *string scenario = shift ARGV;
 printf("TID: %d\n", gettid());
 printf("INITIAL: %d\n", get_stack_size());
+# the size that the OS lets the stack grow to, which depends on the arguments and environment of this process
+printf("GROWTH: %d\n", cpp_api_primary_stack_growth());
 switch (scenario) {
     case "sizes": {
         if (!ARGV || (ARGV.size() % 2)) {

@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTBorrowedLocalLoadMutationTest
+
+#! A value read from a local keeps its value when an operation changes the local in place before the value is used
+/** Native code reads a local from its cache without a reference of its own; an operation that changes the local in
+    place (ex: extract, splice, remove, push) drops the cache's references first, so that the value is changed
+    without a copy.  When the value read earlier is used after the operation, the references are kept, so that the
+    operation copies the local's value, and the value read keeps the value it was read with, as with the AST
+    interpreter; changes with no such use stay in place.
+*/
+class AOTBorrowedLocalLoadMutationTest inherits QUnit::Test {
+    private {
+        string root = realpath(get_script_dir() + "/../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string fixture = get_script_dir() + "/AOTBorrowedLocalLoadMutation.qr";
+        *string expected;
+    }
+
+    constructor() : Test("values read before a local is changed in place", "1.0", \ARGV) {
+        addTestCase("AST results", \astResults());
+        addTestCase("execution modes", \execModes());
+        addTestCase("compiled programs", \compiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! runs a command and returns its output; the command must succeed
+    private string run(list<string> args, string label, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "TZ=UTC QORE_LIBDIR=" + quote(libdir) + " LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map AOTBorrowedLocalLoadMutationTest::quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, label + ": " + output);
+        return output;
+    }
+
+    #! returns the output of AST execution, which the other modes are compared with
+    private string getExpected() {
+        if (!expected) {
+            expected = run((qore, "--exec-mode=ast", fixture), "ast");
+        }
+        return expected;
+    }
+
+    #! returns the result of the case with the given label from the output
+    private static string getResult(string output, string label) {
+        foreach string line in (output.split("\n")) {
+            if (line.equalPartial(label + ": ")) {
+                return line.substr(label.length() + 2);
+            }
+        }
+        throw "TEST-ERROR", sprintf("no result for %y in the output", label);
+    }
+
+    #! checks AST results that the other modes are compared with
+    astResults() {
+        string out = getExpected();
+        assertEq("[[1, 2, 3, 4], [1], [2, 3, 4]]", getResult(out, "list extract"), "the list read before extract");
+        assertEq("[[1, 2], [1, 2, 3], [1, 2, 3]]", getResult(out, "list push"), "the list read before push");
+        assertEq("[{a: 1, b: 2}, 1, {b: 2}]", getResult(out, "hash remove"), "the hash read before remove");
+        assertEq("[1, 2, 3] [1] [2, 3]", getResult(out, "call args"), "call arguments");
+        assertEq("[[1, 2, 3], [1, 2, 3], [10, 20, 30]]", getResult(out, "loop live"), "a value read before a loop");
+        assertEq("20000", getResult(out, "loop in place"), "changes in place");
+    }
+
+    execModes() {
+        string ast = getExpected();
+        foreach string mode in (("ir", "jit", "tiered")) {
+            # the functions are compiled to native code when they are first called
+            assertEq(ast, run((qore, "--exec-mode=" + mode, fixture), mode, mode == "ir" ? ""
+                : "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+    }
+
+    compiled() {
+        string ast = getExpected();
+        TmpDir dir("qore-aot-borrowed-local-load-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture" + level;
+            run((qcc, level, "-o", executable, fixture), "compile " + level);
+            assertEq(ast, run((executable,), "run " + level), "AOT " + level);
+        }
+    }
+}

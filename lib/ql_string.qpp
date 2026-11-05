@@ -236,6 +236,11 @@ static QoreStringNode* q_replace_string(const QoreStringNode* str, const QoreStr
 // string, used for the alignment check; returns nullptr if there is no such match
 static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len,
         const qore_char_boundary& b = qore_char_boundary(), size_t base = 0) {
+    // An empty separator leaves the subject intact. Searching for its terminator
+    // would match embedded NUL bytes without advancing the split cursor.
+    if (!pl) {
+        return nullptr;
+    }
     if (b.charlen && pl) {
         return qore_string_private::memmem_boundary(str, len, pattern, pl, b.charlen);
     }
@@ -296,7 +301,7 @@ static QoreListNode* convert_list_encoding(const QoreListNode* l, const QoreEnco
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
     ConstListIterator li(l);
     while (li.next()) {
-        if (li.index() && !(li.index() % 100) && qore_check_cancel(xsink, "converting split fields")) {
+        if (li.index() && !(li.index() % 10) && qore_check_cancel(xsink, "converting split fields")) {
             return nullptr;
         }
         QoreValue v = li.getValue();
@@ -1704,6 +1709,9 @@ nothing convert_encoding() [flags=RUNTIME_NOOP] {
     @return the encoding and how it was found, or @ref nothing if the data starts with no byte order mark and its zero
     bytes do not show a UTF-16 or UTF-32 byte order
 
+    @throw THREAD-CANCELLED the calling thread was cancelled during the scan
+    @throw PROGRAM-INTERRUPTED the program was interrupted during the scan
+
     @par Example:
     @code{.py}
 *hash<UnicodeByteOrderInfo> h = get_unicode_byte_order(binary(convert_encoding("PO,Qty\n1,2\n", "UTF-16LE")));
@@ -1712,15 +1720,24 @@ nothing convert_encoding() [flags=RUNTIME_NOOP] {
 
     @since %Qore 3.0
 */
-*hash<UnicodeByteOrderInfo> get_unicode_byte_order(binary sample) [flags=CONSTANT] {
+*hash<UnicodeByteOrderInfo> get_unicode_byte_order(binary sample) [flags=RET_VALUE_ONLY] {
     QoreUnicodeByteOrder bo = q_get_unicode_byte_order(static_cast<const unsigned char*>(sample->getPtr()),
-        sample->size());
-    if (!bo.encoding) {
+        sample->size(), xsink);
+    if (*xsink || !bo.encoding) {
         return QoreValue();
     }
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclUnicodeByteOrderInfo, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("encoding", new QoreStringNode(bo.encoding), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("evidence", new QoreStringNode(bo.bom ? "bom" : "zero-bytes"), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     return h.release();
 }
 
@@ -1744,6 +1761,8 @@ nothing convert_encoding() [flags=RUNTIME_NOOP] {
     without the \c "-") is not checked
 
     @throw ENCODING-BYTE-ORDER-ERROR the data is in the other byte order than \a encoding
+    @throw THREAD-CANCELLED the calling thread was cancelled while checking the data or encoding name
+    @throw PROGRAM-INTERRUPTED the program was interrupted while checking the data or encoding name
 
     @par Example:
     @code{.py}
@@ -1754,9 +1773,15 @@ check_unicode_byte_order(binary(convert_encoding("PO,Qty\n1,2\n", "UTF-16LE")), 
     @since %Qore 3.0
 */
 nothing check_unicode_byte_order(binary sample, string encoding) {
+    // This void validator is called for its exception outcome, not a return
+    // value; RET_VALUE_ONLY would warn on its intended statement usage.
     // the canonical code of a form of UTF-16 or UTF-32: "UTF-16", "UTF-16LE", ... "UTF-32BE"
     std::string code;
+    size_t count = 0;
     for (const char* p = encoding->c_str(); *p; ++p) {
+        if (!(count++ % 100) && qore_check_cancel(xsink, "Unicode encoding-name normalization")) {
+            return QoreValue();
+        }
         if (*p != '-' && *p != '_') {
             code += static_cast<char>(toupper(static_cast<unsigned char>(*p)));
         }

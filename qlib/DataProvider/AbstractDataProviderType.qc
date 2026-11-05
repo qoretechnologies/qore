@@ -890,6 +890,12 @@ AbstractDataProviderType restored = AbstractDataProviderType::getFromGraph(graph
 
         @return the members of getInfo() named in @ref ConfigInfoKeys that the type has
 
+        @par Example
+        Describe an order field for a configuration form without expanding its nested type graph:
+        @code{.q}
+        hash<DataTypeInfo> description = order_field.getType().getConfigInfo();
+        @endcode
+
         @since DataProvider 3.11
     */
     hash<DataTypeInfo> getConfigInfo() {

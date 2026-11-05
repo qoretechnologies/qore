@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+int sub exactListStoreLoop(int count, int seed) {
+    list<int> values = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push values, seed;
+    }
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+list<int> sub exactListStoreWide(int value) {
+    list<int> values = ();
+    push values, value;
+    push values, value;
+    return values;
+}
+
+list<int> sub exactListStoreExpression(int value) {
+    list<int> values = ();
+    return push values, value;
+}
+
+list<int> store_alias;
+string sub exactListStoreAlias(int value) {
+    list<int> values = ();
+    push values, value;
+    store_alias = values;
+    push values, value ^ 1;
+    return sprintf("%y:%y", store_alias, values);
+}
+
+string sub exactListStoreCatch(int value) {
+    list<int> values = ();
+    try {
+        push values, value;
+        throw "AFTER-PUSH", "check exception-visible mutation";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s:%y", ex.err, values);
+    }
+}
+
+sub observeListStore() {
+    list<int> seen = get_local_vars(1).values.value;
+    if (seen != (17,)) {
+        throw "LIST-STORE-VISIBILITY", sprintf("expected [17], got %y", seen);
+    }
+    set_local_var_value(1, "values", (41,));
+}
+
+list<int> sub exactListStoreReflect() {
+    list<int> values = ();
+    push values, 17;
+    call_function("observeListStore");
+    push values, 43;
+    return values;
+}
+
+string sub listStoreFallbacks() {
+    list<*int> optional = ();
+    push optional, NOTHING;
+    push optional, 9;
+    list<softint> soft = ();
+    push soft, "11";
+    push soft, 13;
+    list plain = ();
+    push plain, 17;
+    push plain, "nineteen";
+    list<auto!> broad = ();
+    push broad, 23;
+    push broad, "twenty-nine";
+    return sprintf("%s:%y;%s:%y;%s:%y;%s:%y", optional.fullType(), optional,
+        soft.fullType(), soft, plain.fullType(), plain, broad.fullType(), broad);
+}
+
+string sub listStoreRemoved(int value) {
+    list<int> values = (1,);
+    remove values;
+    push values, value;
+    values[3] = 7;
+    push values, value;
+    return sprintf("%y", values);
+}
+
+string sub listStoreCaptured(int value) {
+    list<int> values = ();
+    code<list<int>()> read = list<int> sub () { return values; };
+    push values, value;
+    list<int> copy = read();
+    push values, value ^ 1;
+    return sprintf("%y:%y", copy, read());
+}
+
+sub listStoreReference(reference<list<int>> values, int value) {
+    push values, value;
+}
+
+foreach int value in ((0, 1, -1, 140737488355327, 140737488355328,
+        -140737488355328, -140737488355329, 9223372036854775807,
+        -9223372036854775807 - 1)) {
+    printf("wide:%d:%y\n", value, exactListStoreWide(value));
+    printf("expression:%d:%y\n", value, exactListStoreExpression(value));
+    printf("alias:%d:%s\n", value, exactListStoreAlias(value));
+    printf("catch:%d:%s\n", value, exactListStoreCatch(value));
+    printf("removed:%d:%s\n", value, listStoreRemoved(value));
+    printf("captured:%d:%s\n", value, listStoreCaptured(value));
+    list<int> referenced = (3,);
+    listStoreReference(\referenced, value);
+    printf("reference:%d:%y\n", value, referenced);
+}
+printf("loop-zero:%d\nloop-one:%d\nloop-many:%d\n", exactListStoreLoop(0, 7),
+    exactListStoreLoop(1, 7), exactListStoreLoop(1024, 7));
+printf("fallbacks:%s\n", listStoreFallbacks());
+# Use the ordinary entry to preserve the language's reflective call-frame contract.
+printf("reflect:%y\n", call_function("exactListStoreReflect"));

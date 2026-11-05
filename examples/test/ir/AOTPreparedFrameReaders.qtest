@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class PreparedFrameReadersTest
+
+class PreparedFrameReadersTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        const Expected = "prepared-frame-readers: ok\n";
+    }
+    constructor() : Test("prepared frame stack readers", "1.0", \ARGV) {
+        addTestCase("read frames while prepared targets hit, replace and clear", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTPreparedFrameReaders.qr";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-prepared-frame-readers-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_FLOAT_FRAME_REUSE=1 ",
+                "QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=1 ",
+                "QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK=1 ",
+                "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool prepared = !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_PREPARED_TARGET");
+                bool reuse = prepared && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE");
+                string reused_version = prefix.startsWith("QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=")
+                    ? "v4" : "v5";
+                string version = reuse ? reused_version : prepared ? "v3" : "v2";
+                assertEq(True, ir.find("call i32 @qore_rt_try_funcref_int_int_" + version + "(") >= 0,
+                    "prepared target lowering");
+                bool float_reuse = reuse && !prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_FLOAT_FRAME_REUSE");
+                string float_version = float_reuse ? "v4" : prepared ? "v3" : "v2";
+                assertEq(True, ir.find("call i32 @qore_rt_try_funcref_float_float_" + float_version + "(") >= 0,
+                    "floating prepared target lowering");
+                assertEq(reuse, ir.find("call void @qore_rt_release_funcref_frame_v1") >= 0,
+                    "reusable frame cleanup");
+                assertRegex("preparedLeafA[^\n]*funcref_typed_v2", ir, "native target A");
+                assertRegex("preparedLeafB[^\n]*funcref_typed_v2", ir, "native target B");
+                assertRegex("preparedFloatLeafA[^\n]*funcref_typed_v2", ir, "native floating target A");
+                assertRegex("preparedFloatLeafB[^\n]*funcref_typed_v2", ir, "native floating target B");
+                assertEq(!prefix.startsWith("QORE_DISABLE_AOT_FUNCREF_INLINE_STACK_CHECK"),
+                    regex(ir, "preparedLeafA[^\n]*funcref_typed_v3"), "inline-stack target A");
+                assertEq(Expected, run((executable,)), "AOT " + level);
+                assertEq(Expected, run((executable,), "QORE_DISABLE_FUNCREF_FAST_CALL=1 "), "generic fallback");
+            }
+        }
+    }
+}

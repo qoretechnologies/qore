@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+sub expect(bool ok, string message) {
+    if (!ok) {
+        throw "TEST-FAILURE", message;
+    }
+}
+
+int sub boundedPair(int left, int right, int index) {
+    list<int> pair = (left, right);
+    return pair[index & 1];
+}
+
+int sub commutedPair(int left, int right, int index) {
+    list<int> pair = (left & 65535, right & 65535);
+    return pair[1 & index];
+}
+
+int sub inlinePair(int left, int right, int index) {
+    list<int> pair = (left & 65535, right & 65535);
+    return pair[index & 1];
+}
+
+int sub loopPair(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        list<int> pair = (seed & 65535, (seed + 1) & 65535);
+        sum += pair[i & 1];
+    }
+    return sum;
+}
+
+*int sub unboundedPair(int index) {
+    list<int> pair = (7, 8);
+    return pair[index];
+}
+
+int sub mutatedPair(int index) {
+    list<int> pair = (7, 8);
+    pair[index & 1] += 10;
+    return pair[index & 1];
+}
+
+int sub aliasedPair(int index) {
+    list<int> pair = (7, 8);
+    list<int> alias = pair;
+    pair[0] = 20;
+    return alias[index & 1];
+}
+
+string sub boxedPair(int index) {
+    list<string> pair = ("left", "right");
+    return pair[index & 1];
+}
+
+our int effects = 0;
+int sub effect(int value, bool fail) {
+    effects = effects * 10 + value;
+    if (fail) {
+        throw "PAIR-ERROR", "element evaluation";
+    }
+    return value;
+}
+
+int sub effectPair(int index, bool fail) {
+    list<int> pair = (effect(1, fail) & 65535, effect(2, False) & 65535);
+    return pair[index & 1];
+}
+
+# Full-width integers exercise boxed SSA temporaries in the IR interpreter.
+foreach int left in ((0, -1, 9223372036854775807, -9223372036854775807 - 1)) {
+    foreach int right in ((0, 1, 9223372036854775807, -9223372036854775807 - 1)) {
+        foreach int index in ((0, 1, 2, -1, -2, 9223372036854775807)) {
+            int expected = index & 1 ? right : left;
+            int actual = boundedPair(left, right, index);
+            expect(actual == expected, sprintf("bounded full-width pair (%d, %d)[%d]: expected %d, got %d",
+                left, right, index, expected, actual));
+            expect(commutedPair(left, right, index) == (expected & 65535), "commuted mask");
+            expect(inlinePair(left, right, index) == (expected & 65535), "inline pair");
+        }
+    }
+}
+expect(loopPair(1001, 9) == 9509, "loop-local pair");
+expect(unboundedPair(2) === NOTHING, "out-of-bounds fallback");
+expect(unboundedPair(-1) == 8, "negative index fallback");
+expect(mutatedPair(0) == 17 && mutatedPair(1) == 18, "mutation fallback");
+expect(aliasedPair(0) == 7 && aliasedPair(1) == 8, "alias fallback");
+expect(boxedPair(0) == "left" && boxedPair(1) == "right", "boxed fallback");
+expect(effectPair(0, False) == 1 && effects == 12, "both elements evaluated in order");
+effects = 0;
+bool caught = False;
+try {
+    effectPair(1, True);
+} catch (hash<ExceptionInfo> ex) {
+    caught = ex.err == "PAIR-ERROR";
+}
+expect(caught && effects == 1, "element exception preserves ordering");
+printf("bounded-pair: ok\n");

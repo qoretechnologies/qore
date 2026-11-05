@@ -1771,6 +1771,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreLib.cpp
     lib/qore_git_revision.cpp
     lib/qore_aot_runtime_identity.cpp
+    lib/QoreAOTStringRuntime.cpp
+    lib/QoreAOTClassRuntime.cpp
     lib/QoreTimeZoneManager.cpp
     lib/QoreString.cpp
     lib/QoreObject.cpp
@@ -2519,8 +2521,11 @@ if (SINGLE_COMPILATION_UNIT)
     #   <link.h> that define ELF macros conflicting with LLVM headers in the SCU
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
     # - qore_aot_runtime_identity.cpp: so AOT runtime identity changes only recompile this tiny file
+    # - QoreAOTStringRuntime.cpp: isolate specialized builtin calls from whole-SCU optimization
+    # - QoreAOTClassRuntime.cpp: isolate specialized class acceptance from whole-SCU optimization
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp)
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
+        lib/QoreAOTStringRuntime.cpp lib/QoreAOTClassRuntime.cpp)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
         list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
@@ -2586,6 +2591,20 @@ endif (WIN32 OR MINGW OR MSYS)
 
 # Include CMAKE_BINARY_DIR first so QPP-generated files take precedence over autotools-generated ones
 target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+# The include directories that code including the library's internal headers needs (one per line), for the tests
+# that build C++ fixtures against this build (examples/test/NativeFixture.qm): the internal headers include the
+# headers of libqore's dependencies, which can be outside the compiler's default search path (OpenSSL from MacPorts
+# or Homebrew, LLVM).  The compiler's own include directories are left out: given with -I, they would precede the
+# C++ library's headers, whose #include_next of the C headers then fails.
+get_target_property(_qore_internal_include_dirs libqore INTERFACE_INCLUDE_DIRECTORIES)
+list(REMOVE_DUPLICATES _qore_internal_include_dirs)
+set(_qore_internal_include_content "")
+foreach (_dir IN LISTS _qore_internal_include_dirs)
+    if (NOT _dir IN_LIST CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
+        string(APPEND _qore_internal_include_content "${_dir}\n")
+    endif ()
+endforeach ()
+file(WRITE "${CMAKE_BINARY_DIR}/qore-internal-include-dirs.txt" "${_qore_internal_include_content}")
 
 set(QORE_LIBS ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
 
@@ -2644,6 +2663,10 @@ foreach(_qore_llvm_dir IN LISTS LLVM_LIBRARY_DIRS)
     list(APPEND _QORE_AOT_LLVM_LDIR "-L${_qore_llvm_dir}")
 endforeach()
 qore_aot_link_arguments(_QORE_AOT_STATIC_LIBS ${QORE_LIBS} ${_QORE_AOT_LLVM_LDIR} ${LLVM_LIBS})
+if (APPLE)
+    # A static runtime also needs the frameworks linked privately by shared libqore.
+    list(APPEND _QORE_AOT_STATIC_LIBS -framework Security -framework CoreFoundation)
+endif()
 
 # On macOS, supply the SDK sysroot (unversioned symlink, see note above) so the
 # full-path toolchain clang++ can find libc++/system libraries when linking AOT
@@ -2816,6 +2839,10 @@ target_include_directories(qore-ir-phase0-smoke PRIVATE
     ${ZLIB_INCLUDE_DIRS}
     ${LLVM_INCLUDE_DIRS})
 target_link_libraries(qore-ir-phase0-smoke PRIVATE ${QORE_LIBS})
+if (APPLE)
+    # These executables compile the runtime themselves, including the module signature check.
+    target_link_libraries(qore-ir-phase0-smoke PRIVATE ${SECURITY_FRAMEWORK} ${CORE_FOUNDATION_FRAMEWORK})
+endif()
 if(LLVM_LIBS)
     target_link_libraries(qore-ir-phase0-smoke PRIVATE ${LLVM_LIBS})
 elseif(TARGET LLVM::LLVM)
@@ -2885,6 +2912,10 @@ target_include_directories(qore-ir-plugin-registry-smoke PRIVATE
     ${ZLIB_INCLUDE_DIRS}
     ${LLVM_INCLUDE_DIRS})
 target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${QORE_LIBS})
+if (APPLE)
+    # These executables compile the runtime themselves, including the module signature check.
+    target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${SECURITY_FRAMEWORK} ${CORE_FOUNDATION_FRAMEWORK})
+endif()
 if(LLVM_LIBS)
     target_link_libraries(qore-ir-plugin-registry-smoke PRIVATE ${LLVM_LIBS})
 elseif(TARGET LLVM::LLVM)
@@ -3013,10 +3044,16 @@ set(_qcc_format_sources
 #                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
 #                      calls into the interpreter again, this decision changes.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreAOTStringRuntime executes already-selected builtin helpers; it does not
+#                      emit objects or reconstruct their serialized contents.
+#   QoreAOTClassRuntime executes already-selected class-local initializers;
+#                      codegen selection remains tracked in QoreIRToLLVM.cpp.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
 set(_qcc_format_excluded_sources
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTStringRuntime.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTClassRuntime.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h

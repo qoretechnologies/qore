@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ReceiverEntryTest
+
+class ReceiverEntryTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT receiver-aware forwarding entry", "1.0", \ARGV) {
+        addTestCase("receiver, scalar, reflection and nested-call contracts", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTReceiverEntry.qr";
+        string expected = "receiver-entry: ok\n";
+        assertEq(expected, run((qore, "--exec-mode=ast", source)), "AST reference");
+        TmpDir dir("qore-receiver-entry-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ",
+                "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY");
+                assertEq(enabled, generated.find("qore_rt_bind_receiver_int_method_v3") >= 0,
+                    "separate receiver companion binding");
+                if (enabled) {
+                    *list<*string> body = regex_extract(generated,
+                        "(?s)define [^\n]*@ReceiverEntry__forward[^\n]*_receiver_int_v1\\([^\n]*\n(.*?)\n\\}");
+                    assertTrue(!!body, "whole forwarding body emitted with explicit inputs");
+                    assertEq(-1, (body[0] ?? "").find("qore_rt_load_local_aot"),
+                        "callee does not reload its receiver or argument through TLS");
+                    assertRegex("qore_rt_check_stack_v2", body[0] ?? "", "explicit runtime context stack guard");
+                    assertRegex("qore_rt_get_native_entry_slots_v2", body[0] ?? "",
+                        "location slots use the explicit runtime context");
+                    assertRegex("store ptr @[^\n]*qore_aot_loc", body[0] ?? "",
+                        "companion stores image-owned locations even without DWARF");
+                    assertRegex("_descriptor_v3 = internal constant", generated,
+                        "immutable forwarding entry, slot and location descriptor");
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_RECEIVER_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_LEAF_PREFLIGHT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_FORWARD_CLASS_CONTEXT_CACHE=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 "
+                            + "QORE_DISABLE_AOT_NATIVE_FORWARD_LEAF=1 "
+                            + "QORE_DISABLE_AOT_MATCHED_SCALAR_FALLBACK=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ",
+                        "QORE_DISABLE_IR_CONTEXT_ELISION=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

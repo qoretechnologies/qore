@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class ExactScalarCoerceTest
+
+class ExactScalarCoerceTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("AOT exact scalar assignment coercion", "1.0", \ARGV) {
+        addTestCase("exact values, representation fallback and visible assignment", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/AOTExactScalarCoerce.qr";
+        string expected = "exact-scalar-coerce: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-exact-scalar-coerce-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING=1 ",
+                "QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                assertRegex("(?:call|invoke) i64 @qore_rt_coerce_value_aot", ir,
+                    "fixture exercises the guarded AOT helper");
+                assertRegex("(?:call|invoke) void @qore_rt_assign_local_no_coerce_eval_weak_aot", ir,
+                    "non-exact declarations retain the general helper");
+                string selected = "(?:call|invoke) (?:void|i32) @qore_rt_assign_exact_scalar_local_aot(?:_throwing)?_v[12]";
+                if (prefix.startsWith("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_LOWERING")) {
+                    assertFalse(regex(ir, selected), "disabled lowering retains general publication");
+                } else {
+                    assertRegex(selected, ir, "exact declarations select guarded scalar publication");
+                }
+                string witness = "(?:call|invoke) i32 @qore_rt_assign_exact_scalar_local_aot(?:_throwing)?_v2";
+                bool report = !prefix.startsWith("QORE_DISABLE_AOT_EXACT_SCALAR_STORE_");
+                assertEq(report, regex(ir, witness), "only enabled parameter lowering requests a publication result");
+                foreach string runtime in (("", "QORE_DISABLE_AOT_EXACT_SCALAR_COERCE=1 ",
+                        "QORE_DISABLE_AOT_EXACT_SCALAR_STORE=1 ",
+                        "QORE_DISABLE_AOT_EXACT_SCALAR_STORE_RELOAD=1 ",
+                        "QORE_DISABLE_AOT_EXACT_SCALAR_COERCE=1 QORE_DISABLE_AOT_EXACT_SCALAR_STORE=1 ")) {
+                    assertEq(expected, run((executable,), runtime), prefix + level + runtime);
+                }
+            }
+        }
+    }
+}

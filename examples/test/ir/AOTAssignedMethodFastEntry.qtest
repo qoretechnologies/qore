@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AssignedMethodFastEntryTest
+
+class AssignedMethodFastEntryTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("assigned method fast entries", "1.0", \ARGV) {
+        addTestCase("declared receiver class and guarded fallback", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_JIT_SYNC_COMPILE=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        TmpDir dir("qore-assigned-method-");
+        string source = get_script_dir() + "/AOTAssignedMethodFastEntry.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertTrue(expected.startsWith("0:7:381:381:3033:"), expected);
+        assertTrue(regex(expected, "0:7:381:381:3033:"
+            + "PSEUDO-METHOD-DOES-NOT-EXIST:PSEUDO-METHOD-DOES-NOT-EXIST:"
+            + "REJECTED-ARGUMENT\n"), expected);
+        assertTrue(expected.endsWith("assigned-return-contracts: ok\n"), expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        foreach string prefix in (("", "QORE_AOT_EH=1 ",
+                "QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY=1 ",
+                "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string exe = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", exe, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool enabled = !prefix.startsWith("QORE_DISABLE_");
+                if (level == "-O3") {
+                    foreach string name in (("assignedDirect", "assignedInvoke",
+                            "assignedReturn", "assignedReturnInvoke", "assignedFloat", "assignedBool")) {
+                        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                            + "_[^\n]*\n(.*?)\n\\}");
+                        assertTrue(!!body, name + " LLVM definition");
+                        assertEq(enabled, regex(body[0] ?? "",
+                            "qore_rt_object_has_exact_aot_target_class"),
+                            name + " exact-class guarded native path " + prefix + level);
+                    }
+                }
+                assertEq(expected, run((exe,)), prefix + level);
+                assertEq(expected, run((exe,), "QORE_DISABLE_IR_CONTEXT_ELISION=1 "),
+                    "runtime context control " + prefix + level);
+            }
+        }
+    }
+}

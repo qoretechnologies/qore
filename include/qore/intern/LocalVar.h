@@ -44,6 +44,7 @@
 #include "qore/intern/qore_debug_narrowing.h"
 
 #include <atomic>
+#include <cstdlib>
 #include <memory>
 
 // defined in lib/QoreTypeInfo.cpp; declared in "qore/intern/QoreTypeInfo.h"
@@ -262,6 +263,132 @@ public:
         block_cleared = false;
     }
 
+    //! Replace an immediate scalar after the caller proves ordinary auto declaration admission.
+    /** @param value borrowed immediate input; all other representations are rejected
+        @param direct_store copy the exact primitive, or use the diagnostic generic scalar store
+        @return true after publication to this slot, false without side effects on a live-state miss
+        @note This does not check declaration metadata. The caller must have admitted a noncaptured,
+        writable, non-substituted ordinary auto local, and must own this slot's invocation lifetime.
+        Assignment, finalization, clearing, storage type and ownership flags remain live checks.
+    */
+    // Keep the live-state operation in its caller: outlining duplicates input
+    // admission in the legacy path and adds a call to the prepared hot path.
+    DLLLOCAL __attribute__((always_inline)) bool tryAssignAOTScalarValue(QoreValue value, bool direct_store) {
+        assert(local_var && !frame_boundary);
+        if ((!value.isInt() && !value.isFloat() && !value.isBool())
+                || finalized || block_cleared || !val.assigned || val.static_assignment || val.fixed_type
+                || (val.type != QV_Int && val.type != QV_Float && val.type != QV_Bool)) {
+            return false;
+        }
+        // Neither the admitted input nor the current storage can own a node.
+        // Preserve every assignment/ownership flag and publish the actual slot.
+        if (direct_store) {
+            if (value.isInt()) {
+                val.v.i = value.getInt();
+                val.type = QV_Int;
+            } else if (value.isFloat()) {
+                val.v.f = value.getDouble();
+                val.type = QV_Float;
+            } else {
+                assert(value.isBool());
+                val.v.b = value.getBool();
+                val.type = QV_Bool;
+            }
+            return true;
+        }
+        AbstractQoreNode* removed = val.assignAssume(value);
+        assert(!removed);
+        (void)removed;
+        return true;
+    }
+
+    //! Publish an exact scalar to already assigned fixed primitive storage.
+    /** The caller must first admit the live ordinary exact-scalar declaration.
+        A miss leaves all state unchanged; no owning value can be replaced here.
+        @param value borrowed pre-coerced immediate scalar
+        @return true after publication, false without side effects for ordinary fallback
+    */
+    DLLLOCAL bool tryAssignAOTExactScalarValue(QoreValue value) {
+        assert(local_var && !frame_boundary);
+        if (finalized || block_cleared || !val.assigned || val.static_assignment || !val.fixed_type) {
+            return false;
+        }
+        if (val.type == QV_Int && value.isInt()) {
+            val.v.i = value.getInt();
+        } else if (val.type == QV_Float && value.isFloat()) {
+            val.v.f = value.getDouble();
+        } else if (val.type == QV_Bool && value.isBool()) {
+            val.v.b = value.getBool();
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    //! Refresh a scalar cache only when its representation still matches the live slot exactly.
+    /** @param cache borrowed boxed cache, checked against the current primitive storage
+        @param tracker current reload owner; must contain only NOTHING or an immediate scalar
+        @param deferred previous reload owner; must contain only NOTHING or an immediate scalar
+        @param valid_epoch completed reload epoch, published after the tracker rotation
+        @param epoch caller's current invalidation epoch
+        @return true after the ordinary reload state transition, false without changing any state
+        @note This never assumes the callee or caller cleanup is pure. It reads the actual slot and
+        admits only exact immediate int/float/bool representations. References, nodes, mismatches,
+        cleared storage and any potentially owning cleanup retain ordinary evaluation/destruction.
+    */
+    DLLLOCAL __attribute__((always_inline)) bool tryReloadAOTScalarValue(uint64_t* cache,
+            uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch) const {
+        assert(local_var && !frame_boundary && cache && tracker && deferred && valid_epoch);
+        if (finalized || block_cleared || !val.assigned) {
+            return false;
+        }
+        QoreSimpleValue raw;
+        raw.setRawBits(*cache);
+        QoreValue cached(raw);
+        switch (val.type) {
+            case QV_Int:
+                if (!cached.isInt() || cached.getInt() != val.v.i) {
+                    return false;
+                }
+                break;
+            case QV_Float: {
+                if (!cached.isFloat()) {
+                    return false;
+                }
+                double value = cached.getDouble();
+                // Bit equality preserves signed zero and NaN payloads without
+                // allocating the wide/tag-colliding representations.
+                if (memcmp(&value, &val.v.f, sizeof(value))) {
+                    return false;
+                }
+                break;
+            }
+            case QV_Bool:
+                if (!cached.isBool() || cached.getBool() != val.v.b) {
+                    return false;
+                }
+                break;
+            default:
+                return false;
+        }
+        auto immediate = [](uint64_t bits) {
+            QoreSimpleValue raw;
+            raw.setRawBits(bits);
+            QoreValue value(raw);
+            return !bits || value.isInt() || value.isFloat() || value.isBool();
+        };
+        uint64_t old_tracker = *tracker;
+        if (!immediate(old_tracker) || !immediate(*deferred)) {
+            return false;
+        }
+        // Evaluation would return these exact bits without ownership. Both old
+        // owners are also non-owning, so publication/rotation cannot reenter.
+        *tracker = cached.rawBits();
+        *deferred = old_tracker;
+        *valid_epoch = epoch;
+        return true;
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
         //    val.getTypeName());
@@ -452,6 +579,20 @@ public:
             return nullptr;
         }
         return val.get<ReferenceNode>()->refRefSelf();
+    }
+
+    //! Read one assigned integer without resolving references or entering user code.
+    /** @param result receives the full-width integer only on success
+        @return false for unassigned or reference-backed storage; the caller must use ordinary evaluation
+        @note Each call takes the normal capture read lock; this does not cache a captured value.
+    */
+    DLLLOCAL bool tryReadNativeInt(int64_t& result) const {
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
+        if (!val.assigned || val.getType() != NT_INT) {
+            return false;
+        }
+        result = val.getAsBigInt();
+        return true;
     }
 
     DLLLOCAL const void* getLValueId() const;
@@ -962,6 +1103,176 @@ public:
         }
         return val->getLValue(lvh, for_remove, initial_assignment) ? LocalVarLValueLookup::Error
             : LocalVarLValueLookup::Found;
+    }
+
+    //! Declaration-only admission for ordinary AOT scalar replacement.
+    /** @return true for a writable, noncaptured, non-substituted ordinary auto declaration
+        @note These fields are set during parsing or AOT loading before an ordinary body executes.
+        Signature replacement affects parameters, not admitted body locals; fallback type retargeting
+        leaves the untyped auto descriptor unchanged. No runtime input or storage state is examined.
+    */
+    DLLLOCAL bool isAOTScalarStoreDeclaration() const {
+        return !closure_use && !is_self && !is_top_level && !read_only && !no_narrowing
+            && typeInfo == autoTypeInfo && !refTypeInfo
+            && !type_info_needs_substitution && !ref_type_info_needs_substitution;
+    }
+
+    //! Replaces an ordinary auto local's scalar without generic lvalue preparation.
+    /** Only immediate int/float/bool inputs and already assigned scalar storage
+        are admitted. No reference, filter, weak normalization, replaced node,
+        closure lock or recursive-reference scan can be involved. The actual
+        thread-local slot is updated, so subsequent reflection sees the value.
+        @param value borrowed immediate scalar input
+        @param direct_store use representation-proven primitive extraction;
+        false retains generic scalar storage for diagnostic comparisons
+        @param prepared_slot optional same-thread, same-invocation body storage;
+        the compiler must acquire it after instantiation and never retain it
+        beyond the invocation. nullptr performs the ordinary live lookup.
+        @return true if stored without an exception, false without side effects
+        when ordinary assignment is required
+    */
+    DLLLOCAL bool tryAssignAOTScalarValue(QoreValue value, bool direct_store,
+            LocalVarValue* prepared_slot) const {
+        if (!isAOTScalarStoreDeclaration()
+                || (!value.isInt() && !value.isFloat() && !value.isBool())) {
+            return false;
+        }
+        LocalVarValue* slot = prepared_slot ? prepared_slot : get_var();
+        assert(!prepared_slot || (prepared_slot->local_var == this && !prepared_slot->frame_boundary));
+        return slot && slot->tryAssignAOTScalarValue(value, direct_store);
+    }
+
+    //! Compile-time selection for ordinary exact-scalar publication; runtime admission repeats this check.
+    /** @return true for a writable, uncaptured, nonsubstituted canonical scalar declaration
+        @note This selects a helper, not permission to omit live storage or representation checks.
+    */
+    DLLLOCAL bool isAOTExactScalarStoreDeclaration() const {
+        return !closure_use && !is_self && !is_top_level && !read_only && !no_narrowing && !refTypeInfo
+            && !type_info_needs_substitution && !ref_type_info_needs_substitution
+            && (typeInfo == bigIntTypeInfo || typeInfo == floatTypeInfo || typeInfo == boolTypeInfo);
+    }
+
+    //! Admission for a pre-coerced integer-list publication to ordinary body storage.
+    /** @return true for an uncaptured, writable integer-list declaration without substitution or references
+        @note This does not prove value identity or slot lifetime; the publication helper checks live storage.
+    */
+    DLLLOCAL bool isAOTIntListStoreDeclaration() const {
+        return !closure_use && !is_self && !is_top_level && !read_only && !no_narrowing && !refTypeInfo
+            && !type_info_needs_substitution && !ref_type_info_needs_substitution
+            && QoreTypeInfo::getComplexListValueType(typeInfo) == bigIntTypeInfo;
+    }
+
+    //! Replace an exact scalar without generic lvalue preparation, retaining runtime visibility.
+    /** Live declaration and storage checks exclude references, captures, filters,
+        substituted types, weak values and owning storage. The current thread's
+        actual slot is looked up on every call; no parameter binding is cached.
+        @param value borrowed pre-coerced immediate scalar
+        @return true after publication, false without side effects for ordinary fallback
+    */
+    DLLLOCAL bool tryAssignAOTExactScalarValue(QoreValue value) const {
+        if (!isAOTExactScalarStoreDeclaration()
+                || !((typeInfo == bigIntTypeInfo && value.isInt())
+                    || (typeInfo == floatTypeInfo && value.isFloat())
+                    || (typeInfo == boolTypeInfo && value.isBool()))) {
+            return false;
+        }
+        LocalVarValue* slot = get_var();
+        return slot && slot->tryAssignAOTExactScalarValue(value);
+    }
+
+    //! Prepares only fixed declaration metadata for an ordinary AOT class-local initializer.
+    /** Called after parsing, within the owning Program invocation. The returned
+        constraint is borrowed and immutable; neither slot state nor object acceptance
+        is cached. Substituted, captured, reference and special locals are excluded.
+        @return single unfiltered required-class constraint, or nullptr for ordinary fallback
+    */
+    DLLLOCAL const QoreClass* getAOTClassLocalConstraint() const {
+        if (closure_use || is_self || is_top_level || name == "self"
+                || type_info_needs_substitution || ref_type_info_needs_substitution) {
+            return nullptr;
+        }
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        if (!QoreTypeInfo::getUniqueReturnClass(ti) || QoreTypeInfo::isComplex(ti)
+                || QoreTypeInfo::isReference(ti)) {
+            return nullptr;
+        }
+        return ti->getUnfilteredRequiredClassConstraint();
+    }
+
+    //! Attempts an admitted required-class initializer without generic lvalue setup.
+    /** The compiler must have proved a normal initial required-class assignment.
+        Captured, self, substituted, finalized, static and already-assigned slots
+        are not handled. The empty plain slot has no replaced value or recursive
+        root requiring lvalue cleanup. Type/access validation and real-reference
+        bookkeeping are identical to the normal assignment path.
+        @param value borrowed, already weak-normalized input
+        @param result holder containing NOTHING, receiving the owned stored value;
+        nullptr requests a borrowed result and admits only unchanged strong-object
+        storage without filtering (the caller must independently pin the value)
+        @param xsink exception sink
+        @param prepared_slot optional same-invocation AOT body-local slot; its
+        storage must remain instantiated until all uses of the handle end
+        @return true if handled (including a type error), false for ordinary fallback
+    */
+    DLLLOCAL bool tryAssignInitialClassValue(QoreValue value, ValueHolder* result, ExceptionSink* xsink,
+            LocalVarValue* prepared_slot = nullptr) const {
+        assert(!*xsink && (!result || (*result)->isNothing()));
+        if (closure_use || is_self || name == "self"
+                || type_info_needs_substitution || ref_type_info_needs_substitution) {
+            return false;
+        }
+        assert(!prepared_slot || prepared_slot->local_var == this);
+        LocalVarValue* slot = prepared_slot ? prepared_slot : get_var();
+        if (!slot || slot->finalized || slot->val.assigned || slot->val.static_assignment) {
+            return false;
+        }
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        assert(QoreTypeInfo::getUniqueReturnClass(ti) && !QoreTypeInfo::isComplex(ti)
+            && !QoreTypeInfo::isReference(ti));
+        static constinit QoreEnvFlag fast_class_accept_env("QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH");
+        const bool fast_class_accept = !fast_class_accept_env.get();
+        static constinit QoreEnvFlag class_node_store_env("QORE_DISABLE_AOT_CLASS_NODE_STORE");
+        const bool class_node_store = !class_node_store_env.get();
+        bool accepted = fast_class_accept && ti->acceptsRequiredClassValueWithoutFilter(value);
+        if (accepted && class_node_store && !slot->val.fixed_type) {
+            // Acceptance proves a strong object, not just a pointer-tagged value.
+            // The checks above also prove an empty, nonfixed, owning slot. Its
+            // infallible initializer consumes the reference directly; there is
+            // no old value or temporary owner to discard. Keep real-reference
+            // bookkeeping and the optional second owner for the result.
+            QoreObject* object = value.get<QoreObject>();
+            slot->val.assignInitialNode(object->objectRefSelf());
+            if (!*xsink && result) {
+                // This is initialization, not replacement: the result holder
+                // contains NOTHING. Keep its RAII ownership without discarding
+                // an empty value through ValueHolder::operator=().
+                **result = QoreValue(object->objectRefSelf());
+            }
+            return true;
+        }
+        // A borrowed cache must contain precisely the already-pinned input.
+        // Filters, fixed storage and unadmitted types keep the owned-result path.
+        if (!result) {
+            return false;
+        }
+        ValueHolder stored(value.refSelf(), xsink);
+        if (!accepted) {
+            QoreTypeInfo::acceptAssignment(ti, "<lvalue>", *stored, xsink);
+        }
+        if (*xsink) {
+            return true;
+        }
+        // assignAssume consumes the value and retains the normal real-reference
+        // accounting. There can be no old node in this unassigned class slot.
+        AbstractQoreNode* removed = slot->val.assignAssume(*stored);
+        assert(!removed);
+        if (removed) {
+            removed->deref(xsink);
+        }
+        if (!*xsink) {
+            **result = slot->val.getReferencedValue();
+        }
+        return true;
     }
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh) {

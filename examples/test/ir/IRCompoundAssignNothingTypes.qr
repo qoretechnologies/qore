@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Compound assignments into auto locals that have no value (and some with a value), printing the type and value of
+# each result; IRCompoundAssignNothingTypes.qtest compares the output of each execution mode with AST execution
+
+%modern
+
+hashdecl CaPoint {
+    int x = 1;
+    int y = 2;
+}
+
+class CaObj {
+    public {
+        int a = 1;
+        int b = 2;
+    }
+}
+
+# returns a description of a value: its full type and value
+string sub ca_desc(auto v) {
+    if (v.typeCode() == NT_OBJECT) {
+        return sprintf("%s:%s{a:%y,b:%y}", v.fullType(), v.className(), v.a, v.b);
+    }
+    if (v.typeCode() == NT_BINARY) {
+        return sprintf("%s:%s", v.fullType(), v.toHex());
+    }
+    if (v.typeCode() == NT_LIST || v.typeCode() == NT_HASH) {
+        # the element and member types of containers are part of the description
+        string parts = foldl $1 + "," + $2, (map ca_desc($1), (v.typeCode() == NT_LIST ? v : v.values())) ?? "";
+        return sprintf("%s:%y[%s]", v.fullType(), v, parts);
+    }
+    return sprintf("%s:%y", v.fullType(), v);
+}
+
+# the right-hand side values
+list<auto> sub ca_values() {
+    hash<string, int> typed_hash = {"a": 1, "b": 2};
+    list<int> typed_list = (1, 2);
+    list<hash<CaPoint>> hashdecl_list = (<CaPoint>{}, <CaPoint>{"x": 3},);
+    return (
+        <CaPoint>{"x": 5},
+        typed_hash,
+        typed_list,
+        hashdecl_list,
+        new CaObj(),
+        "abc",
+        "7",
+        5,
+        0,
+        2.5,
+        3.5n,
+        True,
+        2026-11-01T10:00:00Z,
+        1D,
+        <bead>,
+        {"a": 1},
+        (1, "two"),
+        NOTHING,
+        NULL,
+    );
+}
+
+# the operators applied to an auto local that has no value
+auto sub ca_add(auto r) { auto v; v += r; return v; }
+auto sub ca_sub(auto r) { auto v; v -= r; return v; }
+auto sub ca_mul(auto r) { auto v; v *= r; return v; }
+auto sub ca_div(auto r) { auto v; v /= r; return v; }
+auto sub ca_mod(auto r) { auto v; v %= r; return v; }
+auto sub ca_and(auto r) { auto v; v &= r; return v; }
+auto sub ca_or(auto r) { auto v; v |= r; return v; }
+auto sub ca_xor(auto r) { auto v; v ^= r; return v; }
+auto sub ca_shl(auto r) { auto v; v <<= r; return v; }
+auto sub ca_shr(auto r) { auto v; v >>= r; return v; }
+
+# the operators in a try block, where an operation that can raise an exception is lowered with an exception edge
+auto sub ca_add_try(auto r) { auto v; try { v += r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_sub_try(auto r) { auto v; try { v -= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_mul_try(auto r) { auto v; try { v *= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_div_try(auto r) { auto v; try { v /= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_mod_try(auto r) { auto v; try { v %= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_and_try(auto r) { auto v; try { v &= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_or_try(auto r) { auto v; try { v |= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_xor_try(auto r) { auto v; try { v ^= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_shl_try(auto r) { auto v; try { v <<= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+auto sub ca_shr_try(auto r) { auto v; try { v >>= r; } catch (hash<ExceptionInfo> ex) { rethrow; } return v; }
+
+# += applied to locals of other declared types that have no value
+auto sub ca_add_any(auto r) { any v; v += r; return v; }
+auto sub ca_add_hash(auto r) { *hash v; v += r; return v; }
+auto sub ca_add_hash_auto(auto r) { *hash<auto> v; v += r; return v; }
+auto sub ca_add_list(auto r) { *list v; v += r; return v; }
+auto sub ca_add_list_auto(auto r) { *list<auto> v; v += r; return v; }
+
+# += applied to a hash member or list element that has no value
+auto sub ca_add_key_auto(auto r) { hash<auto> h = {}; h.k += r; return h.k; }
+auto sub ca_add_key_plain(auto r) { hash h = {}; h.k += r; return h.k; }
+auto sub ca_add_key_dyn(auto r) { hash<auto> h = {}; string k = "k"; h{k} += r; return h{k}; }
+auto sub ca_add_elem_auto(auto r) { list<auto> l = (); l[0] += r; return l[0]; }
+auto sub ca_add_elem_plain(auto r) { list l = (); l[0] += r; return l[0]; }
+
+# the value of the compound assignment expression itself
+auto sub ca_add_expr(auto r) { auto v; return v += r; }
+
+# a local that is assigned no value on one path (ex: Mapper: v += rec{name} ?? NOTHING)
+auto sub ca_add_cond(hash<auto> rec, string name) {
+    auto v;
+    if (rec.skip) {
+        v = 0;
+    }
+    v += rec{name} ?? NOTHING;
+    return v;
+}
+
+# as above in a try block
+auto sub ca_add_cond_try(hash<auto> rec, string name) {
+    auto v;
+    try {
+        if (rec.skip) {
+            v = 0;
+        }
+        v += rec{name} ?? NOTHING;
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+    return v;
+}
+
+# the operators applied in a loop: the local has no value in the first iteration only
+auto sub ca_add_loop(auto r) {
+    auto v;
+    for (int i = 0; i < 2; ++i) {
+        v += r;
+    }
+    return v;
+}
+
+# the operators applied to an auto local with a value
+auto sub ca_add_hashdecl_merge() { auto v = <CaPoint>{}; v += {"x": 9}; return v; }
+auto sub ca_add_typed_list_push() { auto v = cast<list<int>>((1,)); v += 2; return v; }
+auto sub ca_add_typed_list_merge() { auto v = cast<list<int>>((1,)); v += cast<list<int>>((2, 3)); return v; }
+auto sub ca_add_typed_hash_merge() { hash<string, int> h = {"a": 1}; auto v = h; v += {"b": 2}; return v; }
+auto sub ca_add_string() { auto v = "x"; v += 5; return v; }
+auto sub ca_sub_hashdecl_key() { auto v = <CaPoint>{}; v -= "x"; return v; }
+auto sub ca_mul_number() { auto v = 2n; v *= 3; return v; }
+auto sub ca_mul_zero_float() { auto v = 2.5; v *= 0; return v; }
+
+# an error from the right-hand side value, or a type error, is reported as the exception
+string sub ca_try(code c, auto r) {
+    try {
+        return ca_desc(c(r));
+    } catch (hash<ExceptionInfo> ex) {
+        return "exception:" + ex.err;
+    }
+}
+
+list<list<auto>> ca_ops = (
+    ("+=", \ca_add()),
+    ("-=", \ca_sub()),
+    ("*=", \ca_mul()),
+    ("/=", \ca_div()),
+    ("%=", \ca_mod()),
+    ("&=", \ca_and()),
+    ("|=", \ca_or()),
+    ("^=", \ca_xor()),
+    ("<<=", \ca_shl()),
+    (">>=", \ca_shr()),
+    ("+= expr", \ca_add_expr()),
+    ("+= loop", \ca_add_loop()),
+    ("+= try", \ca_add_try()),
+    ("-= try", \ca_sub_try()),
+    ("*= try", \ca_mul_try()),
+    ("/= try", \ca_div_try()),
+    ("%= try", \ca_mod_try()),
+    ("&= try", \ca_and_try()),
+    ("|= try", \ca_or_try()),
+    ("^= try", \ca_xor_try()),
+    ("<<= try", \ca_shl_try()),
+    (">>= try", \ca_shr_try()),
+    ("+= hash<auto> key", \ca_add_key_auto()),
+    ("+= hash key", \ca_add_key_plain()),
+    ("+= hash<auto> dynamic key", \ca_add_key_dyn()),
+    ("+= list<auto> element", \ca_add_elem_auto()),
+    ("+= list element", \ca_add_elem_plain()),
+    ("+= any", \ca_add_any()),
+    ("+= *hash", \ca_add_hash()),
+    ("+= *hash<auto>", \ca_add_hash_auto()),
+    ("+= *list", \ca_add_list()),
+    ("+= *list<auto>", \ca_add_list_auto()),
+);
+
+# each case is run several times, so that tiered execution compiles the functions
+for (int pass = 0; pass < 3; ++pass) {
+    list<auto> values = ca_values();
+    foreach list<auto> op in (ca_ops) {
+        foreach auto r in (values) {
+            string line = sprintf("%s %s => %s", op[0], ca_desc(r), ca_try(op[1], r));
+            if (!pass) {
+                printf("%s\n", line);
+            }
+        }
+    }
+    list<string> lines = (
+        "cond present => " + ca_desc(ca_add_cond({"p": <CaPoint>{}}, "p")),
+        "cond missing => " + ca_desc(ca_add_cond({}, "p")),
+        "cond try present => " + ca_desc(ca_add_cond_try({"p": <CaPoint>{}}, "p")),
+        "cond try missing => " + ca_desc(ca_add_cond_try({}, "p")),
+        "cond assigned => " + ca_try(auto sub (auto r) { return ca_add_cond({"skip": True, "p": r}, "p"); }, 4),
+        "hashdecl merge => " + ca_try(\ca_add_hashdecl_merge(), NOTHING),
+        "typed list push => " + ca_try(\ca_add_typed_list_push(), NOTHING),
+        "typed list merge => " + ca_try(\ca_add_typed_list_merge(), NOTHING),
+        "typed hash merge => " + ca_try(\ca_add_typed_hash_merge(), NOTHING),
+        "string append => " + ca_try(\ca_add_string(), NOTHING),
+        "hashdecl key removal => " + ca_try(\ca_sub_hashdecl_key(), NOTHING),
+        "number multiply => " + ca_try(\ca_mul_number(), NOTHING),
+        "float zero multiply => " + ca_try(\ca_mul_zero_float(), NOTHING),
+    );
+    if (!pass) {
+        map printf("%s\n", $1), lines;
+    }
+}

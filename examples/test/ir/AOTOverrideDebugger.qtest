@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class OverrideDebuggerTest
+
+#! Inlined AOT method bodies (exact base class and scalar overrides) behave as ordinary method calls
+/** A debugger attached before or during a loop sees the inlined methods' function events, and other threads' call
+    stack readers see the frames of inlined overrides; without a debugger the inline paths stay selected.
+*/
+class OverrideDebuggerTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("inlined AOT methods honor debuggers and stack readers", "1.0", \ARGV) {
+        addTestCase("debugger attached before and during inlined method calls", \checkDebugger());
+        addTestCase("concurrent readers of inlined override frames", \checkReaders());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private string body(string ir, string name) {
+        *list<*string> found = regex_extract(ir,
+            "(?s)define [^\n]*@" + name + "_[^\n]*\\(ptr %ctx, ptr %xsink\\)[^\n]*\n(.*?)\n\\}");
+        assertTrue(!!found, name + " normal LLVM entry");
+        return found[0] ?? "";
+    }
+    private static int count(string text, string pattern) {
+        return (select text.split("\n"), regex($1, pattern)).size();
+    }
+
+    #! checks the inline paths of a method call site: base fast entry and override alternatives
+    private checkSite(string fn, string label, bool overrides, bool hoisted) {
+        # the exact base class and each override have a debugger gate, loaded at every call
+        int gates = overrides ? 3 : 1;
+        assertEq(gates, count(fn, "call ptr @qore_rt_get_aot_method_debugger_gate_v1"), label + " gates");
+        assertEq(gates, count(fn, "load atomic ptr, ptr %method_debugger_gate[0-9]* monotonic"),
+            label + " live gate loads");
+        assertEq(overrides, regex(fn, "\nscalar_override[0-9]*:"), label + " inline overrides");
+        assertEq(overrides && hoisted, regex(fn, "call ptr @qore_rt_get_aot_override_class_v1"),
+            label + " hoisted override admission");
+        assertEq(overrides && !hoisted, regex(fn, "call i32 @qore_rt_object_has_exact_aot_override_v1"),
+            label + " per-call override admission");
+        # each inlined override keeps its frame, even with a body that cannot raise an exception
+        assertEq(overrides ? 2 : 0, count(fn, "call void @qore_rt_push_native_inline_call_frame_aot"),
+            label + " override frames");
+        assertEq(overrides ? 2 : 0, count(fn, "call void @qore_rt_pop_native_call_frame"),
+            label + " override frame pops");
+    }
+
+    private checkDebugger() {
+        string source = get_script_dir() + "/AOTOverrideDebugger.qr";
+        string expected = "override-debugger: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-override-debugger-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT=1 ",
+                "QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST=1 ", "QORE_DISABLE_AOT_PINNED_OVERRIDE_RECEIVER=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool overrides = prefix != "QORE_DISABLE_AOT_POLYMORPHIC_SCALAR_IMPORT=1 ";
+                bool hoist = prefix != "QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST=1 ";
+                foreach string name in (("ovIntCall", "ovFloatCall")) {
+                    checkSite(body(ir, name), name + " " + label, overrides, False);
+                }
+                foreach string name in (("ovIntLoop", "ovFloatLoop", "ovIntLoopAttach", "ovFloatLoopAttach")) {
+                    checkSite(body(ir, name), name + " " + label, overrides, hoist);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_ADMISSION_CACHE=1 ",
+                        "QORE_DISABLE_AOT_NATIVE_METHOD_DEFERRED_CONTEXT=1 ",
+                        "QORE_DISABLE_AOT_INLINE_RECEIVER_VALIDITY=1 ")) {
+                    assertEq(expected, run((executable,), runtime), label + " " + runtime);
+                }
+            }
+        }
+    }
+
+    private checkReaders() {
+        string source = get_script_dir() + "/AOTOverrideFrameReaders.qr";
+        string expected = "override-frame-readers: ok\n";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source)), mode);
+        }
+        TmpDir dir("qore-override-readers-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string label = prefix + level;
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                bool hoist = prefix != "QORE_DISABLE_AOT_SCALAR_OVERRIDE_GUARD_HOIST=1 ";
+                foreach string name in (("overrideIntBatch", "overrideFloatBatch")) {
+                    checkSite(body(ir, name), name + " " + label, True, hoist);
+                }
+                foreach string runtime in (("", "QORE_DISABLE_AOT_NATIVE_METHOD_ENTRY=1 ")) {
+                    assertEq(expected, run((executable,), runtime), label + " " + runtime);
+                }
+            }
+        }
+    }
+}

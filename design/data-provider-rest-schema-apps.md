@@ -22,11 +22,10 @@ existing ports taught that the next one should not have to rediscover.
 
 ## Choosing a path
 
-| Use the schema-driven path when | Use the hand-written path when |
-|---|---|
-| The vendor publishes a machine-readable OpenAPI 3 description and maintains it | There is no published schema, or it is written by hand and lags the API |
-| The API is large enough that reproducing request and response contracts by hand is real, recurring work | The application exposes a handful of operations |
-| Options and output types matter more than a bespoke provider shape | The integration needs a bespoke provider shape that is neither an action nor a record table |
+|!Use the schema-driven path when|!Use the hand-written path when
+|The vendor publishes a machine-readable OpenAPI 3 description and maintains it|There is no published schema, or it is written by hand and lags the API
+|The API is large enough that reproducing request and response contracts by hand is real, recurring work|The application exposes a handful of operations
+|Options and output types matter more than a bespoke provider shape|The integration needs a bespoke provider shape that is neither an action nor a record table
 
 Record-based CRUD and server-side search expressions are **not** a reason to choose the hand-written path.
 They are built once in `RestSchemaActions` and declared per resource; see *Record Tables* below.
@@ -42,11 +41,10 @@ The paths are not exclusive, and no application is purely schema-driven. What th
 the API-call action surface. Everything else in a schema-driven application is ordinary hand-written
 code:
 
-| Generated from the schema | Hand-written |
-|---|---|
-| Action options, output types, and the transport request each action sends | The REST client module and its connection (`qlib/<App>RestClient.qm`) |
-| Allowed values, requiredness and enums, from the schema's own declarations | `registerApp()`, the app info, the logo, the app groups |
-| The dropdown queries, once a manifest names the action and fields that back them | Every `DPAT_EVENT` provider, its webhook signature verification and its event data types |
+|!Generated from the schema|!Hand-written
+|Action options, output types, and the transport request each action sends|The REST client module and its connection (`qlib/<App>RestClient.qm`)
+|Allowed values, requiredness and enums, from the schema's own declarations|`registerApp()`, the app info, the logo, the app groups
+|The dropdown queries, once a manifest names the action and fields that back them|Every `DPAT_EVENT` provider, its webhook signature verification and its event data types
 
 ## Application layout
 
@@ -85,13 +83,12 @@ this page is inside the module, and because **all five applications in the first
 without all five of them** - the module loaded, every test passed, and the live verification against
 each vendor's API worked, because none of these is on the path a `%requires` takes:
 
-| Registration | Where | What breaks without it |
-|---|---|---|
-| Connection scheme | `qlib/ConnectionProvider/ConnectionSchemeCache.qc` → `SchemeMap` | the scheme is unknown to the index, so the app is dropped from it |
-| Provider factory | `qlib/DataProvider/DataProvider.qc` → `FactoryMap` | the module loads but the app never appears in the apps list |
-| Presentation catalog | `qlib/<Module>/i18n/data-provider.<base64 app name>/root.json` | `Presentation.qtest` fails; the app has no translatable strings |
-| Module list | `doxygen/lang/120_modules.dox.tmpl` | the module is missing from the published module index |
-| Release note | `doxygen/lang/900_release_notes.dox.tmpl` | the new module is unannounced |
+|!Registration|!Where|!What breaks without it
+|Connection scheme|`qlib/ConnectionProvider/ConnectionSchemeCache.qc` → `SchemeMap`|the scheme is unknown to the index, so the app is dropped from it
+|Provider factory|`qlib/DataProvider/DataProvider.qc` → `FactoryMap`|the module loads but the app never appears in the apps list
+|Presentation catalog|`qlib/<Module>/i18n/data-provider.<base64 app name>/root.json`|`Presentation.qtest` fails; the app has no translatable strings
+|Module list|`doxygen/lang/120_modules.dox.tmpl`|the module is missing from the published module index
+|Release note|`doxygen/lang/900_release_notes.dox.tmpl`|the new module is unannounced
 
 Both `doxygen/lang/` lists are maintained in **alphabetical order**; insert in place rather than
 appending. The presentation catalog is generated, never hand-written - see the checklist for the
@@ -131,10 +128,9 @@ what gets committed.
 This is not primarily a repository-size decision. Parsing the full upstream document is the cost being
 avoided:
 
-| | Upstream | Committed | Parse time, full document |
-|---|---|---|---|
-| Paddle | 7.4 MB, 70 paths, 99 operations, 519 component schemas | 569 KB, 237 schemas | ~1 second |
-| Stripe | 416 paths, 1440 component schemas | 2.5 MB, 21 paths, 1022 schemas | ~45 seconds |
+|!|!Upstream|!Committed|!Parse time, full document
+|Paddle|7.4 MB, 70 paths, 99 operations, 519 component schemas|569 KB, 237 schemas|~1 second
+|Stripe|416 paths, 1440 component schemas|2.5 MB, 21 paths, 1022 schemas|~45 seconds
 
 Note how little pruning removes from the component schemas in both cases - around half. Entity types in
 a real API reference each other heavily, so do not expect the closure to be small; the win comes from
@@ -343,11 +339,10 @@ does not follow, so the document stays out of the type graph, and the scans of t
 Measured with `bench/rest-schema-first-output-type.qr` (median of 5 processes, modules from the source tree; hoppy,
 arm64 Linux):
 
-| Action | first output type | other output types | peak RSS |
-|---|---|---|---|
-| Stripe `get-customer` | 4.5 s -> 2.0-2.4 s | 0.64-0.77 s -> 0.39-0.47 s | 428 MB -> 434 MB |
-| Azure OpenAI `create-response` | 0.18 s -> 0.19 s | 1.40-1.48 s -> 1.02-1.10 s | 406 MB -> 400-405 MB |
-| AWS Bedrock `apply-guardrail` | 0.11-0.14 s -> 0.11-0.12 s | 1.38-2.47 s -> 0.86-0.89 s | 377 MB -> 377 MB |
+|!Action|!first output type|!other output types|!peak RSS
+|Stripe `get-customer`|4.5 s -> 2.0-2.4 s|0.64-0.77 s -> 0.39-0.47 s|428 MB -> 434 MB
+|Azure OpenAI `create-response`|0.18 s -> 0.19 s|1.40-1.48 s -> 1.02-1.10 s|406 MB -> 400-405 MB
+|AWS Bedrock `apply-guardrail`|0.11-0.14 s -> 0.11-0.12 s|1.38-2.47 s -> 0.86-0.89 s|377 MB -> 377 MB
 
 A cycle through an opaque reference is never collected, so the rules that keep the document collectable are part of
 the change:
@@ -421,13 +416,12 @@ Measure this over the **exported** operations, not the whole document, and ignor
 a `GET /pages/{id}` has nothing to page. Across the five applications evaluated for #5394 the measurement
 separates cleanly:
 
-| app | exported collection GETs that can be paged |
-|---|---|
-| GitLab | all of them (`page`, `per_page`) |
-| Confluence | all of them (`limit`, `cursor`) |
-| GitHub | all of them (`page`, `per_page`) |
-| Xero | all of them (`page`, `pageSize`), except the four settings listings that have no paging at all |
-| Bitbucket | **3 of 16** - only the three code-search endpoints |
+|!app|!exported collection GETs that can be paged
+|GitLab|all of them (`page`, `per_page`)
+|Confluence|all of them (`limit`, `cursor`)
+|GitHub|all of them (`page`, `per_page`)
+|Xero|all of them (`page`, `pageSize`), except the four settings listings that have no paging at all
+|Bitbucket|**3 of 16** - only the three code-search endpoints
 
 So this is not a general property of published descriptions; it is one vendor's description being wrong in
 one specific way.
@@ -587,10 +581,9 @@ one against each ported application before it ships.
 
 The repair splits by whether a replacement exists:
 
-| | |
-|---|---|
-| A replacement exists | **repoint the action, keep its ID.** `workspaces_get` moved from `GET /workspaces` to `GET /user/workspaces`. That is what an action ID being a product commitment means: the operation behind it changed, the name workflows call did not. |
-| Nothing replaces it | **withdraw the action.** `repositories_get` listed public repositories across all of Bitbucket; Atlassian's guidance is to list the workspaces and ask each one, which another exported action already did. Keeping a name that cannot work is worse than removing it. |
+|!|!
+|A replacement exists|**repoint the action, keep its ID.** `workspaces_get` moved from `GET /workspaces` to `GET /user/workspaces`. That is what an action ID being a product commitment means: the operation behind it changed, the name workflows call did not.
+|Nothing replaces it|**withdraw the action.** `repositories_get` listed public repositories across all of Bitbucket; Atlassian's guidance is to list the workspaces and ask each one, which another exported action already did. Keeping a name that cannot work is worse than removing it.
 
 Repointing an action to a path the committed document does not yet contain is the bootstrap problem again:
 the module cannot load, so the importer cannot read the manifest. Import once from an `ops` file **with the
@@ -628,10 +621,9 @@ unknown, or malformed."*
 So diff the scopes against the superseded app the same way the action surface is diffed, and remember that
 providers differ in whether they check:
 
-| | |
-|---|---|
-| GitLab, Atlassian, Xero | validate against the application's registered scopes; a new scope needs the application re-registered, not a code edit |
-| GitHub | OAuth Apps carry no registered scope list, so a request may ask for more - which is why adding `delete_repo` was safe |
+|!|!
+|GitLab, Atlassian, Xero|validate against the application's registered scopes; a new scope needs the application re-registered, not a code edit
+|GitHub|OAuth Apps carry no registered scope list, so a request may ask for more - which is why adding `delete_repo` was safe
 
 Asking for **fewer** scopes is always safe, which is why Confluence's reduced set is not a problem.
 
@@ -804,11 +796,10 @@ the ping.
 The mechanism is already there and has to be used on **every** path that can complete an authorization,
 because different callers complete it in different places:
 
-|Path|Who calls it|
-|---|---|
-| `RestConnection::processOAuth2TokenResponseImpl()` | the platform, after it exchanges an authorization code - the flow a user actually goes through |
-| `RestClient::getUpdateOptionsAfterLogin()` | a synchronous client performing its own login or refresh |
-| `RestClientIo::getUpdateOptionsAfterLogin()` | the async client, and the connection's ping poller through it |
+|!Path|!Who calls it
+|`RestConnection::processOAuth2TokenResponseImpl()`|the platform, after it exchanges an authorization code - the flow a user actually goes through
+|`RestClient::getUpdateOptionsAfterLogin()`|a synchronous client performing its own login or refresh
+|`RestClientIo::getUpdateOptionsAfterLogin()`|the async client, and the connection's ping poller through it
 
 Whatever they return is persisted onto the connection, so the discovery belongs in one shared method per
 application and each override is three lines. Four rules make it safe:
@@ -884,13 +875,12 @@ a search goes wrong rather than merely slow.** The renderer was written for one 
 joined by AND, OR and NOT into a parenthesised string - and neither of the two applications added after it
 fits:
 
-| | |
-|---|---|
-| Klaviyo has **no OR and no NOT at all**, writes `equals(field,"v")` and joins with a bare comma | a connective a language does not declare fails `canRender()`, so the expression stays whole and is answered client-side; joining an OR's arguments with commas answers with their intersection and looks like it worked |
-| Intercom's query is a **tree of hashes in the request body** | `render_query` renders the whole expression and may return any type, while the operator tables still decide what is pushed down |
-| Klaviyo indexes each field for particular comparisons - no `>=` on a profile's `created`, one on a campaign's `created_at` | `field_ops` states the matrix per field; a per-field-only `fields` set turns `created >= x` into a **failed** search rather than a wrong one |
-| Intercom's `>=` and `<=` do not exist at all | leave them unmapped; mapping `>=` onto `>` silently drops the boundary records |
-| A field reference is a field path: `Unit\.Price` is the one key `Unit.Price` | `fields`, `field_ops`, `field_map` and a filter rule name a field by its keys joined with dots (`owner.uuid`), never by the escaped text; a key with a dot cannot be named, so its predicate is answered client-side unless a `render_query` hook reads the path with `getFieldPath()` |
+|!|!
+|Klaviyo has **no OR and no NOT at all**, writes `equals(field,"v")` and joins with a bare comma|a connective a language does not declare fails `canRender()`, so the expression stays whole and is answered client-side; joining an OR's arguments with commas answers with their intersection and looks like it worked
+|Intercom's query is a **tree of hashes in the request body**|`render_query` renders the whole expression and may return any type, while the operator tables still decide what is pushed down
+|Klaviyo indexes each field for particular comparisons - no `>=` on a profile's `created`, one on a campaign's `created_at`|`field_ops` states the matrix per field; a per-field-only `fields` set turns `created >= x` into a **failed** search rather than a wrong one
+|Intercom's `>=` and `<=` do not exist at all|leave them unmapped; mapping `>=` onto `>` silently drops the boundary records
+|A field reference is a field path: `Unit\.Price` is the one key `Unit.Price`|`fields`, `field_ops`, `field_map` and a filter rule name a field by its keys joined with dots (`owner.uuid`), never by the escaped text; a key with a dot cannot be named, so its predicate is answered client-side unless a `render_query` hook reads the path with `getFieldPath()`
 
 **Measure the matrix; do not read it.** Klaviyo's is in each argument's own description and was still
 verified live. Intercom's description says only "the accepted field that you want to search on" and
@@ -919,11 +909,10 @@ passes `NOTHING` for `where_cond` will ever notice.
 descriptions in this fleet describe their own collections wrongly or not at all, and each needed a different
 answer:
 
-| | |
-|---|---|
-| GitLab declares the 200 response of **every** listing as a single entity rather than an array of them | derive the record type from the response's own fields; the body really is an array at run time |
-| Paddle describes a report as `oneOf` seven models, and Stripe an external account as `anyOf` two | no element type to derive: the table names its columns, which are the ones every branch declares |
-| Bitbucket declares `q` on its repository and commit-comment listings but not on its pull request one, though the API accepts it | an overlay cannot add a parameter, so that table filters on `state` alone; repairing it belongs in the import spec's `normalize` block |
+|!|!
+|GitLab declares the 200 response of **every** listing as a single entity rather than an array of them|derive the record type from the response's own fields; the body really is an array at run time
+|Paddle describes a report as `oneOf` seven models, and Stripe an external account as `anyOf` two|no element type to derive: the table names its columns, which are the ones every branch declares
+|Bitbucket declares `q` on its repository and commit-comment listings but not on its pull request one, though the API accepts it|an overlay cannot add a parameter, so that table filters on `state` alone; repairing it belongs in the import spec's `normalize` block
 
 The layer refuses a table whose record type can neither be derived nor is declared, because a table with
 `has_record` and no columns is worse than one that failed while the application was being built.

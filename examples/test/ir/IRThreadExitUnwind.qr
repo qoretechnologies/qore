@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+# A thread_exit unwinds the blocks of its function as an exception does: block locals, catch blocks and the
+# caught exceptions are released, and on_exit and on_success handlers run, in the order of the interpreter; on_error
+# handlers do not run, and a try block does not catch it; every mode must match the interpreter
+
+our list<string> events = ();
+
+class Tracker {
+    public {
+        string name;
+    }
+    constructor(string name) {
+        self.name = name;
+    }
+    destructor() {
+        events += name;
+    }
+}
+
+#! signals the main thread when the thread's frame is unwound
+class Signal {
+    public {
+        Queue queue;
+    }
+    constructor(Queue queue) {
+        self.queue = queue;
+    }
+    destructor() {
+        queue.push(1);
+    }
+}
+
+list<auto> sub objs(string prefix) {
+    return (new Tracker(prefix + "0"), new Tracker(prefix + "1"));
+}
+
+sub exiter() {
+    Tracker x("callee");
+    thread_exit;
+}
+
+sub raise(string err) {
+    throw err, err, new Tracker("arg" + err);
+}
+
+sub unwind(int which) {
+    Tracker a("a");
+    on_exit { events += "on_exit"; }
+    on_error { events += "on_error"; }
+    on_success { events += "on_success"; }
+    if (which == 0) { thread_exit; }
+    {
+        Tracker b("b");
+        on_exit { events += "inner_exit"; }
+        if (which == 1) { thread_exit; }
+    }
+    foreach Tracker t in (objs("f")) {
+        Tracker fl("fl" + t.name);
+        if (which == 2 && t.name == "f1") { thread_exit; }
+    }
+    try {
+        Tracker tr("try");
+        if (which == 3) { thread_exit; }
+        raise("C");
+    } catch (hash<ExceptionInfo> ex) {
+        Tracker c("catch");
+        if (which == 4) { thread_exit; }
+        try {
+            raise("D");
+        } catch (hash<ExceptionInfo> ex2) {
+            Tracker c2("catch2");
+            if (which == 5) { thread_exit; }
+        }
+        if (which == 6) { exiter(); }
+    }
+    if (which == 7) { exiter(); }
+    try {
+        try {
+            raise("E");
+        } catch (hash<ExceptionInfo> ex) {
+            Tracker ce("catchE");
+            if (which == 8) { thread_exit; }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        events += "caught " + ex.err;
+    }
+    for (int i = 0; i < 2; ++i) {
+        Tracker li("loop" + i);
+        on_exit { events += "loop_exit"; }
+        if (which == 9 && i == 1) { thread_exit; }
+    }
+    events += "end";
+}
+
+for (int which = 0; which <= 10; ++which) {
+    events = ();
+    Queue queue();
+    background sub () {
+        Signal signal(queue);
+        unwind(which);
+    }();
+    queue.get();
+    printf("%d: %y\n", which, events);
+}
+printf("ir-thread-exit-unwind: ok\n");

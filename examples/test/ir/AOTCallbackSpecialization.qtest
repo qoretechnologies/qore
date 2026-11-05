@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o. -- SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class CallbackSpecializationTest
+
+class CallbackSpecializationTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTCallbackSpecialization.qr";
+    }
+    constructor() : Test("Private AOT callback argument specialization", "1.0", \ARGV) {
+        addTestCase("known targets and ordinary dynamic entries", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        foreach string prefix in (("", "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq("callback-specialization: ok\n",
+                    run((qore, "--exec-mode=" + mode, behavior), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-callback-specialization-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_CALLBACK_SPECIALIZATION=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                bool selected = !prefix.startsWith("QORE_DISABLE_") && !prefix.contains("QCC_SPLIT_THRESHOLD");
+                if (level == "-O0" && !prefix.contains("QCC_SPLIT_THRESHOLD")) {
+                    int callers = 0;
+                    int result_entries = 0;
+                    int compound_result_entries = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string header = definition.split("\n")[0];
+                        string body = definition.split("\n}")[0];
+                        if (header.contains("@knownUnary_") && header.contains("_fast_")) {
+                            assertEq(selected, body.contains("_cb2_step_"), "known target selects private entry");
+                            ++callers;
+                        }
+                        if (header.contains("@hofResult_") && header.contains("_cb1_")) {
+                            ++result_entries;
+                        }
+                        if (header.contains("@hofBoxedResult_") && header.contains("_cb1_")) {
+                            ++compound_result_entries;
+                        }
+                        if (header.contains("@mutatedParameter_")) {
+                            assertFalse(header.contains("_cb"), "written parameter has no specialized entry");
+                        }
+                    }
+                    assertEq(1, callers, "inspected known caller fast entry");
+                    assertEq(selected ? 4 : 0, result_entries, "bounded callback target entries");
+                    assertEq(selected ? 1 : 0, compound_result_entries,
+                        "native floating compound assignment permits callback specialization");
+                }
+                assertEq("callback-specialization: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

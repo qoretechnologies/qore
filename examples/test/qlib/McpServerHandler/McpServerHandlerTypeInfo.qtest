@@ -390,8 +390,8 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
                 "element_allowed_values": over_bound, "element_allowed_values_creatable": True},
         });
         TestMcpServerHandler handler();
-        handler.registerTool("from-type", "a tool", type, sub (auto v) {});
-        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+        handler.registerTool("from-type", "a tool", type, auto sub (auto v) {});
+        handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), auto sub (auto v) {});
         foreach string tool in (("from-type", "from-info")) {
             hash<auto> props = handler.getInput(tool).properties;
             # another model is accepted, so the suggestions are not an enum
@@ -411,8 +411,8 @@ public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
 
         # a subclass words the sentence
         LookupMcpServerHandler lookup();
-        lookup.registerTool("from-type", "a tool", type, sub (auto v) {});
-        lookup.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+        lookup.registerTool("from-type", "a tool", type, auto sub (auto v) {});
+        lookup.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), auto sub (auto v) {});
         foreach string tool in (("from-type", "from-info")) {
             hash<auto> props = lookup.getInput(tool).properties;
             assertEq("The model model suggests 2 value(s).", props.model.description, tool);

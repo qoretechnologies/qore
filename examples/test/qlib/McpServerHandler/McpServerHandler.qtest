@@ -1046,7 +1046,7 @@ public class McpServerHandlerTest inherits QUnit::Test {
         assertEq(200, resp.status_code, "the GET opens the event stream");
 
         string buf = "";
-        code next_event = hash<SseMessageInfo> sub () {
+        code<hash<SseMessageInfo>()> next_event = hash<SseMessageInfo> sub () {
             while (True) {
                 int end = buf.find("\n\n");
                 if (end == -1) {
@@ -1069,7 +1069,7 @@ public class McpServerHandlerTest inherits QUnit::Test {
 
         HTTPClient hc({"url": "http://localhost:" + port});
         on_exit hc.disconnect();
-        code post = sub (hash<auto> msg) {
+        code<nothing(hash<auto>)> post = nothing sub (hash<auto> msg) {
             hash<auto> info;
             hc.post(endpoint.data, make_json(msg), {"Content-Type": MimeTypeJson}, \info);
             assertEq(202, info."response-headers".status_code, msg.method + " is accepted");

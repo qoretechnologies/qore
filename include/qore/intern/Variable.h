@@ -52,8 +52,12 @@ enum qore_var_t {
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 // forward references
 class Var;
@@ -442,7 +446,79 @@ struct ObjCountRec {
     DLLLOCAL int getDifference();
 };
 
-typedef std::vector<ObjCountRec> ocvec_t;
+//! Borrowed lvalue object-count snapshots, with the common single record kept inline.
+/** All records are retained in insertion order. The lvalue's existing locks and
+    owners keep the containers alive; this storage takes no references and does
+    not change scan decisions or reverse hierarchy propagation.
+*/
+class ObjCountRecords {
+private:
+    // Record copies and destruction must not acquire ownership or run Qore code.
+    static_assert(std::is_trivially_copyable_v<ObjCountRec>);
+    std::optional<ObjCountRec> first;
+    std::vector<ObjCountRec> remaining;
+
+public:
+    //! Creates empty bookkeeping storage.
+    DLLLOCAL ObjCountRecords() = default;
+
+    //! Releases storage only; borrowed containers are not dereferenced.
+    DLLLOCAL ~ObjCountRecords() = default;
+
+    //! Transfers every record and leaves the source empty and reusable.
+    /** @param other the records to transfer
+    */
+    DLLLOCAL ObjCountRecords(ObjCountRecords&& other) noexcept
+            : first(std::move(other.first)), remaining(std::move(other.remaining)) {
+        // Moving an optional does not disengage it. A moved-from LValueHelper
+        // must not propagate the same record again in its destructor.
+        other.first.reset();
+        other.remaining.clear();
+    }
+
+    DLLLOCAL ObjCountRecords(const ObjCountRecords&) = delete;
+    DLLLOCAL ObjCountRecords& operator=(const ObjCountRecords&) = delete;
+    DLLLOCAL ObjCountRecords& operator=(ObjCountRecords&&) = delete;
+
+    //! Appends a snapshot without allocating for the first record.
+    /** @param record the borrowed container and its initial scan state
+    */
+    DLLLOCAL void push_back(const ObjCountRec& record) {
+        if (first) {
+            remaining.push_back(record);
+        } else {
+            first.emplace(record);
+        }
+    }
+
+    //! Clears all snapshots, retaining overflow capacity for reuse.
+    DLLLOCAL void clear() noexcept {
+        first.reset();
+        remaining.clear();
+    }
+
+    //! @return true when no snapshots are held
+    DLLLOCAL bool empty() const noexcept {
+        return !first;
+    }
+
+    //! @return the number of snapshots in insertion order
+    DLLLOCAL size_t size() const noexcept {
+        return static_cast<size_t>(first.has_value()) + remaining.size();
+    }
+
+    //! Returns a snapshot for hierarchy bookkeeping.
+    /** @param index insertion-order index, less than size()
+        @return the mutable borrowed snapshot
+    */
+    DLLLOCAL ObjCountRec& operator[](size_t index) noexcept {
+        assert(index < size());
+        return index ? remaining[index - 1] : *first;
+    }
+
+};
+
+using ocvec_t = ObjCountRecords;
 
 #ifdef DEBUG
 //! returns the number of recursive-reference scans started by lvalue operations in the current thread
@@ -548,6 +624,9 @@ public:
 
 private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
+    // Most writes defer just one reference. Keep it inline, with overflow in tvec;
+    // both are released in insertion order after unlocking and the recursive scan.
+    AbstractQoreNode* first_temp = nullptr;
     nvec_t tvec;
     lvid_set_t* lvid_set = nullptr;
     // to track object count changes
@@ -773,8 +852,10 @@ public:
     //! @param steps array of LVPathStep describing the navigation
     //! @param num_steps number of steps in the array
     //! @param for_remove true if navigating for a remove operation
+    //! @param single_index optional per-call index for a two-step root/ListIndex path; leaves shared steps immutable
     //! @return 0 on success, -1 on error (exception raised in vl.xsink)
-    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
+        const int64_t* single_index = nullptr);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);

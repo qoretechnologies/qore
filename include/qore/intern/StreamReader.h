@@ -805,7 +805,11 @@ protected:
     /** @return 0 for OK, -1 if ENCODING-BYTE-ORDER-ERROR was raised
     */
     DLLLOCAL int checkSample(const unsigned char* p, size_t len, const char* code, ExceptionSink* xsink) {
-        if (!q_get_unicode_byte_order(p, len).encoding && len < QORE_UNICODE_BYTE_ORDER_SAMPLE) {
+        QoreUnicodeByteOrder found = q_get_unicode_byte_order(p, len, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (!found.encoding && len < QORE_UNICODE_BYTE_ORDER_SAMPLE) {
             // not decided yet: the text read next is added to the sample
             return 0;
         }

@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+# An empty regular expression pattern matches the empty string at every position of the subject; a global
+# substitution with an empty pattern raises an exception for a subject that is not empty.
+
+class Holder {
+    public {
+        string s = "ab";
+    }
+
+    string subst() {
+        s =~ s//-/;
+        return s;
+    }
+}
+
+bool sub match(string s) { return s =~ //; }
+bool sub nmatch(string s) { return s !~ //; }
+bool sub match_options(string s) { return s =~ m//i; }
+*list<*string> sub extract_once(string s) { return s =~ x//; }
+*list<*string> sub extract_all(string s) { return s =~ x//g; }
+*list<*string> sub extract_group(string s) { return s =~ x/()/; }
+string sub subst_once(string s) { s =~ s//-/; return s; }
+string sub subst_all(string s) { s =~ s//-/g; return s; }
+string sub subst_empty(string s) { s =~ s///g; return s; }
+string sub subst_element(string s) { hash<auto> h = {"a": s}; h.a =~ s//-/; return h.a; }
+string sub subst_value(string s) { string t = s; return t =~ s//+/; }
+string sub regex_case(string s) {
+    switch (s) {
+        case /^x/: return "starts with x";
+        case //: return "empty pattern";
+    }
+    return "none";
+}
+string sub negated_case(string s) {
+    switch (s) {
+        case !~ //: return "no match";
+    }
+    return "matched";
+}
+bool sub combined(string s) { return (s =~ //) && (s =~ /a/) && !(s !~ //); }
+int sub loop(int count) {
+    int matches = 0;
+    for (int i = 0; i < count; ++i) {
+        if (string(i) =~ //) {
+            ++matches;
+        }
+    }
+    return matches;
+}
+
+list<string> names = ("match", "nmatch", "match_options", "extract_once", "extract_all", "extract_group",
+    "subst_once", "subst_all", "subst_empty", "subst_element", "subst_value", "regex_case", "negated_case",
+    "combined");
+foreach string name in (names) {
+    foreach string subject in (("", "ab", "xyz")) {
+        try {
+            printf("%s %y: %y\n", name, subject, call_function(name, subject));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s %y: %s: %s\n", name, subject, ex.err, ex.desc);
+        }
+    }
+}
+Holder holder();
+printf("member: %y\n", holder.subst());
+printf("loop: %d\n", loop(1000));

@@ -1,0 +1,252 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%disable-warning duplicate-hash-key
+
+int sub finiteKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    return values{key};
+}
+
+int sub directKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    return values{right ? "right" : "left"};
+}
+
+int sub linkedKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string first = right ? "right" : "left";
+    string second = first;
+    return values{second} + values{first};
+}
+
+int sub repeatedKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    int first = values{key};
+    int second = values{key};
+    return first ^ second ^ values.left;
+}
+
+int sub duplicateKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": 99, "right": b & 65535, "left": a & 65535};
+    string key = right ? "right" : "left";
+    return values{key};
+}
+
+int sub unicodeKey(int a, int b, bool right) {
+    hash<string, int> values = {"": a & 65535, "café": b & 65535};
+    string key = right ? "café" : "";
+    return values{key};
+}
+
+int sub extremeKey(bool right) {
+    hash<string, int> values = {"left": -140737488355328, "right": 140737488355327};
+    string key = right ? "right" : "left";
+    return values{key};
+}
+
+int sub loopKey(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        hash<string, int> values = {"left": seed, "right": seed + 1};
+        string key = (seed & 1) ? "right" : "left";
+        sum += values{key};
+    }
+    return sum;
+}
+
+int sub observableKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    int result = values{key};
+    return result + key.strlen();
+}
+
+int sub wideKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a, "right": b};
+    string key = right ? "right" : "left";
+    return values{key};
+}
+
+int sub wideConstantKey(bool right) {
+    hash<string, int> values = {"left": -9223372036854775807 - 1, "right": 9223372036854775807};
+    string key = right ? "right" : "left";
+    return values{key};
+}
+
+int sub earlyKey(int a, int b, bool right) {
+    string key = right ? "right" : "left";
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    return values{key};
+}
+
+*int sub missingKey(int a, bool right) {
+    hash<string, int> values = {"left": a & 65535};
+    string key = right ? "missing" : "left";
+    return values{key};
+}
+
+*int sub arbitraryKey(int a, string key) {
+    hash<string, int> values = {"left": a & 65535, "right": 17};
+    return values{key};
+}
+
+int sub changedKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    key = right ? "left" : "right";
+    return values{key};
+}
+
+int sub mutatedHash(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    values.left = 7;
+    return values{key};
+}
+
+int sub aliasedHash(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    hash<string, int> alias = values;
+    values.left = 7;
+    return alias{key};
+}
+
+int sub capturedHash(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    code<int()> read = int sub () { return values{key}; };
+    values.left = 7;
+    return read();
+}
+
+sub changeKey(reference<string> key) {
+    key = "right";
+}
+
+int sub referencedKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    changeKey(\key);
+    return values{key};
+}
+
+int sub nestedKey(int a, int b, bool right, bool nested) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? (nested ? "right" : "left") : "left";
+    return values{key};
+}
+
+int sub caughtKey(int a, int b, bool right) {
+    try {
+        hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+        string key = right ? "right" : "left";
+        return values{key};
+    } catch (hash<auto> ex) {
+        rethrow;
+    }
+}
+
+int sub rejoinedKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    int caught = 0;
+    try {
+        if (right) {
+            throw "EXPECTED", "finite hash exceptional rejoin";
+        }
+    } catch (hash<auto> ex) {
+        caught = 1;
+    }
+    string key = right ? "right" : "left";
+    return values{key} + caught;
+}
+
+int sub twoHashKey(int a, int b, bool right) {
+    hash<string, int> first = {"left": a & 65535, "right": b & 65535};
+    hash<string, int> second = {"left": (a & 65535) + 1, "right": (b & 65535) + 2};
+    string key = right ? "right" : "left";
+    return first{key} + second{key};
+}
+
+int sub partialKey(int a, int b, bool right) {
+    hash<string, int> bounded = {"left": a & 65535, "right": b & 65535};
+    hash<string, int> wide = {"left": a, "right": b};
+    string key = right ? "right" : "left";
+    return bounded{key} ^ wide{key};
+}
+
+int sub copiedKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    string key = right ? "right" : "left";
+    string copied = key;
+    return values{key} + copied.strlen();
+}
+
+int sub sideEffectKey(int a, int b, bool right) {
+    hash<string, int> values = {"left": a & 65535, "right": b & 65535};
+    int count = right ? 1 : 0;
+    string key = (++count & 1) ? "right" : "left";
+    return values{key} + count;
+}
+
+sub equal(auto expected, auto actual) {
+    if (expected !== actual) {
+        throw "MISMATCH", sprintf("expected %y, got %y", expected, actual);
+    }
+}
+
+foreach int a in ((-9223372036854775807 - 1, -65537, -1, 0, 1, 65535, 9223372036854775807)) {
+    foreach int b in ((-9223372036854775807 - 1, -1, 0, 1, 9223372036854775807)) {
+        foreach bool right in ((False, True)) {
+            int expected = right ? (b & 65535) : (a & 65535);
+            equal(expected, finiteKey(a, b, right));
+            equal(expected, directKey(a, b, right));
+            equal(expected * 2, linkedKey(a, b, right));
+            equal(a & 65535, repeatedKey(a, b, right));
+            equal(expected, duplicateKey(a, b, right));
+            equal(expected, unicodeKey(a, b, right));
+            equal(expected + (right ? 5 : 4), observableKey(a, b, right));
+            equal(right ? b : a, wideKey(a, b, right));
+            equal(expected, earlyKey(a, b, right));
+            equal(right ? NOTHING : (a & 65535), missingKey(a, right));
+            equal(right ? (a & 65535) : (b & 65535), changedKey(a, b, right));
+            equal(right ? (b & 65535) : 7, mutatedHash(a, b, right));
+            equal(expected, aliasedHash(a, b, right));
+            equal(right ? (b & 65535) : 7, capturedHash(a, b, right));
+            equal(b & 65535, referencedKey(a, b, right));
+            equal(expected, nestedKey(a, b, right, True));
+            equal(a & 65535, nestedKey(a, b, right, False));
+            equal(expected * 2 + (right ? 2 : 1), twoHashKey(a, b, right));
+            equal(expected ^ (right ? b : a), partialKey(a, b, right));
+            equal(expected + (right ? 5 : 4), copiedKey(a, b, right));
+            equal((right ? (a & 65535) : (b & 65535)) + (right ? 2 : 1),
+                sideEffectKey(a, b, right));
+            equal(expected, caughtKey(a, b, right));
+            equal(expected + (right ? 1 : 0), rejoinedKey(a, b, right));
+        }
+    }
+    equal(a & 65535, arbitraryKey(a, "left"));
+    equal(17, arbitraryKey(a, "right"));
+    equal(NOTHING, arbitraryKey(a, "missing"));
+}
+equal(-140737488355328, extremeKey(False));
+equal(140737488355327, extremeKey(True));
+equal(-9223372036854775807 - 1, wideConstantKey(False));
+equal(9223372036854775807, wideConstantKey(True));
+foreach int count in ((0, 1, 2, 17, 257, 4096)) {
+    foreach int initial in ((0, 7, 65535)) {
+        int seed = initial;
+        int expected = 0;
+        for (int i = 0; i < count; ++i) {
+            seed = (seed * 33 + 17) & 65535;
+            expected += seed + (seed & 1);
+        }
+        equal(expected, loopKey(count, initial));
+    }
+}
+printf("finite key selector checks passed\n");

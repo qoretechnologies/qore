@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTDeserializedConstantJITTierTest
+
+# Regression test: a constant read in IR deserialized from an AOT binary must be compiled correctly when the
+# function reaches the JIT tier, and a member initialized with a call reference to a static method of its own
+# class must be readable from an AOT binary.
+#
+# A constant whose initializer runs code -- `const C = Cls::method();`, `const C = \Cls::method();` -- stays a
+# named constant in the IR, and a read of one inside a try block or a foreach loop is an invoke whose expression
+# is the RuntimeConstantRefNode.  An AOT binary stores the constant's path instead, and the reader resolves it
+# again when the IR is loaded: a constant that already has its value is read back as that value, not as a
+# reference.  The IR interpreter serves either form; the LLVM lowering of the invoke assumed the reference,
+# failed the assertion `rt_const` in a debug build, and in a release build emitted
+# qore_rt_load_constant(nullptr, ...), which faults the first time the compiled code reads the constant.
+#
+# Module code that runs from the IR its binary carries -- the module's init closure and the closures it creates,
+# closures held in a constant -- is promoted to the JIT tier in every execution mode, so a module with such a
+# closure aborted every program that called it often enough: AssemblyAiDataProvider's discovery inventory
+# provider, which iterates a constant in a foreach loop, did so for every test that loaded the module.
+#
+# The AOTConstantInvoke fixture reads constants and static members initialized by static method calls and call
+# references, inside and outside try blocks and foreach loops, from native method bodies, from closures that a
+# method creates and from closures that run from the module's IR; every reader must give the same result as the
+# module's source, in every execution mode and as a program compiled to an executable.
+#
+# The AOTStaticCallRef fixture initializes static and instance members with call references to static methods
+# of their own class (`static code c = \Cls::m();`), and hashdecl members with call references to static methods
+# of a class of the module.  Their initial values are read while the binary's classes are being loaded: a
+# member's before the classes' methods are committed, a hashdecl member's before the classes have any method.
+# The reader looked the method up among the committed methods only, so the module failed to load with "cannot
+# resolve static method reference".
+class AOTDeserializedConstantJITTierTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture_dir;
+
+        #! the number of times the consumer calls each reader of the AOTConstantInvoke fixture
+        const Iterations = 40;
+
+        #! the readers of the AOTConstantInvoke fixture and the result every one of them must give
+        const ConstantExpected = {
+            "native-try": AllValues,
+            "native-plain": AllValues,
+            "closure-try": AllValues,
+            "closure-plain": AllValues,
+            "const-try": AllValues,
+            "const-plain": AllValues,
+            "init-try": AllValues,
+            "init-foreach": "made=1,n=1,41,42",
+            "init-catch": "AOT-CONSTANT-INVOKE-ERROR:41/42",
+            "init-plain": AllValues,
+        };
+
+        #! the values that Cls::describe() in the AOTConstantInvoke fixture formats
+        const AllValues = "{made: True, n: 1}|{made: True, n: 1}|41|[41, 42]|{a: 1, b: 41}|{made: True, n: 1}"
+            "|{made: {made: True, n: 1}, n: 41, plain: {a: 1}}|42|{made: True, n: 1}|{made: True, n: 1}";
+
+        #! the lines of the AOTStaticCallRef consumer and the result each of them must give
+        const StaticCallRefExpected = {
+            "call-try": CallRefValues,
+            "call-plain": CallRefValues,
+            "call-script": CallRefValues,
+        };
+
+        #! the values that Refs::describe() in the AOTStaticCallRef fixture formats
+        const CallRefValues = "{made: True, n: 1}|{made: True, n: 1}|41|41|{made: True, n: 1}|{made: True, n: 1}"
+            "|{made: True, n: 1}|41";
+    }
+
+    constructor() : QUnit::Test("AOTDeserializedConstantJITTierTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture_dir = get_script_dir() + "/aot-constant-invoke";
+
+        addTestCase("the constant fixture's source gives the expected values", \testConstantSource());
+        addTestCase("the AOT constant module gives them in every execution mode", \testConstantAllModes());
+        addTestCase("the AOT constant module gives them with the CI execution options", \testConstantCiOptions());
+        addTestCase("deserialized IR closures reading constants reach the JIT tier", \testIrClosuresCompiled());
+        addTestCase("a program compiled to an executable gives them", \testConstantExecutable());
+        addTestCase("the call reference fixture's source gives the expected values", \testStaticCallRefSource());
+        addTestCase("members holding call references load from an AOT module", \testStaticCallRefAllModes());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+    }
+
+    #! compiles a fixture module to a qmod in a directory of its own, without its source
+    private string compileModule(string dir, string module) {
+        string mod_dir = dir + "/mod";
+        if (!is_dir(mod_dir)) {
+            mkdir(mod_dir);
+        }
+        string qmod = sprintf("%s/%s.qmod", mod_dir, module);
+        string out = ExecModeHarness::run_any(sprintf("%s %s -m --strip-source -o %s %s/%s.qm", env(), qcc_bin,
+            qmod, fixture_dir, module));
+        assertTrue(is_file(qmod), sprintf("the %s fixture compiles: %s", module, out));
+        return mod_dir;
+    }
+
+    #! returns the command that runs a consumer script against the modules in the given directory
+    private string consumerCommand(string mod_dir, string script, string opts) {
+        return sprintf("%s QORE_MODULE_DIR=%s %s -b %s %s/%s; echo \"exit=$?\"", env(), mod_dir, qore_bin, opts,
+            fixture_dir, script);
+    }
+
+    #! checks a consumer run: it exits normally and every line gives exactly its expected result
+    private checkOutput(string label, string out, hash<string, string> expected) {
+        assertNeq(-1, out.find("exit=0\n"), label + ": the consumer exits normally: " + out);
+        assertEq(-1, out.find("failed to load"), label + ": the AOT module loads: " + out);
+        hash<string, string> got;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^([a-z-]+): (.*)$/);
+            if (m && exists expected{m[0]}) {
+                got{m[0]} = m[1];
+            }
+        }
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, got{i.key}, sprintf("%s: %y: %s", label, i.key, out));
+        }
+    }
+
+    #! checks a run of the AOTConstantInvoke consumer, which calls each reader Iterations times
+    private checkConstantOutput(string label, string out) {
+        # every call of a reader must give the same result
+        checkOutput(label, out, map {$1.key: sprintf("%s x%d", $1.value, Iterations)},
+            ConstantExpected.pairIterator());
+    }
+
+    testConstantSource() {
+        string out = ExecModeHarness::run(consumerCommand(fixture_dir, "consumer.q", "--exec-mode=ast"));
+        checkConstantOutput("source module", out);
+    }
+
+    testConstantAllModes() {
+        TmpDir tmp("qore-aot-deserialized-constant-jit-");
+        string mod_dir = compileModule(tmp.path, "AOTConstantInvoke");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the module's IR closures are compiled to native code in every mode, so the check of the native
+            # compilation that a mode requires of the consumer itself does not apply
+            string out = ExecModeHarness::run(consumerCommand(mod_dir, "consumer.q", "--exec-mode=" + mode),
+                ExecModeHarness::NativeCheck::None);
+            checkConstantOutput(mode + " mode", out);
+        }
+    }
+
+    testConstantCiOptions() {
+        TmpDir tmp("qore-aot-deserialized-constant-jit-ci-");
+        string mod_dir = compileModule(tmp.path, "AOTConstantInvoke");
+        foreach string opts in ("--exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10",
+                "--exec-mode=ir --ir-fallback-warn") {
+            string out = ExecModeHarness::run(consumerCommand(mod_dir, "consumer.q", "-penable-debug " + opts),
+                ExecModeHarness::NativeCheck::None);
+            checkConstantOutput(opts, out);
+        }
+    }
+
+    testIrClosuresCompiled() {
+        TmpDir tmp("qore-aot-deserialized-constant-jit-trace-");
+        string mod_dir = compileModule(tmp.path, "AOTConstantInvoke");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(consumerCommand(mod_dir,
+            "consumer.q", "--exec-mode=ast"));
+        checkConstantOutput("traced ast mode", r.out);
+        # with the AST interpreter, the native code compiled is module code: the closures that run from the
+        # module's IR, which are what read the deserialized constants
+        assertTrue((select r.trace, ExecModeHarness::is_native_compilation($1) && $1 =~ /<closure>/).size() > 0,
+            "the module's IR closures are compiled to native code: " + r.trace.join("\n"));
+    }
+
+    testConstantExecutable() {
+        TmpDir tmp("qore-aot-deserialized-constant-jit-exe-");
+        string mod_dir = compileModule(tmp.path, "AOTConstantInvoke");
+        string exe = tmp.path + "/consumer";
+        string out = ExecModeHarness::run_any(sprintf("%s QORE_MODULE_DIR=%s %s -o %s %s/consumer.q", env(),
+            mod_dir, qcc_bin, exe, fixture_dir));
+        assertTrue(is_file(exe), "the consumer compiles to an executable: " + out);
+        # the executable loads the AOT module it was compiled against
+        out = ExecModeHarness::run_any(sprintf("%s QORE_MODULE_DIR=%s %s; echo \"exit=$?\"", env(), mod_dir, exe));
+        checkConstantOutput("executable", out);
+    }
+
+    testStaticCallRefSource() {
+        string out = ExecModeHarness::run(consumerCommand(fixture_dir, "static-call-ref-consumer.q",
+            "--exec-mode=ast"));
+        checkOutput("source module", out, StaticCallRefExpected);
+    }
+
+    testStaticCallRefAllModes() {
+        TmpDir tmp("qore-aot-static-call-ref-");
+        string mod_dir = compileModule(tmp.path, "AOTStaticCallRef");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the consumer calls each method once, which is not often enough to compile it in tiered mode
+            string out = ExecModeHarness::run(consumerCommand(mod_dir, "static-call-ref-consumer.q",
+                "--exec-mode=" + mode), ExecModeHarness::NativeCheck::Jit);
+            checkOutput(mode + " mode", out, StaticCallRefExpected);
+        }
+    }
+}

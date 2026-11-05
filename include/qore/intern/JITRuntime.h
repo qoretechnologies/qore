@@ -35,6 +35,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <string>
 
 class ExceptionSink;
@@ -43,10 +44,75 @@ class QoreIRFunction;
 class AbstractStatement;
 class QoreIRBackgroundInstruction;
 struct QoreAOTContext;
+struct QoreAOTReceiverIntForwardEntryV3;
 class QoreIRLValuePathInstruction;
 class QoreValue;
 class QoreVarInfo;
 class UserVariantBase;
+class RuntimeConfig;
+class FunctionCallReferenceNode;
+class QoreClosureBase;
+class QoreProgram;
+class StatementBlock;
+class QoreProgramLocation;
+
+//! Invocation-local, positive-only cache for the v3 typed callback helpers.
+/** The generated caller initializes owner to NOTHING and registers that first
+    word with its persistent boxed-value cleanup. All other fields are borrowed
+    from owner and valid only when owner is non-NOTHING. Clearing owner on any
+    cleanup invalidates the entire cache, including across caught exceptions.
+    Only exact FunctionCallReferenceNode objects (no captures, user destructor,
+    or weak-reference semantics) are retained. A slot belongs to one signature
+    and one native invocation; it must never be shared across threads.
+
+    This is a versioned native helper ABI, not serialized AOT metadata. Keep the
+    layout stable for existing v3 artifacts; extend via a new helper version.
+*/
+struct QorePreparedFunctionRefV3 {
+    uint64_t owner;
+    const FunctionCallReferenceNode* ref;
+    const UserVariantBase* uvb;
+    QoreProgram* pgm;
+    void (*entry)();
+    const std::string* name;
+    const StatementBlock* statements;
+    const QoreProgramLocation* parse_loc;
+};
+static_assert(offsetof(QorePreparedFunctionRefV3, owner) == 0);
+
+//! Caller-owned scratch for one reusable, non-reentrant integer or floating callback site.
+/** Native v4 ABI: exactly 208 bytes, aligned to 16, with a null-initialized
+    pointer in the first word. The remaining bytes are runtime-private storage.
+    Only one invocation/thread may use a slot. Cleanup destroys the inactive
+    placement-constructed frame and clears the pointer before the cache owner
+    is released. Never copy an initialized slot or reuse it for another cache.
+*/
+struct alignas(16) QorePreparedFunctionRefFrameV4 {
+    void* frame;
+    alignas(16) unsigned char storage[192];
+};
+static_assert(offsetof(QorePreparedFunctionRefFrameV4, frame) == 0);
+static_assert(offsetof(QorePreparedFunctionRefFrameV4, storage) == 16);
+static_assert(sizeof(QorePreparedFunctionRefFrameV4) == 208);
+
+//! Borrowed flag addresses for a generated no-pending cancellation check.
+/** Versioned native ABI: three target-sized pointers, all null when unsupported
+    or when no live thread context exists. The compiler reads deferral as i32,
+    thread_requested as atomic i8 and program_pending as atomic i64. Both atomic
+    loads MUST be seq_cst. The runtime only provides these addresses on targets
+    whose primitive atomic layout/alignment and lock-free operations match.
+
+    Addresses (never values) may be retained only within the acquiring thread's
+    current native invocation. Check deferral first, then thread cancellation,
+    then the program count. A pending flag is NOT proof of cancellation: call
+    qore_rt_check_cancel_v2 to resolve scope, manager, priority and diagnostics.
+    A null deferral pointer likewise requires the full helper, not a skipped poll.
+*/
+struct QoreCancelPollStateV1 {
+    const unsigned* deferral;
+    const std::atomic<bool>* thread_requested;
+    const std::atomic<uint64_t>* program_pending;
+};
 
 struct QoreJITRuntimeSymbolInfo {
     const char* name;
@@ -83,6 +149,23 @@ extern "C" {
 
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
+
+//! Check the same native stack guard using a non-null, same-thread live context.
+//! @param xsink sink receiving STACK-LIMIT-EXCEEDED on failure
+//! @param rc borrowed context, valid only for the current native invocation
+//! @return zero on success, nonzero on stack exhaustion
+int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Borrow the live downward-growing native stack-limit address for a scalar callee.
+//! @param rc same-thread invocation context; nullptr is permitted
+//! @return address of a 64-bit size_t limit, or nullptr for unsupported targets/configurations
+//! @note Compare the live limit against the current native SP, not a saved limit or SP.
+//! A null address or failed comparison MUST use qore_rt_check_stack_v2; the address
+//! must not escape the acquiring thread's invocation. Only 64-bit x86-64/AArch64 are supported;
+//! other pointer/size_t layouts receive nullptr and must retain the complete helper check.
+const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc);
+//! the live stack-limit view of qore_rt_get_stack_limit_v1() for libqore's own callers (hidden, so it can be inlined)
+DLLLOCAL const size_t* qore_get_stack_limit_intern(RuntimeConfig* rc);
 
 // --- Outlined function-body return token (design/aot-function-outlining.md) ---
 
@@ -139,6 +222,17 @@ double qore_rt_div_float(double left, double right, ExceptionSink* xsink);
 
 //! Convert a QoreValue to int64_t
 int64_t qore_rt_to_int(uint64_t val);
+
+//! Check an exact boxed integer for a typed call without conversion or user-code evaluation.
+/** Runtime closures without an enabled, published native companion and function references without
+    a typed int(int) entry use ordinary argument binding.
+    This preliminary check does not replace the scalar entry's live admission checks.
+    @param ref_bits NaN-boxed borrowed callable; no pointer is retained.
+    @param val NaN-boxed borrowed argument; ownership is unchanged.
+    @param result Non-null scalar output, set to zero on any miss.
+    @return 1 for an exact NT_INT argument eligible for a scalar attempt, otherwise 0.
+*/
+int qore_rt_try_typed_int_argument_v1(uint64_t ref_bits, uint64_t val, int64_t* result);
 
 //! Convert a QoreValue accepted by the timeout type to milliseconds
 int64_t qore_rt_to_timeout(uint64_t val);
@@ -283,6 +377,9 @@ void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xsink);
 //! Rethrow the current catch exception: copies the exception into xsink; pops no catch scope (see qore_rt_catch_end())
 void qore_rt_rethrow(ExceptionSink* xsink);
 
+//! Rethrow the current catch exception with replaced err/desc/arg; pops no catch scope (see qore_rt_catch_end())
+void qore_rt_rethrow_with_args(uint64_t args_bits, ExceptionSink* xsink);
+
 // --- Deopt helpers ---
 
 //! Atomically increment the deopt counter for a variant.
@@ -356,6 +453,11 @@ class TypedHashDecl;
 //! Instantiate a local variable on the Qore thread-local variable stack.
 //! Must be called once per local at JIT function entry before any loads/stores.
 void qore_rt_instantiate_local(LocalVar* var);
+//! Makes an existing ordinary local visible again when its lexical block is re-entered.
+/** @param var a non-captured local with an instantiated slot in the current invocation
+    @note This changes reflection visibility only; it neither assigns nor owns a value.
+*/
+void qore_rt_activate_local(LocalVar* var);
 
 //! Assign a NaN-boxed QoreValue to a local variable on the Qore thread-local
 //! variable stack.  The JIT should call this on every StoreLocal so the Qore
@@ -388,6 +490,16 @@ uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
 //! Load a NaN-boxed QoreValue from a local variable on the Qore thread-local
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
+
+//! Classifies a stable untyped parameter, evaluating only reference inputs.
+/** @param val borrowed NaN-boxed local value
+    @param reference_result receives the owned evaluated result only when returning 0; never retained
+    @param xsink exception sink for reference evaluation
+    @return 1 for a non-reference input (val is unchanged), 0 after reference evaluation, including errors
+    @note Only compiler-proven stable parameters may cache a return of 1. A return of 0 must never
+        cache the reference target: evaluation must remain at every original load.
+*/
+uint8_t qore_rt_deref_stable_local_v2(uint64_t val, uint64_t* reference_result, ExceptionSink* xsink);
 
 //! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
 void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
@@ -659,6 +771,22 @@ uint64_t qore_rt_list_push_in_place_throwing(uint64_t list_bits, uint64_t val_bi
 uint64_t qore_rt_list_push_float_in_place_unchecked(uint64_t list_bits, double value);
 uint64_t qore_rt_list_push_bool_in_place_unchecked(uint64_t list_bits, int64_t value);
 
+//! Append an exact native integer to a proven fresh, assigned list<int>.
+/** @param list_bits borrowed list; the compiler proves exclusive ownership and exact element type
+    @param value full-width signed integer, not NaN-boxed bits
+    @return the unchanged borrowed list bits; the list owns the appended value
+    @note This does not replace copy-on-write or type checks for unproven lists.
+*/
+uint64_t qore_rt_list_push_int_in_place_unchecked_v1(uint64_t list_bits, int64_t value);
+
+//! Append an already boxed exact integer without replacing its representation.
+/** @param list_bits borrowed fresh, assigned, exclusively owned list<int>
+    @param value_bits borrowed NaN-boxed integer; the list acquires its own reference
+    @return the unchanged borrowed list bits
+    @note Shares an existing wide-integer box rather than allocating a duplicate.
+*/
+uint64_t qore_rt_list_push_int_bits_in_place_unchecked_v1(uint64_t list_bits, uint64_t value_bits);
+
 // --- Statement execution helpers ---
 
 //! Execute a statement (foreach, on_block_exit, context, etc.)
@@ -746,6 +874,11 @@ struct QoreNativeEntrySlots {
 //! Fills the thread's runtime location slots and data for a native function being entered
 void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots);
 
+//! Fills native location slots from a live same-thread RuntimeConfig, without a TLS lookup.
+//! @param slots caller-owned output storage
+//! @param rc live invocation context, valid until the native function returns
+void qore_rt_get_native_entry_slots_v2(QoreNativeEntrySlots* slots, RuntimeConfig* rc);
+
 //! Pushes the call stack frame of a call that AOT-compiled code makes directly to a callee it names
 /** As qore_rt_push_native_call_frame_aot(), for a call without a call target, such as a call of a known call
     reference: the frame's name is \a call_name, interned on the first call of the site and cached in
@@ -811,6 +944,13 @@ class RuntimeConstantRefNode;
 
 //! Load a runtime constant value; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink* xsink);
+
+//! Load a constant from the expression a LoadConstant instruction holds; returns NaN-boxed QoreValue
+/** The expression is a RuntimeConstantRefNode, a node that resolves on evaluation (a deferred reference),
+    or the constant's value itself, which is what IR deserialized from an AOT binary carries for a
+    constant that is already initialized; each is served as the IR interpreter serves it.
+*/
+uint64_t qore_rt_load_constant_expr(uint64_t expr_bits, ExceptionSink* xsink);
 
 //! Load a runtime constant or direct constant value via AOT context slot
 uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
@@ -908,6 +1048,552 @@ uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContext* ctx, const char* f
     ExceptionSink* xsink);
 uint64_t qore_rt_create_function_call_ref_aot_throwing(QoreAOTContext* ctx, const char* function_name,
     ExceptionSink* xsink);
+
+//! Attach an optional context-independent adapter to a newly created function reference.
+//! Both entries must come from the same compiled body; no change to the serialized AOT ABI.
+void qore_rt_bind_function_call_ref_native(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    uint64_t (*entry)(const uint64_t*, QoreAOTContext*, ExceptionSink*));
+
+//! Bind a versioned zero/unary scalar ABI; only before publishing a new reference.
+void qore_rt_bind_function_call_ref_typed_v1(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
+
+//! Bind an optional scalar entry with a trailing RuntimeConfig* argument.
+//! @param ref_bits newly created reference, not yet published
+//! @param normal normal entry identifying the same compiled body as the v1 binding
+//! @param entry native zero/unary scalar ABI, followed by AOT context, sink and live RuntimeConfig*
+//! @param signature same scalar signature as an already validated v1 binding
+//! @note Does not replace v1; older callers and disabled controls keep that entry.
+void qore_rt_bind_function_call_ref_typed_v2(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
+
+//! Bind an optional scalar entry appending const size_t* stack_limit to the v2 ABI.
+//! @param ref_bits newly created reference, not yet published
+//! @param normal same normal body identity as the validated v1/v2 binding
+//! @param entry native scalar args, AOT context, sink, RuntimeConfig*, live stack-limit address
+//! @param signature scalar signature of the existing binding
+//! @note Prior entries remain available; a null limit must execute the full stack check.
+void qore_rt_bind_function_call_ref_typed_v3(uint64_t ref_bits,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), void (*entry)(), uint32_t signature);
+
+//! Acquire a borrowed RuntimeConfig for this native invocation, on this thread only.
+RuntimeConfig* qore_rt_get_fast_runtime_config();
+
+//! Publish an optional pure int(int) method entry in its runtime-owned AOT context.
+//! @param ctx context for the normal body; must already identify normal in its PC metadata
+//! @param normal normal entry identifying this exact compiled body
+//! @param entry context-independent, non-throwing native int(int) body plus context and sink
+//! @note Publication is idempotent and thread-safe; old binaries keep the generic path.
+void qore_rt_bind_method_int_unary_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*));
+
+//! Publish a receiver-aware forwarding companion without removing observable signature slots.
+//! @param ctx runtime-owned AOT context identifying the exact normal body
+//! @param normal immutable normal-body identity; publication must match this exact body
+//! @param entry native int argument, borrowed boxed receiver and live RuntimeConfig, context and sink;
+//! returns an owned boxed value after the ordinary declared-return filter
+//! @param requires_pc_map legacy argument: a nonzero value refuses publication because PC maps are retired
+//! @note Thread-safe, idempotent publication. The caller must retain the normal frame and TLS signature slots.
+void qore_rt_bind_receiver_int_method_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    uint64_t (*entry)(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*), int32_t requires_pc_map);
+
+//! Publish a receiver companion and its whole-body unary self-forwarding proof.
+//! @param ctx runtime-owned context identifying this exact normal body
+//! @param normal immutable normal-body identity
+//! @param entry receiver-aware companion with the v1 calling convention
+//! @param requires_pc_map nonzero when the companion requires native-PC source locations
+//! @param slot call-target slot for the sole forwarded call
+//! @param loc legacy location-table index, no longer used
+//! @note Only the companion can be published; legacy location indices cannot prove an eager forwarding location.
+void qore_rt_bind_receiver_int_method_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    uint64_t (*entry)(int64_t, uint64_t, RuntimeConfig*, QoreAOTContext*, ExceptionSink*),
+    int32_t requires_pc_map, int32_t slot, int32_t loc);
+
+//! Publish a receiver companion and an immutable eager-location forwarding descriptor.
+//! @param ctx runtime-owned context identifying this exact normal body
+//! @param normal immutable normal-body identity
+//! @param descriptor image-owned entry, call-target slot and location, all immutable for the Program lifetime
+//! @note Publication is atomic and idempotent; the inner target and all mutable guards are checked per invocation.
+void qore_rt_bind_receiver_int_method_v3(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTReceiverIntForwardEntryV3* descriptor);
+
+//! Publish an immutable proof for an exact float(float) self-forwarding body.
+//! @param ctx runtime-owned context identifying this exact normal body
+//! @param normal immutable normal-body identity
+//! @param descriptor legacy-layout image-owned slot/location, with a required null integer companion
+//! @note Atomic and idempotent; every invocation must still admit the live inner pure float body.
+void qore_rt_bind_receiver_float_forward_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTReceiverIntForwardEntryV3* descriptor);
+
+//! Publish an optional exact-body scalar method companion with an explicit live RuntimeConfig.
+//! @param ctx runtime-owned context whose normal body must match
+//! @param normal immutable body identity, rechecked on every call
+//! @param entry non-throwing int(int) body retaining its native stack check
+void qore_rt_bind_method_int_unary_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*));
+
+//! Publish an additive pure scalar method companion with an inline live-stack guard.
+//! @param ctx runtime-owned context whose normal body must match
+//! @param normal immutable body identity, rechecked on every call
+//! @param entry same pure int(int) proof as v2, appending the borrowed live stack-limit address
+//! @note A null limit or failed inline check must use v2's full guard; v1/v2 bindings remain unchanged.
+void qore_rt_bind_method_int_unary_v3(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*));
+
+//! Try a warmed immutable polymorphic cache entry without boxing a scalar argument or result.
+//! @param ctx caller context owning the call-target slot
+//! @param slot pre-resolved non-generic object method call target
+//! @param base_bits borrowed receiver; ownership is unchanged on either outcome
+//! @param arg full-width integer argument, proven by the caller
+//! @param result initialized scalar result when handled (check xsink before using it)
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation view, never a cached permission snapshot
+//! @return one when handled, zero for effect-free fallback without consuming arguments
+int qore_rt_try_method_int_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Publish a whole-body-proven float(float) method companion, without changing integer bindings.
+//! @param ctx runtime-owned context identifying normal in its PC metadata
+//! @param normal exact compiled normal body, checked again before dispatch
+//! @param entry context-independent, non-throwing float(float) body with context and sink
+//! @note Publication is idempotent and thread-safe; context lifetime bounds this borrowed code pointer.
+void qore_rt_bind_method_float_unary_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreAOTContext*, ExceptionSink*));
+
+//! Publish a pure float(float) companion consuming the caller's live RuntimeConfig.
+//! @param ctx runtime-owned context whose body must match normal
+//! @param normal exact normal body identity, rechecked on every use
+//! @param entry scalar companion retaining the full native stack guard
+void qore_rt_bind_method_float_unary_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*));
+
+//! Publish an additive float(float) companion with the live inline stack-limit view.
+//! @param ctx runtime-owned context whose body must match normal
+//! @param normal exact normal body identity, rechecked on every use
+//! @param entry pure scalar body; a null/failed limit must use v2's full guard before body work
+void qore_rt_bind_method_float_unary_v3(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreAOTContext*, ExceptionSink*, RuntimeConfig*, const size_t*));
+
+//! Try a warmed exact-signature float method cache entry with an unboxed argument/result.
+//! @param ctx caller context owning the call-target slot
+//! @param slot pre-resolved non-generic object method target
+//! @param base_bits borrowed strong receiver; ownership never changes here
+//! @param arg assigned native double, without coercion or representation restriction
+//! @param result scalar result initialized when handled; check xsink before use
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation state, never a cached permission snapshot
+//! @return one when handled, zero for effect-free fallback without consuming arguments
+int qore_rt_try_method_float_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Try a native integer method, reusing a validated PIC match for ordinary dispatch on a body miss.
+//! @param ctx caller context owning the call-target slot
+//! @param slot non-generic object method target, with no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership remains with the caller
+//! @param arg assigned full-width integer, without coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free miss, one for native result, two for ordinary boxed result
+//! @note Does not consume caller argument cleanups. The ordinary entry retains frames, locals,
+//! context, debugger checks and return filtering; a boxed result is never a native type proof.
+int qore_rt_try_method_int_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Floating counterpart of qore_rt_try_method_int_unary_v2, retaining the same outcome/ownership contract.
+//! @param ctx caller context owning the call-target slot
+//! @param slot non-generic object method target, with no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership remains with the caller
+//! @param arg assigned double, including escaped representations; no coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free miss, one for native result, two for ordinary boxed result
+int qore_rt_try_method_float_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Try a parse-resolved integer method while preserving its selected overload.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned full-width integer without coercion
+//! @param result initialized native result for return code one; check xsink before use
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a handled native result
+//! @note Same-class identity follows ordinary class-ID dispatch and retains the parse-selected variant;
+//! subclasses use the full live name-dispatch key. Existing argument cleanups remain caller-owned.
+int qore_rt_try_resolved_method_int_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Floating counterpart of qore_rt_try_resolved_method_int_unary_v1.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned double, including escaped representations, without coercion
+//! @param result initialized native result for return code one; check xsink before use
+//! @param xsink exception sink, including stack exhaustion
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a handled native result
+//! @note Retains the same class-ID, selected-variant and ownership contract as the integer entry.
+int qore_rt_try_resolved_method_float_unary_v1(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Try a resolved integer method, retaining a full-key match for ordinary dispatch on a native body miss.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned full-width integer without coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a native result, two for an ordinary boxed result
+//! @note Preserves v1's selected-variant contract; a boxed result is never a native type proof.
+int qore_rt_try_resolved_method_int_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int64_t arg, int64_t* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Floating counterpart of qore_rt_try_resolved_method_int_unary_v2.
+//! @param ctx caller context owning the call-target slot
+//! @param slot resolved non-static instance target, proven to have no explicit type instantiation
+//! @param base_bits borrowed strong receiver; ownership is unchanged
+//! @param arg assigned double, including escaped representations, without coercion
+//! @param result native result initialized only for return code one; check xsink before use
+//! @param boxed_result owned boxed result initialized only for return code two
+//! @param xsink exception sink for either handled path
+//! @param rc live same-thread invocation view
+//! @return zero for effect-free fallback, one for a native result, two for an ordinary boxed result
+//! @note Preserves the integer entry's class-ID, selected-variant and ownership contract.
+int qore_rt_try_resolved_method_float_unary_v2(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    double arg, double* result, uint64_t* boxed_result, ExceptionSink* xsink, RuntimeConfig* rc);
+
+//! Publish a single-member scalar companion only for the supplied normal body identity.
+//! @param ctx runtime-owned method context
+//! @param normal body identity rechecked at dispatch
+//! @param entry borrowed receiver/class, live RuntimeConfig, accepted output, context and sink
+void qore_rt_bind_member_int_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, QoreObject*, const qore_class_private*, RuntimeConfig*, int*,
+        QoreAOTContext*, ExceptionSink*));
+//! Floating counterpart, with the same publication and ownership contract.
+void qore_rt_bind_member_float_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(double, QoreObject*, const qore_class_private*, RuntimeConfig*, int*,
+        QoreAOTContext*, ExceptionSink*));
+
+//! Publish a zero-argument read-only integer getter for the exact normal body.
+/** @param ctx runtime-owned method context
+    @param normal normal body identity, rechecked at dispatch
+    @param entry companion borrowing receiver/class/RuntimeConfig; accepted zero requests effect-free fallback
+    @return No value; the first valid binding remains installed.
+    @throw None This function does not throw or raise a Qore exception.
+    @note Null or mismatched inputs are a no-op. Release publication transfers no
+    ownership and caches no receiver or member value. Readers must still check
+    the current body and admission contract before invoking the companion.
+
+    @par Example
+    Publish a compiled account-balance getter when its normal body first executes:
+    @code{.cpp}
+    qore_rt_bind_getter_int_v1(ctx, normal_body, balance_getter);
+    @endcode
+*/
+void qore_rt_bind_getter_int_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(QoreObject*, const qore_class_private*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
+//! Publish a zero-argument floating getter under the same exact-body contract.
+/** @param ctx runtime-owned method context
+    @param normal normal body identity, rechecked at dispatch
+    @param entry companion borrowing receiver/class/RuntimeConfig; accepted zero requests effect-free fallback
+    @return No value; the first valid binding remains installed.
+    @throw None This function does not throw or raise a Qore exception.
+    @note Null or mismatched inputs are a no-op. Release publication transfers no
+    ownership and caches no receiver or member value. Runtime float controls and
+    current body/admission checks remain authoritative when invoking the entry.
+
+    @par Example
+    Publish a compiled temperature getter when its normal body first executes:
+    @code{.cpp}
+    qore_rt_bind_getter_float_v1(ctx, normal_body, temperature_getter);
+    @endcode
+*/
+void qore_rt_bind_getter_float_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    double (*entry)(QoreObject*, const qore_class_private*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
+struct QoreAOTEffectMemberIntEntryV1;
+//! Publish an immutable update-prefix/continuation pair for the exact normal AOT body.
+//! @param ctx method context
+//! @param normal matching normal entry
+//! @param entries module-owned native entry, continuation and prefix length
+//! @note The immutable descriptor must outlive the context; conflicting bindings are never replaced.
+void qore_rt_bind_effect_member_int_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*), const QoreAOTEffectMemberIntEntryV1* entries);
+//! Non-evaluating update probe; no effect on a miss and exactly one update on success.
+//! @param object borrowed receiver
+//! @param name member name
+//! @param class_ctx admitted defining-class context
+//! @param delta 1 or -1
+//! @return one if updated, zero if this operation requires the cold continuation
+int qore_rt_try_update_member_int_v1(QoreObject* object, const char* name,
+    const qore_class_private* class_ctx, int64_t delta);
+
+//! Same update probe with both target-width name hashes computed at compile time.
+//! @param object borrowed receiver, alive throughout this call
+//! @param name member name matching both precomputed hashes
+//! @param hash64 XXH64 of name with seed zero
+//! @param hash32 XXH32 of name with seed zero
+//! @param class_ctx admitted defining-class context, or nullptr for public access
+//! @param delta 1 or -1
+//! @return one after exactly one synchronized update, zero without effects when ordinary execution is needed
+//! @note Internal compiler ABI: hashes must match name. No access, storage, locking or representation check
+//! is omitted. Neither outcome allocates, changes node ownership, or enters Qore code.
+int qore_rt_try_update_member_int_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t delta);
+
+//! Copy live primitive storage under the ordinary object read lock, never evaluating references.
+//! @param object borrowed receiver
+//! @param name member name
+//! @param class_ctx method's defining class context
+//! @param result output modified only on success
+//! @return one on success, zero on an effect-free miss requiring ordinary execution
+int qore_rt_try_load_member_int_v1(QoreObject* object, const char* name,
+    const qore_class_private* class_ctx, int64_t* result);
+//! Floating counterpart, with the same synchronized read and untouched-miss-output contract.
+int qore_rt_try_load_member_float_v1(QoreObject* object, const char* name,
+    const qore_class_private* class_ctx, double* result);
+
+//! Identical guard/ownership contract, with both target-width hashes computed by the compiler.
+//! Hashes must match name; access context, locking and actual value tags are still checked live.
+int qore_rt_try_load_member_int_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t* result);
+int qore_rt_try_load_member_float_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result);
+
+//! Read a member whose local private:internal storage context was proven by the compiler.
+//! @param object borrowed receiver already admitted by the full live native method guards
+//! @param name member name from the separately proven whole body
+//! @param hash64 compiler-computed XXH64 of name, seed zero
+//! @param hash32 compiler-computed XXH32 of name, seed zero
+//! @param class_ctx live variant's defining class; must contain the proven local Internal declaration
+//! @param result scalar output, untouched on miss
+//! @return one for a locked live primitive read, zero for an effect-free ordinary fallback
+//! @note Only storage-context lookup is removed; ownership, locking and actual value checks are unchanged.
+int qore_rt_try_load_member_int_internal_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, int64_t* result);
+//! Floating counterpart with the same positive declaration proof and untouched-miss-output contract.
+int qore_rt_try_load_member_float_internal_prehashed_v1(QoreObject* object, const char* name,
+    uint64_t hash64, uint32_t hash32, const qore_class_private* class_ctx, double* result);
+
+//! Publish a pure dynamic int(int) closure companion, idempotently for this exact normal body.
+//! @param ctx runtime-owned context, without per-instance captured values
+//! @param normal body identity checked again at dispatch
+//! @param entry borrowed closure and live RuntimeConfig, accepted output, context and sink
+//! @note The compiler proves exact builtin int(int) without type substitution before emitting this binding.
+//! Publication carries that immutable signature proof; live body/Program/readiness guards remain at dispatch.
+void qore_rt_bind_closure_int_unary_v1(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
+//! Publish the additive fully deferred closure-v2 contract after checking the entire lowered body.
+//! @param ctx runtime-owned context, without per-instance captured values
+//! @param normal exact normal body identity; v1 remains independently published
+//! @param entry context-independent scalar companion with a materializing live stack guard
+//! @note Retains v1's exact builtin int(int) signature proof without type substitution.
+void qore_rt_bind_closure_int_unary_v2(QoreAOTContext* ctx,
+    uint64_t (*normal)(QoreAOTContext*, ExceptionSink*),
+    int64_t (*entry)(int64_t, const QoreClosureBase*, RuntimeConfig*, int*, QoreAOTContext*, ExceptionSink*));
+
+//! Read a single capture under its normal lock, without TLS lookup or reference evaluation.
+//! @param closure borrowed live closure instance
+//! @param ctx context mapping the compiled slot to its lexical local
+//! @param slot local slot in ctx
+//! @param result full-width integer output on success
+//! @return one on success, zero for ordinary-evaluation fallback without visible effects
+int qore_rt_try_load_closure_int_v1(const QoreClosureBase* closure, QoreAOTContext* ctx,
+    int32_t slot, int64_t* result);
+
+//! Acquire an optional borrowed live context for generated loop cancellation checks.
+//! @return nullptr after thread-data teardown; only valid within this thread's invocation
+RuntimeConfig* qore_rt_get_loop_runtime_config();
+//! Acquire addresses for an inline no-pending poll; never snapshots request values.
+//! @param rc optional same-thread live context from qore_rt_get_loop_runtime_config()
+//! @param state non-null caller-owned output; all three fields are always initialized
+//! @note The output's borrowed addresses cannot outlive the current native invocation.
+void qore_rt_get_cancel_poll_state_v1(RuntimeConfig* rc, QoreCancelPollStateV1* state);
+//! Preserve normal cancellation semantics; a null context selects the legacy TLS path.
+//! @param xsink optional sink receiving a cancellation or interruption exception
+//! @param operation diagnostic operation name
+//! @param rc optional borrowed context from qore_rt_get_loop_runtime_config()
+//! @return 1 if cancelled or interrupted, otherwise 0
+int64_t qore_rt_check_cancel_v2(ExceptionSink* xsink, const char* operation, RuntimeConfig* rc);
+
+//! Return 1 after an attempted native call (also on exception), 0 for generic fallback.
+//! Scalar arguments/results are native, borrowed, and bool uses a 0/1 int64_t carrier.
+//! The int(int) v3 miss path also borrows eligible dynamic closures, without storing them in cache.
+#define QORE_DECLARE_TYPED_FUNCREF_RESULT(NAME, TYPE) \
+    int qore_rt_try_funcref_##NAME##_0_v1(uint64_t ref, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_int_v1(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_float_v1(uint64_t ref, double arg, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_bool_v1(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink); \
+    int qore_rt_try_funcref_##NAME##_0_v2(uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
+    int qore_rt_try_funcref_##NAME##_int_v2(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
+    int qore_rt_try_funcref_##NAME##_float_v2(uint64_t ref, double arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
+    int qore_rt_try_funcref_##NAME##_bool_v2(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc); \
+    int qore_rt_try_funcref_##NAME##_0_v3(uint64_t ref, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache); \
+    int qore_rt_try_funcref_##NAME##_int_v3(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache); \
+    int qore_rt_try_funcref_##NAME##_float_v3(uint64_t ref, double arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache); \
+    int qore_rt_try_funcref_##NAME##_bool_v3(uint64_t ref, int64_t arg, TYPE* result, ExceptionSink* xsink, RuntimeConfig* rc, QorePreparedFunctionRefV3* cache);
+QORE_DECLARE_TYPED_FUNCREF_RESULT(int, int64_t)
+QORE_DECLARE_TYPED_FUNCREF_RESULT(float, double)
+QORE_DECLARE_TYPED_FUNCREF_RESULT(bool, int64_t)
+#undef QORE_DECLARE_TYPED_FUNCREF_RESULT
+
+//! V4 adds null-initialized, invocation-owned scratch to the stable v3 cache ABI.
+//! The slot must be released on every exit/error cleanup, before releasing the cache owner.
+//! Only non-reentrant callee-v3 integer/floating results reuse frames; legacy targets tail-call v3.
+/** @param ref the original NaN-boxed function reference
+    @param result receives a native result when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one zero-argument integer-signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 if the caller must use generic evaluation
+    @note Runtime-private ABI; the reference and descriptor have the same lifetime rules as v3.
+*/
+int qore_rt_try_funcref_int_0_v4(uint64_t ref, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Unary integer counterpart of qore_rt_try_funcref_int_0_v4().
+/** @param ref the original NaN-boxed function reference
+    @param arg native integer argument
+    @param result receives a native result when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one integer-to-integer signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 if the caller must use generic evaluation
+*/
+int qore_rt_try_funcref_int_int_v4(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
+//! V9 consumes a compiler-proven invariant reference in a private reusable helper.
+/** Every producer of this invocation-local v3 descriptor must receive the same
+    reference bits for its entire lifetime. The descriptor starts at NOTHING;
+    cleanup may clear it, but no producer may install a different nonempty owner.
+    The compiler verifies every address use before selecting this private ABI.
+    The wrapper checks only nonempty ownership; identity is asserted in debug.
+    The v4 cache, scratch, ownership, exception and cleanup contracts are unchanged.
+    Integer unary misses retain v5 closure routing. Live Program, debugger, body,
+    readiness and stack checks, and per-call reader synchronization remain active.
+    @param ref invariant NaN-boxed reference, borrowed for this call
+    @param result receives a native integer result when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache zero-initialized, invocation-owned zero-argument integer descriptor
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note Runtime-private ABI. Old v4/v5 helpers remain available for existing artifacts and changing references.
+*/
+int qore_rt_try_funcref_int_0_v9(uint64_t ref, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Integer unary counterpart with the invariant-reference contract above.
+/** @param ref invariant NaN-boxed reference, borrowed for this call
+    @param arg native integer argument
+    @param result receives a native integer result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache invocation-owned descriptor for this exact signature and invariant reference
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note All producer arguments must have identical reference bits throughout the descriptor lifetime.
+*/
+int qore_rt_try_funcref_int_int_v9(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Floating zero-argument counterpart with the invariant-reference contract above.
+/** @param ref invariant NaN-boxed reference, borrowed for this call
+    @param result receives a native floating result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache invocation-owned descriptor for this exact signature and invariant reference
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note All producer arguments must have identical reference bits throughout the descriptor lifetime.
+*/
+int qore_rt_try_funcref_float_0_v9(uint64_t ref, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Floating unary counterpart with the invariant-reference contract above.
+/** @param ref invariant NaN-boxed reference, borrowed for this call
+    @param arg native floating argument
+    @param result receives a native floating result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's live runtime context
+    @param cache invocation-owned descriptor for this exact signature and invariant reference
+    @param frame null-initialized scratch paired with this descriptor; release before its owner
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note All producer arguments must have identical reference bits throughout the descriptor lifetime.
+*/
+int qore_rt_try_funcref_float_float_v9(uint64_t ref, double arg, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
+//! V5 checks a live closure tag once on a reusable integer callback miss.
+/** @param ref the original NaN-boxed callback, borrowed for this call
+    @param arg native integer argument
+    @param result receives a native result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one integer-to-integer signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note The v4 scratch, ownership and cleanup contract is unchanged. Closures are never
+        retained in the cache; all live native-closure admission and capture locks remain.
+*/
+int qore_rt_try_funcref_int_int_v5(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
+//! Zero-argument floating counterpart of qore_rt_try_funcref_int_0_v4().
+/** @param ref the original NaN-boxed function reference
+    @param result receives a native double when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one zero-argument floating-signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note Only complete non-throwing callee-v3 bodies may use the reusable deferred context.
+        Both physical stack guards and per-call reader synchronization are retained.
+        Release the frame before its borrowed cache owner, using qore_rt_release_funcref_frame_v1().
+*/
+int qore_rt_try_funcref_float_0_v4(uint64_t ref, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+//! Unary floating counterpart of qore_rt_try_funcref_float_0_v4().
+/** @param ref the original NaN-boxed function reference
+    @param arg native double argument, not a NaN-boxed payload
+    @param result receives a native double when handled; unchanged on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one floating-to-floating signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note The same guard, ownership and cleanup contract as qore_rt_try_funcref_float_0_v4() applies.
+*/
+int qore_rt_try_funcref_float_float_v4(uint64_t ref, double arg, double* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
+//! Destroy an inactive placement-constructed frame and clear its slot.
+/** @param frame non-null scratch pointer; a null first word makes cleanup a no-op
+    @note Call before releasing the borrowed descriptor owner; idempotent after cleanup.
+*/
+void qore_rt_release_funcref_frame_v1(QorePreparedFunctionRefFrameV4* frame);
 
 //! Create a method reference; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);
@@ -1224,6 +1910,18 @@ uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSi
 uint64_t qore_rt_list_index_access_compat(uint64_t list_val, int64_t index, int32_t string_index_char,
         ExceptionSink* xsink);
 
+//! Index an evaluated container using an already available live runtime context.
+/** @param list_val borrowed NaN-boxed container, evaluated before reading the runtime policy
+    @param index signed index, normalized according to the current negative-offset policy
+    @param string_index_char nonzero for character indexing; zero for substring indexing
+    @param xsink exception sink used by the ordinary indexed-read operation
+    @param rc borrowed same-thread invocation view, valid through evaluation; nullptr uses the compatibility path
+    @return owned NaN-boxed result, or NOTHING for unsupported containers/out-of-range indices
+    @note Reads live thread policy through rc, not its compatibility snapshot; ownership and evaluation are unchanged.
+*/
+uint64_t qore_rt_list_index_access_context_v1(uint64_t list_val, int64_t index, int32_t string_index_char,
+        ExceptionSink* xsink, RuntimeConfig* rc);
+
 //! Extract the value assigned to one LHS entry in a list assignment.
 uint64_t qore_rt_list_assignment_value(uint64_t value, int64_t index, ExceptionSink* xsink);
 uint64_t qore_rt_list_assignment_value_throwing(uint64_t value, int64_t index, ExceptionSink* xsink);
@@ -1330,11 +2028,17 @@ void qore_rt_list_set_common_type_by_type_path(uint64_t list_val, int64_t state,
 void qore_rt_hash_set_common_type(uint64_t hash_val, int64_t state);
 
 //! Set the type of the result list of a select operator from its values; see QoreIROpcode::ListSetScannedType.
-void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* element_type);
+//! Leaves the result type unchanged if cancellation raises an exception in \a xsink.
+void qore_rt_list_set_scanned_type(uint64_t list_val, const QoreTypeInfo* element_type, ExceptionSink* xsink);
 
 //! AOT form of qore_rt_list_set_scanned_type(); \a has_element_type = 0 for no element type
 void qore_rt_list_set_scanned_type_by_type_path(uint64_t list_val, const char* element_type_path,
         int32_t has_element_type, ExceptionSink* xsink);
+
+// Compatibility helpers for previously serialized map IR.
+int64_t qore_rt_common_type_fold(int64_t state, uint64_t value, int64_t index);
+void qore_rt_list_append_element_legacy(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
+void qore_rt_list_append_element_legacy_throwing(uint64_t list_val, uint64_t value_val, ExceptionSink* xsink);
 
 //! Append a value to the result list of a map or map/select operator as QoreListNode::push() appends it, and fold
 //! its type into the common value type state
@@ -1348,7 +2052,7 @@ int64_t qore_rt_list_append_element_throwing(uint64_t list_val, uint64_t value_v
         ExceptionSink* xsink);
 
 //! Set the type of the result list of a select operator from its values or else the value type of its source.
-void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val);
+void qore_rt_list_set_scanned_type_from_source(uint64_t list_val, uint64_t source_val, ExceptionSink* xsink);
 
 //! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
 //! Returns NOTHING if not a list or index out of bounds.
@@ -1407,6 +2111,26 @@ uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
 uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! Typed AOT fallback with ordinary binding and no initial optional native closure attempt.
+/** Used after a typed scalar admission miss; ordinary argument binding is still required.
+    Full Program entry and its native retry remain. Arguments/results use the existing boxed ABI.
+    Argument-compatibility misses use the original helper to preserve its wide-integer native path.
+*/
+uint64_t qore_rt_call_closure_typed_fallback_v1(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink);
+
+//! Typed AOT fallback consuming caller-owned argument cleanup refs.
+uint64_t qore_rt_call_closure_typed_fallback_consume_args_v1(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! Typed AOT fallback that throws QoreJITException when the exception sink is set.
+uint64_t qore_rt_call_closure_typed_fallback_v1_throwing(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink);
+
+//! Consuming typed AOT fallback that throws QoreJITException when the exception sink is set.
+uint64_t qore_rt_call_closure_typed_fallback_consume_args_v1_throwing(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 // --- AOT context-based helpers (Phase 7b) ---
 // These variants take QoreAOTContext* and a slot index instead of raw pointers.
 // At runtime, they resolve ctx->array[idx] and delegate to the existing helpers.
@@ -1416,8 +2140,76 @@ struct QoreAOTContext;
 //! Load from a local variable via AOT context slot
 uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Load an owned value through invocation-local prepared storage.
+/** @param ctx current AOT context
+    @param idx compiler-proven ordinary body-local index
+    @param prepared_slot borrowed result of qore_rt_get_reload_local_slot_aot_v1 in this invocation,
+        or nullptr to retain ordinary local lookup
+    @param xsink exception sink, including reference evaluation failures
+    @return the same owned value as qore_rt_load_local_aot
+    @note Prepared storage omits local lookup; actual strong-list storage returns its owned node
+        directly. Weak/reference evaluation and pending-exception behavior remain unchanged;
+        caller cache publication and deferred cleanup still follow the load.
+*/
+uint64_t qore_rt_load_prepared_local_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    void* prepared_slot, ExceptionSink* xsink);
+
+//! Acquire the invalidation epoch for a compiler-proven read-only strong class parameter.
+//! @param ctx current AOT context
+//! @param idx parameter local slot
+//! @param cached entry value retained by the existing native cleanup owner
+//! @param rc borrowed live same-thread invocation context
+//! @return borrowed epoch address, or immutable UINT64_MAX sentinel if admission fails
+//! @note Never retain the address beyond this invocation/thread; no new object ownership.
+const uint64_t* qore_rt_get_class_param_epoch_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t cached, RuntimeConfig* rc);
+
 //! AOT variant of qore_rt_reload_local_if_stale().
 void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink);
+
+//! Resolve compiler-proven ordinary AOT body-local storage after its instantiation.
+/** @param ctx current AOT context
+    @param idx body-local index, never a parameter, capture, self or top-level local
+    @param rc borrowed live same-thread invocation context
+    @return borrowed slot, or nullptr to retain ordinary reload lookup
+    @note The slot is valid only during this invocation, including nested calls and block clears.
+    The executing Program may be an importing caller rather than the AOT code owner;
+    compiler-proven instantiation and exact local identity select its active slot.
+    No value, ownership or live-state flags are cached. The first-use presence control
+    QORE_DISABLE_AOT_PREPARED_LOCAL_RELOAD returns nullptr independently of store-slot controls.
+*/
+void* qore_rt_get_reload_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+
+//! Reload through a non-null invocation-local slot with the ordinary evaluation/ownership protocol.
+/** @param prepared_slot non-null result of qore_rt_get_reload_local_slot_aot_v1 in this invocation
+    @param cache caller's borrowed local-value cache
+    @param tracker caller's owning current reload tracker
+    @param deferred caller's owning previous reload tracker
+    @param valid_epoch caller's last completed reload epoch
+    @param epoch current caller invalidation epoch
+    @param xsink exception sink, including reference evaluation and deferred destruction failures
+    @note Matching epochs are a no-op. Owners are snapshotted before evaluation, values are
+    published before old deferred cleanup, and the epoch is published last, as in generic reloads.
+*/
+void qore_rt_reload_prepared_local_if_stale_aot_v1(void* prepared_slot, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink);
+
+//! Prepared reload with exact live-scalar reuse and the complete v1 fallback.
+/** @param prepared_slot same invocation-local non-null storage contract as v1
+    @param cache borrowed boxed value, compared to live primitive storage before reuse
+    @param tracker owning current reload tracker
+    @param deferred owning previous reload tracker
+    @param valid_epoch caller's last completed reload epoch
+    @param epoch caller's current invalidation epoch
+    @param xsink exception sink; populated sinks retain ordinary v1 handling
+    @note Only identical immediate int/float/bool values with non-owning scalar/NOTHING cleanup
+    slots bypass evaluation. All epoch invalidation and cleanup ordering remain unchanged.
+    QORE_DISABLE_AOT_SCALAR_LOCAL_RELOAD presence at first use selects the v1 operation.
+*/
+void qore_rt_reload_prepared_local_if_stale_aot_v2(void* prepared_slot, uint64_t* cache,
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
         ExceptionSink* xsink);
 
@@ -1425,20 +2217,242 @@ void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
+//! Checked required-class initializer returning an owned copy of the actual stored value.
+/** Only emitted for a normal, non-captured, non-self AOT body-local initializer. Weak inputs
+    are normalized and all assignment checks remain. Nonfresh/captured runtime
+    slots retain the ordinary post-cleanup reload instead of returning an earlier
+    snapshot. The caller transfers the returned reference to its reload tracker.
+    @param ctx current AOT context
+    @param idx valid body-local slot
+    @param val borrowed input value
+    @param xsink exception sink; errors return NOTHING with no owned result
+    @return owned NaN-boxed stored value, or NOTHING on error
+*/
+uint64_t qore_rt_assign_class_local_result_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t val, ExceptionSink* xsink);
+//! Native-EH form; throws QoreJITException on a populated exception sink.
+uint64_t qore_rt_assign_class_local_result_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t val, ExceptionSink* xsink);
+
+//! Attempts a checked class initializer whose cache borrows an existing entry owner.
+/** @param ctx current AOT function context
+    @param idx compiler-proven initial ordinary required-class local slot
+    @param value strong receiver independently pinned by an existing caller entry
+    owner until every cached/SSA use ends, including after reflective slot changes
+    @param xsink exception sink
+    @return 1 if handled (check xsink), 0 without changing the slot for normal fallback
+    @note No cache reference is returned. Successful storage preserves the input
+    bits and acquires the ordinary runtime-slot reference. Type/access checks,
+    real-reference bookkeeping and runtime-local cleanup remain unchanged.
+*/
+int qore_rt_try_assign_pinned_class_local_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, ExceptionSink* xsink);
+//! Throwing counterpart for native AOT exception handling.
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, ExceptionSink* xsink);
+
+//! Resolve an opaque class body-local slot after native entry instantiation.
+/** @param ctx current AOT context
+    @param idx compiler-proven ordinary class body-local slot, never popped within this function
+    @param rc live same-thread invocation context
+    @return borrowed storage handle, or nullptr for ordinary runtime lookup
+    @note The handle is invocation-local and owns no value. Reflection may replace
+    its value, but the pre-instantiated storage remains until function exit.
+*/
+void* qore_rt_get_class_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+
+//! Resolve an ordinary auto body-local slot after this invocation's instantiation.
+/** @param ctx current AOT function context
+    @param idx compiler-proven noncaptured runtime-backed auto body-local slot
+    @param rc live same-thread context; must belong to ctx's Program
+    @return borrowed slot handle, or nullptr to retain ordinary assignment lookup
+    @note The caller owns the slot lifetime until function exit. Block exit clears
+    its value without popping storage; parameters and closure slots are excluded.
+    No declaration decision, primitive value or live slot flags are cached.
+*/
+void* qore_rt_get_auto_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+//! Assign with optional invocation-local storage, retaining all ordinary declaration and live-value checks.
+/** @param ctx current AOT function context
+    @param idx same body-local index supplied to the slot getter
+    @param value borrowed NaN-boxed input
+    @param prepared_slot result of qore_rt_get_auto_local_slot_aot_v1 in this invocation, or nullptr
+    @param xsink exception sink; all unsupported assignments keep ordinary handling
+    @note The actual runtime slot is updated; no value owner or reflection reload is elided.
+*/
+void qore_rt_assign_auto_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException on a populated exception sink.
+void qore_rt_assign_auto_local_slot_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+
+//! Resolve ordinary body storage and admit its immutable auto declaration once per invocation.
+/** @param ctx current AOT function context
+    @param idx compiler-proven ordinary auto body-local slot, excluding parameters and private IR storage
+    @param rc borrowed live same-thread, same-Program invocation context
+    @return borrowed slot with declaration admission, or nullptr for the fully checked fallback
+    @note Only a v2 getter result may be passed as a non-null slot to the v2 store. The declaration
+    is complete before this invocation; values and assignment/ownership flags are never cached.
+    The existing QORE_DISABLE_AOT_AUTO_LOCAL_SLOT control still disables slot preparation.
+*/
+void* qore_rt_get_auto_local_slot_aot_v2(QoreAOTContext* ctx, int32_t idx, RuntimeConfig* rc);
+//! Assign with prepared declaration admission and live input/storage checks.
+/** @param ctx current AOT function context
+    @param idx same local index as the v2 getter
+    @param value borrowed NaN-boxed input
+    @param prepared_slot v2 getter result in this invocation, or nullptr for v1 handling
+    @param xsink exception sink; unsupported replacements retain ordinary assignment and cleanup
+    @note Presence of QORE_DISABLE_AOT_AUTO_LOCAL_DECLARATION at first v2 store use selects v1
+    checks with the same prepared storage. Scalar/direct-store controls remain independent.
+*/
+void qore_rt_assign_auto_local_slot_aot_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException on a populated exception sink.
+void qore_rt_assign_auto_local_slot_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+
+//! Assign as v2 and report an exact, non-reentrant scalar publication.
+/** @param ctx current AOT function context
+    @param idx same ordinary body-local index as the v2 getter
+    @param value borrowed NaN-boxed input
+    @param prepared_slot v2 getter result in this invocation, or nullptr for ordinary assignment
+    @param xsink exception sink; ordinary fallback and error handling are unchanged
+    @return 1 only after a sink-clean immediate scalar replacement in the admitted live slot;
+    0 after ordinary assignment, failure, or disabled publication reporting
+    @note This is a point-in-time storage witness, not a callee-purity or subsequent-cleanup proof.
+    The caller must invalidate it before any possibly reentrant operation or external write.
+    Presence of QORE_DISABLE_AOT_SCALAR_BOUNDARY_REUSE at first use disables reporting only.
+*/
+int qore_rt_assign_auto_local_slot_aot_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException on a populated exception sink.
+int qore_rt_assign_auto_local_slot_aot_throwing_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+
+//! Checked pinned initializer with an optional prepared slot; v1 ownership and fallback contract.
+//! @param prepared_slot handle from qore_rt_get_class_local_slot_aot_v1 for this ctx/idx/invocation
+int qore_rt_try_assign_pinned_class_local_aot_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Throwing counterpart; throws QoreJITException on a populated sink.
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, ExceptionSink* xsink);
+//! Prepare immutable declaration metadata once after acquiring this invocation's body-local slot.
+/** @param ctx current AOT context, owning the local and its type metadata
+    @param idx compiler-proven ordinary required-class body-local index
+    @param prepared_slot same-invocation handle from qore_rt_get_class_local_slot_aot_v1
+    @return borrowed required-class constraint, or nullptr to retain the v2 initializer
+    @note No object acceptance, access-context result or live slot state is cached.
+*/
+const QoreClass* qore_rt_get_class_local_constraint_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    void* prepared_slot);
+//! Pinned initializer with prepared storage and immutable declaration constraint.
+/** @param ctx current AOT context
+    @param idx compiler-proven initial ordinary required-class body-local slot
+    @param value borrowed input independently pinned until every cached/SSA use ends
+    @param prepared_slot same-invocation storage handle
+    @param constraint result of qore_rt_get_class_local_constraint_aot_v1 for this ctx/idx/slot
+    @param xsink exception sink
+    @return 1 if stored unchanged, 0 for ordinary fallback; nullptr constraint uses v2
+    @note Live slot state, object representation and current class/access checks remain at each store.
+*/
+int qore_rt_try_assign_pinned_class_local_aot_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Throwing counterpart; throws QoreJITException on a populated sink.
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v3(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Version 3 storage/ownership contract, with live first-public-base identity acceptance.
+/** @param ctx current AOT context
+    @param idx compiler-proven initial ordinary required-class body-local slot
+    @param value borrowed input independently pinned until every cached/SSA use ends
+    @param prepared_slot same-invocation storage handle
+    @param constraint prepared immutable declaration constraint; nullptr retains v2
+    @param xsink exception sink
+    @return 1 if stored unchanged, 0 for ordinary fallback
+    @note No acceptance decision is cached; non-public or later bases retain ordered lookup.
+*/
+int qore_rt_try_assign_pinned_class_local_aot_v4(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Throwing counterpart; throws QoreJITException on a populated sink.
+/** @copydoc qore_rt_try_assign_pinned_class_local_aot_v4
+    @throw QoreJITException if the exception sink is populated after the initializer
+*/
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v4(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Clear the live slot value at the original source scope exit; nullptr uses ordinary lookup.
+/** @param ctx current AOT context
+    @param idx compiler-proven ordinary class body-local index
+    @param prepared_slot same-invocation handle; storage remains instantiated after clearing
+    @param xsink exception sink, including one already populated during unwind
+    @note Preserves del(), real-reference bookkeeping and declaration-order cleanup.
+*/
+void qore_rt_clear_class_local_slot_aot_v1(QoreAOTContext* ctx, int32_t idx,
+    void* prepared_slot, ExceptionSink* xsink);
+
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
 void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Publish a pre-coerced exact scalar with live declaration/storage guards and ordinary fallback.
+/** @param ctx current AOT context
+    @param idx ordinary exact-scalar declaration selected by the compiler
+    @param val borrowed pre-coerced value; wide, mismatched and owning values use ordinary assignment
+    @param xsink receives exceptions; an already populated sink prevents publication
+    @note The actual runtime slot remains visible. No slot lifetime or parameter binding is cached.
+*/
+void qore_rt_assign_exact_scalar_local_aot_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+
+//! Publish a pre-coerced list, avoiding reassignment only when its ordinary local already owns the same node.
+/** @param ctx current AOT context
+    @param idx compiler-selected exact integer-list body local
+    @param val borrowed, already coerced assignment input
+    @param prepared_slot same-invocation storage from qore_rt_get_reload_local_slot_aot_v1, or nullptr
+    @param xsink receives assignment errors; a populated sink prevents publication
+    @note Strong identity, declaration, live slot and container guards precede elision. All misses retain
+    ordinary weak normalization and assignment. Caller cache ownership and exception checks are unchanged.
+*/
+void qore_rt_assign_same_list_local_aot_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException when the sink is populated.
+void qore_rt_assign_same_list_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    void* prepared_slot, ExceptionSink* xsink);
+//! Native-EH counterpart; throws QoreJITException when the sink is populated.
+void qore_rt_assign_exact_scalar_local_aot_throwing_v1(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+//! Publish as v1 and report whether the actual slot contains the exact immediate input bits.
+/** @return 1 only after non-reentrant exact scalar publication, 0 for ordinary fallback or disabled reporting
+    @note A positive result permits reuse only before any subsequent reentrant operation.
+    Cache ownership rotation, deferred cleanup and later invalidation must remain unchanged.
+*/
+int qore_rt_assign_exact_scalar_local_aot_v2(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+//! Native-EH counterpart with the same publication result.
+int qore_rt_assign_exact_scalar_local_aot_throwing_v2(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
 void qore_rt_assign_local_no_coerce_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
         ExceptionSink* xsink);
 
 //! Instantiate a local variable via AOT context slot
 void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
+//! AOT slot form of qore_rt_activate_local().
+/** @param ctx the current invocation's initialized AOT context
+    @param idx a valid local slot index in @a ctx, identifying an instantiated ordinary local
+*/
+void qore_rt_activate_local_aot(QoreAOTContext* ctx, int32_t idx);
 
 //! Clear a local variable's value via AOT context slot (block scope exit)
 void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Uninstantiate a local variable via AOT context slot (clear only, no pop)
 void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Pop ordinary body storage owned by a direct AOT fast entry.
+/** @param ctx current AOT function context
+    @param idx noncaptured body local instantiated by this entry, in reverse push order
+    @param xsink receives any exception from destruction
+    @note Use only at function exit, including exceptional exit. Ordinary wrapper-owned
+    entries and block exits retain clear-only handling. No slot handle survives this pop.
+*/
+void qore_rt_pop_body_local_aot_v1(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Pop a closure-use variable from the cvstack via AOT context slot
 //! Unlike qore_rt_uninstantiate_local_aot (which only clears), this properly pops
@@ -1561,6 +2575,10 @@ uint64_t qore_rt_lv_path_compound_aot(QoreAOTContext* ctx, int32_t slot, uint64_
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound_consume_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
+// Compiler-proved local/list-index AddAssign; the index is a native integer.
+// The invocation-owned slot is borrowed. A nonzero consume_rhs transfers RHS ownership in every case.
+uint64_t qore_rt_lv_path_int_add_prepared_aot_v1(QoreAOTContext* ctx, int32_t slot, int64_t index,
+    uint64_t rhs_bits, void* prepared_slot, int32_t consume_rhs, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_unary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
     ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_binary_mut_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
@@ -1612,6 +2630,17 @@ QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int
 //! Returns true when an assigned object is valid and needs no provenance guard.
 //! Used only to guard receiver-independent AOT fast entries; tagged receivers use guarded dispatch.
 int qore_rt_object_is_valid(uint64_t value);
+
+//! Borrows the live deletion status of an already-owned strong receiver.
+/** @param value receiver kept alive by the caller for the entire view lifetime
+    @return address of a lock-free, four-byte atomic integer, or nullptr for a
+    non-object/unsupported representation; the caller then uses normal validation
+    @note Generated code must load with sequential consistency on every call.
+    Version 1 defines -1 as deleted; all other states retain isValid() semantics,
+    including a destructor in progress. This acquires no reference and must not
+    outlive the receiver owner. A changed receiver requires ordinary dispatch.
+*/
+const void* qore_rt_get_object_status_view_v1(uint64_t value);
 //! Raises OBJECT-ALREADY-DELETED unless the method-call receiver is valid.
 void qore_rt_check_valid_object_call_receiver(uint64_t value,
         ExceptionSink* xsink);
@@ -1623,9 +2652,85 @@ int qore_rt_object_has_exact_aot_target_class(QoreAOTContext* ctx, int32_t slot,
 int qore_rt_object_has_exact_aot_target_class_only(QoreAOTContext* ctx, int32_t slot,
         uint64_t value);
 
+//! Check a load-bound exact receiver alternative to a resolved method call.
+/** @param ctx active AOT context owning both target slots
+    @param base_slot original resolved call target
+    @param target_slot compile-proven scalar override target
+    @param value borrowed boxed receiver
+    @return true for a live, untagged exact receiver with a different class ID
+    whose object and method execute in the context's Program; false retains
+    ordinary dispatch, including same-ID imported class behavior
+    @note Neither the receiver nor the target metadata is retained or modified.
+*/
+int qore_rt_object_has_exact_aot_override_v1(QoreAOTContext* ctx, int32_t base_slot,
+        int32_t target_slot, uint64_t value);
+
+//! Get immutable class admission for a load-bound scalar override.
+/** @param ctx active AOT context owning both target slots and their metadata
+    @param base_slot original resolved call target
+    @param target_slot compile-proven scalar override target
+    @return the borrowed target class, or nullptr for missing metadata, matching
+    class IDs or a method owned by a different Program
+    @note Target metadata and Program ownership remain fixed while ctx is live.
+    This does not validate a receiver and can be hoisted within an invocation.
+*/
+const QoreClass* qore_rt_get_aot_override_class_v1(QoreAOTContext* ctx,
+        int32_t base_slot, int32_t target_slot);
+
+//! Classify the current receiver for a scalar override chain.
+/** @param ctx active AOT context whose Program must own the receiver
+    @param value borrowed boxed receiver, checked afresh at each call
+    @return the class of a live strong receiver without provenance, or nullptr
+    @note No receiver, liveness result or ownership is retained. Compare only
+    against a nonnull class admitted by qore_rt_get_aot_override_class_v1().
+*/
+const QoreClass* qore_rt_get_live_aot_override_receiver_class_v1(QoreAOTContext* ctx, uint64_t value);
+
+//! Get the debugger gate of an AOT call target that AOT code calls natively.
+/** AOT code that calls a user function, static method or method natively or runs its body inline (a fast entry, a
+    body summary or a scalar override) loads the returned pointer-sized word with a relaxed atomic load before each
+    such call and takes the ordinary call path when it is not null, as that path does not run a callee natively
+    while a debugger is attached to the callee's execution Program or to its body owner
+    (qore_rt_debugger_attached()).  The compiler emits no gate for a callee whose Program cannot be debugged
+    (\c PO_NO_DEBUGGING).
+
+    @param ctx active AOT context owning the call-target slot
+    @param slot the function or method call target
+    @return the attached-debugger word of the method's Program, which stays valid while ctx is live; a word that is
+    never null if the call cannot be checked with one Program; a word that is always null for a target without a
+    user variant (never inlined)
+    @note The result can be hoisted within an invocation; the word must be loaded at every call.
+*/
+const void* qore_rt_get_aot_method_debugger_gate_v1(QoreAOTContext* ctx, int32_t slot);
+
+//! Get the debugger gate of the Program of an AOT context, for a call without a call-target slot
+/** As qore_rt_get_aot_method_debugger_gate_v1(), for a callee compiled with the code of \a ctx (a known call
+    reference), which belongs to the context's Program.
+    @return a word that is never null without a Program
+*/
+const void* qore_rt_get_aot_context_debugger_gate_v1(QoreAOTContext* ctx);
+
+//! The ordinary call of a known call reference that AOT code makes while a debugger is attached
+/** @param arg_cleanups the caller's temporary argument cleanups, consumed by the call, or nullptr
+*/
+uint64_t qore_rt_call_reference_debugger_v1(uint64_t ref_bits, uint64_t* args, uint64_t** arg_cleanups,
+    int nargs, ExceptionSink* xsink);
+
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! Executes the compile-proven canonical trim(string) overload in the current Program.
+/** @param ctx active AOT context
+    @param slot prelinked canonical trim value-overload slot
+    @param value borrowed boxed argument; non-string/enum values use ordinary dispatch
+    @param arg_cleanups caller-owned argument cleanup slots; the caller clears these after return
+    @param xsink exception sink, including canonical encoding/stack failures
+    @return owned boxed result, or NOTHING on error
+    @note Context/type/control misses use consuming ordinary dispatch. No call checkpoint is removed.
+*/
+uint64_t qore_rt_string_trim_aot_v1(QoreAOTContext* ctx, int32_t slot, uint64_t value,
+    uint64_t** arg_cleanups, ExceptionSink* xsink);
 
 //! Direct function call — resolved at parse time, bypasses dynamic_cast chain and AST node copy.
 //! Calls QoreFunction::evalFunctionTmpArgs() directly.
@@ -1928,6 +3033,14 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t 
 //! AOT pseudo-method variant that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! AOT-only canonical <string>::split(string) call with compile-proven false defaults.
+/** Borrows both strings. The caller clears temporary argument slots after the call; fallback
+    consumes those slots before reentry, as the ordinary pseudo-method helper does.
+    Preserves the builtin frame, physical stack check, runtime flags, and code context.
+*/
+uint64_t qore_rt_pseudo_string_split_aot_v1(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t separator_bits, uint64_t** arg_cleanups, ExceptionSink* xsink);
 
 //! AOT guarded fast path for no-arg <list>::empty() and <list>::val() pseudo-methods.
 uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,

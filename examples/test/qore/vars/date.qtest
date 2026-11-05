@@ -430,6 +430,14 @@ class DateTest inherits QUnit::Test {
             assertEq(i.value[1], tzd.getUtcOffset(), "Asia/Tokyo: " + i.key);
         }
 
+        # Long whitespace suffixes remain valid across cancellation checkpoints;
+        # an invalid character after them must still be rejected.
+        foreach int length in ((99, 100, 101, 4096)) {
+            string text = "2026-01-01T10:00:00Z" + strmul(" ", length);
+            assertEq(2026-01-01T10:00:00Z, date(text));
+            assertThrows("INVALID-DATE", \date(), text + "X");
+        }
+
         # without a zone designator, the time is in the local time zone
         assertEq(2026-01-01T10:00:00, date("2026-01-01T10"));
         assertEq(2026-01-01T10:00:00, date("20260101T10"));

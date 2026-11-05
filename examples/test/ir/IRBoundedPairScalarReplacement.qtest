@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class IRBoundedPairScalarReplacementTest
+
+class IRBoundedPairScalarReplacementTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string gate = "QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT=1 ";
+    }
+    constructor() : Test("Bounded integer pair scalar replacement", "1.0", \ARGV) {
+        addTestCase("values, aliases, bounds, ownership and compiled selection", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string source = get_script_dir() + "/IRBoundedPairScalarReplacement.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("bounded pair checks passed", expected);
+        foreach string prefix in (("", gate)) {
+            foreach string mode in (("ir", "jit", "tiered")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-bounded-pair-");
+        foreach string prefix in (("", gate, "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                    prefix + "QORE_DUMP_LLVM_IR=1 ");
+                if (level == "-O3") {
+                    foreach string name in (("inlinePair", "inlineCommutedPair", "inlineMultipleReads", "inlineCrossBlockPair",
+                            "inlineExtremes", "loopPair")) {
+                        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                            + "_[^\n]*\n(.*?)\n\\}");
+                        assertTrue(!!body, name + " LLVM definition");
+                        assertEq(prefix == gate, regex(body[0] ?? "", "(?:call|invoke) [^\n]*@qore_rt_make_list"),
+                            name + " list allocation selection");
+                    }
+                    foreach string name in (("boundedPair", "commutedPair", "multipleReads", "crossBlockPair", "uncheckedPair", "wideMaskPair", "negativeMaskPair", "boxedPair",
+                            "mutatedPair", "capturedPair", "referencedPair", "wideConstantPair")) {
+                        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name
+                            + "_[^\n]*\n(.*?)\n\\}");
+                        assertTrue(!!body, name + " LLVM definition");
+                        assertTrue(regex(body[0] ?? "", "(?:call|invoke) [^\n]*@qore_rt_make_list"),
+                            name + " conservative allocation retained");
+                    }
+                }
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

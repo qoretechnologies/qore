@@ -35,6 +35,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
+#include <limits>
 
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -46,15 +47,20 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QorePollCompat.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/QoreSandboxInterrupt.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/ql_debug.h"
 
 // to register object types
 #include "qore/intern/QC_Queue.h"
@@ -87,7 +93,11 @@
 #include <sys/resource.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <cassert>
 #include <cerrno>
 #include <map>
@@ -166,8 +176,6 @@ const pthread_mutexattr_t* qore_recursive_mutex_attr() {
 QoreThreadLock stack_lck;
 // 8MB default thread stack size
 #define STACK_SIZE (8 * 1024 * 1024)
-// issue #4392: the additional stack guard of the primary thread
-#define QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD (64 * 1024)
 
 // default size and limit for qore threads; to be set in init_qore_threads()
 size_t qore_thread_stack_size = 0;
@@ -447,6 +455,9 @@ public:
     const QoreProgramLocation* runtime_loc = &loc_builtin;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
+    // Same-thread deferred context for an admitted non-reentrant native scalar leaf.
+    // Never read by stack observers; they use the independently published frame.
+    RuntimeConfigNativeLeafCallHelper* native_leaf_context = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
     const char* parse_file = nullptr; // the current file or label being parsed
     const char* parse_source = nullptr; // the current source being parsed
@@ -648,6 +659,8 @@ public:
             // save this thread's stack size as the default stack size can change
             size_t stack_guard = QORE_STACK_GUARD;
             // on Linux the initial thread's stack is extended automatically, so we put a large number here
+            // the size from the stack resource limit, if the stack has one (see primaryStackGrowth())
+            [[maybe_unused]] size_t primary_rlimit = 0;
             if (tid == initial_thread) {
 #ifdef _Q_WINDOWS
                 // windows uses a 1MB stack size for the main thread
@@ -662,6 +675,7 @@ public:
                 if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur
                         && rl.rlim_cur != RLIM_INFINITY) {
                     stack_size = rl.rlim_cur;
+                    primary_rlimit = stack_size;
                     printd(5, "rlimit: stack size: %lld bytes\n", (int64)rl.rlim_cur);
                 } else
 #endif
@@ -725,7 +739,9 @@ public:
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
 
             if (tid == initial_thread) {
-                // the limit above is left as it is; the real bounds are only used when the stack size is enforced
+                // where the size that the stack can grow to is known (Linux) or the stack has a fixed size that the
+                // thread library reports (macOS), the limit is anchored to the real end of the stack; elsewhere the
+                // limit above is left as it is, and the real bounds are only used when the stack size is enforced
                 // later by enforcePrimaryStackSize()
                 primary_stack_top = stack_start;
                 primary_stack_size = stack_size;
@@ -738,12 +754,41 @@ public:
 #else
                     primary_stack_top = real_base;
 #endif
-                    // the size reported for a stack that grows on demand can be only the part mapped so far (musl
-                    // reports the mapped size of the initial thread's stack), so the size from the resource limit
-                    // above is used when it is larger
-                    if (real_size > primary_stack_size) {
+                    size_t growth = primaryStackGrowth(primary_stack_top, real_size, primary_rlimit);
+                    if (growth) {
+#if defined(__linux__) && defined(STACK_DIRECTION_DOWN)
+                        // The stack resource limit bounds the whole stack mapping, including the arguments and the
+                        // environment above the top of the stack: the stack ends that much less than the limit below
+                        // the top.  The limit is anchored to the real end of the stack, as for the other threads,
+                        // instead of to the stack position where this ThreadData is created: from there, a limit as
+                        // large as the resource limit lay beyond the end of the stack by the size of the arguments,
+                        // the environment and the frames above that position, and a process started with a large
+                        // environment (more than the stack guard) crashed on a stack overflow in its primary thread
+                        // instead of raising STACK-LIMIT-EXCEEDED.
+                        stack_size = growth;
+                        stack_limit = primary_stack_top - (growth > stack_guard ? growth - stack_guard : 0);
+#endif
+                        primary_stack_size = growth;
+                    } else if (real_size > primary_stack_size) {
+                        // the size reported for a stack that grows on demand can be only the part mapped so far
+                        // (musl reports the mapped size of the initial thread's stack), so the size from the
+                        // resource limit above is used when it is larger
                         primary_stack_size = real_size;
                     }
+#if defined(__APPLE__) && defined(STACK_DIRECTION_DOWN)
+                    // Darwin maps the initial thread's stack with its full size when the process starts (the stack
+                    // resource limit then), and reports its real bounds, as it does for any other thread, including
+                    // a thread that is the initial thread of the library because a program that embeds Qore
+                    // initialized it there.  The limit is anchored to the real end of the stack, as for the other
+                    // threads: derived from the stack position where this ThreadData is created, it lay below the end
+                    // of the stack by the stack used before (the program's frames and those of the dynamic loader and
+                    // of the C runtime), which silently consumed the stack guard, and by the whole difference when
+                    // the thread's stack is smaller than the stack resource limit taken as its size above.
+                    assert(!growth);
+                    stack_size = real_size;
+                    stack_limit = real_base + (real_size > stack_guard ? stack_guard : real_size);
+                    primary_stack_size = real_size;
+#endif
                 }
 #endif // #ifdef QORE_HAVE_GET_STACK_SIZE
             }
@@ -757,6 +802,69 @@ public:
     }
 
 #ifdef QORE_MANAGE_STACK
+    //! Returns the size that the initial thread's stack can grow to below its top, or 0 if it cannot be determined
+    /** @param top the top of the stack, as the thread library reports it
+        @param reported_size the size of the stack that the thread library reports
+        @param rlimit the stack resource limit, or 0 if the stack has none
+
+        On Linux, the resource limit bounds the whole stack mapping (the kernel does not let the mapping grow
+        beyond it), and the mapping holds the arguments, the environment and the auxiliary vector above the top of
+        the stack, so the stack itself can only grow to the limit less their size.  glibc reports exactly that size
+        for the initial thread (from the mapping and the resource limit, and less if another mapping is closer),
+        while musl reports only the part of the stack that is mapped so far, so there the end of the mapping is
+        read from /proc/self/maps.  Elsewhere, and if the stack has no resource limit, 0 is returned: the caller
+        then uses the larger of the resource limit (or the default size) and the size reported.
+    */
+    DLLLOCAL static size_t primaryStackGrowth([[maybe_unused]] size_t top, [[maybe_unused]] size_t reported_size,
+            [[maybe_unused]] size_t rlimit) {
+#if defined(__linux__) && defined(STACK_DIRECTION_DOWN)
+        if (syscall(SYS_gettid) != getpid()) {
+            // Qore was initialized in another thread than the process's initial thread (by a program that embeds
+            // it): that thread's stack has a fixed size, which the thread library reports
+            return reported_size;
+        }
+        if (!rlimit) {
+            return 0;
+        }
+#ifdef __GLIBC__
+        return reported_size <= rlimit ? reported_size : 0;
+#else
+        size_t mapping_end = getMappingEnd(top - 1);
+        if (!mapping_end || mapping_end < top || mapping_end - top >= rlimit) {
+            return 0;
+        }
+        return rlimit - (mapping_end - top);
+#endif
+#else
+        return 0;
+#endif
+    }
+
+#if defined(__linux__) && !defined(__GLIBC__)
+    //! Returns the end of the memory mapping of this process that contains the given address, or 0 if not found
+    /** Reads /proc/self/maps, whose lines start with "<start>-<end> " in hexadecimal; called once per process, for
+        the initial thread, so the number of lines is bounded by the mappings made before Qore is initialized
+    */
+    DLLLOCAL static size_t getMappingEnd(size_t addr) {
+        FILE* maps = fopen("/proc/self/maps", "re");
+        if (!maps) {
+            return 0;
+        }
+        ON_BLOCK_EXIT(fclose, maps);
+        char line[512];
+        while (fgets(line, sizeof line, maps)) {
+            unsigned long start, end;
+            if (sscanf(line, "%lx-%lx", &start, &end) == 2 && addr >= start && addr < end) {
+                return end;
+            }
+            // a line longer than the buffer: skip the rest of it
+            while (!strchr(line, '\n') && fgets(line, sizeof line, maps)) {
+            }
+        }
+        return 0;
+    }
+#endif
+
     //! Returns the stack size of the thread less the stack guard, or 0 if the stack is no larger than the guard
     DLLLOCAL size_t getUsableStackSize() const {
         return stack_size > QORE_STACK_GUARD ? stack_size - QORE_STACK_GUARD : 0;
@@ -1367,7 +1475,12 @@ public:
 
     //! releases the values of the parameters, if they have not been instantiated
     DLLLOCAL void discardValues(ExceptionSink* xsink) {
+        size_t count = 0;
         for (QoreValue& v : values) {
+            if (++count % 100 == 0) {
+                // All references must be released, including after a cancelled partial setup.
+                (void)qore_check_cancel(nullptr, "background helper value cleanup");
+            }
             v.discard(xsink);
         }
         values.clear();
@@ -1377,10 +1490,6 @@ public:
     DLLLOCAL QoreValue run(ExceptionSink* xsink) {
         assert(params.size() == values.size());
         size_t num = params.size();
-        for (size_t i = 0; i < num; ++i) {
-            params[i]->instantiate(values[i]);
-        }
-        values.clear();
         // the parameters are uninstantiated in reverse order however the helper returns
         class ParamUninstantiator {
         public:
@@ -1389,15 +1498,30 @@ public:
             }
 
             ~ParamUninstantiator() {
-                for (size_t i = params.size(); i; --i) {
+                for (size_t i = initialized; i; --i) {
+                    if (!(i % 100)) {
+                        (void)qore_check_cancel(nullptr, "background helper parameter cleanup");
+                    }
                     params[i - 1]->uninstantiate(xsink);
                 }
             }
+
+            size_t initialized = 0;
 
         private:
             const std::vector<LocalVar*>& params;
             ExceptionSink* xsink;
         } param_uninstantiator(params, xsink);
+        for (size_t i = 0; i < num; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "background helper parameter setup")) {
+                discardValues(xsink);
+                return QoreValue();
+            }
+            params[i]->instantiate(values[i]);
+            values[i] = QoreValue();
+            ++param_uninstantiator.initialized;
+        }
+        values.clear();
         return qore_run_background_helper(code, xsink);
     }
 };
@@ -1690,6 +1814,9 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #ifdef IA64_64
     //printd(5, "check_stack() bsp current: %p limit: %p\n", get_rse_bsp(), td->rse_limit);
     if (td->rse_limit < get_rse_bsp()) {
+        if (td->native_leaf_context) {
+            td->native_leaf_context->materialize();
+        }
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the IA-64 RSE (Register " \
             "Stack Engine) stack size limit (%ld bytes)", td->getUsableStackSize());
         return -1;
@@ -1710,6 +1837,9 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #else
     if (td->stack_limit < pos) {
 #endif
+        if (td->native_leaf_context) {
+            td->native_leaf_context->materialize();
+        }
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
             "(%lu bytes)", td->getUsableStackSize());
         return -1;
@@ -2464,17 +2594,248 @@ static void stack_walk_barrier() {
 #endif
 }
 
+//! What published a location on a thread's call stack, as reported by dbg_read_stacks_at_frame()
+enum class StackPushKind : uint8_t {
+    //! an ordinary call or a JIT/IR frame
+    Ordinary,
+    //! a native (JIT or AOT) call that publishes its frame without a runtime helper (QoreNativeCallStackLocation,
+    //! RuntimeConfigNativeCallHelper)
+    Native,
+    //! a native leaf call with a deferred context (RuntimeConfigNativeLeafCallHelper, including a forwarding pair)
+    NativeLeaf,
+    //! a location of an external module (QoreExternalRuntimeStackLocationHelper), which can be published before it
+    //! is fully constructed (see design/call-stack-publication.md), so its virtual methods must not be called then
+    External,
+};
+
+#ifdef DEBUG
+//! The state of dbg_read_stacks_at_frame()
+/** A reader arms it with a set of call names, and the first other thread that then publishes a location with one of
+    those names parks right after publishing it, until the reader has read every thread's call stack.  A walk of the
+    stack of a thread that keeps calling observes the state after that thread's next pop (see
+    QoreThreadList::walkCallStack()), so this is how a test observes a short leaf frame for certain.
+*/
+namespace {
+class DbgStackParkState {
+public:
+    std::mutex m;
+    std::condition_variable cond;
+    //! the call names that park a thread, and the call names of the caller frame required (empty: any caller)
+    std::vector<std::string> names;
+    std::vector<std::string> callers;
+    //! the thread that reads the stacks, which never parks
+    const ThreadData* reader = nullptr;
+    //! incremented each time a reader arms the hook
+    uint64_t generation = 0;
+    //! the generation whose parked thread has been released
+    uint64_t released_generation = 0;
+    //! set while a thread is parked
+    bool parked = false;
+    int parked_tid = 0;
+    StackPushKind parked_kind = StackPushKind::Ordinary;
+
+    //! returns true if the location matches; called with the lock held
+    bool matches(const QoreStackLocation* stack_loc) const {
+        if (std::find(names.begin(), names.end(), stack_loc->getCallName()) == names.end()) {
+            return false;
+        }
+        if (callers.empty()) {
+            return true;
+        }
+        const QoreStackLocation* caller = stack_loc->getNext();
+        return caller && std::find(callers.begin(), callers.end(), caller->getCallName()) != callers.end();
+    }
+};
+}
+
+static DbgStackParkState dbg_stack_park;
+//! Set while dbg_read_stacks_at_frame() waits for a thread to park; checked on every push in DEBUG builds only
+static std::atomic<bool> dbg_stack_park_armed{false};
+
+//! Parks this thread if it has just published a location that dbg_read_stacks_at_frame() waits for
+/** Called from the push paths of native code, which must not throw: a failure of the standard library's locking
+    (which raises only for invalid use) leaves the thread unparked, and the reader times out.
+*/
+static __attribute__((noinline, cold)) void dbg_stack_location_published(ThreadData* td,
+        const QoreStackLocation* stack_loc, StackPushKind kind) noexcept {
+    try {
+        std::unique_lock<std::mutex> lock(dbg_stack_park.m);
+        if (!dbg_stack_park_armed.load(std::memory_order_relaxed) || td == dbg_stack_park.reader
+                || !dbg_stack_park.matches(stack_loc)) {
+            return;
+        }
+        dbg_stack_park_armed.store(false, std::memory_order_relaxed);
+        dbg_stack_park.parked = true;
+        dbg_stack_park.parked_tid = td->tid;
+        dbg_stack_park.parked_kind = kind;
+        uint64_t generation = dbg_stack_park.generation;
+        dbg_stack_park.cond.notify_all();
+        // the location stays published while this thread waits, holding no lock that a reader of the call stacks
+        // needs
+        dbg_stack_park.cond.wait(lock, [generation] () {
+            return dbg_stack_park.released_generation >= generation;
+        });
+    } catch (const std::exception&) {
+        assert(false);
+    }
+}
+#endif
+
 // Publishes a location pushed on this thread's call stack
 /* A push needs no handshake with a thread walking this stack: the new location is linked to the current one before
    it is published, with release ordering, so a walk either starts below it or sees it fully linked.  A location a walk
    can reach is only ever freed by a pop, and publish_popped_stack_location() makes a pop wait for the walk.
 */
-static const QoreStackLocation* publish_pushed_stack_location(ThreadData* td, QoreStackLocation* stack_loc) {
+template <StackPushKind Kind = StackPushKind::Ordinary>
+static __attribute__((always_inline)) inline const QoreStackLocation* publish_pushed_stack_location(ThreadData* td,
+        QoreStackLocation* stack_loc) {
     const QoreStackLocation* rv = td->current_stack_location.load(std::memory_order_relaxed);
     stack_loc->setNext(rv);
     td->current_stack_location.store(stack_loc, std::memory_order_release);
+#ifdef DEBUG
+    if constexpr (Kind != StackPushKind::External) {
+        if (dbg_stack_park_armed.load(std::memory_order_relaxed)) {
+            dbg_stack_location_published(td, stack_loc, Kind);
+        }
+    }
+#endif
     return rv;
 }
+
+#ifdef DEBUG
+//! Adds the strings of a list to a vector; returns -1 with an exception raised if an element is not a string
+static int dbg_stack_park_names(const QoreListNode* list, const char* param, std::vector<std::string>& names,
+        ExceptionSink* xsink) {
+    names.clear();
+    if (!list) {
+        return 0;
+    }
+    ConstListIterator i(list);
+    while (i.next()) {
+        QoreValue v = i.getValue();
+        if (v.getType() != NT_STRING) {
+            xsink->raiseException("DBG-STACK-PARK-ERROR", "element %zu of the %s list is type '%s'; expecting "
+                "'string'", i.index(), param, v.getFullTypeName());
+            return -1;
+        }
+        names.push_back(v.get<const QoreStringNode>()->c_str());
+    }
+    return 0;
+}
+
+//! Releases the thread parked for dbg_read_stacks_at_frame(), or disarms the hook if none is; called with the lock held
+static void dbg_stack_park_end_locked() {
+    if (dbg_stack_park.parked) {
+        dbg_stack_park.released_generation = dbg_stack_park.generation;
+        dbg_stack_park.parked = false;
+        dbg_stack_park.cond.notify_all();
+    } else {
+        // no thread can park any more: a thread checks the flag with the lock held
+        dbg_stack_park_armed.store(false, std::memory_order_relaxed);
+    }
+    dbg_stack_park.reader = nullptr;
+}
+
+QoreHashNode* qore_dbg_read_stacks_at_frame(const QoreListNode* names, const QoreListNode* callers,
+        int64 timeout_ms, const ResolvedCallReferenceNode* on_armed, const ResolvedCallReferenceNode* on_parked,
+        ExceptionSink* xsink) {
+    std::vector<std::string> name_vec;
+    std::vector<std::string> caller_vec;
+    if (dbg_stack_park_names(names, "names", name_vec, xsink)
+            || dbg_stack_park_names(callers, "callers", caller_vec, xsink)) {
+        return nullptr;
+    }
+    if (name_vec.empty()) {
+        xsink->raiseException("DBG-STACK-PARK-ERROR", "no call names given");
+        return nullptr;
+    }
+    int tid;
+    StackPushKind kind;
+    // set once this call has armed the hook, which it must then end on every path
+    bool armed_here = false;
+    try {
+        std::unique_lock<std::mutex> lock(dbg_stack_park.m);
+        if (dbg_stack_park_armed.load(std::memory_order_relaxed) || dbg_stack_park.parked) {
+            xsink->raiseException("DBG-STACK-PARK-ERROR", "another thread is already reading stacks in "
+                "dbg_read_stacks_at_frame()");
+            return nullptr;
+        }
+        dbg_stack_park.names.swap(name_vec);
+        dbg_stack_park.callers.swap(caller_vec);
+        dbg_stack_park.reader = thread_data.get();
+        ++dbg_stack_park.generation;
+        dbg_stack_park_armed.store(true, std::memory_order_relaxed);
+        armed_here = true;
+        if (on_armed) {
+            // the code runs without the lock, so that it can let the thread to be parked go on: a thread that
+            // publishes a matching location meanwhile parks, and the wait below finds it parked
+            lock.unlock();
+            {
+                ValueHolder armed_rv(on_armed->invoke(nullptr, xsink), xsink);
+            }
+            lock.lock();
+            if (*xsink) {
+                dbg_stack_park_end_locked();
+                return nullptr;
+            }
+        }
+        if (!dbg_stack_park.cond.wait_for(lock, std::chrono::milliseconds(timeout_ms > 0 ? timeout_ms : 0),
+                [] () { return dbg_stack_park.parked; })) {
+            dbg_stack_park_end_locked();
+            xsink->raiseException("DBG-STACK-PARK-TIMEOUT", "no other thread published a call stack location "
+                "with a requested name within %lld ms", timeout_ms);
+            return nullptr;
+        }
+        tid = dbg_stack_park.parked_tid;
+        kind = dbg_stack_park.parked_kind;
+    } catch (const std::exception& e) {
+        if (armed_here) {
+            // the lock was released when the exception left its scope
+            try {
+                std::lock_guard<std::mutex> lock(dbg_stack_park.m);
+                dbg_stack_park_end_locked();
+            } catch (const std::exception&) {
+                // the lock is never in invalid use here
+                assert(false);
+            }
+        }
+        xsink->raiseException("DBG-STACK-PARK-ERROR", "cannot wait for a thread to park: %s", e.what());
+        return nullptr;
+    }
+
+    // releases the parked thread on every path out of this function
+    class ParkReleaseHelper {
+    public:
+        DLLLOCAL ~ParkReleaseHelper() {
+            try {
+                std::lock_guard<std::mutex> lock(dbg_stack_park.m);
+                dbg_stack_park_end_locked();
+            } catch (const std::exception&) {
+                // the lock is never in invalid use here
+                assert(false);
+            }
+        }
+    } release_helper;
+
+    // read while the thread is parked with the location published
+    ReferenceHolder<QoreHashNode> stacks(getAllCallStacks(), xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("tid", tid, xsink);
+    rv->setKeyValue("kind", new QoreStringNode(kind == StackPushKind::NativeLeaf ? "native-leaf"
+        : (kind == StackPushKind::Native ? "native" : "ordinary")), xsink);
+    rv->setKeyValue("stacks", stacks.release(), xsink);
+    if (on_parked) {
+        // the code runs while the thread is still parked with the location published
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+        args->push(rv->refSelf(), xsink);
+        ValueHolder parked_rv(on_parked->invoke(*args, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+#endif
 
 // Publishes a location restored on this thread's call stack, and waits for any walk that may still read the one
 // replaced
@@ -2490,17 +2851,16 @@ static const QoreStackLocation* publish_pushed_stack_location(ThreadData* td, Qo
    barrier it is a plain store and a plain load, on memory no other thread writes.  The process-wide read lock this
    replaced was two contended lock operations, on one mutex shared by every thread, on every call.
 */
-static void publish_popped_stack_location(ThreadData* td, const QoreStackLocation* stack_loc) {
-#ifdef DEBUG
-    {
-        // The handshake below only protects the locations a walker can reach if the stack changes strictly
-        // last-in, first-out: this must restore the current location's successor, or push a location already linked
-        // to it (RuntimeConfigStackHelper), or leave it as it is.  A location destroyed while another one still
-        // links to it would be reachable by a walk without any pop having waited for that walk.
-        const QoreStackLocation* cur = td->current_stack_location.load(std::memory_order_relaxed);
-        assert(!cur || stack_loc == cur || stack_loc == cur->getNext() || (stack_loc && stack_loc->getNext() == cur));
-    }
-#endif
+// Only an active reader needs the lock; keep its wait outside ordinary pops.
+static __attribute__((noinline, cold)) void wait_for_stack_walk(ThreadData* td) {
+    AutoLocker al(td->stack_walk_lck);
+}
+
+// The caller must remove only its own complete head chain, and retain every
+// removed location until this handshake finishes. Single-frame and exact-pair
+// owners check their respective LIFO invariants before entering this backend.
+static __attribute__((always_inline)) void finish_stack_location_pop(ThreadData* td,
+        const QoreStackLocation* stack_loc) {
     if (stack_walk_heavy_barrier) {
         td->current_stack_location.store(stack_loc, std::memory_order_release);
         // the walker's heavy barrier orders the store and the load in hardware; this keeps the compiler from
@@ -2519,7 +2879,704 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
         }
     }
     // the walker holds this lock until it has finished reading the stack
-    AutoLocker al(td->stack_walk_lck);
+    wait_for_stack_walk(td);
+}
+
+static __attribute__((always_inline)) void publish_popped_stack_location(ThreadData* td,
+        const QoreStackLocation* stack_loc) {
+#ifdef DEBUG
+    {
+        // The handshake below only protects the locations a walker can reach if the stack changes strictly
+        // last-in, first-out: this must restore the current location's successor, or push a location already linked
+        // to it (RuntimeConfigStackHelper), or leave it as it is.  A location destroyed while another one still
+        // links to it would be reachable by a walk without any pop having waited for that walk.
+        const QoreStackLocation* cur = td->current_stack_location.load(std::memory_order_relaxed);
+        assert(!cur || stack_loc == cur || stack_loc == cur->getNext() || (stack_loc && stack_loc->getNext() == cur));
+    }
+#endif
+    finish_stack_location_pop(td, stack_loc);
+}
+
+RuntimeConfig& RuntimeConfigNativeAccess::getCurrent() {
+    // Native helpers consume only this live view, never the legacy snapshot
+    // fields. Compatibility entry points refresh those with rc_get_current_ref().
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.impl->native_thread_data = thread_data.get();
+    assert(rc.impl->native_thread_data);
+    return rc;
+}
+
+RuntimeConfig* RuntimeConfigNativeAccess::tryGetCurrent() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        // Static-namespace cleanup can run after thread data has been destroyed.
+        // Do not access a possibly destroyed TLS RuntimeConfig in that case.
+        return nullptr;
+    }
+    RuntimeConfig& rc = rc_get_tls_ref();
+    rc.impl->native_thread_data = td;
+    return &rc;
+}
+
+bool RuntimeConfigNativeAccess::hasProgramData(const RuntimeConfig& rc) {
+    return getThreadData(rc)->tlpd != nullptr;
+}
+
+const uint64_t* RuntimeConfigNativeAccess::getStrongLocalMutationEpoch(const RuntimeConfig& rc,
+        const LocalVar* local, const QoreObject* expected) {
+    static const uint64_t rejected = std::numeric_limits<uint64_t>::max();
+    ThreadData* td = getThreadData(rc);
+    if (!td->tlpd || !local || !expected || local->closureUse() || local->isSelf()
+            || local->isTopLevel()) {
+        return &rejected;
+    }
+    LocalVarValue* slot = td->tlpd->lvstack.findMaybe(local);
+    if (!slot || slot->finalized || slot->block_cleared || !slot->val.assigned
+            || slot->val.static_assignment || slot->val.getType() != NT_OBJECT
+            || slot->val.getValue().get<const QoreObject>() != expected) {
+        return &rejected;
+    }
+    return td->tlpd->lvstack.getReflectiveMutationEpoch();
+}
+
+LocalVarValue* RuntimeConfigNativeAccess::getAOTBodyLocalSlot(const RuntimeConfig& rc, const LocalVar* local) {
+    ThreadData* td = getThreadData(rc);
+    if (!td->tlpd || !local || local->closureUse() || local->isSelf() || local->isTopLevel()) {
+        return nullptr;
+    }
+    LocalVarValue* slot = td->tlpd->lvstack.findMaybe(local);
+    return slot && !slot->finalized && !slot->frame_boundary ? slot : nullptr;
+}
+
+QoreProgram* RuntimeConfigNativeAccess::getProgram(const RuntimeConfig& rc) {
+    return getThreadData(rc)->current_pgm;
+}
+
+const qore_class_private* RuntimeConfigNativeAccess::getClass(const RuntimeConfig& rc) {
+    return getThreadData(rc)->current_class;
+}
+
+QoreParseOptions RuntimeConfigNativeAccess::getParseOptions(const RuntimeConfig& rc) {
+    return getThreadData(rc)->runtime_po;
+}
+
+QoreParseOptions RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(const RuntimeConfig& rc,
+        const QoreProgram* pgm) {
+    ThreadData* td = getThreadData(rc);
+    return pgm ? apply_runtime_po_override(td, pgm->getParseOptions()) : td->runtime_po;
+}
+
+extern "C" DLLEXPORT void qore_rt_get_cancel_poll_state_v1(RuntimeConfig* rc, QoreCancelPollStateV1* state) {
+    *state = {};
+    // Expose a native atomic load ABI only when the runtime's representation
+    // matches it. Other targets retain the ordinary helper at every checkpoint.
+    if constexpr (sizeof(unsigned) == 4 && alignof(unsigned) >= 4
+            && sizeof(std::atomic<bool>) == 1 && std::atomic<bool>::is_always_lock_free
+            && sizeof(std::atomic<uint64_t>) == 8 && alignof(std::atomic<uint64_t>) >= 8
+            && std::atomic<uint64_t>::is_always_lock_free) {
+        if (rc) {
+            ThreadData* td = RuntimeConfigNativeAccess::getThreadData(*rc);
+            const auto* flag = thread_list.getCancelRequestedFlag(td->tid);
+            if (flag) {
+                state->deferral = &td->cancel_defer_count;
+                state->thread_requested = flag;
+                state->program_pending = &qore_pending_program_interrupts;
+            }
+        }
+    }
+}
+
+int RuntimeConfigNativeAccess::checkStack(const RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+    return check_stack_intern(xsink, getThreadData(rc));
+#else
+    return 0;
+#endif
+}
+
+// Scope forced inlining to the prepared callback helper; ordinary guard users are unchanged.
+__attribute__((always_inline)) int RuntimeConfigNativeAccess::checkStackForPreparedCallback(
+        const RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef QORE_MANAGE_STACK
+#if defined(__clang__)
+    [[clang::always_inline]]
+#endif
+    return check_stack_intern(xsink, getThreadData(rc));
+#else
+    return 0;
+#endif
+}
+
+// libqore's own scalar fast paths call this hidden helper, which the compiler inlines into them in a single
+// compilation unit; the exported qore_rt_get_stack_limit_v1() below is the symbol generated code binds to.  An
+// exported default-visibility function can be interposed on ELF, so it cannot itself be inlined (or forced inline)
+// into its callers in libqore
+DLLLOCAL const size_t* qore_get_stack_limit_intern(RuntimeConfig* rc) {
+#if defined(QORE_MANAGE_STACK) && defined(STACK_DIRECTION_DOWN) \
+        && (defined(__aarch64__) || defined(__x86_64__))
+    // These targets use the same native SP for get_stack_pos() and LLVM
+    // stacksave. Do not expose a partial guard on targets with extra state
+    // (for example the IA-64 register stack) or different stack conventions.
+    if constexpr (sizeof(size_t) == 8 && sizeof(void*) == 8) {
+        return rc ? &RuntimeConfigNativeAccess::getThreadData(*rc)->stack_limit : nullptr;
+    }
+#endif
+    return nullptr;
+}
+
+extern "C" DLLEXPORT const size_t* qore_rt_get_stack_limit_v1(RuntimeConfig* rc) {
+    return qore_get_stack_limit_intern(rc);
+}
+
+#ifdef QORE_MANAGE_STACK
+//! Keeps overflow materialization and diagnostics outside the generated-code wrapper's successful path
+static __attribute__((noinline)) int qore_rt_check_stack_v2_slow(ExceptionSink* xsink, RuntimeConfig* rc) {
+    return RuntimeConfigNativeAccess::checkStack(*rc, xsink);
+}
+#endif
+
+extern "C" DLLEXPORT int qore_rt_check_stack_v2(ExceptionSink* xsink, RuntimeConfig* rc) {
+#ifdef QORE_MANAGE_STACK
+    // A nonnull view supports this exact downward-stack predicate. Read both the live limit and current SP;
+    // unsupported targets and failed comparisons retain the full guard, including any platform-specific state.
+    // Keeping this wrapper beside the accessor also avoids an extra call in split compilation-unit builds.
+    const size_t* limit = qore_get_stack_limit_intern(rc);
+    if (limit && *limit <= get_stack_pos()) {
+        return 0;
+    }
+    return qore_rt_check_stack_v2_slow(xsink, rc);
+#else
+    return 0;
+#endif
+}
+
+// Keep native-leaf save/restore visible to the caller's register allocator when
+// this definition is available (the normal single-compilation-unit build).
+// Applying the hint only here retains ordinary out-of-line symbols for split
+// builds; no frame boundary, guard or reader handshake is omitted.
+__attribute__((always_inline)) RuntimeConfigNativeCallHelper::RuntimeConfigNativeCallHelper(RuntimeConfig& rc,
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QoreProgramLocation* parse_loc, const QoreParseOptions& po,
+        QoreProgram* pgm, ExceptionSink* xsink)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), tlpd(td->tlpd),
+          old_call_pgm(td->call_program_context), old_closure(td->closure_rt_env),
+          old_stmt(td->runtime_statement), old_loc(td->runtime_loc), old_po(td->runtime_po),
+          swapped(parse_loc != nullptr) {
+    assert(td->current_pgm == pgm);
+    // Typed callback admission proves a scalar leaf with no TLS locals or
+    // generic reentry. Keep observable markers, but no variable cleanup record.
+    tlpd->lvstack.pushNativeLeafFrameBoundary();
+    try {
+        tlpd->cvstack.pushNativeLeafFrameBoundary();
+    } catch (...) {
+        tlpd->lvstack.popNativeLeafFrameBoundary();
+        throw;
+    }
+    // Both marker allocations must succeed before changing compatibility state.
+    td->call_program_context = pgm;
+    td->closure_rt_env = nullptr;
+    call_loc = old_loc ? old_loc : parse_loc;
+    old_stack = publish_pushed_stack_location<StackPushKind::Native>(td, stack_loc);
+    if (swapped) {
+        td->runtime_statement = nullptr;
+        td->runtime_loc = parse_loc;
+        td->runtime_po = apply_runtime_po_override(td, po);
+#ifdef QORE_MANAGE_STACK
+        check_stack_intern(xsink, td);
+#endif
+    }
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeCallHelper::~RuntimeConfigNativeCallHelper() {
+    if (swapped) {
+        td->runtime_po = apply_runtime_po_override(td, old_po);
+    }
+    td->runtime_statement = old_stmt;
+    td->runtime_loc = old_loc;
+    publish_popped_stack_location(td, old_stack);
+    tlpd->lvstack.popNativeLeafFrameBoundary();
+    tlpd->cvstack.popNativeLeafFrameBoundary();
+    td->closure_rt_env = old_closure;
+    td->call_program_context = old_call_pgm;
+}
+
+RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
+        RuntimeConfigNativeCallbackContext& context)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), callback_context(&context), previous(nullptr),
+          state(ContextState::DeferredMarkers), target_kind(TargetKind::CallbackV2) {
+}
+
+__attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::enterReusableCallback(
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc, const QorePreparedFunctionRefV3& cache) {
+    assert(&cache == &callback_context->cache);
+    assert(td->current_pgm == cache.pgm);
+    previous = td->native_leaf_context;
+    state = ContextState::DeferredMarkers;
+    call_loc = td->runtime_loc ? td->runtime_loc : cache.parse_loc;
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = cache.uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : cache.parse_loc;
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const QorePreparedFunctionRefV3& cache, ExceptionSink*, bool defer_markers)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), callback_cache(&cache),
+          previous(td->native_leaf_context),
+          state(defer_markers ? ContextState::DeferredMarkers : ContextState::EagerMarkers),
+          target_kind(TargetKind::Callback) {
+    assert(td->current_pgm == cache.pgm);
+    if (!defer_markers) {
+        tlpd = td->tlpd;
+        tlpd->lvstack.pushNativeLeafFrameBoundary();
+        try {
+            tlpd->cvstack.pushNativeLeafFrameBoundary();
+        } catch (...) {
+            tlpd->lvstack.popNativeLeafFrameBoundary();
+            throw;
+        }
+    }
+    call_loc = td->runtime_loc ? td->runtime_loc : cache.parse_loc;
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = cache.uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : cache.parse_loc;
+    // The prepared helper has already checked its entry stack. The only body
+    // admitted here is callee-v3, whose first operation checks its own live
+    // stack (or enters the complete v2 guard on unsupported targets). It cannot
+    // execute scalar work before that check. Publish the deferred context now
+    // so a callee overflow materializes it before constructing the exception;
+    // repeating the caller-side check in this middle frame is unnecessary.
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(RuntimeConfig& rc,
+        QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        RuntimeConfigNativeMethodContext& context, ExceptionSink*, const QoreProgramLocation* caller_loc)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), method_context(&context),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
+    const auto& cache = context.cache;
+    assert(cache.native_scalar_uvb && td->current_pgm == cache.native_scalar_program);
+    call_loc = caller_loc ? caller_loc : td->runtime_loc ? td->runtime_loc
+        : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = cache.native_scalar_uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    // Admitted method companions check the live stack before any body work.
+    // Scalar operations and bounded explicit-context member probes cannot
+    // reenter; generic cold work starts only after this borrowed frame is gone.
+    // As for callback-v3, publish before the guard so overflow materializes it.
+}
+
+// Inactive until the pair owner has initialized both locations and saved views.
+// The base destructor is inert; the pair owner alone performs restoration.
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        ThreadData* thread, RuntimeConfigNativeMethodContext& context)
+        : td(thread), method_context(&context), previous(nullptr), old_stack(nullptr),
+          state(ContextState::DeferredMarkers), target_kind(TargetKind::Method) {
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeMethodFramePairHelper::RuntimeConfigNativeMethodFramePairHelper(
+        RuntimeConfig& rc, QoreStackLocation* outer_frame, const QoreProgramLocation*& outer_loc,
+        RuntimeConfigNativeMethodContext& outer_context,
+        QoreStackLocation* inner_frame, const QoreProgramLocation*& inner_loc,
+        RuntimeConfigNativeMethodContext& inner_context, const QoreProgramLocation* caller_loc)
+        : outer(RuntimeConfigNativeAccess::getThreadData(rc), outer_context), inner(outer.td, inner_context) {
+    ThreadData* td = outer.td;
+    const auto& outer_cache = outer_context.cache;
+    const auto& inner_cache = inner_context.cache;
+    assert(outer_frame && inner_frame && caller_loc);
+    assert(outer_cache.native_scalar_uvb && inner_cache.native_scalar_uvb);
+    assert(td->current_pgm == outer_cache.native_scalar_program
+        && td->current_pgm == inner_cache.native_scalar_program);
+    const QoreProgramLocation* outer_parse = outer_cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    const QoreProgramLocation* outer_body = outer_cache.native_scalar_uvb->getAOTBodyLocation();
+    const QoreProgramLocation* inner_body = inner_cache.native_scalar_uvb->getAOTBodyLocation();
+    if (!inner_body) {
+        inner_body = inner_cache.native_scalar_uvb->getUserSignature()->getParseLocation();
+    }
+    outer_loc = td->runtime_loc ? td->runtime_loc : outer_parse;
+    inner_loc = caller_loc;
+    outer.previous = td->native_leaf_context;
+    outer.old_stmt = td->runtime_statement;
+    outer.old_loc = td->runtime_loc;
+    outer.old_stack = td->current_stack_location.load(std::memory_order_relaxed);
+    inner.previous = &outer;
+    inner.old_stmt = nullptr;
+    inner.old_loc = outer_body ? outer_body : outer_parse;
+    inner.old_stack = outer_frame;
+    outer_frame->setNext(outer.old_stack);
+    inner_frame->setNext(outer_frame);
+#ifdef DEBUG
+    published_inner = inner_frame;
+#endif
+    // No fallible work follows. Readers see either the preceding stack or both
+    // fully linked immutable frames, never a partly initialized inner frame.
+    td->native_leaf_context = &inner;
+    td->runtime_statement = nullptr;
+    td->runtime_loc = inner_body;
+    td->current_stack_location.store(inner_frame, std::memory_order_release);
+#ifdef DEBUG
+    if (dbg_stack_park_armed.load(std::memory_order_relaxed)) {
+        dbg_stack_location_published(td, inner_frame, StackPushKind::NativeLeaf);
+    }
+#endif
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeMethodFramePairHelper::~RuntimeConfigNativeMethodFramePairHelper() {
+    using State = RuntimeConfigNativeLeafCallHelper::ContextState;
+    if (inner.state != State::DeferredMarkers || outer.state != State::DeferredMarkers) {
+        // Also handles an outer-only materialization if the inner marker push
+        // failed. Each existing restoration owns exactly its own saved state.
+        inner.restoreDeferred();
+        outer.restoreDeferred();
+        return;
+    }
+    ThreadData* td = outer.td;
+    assert(td == inner.td && td->native_leaf_context == &inner && inner.previous == &outer);
+#ifdef DEBUG
+    const QoreStackLocation* current = td->current_stack_location.load(std::memory_order_relaxed);
+    assert(current == published_inner && current->getNext() == inner.old_stack
+        && inner.old_stack && inner.old_stack->getNext() == outer.old_stack);
+#endif
+    td->runtime_statement = outer.old_stmt;
+    td->runtime_loc = outer.old_loc;
+    td->native_leaf_context = outer.previous;
+    // Unpublish the complete pair and wait before either frame or its vtable
+    // can be destroyed. The ordinary single-frame assertion remains unchanged.
+    finish_stack_location_pop(td, outer.old_stack);
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        RuntimeConfigNativeUncachedMethodContext& context, ExceptionSink*)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), uncached_method_context(&context),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers),
+          target_kind(TargetKind::UncachedMethod) {
+    assert(context.uvb && td->current_pgm == context.pgm);
+    const QoreProgramLocation* parse_loc = context.uvb->getUserSignature()->getParseLocation();
+    call_loc = td->runtime_loc ? td->runtime_loc : parse_loc;
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = context.uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : parse_loc;
+    // Ordinary Program entry and override setup already completed. This pure
+    // v2/v3 body checks its live stack before work and cannot observe context
+    // or reenter. Materialize object/class state only for its failing guard.
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        const UserVariantBase* uvb)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), closure_uvb(uvb),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::Closure) {
+    assert(uvb && td->current_pgm == uvb->pgm);
+    call_loc = td->runtime_loc ? td->runtime_loc : uvb->getUserSignature()->getParseLocation();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : uvb->getUserSignature()->getParseLocation();
+    // No allocation or reentry here. The closure-v1 callee checks its live
+    // stack before scalar work; a failed guard materializes this context.
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeLeafCallHelper::RuntimeConfigNativeLeafCallHelper(
+        RuntimeConfig& rc, QoreStackLocation* stack_loc, const QoreProgramLocation*& call_loc,
+        RuntimeConfigNativeClosureContext& context)
+        : td(RuntimeConfigNativeAccess::getThreadData(rc)), closure_context(&context),
+          previous(td->native_leaf_context), state(ContextState::DeferredMarkers), target_kind(TargetKind::ClosureV2) {
+    assert(context.uvb && td->current_pgm == context.closure->getProgram());
+    call_loc = td->runtime_loc ? td->runtime_loc : context.uvb->getUserSignature()->getParseLocation();
+    old_stmt = td->runtime_statement;
+    old_loc = td->runtime_loc;
+    td->native_leaf_context = this;
+    old_stack = publish_pushed_stack_location<StackPushKind::NativeLeaf>(td, stack_loc);
+    td->runtime_statement = nullptr;
+    const QoreProgramLocation* body_loc = context.uvb->getAOTBodyLocation();
+    td->runtime_loc = body_loc ? body_loc : context.uvb->getUserSignature()->getParseLocation();
+}
+
+// Never pull exception-only context traffic back into the successful call path.
+__attribute__((noinline)) void RuntimeConfigNativeLeafCallHelper::materialize() {
+    if (state == ContextState::Materialized) {
+        return;
+    }
+    // A preflighted forwarding pair publishes two logical frames without
+    // entering Qore. Install their private markers/context in caller order
+    // before the leaf guard constructs an exception. Each RAII owner restores
+    // exactly its own state, including when a later marker allocation fails.
+    if (previous) {
+        previous->materialize();
+    }
+    // The fixed generated callback frame cannot grow with option state. Its
+    // cold save area must be allocated before either marker is pushed, so an
+    // allocation failure leaves this deferred frame unchanged and unwinds safely.
+    if (target_kind == TargetKind::CallbackV2) {
+        callback_context->prepareMaterialization();
+    }
+    const UserVariantBase* uvb;
+    QoreProgram* pgm;
+    const QoreProgramLocation* parse_loc;
+    if (target_kind == TargetKind::Method) {
+        uvb = method_context->cache.native_scalar_uvb;
+        pgm = method_context->cache.native_scalar_program;
+        parse_loc = uvb->getUserSignature()->getParseLocation();
+    } else if (target_kind == TargetKind::UncachedMethod) {
+        uvb = uncached_method_context->uvb;
+        pgm = uncached_method_context->pgm;
+        parse_loc = uvb->getUserSignature()->getParseLocation();
+    } else if (target_kind == TargetKind::Closure || target_kind == TargetKind::ClosureV2) {
+        uvb = target_kind == TargetKind::Closure ? closure_uvb : closure_context->uvb;
+        pgm = target_kind == TargetKind::Closure ? uvb->pgm : closure_context->closure->getProgram();
+        parse_loc = uvb->getUserSignature()->getParseLocation();
+    } else {
+        const auto& cache = target_kind == TargetKind::CallbackV2 ? callback_context->cache : *callback_cache;
+        uvb = cache.uvb;
+        pgm = cache.pgm;
+        parse_loc = cache.parse_loc;
+    }
+    // Cross-thread observers inspect the published diagnostic chain, not these
+    // thread-private variable stacks. The admitted body cannot observe them or
+    // reenter Qore. Install both markers before exception/context construction.
+    if (state == ContextState::DeferredMarkers) {
+        tlpd = td->tlpd;
+        tlpd->lvstack.pushNativeLeafFrameBoundary();
+        try {
+            tlpd->cvstack.pushNativeLeafFrameBoundary();
+        } catch (...) {
+            tlpd->lvstack.popNativeLeafFrameBoundary();
+            throw;
+        }
+    }
+    old_call_pgm = td->call_program_context;
+    old_closure = td->closure_rt_env;
+    old_po = td->runtime_po;
+
+    swapped = parse_loc != nullptr;
+    if (target_kind == TargetKind::Method) {
+        method_context->materialize(td);
+    } else if (target_kind == TargetKind::UncachedMethod) {
+        uncached_method_context->materialize(td);
+    } else if (target_kind == TargetKind::ClosureV2) {
+        closure_context->materialize(td);
+    } else if (target_kind == TargetKind::CallbackV2) {
+        callback_context->materialize(td);
+    }
+    state = ContextState::Materialized;
+    td->call_program_context = pgm;
+    td->closure_rt_env = nullptr;
+    if (swapped) {
+        td->runtime_statement = nullptr;
+        td->runtime_loc = parse_loc;
+        td->runtime_po = apply_runtime_po_override(td, uvb->getParseOptions(pgm->getParseOptions()));
+    }
+}
+
+__attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreEager() {
+    assert(state != ContextState::DeferredMarkers);
+    if (state == ContextState::Materialized) {
+        if (swapped) {
+            td->runtime_po = apply_runtime_po_override(td, old_po);
+        }
+    }
+    td->runtime_statement = old_stmt;
+    td->runtime_loc = old_loc;
+    td->native_leaf_context = previous;
+    publish_popped_stack_location(td, old_stack);
+    tlpd->lvstack.popNativeLeafFrameBoundary();
+    tlpd->cvstack.popNativeLeafFrameBoundary();
+    if (state == ContextState::Materialized) {
+        td->closure_rt_env = old_closure;
+        td->call_program_context = old_call_pgm;
+    }
+}
+
+__attribute__((always_inline)) void RuntimeConfigNativeLeafCallHelper::restoreDeferred() {
+    if (state == ContextState::Materialized) {
+        restoreMaterialized();
+        return;
+    }
+    td->runtime_statement = old_stmt;
+    td->runtime_loc = old_loc;
+    td->native_leaf_context = previous;
+    publish_popped_stack_location(td, old_stack);
+    assert(state == ContextState::DeferredMarkers);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeLeafCallHelper::restoreMaterialized() {
+    assert(state == ContextState::Materialized);
+    if (target_kind == TargetKind::ClosureV2) {
+        // Restore the caller's override before applying it to the saved options.
+        closure_context->restoreOptions(td);
+    } else if (target_kind == TargetKind::CallbackV2) {
+        callback_context->restoreOptions(td);
+    }
+    if (swapped) {
+        td->runtime_po = apply_runtime_po_override(td, old_po);
+    }
+    td->runtime_statement = old_stmt;
+    td->runtime_loc = old_loc;
+    td->native_leaf_context = previous;
+    publish_popped_stack_location(td, old_stack);
+    tlpd->lvstack.popNativeLeafFrameBoundary();
+    tlpd->cvstack.popNativeLeafFrameBoundary();
+    td->closure_rt_env = old_closure;
+    td->call_program_context = old_call_pgm;
+    if (target_kind == TargetKind::Method) {
+        method_context->restore(td);
+    } else if (target_kind == TargetKind::UncachedMethod) {
+        uncached_method_context->restore(td);
+    } else if (target_kind == TargetKind::ClosureV2) {
+        closure_context->restore(td);
+    }
+}
+
+// The admitted body cannot observe object/class context or reenter Qore. Stack
+// overflow materializes it before constructing an exception; diagnostic readers
+// use the separately published immutable frame, never these thread-private views.
+__attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::materialize(ThreadData* td) {
+    old_object = td->current_obj;
+    old_class = td->current_class;
+    old_rc_object = rc.getObject();
+    old_rc_class = rc.getClass();
+    td->current_obj = object;
+    td->current_class = cache.native_scalar_class_ctx;
+    rc.setObject(object);
+    rc.setClass(cache.native_scalar_class_ctx);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeMethodContext::restore(ThreadData* td) {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeUncachedMethodContext::materialize(ThreadData* td) {
+    old_object = td->current_obj;
+    old_class = td->current_class;
+    old_rc_object = rc.getObject();
+    old_rc_class = rc.getClass();
+    td->current_obj = object;
+    td->current_class = class_ctx;
+    rc.setObject(object);
+    rc.setClass(class_ctx);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeUncachedMethodContext::restore(ThreadData* td) {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::prepareMaterialization() {
+    if (!old_options) {
+        old_options = std::make_unique<SavedOptions>();
+    }
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::materialize(ThreadData* td) {
+    assert(old_options);
+    old_options->mask = td->runtime_po_override_mask;
+    old_options->value = td->runtime_po_override_value;
+    old_options->replace = td->runtime_po_override_replace;
+    old_options->caller_restrictions = td->runtime_po_caller_restrictions;
+    old_options->module_pgm = td->runtime_po_module_pgm;
+    old_options->app_pgm_id = td->runtime_po_app_pgm_id;
+    // Match FunctionRefParseOptionsOverride, including its unchanged enclosing
+    // scope for a same-owner non-module callback. No context is consulted by a
+    // successful compiler-proven scalar body; this runs only before error work.
+    if (cache.uvb->pgm != cache.pgm || qore_program_is_module(cache.uvb->pgm)) {
+        QoreCallParseOptionsOverride o;
+        qore_get_user_call_runtime_po_override(cache.pgm, cache.uvb,
+            apply_runtime_po_override(td, cache.pgm->getParseOptions()), td->current_pgm, o);
+        td->runtime_po_override_mask = o.mask;
+        td->runtime_po_override_value = o.value;
+        td->runtime_po_override_replace = o.replace & o.mask;
+        td->runtime_po_caller_restrictions = o.caller_restrictions;
+        td->runtime_po_module_pgm = o.module_pgm;
+        td->runtime_po_app_pgm_id = o.app_pgm_id;
+    }
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeCallbackContext::restoreOptions(ThreadData* td) {
+    assert(old_options);
+    td->runtime_po_override_mask = old_options->mask;
+    td->runtime_po_override_value = old_options->value;
+    td->runtime_po_override_replace = old_options->replace;
+    td->runtime_po_caller_restrictions = old_options->caller_restrictions;
+    td->runtime_po_module_pgm = old_options->module_pgm;
+    td->runtime_po_app_pgm_id = old_options->app_pgm_id;
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::materialize(ThreadData* td) {
+    QoreProgram* pgm = closure->getProgram();
+    QoreProgram* caller = caller_pgm ? caller_pgm : td->current_pgm;
+    QoreCallParseOptionsOverride o;
+    qore_get_user_call_runtime_po_override(pgm, uvb,
+        RuntimeConfigNativeAccess::getEffectiveParseOptionsFor(rc, caller), caller, o);
+    old_options.emplace(td->runtime_po_override_mask, td->runtime_po_override_value, td->runtime_po_override_replace,
+        td->runtime_po_caller_restrictions, td->runtime_po_module_pgm, td->runtime_po_app_pgm_id);
+    td->runtime_po_override_mask = o.mask;
+    td->runtime_po_override_value = o.value;
+    td->runtime_po_override_replace = o.replace & o.mask;
+    td->runtime_po_caller_restrictions = o.caller_restrictions;
+    td->runtime_po_module_pgm = o.module_pgm;
+    td->runtime_po_app_pgm_id = o.app_pgm_id;
+    old_object = td->current_obj;
+    old_class = td->current_class;
+    old_rc_object = rc.getObject();
+    old_rc_class = rc.getClass();
+    QoreObject* object = closure->getObject();
+    const qore_class_private* cls = closure->getClassCtx();
+    restore_self = object != nullptr;
+    if (restore_self) {
+        old_self = QoreClosureSelfContextHelper::exchange(object);
+    }
+    td->current_obj = object;
+    td->current_class = cls;
+    rc.setObject(object);
+    rc.setClass(cls);
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restoreOptions(ThreadData* td) {
+    if (old_options) {
+        td->runtime_po_override_mask = old_options->mask;
+        td->runtime_po_override_value = old_options->value;
+        td->runtime_po_override_replace = old_options->replace;
+        td->runtime_po_caller_restrictions = old_options->caller_restrictions;
+        td->runtime_po_module_pgm = old_options->module_pgm;
+        td->runtime_po_app_pgm_id = old_options->app_pgm_id;
+        old_options.reset();
+    }
+}
+
+__attribute__((noinline, cold)) void RuntimeConfigNativeClosureContext::restore(ThreadData* td) {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    // Restore the current Impl, including after an exception-time refresh or move.
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+    if (restore_self) {
+        QoreClosureSelfContextHelper::exchange(old_self);
+    }
 }
 
 // called when pushing a new location on the stack
@@ -2532,6 +3589,16 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     current_stmt = td->runtime_statement;
 
     return publish_pushed_stack_location(td, stack_loc);
+}
+
+const QoreStackLocation* update_get_runtime_external_stack_location(QoreStackLocation* stack_loc,
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm) {
+    ThreadData* td = thread_data.get();
+
+    current_pgm = td->current_pgm;
+    current_stmt = td->runtime_statement;
+
+    return publish_pushed_stack_location<StackPushKind::External>(td, stack_loc);
 }
 
 const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
@@ -2565,7 +3632,7 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     runtime_loc = td->runtime_loc;
     frame_loc = call_loc ? call_loc : runtime_loc;
 
-    const QoreStackLocation* prev = publish_pushed_stack_location(td, stack_loc);
+    const QoreStackLocation* prev = publish_pushed_stack_location<StackPushKind::Native>(td, stack_loc);
     if (callee_loc) {
         td->runtime_statement = nullptr;
         td->runtime_loc = callee_loc;
@@ -2649,6 +3716,14 @@ RuntimeLocationCache get_runtime_location_cache() {
         &td->runtime_statement,
         td
     };
+}
+
+extern "C" DLLEXPORT void qore_rt_get_native_entry_slots_v2(QoreNativeEntrySlots* slots, RuntimeConfig* rc) {
+    assert(slots && rc);
+    ThreadData* td = RuntimeConfigNativeAccess::getThreadData(*rc);
+    slots->thread_data = td;
+    slots->loc_ptr = &td->runtime_loc;
+    slots->stmt_ptr = &td->runtime_statement;
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
@@ -2978,6 +4053,26 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     sync_runtime_config_program(td);
 }
 
+// Keep this narrow native-call save/restore visible to the register allocator
+// in the single-compilation-unit build; split builds retain normal definitions.
+__attribute__((always_inline)) RuntimeConfigNativeObjectHelper::RuntimeConfigNativeObjectHelper(
+        RuntimeConfig& rc, QoreObject* object, const qore_class_private* cls)
+        : rc(rc), td(RuntimeConfigNativeAccess::getThreadData(rc)),
+          old_object(td->current_obj), old_class(td->current_class),
+          old_rc_object(rc.getObject()), old_rc_class(rc.getClass()) {
+    td->current_obj = object;
+    td->current_class = cls;
+    rc.setObject(object);
+    rc.setClass(cls);
+}
+
+__attribute__((always_inline)) RuntimeConfigNativeObjectHelper::~RuntimeConfigNativeObjectHelper() {
+    td->current_obj = old_object;
+    td->current_class = old_class;
+    rc.setObject(old_rc_object);
+    rc.setClass(old_rc_class);
+}
+
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c) {
     ThreadData* td  = thread_data.get();
     old_obj = td->current_obj;
@@ -3268,19 +4363,27 @@ ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* 
     set(xsink, pgm, runtime);
 }
 
+ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(RuntimeConfig& rc, ExceptionSink* xsink,
+        QoreProgram* pgm, bool runtime) {
+    if (pgm) {
+        setWithThreadData(RuntimeConfigNativeAccess::getThreadData(rc), xsink, pgm, runtime);
+    }
+}
+
 ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     if (!restore) {
         printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p cur_ctx:%p no restore\n", this, old_ctx);
         return;
     }
     // restore thread stacks
-    ThreadData* td = thread_data.get();
+    ThreadData* td = context_td;
+    assert(td);
 
     QoreProgram* pgm = td->current_pgm;
     printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this: %p current_pgm: %p " \
         "pgmid: " QLLD ", restoring old pgm: %p old_pgmid: " QLLD " old tlpd: %p old_ctx: %p savefc: %d oldfc: %d " \
-        "init_tlpd: %d\n", this, td->current_pgm, td->current_pgm ? (int64)td->current_pgm->getProgramId() : -1LL,
-        old_pgm, old_pgm ? (int64)old_pgm->getProgramId() : -1LL, old_tlpd, old_ctx, save_frameCount, old_frameCount,
+        "init_tlpd: %d\n", this, td->current_pgm, td->current_pgm ? static_cast<int64>(td->current_pgm->getProgramId()) : -1LL,
+        old_pgm, old_pgm ? static_cast<int64>(old_pgm->getProgramId()) : -1LL, old_tlpd, old_ctx, save_frameCount, old_frameCount,
         init_tlpd);
     if (td->tlpd->dbgIsAttached()) {
         // find if tlpd is in lower context and if not then notify dbgDetach()
@@ -3302,9 +4405,14 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     if (!pgm) {
         return;
     }
+    setWithThreadData(thread_data.get(), xsink, pgm, runtime);
+}
+
+void ProgramThreadCountContextHelper::setWithThreadData(ThreadData* td, ExceptionSink* xsink,
+        QoreProgram* pgm, bool runtime) {
+    assert(td && pgm);
     assert(!old_pgm);
 
-    ThreadData* td = thread_data.get();
     // ProgramRuntimeParseContextHelper can set current_pgm without setting
     // tlpd.  User-code execution still needs tlpd for local and closure
     // variable access, so only skip setup when the current program already has
@@ -3312,6 +4420,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     if (pgm == td->current_pgm && td->tlpd) {
         return;
     }
+    context_td = td;
     old_pgm = td->current_pgm;
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
@@ -3319,7 +4428,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p current_pgm:%p "
         "pgmid:" QLLD " new_pgm: %p new_pgmid:" QLLD " cur_tlpd:%p cur_ctx:%p fc:%d\n", this, old_pgm,
-        old_pgm ? (int64)old_pgm->getProgramId() : -1LL, pgm, pgm ? (int64)pgm->getProgramId() : -1LL, old_tlpd, old_ctx,
+        old_pgm ? static_cast<int64>(old_pgm->getProgramId()) : -1LL, pgm, pgm ? static_cast<int64>(pgm->getProgramId()) : -1LL, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
     this->xsink = xsink;
@@ -3328,10 +4437,11 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // from that program while module init is still running; re-entering the
     // same-thread parse-locked program only needs a local frame. Calling
     // incThreadCount() is invalid while parsing_in_progress is set.
-    const bool skip_thread_count = pp->parsingLocked();
+    // Both checks refer to this same live thread, before any initialization callbacks.
+    const bool skip_thread_count = pp->parsingLocked(td->tid);
     if (!skip_thread_count) {
         // try to increment thread count
-        if (pp->incThreadCount(xsink)) {
+        if (pp->incThreadCount(xsink, td->tid)) {
             printd(5, "ProgramThreadCountContextHelper::set() failed\n");
             return;
         }
@@ -3387,7 +4497,7 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
     QoreProgram* pgm = td->current_pgm;
     printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p pgmid:" QLLD " inst:%d init_tlpd:%d\n",
-        frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm, (int64)pgm->getProgramId(), tlpd->inst, ch?ch->init_tlpd:-1
+        frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm, static_cast<int64>(pgm->getProgramId()), tlpd->inst, ch?ch->init_tlpd:-1
     );
     /*
         ThreadFrameBoundaryHelper increments lvstack.getFrameCount after ProgramThreadCountContextHelper saved current frame count
@@ -3423,7 +4533,7 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         }
         printd(5, "ProgramThreadCountContextHelper::getContextFrame() L: frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
             "pgmid:" QLLD ", inst:%d init_tlpd:%d\n", frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm,
-            (int64)pgm->getProgramId(), tlpd->inst, ch ? ch->init_tlpd: -1);
+            static_cast<int64>(pgm->getProgramId()), tlpd->inst, ch ? ch->init_tlpd: -1);
     }
     if (!pgm->checkAllowDebugging(xsink)) {
         return nullptr;
@@ -3432,7 +4542,7 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     frame += tlpd->lvstack.getFrameCount() - frameCount;
     printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
         "pgmid:" QLLD " inst:%d\n", frame, ch, tlpd, frameCount, tlpd->lvstack.getFrameCount(), pgm,
-        (int64)pgm->getProgramId(),
+        static_cast<int64>(pgm->getProgramId()),
         tlpd->inst);
     return tlpd;
 }
@@ -3770,7 +4880,9 @@ void QoreSandboxProvenanceHelper::set(const QoreObject* object) {
 
 QoreSandboxProvenanceHelper::QoreSandboxProvenanceHelper(const ResolvedCallReferenceNode* callback) {
     if (callback) {
-        apply(qore_get_call_reference_provenance(callback));
+        if (auto* captured = qore_get_call_reference_provenance(callback)) {
+            apply(captured);
+        }
     }
 }
 
@@ -4220,21 +5332,37 @@ static int check_module_owned_code(const ResolvedCallReferenceNode* rcr, int64 d
 }
 
 RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask,
-        const QoreParseOptions& value) {
+        const QoreParseOptions& value)
+        : RuntimeParseOptionsOverrideHelper(thread_data.get(), mask, value) {
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc,
+        const QoreParseOptions& mask, const QoreParseOptions& value)
+        : RuntimeParseOptionsOverrideHelper(RuntimeConfigNativeAccess::getThreadData(rc), mask, value) {
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(ThreadData* td,
+        const QoreParseOptions& mask, const QoreParseOptions& value) : td(td) {
     QoreCallParseOptionsOverride o;
     o.mask = mask;
     o.value = value;
     set(o);
 }
 
-RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o) {
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o)
+        : td(thread_data.get()) {
+    set(o);
+}
+
+RuntimeParseOptionsOverrideHelper::RuntimeParseOptionsOverrideHelper(RuntimeConfig& rc,
+        const QoreCallParseOptionsOverride& o) : td(RuntimeConfigNativeAccess::getThreadData(rc)) {
     set(o);
 }
 
 void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& o) {
     // the caller restrictions apply only to the code of the given module Program
     assert(!o.caller_restrictions || o.module_pgm);
-    ThreadData* td = thread_data.get();
+    assert(td);
     old_mask = td->runtime_po_override_mask;
     old_value = td->runtime_po_override_value;
     old_replace = td->runtime_po_override_replace;
@@ -4252,7 +5380,6 @@ void RuntimeParseOptionsOverrideHelper::set(const QoreCallParseOptionsOverride& 
 }
 
 RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
-    ThreadData* td = thread_data.get();
     td->runtime_po_override_mask = old_mask;
     td->runtime_po_override_value = old_value;
     td->runtime_po_override_replace = old_replace;
@@ -5139,6 +6266,9 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         ExceptionSink* xsink;
     } value_releaser(helper, xsink);
     for (size_t i = 0; i < num; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "background helper value capture")) {
+            return QoreValue();
+        }
         helper->values.push_back(background_check_value_capture(values[i].refSelf(), xsink));
         if (*xsink) {
             return QoreValue();
@@ -6599,6 +7729,39 @@ static bool check_cancel_in_scope(int tid) {
     return false;
 }
 
+// Keep exception construction and manager lookup out of the no-pending poll.
+// Otherwise their stack frames/register saves are paid on every loop iteration.
+static __attribute__((noinline)) bool raise_thread_cancel(int tid, ExceptionSink* xsink, const char* operation) {
+    if (xsink) {
+        // Hold a reference while formatting: another requester can replace the reason.
+        ReferenceHolder<QoreStringNode> reason(thread_list.getCancelReasonRef(tid), nullptr);
+        if (reason) {
+            xsink->raiseException("THREAD-CANCELLED",
+                new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
+        } else {
+            xsink->raiseException("THREAD-CANCELLED",
+                new QoreStringNodeMaker("%s: thread %d cancelled", operation, tid));
+        }
+    }
+    return true;
+}
+
+static __attribute__((noinline)) bool check_pending_program_interrupt(ExceptionSink* xsink, const char* operation) {
+    // Resolve the actual governing manager, including enclosing callers and
+    // captured async contexts. Policy barriers do not suppress interruption.
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
+    if (smh) {
+        if (xsink) {
+            if (smh->checkIOInterrupt(xsink, operation)) {
+                return true;
+            }
+        } else if (smh->isInterruptRequested()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 #ifdef DEBUG
 //! the number of cancellation checks that the current thread has made; see q_get_cancel_check_count()
 static thread_local int64 cancel_check_count = 0;
@@ -6608,11 +7771,10 @@ int64 q_get_cancel_check_count() {
 }
 #endif
 
-bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const char* operation) {
 #ifdef DEBUG
     ++cancel_check_count;
 #endif
-    ThreadData* td = thread_data.get();
     // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
     // the pending request is deliberately left untouched here, so the first cancellation point
     // after the deferral scope ends raises it with the original reason and scope
@@ -6625,34 +7787,27 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     // been destroyed, in which case q_gettid() reports TID 0, which is never cancel-requested
     int tid = td ? td->tid : 0;
     if (thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid)) {
-        if (xsink) {
-            // hold a reference while formatting; a concurrent cancelThread() call would otherwise
-            // be able to replace and free the string between the read and its use
-            ReferenceHolder<QoreStringNode> reason(thread_list.getCancelReasonRef(tid), nullptr);
-            if (reason) {
-                xsink->raiseException("THREAD-CANCELLED",
-                    new QoreStringNodeMaker("%s: thread %d cancelled: %s", operation, tid, reason->c_str()));
-            } else {
-                xsink->raiseException("THREAD-CANCELLED",
-                    new QoreStringNodeMaker("%s: thread %d cancelled", operation, tid));
-            }
-        }
-        return true;
+        return raise_thread_cancel(tid, xsink, operation);
     }
 
-    // check program-level interrupt: the governing sandbox, never suppressed by a policy barrier
-    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
-    if (smh) {
-        if (xsink) {
-            if (smh->checkIOInterrupt(xsink, operation)) {
-                return true;
-            }
-        } else if (smh->isInterruptRequested()) {
-            return true;
-        }
+    // No manager can report an interrupt if the global conservative count is zero.
+    // Keep this load seq_cst: a waiter publishes waiting_on before this check, and
+    // requestInterrupt() publishes the count before broadcasting to registered waiters.
+    // Thread cancellation and deferral above are independent and must always run first.
+    if (!qore_pending_program_interrupts.load(std::memory_order_seq_cst)) {
+        return false;
     }
 
-    return false;
+    return check_pending_program_interrupt(xsink, operation);
+}
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel_intern(thread_data.get(), xsink, operation);
+}
+
+bool RuntimeConfigNativeAccess::checkCancel(const RuntimeConfig& rc, ExceptionSink* xsink,
+        const char* operation) {
+    return qore_check_cancel_intern(getThreadData(rc), xsink, operation);
 }
 
 bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {

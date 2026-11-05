@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class AOTOutlinedLocalReleaseTest
+
+/*  An outlined function-body helper (see design/aot-function-outlining.md) that removes, replaces or empties a local
+    of its caller must destroy the value when it releases it, as the AST interpreter does, and not when the caller
+    exits: the caller's own references to the local's value (its reload storage) are released before the call.
+    The outliner is forced onto small fixtures, and the destructor order of the compiled program is compared with
+    the AST interpreter's.
+*/
+class AOTOutlinedLocalReleaseTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+
+        #! forces the outliner onto any function
+        const ForceOutlining = "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=1 ";
+        #! target region sizes: each one partitions the fixtures differently
+        const TargetSizes = (5, 10, 20, 50);
+        const Levels = ("-O0", "-O3");
+        const Prefixes = ("", "QORE_AOT_EH=1 ");
+    }
+
+    constructor() : Test("outlined helpers release the caller's locals when they change them", "1.0", \ARGV) {
+        addTestCase("remove of a local declared in the caller", \checkRemove());
+        addTestCase("lvalue operations on the caller's locals", \checkLValueOperations());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    #! the shape of the reported fixture: object locals whose destructors log, each removed two statements later
+    /** the first local is declared in the entry block, which stays in the caller, and is removed in a helper
+    */
+    private static string removeFixture(int n) {
+        list<string> lines = ("%modern", "our list<string> events = ();",
+            "class Tracked { private { string name; } constructor(string name) { self.name = name; }"
+                " destructor() { push events, name; } string get() { return name; } }",
+            "sub ext(auto v) { push events, \"ext\"; }", "int sub big(int seed) {", "    int total = 0;");
+        for (int i = 0; i < n; ++i) {
+            push lines, sprintf("    Tracked t%d(sprintf(\"t%d-%%d\", seed)); ext(t%d); total += t%d.get().size();",
+                i, i, i, i);
+            if (i >= 2) {
+                push lines, sprintf("    remove t%d;", i - 2);
+                push lines, sprintf("    push events, \"after remove t%d\";", i - 2);
+            }
+            if (!(i % 4)) {
+                push lines, sprintf("    { Tracked a%d(\"a%d\"); Tracked b%d(\"b%d\"); ext(b%d); ext(a%d);"
+                    " total += b%d.get().size() + a%d.get().size(); }", i, i, i, i, i, i, i, i);
+            }
+        }
+        lines += ("    return total;", "}", "printf(\"%d:%s\\n\", big(7), events.join(\",\"));");
+        return lines.join("\n") + "\n";
+    }
+
+    #! each lvalue operation that releases a value, on a local that the caller read last
+    /** The statements that read the weak-assigned local stay in the caller (a weak-assigned local cannot cross a
+        region boundary), and each one reads the local that the next statement changes: the caller then holds the
+        reloaded value of that local when the helper of the next statement changes it.
+    */
+    private static string operationsFixture() {
+        list<list<string>> operations = (
+            ("o0", "remove o0;", "remove"),
+            ("o1", "delete o1;", "delete"),
+            ("o2", "o2 = new Tracked(\"assigned\");", "assign"),
+            ("o3", "o3 = NOTHING;", "assign NOTHING"),
+            ("l", "splice l, 0, 1;", "splice"),
+            ("l", "extract l, 0, 1;", "extract"),
+            ("l", "shift l;", "shift"),
+            ("l", "pop l;", "pop"),
+            ("l", "l[0] = NOTHING;", "list element assign"),
+            ("l", "l = ();", "list assign"),
+            ("h", "h.assign = NOTHING;", "hash key assign"),
+            ("h", "remove h.rm;", "hash key remove"),
+            ("h", "delete h.del;", "hash key delete"),
+            ("h", "h = {};", "hash assign"),
+        );
+        list<string> lines = ("%modern", "%allow-weak-references", "our list<string> events = ();",
+            "class Tracked { private { string name; } constructor(string name) { self.name = name; }"
+                " destructor() { push events, name; } }",
+            "sub ext(auto v) { push events, \"ext\"; }", "sub big() {",
+            "    int pin = 0;",
+            "    pin := 1;",
+            "    *Tracked o0 = new Tracked(\"remove\"); ext(1);",
+            "    *Tracked o1 = new Tracked(\"delete\"); ext(1);",
+            "    *Tracked o2 = new Tracked(\"assign\"); ext(1);",
+            "    *Tracked o3 = new Tracked(\"nothing\"); ext(1);",
+            "    list<*Tracked> l = (new Tracked(\"splice\"), new Tracked(\"extract\"), new Tracked(\"shift\"),"
+                " new Tracked(\"index\"), new Tracked(\"keep\"), new Tracked(\"pop\")); ext(1);",
+            "    hash<string, *Tracked> h = {\"assign\": new Tracked(\"key assign\"), \"rm\": new Tracked(\"key remove\"),"
+                " \"del\": new Tracked(\"key delete\"), \"rest\": new Tracked(\"hash assign\")}; ext(1);",
+            "    pin := 2;");
+        foreach list<string> operation in (operations) {
+            push lines, sprintf("    ext((pin, %s)); ext(1);", operation[0]);
+            push lines, "    " + operation[1];
+            push lines, sprintf("    push events, \"after %s\";", operation[2]);
+        }
+        lines += ("    ext((pin, h)); ext(1);", "}", "big();", "printf(\"%s\\n\", events.join(\",\"));");
+        return lines.join("\n") + "\n";
+    }
+
+    #! compiles the fixture with forced outlining in each configuration and compares its output with AST's
+    private check(string fixture, string name) {
+        TmpDir dir("qore-aot-outlined-local-release-");
+        string source = dir.path + "/fixture.q";
+        write(source, fixture);
+        string expected = run((qore, "--exec-mode=ast", source));
+        # the fixture logs the destruction of every value it releases
+        assertRegex("after", expected, name + ": AST output");
+        string executable = dir.path + "/fixture";
+        foreach int target in (TargetSizes) {
+            foreach string prefix in (Prefixes) {
+                foreach string level in (Levels) {
+                    string config = sprintf("%s: %starget %d %s", name, prefix, target, level);
+                    string compile = run((qcc, level, "--strip-source", "-o", executable, source),
+                        prefix + ForceOutlining + "QORE_AOT_OUTLINE_FN_TARGET_INSTS=" + target + " ");
+                    # the test is only meaningful if the function was outlined
+                    assertRegex("AOT-OUTLINE-FN: 'big' outlined [1-9][0-9]* regions", compile, config + ": outlined");
+                    assertEq(expected, run((executable,)), config);
+                }
+            }
+        }
+    }
+
+    checkRemove() {
+        check(removeFixture(4), "remove");
+    }
+
+    checkLValueOperations() {
+        check(operationsFixture(), "lvalue operations");
+    }
+}

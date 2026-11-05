@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class FloatLocalExpressionTest
+
+class FloatLocalExpressionTest inherits QUnit::Test {
+    private {
+        string libdir = realpath(ENV.QORE_LIBDIR ?? get_script_dir() + "/../../../build");
+        string qore = ENV.QORE_BIN ?? libdir + "/qore";
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string behavior = get_script_dir() + "/AOTFloatLocalExpression.qr";
+    }
+    constructor() : Test("AOT float expressions through private locals", "1.0", \ARGV) {
+        addTestCase("native local expressions and observable fallbacks", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix
+            + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + (map quote($1), args).join(" "));
+        if (result.mode) { ExecModeHarness::check_native(result); }
+        assertEq(0, result.rc, result.out);
+        return result.out;
+    }
+    private check() {
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FLOAT_LOCAL_EXPRESSION=1 ")) {
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                assertEq("float-local-expression: ok\n",
+                    run((qore, "--exec-mode=" + mode, behavior), prefix), prefix + mode);
+            }
+        }
+        TmpDir dir("qore-float-local-expression-");
+        foreach string prefix in (("", "QORE_DISABLE_AOT_FLOAT_LOCAL_EXPRESSION=1 ", "QORE_AOT_EH=1 ",
+                "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/behavior";
+                string generated = run((qcc, level, "--strip-source", "-o", executable, behavior),
+                    prefix + "QORE_DUMP_IR_AFTER_OPT=1 ");
+                foreach string name in (("localIdentity", "localAffine", "localConstant", "localReassign",
+                        "localEffect", "localOwned", "localExit", "localExitFailure", "localLoop",
+                        "localCapture", "localDivide", "localAuto")) {
+                    bool selected = !prefix.startsWith("QORE_DISABLE_") && (name == "localIdentity"
+                        || name == "localAffine" || name == "localConstant" || name == "localReassign");
+                    int normal = 0;
+                    int native = 0;
+                    foreach string definition in (generated.split("\ndefine ")) {
+                        string header = definition.split("\n")[0];
+                        if (!header.contains("@" + name + "_")) { continue; }
+                        if (header.contains("_funcref_typed_v3(")) { ++native; }
+                        if (!header.contains("_fast_")) { ++normal; }
+                    }
+                    assertTrue(normal > 0, "inspected ordinary entry " + name);
+                    assertEq(selected ? 1 : 0, native, "typed native callback entry " + name + " " + prefix + level);
+                }
+                assertEq("float-local-expression: ok\n", run((executable,)), prefix + level);
+            }
+        }
+    }
+}

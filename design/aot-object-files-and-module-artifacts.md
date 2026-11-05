@@ -17,12 +17,11 @@ Relevant code:
 
 ## Artifact Types
 
-| Artifact | Produced by | Purpose |
-|---|---|---|
-| Executable | `qcc -o app script.qr` or `qcc -o app *.qo` | Native launcher for a Qore script/app |
-| `.qmod` | `qcc -m Module.qm` or `qcc -m qlib/Module` | Loadable binary user module |
-| `.qo` | `qcc -c file.qr` / `file.qc` / `file.qm` | Relocatable object containing native code and AOT metadata |
-| `.qoa` | `qcc -a --context=DIR *.qo` | Static archive exposing `qore_qoa_register_all()` |
+|!Artifact|!Produced by|!Purpose
+|Executable|`qcc -o app script.qr` or `qcc -o app *.qo`|Native launcher for a Qore script/app
+|`.qmod`|`qcc -m Module.qm` or `qcc -m qlib/Module`|Loadable binary user module
+|`.qo`|`qcc -c file.qr` / `file.qc` / `file.qm`|Relocatable object containing native code and AOT metadata
+|`.qoa`|`qcc -a --context=DIR *.qo`|Static archive exposing `qore_qoa_register_all()`
 
 `qcc -a` writes a `.qoa` with LLVM's archive writer, in the host linker's
 format (Darwin on Apple platforms, the big archive format on AIX, GNU
@@ -52,15 +51,32 @@ registration path.
 
 Batch registration uses the multi-deserializer:
 
-1. Open all metadata blobs and create namespace/class/hashdecl/typedef shells.
+1. Open all metadata blobs and create namespace/class/hashdecl/typedef shells,
+   including names for class and namespace constants without resolving their types or values.
 2. Resolve types and base classes across all sessions.
-3. Register constants across all sessions.
+3. Resolve constant types and values across all sessions, retaining their original entries.
 4. Resolve own members, then inherited members.
 5. Deserialize functions, methods, globals, static members, and init functions.
 6. Commit class structures and run final fixups.
 
 The cross-session barriers are required because one `.qo` can reference classes,
 constants, or members declared in another `.qo`.
+
+Hashdecl member defaults retain their complete serialized payload until all declaration
+and constant-name shells exist. During member resolution, constant references bind to
+those stable entries as lazy expressions; later constant resolution fills the entries.
+The default is installed before parameterized hashdecl instantiation can copy it.
+Deferring installation until after constant values would leave already-instantiated
+hashdecls with missing defaults and would make typed constant construction observe
+incomplete declarations.
+
+Lists and hashes containing lazy default references are marked as expressions and
+evaluate their children when the default is used. Evaluated containers retain their
+type metadata and ordinary value containers keep their existing fast return. After
+a hashdecl takes ownership of a default, the pending record is cleared so an error in
+a later member does not release that default again. The regression
+`examples/test/ir/AOTHashdeclConstantDefaults.qtest` covers qmod-only loading, nested
+defaults, independent instances, AOT consumers and repeated failed loads.
 
 ### Class-Static LValue Roots Resolve By Name, With A Load-Time Fallback
 
@@ -225,10 +241,9 @@ dependency, and the executable refuses to start without it.
 An embedded module is visible to the compiler through two namespace trees, and
 both must be walked:
 
-| Tree | Holds | `compile_module` | Symbol namespace |
-|---|---|---|---|
-| The main program's root namespace | the module's **exported** items, imported into the importing program | `""` | unprefixed |
-| The module program's own root namespace | **every** item, exported or not | the module name | `_qaot_<Mod>_` |
+|!Tree|!Holds|!`compile_module`|!Symbol namespace
+|The main program's root namespace|the module's **exported** items, imported into the importing program|`""`|unprefixed
+|The module program's own root namespace|**every** item, exported or not|the module name|`_qaot_<Mod>_`
 
 The two overlap: an exported item appears in both. It is one
 `AbstractQoreFunctionVariant`, because namespace import copies functions and
@@ -675,6 +690,14 @@ Format version 21 dropped the per-function location table from the function
 records of the metadata (a v9–v20 record's table is skipped when read), and qcc
 no longer writes the PC→location maps that earlier versions carried in a `QPCM`
 EOF trailer and in a `qore_aot_pcloc` (Mach-O `__QORE,__pcloc`) object section.
+
+Format version 22 additionally carries the performance branch's closure-entry
+locations/parse options and parser-selected constructor signatures for object
+defaults. It retains develop's v20 background/block-exit helper layout and v21
+removal of location tables. Earlier experimental performance-branch v20/v21
+artifacts used those numbers for different payloads and must be recompiled;
+they are not compatible aliases of develop's versions. Native artifacts must
+also match the runtime identity and helper/context ABI of their compiler.
 
 ## Inspection
 

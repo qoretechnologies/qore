@@ -5151,7 +5151,9 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     assert(ir);
     IRContextFlags flags;
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
-    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if ((pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER))
+            || q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        // argv and self are visible to reflection even without an explicit IR load.
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -5187,7 +5189,8 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
     if (ir) {
         ir->computeIROnlyLocals();
 
-        if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER) && !ir->reflection_free) {
+            ir->reflective_frame = true;
             if (!ir->ir_only_locals.empty()) {
                 ir->ir_only_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
@@ -5254,7 +5257,8 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         }
         // else: another thread published first; ir_holder deletes our unpublished body
     }
-    std::call_once(ir_lower_once, []{});  // consume the flag safely
+    // the variant has its IR: no lowering attempt is made any more
+    ir_lower_done.store(true, std::memory_order_release);
     if (promote_to_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
     }
@@ -5453,9 +5457,6 @@ static void collectBlockLocals(const LVList* lvars, std::vector<LocalVar*>& loca
     }
 }
 
-// forward declaration — non-static for non-SCU visibility
-void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
-
 void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig) {
     if (!sig || locals.empty()) {
         return;
@@ -5478,90 +5479,191 @@ void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const U
         }), locals.end());
 }
 
-// helper: collect all locals from a single statement and recurse into nested blocks.
-// Recurses into statement types that are fully lowered to IR (if/for/while/try/switch/block/on_block_exit).
-// With Phase 1 inline handler lowering, on_block_exit handler code is lowered directly into the
-// parent IR context, so handler-internal locals must be collected.
-// Statements delegated to AST via special IR opcodes (context, summarize, assert)
-// are skipped because the AST's LVListInstantiator handles their locals.
-static void collectStatementLocals(const AbstractStatement* stmt, std::vector<LocalVar*>& locals) {
-    if (!stmt) {
-        return;
-    }
-    if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
-        collectAllStatementLocals(block, locals);
+namespace {
+//! An item of the walk of collectAllStatementLocals(): a block or statement to visit, or locals to collect
+struct LocalsWalkItem {
+    enum Kind : unsigned char { Block, Statement, List, Var } kind;
+    const void* ptr;
+};
+
+//! Pushes the parts of a statement for collectAllStatementLocals() onto the walk's stack
+/** The parts are pushed in reverse order, so that they are visited, and their locals collected, in lexical
+    (pre-order) order.
+
+    The walk enters the statements that are fully lowered to IR (if/for/while/try/switch/block/foreach/debug/
+    on_block_exit/context).  With inline handler lowering, on_block_exit handler code is lowered directly into the
+    parent IR context, so handler-internal locals must be collected.  Statements delegated to AST via special IR
+    opcodes (summarize, assert) are skipped because the AST's LVListInstantiator handles their locals.
+*/
+void pushStatementLocals(const AbstractStatement* stmt, std::vector<LocalsWalkItem>& stack) {
+    using I = LocalsWalkItem;
+    auto block = [&stack](const StatementBlock* b) {
+        if (b) {
+            stack.push_back({I::Block, b});
+        }
+    };
+    auto list = [&stack](const LVList* l) {
+        if (l) {
+            stack.push_back({I::List, l});
+        }
+    };
+    if (auto* b = dynamic_cast<const StatementBlock*>(stmt)) {
+        block(b);
     } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
-        collectBlockLocals(if_stmt->getLVList(), locals);
-        collectAllStatementLocals(if_stmt->getIfCode(), locals);
-        collectAllStatementLocals(if_stmt->getElseCode(), locals);
+        block(if_stmt->getElseCode());
+        block(if_stmt->getIfCode());
+        list(if_stmt->getLVList());
     } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
-        collectBlockLocals(for_stmt->getLVList(), locals);
-        collectAllStatementLocals(for_stmt->getCode(), locals);
+        block(for_stmt->getCode());
+        list(for_stmt->getLVList());
     } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
-        // Also covers DoWhileStatement (inherits from WhileStatement)
-        collectBlockLocals(while_stmt->getLVList(), locals);
-        collectAllStatementLocals(while_stmt->getCode(), locals);
+        // also covers DoWhileStatement (inherits from WhileStatement)
+        block(while_stmt->getCode());
+        list(while_stmt->getLVList());
     } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
-        collectAllStatementLocals(try_stmt->getTryBlock(), locals);
-        // Collect the catch variable (it's a separate LocalVar, not part of catch_block's LVList)
+        block(try_stmt->getCatchBlock());
+        // the catch variable is a separate LocalVar, not part of the catch block's LVList
         if (LocalVar* catch_var = try_stmt->getCatchVar()) {
-            locals.push_back(catch_var);
+            stack.push_back({I::Var, catch_var});
         }
-        collectAllStatementLocals(try_stmt->getCatchBlock(), locals);
+        block(try_stmt->getTryBlock());
     } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
-        collectBlockLocals(sw_stmt->lvars, locals);
-        const CaseNode* cn = sw_stmt->getCases();
-        while (cn) {
-            collectAllStatementLocals(cn->code, locals);
-            cn = cn->next;
+        // the case list is singly linked: its blocks are pushed in order, then reversed in place
+        size_t first = stack.size();
+        for (const CaseNode* cn = sw_stmt->getCases(); cn; cn = cn->next) {
+            block(cn->code);
         }
+        std::reverse(stack.begin() + first, stack.end());
+        list(sw_stmt->lvars);
     } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
-        // Collect foreach locals for both reference and non-reference iteration.
-        // Both are now fully lowered to IR.
-        collectBlockLocals(foreach_stmt->getLVList(), locals);
-        collectAllStatementLocals(foreach_stmt->getCode(), locals);
+        // both reference and non-reference iteration are fully lowered to IR
+        block(foreach_stmt->getCode());
+        list(foreach_stmt->getLVList());
     } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
-        // Debug is now fully lowered to IR: expression form has no locals,
-        // block form recurses into the statement block.
-        if (StatementBlock* block = debug_stmt->getBlock()) {
-            collectAllStatementLocals(block, locals);
-        }
+        // the expression form has no locals; the block form has the block's
+        block(debug_stmt->getBlock());
     } else if (auto* obe_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        // Phase 1 inline lowering: on_exit handler code is directly lowered into the
-        // parent IR context at normal exit points (fall-through, break, continue, return).
-        // Handler-internal locals must be collected into pre_instantiated_locals so that
-        // evalTiered() pre-instantiates them on the TLS stack before IR execution.
-        // Without this, the IR interpreter cannot find handler locals (ThreadLocalVariableData::find asserts).
-        collectAllStatementLocals(obe_stmt->getCode(), locals);
+        // on_exit handler code is lowered into the parent IR context at its normal exit points, so its locals are
+        // pre-instantiated by evalTiered() on the TLS stack before IR execution, as the IR interpreter cannot find
+        // them otherwise (ThreadLocalVariableData::find asserts)
+        block(obe_stmt->getCode());
     } else if (auto* ctx_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
-        // Native IR lowering (D2): the body block is inlined into the parent
-        // IR function, so its locals (and any lvars declared by the context's
-        // own exp / where / sort expressions) must be pre-instantiated.
-        // Without this, body-scope StoreLocal hits
-        // ThreadLocalVariableData::find's assertion when writing a local.
-        collectBlockLocals(ctx_stmt->lvars, locals);
-        collectAllStatementLocals(ctx_stmt->code, locals);
+        // the body block is inlined into the parent IR function, so its locals (and any lvars declared by the
+        // context's own exp / where / sort expressions) must be pre-instantiated, or a body-scope StoreLocal hits
+        // ThreadLocalVariableData::find's assertion
+        block(ctx_stmt->code);
+        list(ctx_stmt->lvars);
     }
-    // SummarizeStatement, AssertStatement: these still generate special
-    // IR opcodes that call into the AST, which handles their locals via
-    // LVListInstantiator.  Skip them.
+}
 }
 
-// Recursively collect all local variables from a StatementBlock and all nested blocks
-// that are fully lowered to IR.  This collects the block's own LVList plus all nested
-// block locals from if/for/while/try/switch statements.
-// Note: this function is non-static because it's also used by StatementBlock.cpp for
-// top-level code IR lowering.
+// Collects all local variables of a StatementBlock and of all nested blocks that are fully lowered to IR, in lexical
+// (pre-order) order: the block's own LVList plus the locals of its nested if/for/while/try/switch/... statements.
+// The walk is iterative: it follows the nesting of the code, which the parser accepts deeper than a recursive walk
+// can follow on a small thread stack (a recursive walk took about 110 bytes of stack per level of nesting without
+// checking the stack, before the lowering that follows it checks it), and it cannot fail.
+// Note: this function is non-static because it's also used by StatementBlock.cpp for top-level code IR lowering.
 void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
     if (!block) {
         return;
     }
-    // Collect this block's own locals
-    collectBlockLocals(block->getLVList(), locals);
-    // Recurse into child statements
-    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
-        collectStatementLocals(*it, locals);
+    std::vector<LocalsWalkItem> stack;
+    stack.push_back({LocalsWalkItem::Block, block});
+    while (!stack.empty()) {
+        LocalsWalkItem item = stack.back();
+        stack.pop_back();
+        switch (item.kind) {
+            case LocalsWalkItem::Block: {
+                const StatementBlock* b = static_cast<const StatementBlock*>(item.ptr);
+                // the statement list is singly linked: its statements are pushed in order, then reversed in place
+                size_t first = stack.size();
+                for (const AbstractStatement* stmt : b->getStatements()) {
+                    if (stmt) {
+                        stack.push_back({LocalsWalkItem::Statement, stmt});
+                    }
+                }
+                std::reverse(stack.begin() + first, stack.end());
+                // the block's own locals come first
+                collectBlockLocals(b->getLVList(), locals);
+                break;
+            }
+            case LocalsWalkItem::Statement:
+                pushStatementLocals(static_cast<const AbstractStatement*>(item.ptr), stack);
+                break;
+            case LocalsWalkItem::List:
+                collectBlockLocals(static_cast<const LVList*>(item.ptr), locals);
+                break;
+            case LocalsWalkItem::Var:
+                locals.push_back(static_cast<LocalVar*>(const_cast<void*>(item.ptr)));
+                break;
+        }
     }
+}
+
+const LVarSet* UserVariantBase::getClosureCaptures() const {
+    if (!is_closure || !source_qf) {
+        return nullptr;
+    }
+    // a closure variant's function is always its UserClosureFunction (UserClosureVariant::parseInit())
+    return static_cast<UserClosureFunction*>(const_cast<QoreFunction*>(source_qf))->getVList();
+}
+
+bool qore_ir_seed_canonical_local_slots(QoreIRFunction& func, const UserVariantBase& uvb) {
+    assert(func.local_var_slots.empty());
+    size_t count = 0;
+    auto reserve = [&func, &count](const LocalVar* lv) -> bool {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "IR canonical local slot numbering")) {
+            return false;
+        }
+        func.reserveLocalSlot(lv);
+        return true;
+    };
+
+    const UserSignature* sig = uvb.getUserSignature();
+    const bool closure = uvb.isClosureVariant();
+    // the signature's locals as the caller instantiates them; a closure's self is the captured self of the code that
+    // created it (a capture below), not the synthetic one of its signature
+    if (sig) {
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            if (!reserve(sig->lv[i])) {
+                return false;
+            }
+        }
+        if (!reserve(sig->argvid)) {
+            return false;
+        }
+        if (!closure && !reserve(sig->selfid)) {
+            return false;
+        }
+    }
+
+    // every local declared in the body, in lexical declaration (pre-order) order: nested blocks, loop and foreach
+    // variables, catch parameters and the locals of on_exit/on_error/on_success handlers
+    std::vector<LocalVar*> body_locals;
+    collectAllStatementLocals(uvb.getStatementBlock(), body_locals);
+    for (LocalVar* lv : body_locals) {
+        if (!reserve(lv)) {
+            return false;
+        }
+    }
+
+    // a closure's captured variables, in declaration order (LVarSet), whether or not its code refers to them: the
+    // runtime binds them to the variables of the code that creates the closure
+    if (closure) {
+        if (const LVarSet* captures = uvb.getClosureCaptures()) {
+            for (LocalVar* lv : *captures) {
+                if (!reserve(lv)) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    func.canonical_local_slots = true;
+    func.canonical_local_slot_count = static_cast<uint32_t>(func.local_var_slots.size());
+    const StatementBlock* body = uvb.getStatementBlock();
+    func.canonical_slot_loc = body ? body->loc : nullptr;
+    return true;
 }
 
 void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
@@ -5591,27 +5693,44 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     return isTerminator(block->instructions.back()->opcode);
 }
 
+// Register before application threads can fork, including before any variant name is requested.
+static std::mutex variant_call_name_mutex;
+static QoreForkStdMutex variant_call_name_fork_handler(variant_call_name_mutex, QFLR_LEAF, "variant_call_names");
+
 void UserVariantBase::buildCallName() const {
-    static std::mutex lck;
-    std::lock_guard<std::mutex> lock(lck);
+    std::lock_guard<std::mutex> lock(variant_call_name_mutex);
     if (call_name_ready.load(std::memory_order_relaxed)) {
         return;
     }
+    std::string name;
     const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
     if (const char* class_name = variant ? variant->className() : nullptr) {
-        call_name = class_name;
-        call_name += "::";
+        name = class_name;
+        name += "::";
     }
     if (source_qf) {
-        call_name += source_qf->getName();
+        name += source_qf->getName();
     }
+    call_name = std::move(name);
     call_name_ready.store(true, std::memory_order_release);
+}
+
+namespace {
+//! set in lowerIRFunction() when lowering stopped for lack of stack, for attemptIRLowering() in the same thread
+thread_local bool ir_lowering_stopped_for_stack = false;
+
+//! Returns the stack that remains above the current thread's stack limit, 0 if it has reached it
+size_t q_ir_lowering_stack_room() {
+    size_t remaining = q_thread_stack_remaining();
+    // below the limit, the difference wraps around
+    return remaining > q_thread_get_this_stack_size() ? 0 : remaining;
+}
 }
 
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
         const QoreTypeInfo* specialization_receiver_type_info,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation,
-        bool mark_failure, bool raise_on_failure) const {
+        bool mark_failure, bool raise_on_failure, bool reflection_free, bool unwind_order_proven) const {
     assert(pgm);
     assert(statements);
 
@@ -5625,6 +5744,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     func->source_variant = variant;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
+    func->reflection_free = reflection_free;
+    func->unwind_order_proven = unwind_order_proven;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).
@@ -5669,16 +5790,12 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
         func->pre_instantiated_cache.insert(lv);
     }
-    // Reserve stable slot-cache entries before lowering.  Nested on_exit handler
-    // compilation can compute parent slots while this function is still being
-    // lowered, so signature/body locals must not be assigned later from slot 0.
-    for (unsigned i = 0; i < signature.numParams(); ++i) {
-        func->reserveLocalSlot(signature.lv[i]);
-    }
-    func->reserveLocalSlot(signature.argvid);
-    func->reserveLocalSlot(signature.selfid);
-    for (LocalVar* lv : func->all_body_locals) {
-        func->reserveLocalSlot(lv);
+    // Give the locals their canonical slots before lowering (design/ir-local-slot-numbering.md); nested on_exit
+    // handler compilation also inherits the parent's slots while this function is still being lowered
+    if (!qore_ir_seed_canonical_local_slots(*func, *this)) {
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' cancelled\n", name);
+        return nullptr;
     }
     QoreIRBuilder builder(func);
     auto* entry = func->createBlock("entry");
@@ -5717,7 +5834,18 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     std::string error;
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (mark_failure) {
-            ir_lower_failed = true;
+            if (lowering.stackLimitReached()) {
+                // the failure depends on the stack of this call, not on the code: a call with more stack attempts
+                // lowering again (see lowerIROnce())
+                size_t room = q_ir_lowering_stack_room();
+                size_t old_room = ir_lower_stack_room.load(std::memory_order_relaxed);
+                while (room > old_room && !ir_lower_stack_room.compare_exchange_weak(old_room, room,
+                        std::memory_order_relaxed)) {
+                }
+                ir_lowering_stopped_for_stack = true;
+            } else {
+                ir_lower_failed = true;
+            }
         }
         delete func;
         printd(2, "UserVariantBase::attemptIRLowering() '%s' failed: %s\n", name, error.c_str());
@@ -5753,15 +5881,10 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
 
-    // Keep signature-owned slots reserved after lowering and expose parameter
-    // assignment/type metadata before IR optimization. Slot IDs are populated
-    // later and remain independent of this map.
+    // Expose parameter assignment/type metadata before IR optimization; the parameters have canonical slots
     for (unsigned i = 0; i < signature.numParams(); ++i) {
-        func->reserveLocalSlot(signature.lv[i]);
         func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
     }
-    func->reserveLocalSlot(signature.argvid);
-    func->reserveLocalSlot(signature.selfid);
 
     // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
     // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
@@ -5790,14 +5913,26 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
         return nullptr;
     }
+    qore_ir_trace_local_slots(*func, reflection_free
+        ? (unwind_order_proven ? "jit-reflection-free-unanchored" : "jit-reflection-free")
+        : (unwind_order_proven ? "jit-unanchored" : "jit"));
 
     // Classify locals as IR-only vs AST-visible for optimization; the variant's flags describing the body are set
     // only if and when it is published (see publishIRContextFlags())
     func->computeIROnlyLocals();
 
     // When debugger is enabled, all locals must be on the TLS stack so
-    // get_local_vars() and set_local_var_value() can access them
-    if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+    // get_local_vars() and set_local_var_value() can access them, unless the function cannot reflect: then it is
+    // lowered again without the reflection-specific rules (see design/aot-reflection-visible-locals.md).  The IR
+    // tiers lower one function at a time, so a function calling another user function keeps the rules.
+    if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER) && !func->reflection_free) {
+        std::vector<const AbstractQoreFunctionVariant*> callees;
+        if (!qore_ir_function_may_reflect_locally(*func, callees) && callees.empty()) {
+            delete func;
+            return lowerIRFunction(name, unique_name, specialization_receiver_type_info,
+                specialization_type_param_instantiation, mark_failure, raise_on_failure, true, unwind_order_proven);
+        }
+        func->reflective_frame = true;
         if (!func->ir_only_locals.empty()) {
             func->ir_only_locals.clear();
             func->ast_visible_body_locals = func->all_body_locals;
@@ -5960,10 +6095,23 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         && all_params_direct_safe && !signature.argvid;
 
     printd(3, "UserVariantBase::lowerIRFunction() '%s' lowered to IR (%d guards)\n", name, func->num_guards);
+    // A frame whose cleanup alone releases its locals in reverse declaration order needs no unwind anchor for them:
+    // lower it again without, and keep the result if its own classification still proves the order
+    if (func->has_local_unwind_anchor && !func->unwind_order_proven
+            && qore_ir_local_unwind_order_is_exact(statements, *func)) {
+        std::unique_ptr<QoreIRFunction> anchored(func);
+        std::unique_ptr<QoreIRFunction> unanchored(lowerIRFunction(name, unique_name,
+            specialization_receiver_type_info, specialization_type_param_instantiation, false, false,
+            anchored->reflection_free, true));
+        if (unanchored && qore_ir_local_unwind_order_is_exact(statements, *unanchored)) {
+            return unanchored.release();
+        }
+        return anchored.release();
+    }
     return func;
 }
 
-void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
+bool UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
         bool promote_to_ir) const {
     // Only %modern functions may be IR-lowered.  The eager-compile path
     // (eagerlyCompileAllFunctions()) and threshold-promotion path both gate on
@@ -5983,7 +6131,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
         && !qore_parse_options_support_ir(getParseOptions(pgm->getParseOptions()))) {
         ir_lower_failed = true;
         pgm->recordIRFallback("lowering: non-%modern function requires the AST tier");
-        return;
+        return true;
     }
 
     // Make the IR function name unique per variant to avoid name collisions in the
@@ -5996,13 +6144,15 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
     static std::atomic<uint64_t> variant_counter{0};
     std::string unique_name = std::string(name) + "@" + std::to_string(reinterpret_cast<uintptr_t>(this))
         + "_" + std::to_string(variant_counter.fetch_add(1));
+    ir_lowering_stopped_for_stack = false;
     std::unique_ptr<QoreIRFunction> func(
         lowerIRFunction(name, unique_name, nullptr, nullptr, true, raise_on_failure));
     if (!func) {
-        return;
+        // a lowering that stopped for lack of stack is attempted again by a call with more stack
+        return !ir_lowering_stopped_for_stack;
     }
     // Claim-then-publish; see setCachedIR() for why the winner's body is never replaced.
-    // The ir_lower_once flag serialises lowerings against each other but gives no edge to
+    // ir_lower_mutex (lowerIROnce()) serialises lowerings against each other but gives no edge to
     // setCachedIR(), which publishes without holding it, so the CAS is what makes this safe.
     const int num_guards = func->num_guards;
     const IRContextFlags flags = getIRContextFlags(func.get());
@@ -6017,6 +6167,12 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
     }
     printd(3, "UserVariantBase::attemptIRLowering() '%s' cached IR%s (%d guards)\n",
         name, promote_to_ir ? " and promoted to IR tier" : "", num_guards);
+    return true;
+}
+
+bool UserVariantBase::hasLowerIRStackRoom() const {
+    size_t room = ir_lower_stack_room.load(std::memory_order_relaxed);
+    return !room || q_ir_lowering_stack_room() > room;
 }
 
 // Check if a callee is eligible for Approach B (direct LLVM arg passing).
@@ -6045,6 +6201,14 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
                 " (body_locals=%d, ir_only=%d)\n",
                 callee_ir->name.c_str(), (int)callee_ir->all_body_locals.size(),
                 (int)callee_ir->ir_only_locals.size());
+        }
+        return false;
+    }
+
+    // A function that reflection can reach runs in a real frame, which a direct entry does not push
+    if (callee_ir->reflective_frame) {
+        if (batch_debug) {
+            printd(5, "  APPROACH_B: '%s' ineligible: reflective frame\n", callee_ir->name.c_str());
         }
         return false;
     }
@@ -6352,8 +6516,8 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
     // raise_on_failure=true: the user explicitly requested IR/JIT/tiered
     // execution, so any IR lowering gap must surface as a parse error
     // rather than silently falling back to AST.
-    std::call_once(ir_lower_once, [this, name]() {
-        attemptIRLowering(name, /*raise_on_failure=*/true);
+    lowerIROnce([this, name]() {
+        return attemptIRLowering(name, /*raise_on_failure=*/true);
     });
 
     // For JIT mode, set IR tier so function executes immediately, then enqueue
@@ -6508,6 +6672,28 @@ const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name
     return it->second.get();
 }
 
+//! Applies the declared return type to the value returned by IR- or native-executed code
+/** The AST interpreter applies the return type in ReturnStatement::execImpl() with
+    QoreTypeInfo::acceptAssignment(), which converts the value for a declared type, strips complex types from a
+    hash or list for no type or \c any, and leaves the value as it is for \c auto; a value is applied the same way
+    here.  No value is checked only for a declared type, as UserVariantBase::evalIntern() checks it for code that
+    ends without a return statement.
+*/
+static void apply_tiered_return_type(const UserSignature& signature, const QoreTypeInfo* rt, QoreValue& val,
+        ExceptionSink* xsink) {
+    if (val.isNothing()) {
+        if (QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*signature.getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        }
+        return;
+    }
+    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+}
+
 QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
         ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
         bool caller_has_frame_boundary) const {
@@ -6593,17 +6779,7 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
         const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
             ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
             : signature.getReturnTypeInfo();
-        if (rt && QoreTypeInfo::hasType(rt)) {
-            if (val.isNothing()) {
-                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                if (*xsink) {
-                    xsink->overrideLocation(*signature.getParseLocation());
-                    xsink->appendLastDescription(": block missing return statement");
-                }
-            } else {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-            }
-        }
+        apply_tiered_return_type(signature, rt, val, xsink);
     }
     return val;
 }
@@ -6704,7 +6880,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         const bool call_uses_argv = uses_argv.load(std::memory_order_acquire);
         const bool call_uses_self = uses_self.load(std::memory_order_acquire);
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%llu aot_ctx=%p\n",
-            name, (unsigned long long)exec_count.load(), static_cast<void*>(aot_ctx));
+            name, static_cast<unsigned long long>(exec_count.load()), static_cast<void*>(aot_ctx));
 
         // self might be 0 if instantiated by a constructor call
         // Only instantiate if actually used in the function body
@@ -6859,17 +7035,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
                 ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
                 : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
+            apply_tiered_return_type(signature, rt, val, xsink);
         }
         return val;
     }
@@ -6988,9 +7154,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         // Check for JIT promotion while on IR tier
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
-        printd(3, "evalTiered IR '%s' exec_count=%llu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
-            name, (unsigned long long)count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure,
-            (int)jit_compile_failed.load(std::memory_order_acquire));
+        printd(3, "evalTiered IR '%s' exec_count=%llu jit_threshold=%llu is_closure=%d jit_failed=%d\n",
+            name, static_cast<unsigned long long>(count),
+            static_cast<unsigned long long>(QoreJIT::getJITThreshold()), static_cast<int>(is_closure),
+            static_cast<int>(jit_compile_failed.load(std::memory_order_acquire)));
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         // On-demand promotion: explicit --exec-mode=jit promotes on the first call
         // (threshold 1); tiered mode promotes once the function is hot.
@@ -7010,17 +7177,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             const QoreTypeInfo* rt = signature.needsTypeParameterSubstitution()
                 ? qore_substitute_type_params_if_needed(signature.getReturnTypeInfo())
                 : signature.getReturnTypeInfo();
-            if (rt && QoreTypeInfo::hasType(rt)) {
-                if (val.isNothing()) {
-                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
-                    if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
-                        xsink->appendLastDescription(": block missing return statement");
-                    }
-                } else {
-                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
-                }
-            }
+            apply_tiered_return_type(signature, rt, val, xsink);
         }
         return val;
     }
@@ -7045,8 +7202,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             // independently reaches the normal IR threshold.
             current_tier.store(TIER_IR, std::memory_order_release);
         } else {
-            std::call_once(ir_lower_once, [this, name]() {
-                attemptIRLowering(name);
+            lowerIROnce([this, name]() {
+                return attemptIRLowering(name);
             });
         }
         // If promotion succeeded, the next call will use IR tier

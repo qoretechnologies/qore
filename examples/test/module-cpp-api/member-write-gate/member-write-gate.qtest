@@ -18,7 +18,7 @@
 class MemberWriteGateTest inherits QUnit::Test {
     public {
         #! every check passes
-        const Checks = ("typed", "object", "auto", "inheritance", "exception", "private", "reference",
+        const Checks = ("typed", "object", "auto", "inheritance", "fast-members", "exception", "private", "reference",
             "read-inheritance", "internal", "object-removal", "nested", "error-results", "slice", "cycle", "builtin-inheritance");
 
         #! the execution modes that the worker is run in

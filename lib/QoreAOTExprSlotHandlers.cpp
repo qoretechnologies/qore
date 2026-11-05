@@ -1111,6 +1111,7 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         closure_flags |= 0x0004;
     }
     ctx.writer.writeU16(closure_flags);
+    qore_aot_write_closure_entry(ctx.writer, *variant);
 
     // Lower closure before writing captures so embedded expression payloads
     // can contribute parent locals not present in the parser's closure vlist.
@@ -1129,11 +1130,6 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     }
 
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-    if (!::qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
-        ::qoreAOTReportExprSerializationError(std::string("cancelled while preparing the local slots of closure '")
-            + ucf->getName() + "'");
-        return false;
-    }
     ::qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
     if (!::qoreAOTWriteClosureCaptures(ctx.writer, vlist, closure_ir, ctx.parent_locals)) {
         ::qoreAOTReportExprSerializationError(std::string("the captures of closure '") + ucf->getName()

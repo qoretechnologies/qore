@@ -591,6 +591,23 @@ QoreIRInstruction* QoreIRBuilder::createListSetCommonType(QoreIRValue list, Qore
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCommonTypeFold(QoreIRValue state, QoreIRValue value,
+        QoreIRValue index, const QoreProgramLocation* loc) {
+    if (!index.isValid()) {
+        // -1: the first value folded starts the common type
+        index = createConstInt(-1, loc)->result;
+    }
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CommonTypeFold);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    // the state is a native int (see qore_rt_common_type_fold())
+    qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+    inst->operands.push_back(state);
+    inst->operands.push_back(value);
+    inst->operands.push_back(index);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createHashSetKeyValueFold(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
         QoreIRValue state, QoreIRValue index, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::HashSetKeyValueFold);
@@ -1519,6 +1536,15 @@ QoreIRInstruction* QoreIRBuilder::createCatchCleanup(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createCatchUnwind(int depth, const QoreProgramLocation* loc) {
+    assert(depth >= 0);
+    QoreIRValue depth_value = createConstInt(depth, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CatchUnwind);
+    inst->loc = loc;
+    inst->operands.push_back(depth_value);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::RefSelf);
     inst->loc = loc;
@@ -1673,6 +1699,13 @@ QoreIRInstruction* QoreIRBuilder::createIteratorRelease(QoreIRValue iterator, co
 
 QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
+    inst->operands.push_back(value);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseOperandTemp(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOperandTemp);
     inst->operands.push_back(value);
     inst->loc = loc;
     return inst;
