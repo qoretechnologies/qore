@@ -1450,7 +1450,7 @@ public class HttpServerTest inherits QUnit::Test {
             "Host: localhost\r\nConnection: close\r\n\r\n");
         resp = readRawHttpResponse(mask_sock);
         assertEq(200, resp.status_code);
-        assertEq("/masked path?password=<masked>...", resp.body);
+        assertEq("/masked path?password=<masked>&limit=100", resp.body);
 
         Socket token_mask_sock();
         token_mask_sock.connect("127.0.0.1:" + port);

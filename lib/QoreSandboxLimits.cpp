@@ -58,10 +58,21 @@ static constexpr int64 QSB_MIN_CPU_CHECK_US = 1000;
 
 int QoreThreadCpuClock::init() {
 #if defined(HAVE_PTHREAD_GETCPUCLOCKID)
-    return pthread_getcpuclockid(pthread_self(), &cid) ? -1 : 0;
+    static_assert(sizeof(clockid_t) <= sizeof(handle), "a clockid_t fits the handle");
+    clockid_t cid;
+    if (pthread_getcpuclockid(pthread_self(), &cid)) {
+        return -1;
+    }
+    handle = static_cast<uint64_t>(cid);
+    return 0;
 #elif defined(DARWIN)
-    port = mach_thread_self();
-    return port == MACH_PORT_NULL ? -1 : 0;
+    static_assert(sizeof(mach_port_t) <= sizeof(handle), "a Mach port fits the handle");
+    mach_port_t port = mach_thread_self();
+    if (port == MACH_PORT_NULL) {
+        return -1;
+    }
+    handle = port;
+    return 0;
 #else
     return -1;
 #endif
@@ -70,14 +81,15 @@ int QoreThreadCpuClock::init() {
 int64 QoreThreadCpuClock::read() const {
 #if defined(HAVE_PTHREAD_GETCPUCLOCKID)
     struct timespec ts;
-    if (clock_gettime(cid, &ts)) {
+    if (clock_gettime(static_cast<clockid_t>(handle), &ts)) {
         return -1;
     }
     return static_cast<int64>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
 #elif defined(DARWIN)
     thread_basic_info_data_t info;
     mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
-    if (thread_info(port, THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&info), &count) != KERN_SUCCESS) {
+    if (thread_info(static_cast<mach_port_t>(handle), THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&info),
+            &count) != KERN_SUCCESS) {
         return -1;
     }
     return (static_cast<int64>(info.user_time.seconds) + info.system_time.seconds) * 1000000000LL
@@ -89,9 +101,9 @@ int64 QoreThreadCpuClock::read() const {
 
 void QoreThreadCpuClock::release() {
 #if defined(DARWIN) && !defined(HAVE_PTHREAD_GETCPUCLOCKID)
-    if (port != MACH_PORT_NULL) {
-        mach_port_deallocate(mach_task_self(), port);
-        port = MACH_PORT_NULL;
+    if (handle) {
+        mach_port_deallocate(mach_task_self(), static_cast<mach_port_t>(handle));
+        handle = 0;
     }
 #endif
 }

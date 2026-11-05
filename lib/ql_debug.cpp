@@ -111,6 +111,8 @@
 #include <limits>
 #include <mutex>
 #include <type_traits>
+#include <algorithm>
+#include <array>
 #include <set>
 #include <thread>
 
@@ -1802,6 +1804,209 @@ static void ut_event_loop_registrations(UnitTestCounters& c) {
     ::close(sv[0]);
     ::close(sv[1]);
 }
+
+#ifdef DEBUG
+//! Closes the socket pairs of a test on destruction
+struct UtSocketPairs {
+    std::vector<std::array<int, 2>> pairs;
+
+    DLLLOCAL ~UtSocketPairs() {
+        for (auto& sv : pairs) {
+            ::close(sv[0]);
+            ::close(sv[1]);
+        }
+    }
+
+    //! makes @p n socket pairs whose first socket is readable (the peer has written a byte); returns false on error
+    DLLLOCAL bool make(size_t n) {
+        for (size_t i = 0; i < n; ++i) {
+            int sv[2];
+            if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+                return false;
+            }
+            pairs.push_back({sv[0], sv[1]});
+            if (::write(sv[1], "x", 1) != 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+//! A poll reuses its buffers: an idle I/O thread no longer allocates and clears them for each wait (qorus#820)
+/** The poll of an I/O thread allocated and cleared a buffer for the system's events, and a hash table to combine the
+    read and write events of each descriptor, for each wait: with I/O threads that wake often, the allocations cost more
+    than the waits.  The buffer is now kept, and the events of a descriptor are combined in place.
+*/
+static void ut_event_loop_poll_buffer_reuse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "poll buffer reuse: the event loop is created");
+    UtSocketPairs sp;
+    if (xsink || !sp.make(1)) {
+        UT_ASSERT(c, false, "poll buffer reuse: a socket pair is made");
+        xsink.clear();
+        return;
+    }
+    int fd = sp.pairs[0][0];
+    int a = 0;
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(fd, 1, QORE_EV_READ | QORE_EV_WRITE, &a, &xsink),
+        "poll buffer reuse: a read and write registration is added");
+
+    std::vector<QoreEventInfo> events;
+    UT_ASSERT_EQ(c, 1, loop.poll(events, 0, &xsink), "the first poll reports the descriptor once");
+    UT_ASSERT(c, events.size() == 1 && events[0].fd == fd && events[0].udata == &a
+        && (events[0].events & QORE_EV_READ) && (events[0].events & QORE_EV_WRITE),
+        "the read and write events of the descriptor are combined into one event");
+    const void* buf = loop.dbgPollBufferData();
+    size_t buf_size = loop.dbgPollBufferSize();
+    UT_ASSERT(c, buf && buf_size >= 1, "the poll has a buffer for the system's events");
+
+    // the caller's vector is swapped with the loop's scratch buffer of expandRegistrations(), so it has one of two
+    // storages
+    std::set<const void*> event_storage;
+    bool same_events = true;
+    // checked after each poll: an allocator can give back the storage of a buffer freed by an earlier poll
+    bool same_buf = true;
+    for (int i = 0; i < 200; ++i) {
+        if (loop.poll(events, 0, &xsink) != 1 || events[0].fd != fd
+                || (events[0].events & (QORE_EV_READ | QORE_EV_WRITE)) != (QORE_EV_READ | QORE_EV_WRITE)) {
+            same_events = false;
+        }
+        if (loop.dbgPollBufferData() != buf || loop.dbgPollBufferSize() != buf_size) {
+            same_buf = false;
+        }
+        event_storage.insert(events.data());
+    }
+    UT_ASSERT(c, same_events, "each poll reports the descriptor once, with both events");
+    UT_ASSERT(c, same_buf, "the polls reuse the buffer for the system's events");
+    UT_ASSERT(c, event_storage.size() <= 2, "the polls reuse the storage of the events");
+
+    // an event of an earlier poll that is still in the buffer is not reported again
+    char rb;
+    UT_ASSERT(c, ::read(fd, &rb, 1) == 1, "poll buffer reuse: the byte is read");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(fd, 1, QORE_EV_READ, &a, &xsink),
+        "poll buffer reuse: the registration waits for reading only");
+    UT_ASSERT_EQ(c, 0, loop.poll(events, 0, &xsink), "a descriptor that is not ready is not reported");
+    UT_ASSERT(c, events.empty(), "no event is left from the earlier polls");
+    UT_ASSERT(c, loop.dbgPollBufferData() == buf, "the poll that has no event reuses the buffer too");
+
+    UT_ASSERT(c, !xsink, "poll buffer reuse: no error");
+    xsink.clear();
+}
+
+//! The read and write events of many descriptors are each combined into one event per descriptor
+/** The events of a descriptor are combined after the system's events are ordered by descriptor; each of many
+    descriptors that are readable and writable must be reported once, with both events and its own user data, and the
+    buffer grows for them and shrinks again when they are gone.
+*/
+static void ut_event_loop_poll_many_descriptors(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "many descriptors: the event loop is created");
+    constexpr size_t n = 150;
+    UtSocketPairs sp;
+    if (xsink || !sp.make(n)) {
+        UT_ASSERT(c, false, "many descriptors: the socket pairs are made");
+        xsink.clear();
+        return;
+    }
+    std::vector<int> udata(n);
+    std::map<int, size_t> fd_idx;
+    bool added = true;
+    // registered in reverse order, so that the order of the system's events is not the order of the descriptors
+    for (size_t i = n; i-- > 0;) {
+        fd_idx[sp.pairs[i][0]] = i;
+        if (loop.addRegistration(sp.pairs[i][0], 1, QORE_EV_READ | QORE_EV_WRITE, &udata[i], &xsink)) {
+            added = false;
+        }
+    }
+    UT_ASSERT(c, added && loop.size() == n, "many descriptors: every descriptor is registered");
+
+    std::vector<QoreEventInfo> events;
+    int count = loop.poll(events, 0, &xsink);
+    UT_ASSERT_EQ(c, static_cast<int>(n), count, "each descriptor is reported once");
+    std::map<int, int> seen;
+    bool udata_ok = true;
+    for (const QoreEventInfo& e : events) {
+        ++seen[e.fd];
+        auto it = fd_idx.find(e.fd);
+        if (it == fd_idx.end() || e.udata != &udata[it->second]
+                || (e.events & (QORE_EV_READ | QORE_EV_WRITE)) != (QORE_EV_READ | QORE_EV_WRITE)) {
+            udata_ok = false;
+        }
+    }
+    UT_ASSERT(c, seen.size() == n && std::all_of(seen.begin(), seen.end(),
+        [](const std::pair<const int, int>& p) { return p.second == 1; }),
+        "no descriptor is reported twice");
+    UT_ASSERT(c, udata_ok, "each descriptor gets both events with its own user data");
+#ifdef DARWIN
+    // kqueue reports the read and write events of a descriptor separately
+    size_t needed = 2 * n;
+#else
+    size_t needed = n;
+#endif
+    size_t grown = loop.dbgPollBufferSize();
+    UT_ASSERT(c, grown >= needed, "the buffer has grown for the events of every descriptor");
+
+    // the descriptors are removed but one: the buffer is far larger than needed and shrinks
+    for (size_t i = 1; i < n; ++i) {
+        loop.removeRegistration(sp.pairs[i][0], 1, &xsink);
+    }
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.size()), "many descriptors: one descriptor is left");
+    count = loop.poll(events, 0, &xsink);
+    UT_ASSERT(c, count == 1 && events[0].fd == sp.pairs[0][0], "the descriptor that is left is reported");
+    UT_ASSERT(c, loop.dbgPollBufferSize() < grown && loop.dbgPollBufferSize() >= 1,
+        "the buffer shrinks when it is far larger than needed");
+
+    UT_ASSERT(c, !xsink, "many descriptors: no error");
+    xsink.clear();
+}
+
+#ifdef DARWIN
+//! A user event whose identifier is the number of a registered descriptor is not combined with its events
+/** The identifiers of user events (EVFILT_USER) are not descriptors: when the system's events are ordered to combine
+    those of each descriptor, a user event must stay a user event, also when its identifier is a descriptor's number.
+*/
+static void ut_event_loop_poll_user_event_ident(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "user event identifier: the event loop is created");
+    UtSocketPairs sp;
+    if (xsink || !sp.make(1)) {
+        UT_ASSERT(c, false, "user event identifier: a socket pair is made");
+        xsink.clear();
+        return;
+    }
+    int fd = sp.pairs[0][0];
+    int a = 0, u = 0;
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(fd, 1, QORE_EV_READ, &a, &xsink),
+        "user event identifier: a read registration is added");
+    uintptr_t ident = static_cast<uintptr_t>(fd);
+    UT_ASSERT_EQ(c, 0, loop.addUserEvent(ident, &u, &xsink), "a user event with the descriptor's number is added");
+    struct kevent kev;
+    EV_SET(&kev, ident, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    UT_ASSERT(c, kevent(loop.getKqueueFd(), &kev, 1, nullptr, 0, nullptr) == 0, "the user event is registered");
+    EV_SET(&kev, ident, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
+    UT_ASSERT(c, kevent(loop.getKqueueFd(), &kev, 1, nullptr, 0, nullptr) == 0, "the user event is triggered");
+
+    std::vector<QoreEventInfo> events;
+    UT_ASSERT_EQ(c, 2, loop.poll(events, 0, &xsink), "the descriptor and the user event are reported");
+    int fd_events = 0, user_events = 0;
+    for (const QoreEventInfo& e : events) {
+        if (e.fd == fd && e.udata == &a && (e.events & QORE_EV_READ)) {
+            ++fd_events;
+        } else if (e.fd == -1 && e.udata == &u && e.events == QORE_EV_READ) {
+            ++user_events;
+        }
+    }
+    UT_ASSERT(c, fd_events == 1 && user_events == 1, "the user event is reported apart from the descriptor's event");
+    loop.removeUserEvent(ident, &xsink);
+    UT_ASSERT(c, !xsink, "user event identifier: no error");
+    xsink.clear();
+}
+#endif
+#endif
 
 static void ut_event_loop_remove_recycled_fd(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -14081,6 +14286,13 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_event_loop_sub_ms_timer_wakeups(c);
     ut_event_loop_registrations(c);
     ut_event_loop_fifo_registrations(c);
+#ifdef DEBUG
+    ut_event_loop_poll_buffer_reuse(c);
+    ut_event_loop_poll_many_descriptors(c);
+#ifdef DARWIN
+    ut_event_loop_poll_user_event_ident(c);
+#endif
+#endif
     ut_socket_close_race_releases_descriptor_once(c);
     ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);

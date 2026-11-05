@@ -65,6 +65,8 @@ class ListenerRefcountHandler inherits AbstractHttpSocketHandlerInterface {
 public class HttpServerUtilTest inherits QUnit::Test {
     constructor() : Test("HttpServerUtilTest", "1.0") {
         addTestCase("funcs", \funcTests());
+        addTestCase("http_mask_data", \maskDataTest());
+        addTestCase("http_mask_value", \maskValueTest());
         addTestCase("hashdecl tests", \hashdeclTests());
         addTestCase("socket handler listener refcount", \socketHandlerListenerRefcountTest());
 
@@ -88,8 +90,8 @@ public class HttpServerUtilTest inherits QUnit::Test {
         assertEq("\"password\": <masked>...", http_mask_data("\"password\": 1"));
         assertEq("passwrd: 1", http_mask_data("passwrd: 1"));
         assertEq("\"passwrd\": 1", http_mask_data("\"passwrd\": 1"));
-        assertEq("passwd: 1", http_mask_data("passwd: 1"));
-        assertEq("\"passwd\": 1", http_mask_data("\"passwd\": 1"));
+        assertEq("passwd: <masked>...", http_mask_data("passwd: 1"));
+        assertEq("\"passwd\": <masked>...", http_mask_data("\"passwd\": 1"));
         assertEq("passenger: 1", http_mask_data("passenger: 1"));
         assertEq("\"passenger\": 1", http_mask_data("\"passenger\": 1"));
 
@@ -99,8 +101,8 @@ public class HttpServerUtilTest inherits QUnit::Test {
         assertEq("\"password\" : <masked>...", http_mask_data("\"password\" : 1"));
         assertEq("passwrd : 1", http_mask_data("passwrd : 1"));
         assertEq("\"passwrd\" : 1", http_mask_data("\"passwrd\" : 1"));
-        assertEq("passwd : 1", http_mask_data("passwd : 1"));
-        assertEq("\"passwd\" : 1", http_mask_data("\"passwd\" : 1"));
+        assertEq("passwd : <masked>...", http_mask_data("passwd : 1"));
+        assertEq("\"passwd\" : <masked>...", http_mask_data("\"passwd\" : 1"));
         assertEq("passenger : 1", http_mask_data("passenger : 1"));
         assertEq("\"passenger\" : 1", http_mask_data("\"passenger\" : 1"));
 
@@ -110,8 +112,8 @@ public class HttpServerUtilTest inherits QUnit::Test {
         assertEq("\"password\"= <masked>...", http_mask_data("\"password\"= 1"));
         assertEq("passwrd= 1", http_mask_data("passwrd= 1"));
         assertEq("\"passwrd\"= 1", http_mask_data("\"passwrd\"= 1"));
-        assertEq("passwd= 1", http_mask_data("passwd= 1"));
-        assertEq("\"passwd\"= 1", http_mask_data("\"passwd\"= 1"));
+        assertEq("passwd= <masked>...", http_mask_data("passwd= 1"));
+        assertEq("\"passwd\"= <masked>...", http_mask_data("\"passwd\"= 1"));
         assertEq("passenger= 1", http_mask_data("passenger= 1"));
         assertEq("\"passenger\"= 1", http_mask_data("\"passenger\"= 1"));
 
@@ -121,10 +123,103 @@ public class HttpServerUtilTest inherits QUnit::Test {
         assertEq("\"password\" = <masked>...", http_mask_data("\"password\" = 1"));
         assertEq("passwrd = 1", http_mask_data("passwrd = 1"));
         assertEq("\"passwrd\" = 1", http_mask_data("\"passwrd\" = 1"));
-        assertEq("passwd = 1", http_mask_data("passwd = 1"));
-        assertEq("\"passwd\" = 1", http_mask_data("\"passwd\" = 1"));
+        assertEq("passwd = <masked>...", http_mask_data("passwd = 1"));
+        assertEq("\"passwd\" = <masked>...", http_mask_data("\"passwd\" = 1"));
         assertEq("passenger = 1", http_mask_data("passenger = 1"));
         assertEq("\"passenger\" = 1", http_mask_data("\"passenger\" = 1"));
+    }
+
+    maskDataTest() {
+        # every line and every value is masked, and values after a quoted secret remain
+        assertEq("{\"name\":\"bob\",\"token\":<masked>...,\"age\":3}",
+            http_mask_data("{\"name\":\"bob\",\"token\":\"abc\",\"age\":3}"));
+        assertEq("pass: <masked>...\nname: bob\ntoken: <masked>...\n",
+            http_mask_data("pass: x1\nname: bob\ntoken: x2\n"));
+        assertEq("{a: 1, password: <masked>...}", http_mask_data("{a: 1, password: \"p\"}"));
+        map assertEq($1 + ": <masked>...", http_mask_data($1 + ": 1")), (
+            "token", "access_token", "refresh_token", "id_token", "accessToken", "client_secret", "clientSecret",
+            "apikey", "api_key", "api-key", "x-api-key", "Authorization", "Proxy-Authorization", "Cookie",
+            "Set-Cookie", "PASSWORD", "passphrase", "credentials", "private_key", "sensitive", "sensitive_data",
+        );
+        # data about credentials is not masked
+        map assertEq($1 + ": 1", http_mask_data($1 + ": 1")), (
+            "max_tokens", "token_type", "tokens", "passenger", "author", "secret_name", "cookies_enabled",
+        );
+        # an escaped serialized body, an unterminated quote and a quote inside a value do not expose the value
+        assertEq("{\"body\":\"{\\\"token\\\":<masked>...}",
+            http_mask_data("{\"body\":\"{\\\"token\\\":\\\"abc\\\",\\\"a\\\":1}\"}"));
+        assertEq("token: <masked>...", http_mask_data("token: \"abc"));
+        assertEq("token: <masked>...", http_mask_data("token: \"ab\"cd\""));
+        # URL passwords
+        assertEq("db: https://user:<masked>@host:80/x", http_mask_data("db: https://user:s3cr3t@host:80/x"));
+        assertEq("https://host:80/x", http_mask_data("https://host:80/x"));
+        # masking twice changes nothing and loses nothing
+        string once = http_mask_data("{token: \"a\", name: \"b\"}");
+        assertEq("{token: <masked>..., name: \"b\"}", once);
+        assertEq(once, http_mask_data(once));
+        assertEq("a?token=<masked>&b=1", http_mask_data("a?token=<masked>&b=1"));
+        assertEq("{token: \"<masked>\", b: 1}", http_mask_data("{token: \"<masked>\", b: 1}"));
+        # text that only starts like a masked value is masked
+        assertEq("token: <masked>...", http_mask_data("token: <masked>abc"));
+        # a long value does not exceed the regular expression limits
+        string big = strmul("x", 5000000);
+        assertEq("token: <masked>..., a: 1", http_mask_data("token: \"" + big + "\", a: 1"));
+    }
+
+    maskValueTest() {
+        assertTrue(http_is_sensitive_key("refresh_token"));
+        assertTrue(http_is_sensitive_key("Set-Cookie"));
+        assertFalse(http_is_sensitive_key("max_tokens"));
+        assertFalse(http_is_sensitive_key("passenger"));
+
+        hash<auto> value = {
+            "name": "bob",
+            "pass": "s1",
+            "count": 2,
+            "none": NOTHING,
+            "connections": (
+                {"name": "c1", "url_hash": {"protocol": "https", "username": "u", "pass": "s2"}},
+                {"name": "c2", "opts": {"token": "s3", "apikey": {"nested": "s4"}, "timeout": 5}},
+            ),
+            "text": "{\"password\":\"s5\",\"a\":1}",
+            "bin": binary("s6"),
+        };
+        auto masked = http_mask_value(value);
+        assertEq({
+            "name": "bob",
+            "pass": "<masked>",
+            "count": 2,
+            "none": NOTHING,
+            "connections": (
+                {"name": "c1", "url_hash": {"protocol": "https", "username": "u", "pass": "<masked>"}},
+                {"name": "c2", "opts": {"token": "<masked>", "apikey": "<masked>", "timeout": 5}},
+            ),
+            "text": "{\"password\":<masked>...,\"a\":1}",
+            "bin": "<masked: binary of 2 bytes>",
+        }, masked);
+        # the original is not changed
+        assertEq("s2", value.connections[0].url_hash.pass);
+
+        # corner cases
+        assertEq(NOTHING, http_mask_value(NOTHING));
+        assertEq(1, http_mask_value(1));
+        assertEq((), http_mask_value(()));
+        assertEq({}, http_mask_value({}));
+        assertEq(True, http_mask_value(True));
+
+        # a value nested too deeply does not appear
+        auto deep = {"secret-free": "deepvalue"};
+        for (int i = 0; i < 40; ++i) {
+            deep = {"a": deep};
+        }
+        assertEq(-1, sprintf("%y", http_mask_value(deep)).find("deepvalue"));
+        assertNeq(-1, sprintf("%y", http_mask_value(deep)).find("<masked: nested too deeply>"));
+
+        # a string that cannot be processed does not appear, and there is no exception
+        string invalid = "token: " + binary_to_string(<c3ff41424344>, "UTF-8");
+        string result = sprintf("%y", http_mask_value({"a": invalid}));
+        assertEq(-1, result.find("ABCD"), "invalid: " + result.size());
+        assertEq("<masked: invalid string of 13 bytes>", http_mask_data(invalid));
     }
 
     hashdeclTests() {

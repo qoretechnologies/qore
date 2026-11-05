@@ -174,7 +174,7 @@ class MyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         # NOTE: change "%y" to "%Y" to get a more readable multi-line output format for container values
         log("request received on %s from %s: context: %y hdr: %y body size: %d byte%s", cx."peer-info".desc,
-            cx."socket-info".desc, cx, hdr, body.size(), body.size() == 1 ? "" : "s");
+            cx."socket-info".desc, http_mask_value(cx), http_mask_value(hdr), body.size(), body.size() == 1 ? "" : "s");
         return {
             "code": 200,
             "body": sprintf("<title>Test Page</title><body><h1>Qore HTTP server v%s</h1><p>%y on %s PID %s TID %d "
@@ -222,6 +222,12 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::getFastRouteInfo(), @ref Qore::FastCell "FastCell" and
       @ref Qore::HttpFastRoutes "HttpFastRoutes"); a request served by a fast route costs about 10 to 20 microseconds
       of server CPU instead of milliseconds
+    - fixed logging sensitive data: logged message headers and bodies are masked as with
+      @ref HttpServer::http_mask_value() "http_mask_value()", and a binary body sent is logged only by its size
+    - fixed @ref HttpServer::HttpServer::setListenerLogOptions() "setListenerLogOptions()": logging response bodies
+      was set by @ref HttpServer::LLO_RECV_BODY "LLO_RECV_BODY" instead of @ref HttpServer::LLO_SEND_BODY "LLO_SEND_BODY"
+    - request and response log messages are masked and formatted only if they will be logged; added
+      @ref HttpServer::HttpServer::isLogInfoEnabled() "HttpServer::isLogInfoEnabled()"
     - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
       have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
       (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
@@ -2650,6 +2656,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         dhandlers.removeHandler(name, force_immediate);
     }
 
+    #! Returns @ref True if the arguments of messages for @ref log() should be prepared
+    /** Reimplement in a subclass that reimplements @ref log() and can tell that the message will not be logged.
+
+        This implementation returns @ref True if a logger allowing informational messages is set, or if no logger is
+        set, as a subclass can reimplement @ref log() without one.
+
+        @since HttpServer 1.7
+    */
+    bool isLogInfoEnabled() {
+        return !logger || logger.isEnabledFor(LoggerLevel::INFO);
+    }
+
     #! called to log information to the registered log code
     log(string fmt, ...) {
         logger.logArgs(LoggerLevel::INFO, "HttpServer: " + fmt, argv);
@@ -3513,7 +3531,7 @@ ready.set(1);
         l.logRecvHeaders(code & LLO_RECV_HEADERS);
         l.logRecvBody(code & LLO_RECV_BODY);
         l.logSendHeaders(code & LLO_SEND_HEADERS);
-        l.logSendBody(code & LLO_RECV_BODY);
+        l.logSendBody(code & LLO_SEND_BODY);
     }
 
     #! returns header and body logging options for the given listener as a binary-or'ed value of @ref ListenerLogOptions "listener log option codes"
@@ -3988,7 +4006,9 @@ ready.set(1);
         else
             str += ", <no content-type>";
 
-        log("no handler for %s (from %s) hdr: %y", str, cx."peer-info".address_desc, hdr);
+        if (isLogInfoEnabled()) {
+            log("no handler for %s (from %s) hdr: %y", str, cx."peer-info".address_desc, http_mask_value(hdr));
+        }
         return new hash<HttpResponseInfo>({
             "code" : 501,
             "body" : sprintf("no handler has been registered for %s", str),
@@ -5980,7 +6000,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         log_send_body = flag;
     }
 
+    # Returns True if informational messages of this listener will be logged
+    private bool isLogInfoEnabled() {
+        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : serv.isLogInfoEnabled();
+    }
+
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
+        # INVARIANT: arguments of a log message are masked and formatted only if it will be logged
+        if (!isLogInfoEnabled()) {
+            return;
+        }
         if (body) {
             string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
             string lstr = sprintf("cid %d src %y: %s %s %s body (%db): ", cx.id, cx."peer-info".address_desc,
@@ -6003,7 +6032,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
                             socket_info.address_desc);
                         logError("%s", str);
-                        logError("hdr=%y", hdr);
+                        logError("hdr=%y", http_mask_value(hdr));
                     }
                 }
             } else {
@@ -6016,7 +6045,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (body && (hdr."content-type" == MimeTypeOctetStream || hdr."content-encoding")) {
                 log("cid %d: RECV BODY: <%s>", cx.id, body.toHex());
             } else {
-                log("cid %d: RECV BODY: %y", cx.id, body);
+                log("cid %d: RECV BODY: %s", cx.id, getMaskedBodyLogString(body));
             }
         }
     }
@@ -6354,18 +6383,36 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return lstr;
     }
 
+    # returns a message body for a log message
+    /* INVARIANT: message headers and bodies are logged only after masking; see http_mask_value().  This method does
+       not throw: a log message must not make a request fail
+    */
+    private string getMaskedBodyLogString(auto body) {
+        try {
+            return serv.maskData(sprintf("%y", http_mask_value(body)));
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("<masked: %s>", ex.err);
+        }
+    }
+
     logResponse(hash<auto> cx, int status_code, *data body, *hash<auto> hdr) {
+        if (!isLogInfoEnabled()) {
+            return;
+        }
         # do log msg
         string lstr = getResponseLogString(cx, status_code, body, hdr);
         log("%s", lstr);
 
         if (log_send_headers)
-            log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, status_code, hdr);
+            log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, status_code, http_mask_value(hdr));
         if (log_send_body)
-            log("cid %d: SEND BODY: %y", cx.id, body);
+            log("cid %d: SEND BODY: %s", cx.id, getMaskedBodyLogString(body));
     }
 
     logResponse(hash<auto> cx, int code, InputStream body, *hash<auto> hdr) {
+        if (!isLogInfoEnabled()) {
+            return;
+        }
         # do log msg
         string http_ver = cx."header-info".http3 ? "HTTP/3"
             : cx."header-info".http2 ? "HTTP/2" : "HTTP/1.1";
@@ -6379,7 +6426,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         log("%s", lstr);
 
         if (log_send_headers)
-            log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, code, hdr);
+            log("cid %d: SEND HDR: HTTP code %d: %y", cx.id, code, http_mask_value(hdr));
         if (log_send_body)
             log("cid %d: SENT CHUNKED BODY (%s)", cx.id, body.className());
     }
@@ -6404,10 +6451,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         log("%s", lstr);
 
         if (log_send_headers) {
-            log("ERROR: cid %d: FAILED TO SEND HDR: HTTP code %d: %y", cx.id, rv."code", rv.hdr);
+            log("ERROR: cid %d: FAILED TO SEND HDR: HTTP code %d: %y", cx.id, rv."code",
+                http_mask_value(rv.hdr));
         }
         if (log_send_body) {
-            log("ERROR: cid %d: FAILED TO SEND BODY: %y", cx.id, rv.chunked_body ?? rv.body);
+            log("ERROR: cid %d: FAILED TO SEND BODY: %s", cx.id, getMaskedBodyLogString(rv.chunked_body ?? rv.body));
         }
     }
 

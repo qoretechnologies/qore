@@ -101,6 +101,7 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - fixed logging sensitive data: when a response body cannot be serialized, only its type is logged
     - fixed @ref RestSchemaValidator::AbstractRestSchemaValidator::processResponse() "processResponse()" to accept
       response headers whose values all have the same type, such as a literal \c {"X-Total-Count": 42}; adding
       the \c Content-Type header raised \c RUNTIME-TYPE-ERROR, which a REST server returned as a 406 error
@@ -3666,8 +3667,8 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
                         break;
                     } catch (hash<ExceptionInfo> ex1) {
                         log(LoggerLevel::ERROR, "error serializing response with Content-Type %y (%d/%d): "
-                            "%s; failed with response body: %Y", ct, $#, ctl.size(), get_exception_string(ex1),
-                            response_body);
+                            "%s; failed with a response body of type %s", ct, $#, ctl.size(),
+                            get_exception_string(ex1), response_body.fullType());
                         # ignore serialization exceptions
                         ex = ex1;
                     }
