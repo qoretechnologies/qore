@@ -1,0 +1,295 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class TypedReferenceStackGuardTest
+
+#! checks that a failure to resolve a reference bound to a typed parameter is reported as that failure alone
+/** The type of a reference is accepted before its lvalue is resolved, so a failure of the lvalue, such as
+    \c STACK-LIMIT-EXCEEDED in a long chain of references, is not a type mismatch; it was reported with a second
+    \c RUNTIME-TYPE-ERROR exception that named two identical types.
+
+    The script runs in a child process in each execution mode and as an AOT executable.
+*/
+class TypedReferenceStackGuardTest inherits QUnit::Test {
+    public {
+        #! the recursion paths; each one fails with STACK-LIMIT-EXCEEDED alone
+        const StackCases = (
+            "function", "optional reference", "int reference", "list reference", "untyped reference", "auto reference",
+            "local variable", "closure variable", "call_function", "typed return", "constructor", "method",
+            "static method", "closure call", "read to local", "read to argument", "read to return",
+        );
+
+        #! the expected output of the cases without stack exhaustion
+        const OtherCases = (
+            "negative index: NEGATIVE-LIST-INDEX",
+            "negative index, optional reference: NEGATIVE-LIST-INDEX",
+            "undeclared member: INVALID-MEMBER",
+            "member not yet set: OK: 1",
+            "mismatch: RUNTIME-TYPE-ERROR: <reference> expects type 'int', but got type 'string' instead",
+            "mismatch, optional reference: RUNTIME-TYPE-ERROR: <reference> expects type 'int', but got type 'string' "
+                "instead",
+            "mismatch of the reference type: RUNTIME-OVERLOAD-ERROR",
+            "unassigned target: OK: 1",
+            "assigned target: OK: 2",
+        );
+
+        const Script = "%modern
+%disable-warning deprecated
+%disable-warning unreferenced-variable
+
+hashdecl TestInfo {
+    string s;
+}
+
+# recursion in which the argument is a reference to the reference given to the caller, as in a recursive method that
+# passes on a query context: a longer chain of references has to be resolved to bind the argument in each call
+int sub r_function(reference<hash<TestInfo>> r) { return r_function(\\r) + 1; }
+int sub r_optional(*reference<hash<TestInfo>> r) { return r_optional(\\r) + 1; }
+int sub r_int(reference<int> r) { return r_int(\\r) + 1; }
+int sub r_list(reference<list<string>> r) { return r_list(\\r) + 1; }
+int sub r_untyped(reference r) { return r_untyped(\\r) + 1; }
+int sub r_auto(reference<auto> r) { return r_auto(\\r) + 1; }
+int sub r_local(reference<hash<TestInfo>> r) {
+    reference<hash<TestInfo>> x = \\r;
+    return r_local(\\x) + 1;
+}
+int sub r_closure(reference<hash<TestInfo>> r) {
+    code c = string sub () { return r.s; };
+    return r_closure(\\r) + c().size();
+}
+int sub r_call(reference<hash<TestInfo>> r) { return call_function(\\r_call(), \\r) + 1; }
+reference<hash<TestInfo>> sub r_return(reference<hash<TestInfo>> r) { return r_return(\\r); }
+# reads of the value through the chain; the typed target must not report the failed read as a value of the wrong type
+int sub r_read_local(reference<hash<TestInfo>> r) {
+    hash<TestInfo> x = r;
+    return r_read_local(\\r) + x.s.size();
+}
+int sub take(hash<TestInfo> h) { return h.s.size(); }
+int sub r_read_arg(reference<hash<TestInfo>> r) { return r_read_arg(\\r) + take(r); }
+hash<TestInfo> sub r_read_return(reference<hash<TestInfo>> r) {
+    r_read_return(\\r);
+    return r;
+}
+
+class Recurse {
+    constructor(reference<hash<TestInfo>> r, *bool stop) {
+        if (!stop) {
+            Recurse o(\\r);
+        }
+    }
+    int method(reference<hash<TestInfo>> r) { return method(\\r) + 1; }
+    static int staticMethod(reference<hash<TestInfo>> r) { return Recurse::staticMethod(\\r) + 1; }
+}
+
+class Declared {
+    public {
+        int a = 1;
+    }
+}
+
+class NoMembers {
+}
+
+# returns the errors raised, one per line
+string sub result(code c) {
+    try {
+        auto rv = c();
+        return sprintf(\"OK: %d\", rv);
+    } catch (hash<ExceptionInfo> ex) {
+        string rv = ex.err;
+        # a type error is only expected here with its description
+        if (ex.err == \"RUNTIME-TYPE-ERROR\") {
+            rv += \": \" + ex.desc;
+        }
+        # an error of another kind raised after the first one is the subject of this test; the same error raised
+        # again, as JIT code does for some calls when the stack is exhausted, is not
+        hash<auto> e = ex;
+        while (e.next) {
+            e = e.next;
+            if (e.err != ex.err) {
+                rv += sprintf(\" and then %s: %s\", e.err, e.desc);
+            }
+        }
+        return rv;
+    }
+}
+
+# runs the code on a thread with the given stack size
+string sub on_stack(int size, code c) {
+    set_default_thread_stack_size(size);
+    Queue q();
+    background sub () {
+        q.push(result(c));
+    }();
+    return q.get();
+}
+
+hash<TestInfo> h({\"s\": \"a\"});
+int i = 1;
+list<string> l = (\"a\",);
+hash<string, code> cases = {
+    \"function\": int sub () { return r_function(\\h); },
+    \"optional reference\": int sub () { return r_optional(\\h); },
+    \"int reference\": int sub () { return r_int(\\i); },
+    \"list reference\": int sub () { return r_list(\\l); },
+    \"untyped reference\": int sub () { return r_untyped(\\h); },
+    \"auto reference\": int sub () { return r_auto(\\h); },
+    \"local variable\": int sub () { return r_local(\\h); },
+    \"closure variable\": int sub () { return r_closure(\\h); },
+    \"call_function\": int sub () { return r_call(\\h); },
+    \"typed return\": int sub () { r_return(\\h); return 0; },
+    \"constructor\": int sub () { Recurse o(\\h); return 0; },
+    \"method\": int sub () { Recurse o(\\h, True); return o.method(\\h); },
+    \"static method\": int sub () { return Recurse::staticMethod(\\h); },
+    \"closure call\": int sub () {
+        code c;
+        c = int sub (reference<hash<TestInfo>> r) { return c(\\r) + 1; };
+        return c(\\h);
+    },
+    \"read to local\": int sub () { return r_read_local(\\h); },
+    \"read to argument\": int sub () { return r_read_arg(\\h); },
+    \"read to return\": int sub () { r_read_return(\\h); return 0; },
+};
+foreach hash<auto> c in (cases.pairIterator()) {
+    # the stack check that fails depends on what the last frame needs, so more than one stack size is used
+    foreach int size in ((256, 320, 384, 448)) {
+        printf(\"%s (%d): %s\\n\", c.key, size, on_stack(size * 1024, c.value));
+    }
+}
+
+int sub t_int(reference<int> r) { if (!exists r) { r = 1; } return r; }
+int sub t_int_or_nothing(*reference<int> r) { return r ?? 0; }
+
+list<int> li = (1,);
+object declared = new Declared();
+object no_members = new NoMembers();
+string str = \"a\";
+auto untyped = \"a\";
+int unassigned;
+int assigned = 2;
+printf(\"negative index: %s\\n\", result(int sub () { return t_int(\\li[-1]); }));
+printf(\"negative index, optional reference: %s\\n\", result(int sub () { return t_int_or_nothing(\\li[-1]); }));
+printf(\"undeclared member: %s\\n\", result(int sub () { return t_int(\\declared.missing); }));
+# the member does not exist when the argument is checked; it must not be created by the check, and the call assigns it
+printf(\"member not yet set: %s\\n\", result(int sub () { return t_int(\\no_members.missing); }));
+# a value of another type is a real type error, which must still be reported
+printf(\"mismatch: %s\\n\", result(int sub () { return t_int(\\untyped); }));
+printf(\"mismatch, optional reference: %s\\n\", result(int sub () { return t_int_or_nothing(\\untyped); }));
+printf(\"mismatch of the reference type: %s\\n\", result(int sub () { return call_function(\\t_int(), \\str); }));
+printf(\"unassigned target: %s\\n\", result(int sub () { return t_int(\\unassigned); }));
+printf(\"assigned target: %s\\n\", result(int sub () { return t_int(\\assigned); }));
+printf(\"DONE\\n\");
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string timeout_cmd;
+        TmpDir tmp("qore-typed-reference-stack-");
+        string script;
+    }
+
+    constructor() : QUnit::Test("TypedReferenceStackGuardTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+
+        script = tmp.path + "/typed-reference-stack.qr";
+        File f();
+        f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("typed references in %s mode", m), sub () { testMode(m); });
+        }
+        addTestCase("typed references in an AOT executable", \testAot());
+
+        set_return_value(main());
+    }
+
+    private checkOutput(string out, string label) {
+        assertRegex("\nDONE\n", "\n" + out, label + ": the script ran to its end: " + out);
+        assertRegex("EXIT=0\n", out, label + ": exit status");
+        list<string> lines = out.split("\n");
+        foreach string name in (StackCases) {
+            foreach int size in ((256, 320, 384, 448)) {
+                string prefix = sprintf("%s (%d): ", name, size);
+                list<string> found = select lines, $1.equalPartial(prefix);
+                assertEq((prefix + "STACK-LIMIT-EXCEEDED",), found, label + ": " + prefix);
+            }
+        }
+        foreach string expected in (OtherCases) {
+            string prefix = expected.substr(0, expected.find(": ") + 2);
+            list<string> found = select lines, $1.equalPartial(prefix);
+            assertEq((expected,), found, label + ": " + prefix);
+        }
+    }
+
+    private testMode(string mode) {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        string prefix = timeout_cmd ? sprintf("%s -s KILL %s ", timeout_cmd, ENV.QORE_STACK_TEST_TIMEOUT ?? "60") : "";
+        string out = ExecModeHarness::run(sprintf("%s%s --enable-debug --exec-mode=%s %s; echo EXIT=$?", prefix,
+            qore_bin, mode, script), ExecModeHarness::NativeCheck::Jit);
+        checkOutput(out, mode);
+    }
+
+    private testAot() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        if (!is_file(qcc_bin) && !strlen(backquote("command -v qcc 2>/dev/null || true"))) {
+            testSkip("qcc is not available");
+        }
+        string exe = tmp.path + "/typed-reference-stack-aot";
+        string compile_out = backquote(sprintf(
+            "env LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O3 --strip-source -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, exe, script));
+        assertRegex("EXIT=0", compile_out, "AOT compile: " + compile_out);
+        string prefix = timeout_cmd ? sprintf("%s -s KILL %s ", timeout_cmd, ENV.QORE_STACK_TEST_TIMEOUT ?? "60") : "";
+        string out = ExecModeHarness::run_any(sprintf("%senv LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?", prefix,
+            libqore_dir, exe));
+        checkOutput(out, "AOT");
+    }
+}

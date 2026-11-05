@@ -1405,6 +1405,11 @@
 
     - the C++ API function \c BinaryNode::writeTo() did not extend the size of the value when it wrote past its end,
       so the data written there was not part of the value; it now does, and fills a gap with zero bytes
+    - an argument for a parameter declared as \c reference<T> whose target could not be resolved, as with
+      \c STACK-LIMIT-EXCEEDED in a recursion that passes on the reference, raised a second \c RUNTIME-TYPE-ERROR
+      naming two identical types after the actual error; only the actual error is raised now, in all execution modes
+    - an argument for a parameter declared as \c reference<T> that refers to a member that an object does not have
+      yet, of a class that declares no members, crashed the process
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date

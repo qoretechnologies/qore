@@ -1405,16 +1405,17 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
     if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), ctx)) {
         ctx = nullptr;
     }
-    if (!qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink)) {
-        if (!ctx) {
-            vl.addMemberNotification(o, mem); // add member notification for external updates
-        }
+    int rc = qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink);
+    if (!rc && !ctx) {
+        vl.addMemberNotification(o, mem); // add member notification for external updates
     }
     if (*vl.xsink) {
         return -1;
     }
 
-    return 0;
+    // without an exception, this means that there is no lvalue: the member does not exist and was not created because
+    // for_remove is set; there is no value for the caller to read, as with a missing hash key in doHashLValue()
+    return rc;
 }
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
