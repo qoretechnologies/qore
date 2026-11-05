@@ -304,15 +304,19 @@ The per-accept reverse lookup, which used to be the largest avoidable cost of th
 
 ### Proposal (phase 2a): the accept operation answers the first request
 
-`HttpAcceptPollOperationPriv` already is a C++ state machine (`ACCEPTING`, `SSL_HANDSHAKE`, `COMPLETE`), and the TLS
-handshake already runs inside it (`do_ssl_handshake`).  Phase 2a adds a state after the handshake:
+`HttpAcceptPollOperationPriv` already is a C++ state machine (`ACCEPTING`, `SSL_HANDSHAKE`, `COMPLETE`).  The TLS
+handshake can run inside it (`do_ssl_handshake`), but `HttpServer` does not use that: it passes `False`, and
+`handleAcceptComplete()` applies the listener's ALPN list, verify mode, accept-all-certificates flag and certificate
+capture to the accepted socket and starts the handshake itself (`submitSslOp()`), so for TLS the first request follows a
+second Qore callback.  Phase 2a is therefore for plain TCP; TLS is covered by phase 2a' below.  For plain TCP, phase 2a
+adds a state after the accept:
 
 ```
 ACCEPTING -> [SSL_HANDSHAKE] -> FIRST_REQUEST -> COMPLETE
 ```
 
-`FIRST_REQUEST` exists only if the listener socket has fast routes and the connection is HTTP/1.1 (not an h2c
-preface, not an ALPN `h2` connection).  It reads the first header with the receive state machine that the other
+`FIRST_REQUEST` exists only if the listener socket has fast routes, the listener is plain TCP and the connection is
+HTTP/1.1 (not an h2c preface).  It reads the first header with the receive state machine that the other
 header operations use (`startRecvUntilBytes()`), hands the bytes to the strict parser of phase 1.5 and matches the
 route table.
 
@@ -333,6 +337,17 @@ that closes it is seen by the idle check.
 This removes the handler pool hand-off and the header hash for the first request, and one of the two worker wake-ups
 of a new connection.  It does not remove the accept completion itself: for a probe that opens a connection per request
 the accept completion remains the dominant Qore cost.
+
+### Phase 2a': TLS
+
+The handshake of a TLS connection is a second operation that Qore starts, so its completion is another callback and the
+first request is read after it.  Two ways to cover it, to be chosen when 2a is measured:
+
+- the same `FIRST_REQUEST` state after the handshake operation of the controller (a C++ operation that wraps the
+  handshake and continues into the first request), keeping the per-listener TLS setup in Qore where it is
+- moving the whole per-listener TLS setup (ALPN list, verify mode, certificate capture) into the accept operation's
+  arguments so that `do_ssl_handshake = True` can be used; this removes the second callback as well, but moves the
+  policy from Qore to C++ and has to keep certificate reloading (`reloadListenerCertificate`) working
 
 ### Why not keep the connection in C++ for its whole life (phase 2b)?
 
@@ -373,7 +388,7 @@ response is at most 64 KiB and goes through the same send phase and deadline as 
 
 ### Testing
 
-- the fast route suite runs with the first request answered by the route, over plain TCP and TLS; the fallback matrix
+- the fast route suite runs with the first request answered by the route, over plain TCP (TLS with 2a'); the fallback matrix
   of phase 1 is repeated for the first request (a body, `Expect`, `Upgrade`, `Connection: close`, a pipelined second
   request, HTTP/1.0, a header the strict parser rejects, no route)
 - the differential test of phase 1.5 sends every request as the first request of a connection as well
