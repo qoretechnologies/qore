@@ -1463,9 +1463,9 @@ bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
 
 bool QoreIRLowering::stackReserveReached(std::string& error) {
     // Lowering recurses with the nesting of the code, and a thread's stack can be smaller than the nesting the parser
-    // accepts requires; lowering stops while enough stack remains for the next steps, and the function runs on the
-    // AST tier, which checks the stack itself as it executes (see QORE_IR_LOWERING_STACK_RESERVE)
-    // a walk of the code that stopped at the reserve since lowering started leaves its result incomplete or
+    // accepts requires; lowering stops at the stack limit (see QORE_IR_LOWERING_STACK_RESERVE), and the function runs
+    // on the AST tier, which checks the stack itself as it executes, until a call with more stack lowers it
+    // a walk of the code that stopped at the limit since lowering started leaves its result incomplete or
     // conservative, so lowering fails as well
     if (!q_thread_stack_reserve_exceeded(QORE_IR_LOWERING_STACK_RESERVE)
             && ir_walk_stack_reserve_hits == walk_stack_reserve_hits) {

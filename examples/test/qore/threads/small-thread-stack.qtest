@@ -9,15 +9,19 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../NativeFixture.qm
 
 %exec-class SmallThreadStackTest
 
 #! A foreign thread with a 128KB stack parses and runs ordinary code, and a stack overflow there raises an exception
 /** The fixture runs its work in a thread with a 128KB stack: musl's default thread stack (std::thread), and an
     explicit 128KB pthread elsewhere.  It parses code that loads a module and uses classes, hashdecls, closures,
-    sorting, a regular expression and formatting, and runs it, in AST, IR and JIT modes; runaway recursion there must
-    raise STACK-LIMIT-EXCEEDED, and the thread must run code again afterwards.  With the 80KB stack guard and the 64KB
-    parse reserve of earlier versions, no code could be parsed in such a thread.
+    sorting, a regular expression and formatting, and runs it, in AST, IR, JIT and tiered modes; runaway recursion
+    there must raise STACK-LIMIT-EXCEEDED, and the thread must run code again afterwards.  The code must be lowered to
+    IR there in IR, JIT and tiered modes, and a function compiled to native code in JIT and tiered modes (the tiered
+    thresholds are set low, and JIT compilation is synchronous).  With the 80KB stack guard and the 64KB parse
+    reserve of earlier versions, no code could be parsed in such a thread, and with a 128KB lowering reserve, none
+    was lowered.
 */
 public class SmallThreadStackTest inherits QUnit::Test {
     constructor() : Test("SmallThreadStackTest", "1.0") {
@@ -37,9 +41,11 @@ public class SmallThreadStackTest inherits QUnit::Test {
         string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
         TmpDir dir("qore-small-thread-stack-");
         string exe = dir.path + "/small-thread-stack";
-        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-O2", "-I" + root + "/include",
-            "-I" + libdir + "/include", "-I" + libdir, get_script_dir() + "/small_thread_stack.cpp", "-L" + libdir,
-            "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++20", "-pthread", "-g", "-O2", "-DHAVE_UNIX_CONFIG_H",
+            "-I" + root + "/include", "-I" + libdir + "/include", "-I" + libdir)
+            + native_fixture_include_args(libdir)
+            + (get_script_dir() + "/small_thread_stack.cpp", "-L" + libdir, "-Wl,-rpath," + libdir, "-lqore",
+                "-o", exe);
         *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
         if (target) {
             push args, target[0];
@@ -47,8 +53,9 @@ public class SmallThreadStackTest inherits QUnit::Test {
         int status;
         string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
         assertEq(0, status, output);
-        output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
-            + " QORE_MODULE_DIR=" + quote(root + "/qlib") + " " + quote(exe) + " 2>&1", \status);
+        output = backquote("QORE_IR_THRESHOLD=2 QORE_JIT_THRESHOLD=4 QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH="
+            + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_MODULE_DIR=" + quote(root + "/qlib")
+            + " " + quote(exe) + " 2>&1", \status);
         assertEq(0, status, output);
         assertEq("small-thread-stack: ok\n", output);
     }

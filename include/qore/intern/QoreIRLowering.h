@@ -73,18 +73,22 @@ class QoreBackgroundOperatorNode;
 class QoreIRLowering;
 
 //! The stack that IR lowering keeps free above the thread's stack limit
-/** Lowering recurses with the nesting of the code, and several of its frames are large (much larger again with
-    AddressSanitizer), so each check leaves room for a few levels of nesting; code nested more deeply than the thread's
-    stack allows for lowering runs on the AST tier, which checks the stack itself and raises \c STACK-LIMIT-EXCEEDED if
-    it runs out.
+/** Lowering recurses with the nesting of the code, and it and the walks of the code that it makes check the stack at
+    every level of nesting: the stack they use below a check that fails (up to 0.7KB measured, for nested statements
+    of every kind and for nested expressions) is held by the stack guard (QORE_STACK_GUARD), as for the code that runs
+    between the stack checks of execution, so lowering stops at the thread's stack limit itself.  Code nested more
+    deeply than the thread's stack allows for lowering runs on the AST tier, which checks the stack itself and raises
+    \c STACK-LIMIT-EXCEEDED if it runs out, and lowering is attempted again by a call with more stack (see
+    UserVariantBase::lowerIROnce()).  A reserve keeps that much stack of a thread from lowering: with a 128KB reserve,
+    no code was lowered on a thread with a 128KB stack (musl's default thread stack).
 */
-constexpr size_t QORE_IR_LOWERING_STACK_RESERVE = 128 * 1024;
+constexpr size_t QORE_IR_LOWERING_STACK_RESERVE = 0;
 
 //! The lowering error when the reserve is reached
 constexpr const char* QORE_IR_LOWERING_STACK_ERROR = "the code is nested too deeply to be lowered within the stack of "
     "this thread";
 
-//! Returns true if the thread's stack has reached QORE_IR_LOWERING_STACK_RESERVE in a recursive walk of the code
+//! Returns true if the stack has reached its limit plus QORE_IR_LOWERING_STACK_RESERVE in a recursive walk of the code
 /** For the analyses and walks of the AST or of the IR that lowering and IR optimization make: they recurse with the
     nesting of the code and stop when this returns true.  An analysis then returns its conservative answer; the
     lowering in progress in the thread, if any, fails with QORE_IR_LOWERING_STACK_ERROR (see
@@ -287,7 +291,7 @@ public:
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
 
 private:
-    //! set when lowering stopped at QORE_IR_LOWERING_STACK_RESERVE; see stackLimitReached()
+    //! set when lowering stopped at the stack limit (plus QORE_IR_LOWERING_STACK_RESERVE); see stackLimitReached()
     bool stack_limit_reached = false;
 
     //! the number of walks that stopped at the stack reserve in this thread when lowering started
