@@ -514,9 +514,16 @@ eyeballs left behind by a canceled connect, whose peer later closed it, was writ
   `removeOrphanRegistration()` removes it with the hold of its descriptor, logs it once at debug level and counts it in
   `orphan_registrations`.  A registration of a running operation is never removed this way.
 
+A submit made on the I/O thread (a `continuePoll()` in Phase 2) queues the new operation in `new_entry_ids`, for which no
+event comes, so the thread does not block in its poll while the list has entries: before, the operation's first step
+waited for the next unrelated event, or forever.  The result of an operation that another step of the same batch canceled or
+replaced is dropped in Phase 3 and its hashes are cleared, as the POLLOUT re-queue on kqueue reads the results again after
+Phase 3 (`runDirectReplaceExtraFd()` covers both).
+
 `AsyncIoController::getInfo()` reports per I/O thread `extra_fds` (the extra fds registered now) and
 `orphan_registrations` (not 0 only if a retire path has a defect).  Tests: `asyncio_extra_fd_retire.qtest`, and
-`runCanceledExtraFd()`, `runWorkerStepExtraFd()` and `runOrphanRegistrations()` in `AsyncIoDescriptorHoldTest` and
+`runCanceledExtraFd()`, `runWorkerStepExtraFd()`, `runDirectReplaceExtraFd()` and `runOrphanRegistrations()` in
+`AsyncIoDescriptorHoldTest` and
 `runDeletedObject()` in `AsyncIoClosedPollableTest`, which read the same counters, so they need no timing.
 
 ### Poll Info Reuse

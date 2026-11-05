@@ -5449,6 +5449,186 @@ public:
         UT_ASSERT_EQ(c, 0, info.extra_fds, "worker step: no extra fd is registered after the operation left");
     }
 
+    //! A submit made on the I/O thread that replaces another operation leaves no registration of the replaced one
+    /** This is the direct path of submit(), which only an I/O thread takes: here a poll operation's continuePoll().
+        - "in flight": a step of the replaced operation runs on a worker, so the replacing operation takes a new ID and
+          nothing may stay registered for the old one
+        - "idle": the replacing operation keeps the ID, and with its first result what is registered for it is reduced
+          to what it waits for itself
+        The replaced operation waits for an always ready owned extra fd and the replacing one for no extra fd.
+    */
+    static void runDirectReplaceExtraFd(UnitTestCounters& c) {
+        for (bool in_flight : {true, false}) {
+            const std::string v = std::string("direct replace ") + (in_flight ? "in flight" : "idle");
+            ExceptionSink xsink;
+            ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+            UT_ASSERT(c, !xsink, (v + ": controller construction succeeds").c_str());
+            if (xsink) {
+                xsink.clear();
+                continue;
+            }
+            int x = ::socket(AF_INET, SOCK_DGRAM, 0);
+            UT_ASSERT(c, x >= 0, (v + ": the extra fd is made").c_str());
+            if (x < 0) {
+                continue;
+            }
+            std::shared_ptr<QoreSharedDescriptor> owned = qore_owned_descriptor_create(x);
+            struct Latch {
+                std::mutex l;
+                std::condition_variable cv;
+                bool step_entered = false;
+                bool step_released = false;
+                bool replaced = false;
+                bool replacing_ran = false;
+                bool submit_ok = false;
+
+                void set(bool& flag) {
+                    std::lock_guard<std::mutex> g(l);
+                    flag = true;
+                    cv.notify_all();
+                }
+
+                bool wait(bool& flag) {
+                    std::unique_lock<std::mutex> g(l);
+                    // bounded only so that a failing test cannot hang
+                    return cv.wait_for(g, std::chrono::seconds(30), [&flag]() {
+                        return flag;
+                    });
+                }
+            } latch;
+            struct Cleanup {
+                AsyncIoControllerPriv* ctrl;
+                Latch& latch;
+                ExceptionSink& xsink;
+                ~Cleanup() {
+                    latch.set(latch.step_released);
+                    xsink.clear();
+                    ctrl->stopClear(&xsink);
+                    xsink.clear();
+                }
+            } cleanup{*ctrl, latch, xsink};
+            ctrl->setMaxIoThreads(1, &xsink);
+            ctrl->start(&xsink);
+            bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+            UT_ASSERT(c, ready && !xsink, (v + ": controller starts").c_str());
+            if (!ready || xsink) {
+                qore_owned_descriptor_release(owned);
+                continue;
+            }
+            ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+            ReferenceHolder<QoreEventNotifier> trigger(new QoreEventNotifier(&xsink), &xsink);
+            if (xsink || !notifier->isValid() || !trigger->isValid()) {
+                qore_owned_descriptor_release(owned);
+                continue;
+            }
+            notifier->ref();
+            ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier),
+                &xsink);
+            trigger->ref();
+            ReferenceHolder<QoreObject> trigger_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *trigger), &xsink);
+            const char* owner_name = "direct-replace-extra-fd-unit-test";
+            const char* key_name = "direct-replace-extra-fd-key";
+
+            std::function<void()> on_step;
+            if (in_flight) {
+                on_step = [&latch]() {
+                    latch.set(latch.step_entered);
+                    latch.wait(latch.step_released);
+                };
+            }
+            ReferenceHolder<QoreObject> replaced_queue(&xsink);
+            if (!submitExtraFdOp(c, **ctrl, *notifier_obj,
+                    new ReadyExtraFdOp(*notifier_obj, std::move(owned), in_flight, on_step), owner_name,
+                    replaced_queue, xsink, key_name)) {
+                continue;
+            }
+            RegistrationInfo info;
+            if (in_flight) {
+                UT_ASSERT(c, latch.wait(latch.step_entered), (v + ": the step of the operation is in flight").c_str());
+            } else {
+                UT_ASSERT(c, readRegistrationInfo(**ctrl, info, xsink), (v + ": the I/O thread is listed").c_str());
+                UT_ASSERT_EQ(c, 1, info.extra_fds, (v + ": the operation has its extra fd registered").c_str());
+            }
+
+            // the step of this operation runs on the I/O thread when the trigger is notified, and replaces the first
+            AsyncIoControllerPriv* cp = *ctrl;
+            QoreObject* n_obj = *notifier_obj;
+            QoreObject* replacing_queue = nullptr;
+            ExtraFdOp* submitter = new ExtraFdOp(*trigger_obj, *trigger, std::shared_ptr<QoreSharedDescriptor>(),
+                    [&latch, &replacing_queue, cp, n_obj, owner_name, key_name, pgm = getProgram()]() {
+                if (latch.replaced) {
+                    return;
+                }
+                ExceptionSink sx;
+                StepSignalOp* op = new StepSignalOp(n_obj, [&latch]() {
+                    latch.set(latch.replacing_ran);
+                });
+                // the I/O thread has no current Program
+                ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, pgm, op), &sx);
+                op->setSelf(*op_obj);
+                op_obj->setValue("sock", n_obj->objectRefSelf(), &sx);
+                op_obj->setValue("goal", new QoreStringNode("replacing"), &sx);
+                ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclSocketPollOperationInfo, &sx), &sx);
+                h->setKeyValue("sock", n_obj->objectRefSelf(), &sx);
+                h->setKeyValue("spop", op_obj->objectRefSelf(), &sx);
+                h->setKeyValue("owner", new QoreStringNode(owner_name), &sx);
+                h->setKeyValue("key", new QoreStringNode(key_name), &sx);
+                h->setKeyValue("to", -1, &sx);
+                replacing_queue = cp->submit(nullptr, h.release(), true, &sx);
+                {
+                    std::lock_guard<std::mutex> g(latch.l);
+                    latch.submit_ok = !sx && replacing_queue;
+                }
+                sx.clear();
+                latch.set(latch.replaced);
+            });
+            ReferenceHolder<QoreObject> submitter_queue(&xsink);
+            if (!submitExtraFdOp(c, **ctrl, *trigger_obj, submitter, "direct-replace-submitter", submitter_queue,
+                    xsink)) {
+                continue;
+            }
+            trigger->notify();
+            UT_ASSERT(c, latch.wait(latch.replaced), (v + ": the replacing operation is submitted").c_str());
+            UT_ASSERT(c, latch.submit_ok, (v + ": the replacing submit succeeds").c_str());
+            // the replacing operation's first result is applied in the iteration of its first step, before the
+            // I/O thread answers getInfo()
+            UT_ASSERT(c, latch.wait(latch.replacing_ran), (v + ": the replacing operation runs").c_str());
+            UT_ASSERT(c, readRegistrationInfo(**ctrl, info, xsink), (v + ": the I/O thread is still listed").c_str());
+            UT_ASSERT_EQ(c, 0, info.extra_fds, (v + ": no extra fd stays registered for the replaced operation").c_str());
+            UT_ASSERT_EQ(c, 0, info.orphans, (v + ": the registration did not stay until it was an orphan").c_str());
+
+            latch.set(latch.step_released);
+            // the replaced operation's step returns and its cancellation runs; nothing is registered by its result
+            bool canceled = false;
+            if (in_flight) {
+                QoreObject* rq = *replaced_queue;
+                if (rq) {
+                    ReferenceHolder<Queue> q(static_cast<Queue*>(rq->getReferencedPrivateData(CID_QUEUE, &xsink)),
+                        &xsink);
+                    bool to = false;
+                    if (q) {
+                        ValueHolder res(q->shift(&xsink, rq, 30000, &to), &xsink);
+                        canceled = !to && res->getType() == NT_HASH
+                            && res->get<const QoreHashNode>()->getKeyValue("canceled").getAsBool();
+                    }
+                }
+                xsink.clear();
+                UT_ASSERT(c, canceled, (v + ": the replaced operation is canceled after its step").c_str());
+                UT_ASSERT(c, readRegistrationInfo(**ctrl, info, xsink), (v + ": the I/O thread is listed").c_str());
+                UT_ASSERT_EQ(c, 0, info.extra_fds, (v + ": the step's result registers nothing").c_str());
+            }
+            SimpleRefHolder<QoreStringNode> owner(new QoreStringNode(owner_name));
+            SimpleRefHolder<QoreStringNode> owner2(new QoreStringNode("direct-replace-submitter"));
+            ctrl->cancelByOwner(*owner2, &xsink);
+            ctrl->cancelByOwner(*owner, &xsink);
+            xsink.clear();
+            if (replacing_queue) {
+                replacing_queue->deref(&xsink);
+                xsink.clear();
+            }
+        }
+    }
+
     //! An event for a registration that no running operation or socket has removes the registration
     /** Nothing can run for such an event, so a descriptor that stays ready would make the I/O thread poll and discard
         at 100% CPU for the rest of the process.  The registration is made by the test, as none is left by the
@@ -5751,6 +5931,37 @@ private:
         bool worker;
         std::function<void()> on_step;
         int calls = 0;
+    };
+
+    //! Waits for its object only; \a on_step is called in each step, on the I/O thread
+    class StepSignalOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL StepSignalOp(QoreObject* obj, std::function<void()> on_step) : obj(obj),
+                on_step(std::move(on_step)) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            on_step();
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", obj->objectRefSelf(), xsink);
+            return *xsink ? nullptr : info.release();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+    private:
+        QoreObject* obj;
+        std::function<void()> on_step;
     };
 
     //! Submits an operation that waits for a notifier and an extra fd; returns false if it is not registered
@@ -13888,6 +14099,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
     AsyncIoDescriptorHoldTest::runCanceledExtraFd(c);
     AsyncIoDescriptorHoldTest::runWorkerStepExtraFd(c);
+    AsyncIoDescriptorHoldTest::runDirectReplaceExtraFd(c);
     AsyncIoDescriptorHoldTest::runOrphanRegistrations(c);
     QoreCaresSocketsTest::run(c);
 #ifndef _Q_WINDOWS

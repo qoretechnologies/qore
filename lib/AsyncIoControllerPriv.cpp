@@ -5996,12 +5996,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 logAndClearStrayException("a completed operation's teardown", xsink);
                 OpCache::node_t* node = t.cache.findId(result.op_id);
                 if (!node || node->second.spop_obj != result.spop_obj) {
-                    // Operation was canceled (or replaced by another poll operation) during Phase 2
+                    // Operation was canceled (or replaced by another poll operation) during Phase 2; the result
+                    // is read again after this loop (the POLLOUT re-queue), so it must not keep what is freed here
                     if (result.new_poll_info) {
                         result.new_poll_info->deref(xsink);
+                        result.new_poll_info = nullptr;
                     }
                     if (result.ex_hash) {
                         result.ex_hash->deref(xsink);
+                        result.ex_hash = nullptr;
                     }
                     continue;
                 }
@@ -6520,12 +6523,14 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Calculate poll timeout
         int timeout_ms = -1;  // Wait indefinitely by default
-        if (!ssl_deferred_hashes.empty() || !t.wake_socket_hashes.empty()) {
+        if (!ssl_deferred_hashes.empty() || !t.wake_socket_hashes.empty() || !t.new_entry_ids.empty()) {
             // Deferred data discovered in Phase 3 — don't block in
             // kqueue/epoll, just check for new kernel events and return
             // immediately so the next iteration processes the deferred
             // hashes.  wake_socket_hashes is set by the connect-retry
             // re-queue (macOS kqueue edge-triggered EVFILT_WRITE).
+            // new_entry_ids is set in this iteration by a submit made on the I/O thread (a continuePoll() of Phase 2)
+            // or by a result with no poll info: no event comes for such an operation before its first step
             timeout_ms = 0;
         } else if (poll_deadline_us > 0) {
             int64 now_us = get_epoch_us();
