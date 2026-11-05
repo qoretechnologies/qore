@@ -7286,6 +7286,70 @@ int QoreCaresAddrInfoResolver::getPollTimeoutMs() const {
     return ms <= 0 ? 1 : static_cast<int>(std::min<int64_t>(ms, INT_MAX));
 }
 
+bool QoreCaresAddrInfoResolver::startNumeric() {
+    // other flags change the answer (a canonical name, a wildcard address, address configuration checks): c-ares
+    // resolves those
+    if (!has_host || (flags & ~(AI_NUMERICHOST | AI_NUMERICSERV))) {
+        return false;
+    }
+
+    // a numeric port, or none; a service name needs the services database
+    unsigned port = 0;
+    if (has_service) {
+        if (service.empty() || service.size() > 5 || service.find_first_not_of("0123456789") != std::string::npos) {
+            return false;
+        }
+        port = static_cast<unsigned>(strtoul(service.c_str(), nullptr, 10));
+        if (port > 65535) {
+            return false;
+        }
+    }
+
+    SocketResolvedAddrInfo ai;
+    ai.socktype = type;
+    ai.protocol = protocol;
+    struct sockaddr_in* in4 = reinterpret_cast<struct sockaddr_in*>(&ai.addr);
+    struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&ai.addr);
+
+    // the same tests as ares_getaddrinfo() makes (ares_getaddrinfo.c, ares_addrinfo_numeric()), including its
+    // handling of the family hint: an IPv4 address is also given for an IPv6 hint, and an IPv6 address is not given
+    // for an IPv4 hint
+    bool is_v4 = false;
+    if (family == AF_INET || family == AF_INET6 || family == AF_UNSPEC) {
+        // it only looks like an IPv4 address if it is all digits and dots, with three dots
+        size_t numdots = 0;
+        bool valid = true;
+        for (char c : host) {
+            if (c == '.') {
+                ++numdots;
+            } else if (c < '0' || c > '9') {
+                valid = false;
+                break;
+            }
+        }
+        is_v4 = valid && numdots == 3 && ares_inet_pton(AF_INET, host.c_str(), &in4->sin_addr) == 1;
+    }
+    if (is_v4) {
+        in4->sin_family = AF_INET;
+        in4->sin_port = htons(static_cast<uint16_t>(port));
+        ai.family = AF_INET;
+        ai.addrlen = sizeof(struct sockaddr_in);
+    } else if ((family == AF_INET6 || family == AF_UNSPEC)
+            && ares_inet_pton(AF_INET6, host.c_str(), &in6->sin6_addr) == 1) {
+        in6->sin6_family = AF_INET6;
+        in6->sin6_port = htons(static_cast<uint16_t>(port));
+        ai.family = AF_INET6;
+        ai.addrlen = sizeof(struct sockaddr_in6);
+    } else {
+        // not an address, or an IPv6 address for an IPv4 hint: c-ares answers (or fails)
+        return false;
+    }
+    addrs.push_back(ai);
+    status = ARES_SUCCESS;
+    started = done = true;
+    return true;
+}
+
 int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     // c-ares defines ARES_AI_NUMERICHOST but does not enforce it in ares_getaddrinfo(). Do not let a
     // numeric-only request fall through to /etc/hosts or DNS, including a resolvable name such as localhost.
@@ -7297,6 +7361,10 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
             status = ARES_ENONAME;
             return raiseError(xsink);
         }
+    }
+    // an address literal needs no lookup
+    if (startNumeric()) {
+        return 0;
     }
     if (qore_cares_library_init(xsink)) {
         return -1;

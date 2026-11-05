@@ -655,6 +655,14 @@ public:
 
 private:
     DLLLOCAL int start(ExceptionSink* xsink);
+    //! Answers a numeric address without creating a c-ares channel; returns false if c-ares must resolve the host
+    /** An IPv4 or IPv6 address literal with a numeric port (or none) needs no lookup, and creating a channel reads
+        the system's resolver configuration files.  The answer is the one c-ares gives: a single address of the
+        literal's family with the requested socket type and protocol.
+
+        @return true if the lookup is done
+    */
+    DLLLOCAL bool startNumeric();
     //! Destroys the channel and starts the lookup again on a new one after c-ares lost its query
     DLLLOCAL int restart(ExceptionSink* xsink);
     DLLLOCAL void process(ExceptionSink* xsink);
