@@ -610,6 +610,11 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             on_exit if (exists handler) {
                 call_object_method(handler, "restoreThreadLocalData", tld_save);
             }
+            # the per-message hook runs first; an exception from it propagates to the frame loop, which logs it and
+            # drops the message without closing the connection, as for gotMessage()
+            if (exists handler) {
+                call_object_method(handler, "messageReceived", wsc, msg);
+            }
             wsc.gotMessage(msg);
         }
     }

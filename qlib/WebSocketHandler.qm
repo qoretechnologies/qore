@@ -138,6 +138,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - added @ref WebSocketHandler::WebSocketHandler::messageReceived() "WebSocketHandler::messageReceived()", a hook
+      called once for each inbound message, before the connection's
+      @ref WebSocketHandler::WebSocketConnection::gotMessage() "gotMessage()", so a handler can meter messages; an
+      exception from it is logged and drops the message without closing the connection
     - a close started by the server (with
       @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", when the server or a listener stops, on an idle timeout, or for a message that
       is too big) sends the server's close frame and waits for the client's close frame, as RFC 6455 requires, at
@@ -1968,6 +1972,17 @@ class WebSocketStreamProcessor {
                     # H1.1 path.
                     *hash<auto> tld_save = handler.saveThreadLocalData();
                     on_exit handler.restoreThreadLocalData(tld_save);
+                    # the per-message hook runs first; if it throws, the message is not delivered, and the stream
+                    # stays open
+                    try {
+                        handler.messageReceived(wsc, msg);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "OBJECT-ALREADY-DELETED") {
+                            return;
+                        }
+                        handler.logError("H2/H3 WebSocket messageReceived() error: %s", get_exception_string(ex));
+                        continue;
+                    }
                     wsc.gotMessage(msg);
                 }
             }
@@ -2538,6 +2553,28 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     */
     setMaxMessageSize(int size) {
         max_message_size = size;
+    }
+
+    #! Called for each inbound message after it is decoded and validated, before the connection's gotMessage()
+    /** The method is called once for every inbound text and binary message of every transport (HTTP/1.1, HTTP/2 and
+        HTTP/3), on the same worker thread and inside the same
+        @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData() "saveThreadLocalData()" /
+        @ref HttpServer::AbstractHttpRequestHandler::restoreThreadLocalData() "restoreThreadLocalData()" bracket as
+        @ref WebSocketConnection::gotMessage() "gotMessage()", so a subclass can meter or account for messages.
+
+        The default implementation does nothing.
+
+        An exception thrown here is logged and the message is not delivered to the connection; the connection is not
+        closed.  A subclass that must refuse the connection can call @ref WebSocketConnection::stop() "conn.stop()"
+        (or @ref WebSocketConnection::forceStop() "conn.forceStop()") and then throw; closing the connection alone
+        does not stop the current message from being delivered.
+
+        @param conn the connection the message arrived on
+        @param msg the decoded message (a string for text frames, binary for binary frames)
+
+        @since WebSocketHandler 2.8
+    */
+    messageReceived(WebSocketConnection conn, data msg) {
     }
 
     #! returns the heartbeat message as a string
