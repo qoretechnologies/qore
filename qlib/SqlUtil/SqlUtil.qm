@@ -154,6 +154,13 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
+      @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
+      @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
+      nothing from the catalog for the table, and added
+      @ref SqlUtil::Tables::getConnectionValue() "Tables::getConnectionValue()", which reads a value of the connection
+      once for all the templates of a cache
+      (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue 5584</a>)
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"
       and
       @ref SqlUtil::AbstractDatabase::getMaterializedViewRefreshOptions() "AbstractDatabase::getMaterializedViewRefreshOptions()" to refresh the stored data of a materialized view, with
@@ -8311,6 +8318,12 @@ int num = l.size();
 
     #! the table container class stores a collection of tables in a schema
     public class Tables inherits AbstractHashContainer {
+        private {
+            #! values that drivers derive from the connection, shared by the templates of one population; see
+            #! getConnectionValue()
+            transient hash<auto> connection_values;
+        }
+
         #! creates an empty object
         constructor() {
         }
@@ -8350,9 +8363,34 @@ int num = l.size();
             return remove h{k};
         }
 
+        #! returns a value that a database driver derives from the connection, read once for all tables of the cache
+        /** Template tables that are built in this cache (by the @ref SqlUtil::Table "Table" constructor with a
+            description and by populate()) describe tables to create or align, not existing tables; a driver that
+            needs a value of the connection for each of them, such as the default schema of an unqualified table name
+            on PostgreSQL, reads it through this method, so that it is read once however many tables the cache holds.
+
+            The values are kept until the cache is populated again.  Like the rest of the container, the values are not
+            synchronized: a cache is populated and used by one thread at a time.
+
+            @param key the key of the value; it must identify the connection (for example, by including
+            @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "the datasource description")
+            @param get returns the value; called only if the cache has no value for \a key yet
+
+            @return the value
+
+            @since SqlUtil 3.11.0
+        */
+        auto getConnectionValue(string key, code<auto()> get) {
+            if (!connection_values.hasKey(key)) {
+                connection_values{key} = get();
+            }
+            return connection_values{key};
+        }
+
         #! populates the object from a hash<auto> description
         populate(AbstractDatasource ds, hash<auto> tables, *hash<auto> opt) {
             delete h;
+            delete connection_values;
             AbstractDatabase::checkDriverOptions(\tables, ds.getDriverName());
 
             # validate table descriptions up-front
@@ -8460,6 +8498,7 @@ int num = l.size();
         #! populates the object from tables in the database
         populate(AbstractDatasource ds) {
             delete h;
+            delete connection_values;
             Database db(ds);
             foreach string name in (db.tableIterator()) {
                 if (h{name}) {

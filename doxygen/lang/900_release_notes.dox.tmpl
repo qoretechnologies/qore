@@ -964,6 +964,9 @@
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
         \c search_path (see @ref pgsql_schema_scope and @ref qore_3_0_0_compatibility)
       - fixed listing materialized views, which listed the ordinary tables of every schema instead
+      - the template tables of a schema description read the default schema once for all tables instead of reading
+        the catalog three times per table (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue
+        5584</a>)
 
     - @ref providerindexintro "ProviderIndex" module
       - indexes can be built with worker processes, which

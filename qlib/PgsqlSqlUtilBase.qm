@@ -235,6 +235,12 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - a template table built from a description, as for each table of a schema description in
+      @ref SqlUtil::Tables::populate() "Tables::populate()" and schema alignment, no longer reads the catalog three
+      times (the default schema, a temporary table of its name and the tablespace of a table of its name): the default
+      schema of an unqualified name is read once for all the templates of a schema, and nothing else is read; the SQL
+      created and the alignment of templates are unchanged
+      (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue 5584</a>)
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" for
       <tt>REFRESH MATERIALIZED VIEW</tt>, with the \c concurrent option for <tt>REFRESH MATERIALIZED VIEW
       CONCURRENTLY</tt>
@@ -3664,17 +3670,33 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # query for it when it is needed
         hash<PgsqlObjectName> on = pgsql_parse_object_name(nname);
         name_unqualified = !exists on.schema;
-        schema = on.schema ?? get_pgsql_default_schema(nds);
+        # a template, built from a description to create or align a table (see SqlUtil::Table::constructor()),
+        # does not describe an existing table: it takes the default schema of an unqualified name from its template
+        # cache, which reads it once for all the templates of a schema, and reads nothing else from the catalog
+        # (issue #5584)
+        *Tables template = opts.template;
+        if (exists on.schema) {
+            schema = on.schema;
+        } else if (template) {
+            schema = template.getConnectionValue("PgsqlSqlUtilBase default schema " + dsdesc,
+                string sub () { return get_pgsql_default_schema(nds); });
+        } else {
+            schema = get_pgsql_default_schema(nds);
+        }
         sql_schema = on.sql_schema;
         # the name for SQL, quoted if it is quoted; getRelationName() gives the name in the catalog
         name = on.sql_name;
 
-        resolveTemporaryTableSchema(name_unqualified);
+        # a template is not a temporary table of the connection, and its tablespace comes from the options of the
+        # SQL created for it
+        if (!template) {
+            resolveTemporaryTableSchema(name_unqualified);
 
-        # get table info
-        *hash<auto> row = ds.selectRow("select * from pg_tables where schemaname = %v and tablename = %v", schema,
-            getRelationName());
-        tablespace = row.tablespace ? row.tablespace : NOTHING;
+            # get table info
+            *hash<auto> row = ds.selectRow("select * from pg_tables where schemaname = %v and tablename = %v",
+                schema, getRelationName());
+            tablespace = row.tablespace ? row.tablespace : NOTHING;
+        }
     }
 
     #! returns the name of the table in the catalog: the name without its quotes if it is quoted
