@@ -1718,6 +1718,12 @@ static int check_stack_intern(ExceptionSink* xsink, ThreadData* td) {
 #else
     if (td->stack_limit < pos) {
 #endif
+        // a sandbox call can have tightened the limit (see qore_sandbox_tighten_stack())
+        if (int64 sandbox_bytes = td->sandbox_budgets.findStackLimit(td->stack_limit)) {
+            xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the sandbox stack size "
+                "limit of " QLLD " bytes", sandbox_bytes);
+            return -1;
+        }
         xsink->raiseException("STACK-LIMIT-EXCEEDED", "this thread's stack has exceeded the stack size limit " \
             "(%lu bytes)", td->getUsableStackSize());
         return -1;
@@ -1731,6 +1737,40 @@ int check_stack(ExceptionSink* xsink) {
     return check_stack_intern(xsink, td);
 }
 #endif
+
+size_t qore_sandbox_tighten_stack(int64 bytes, size_t& saved) {
+#ifdef QORE_MANAGE_STACK
+    assert(bytes > 0);
+    ThreadData* td = thread_data.get();
+    saved = td->stack_limit;
+    size_t pos = get_stack_pos();
+    size_t limit;
+#ifdef STACK_DIRECTION_DOWN
+    // the lowest address the call may reach; a thread with no stack guard (0) has no limit of its own
+    limit = static_cast<size_t>(bytes) >= pos ? 1 : pos - static_cast<size_t>(bytes);
+    if (td->stack_limit && limit <= td->stack_limit) {
+        return 0;
+    }
+#else
+    limit = static_cast<size_t>(bytes) > SIZE_MAX - pos ? SIZE_MAX : pos + static_cast<size_t>(bytes);
+    if (td->stack_limit && limit >= td->stack_limit) {
+        return 0;
+    }
+#endif
+    td->stack_limit = limit;
+    return limit;
+#else
+    // no stack guard on this platform; see check_stack()
+    saved = 0;
+    return 0;
+#endif
+}
+
+void qore_sandbox_restore_stack(size_t saved) {
+#ifdef QORE_MANAGE_STACK
+    thread_data.get()->stack_limit = saved;
+#endif
+}
 
 bool q_thread_stack_reserve_exceeded(size_t reserve) {
 #ifdef QORE_MANAGE_STACK

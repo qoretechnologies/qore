@@ -1037,7 +1037,7 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 //------------------------------------------------------------------------------
 
 QoreSandboxManager::QoreSandboxManager()
-    : max_threads(0), interrupt_flags(0), wall_time_limit(0), active_threads(0) {
+    : max_threads(0), interrupt_flags(0), wall_time_limit(0), max_stack_size(0), active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
@@ -1088,6 +1088,14 @@ void QoreSandboxManager::setWallTimeLimit(int64 ms) {
 
 int64 QoreSandboxManager::getWallTimeLimit() const {
     return sandbox_intersection_limit<int64>(this, wall_time_limit.load(), &QoreSandboxManager::getWallTimeLimit);
+}
+
+void QoreSandboxManager::setMaxStackSize(int64 bytes) {
+    max_stack_size = bytes > 0 ? bytes : 0;
+}
+
+int64 QoreSandboxManager::getMaxStackSize() const {
+    return sandbox_intersection_limit<int64>(this, max_stack_size.load(), &QoreSandboxManager::getMaxStackSize);
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
@@ -1233,6 +1241,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
 
     config->setKeyValue("max_threads", max_threads.load(), xsink);
     config->setKeyValue("wall_time_limit", wall_time_limit.load(), xsink);
+    config->setKeyValue("max_stack_size", max_stack_size.load(), xsink);
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
 
@@ -1317,6 +1326,7 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     // Copy the thread limit; the copy governs no threads yet
     result->max_threads = max_threads.load();
     result->wall_time_limit = wall_time_limit.load();
+    result->max_stack_size = max_stack_size.load();
     // Don't copy interrupt state
 
     return result;
@@ -1337,6 +1347,9 @@ QoreSandboxManager* QoreSandboxManager::createLockdown() {
     // 5 seconds per call
     sm->setWallTimeLimit(5000);
 
+    // 1MB of stack per call
+    sm->setMaxStackSize(1024 * 1024);
+
     return sm;
 }
 
@@ -1355,6 +1368,9 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 
     // 30 seconds per call
     sm->setWallTimeLimit(30000);
+
+    // 2MB of stack per call
+    sm->setMaxStackSize(2 * 1024 * 1024);
 
     return sm;
 }

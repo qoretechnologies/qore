@@ -3,9 +3,10 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The sandbox wall time limit (issue #5581) stops sandboxed code in every execution mode: the loops of the AST and IR
+# The sandbox wall time and stack limits (issue #5581) stop sandboxed code in every execution mode: the AST and IR
 # interpreters, native code compiled by the JIT compiler, and AOT-compiled module code called from a sandbox.  Each
-# mode reaches the same cancellation check (qore_check_cancel(), from native code through qore_rt_check_cancel()).
+# mode reaches the same checks: qore_check_cancel() at loops (from native code through qore_rt_check_cancel()) and
+# check_stack() at calls (through qore_rt_check_stack()).
 
 %modern
 %no-child-restrictions
@@ -22,6 +23,9 @@ class SandboxLimitsExecModesTest inherits QUnit::Test {
     public {
         #! the loops run in the sandbox
         const Loops = ("spin_while", "spin_for", "spin_foreach", "spin_do");
+
+        #! the recursion run in the sandbox
+        const Recursion = "deep";
 
         #! the script: calls each loop once so that it ends (which compiles it), and then so that it never ends
         const Script = "%modern
@@ -55,12 +59,19 @@ int sub spin_do(bool forever) {
     } while (forever || i < 10);
     return i;
 }
+int sub deep(bool forever, int n = 0) {
+    if (!forever && n >= 10) {
+        return n;
+    }
+    return deep(forever, n + 1);
+}
 auto sub call(code c, auto arg) {
     return c(arg);
 }
 \";
 SandboxManager sm();
 sm.setWallTimeLimit(200);
+sm.setMaxStackSize(256 * 1024);
 Program p(PO_NO_CHILD_PO_RESTRICTIONS);
 # a Program created at runtime does not take the execution mode of the command line
 p.setExecMode({\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED}{shift ARGV});
@@ -94,6 +105,12 @@ public int sub spin(bool forever) {
     }
     return i;
 }
+public int sub deep(bool forever, int n = 0) {
+    if (!forever && n >= 10) {
+        return n;
+    }
+    return deep(forever, n + 1);
+}
 }
 ";
 
@@ -103,15 +120,18 @@ public int sub spin(bool forever) {
 %requires SandboxSpin
 SandboxManager sm();
 sm.setWallTimeLimit(200);
+sm.setMaxStackSize(256 * 1024);
 Program p(PO_NO_CHILD_PO_RESTRICTIONS);
 p.setSandboxManager(sm);
 p.parse(\"%modern\nauto sub call(code c, auto arg) { return c(arg); }\", \"sandboxed\");
-printf(\"aot: %d\\n\", p.callFunction(\"call\", \\SandboxSpin::spin(), False));
-try {
-    p.callFunction(\"call\", \\SandboxSpin::spin(), True);
-    printf(\"aot: no error\\n\");
-} catch (hash<ExceptionInfo> ex) {
-    printf(\"aot: %s\\n\", ex.err);
+foreach code f in (\\SandboxSpin::spin(), \\SandboxSpin::deep()) {
+    printf(\"aot: %d\\n\", p.callFunction(\"call\", f, False));
+    try {
+        p.callFunction(\"call\", f, True);
+        printf(\"aot: no error\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"aot: %s\\n\", ex.err);
+    }
 }
 ";
     }
@@ -125,8 +145,8 @@ try {
     constructor() : QUnit::Test("SandboxLimitsExecModesTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        addTestCase("the wall time limit stops loops in every execution mode", \testExecModes());
-        addTestCase("the wall time limit stops AOT-compiled code", \testAot());
+        addTestCase("the wall time and stack limits stop code in every execution mode", \testExecModes());
+        addTestCase("the wall time and stack limits stop AOT-compiled code", \testAot());
         set_return_value(main());
     }
 
@@ -147,16 +167,17 @@ try {
         f.close();
 
         string expected = foldl $1 + $2, (map sprintf("%s: SANDBOX-TIMEOUT\n", $1), Loops);
+        expected += Recursion + ": STACK-LIMIT-EXCEEDED\n";
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
-                "--exec-mode=%s %s %s %s", env(), qore_bin, mode, script_path, mode, Loops.join(" ")));
+                "--exec-mode=%s %s %s %s %s", env(), qore_bin, mode, script_path, mode, Loops.join(" "), Recursion));
             assertEq(expected, r.out, mode);
             assertEq(0, r.rc, mode + " exit code");
             # the loops ran as native code with JIT execution; tiered execution compiles a function at its third
             # call, which the script does not make
             ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
             if (mode == "jit") {
-                foreach string loop in (Loops) {
+                foreach string loop in (Loops + Recursion) {
                     assertTrue((select r.trace, $1 =~ /'/ && $1.find(loop) >= 0).size() > 0,
                         sprintf("%s was compiled to native code; trace: %y", loop, r.trace));
                 }
@@ -192,7 +213,7 @@ try {
         # only the AOT module is in the module path, so its source cannot be loaded instead
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
             "--exec-mode=ast %s", env(qmod_dir), qore_bin, script_path));
-        assertEq("aot: 10\naot: SANDBOX-TIMEOUT\n", r.out);
+        assertEq("aot: 10\naot: SANDBOX-TIMEOUT\naot: 10\naot: STACK-LIMIT-EXCEEDED\n", r.out);
         assertEq((), r.loader_warnings, "the AOT module was loaded");
     }
 }

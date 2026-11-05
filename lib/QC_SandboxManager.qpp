@@ -97,6 +97,8 @@ hashdecl SandboxConfigInfo {
     int max_threads;
     //! Wall-clock time limit of each call into the sandbox in milliseconds (0 = unlimited)
     int wall_time_limit;
+    //! Stack size limit of each call into the sandbox in bytes (0 = unlimited)
+    int max_stack_size;
     //! Whether an interrupt has been requested
     bool interrupt_requested;
 }
@@ -146,7 +148,7 @@ const QSEC_NET_ALL = QSEC_NET_ALL;
     sandboxing features including:
 
     - A limit on the number of threads that sandboxed code runs at once
-    - A wall-clock time limit for each call into the sandbox
+    - A wall-clock time limit and a stack size limit for each call into the sandbox
     - Safe interruption of sandboxed code
 
     @par Example:
@@ -248,6 +250,47 @@ int SandboxManager::getWallTimeLimit() {
     return sm->getWallTimeLimit();
 }
 
+//! Sets the stack size that each call into the sandbox may use
+/** @param max_stack_bytes the limit in bytes; 0 = unlimited
+
+    The stack is measured from the stack position where the call starts (see setWallTimeLimit() for what a call is);
+    a thread that continues the call, such as a thread that the call starts or a thread pool task, measures from where
+    it starts the work.  A re-entry into the sandbox does not start a new measurement.  The thread's own stack limit
+    still applies: the sandbox limit can only make it tighter.
+
+    Exceeding the limit raises \c STACK-LIMIT-EXCEEDED at the next stack check, which is made at every function and
+    method call in all execution modes, so the limit bounds the recursion of sandboxed code.  Changing the limit
+    affects calls that start afterwards.
+
+    See @ref sandbox_stack_limit for details.
+
+    @par Example:
+    @code{.py}
+sm.setMaxStackSize(max_stack_bytes: 1024 * 1024);  # 1MB per call
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setMaxStackSize(int max_stack_bytes) [flags=NAMED_ARGS] {
+    if (max_stack_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the stack size limit cannot be negative; got: " QLLD,
+            max_stack_bytes);
+        return QoreValue();
+    }
+    sm->setMaxStackSize(max_stack_bytes);
+}
+
+//! Gets the stack size that each call into the sandbox may use
+/** @return the limit in bytes, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getMaxStackSize() {
+    return sm->getMaxStackSize();
+}
+
 //! Requests graceful interruption of sandboxed code
 /** This sets an interrupt flag that is checked at various points
     during execution. Interrupted code receives a PROGRAM-INTERRUPTED exception.
@@ -292,6 +335,7 @@ hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
     - No filesystem access (empty allow list)
     - No network access (empty allow list)
     - Wall time limit per call: 5000ms (see setWallTimeLimit())
+    - Stack size limit per call: 1MB (see setMaxStackSize())
     - Max threads: 1
 
     @par Example:
@@ -312,6 +356,7 @@ static SandboxManager SandboxManager::createLockdown() {
     - No filesystem access
     - Network allowed but private networks blocked
     - Wall time limit per call: 30000ms (see setWallTimeLimit())
+    - Stack size limit per call: 2MB (see setMaxStackSize())
     - Max threads: 4
 
     @par Example:

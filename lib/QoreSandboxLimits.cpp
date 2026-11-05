@@ -285,14 +285,16 @@ void qore_sandbox_watchdog_after_fork() {
     sandbox_watchdog.afterFork();
 }
 
-QoreSandboxCallBudget::QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms)
-        : manager(manager), limit_ms(limit_ms), deadline_us(q_get_monotonic_us() + limit_ms * 1000) {
+QoreSandboxCallBudget::QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 stack_bytes)
+        : manager(manager), limit_ms(limit_ms > 0 ? limit_ms : 0), stack_bytes(stack_bytes > 0 ? stack_bytes : 0),
+        deadline_us(limit_ms > 0 ? q_get_monotonic_us() + limit_ms * 1000 : 0) {
     assert(manager);
-    assert(limit_ms > 0);
+    assert(limit_ms > 0 || stack_bytes > 0);
     manager->ref();
 }
 
-QoreSandboxCallBudget::QoreSandboxCallBudget() : manager(nullptr), limit_ms(0), deadline_us(0), expired(true) {
+QoreSandboxCallBudget::QoreSandboxCallBudget() : manager(nullptr), limit_ms(0), stack_bytes(0), deadline_us(0),
+        expired(true) {
 }
 
 QoreSandboxCallBudget::~QoreSandboxCallBudget() {
@@ -352,9 +354,11 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
     }
     if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm)) {
         for (QoreSandboxManager* member : *members) {
+            // the constituents are plain managers, so their getters report their own limits
             int64 limit = member->getWallTimeLimit();
-            if (limit > 0 && !hasBudgetFor(member)) {
-                startBudget(tid, member, limit, owner);
+            int64 stack = member->getMaxStackSize();
+            if ((limit > 0 || stack > 0) && !hasBudgetFor(member)) {
+                startBudget(tid, member, limit, stack, owner);
                 if (lost_owner) {
                     return;
                 }
@@ -363,29 +367,49 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
         return;
     }
     int64 limit = sm->getWallTimeLimit();
-    if (limit > 0 && !hasBudgetFor(sm)) {
-        startBudget(tid, sm, limit, owner);
+    int64 stack = sm->getMaxStackSize();
+    if ((limit > 0 || stack > 0) && !hasBudgetFor(sm)) {
+        startBudget(tid, sm, limit, stack, owner);
     }
 }
 
-void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, const void* owner) {
+void QoreSandboxBudgetStack::pushFrame(QoreSandboxCallBudget* budget, const void* owner) {
+    frames.push_back({budget, owner, 0, 0});
+    if (budget->stack_bytes > 0) {
+        Frame& frame = frames.back();
+        frame.applied_stack_limit = qore_sandbox_tighten_stack(budget->stack_bytes, frame.saved_stack_limit);
+    }
+}
+
+QoreSandboxCallBudget* QoreSandboxBudgetStack::popFrame() {
+    assert(!frames.empty());
+    Frame& frame = frames.back();
+    if (frame.applied_stack_limit) {
+        qore_sandbox_restore_stack(frame.saved_stack_limit);
+    }
+    QoreSandboxCallBudget* budget = frame.budget;
+    frames.pop_back();
+    return budget;
+}
+
+void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 stack_bytes,
+        const void* owner) {
     QoreSandboxCallBudget* budget;
     try {
-        budget = new QoreSandboxCallBudget(sm, limit_ms);
+        budget = new QoreSandboxCallBudget(sm, limit_ms, stack_bytes);
     } catch (std::bad_alloc&) {
         lose(tid, owner);
         return;
     }
     try {
-        frames.push_back({budget, owner});
+        pushFrame(budget, owner);
     } catch (std::bad_alloc&) {
         budget->deref();
         lose(tid, owner);
         return;
     }
-    if (sandbox_watchdog.add(budget, tid)) {
-        frames.pop_back();
-        budget->deref();
+    if (budget->isTimed() && sandbox_watchdog.add(budget, tid)) {
+        popFrame()->deref();
         lose(tid, owner);
     }
 }
@@ -400,15 +424,14 @@ void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budget
             return;
         }
         try {
-            frames.push_back({budget, owner});
+            pushFrame(budget, owner);
         } catch (std::bad_alloc&) {
             lose(tid, owner);
             return;
         }
         budget->ref();
-        if (sandbox_watchdog.attach(budget, tid)) {
-            frames.pop_back();
-            budget->deref();
+        if (budget->isTimed() && sandbox_watchdog.attach(budget, tid)) {
+            popFrame()->deref();
             lose(tid, owner);
             return;
         }
@@ -433,9 +456,10 @@ void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
         limited = true;
     }
     while (!frames.empty() && frames.back().owner == owner) {
-        QoreSandboxCallBudget* budget = frames.back().budget;
-        frames.pop_back();
-        sandbox_watchdog.detach(budget, tid);
+        QoreSandboxCallBudget* budget = popFrame();
+        if (budget->isTimed()) {
+            sandbox_watchdog.detach(budget, tid);
+        }
         if (budget->isExpired()) {
             limited = true;
         }
@@ -474,11 +498,20 @@ const QoreSandboxCallBudget* QoreSandboxBudgetStack::findExpired() const {
     return nullptr;
 }
 
+int64 QoreSandboxBudgetStack::findStackLimit(size_t limit) const {
+    for (const Frame& frame : frames) {
+        if (frame.applied_stack_limit && frame.applied_stack_limit == limit) {
+            return frame.budget->stack_bytes;
+        }
+    }
+    return 0;
+}
+
 void qore_sandbox_raise_limit(const QoreSandboxCallBudget* budget, ExceptionSink* xsink, const char* operation) {
     assert(budget);
     if (budget == qore_sandbox_lost_budget()) {
-        xsink->raiseException("SANDBOX-ERROR", "%s: the sandbox wall time limit cannot be enforced for this call: "
-            "the resources to track it could not be allocated", operation);
+        xsink->raiseException("SANDBOX-ERROR", "%s: the sandbox limits cannot be enforced for this call: the "
+            "resources to track them could not be allocated", operation);
         return;
     }
     xsink->raiseException("SANDBOX-TIMEOUT", "%s: the sandbox wall time limit of " QLLD " ms was exceeded",

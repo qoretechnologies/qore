@@ -3,7 +3,7 @@
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# SandboxManager resource limits (issue #5581): the wall-clock time limit of each call into a sandbox.
+# SandboxManager resource limits (issue #5581): the wall-clock time and stack size limits of each call into a sandbox.
 #
 # A call starts when a thread enters code governed by the sandbox from code it does not govern; work the call
 # continues on other threads shares its deadline; when the deadline passes, the threads of the call raise
@@ -30,6 +30,12 @@ class SandboxLimitsTest inherits QUnit::Test {
 
         #! the description of the exception for the given limit
         const TimeoutDesc = "the sandbox wall time limit of %d ms was exceeded";
+
+        #! the stack limit used by the tests, in bytes
+        const StackLimit = 256 * 1024;
+
+        #! the description of the stack exception for the given limit
+        const StackDesc = "exceeded the sandbox stack size limit of %d bytes";
 
         #! the sandboxed code
         const SandboxCode = "
@@ -194,6 +200,38 @@ int sub spin_threads(int n, Queue result) {
     }
     return started;
 }
+# recurses without end
+int sub recurse(int n) {
+    return recurse(n + 1);
+}
+# recurses as deep as the stack allows and returns the depth reached
+int sub max_depth(int n) {
+    try {
+        return max_depth(n + 1);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"STACK-LIMIT-EXCEEDED\") {
+            rethrow;
+        }
+        return n;
+    }
+}
+# recurses to the given depth and then calls the trusted code
+auto sub recurse_then_call(int n, code c) {
+    if (n) {
+        return recurse_then_call(n - 1, c);
+    }
+    return c();
+}
+# recurses without end in a new thread and reports the exception that ends it
+sub recurse_in_background(Queue result) {
+    background sub () {
+        try {
+            recurse(0);
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.desc);
+        }
+    }();
+}
 class Spinner {
     int spin() {
         return spin_while();
@@ -217,6 +255,11 @@ code sub get_closure() {
     }
 
     constructor() : QUnit::Test("SandboxLimitsTest", "1.0", \ARGV) {
+        addTestCase("stack limit API", \testStackApi());
+        addTestCase("the stack limit bounds recursion", \testStackRecursion());
+        addTestCase("a re-entry does not restart the stack measurement", \testStackReentry());
+        addTestCase("the stack limit applies to threads the call starts and to nested sandboxes",
+            \testStackContinuations());
         addTestCase("wall time limit API", \testApi());
         addTestCase("busy loops end at the deadline", \testBusyLoops());
         addTestCase("blocked waits end at the deadline", \testBlockedWaits());
@@ -268,7 +311,7 @@ code sub get_closure() {
         sm.setWallTimeLimit(1500);
         assertEq(1500, sm.getWallTimeLimit());
         assertEq(1500, sm.getConfiguration().wall_time_limit, "configuration key");
-        assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "interrupt_requested"),
+        assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "max_stack_size", "interrupt_requested"),
             keys sm.getConfiguration(), "configuration keys");
         sm.setWallTimeLimit(max_wall_time_ms: 2500);
         assertEq(2500, sm.getWallTimeLimit(), "named argument");
@@ -286,6 +329,75 @@ code sub get_closure() {
 
         assertEq(5000, SandboxManager::createLockdown().getWallTimeLimit(), "lockdown preset");
         assertEq(30000, SandboxManager::createWebSafe().getWallTimeLimit(), "web-safe preset");
+    }
+
+    #! returns a sandbox manager with the given stack limit
+    private SandboxManager stackLimited(int bytes = StackLimit) {
+        SandboxManager sm();
+        sm.setMaxStackSize(bytes);
+        return sm;
+    }
+
+    testStackApi() {
+        SandboxManager sm();
+        assertEq(0, sm.getMaxStackSize(), "no limit by default");
+        sm.setMaxStackSize(65536);
+        assertEq(65536, sm.getMaxStackSize());
+        assertEq(65536, sm.getConfiguration().max_stack_size, "configuration key");
+        sm.setMaxStackSize(max_stack_bytes: 131072);
+        assertEq(131072, sm.getMaxStackSize(), "named argument");
+        SandboxManager copy = sm.copy();
+        assertEq(131072, copy.getMaxStackSize(), "copy() copies the limit");
+        sm.setMaxStackSize(0);
+        assertEq(0, sm.getMaxStackSize(), "0 removes the limit");
+        assertEq(131072, copy.getMaxStackSize(), "the copy is independent");
+        assertThrows("SANDBOX-CONFIG-ERROR", "cannot be negative", \sm.setMaxStackSize(), -1);
+        assertEq(0, sm.getMaxStackSize(), "a rejected value does not change the limit");
+        assertEq(1024 * 1024, SandboxManager::createLockdown().getMaxStackSize(), "lockdown preset");
+        assertEq(2 * 1024 * 1024, SandboxManager::createWebSafe().getMaxStackSize(), "web-safe preset");
+    }
+
+    testStackRecursion() {
+        Program p = sandboxed(stackLimited());
+        assertThrows("STACK-LIMIT-EXCEEDED", sprintf(StackDesc, StackLimit), \p.callFunction(), ("recurse", 0));
+        # recursion within the limit is allowed
+        int depth = p.callFunction("max_depth", 0);
+        assertGe(10, depth, "a moderate depth is allowed");
+        assertEq("done", p.callFunctionArgs("recurse_then_call", (depth / 2, auto sub () { return "done"; })));
+        # without the limit, the same code reaches a much greater depth: the thread's own limit
+        Program unlimited = sandboxed(new SandboxManager());
+        assertGt(depth * 4, unlimited.callFunction("max_depth", 0), "the thread's own stack allows more");
+        # and the host's stack limit is restored after the call
+        assertEq("done", unlimited.callFunctionArgs("recurse_then_call", (depth * 4, auto sub () { return "done"; })));
+    }
+
+    testStackReentry() {
+        # the sandbox uses most of its stack, then re-enters itself through trusted code: the re-entered code only has
+        # the rest, where a new measurement would give it the whole limit again
+        Program p = sandboxed(stackLimited());
+        int depth = p.callFunction("max_depth", 0);
+        code callback = auto sub () { return p.callFunction("max_depth", 0); };
+        int reentered = p.callFunctionArgs("recurse_then_call", (depth * 2 / 3, callback));
+        assertLt(depth * 3 / 4, reentered, sprintf("the re-entry kept the original measurement (full depth %d)",
+            depth));
+    }
+
+    testStackContinuations() {
+        Program p = sandboxed(stackLimited());
+        Queue result();
+        p.callFunction("recurse_in_background", result);
+        assertRegex(sprintf(StackDesc, StackLimit), result.get(), "a thread started by the call");
+
+        # the outer limit applies in an inner sandbox that has no stack limit of its own
+        Program inner = sandboxed(new SandboxManager());
+        code call_inner = auto sub () { return inner.callFunction("recurse", 0); };
+        try {
+            p.callFunction("call", call_inner);
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("STACK-LIMIT-EXCEEDED", ex.err);
+            assertRegex(sprintf(StackDesc, StackLimit), ex.desc, "the outer limit in the inner sandbox");
+        }
     }
 
     testBusyLoops() {

@@ -558,6 +558,27 @@ public:
     //! Gets the wall-clock time limit of each call into the sandbox in milliseconds; 0 = unlimited
     DLLEXPORT int64 getWallTimeLimit() const;
 
+    //! Sets the stack size that each call into the sandbox may use, in bytes
+    /** @param bytes the limit in bytes; 0 (or a negative value) = unlimited
+
+        The stack is measured from the stack position where the call starts (see setWallTimeLimit() for what a call
+        is); a thread that continues the call (a thread it starts, a pool task) measures from where it starts the
+        work.  A re-entry into the sandbox does not start a new measurement.  The thread's own stack guard still
+        applies: the sandbox limit can only make it tighter.
+
+        Exceeding the limit raises \c STACK-LIMIT-EXCEEDED at the next stack check (every function and method call in
+        all execution modes), which bounds recursion in sandboxed code.  Changing the limit affects calls that start
+        afterwards.
+
+        @note Only enforced on platforms where %Qore checks the stack (\c QORE_MANAGE_STACK)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setMaxStackSize(int64 bytes);
+
+    //! Gets the stack size that each call into the sandbox may use, in bytes; 0 = unlimited
+    DLLEXPORT int64 getMaxStackSize() const;
+
     //! Requests graceful interruption of sandboxed code
     /** This sets an interrupt flag that is checked at various points
         during execution (statement boundaries, blocking operations).
@@ -688,6 +709,7 @@ public:
         - No filesystem access (empty allow list)
         - No network access (empty allow list)
         - Wall time limit per call: 5000ms
+        - Stack size limit per call: 1MB
         - Max threads: 1
     */
     DLLEXPORT static QoreSandboxManager* createLockdown();
@@ -699,6 +721,7 @@ public:
         - No filesystem access
         - Network allowed but private networks blocked
         - Wall time limit per call: 30000ms
+        - Stack size limit per call: 2MB
         - Max threads: 4
     */
     DLLEXPORT static QoreSandboxManager* createWebSafe();
@@ -723,6 +746,9 @@ private:
 
     //! The wall-clock time limit of each call in milliseconds (0 = unlimited)
     std::atomic<int64> wall_time_limit;
+
+    //! The stack size limit of each call in bytes (0 = unlimited)
+    std::atomic<int64> max_stack_size;
 
     //! Mutex for cancel callbacks
     mutable std::mutex cancel_mutex;

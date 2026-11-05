@@ -13,7 +13,7 @@ enforcement, in four phases:
 | Phase | Limit | Exception | Status |
 |---|---|---|---|
 | 1 | wall time per call, plus interrupt reason codes | `SANDBOX-TIMEOUT` | implemented |
-| 2 | stack size | `STACK-LIMIT-EXCEEDED` | planned |
+| 2 | stack size per call | `STACK-LIMIT-EXCEEDED` | implemented |
 | 3 | CPU time per call | `SANDBOX-TIMEOUT` | planned |
 | 4 | memory, then the `q_sb_*` allocation API | `SANDBOX-MEMORY-LIMIT` | planned |
 
@@ -143,8 +143,8 @@ budgets have expired, the outermost one is reported.
 
 A frame that cannot be recorded (no memory for the budget or the frame, or the watchdog thread cannot be started)
 must not let the call run without its limit. The stack records the helper that failed (`lost_owner`) and sets the
-limit bit; until that helper leaves, every cancellation point raises `SANDBOX-ERROR` ("the sandbox wall time limit
-cannot be enforced for this call"), and nothing further is recorded. A continuation captured meanwhile carries a
+limit bit; until that helper leaves, every cancellation point raises `SANDBOX-ERROR` ("the sandbox limits cannot be
+enforced for this call"), and nothing further is recorded. A continuation captured meanwhile carries a
 static sentinel budget (`qore_sandbox_lost_budget()`) that has the same effect on the threads it starts.
 
 ### Limitations (documented)
@@ -177,12 +177,48 @@ static sentinel budget (`qore_sandbox_lost_budget()`) that has the same effect o
 
 ## Phase 2: stack limit
 
-- `setMaxStackSize(int bytes)`: the stack that a call into the sandbox may use, measured from the stack pointer at
-  the entry. The budget frame records the entry stack pointer; the thread caches the resulting lowest allowed stack
-  address (the minimum over its frames) in `ThreadData`, updated when a frame is pushed or popped.
-- `check_stack()` compares against the higher of the thread's own guard and the cached sandbox guard, so all tiers
-  (interpreter, IR, JIT/AOT through `qore_rt_check_stack`) are covered with no new hooks and no per-call counter.
-- Exception: `STACK-LIMIT-EXCEEDED`, with a description naming the sandbox limit.
+### API
+
+| C++ (`QoreSandboxManager`) | Qore (`SandboxManager`) | Notes |
+|---|---|---|
+| `setMaxStackSize(int64 bytes)` | `setMaxStackSize(int max_stack_bytes)` | 0 = unlimited; negative: `SANDBOX-CONFIG-ERROR` in Qore, 0 in C++ |
+| `getMaxStackSize()` | `getMaxStackSize()` | tightest constituent limit for a composite manager |
+| — | `SandboxConfigInfo::max_stack_size` | |
+| `createLockdown()` / `createWebSafe()` | same | 1 MB / 2 MB (the removed presets had recursion depths of 100 / 200) |
+
+### Design
+
+- The stack limit uses the **same call records** as the wall-time limit: a budget is started when the entered
+  manager has a wall-time **or** a stack limit (`QoreSandboxCallBudget::stack_bytes`); only budgets with a wall-time
+  limit are scheduled with the watchdog and track their threads. The re-entry rule is therefore the same: a thread
+  that re-enters a sandbox it is already running a call of does not start a new measurement, so sandboxed code
+  cannot gain stack by calling back into itself through trusted code.
+- Each frame of `QoreSandboxBudgetStack` whose budget has a stack limit **tightens the thread's own guard**
+  (`ThreadData::stack_limit`) to `entry position - stack_bytes` (stack growing down) if that is tighter, and
+  restores the saved guard when the frame is popped (`qore_sandbox_tighten_stack()` / `qore_sandbox_restore_stack()`
+  in `lib/thread.cpp`). This is the technique of `QoreElidedStackHelper`; both are strictly scoped, so they nest.
+- `check_stack()` (interpreter, IR, JIT and AOT through `qore_rt_check_stack()`), `q_check_stack()` and
+  `q_thread_stack_reserve_exceeded()` all read `ThreadData::stack_limit`, so every tier is covered with no new hook
+  and no cost on the call path. Nothing caches the guard.
+- A continuation (a thread the call starts, a pool task) attaches the call's budgets and applies the stack limit
+  from its own position at that point: the limit bounds the stack the work uses, on whatever thread it runs.
+- With nested sandboxes, every enclosing frame's guard stays in force, because a frame only ever tightens it.
+- A thread with no stack guard of its own (`QTF_NO_STACK_GUARD`, guard 0) gets the sandbox guard.
+- Exception: `STACK-LIMIT-EXCEEDED`, `this thread's stack has exceeded the sandbox stack size limit of <N> bytes`
+  when the active guard is the one a frame set (`QoreSandboxBudgetStack::findStackLimit()`), otherwise the existing
+  message.
+
+### Tests
+
+- API, configuration key, `copy()`, presets, negative value.
+- Unbounded recursion raises `STACK-LIMIT-EXCEEDED` naming the sandbox limit; a moderate depth is allowed; without
+  the limit the same code reaches a much greater depth, and the host has its whole stack again after the call.
+- Re-entry: the sandbox recurses to two thirds of the depth it can reach and then re-enters itself through trusted
+  code; the re-entered code reaches less than three quarters of the full depth (measured in the same mode, so this
+  does not depend on frame sizes). Observed in a debug build with a 256 KB limit: full depth 93 (ast) / 44 (ir, jit),
+  after the re-entry 29 / 23.
+- A `background` thread started by the call, and an inner sandbox without a stack limit of its own.
+- All execution modes and AOT-compiled module code (`sandbox-limits-exec-modes.qtest`).
 
 ## Phase 3: CPU-time limit
 

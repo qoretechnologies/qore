@@ -43,10 +43,11 @@ class QoreSandboxCallBudget;
 //! Returns the static budget that marks a call whose limit cannot be enforced (see QoreSandboxBudgetStack)
 DLLLOCAL QoreSandboxCallBudget* qore_sandbox_lost_budget();
 
-//! The time budget of one call into a sandbox with a wall-time limit
-/** Created when a thread enters a sandbox manager with a wall-time limit that has no budget on the thread yet, and
+//! The budget of one call into a sandbox with a wall-time or stack limit
+/** Created when a thread enters a sandbox manager with a per-call limit that has no budget on the thread yet, and
     shared by everything the call continues on other threads (threads it starts, pool tasks, async I/O operations).
-    The process-wide watchdog expires it at its deadline and sets the sandbox limit bit of every attached thread.
+    With a wall-time limit, the process-wide watchdog expires it at its deadline and sets the sandbox limit bit of
+    every attached thread; the stack limit is applied by each thread from the stack position where it attaches.
     See design/sandbox-resource-limits.md.
 
     The watchdog's deadline map does not hold a reference: the last dereference removes the budget from the map, and
@@ -55,7 +56,11 @@ DLLLOCAL QoreSandboxCallBudget* qore_sandbox_lost_budget();
 class QoreSandboxCallBudget {
 public:
     //! Creates a budget with one reference; the deadline is now + limit_ms; references the manager
-    DLLLOCAL QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms);
+    /** @param manager the manager whose limits the budget enforces
+        @param limit_ms the wall-time limit in milliseconds, or 0 for none
+        @param stack_bytes the stack limit in bytes, or 0 for none
+    */
+    DLLLOCAL QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 stack_bytes);
 
     DLLLOCAL QoreSandboxCallBudget(const QoreSandboxCallBudget&) = delete;
     DLLLOCAL QoreSandboxCallBudget& operator=(const QoreSandboxCallBudget&) = delete;
@@ -80,6 +85,16 @@ public:
         return limit_ms;
     }
 
+    //! The stack limit in bytes that the budget was created with, 0 for none
+    DLLLOCAL int64 getStackBytes() const {
+        return stack_bytes;
+    }
+
+    //! Returns true if the budget has a wall-time limit and so a deadline that the watchdog enforces
+    DLLLOCAL bool isTimed() const {
+        return limit_ms > 0;
+    }
+
     //! Returns true if the deadline has passed (set by the watchdog)
     DLLLOCAL bool isExpired() const {
         return expired.load(std::memory_order_acquire);
@@ -94,8 +109,10 @@ private:
     std::atomic<int> refs{1};
     //! the manager (referenced), or nullptr for the static budget that marks an unenforceable call
     QoreSandboxManager* manager;
-    //! the limit in milliseconds
+    //! the wall-time limit in milliseconds, 0 for none
     int64 limit_ms;
+    //! the stack limit in bytes, 0 for none
+    int64 stack_bytes;
     //! the monotonic deadline (q_get_monotonic_us())
     int64 deadline_us;
     //! true once the deadline has passed; set under the watchdog lock
@@ -141,8 +158,8 @@ public:
         return frames.empty() && !lost_owner;
     }
 
-    //! Starts a new budget for \a sm and for each constituent of a composite manager that has a wall-time limit and
-    //! no budget on this thread yet
+    //! Starts a new budget for \a sm and for each constituent of a composite manager that has a per-call limit (wall
+    //! time or stack) and no budget on this thread yet
     /** @param tid the current thread's TID
         @param sm the manager that governs the code the thread enters
         @param owner the helper that will call leave()
@@ -165,17 +182,30 @@ public:
     //! Returns the outermost expired budget, or nullptr if no budget of the thread has expired
     DLLLOCAL const QoreSandboxCallBudget* findExpired() const;
 
+    //! Returns the stack limit in bytes of the frame that set the given stack limit address, or 0 if none did
+    /** Used to report which limit a thread exceeded (see check_stack())
+    */
+    DLLLOCAL int64 findStackLimit(size_t limit) const;
+
 private:
     struct Frame {
         QoreSandboxCallBudget* budget;
         const void* owner;
+        //! the thread's stack limit address before the frame was pushed
+        size_t saved_stack_limit;
+        //! the stack limit address the frame set, or 0 if it did not change the limit
+        size_t applied_stack_limit;
     };
     std::vector<Frame> frames;
     //! the helper whose frame could not be recorded, or nullptr; see the class documentation
     const void* lost_owner = nullptr;
 
     DLLLOCAL bool hasBudgetFor(const QoreSandboxManager* sm) const;
-    DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, const void* owner);
+    DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 stack_bytes, const void* owner);
+    //! Pushes a frame for a referenced budget and applies its stack limit; may throw std::bad_alloc (nothing changed)
+    DLLLOCAL void pushFrame(QoreSandboxCallBudget* budget, const void* owner);
+    //! Pops the top frame and restores the stack limit; returns its budget (the reference passes to the caller)
+    DLLLOCAL QoreSandboxCallBudget* popFrame();
     DLLLOCAL void lose(int tid, const void* owner);
     DLLLOCAL void leaveIntern(int tid, const void* owner);
 };
@@ -185,6 +215,17 @@ private:
 */
 DLLLOCAL void qore_sandbox_raise_limit(const QoreSandboxCallBudget* budget, ExceptionSink* xsink,
         const char* operation);
+
+//! Tightens the current thread's stack limit to \a bytes from the current stack position if that is tighter
+/** Defined in thread.cpp, which owns the thread's stack guard (check_stack())
+
+    @param saved set to the thread's previous stack limit address
+    @return the new stack limit address, or 0 if the limit was not changed
+*/
+DLLLOCAL size_t qore_sandbox_tighten_stack(int64 bytes, size_t& saved);
+
+//! Restores the current thread's stack limit address saved by qore_sandbox_tighten_stack()
+DLLLOCAL void qore_sandbox_restore_stack(size_t saved);
 
 //! Stops the watchdog thread; called by qore_cleanup()
 DLLLOCAL void qore_sandbox_watchdog_stop();
