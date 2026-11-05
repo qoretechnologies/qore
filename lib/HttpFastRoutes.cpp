@@ -176,11 +176,12 @@ std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
     // the response of a handler to a request that is not a HEAD request has a Content-Length header, also with the
     // status 204 (RFC 9110 section 8.6 says that a server must not send one with 204; the handler path does, and a
     // fast route answers exactly as it does so that the two cannot be told apart)
-    std::string suffix = "Connection: Keep-Alive\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n";
+    std::string suffix = "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n";
 
     // "Date: " + a 29-character date + the line end
     static constexpr size_t DateLineSize = 6 + 29 + 2;
-    size_t head_size = prefix.size() + DateLineSize + suffix.size();
+    static constexpr size_t KeepAliveLineSize = sizeof("Connection: Keep-Alive\r\n") - 1;
+    size_t head_size = prefix.size() + DateLineSize + KeepAliveLineSize + suffix.size();
     if (head_size + body.size() > MaxSize) {
         err = "the response is larger than the " + std::to_string(MaxSize) + " bytes that a fast route serves";
         return nullptr;
@@ -320,10 +321,11 @@ std::shared_ptr<const HttpFastResponse> HttpFastRouteSpec::choose(HttpFastFallba
     return nullptr;
 }
 
-std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s) const {
+std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close) const {
+    const size_t i = close ? 1 : 0;
     std::lock_guard<std::mutex> lg(cache_lock);
-    if (cache && cache_second == epoch_s) {
-        return cache;
+    if (cache[i] && cache_second[i] == epoch_s) {
+        return cache[i];
     }
     auto wire = std::make_shared<std::string>();
     wire->reserve(head_size + body.size());
@@ -331,11 +333,14 @@ std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s) co
     *wire += "Date: ";
     *wire += format_http_date(epoch_s);
     *wire += "\r\n";
+    // as the handler path sends them: "Keep-Alive" for a request that keeps the connection, "close" for one that
+    // closes it
+    *wire += close ? "Connection: close\r\n" : "Connection: Keep-Alive\r\n";
     *wire += head_suffix;
     *wire += body;
-    cache = std::move(wire);
-    cache_second = epoch_s;
-    return cache;
+    cache[i] = std::move(wire);
+    cache_second[i] = epoch_s;
+    return cache[i];
 }
 
 std::shared_ptr<const HttpFastRoutes::table_t> HttpFastRoutes::snapshot() const {
@@ -397,7 +402,10 @@ size_t HttpFastRoutes::size() const {
 }
 
 std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestView& req, int64_t epoch_s,
-        HttpFastFallback& fallback) {
+        HttpFastFallback& fallback, bool* close_after) {
+    if (close_after) {
+        *close_after = false;
+    }
     std::shared_ptr<const table_t> snap = snapshot();
     if (snap->empty()) {
         // nothing is registered: the normal path, without counting it
@@ -443,8 +451,13 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
     if (req.has_upgrade) {
         return fail(HttpFastFallback::Upgrade);
     }
+    bool close = false;
     if (req.connection && !iequals(*req.connection, "keep-alive")) {
-        return fail(HttpFastFallback::Connection);
+        // a request that asks for the connection to be closed is answered if the caller closes it afterwards
+        if (!close_after || !iequals(*req.connection, "close")) {
+            return fail(HttpFastFallback::Connection);
+        }
+        close = true;
     }
     if (req.pending) {
         return fail(HttpFastFallback::Pipelined);
@@ -456,8 +469,11 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
     if (!response) {
         return fail(why);
     }
-    std::shared_ptr<const std::string> wire = response->getWire(epoch_s);
+    std::shared_ptr<const std::string> wire = response->getWire(epoch_s, close);
     route.hits.fetch_add(1, std::memory_order_relaxed);
+    if (close_after) {
+        *close_after = close;
+    }
     return wire;
 }
 

@@ -181,7 +181,31 @@ int main() {
     v = req("/e"); v.has_upgrade = true;
     CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::Upgrade);
     v = req("/e"); v.connection = "close";
-    CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::Connection);
+    CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::Connection);   // the caller does not close the connection
+    {
+        // a caller that closes the connection after the response gets the response with Connection: close
+        bool close_after = true;
+        auto cw = re.match(req("/e"), 1730000000, fb, &close_after);
+        CHECK(cw && !close_after);
+        CHECK(cw && cw->find("Connection: Keep-Alive\r\n") != std::string::npos);
+        for (const char* c : {"close", "Close", "CLOSE"}) {
+            v = req("/e"); v.connection = c;
+            cw = re.match(v, 1730000000, fb, &close_after);
+            CHECK(cw && close_after);
+            CHECK(cw && cw->find("Connection: close\r\n") != std::string::npos);
+            CHECK(cw && cw->find("Connection: Keep-Alive") == std::string::npos);
+            CHECK(cw && cw->find("Content-Length:") != std::string::npos);
+        }
+        v = req("/e"); v.connection = "te";
+        CHECK(!re.match(v, 1, fb, &close_after) && fb == HttpFastFallback::Connection && !close_after);
+        v = req("/e"); v.connection = "close"; v.pending = true;
+        CHECK(!re.match(v, 1, fb, &close_after) && fb == HttpFastFallback::Pipelined);
+        // the wire for a closing request is cached apart from the other
+        auto k1 = ok->getWire(1730000005, false);
+        auto k2 = ok->getWire(1730000005, true);
+        CHECK(k1 != k2 && k1->find("Keep-Alive") != std::string::npos && k2->find("close") != std::string::npos);
+        CHECK(ok->getWire(1730000005, true) == k2 && ok->getWire(1730000005, false) == k1);
+    }
     v = req("/e"); v.connection = "Keep-Alive";
     CHECK(re.match(v, 1, fb));
     v = req("/e"); v.pending = true;

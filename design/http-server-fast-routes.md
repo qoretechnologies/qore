@@ -88,8 +88,11 @@ A fast route is eligible for a request only if all of the following hold; otherw
 
 - HTTP/1.1, method `GET`, a path that matches exactly
 - no `Content-Length` (or `0`), no `Transfer-Encoding`, no `Expect`, no `Upgrade`, no `HTTP2-Settings`
-- no `Connection` header other than `keep-alive` (a `Connection: close` request takes the normal path in phase 1,
-  and is answered with `Connection: close` and a close in a later phase)
+- no `Connection` header other than `keep-alive` or `close`: a `Connection: close` request is answered with `Connection:
+  close` (the value that the handler path sends) and the connection is closed when the response has been sent (the
+  operation completes in its closed state, which the controller closes); any other value takes the normal path.  This
+  is the request that a Kubernetes probe sends (Go's HTTP client with keep-alives disabled), so a probe of a fast route
+  is answered without a handler thread
 - no bytes already buffered after the header (a pipelined request takes the normal path)
 - every cell that the route's rules read is current, and a rule holds or the route has an `otherwise` response (see
   Cells)
@@ -269,7 +272,7 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 |2a (done for plain TCP)|The first request of a connection is read by the fused idle + read header operation, which answers it from a route; see "Phase 2 design".  The per-accept reverse lookup is already opt-in (`peer_hostname_lookup`)|a new connection's first request is also served without a hand-off
 |2b|Only if 2a leaves a measured gap: connections owned by C++ until a request needs the handler|measured
 |3|HTTP/2 and HTTP/3|same tests over h2 and h3
-|4|Only if measured and justified: `Connection: close` handling, prefix routes, further blocks|each addition reviewed for boundedness
+|4|`Connection: close` handling (done); only if measured and justified: prefix routes, further blocks|each addition reviewed for boundedness
 
 Phase 1.5 comes before phase 2 because phase 2 reads the first request of a connection in the `read_header` operation,
 which builds a hash today as well: the parser is written once, in the core, and both operations use it.  Its safety

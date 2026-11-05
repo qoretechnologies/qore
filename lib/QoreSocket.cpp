@@ -18928,6 +18928,14 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             poll_state.reset();
             send_data.discard();
             fast_wire.reset();
+            if (fast_close) {
+                // the response of a fast route to a request that asked for the connection to be closed was sent: the
+                // controller closes the connection when the operation completes in this phase
+                phase = Phase::Closed;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
             phase = Phase::Idle;
             // Return POLLIN to wait for incoming data
             return getSocketPollInfoHash(xsink, SOCK_POLLIN);
@@ -19102,12 +19110,13 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
     int us;
     int64 epoch_s = q_epoch_us(us);
     HttpFastFallback why;
-    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why);
+    bool close_after = false;
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after);
     if (!wire) {
         return 0;
     }
 
-    return startFastSend(std::move(wire), info, xsink);
+    return startFastSend(std::move(wire), close_after, info, xsink);
 }
 
 int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t size, QoreHashNode*& info,
@@ -19132,17 +19141,20 @@ int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t 
     int us;
     int64 epoch_s = q_epoch_us(us);
     HttpFastFallback why;
-    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why);
+    bool close_after = false;
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after);
     if (!wire) {
         // the request was parsed and counted: it takes the normal path without being matched again
         fast_decided = true;
         return 0;
     }
-    return startFastSend(std::move(wire), info, xsink);
+    return startFastSend(std::move(wire), close_after, info, xsink);
 }
 
-int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const std::string> wire, QoreHashNode*& info,
-        ExceptionSink* xsink) {
+int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const std::string> wire, bool close_after,
+        QoreHashNode*& info, ExceptionSink* xsink) {
+    // a request that asked for the connection to be closed: the operation ends when the response is sent
+    fast_close = close_after;
     // the operation does not complete for this request: its timeout, which covers one request, starts again
     timeout_renewal = true;
 
@@ -19180,6 +19192,14 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
     }
     poll_state.reset();
     fast_wire.reset();
+    if (fast_close) {
+        // the controller closes the connection when the operation completes in this phase
+        phase = Phase::Closed;
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        info = nullptr;
+        return 1;
+    }
     phase = Phase::Idle;
     info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
     return 1;

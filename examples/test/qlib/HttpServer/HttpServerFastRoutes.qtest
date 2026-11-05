@@ -262,6 +262,20 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         }
         assertTrue(exists fast.hdr.date, "the response has a Date header");
         assertEq("Keep-Alive", fast.hdr.connection);
+
+        # a request that asks for the connection to be closed: the headers are those of the handler's response too
+        Socket cc = connect();
+        hash<auto> ncl = request(cc, "GET", "/normal", {"Connection": "close"});
+        Socket cc2 = connect();
+        hash<auto> fcl = request(cc2, "GET", "/fast", {"Connection": "close"});
+        assertEq("same", ncl.body);
+        assertEq("same", fcl.body);
+        assertEq(sort(keys (ncl.hdr - ("date",))), sort(keys (fcl.hdr - ("date",))),
+            "the same headers with Connection: close");
+        foreach string name in (keys (ncl.hdr - ("date",))) {
+            assertEq(ncl.hdr{name}, fcl.hdr{name}, "close, header " + name);
+        }
+        assertEq("close", fcl.hdr.connection);
         assertTrue(fast.hdr."x-powered-by" =~ /^Qore\//, "the server's headers are added");
         assertTrue(fast.hdr.server =~ /Qore-HTTP-Server/, "the Server header is added");
         assertEq("text/plain;charset=utf-8", fast.hdr."content-type");
@@ -462,13 +476,34 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("handler", request(c, "GET", "/not-a-route").body);
         assertEq("fast", request(c, "GET", "/first").body);
 
+        # Connection: close: the route answers, with Connection: close, and the connection is closed after the response
+        foreach string conn in ("close", "Close", "CLOSE") {
+            Socket cl = connect();
+            cl.send("GET /first HTTP/1.1\r\nHost: x\r\nConnection: " + conn + "\r\n\r\n");
+            hash<auto> cr = readResponse(cl);
+            assertEq("fast", cr.body, "Connection: " + conn);
+            assertEq("close", cr.hdr.connection, "Connection: " + conn);
+            # the connection is closed after the response
+            assertThrows("SOCKET-CLOSED", sub () { cl.recv(1, Timeout); });
+        }
+        # after earlier requests, too
+        Socket cl2 = warmUp();
+        hash<auto> cr2 = request(cl2, "GET", "/first", {"Connection": "close"});
+        assertEq("fast", cr2.body);
+        assertEq("close", cr2.hdr.connection);
+        assertThrows("SOCKET-CLOSED", sub () { cl2.recv(1, Timeout); });
+        # a request with Connection: close and a following request already received: the normal path answers both
+        Socket cl3 = connect();
+        cl3.send("GET /first HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n" + req);
+        assertEq("handler", readResponse(cl3).body,
+            "the route does not answer a closing request that has another after it");
+
         # a request that does not qualify as the first request of a connection is answered by the handler, with the
         # full header
         foreach hash<auto> t in ((
             {"desc": "a body", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\n\r\nabc"},
             {"desc": "Expect", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n\r\n", "interim": True},
             {"desc": "Upgrade", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n"},
-            {"desc": "Connection: close", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"},
             {"desc": "HTTP/1.0", "raw": "GET /first HTTP/1.0\r\nHost: x\r\n\r\n"},
             {"desc": "POST", "raw": "POST /first HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n"},
             {"desc": "no route", "raw": "GET /nothing HTTP/1.1\r\nHost: x\r\n\r\n"},
@@ -548,11 +583,11 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertTrue(fb.no_route >= 3, "POST, HEAD and OPTIONS had no route");
         assertTrue(fb.body >= 1, "the body");
 
-        # Connection: close takes the normal path, which closes the connection after the response
+        # a Connection header other than keep-alive and close takes the normal path
         Socket c2 = warmUp();
-        assertEq("handler", request(c2, "GET", "/fb", {"Connection": "close"}).body);
-        assertThrows("SOCKET-CLOSED", sub () { c2.recv(1, Timeout); });
-        assertTrue(hs.getFastRouteInfo().fallbacks.connection >= 1);
+        int before_connection = hs.getFastRouteInfo().fallbacks.connection;
+        assertEq("handler", request(c2, "GET", "/fb", {"Connection": "te"}).body);
+        assertEq(before_connection + 1, hs.getFastRouteInfo().fallbacks.connection);
 
         # an HTTP/1.0 request takes the normal path
         Socket c3 = connect();

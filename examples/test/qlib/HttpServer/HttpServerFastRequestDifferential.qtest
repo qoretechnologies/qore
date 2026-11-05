@@ -135,7 +135,7 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
         assertFalse(exists h."transfer-encoding", desc + ": transfer-encoding");
         assertFalse(exists h.expect, desc + ": expect");
         assertFalse(exists h.upgrade, desc + ": upgrade");
-        assertTrue(!exists h.connection || h.connection =~ /^keep-alive$/i,
+        assertTrue(!exists h.connection || h.connection =~ /^(keep-alive|close)$/i,
             sprintf("%s: connection %y of %y", desc, h.connection, raw));
         assertEq("1.1", h.http_version, desc);
         return True;

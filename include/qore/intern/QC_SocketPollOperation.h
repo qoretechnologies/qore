@@ -1094,10 +1094,14 @@ private:
 
     //! Starts sending the response of a fast route with this operation's send phase
     /** @return 1 (return \a info) or -1 if an error occurred */
-    DLLLOCAL int startFastSend(std::shared_ptr<const std::string> wire, QoreHashNode*& info, ExceptionSink* xsink);
+    DLLLOCAL int startFastSend(std::shared_ptr<const std::string> wire, bool close_after, QoreHashNode*& info,
+            ExceptionSink* xsink);
 
     // true when the raw parser accepted the request and no route answered it
     bool fast_decided = false;
+
+    // true while the response of a fast route to a request with Connection: close is sent: the operation then ends
+    bool fast_close = false;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;

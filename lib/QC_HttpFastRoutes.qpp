@@ -362,8 +362,10 @@ static std::shared_ptr<const HttpFastRouteSpec> fast_route_parse_spec(const Qore
     the connections accepted from that socket share it, so a change reaches the connections that are already open.
 
     A route answers a @c GET request for its exact path (the query string is not part of the path) that has no body,
-    no @c Expect or @c Upgrade header, is HTTP/1.1 with a keep-alive connection, and has no further request already
-    received.  Anything else takes the normal path.  The first request of a connection is covered as well as the later ones.
+    no @c Expect or @c Upgrade header, is HTTP/1.1 (with a keep-alive connection, or with @c Connection: close, in
+    which case the response has @c Connection: close and the connection is closed after it), and has no further
+    request already received.  Anything else takes the normal path.  The first request of a connection is covered as
+    well as the later ones.
 
     @par Example:
     @code{.py}

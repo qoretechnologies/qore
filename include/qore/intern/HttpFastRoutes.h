@@ -95,8 +95,12 @@ public:
 
     //! Returns the serialized response with the \c Date of the given second
     /** The copy is cached; it is built again when the second changes.
+
+        @param epoch_s the time, in seconds since the epoch
+        @param close if true, the response has \c Connection: close, for a request that asked for the connection to be
+        closed, instead of \c Connection: Keep-Alive
     */
-    DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s) const;
+    DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s, bool close = false) const;
 
     //! Returns the time that the response was created, in microseconds since the epoch
     DLLLOCAL int64_t getCreatedUs() const {
@@ -113,15 +117,17 @@ private:
 
     //! status line, the given headers, up to (and excluding) the \c Date header
     std::string head_prefix;
-    //! the headers after \c Date, the empty line and the body are appended to the \c Date header in getWire()
+    //! the \c Content-Length header and the empty line; the \c Connection header, which depends on the request, goes
+    //! between the \c Date header and this in getWire()
     std::string head_suffix;
     std::string body;
     size_t head_size = 0;
     int64_t created_us = 0;
 
     mutable std::mutex cache_lock;
-    mutable int64_t cache_second = -1;
-    mutable std::shared_ptr<const std::string> cache;
+    //! the serialized responses for a request that keeps the connection and for one that closes it
+    mutable int64_t cache_second[2] = {-1, -1};
+    mutable std::shared_ptr<const std::string> cache[2];
 };
 
 //! The parts of a request that decide whether a fast route answers it
@@ -389,7 +395,7 @@ public:
         @return the serialized response to send, or nullptr
     */
     DLLLOCAL std::shared_ptr<const std::string> match(const HttpFastRequestView& req, int64_t epoch_s,
-            HttpFastFallback& fallback);
+            HttpFastFallback& fallback, bool* close_after = nullptr);
 
     //! Returns the number of requests that took the normal path for a reason
     DLLLOCAL uint64_t getFallbacks(HttpFastFallback reason) const {
