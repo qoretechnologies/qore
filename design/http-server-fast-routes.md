@@ -522,6 +522,17 @@ phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at mos
 
 ## Risks and open questions
 
+- `HEAD` requests are not answered by a route (they take the normal path).  The normal path answers a `HEAD` request to
+  a handler with `Content-Length: 0` and without the `;charset=utf-8` that a `GET` response has, which is not what RFC
+  9110 says (a `HEAD` response has the headers of the `GET` response, including its `Content-Length`).  A route that
+  copied that would copy what looks like a defect of the normal path, and one that did what the RFC says would differ
+  from it, so `HEAD` waits until the normal path's behavior is settled.
+- HTTP/3 requests are not answered by a route.  The hook belongs in `QuicSession::h3EndHeadersCallback()` for a server
+  session when the request ends with `FIN` on its `HEADERS`; the session needs the routes (the shared
+  `HttpFastRoutes` object of the QUIC listener, captured when the session is created: the socket pointer that
+  `QuicSession` keeps is cleared after initialization), the fast-served stream must be skipped by
+  `takeHeadersReadyStreamCopy()` and erased when the stream closes, and the test needs an HTTP/3 client
+
 - (fixed) the normal path did not answer the second of two pipelined requests that arrived in one send: the idle
   check of a connection looked at the descriptor (and at OpenSSL's buffer), not at the bytes that the header read had
   already taken into the socket's own buffer, so the request waited until more data arrived.
