@@ -45,6 +45,11 @@ public class ProviderIndexFactoryInfoTest inherits QUnit::Test {
             qore_bin = normalize_dir(qore_bin);
         }
 
+        # the errors of the index that the test cases cause are checked by them, not printed
+        if (m_options.verbose <= 2) {
+            ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
+        }
+
         addTestCase("the factory info is recorded in the metadata cache", \writeTest());
         addTestCase("the factory info is read without loading any module", \readTest());
         addTestCase("the known factories are listed from the index", \listKnownFactoriesTest());
@@ -677,7 +682,7 @@ printf(\"%s\\n\", make_json({
         unlink(getFactoryInfoPath(dir));
         resetIndexState();
         LogCapture log = captureLog();
-        on_exit ProviderIndexUtil::setGlobalLogger();
+        on_exit ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
 
         # routing lookups
         assertEq(("qoretest", "qoretest-noinfo"), ProviderIndexUtil::getIndexedFactories());
@@ -727,7 +732,7 @@ printf(\"%s\\n\", make_json({
         resetIndexState();
 
         LogCapture log = captureLog();
-        on_exit ProviderIndexUtil::setGlobalLogger();
+        on_exit ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
 
         # listing never fails; without readable factory info, every indexed factory is listed
         list<string> known = DataProvider::listKnownFactories();

@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires Util
 %requires ../TestFileTime.qm
 
 %exec-class AOTModuleStaleFallbackTest
@@ -30,10 +31,12 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTModuleStaleFallbackTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
-            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the commands of the test run in other directories, so a relative path is made absolute; a command without a
+        # directory is found through the PATH
+        qore_bin = AOTModuleStaleFallbackTest::absolutePath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = AOTModuleStaleFallbackTest::absolutePath(ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc"));
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
 
@@ -42,7 +45,17 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
         addTestCase("a built module that is a regular file with a depfile is checked (the run_tests.sh layout)",
             \regularWithDepfileTest());
         addTestCase("a module compiled without a depfile is not checked", \regularWithoutDepfileTest());
+        addTestCase("a depfile copied next to another module is ignored", \copiedDepfileTest());
+        addTestCase("a depfile reached through a linked module is used", \linkedDepfileTest());
+        addTestCase("a depfile without a rule target, or with a malformed one, is ignored",
+            \malformedTargetTest());
+        addTestCase("a depfile with a relative target names the module in its directory", \relativeTargetTest());
         set_return_value(main());
+    }
+
+    #! returns the absolute path of a program given with a directory, and the name of a program without one
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
     }
 
     private string run(string cmd) {
@@ -135,6 +148,137 @@ class AOTModuleStaleFallbackTest inherits QUnit::Test {
         writeStale(src_dir, "return \"v2\";");
         touchLater(src_dir + "/Stale.qm");
         assertEq("v1 Stale.qmod", runRequires(src_dir, tmp.path));
+    }
+
+    #! returns the output of loading Stale with load_module() and with %requires, which must be the same
+    private string loadBoth(string module_path, string script_dir) {
+        string loaded = runStale(module_path);
+        string required = runRequires(module_path, script_dir);
+        assertEq(loaded.split("\n").last(), required.split("\n").last(), "load_module() and %requires");
+        return required;
+    }
+
+    #! changes the source of the Stale module after it was compiled
+    private changeSource(string src_dir) {
+        writeStale(src_dir, "return \"v2\";");
+        touchLater(src_dir + "/Stale.qm");
+    }
+
+    #! asserts that the Stale module was loaded from its source because it is out of date
+    private assertFallback(string out) {
+        assertEq("v2 Stale.qm", out.split("\n").last(), out);
+        assertRegex("BINARY-MODULE-SOURCE-FALLBACK: AOT module '.*Stale\\.qmod' for feature 'Stale' is out of date",
+            out);
+    }
+
+    copiedDepfileTest() {
+        # a build tree's qlib-qmod copied to an installation with cp -p, which keeps the modification times, as
+        # cp -a and rsync -a do: the depfile names the built module, not the copy
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string inst_dir = tmp.path + "/inst";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(inst_dir);
+        writeStale(src_dir, "return \"v1\";");
+        compile(src_dir, qmod_dir + "/Stale.qmod");
+        assertTrue(is_file(qmod_dir + "/Stale.qmod.d.fingerprints"));
+        assertEq(0, system(sprintf("cp -p '%s'/Stale.qmod* '%s'", qmod_dir, inst_dir)), "copy");
+        assertTrue(is_file(inst_dir + "/Stale.qmod.d"));
+        changeSource(src_dir);
+
+        # the copy is loaded: its depfile is not its own
+        string out = loadBoth(inst_dir + ":" + src_dir, tmp.path);
+        assertEq("v1 Stale.qmod", out, out);
+        # the built module is still checked with the same depfile, which is its own
+        assertFallback(loadBoth(qmod_dir + ":" + src_dir, tmp.path));
+
+        # a depfile that names a module that does not exist is not used either
+        unlink(qmod_dir + "/Stale.qmod");
+        out = loadBoth(inst_dir + ":" + src_dir, tmp.path);
+        assertEq("v1 Stale.qmod", out, out);
+    }
+
+    linkedDepfileTest() {
+        # the source qlib links to the built module; the depfile next to the built module names it
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/qlib";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+        mkdir(build_dir);
+        writeStale(src_dir, "return \"v1\";");
+        compile(src_dir, build_dir + "/Stale.qmod");
+        assertEq(0, system(sprintf("ln -s '%s/Stale.qmod' '%s/Stale.qmod'", build_dir, src_dir)), "link");
+        assertEq("v1 Stale.qmod", loadBoth(src_dir, tmp.path));
+        # touched only: the fingerprints of the depfile tell that the source has not changed
+        touchLater(src_dir + "/Stale.qm");
+        assertEq("v1 Stale.qmod", loadBoth(src_dir, tmp.path));
+        changeSource(src_dir);
+        assertFallback(loadBoth(src_dir, tmp.path));
+    }
+
+    malformedTargetTest() {
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeStale(src_dir, "return \"v1\";");
+        string qmod = qmod_dir + "/Stale.qmod";
+        compile(src_dir, qmod);
+        string depfile = qmod + ".d";
+        string source = src_dir + "/Stale.qm";
+        changeSource(src_dir);
+        string module_path = qmod_dir + ":" + src_dir;
+        # with its own depfile the module is out of date, so each of the depfiles below is what keeps it loaded
+        assertFallback(loadBoth(module_path, tmp.path));
+        unlink(depfile + ".fingerprints");
+
+        foreach string body in ((
+                # no target
+                sprintf(": %s\n", source),
+                sprintf("   : %s\n", source),
+                # no rule
+                sprintf("%s %s\n", qmod, source),
+                "",
+                # a target split over two lines
+                sprintf("%s\\\n: %s\n", qmod, source),
+                # two targets
+                sprintf("%s %s: %s\n", qmod, qmod, source),
+                # a target that is the module's source, not the module
+                sprintf("%s: %s\n", source, source),
+            )) {
+            write(depfile, body);
+            string out = loadBoth(module_path, tmp.path);
+            assertEq("v1 Stale.qmod", out, sprintf("%y: %s", body, out));
+        }
+
+        # the module's own target, with blanks around it, is used
+        write(depfile, sprintf("  %s  : %s\n", qmod, source));
+        assertFallback(loadBoth(module_path, tmp.path));
+    }
+
+    relativeTargetTest() {
+        # qcc writes the -o path as the target; one given relative to the build directory is relative to the
+        # directory of the depfile next to it
+        TmpDir tmp("qore-aot-stale-fallback-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeStale(src_dir, "return \"v1\";");
+        string out = run(sprintf("cd '%s' && %s QORE_MODULE_DIR=%s %s -m --depfile=Stale.qmod.d "
+            "--depfile-module-deps=source -o Stale.qmod %s", qmod_dir, env, src_dir, qcc_bin, src_dir + "/Stale.qm"));
+        assertTrue(is_file(qmod_dir + "/Stale.qmod.d"), out);
+        assertRegex("^Stale\\.qmod:", ReadOnlyFile::readTextFile(qmod_dir + "/Stale.qmod.d"));
+        string module_path = qmod_dir + ":" + src_dir;
+        assertEq("v1 Stale.qmod", loadBoth(module_path, tmp.path));
+        changeSource(src_dir);
+        assertFallback(loadBoth(module_path, tmp.path));
+        # a relative target names the module next to the depfile: one that is not there is not used
+        write(qmod_dir + "/Stale.qmod.d", sprintf("other/Stale.qmod: %s\n", src_dir + "/Stale.qm"));
+        assertEq("v1 Stale.qmod", loadBoth(module_path, tmp.path));
     }
 
     staleSourceFailsTest() {

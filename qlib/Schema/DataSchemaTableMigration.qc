@@ -470,7 +470,7 @@ public hash<auto> sub inspect_alignment(Qore::SQL::AbstractDatasource ds,
 
     @param ds target datasource
     @param raw reviewed contract
-    @param verbose nonzero to print progress without row values
+    @param verbose positive to print progress without row values
     @return number of material changes
 
     @throw DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR when the reviewed contract
@@ -497,7 +497,7 @@ public int sub execute(Qore::SQL::AbstractDatasource ds, hash<auto> raw,
 
     @param ds target datasource
     @param raw reviewed contract
-    @param verbose nonzero to print progress without row values
+    @param verbose positive to print progress without row values
     @return language-independent aggregate execution report
 
     @throw DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR when the reviewed contract
@@ -577,7 +577,7 @@ public hash<auto> sub execute_with_report(
         }
         table.addColumn(spec.name, column_definitions{spec.name}, True);
         ++changes;
-        if (verbose) {
+        if (verbose > 0) {
             printf("added nullable canonical column %s.%s\n",
                 contract.table, spec.name);
         }
@@ -665,7 +665,7 @@ public hash<auto> sub execute_with_report(
 
     list<auto> verification = verify_result(ds, contract, specs, cursor,
         empty_table_initialization, original_count, quarantine_count);
-    if (verbose) {
+    if (verbose > 0) {
         printf("migration %s complete: original=%d active=%d "
             "quarantined=%d updated=%d newly_quarantined=%d changes=%d\n",
             contract.migration_id, original_count, active_count,
@@ -1256,7 +1256,7 @@ SqlUtil::AbstractTable sub ensure_quarantine_table(
     table = (new SqlUtil::Table(ds, description, name)).getTable();
     table.create();
     ensure_quarantine_index(table, name, cursor, {});
-    if (verbose) {
+    if (verbose > 0) {
         printf("created quarantine table %s\n", name);
     }
     return table;

@@ -36,7 +36,9 @@
 
     The above functions are atomic, meaning that when they return to the caller, the signal handling thread has already acknowledged the changes.
 
-    It is not possible to set signal masks per thread; all signals are delivered to the signal handling thread. Signals not handled with a %Qore signal handler are handled with their default action. It is not possible to catch \c SIGPIPE. \c SIGPIPE is always ignored in Qore.
+    It is not possible to set signal masks per thread; all signals are delivered to the signal handling thread. Signals not handled with a %Qore signal handler are handled with their default action, except that \c SIGTERM and \c SIGHUP end the process with exit code 128 plus the signal number, unless the process was started with the signal ignored (as \c SIGHUP with \c nohup), when it stays ignored, and \c SIGINT does what the process inherited. It is not possible to catch \c SIGPIPE. \c SIGPIPE is always ignored in Qore.
+
+    After remove_signal_handler(), a signal is processed as if it never had a handler.
 
     Some issues to be aware of in signal handlers:
     - Thread-local storage is not persistent in signal handlers; it is deleted after every signal handler is run.

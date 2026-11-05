@@ -929,6 +929,7 @@ module Schema {
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
+    - an alignment with a negative verbosity level (see @ref Schema::AbstractSchema::align()) prints nothing
     - \c qschema \c export is the canonical command for reverse-engineering a database schema, with schema naming,
       object filtering, YAML or JSON output and physical-partition options; \c schema-reverse is kept as a
       compatibility alias for it

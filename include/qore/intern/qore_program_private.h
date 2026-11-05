@@ -4374,7 +4374,7 @@ public:
     DLLLOCAL QoreListNode* getAllProgramObjects() {
         QoreAutoRWReadLocker al(&tlock);
         printd(5, "qore_debug_program_private::getAllProgramObjects(), this: %p\n", this);
-        ReferenceHolder<QoreListNode> l(new QoreListNode(QC_PROGRAM->getTypeInfo()), nullptr);
+        ReferenceHolder<QoreListNode> l(new QoreListNode(QC_PROGRAMCONTROL->getTypeInfo()), nullptr);
         qore_program_map_t::iterator i = qore_program_map.begin();
         while (i != qore_program_map.end()) {
             QoreObject* o = QoreProgram::getQoreObject(i->first);

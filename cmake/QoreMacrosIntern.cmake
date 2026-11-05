@@ -15,6 +15,19 @@ include(CheckIncludeFileCXX)
 include(CMakeParseArguments)
 include(CMakePushCheckState)
 
+# Writes _content to the generated source _path only if it differs from what the file holds, so that its modification
+# time changes only with its content
+#
+# A generated single-compilation-unit source that file(WRITE) rewrote on every configure was recompiled after each
+# reconfigure, although no source had changed, and the binary module was linked again; every qlib AOT module that
+# requires that module (astparser, reflection, krb5, logger_bin) was then out of date and compiled again too.  A
+# reconfigure that changes nothing, such as the one after binary modules were installed that probes them again
+# (qrb install qm), must rebuild nothing.
+function(qore_write_generated_source _path _content)
+    file(WRITE "${_path}.in" "${_content}")
+    configure_file("${_path}.in" "${_path}" COPYONLY)
+endfunction()
+
 macro(qore_check_headers_cxx)
     set(options)
     set(oneValueArgs)

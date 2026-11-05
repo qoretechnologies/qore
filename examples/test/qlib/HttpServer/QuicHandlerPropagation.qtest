@@ -101,11 +101,13 @@ public class QuicHandlerPropagationTest inherits QUnit::Test {
 
         server.waitForAsyncIo();
 
-        if (!quic_port) {
-            printf("WARNING: no QUIC listener found (QUIC may not be available on this platform); "
-                "skipping QUIC tests\n");
-        } else {
-            printf("HTTPS port: %d, QUIC port: %d\n", https_port, quic_port);
+        if (m_options.verbose > 2) {
+            if (!quic_port) {
+                printf("WARNING: no QUIC listener found (QUIC may not be available on this platform); "
+                    "skipping QUIC tests\n");
+            } else {
+                printf("HTTPS port: %d, QUIC port: %d\n", https_port, quic_port);
+            }
         }
     }
 

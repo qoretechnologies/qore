@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires DataProvider
 %requires ProviderIndexUtil
+%requires Logger
 
 %requires yaml
 
@@ -53,6 +54,11 @@ public class ProviderIndexTypeGraphTest inherits QUnit::Test {
     }
 
     constructor() : Test("ProviderIndex type graph test", "1.0") {
+        # the errors of the index that the test cases cause are checked by them, not printed
+        if (m_options.verbose <= 2) {
+            ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
+        }
+
         addTestCase("the type table of an app is stored once, with the types its options refer to", \storedTest());
         addTestCase("the descriptions read are those written, and restore the described types", \roundTripTest());
         addTestCase("descriptions described with two type tables are stored with one", \twoTablesTest());

@@ -46,14 +46,23 @@ string sub format_ns(float ns) {
     }
 }
 
-printf("=== HTTP3 Polling Loop Micro-Benchmarks ===\n");
-printf("Mode: %s\n", ENV."QORE_EXEC_MODE" ?? "ast");
-printf("Build: %s\n\n", ENV."QORE_BUILD_TYPE" ?? "release");
+#! the results are printed only with verbosity 3, as for a QUnit test
+our bool verbose = inlist("-vvv", ARGV ?? ());
+
+sub report(string fmt) {
+    if (verbose) {
+        vprintf(fmt, argv);
+    }
+}
+
+report("=== HTTP3 Polling Loop Micro-Benchmarks ===\n");
+report("Mode: %s\n", ENV."QORE_EXEC_MODE" ?? "ast");
+report("Build: %s\n\n", ENV."QORE_BUILD_TYPE" ?? "release");
 
 # ============================================================================
 # Benchmark 1: Mutex lock acquisition cost
 # ============================================================================
-printf("--- Benchmark 1: Lock Acquisition ---\n");
+report("--- Benchmark 1: Lock Acquisition ---\n");
 
 Mutex m();
 int ITERATIONS = 1000000;
@@ -64,12 +73,12 @@ for (int i = 0; i < ITERATIONS; i++) {
 }
 date elapsed = now_us() - start;
 float ns_per_lock = elapsed.durationMicroseconds() * 1000.0 / ITERATIONS;
-printf("Lock acquisition: %s/acq\n", format_ns(ns_per_lock));
+report("Lock acquisition: %s/acq\n", format_ns(ns_per_lock));
 
 # ============================================================================
 # Benchmark 2: Future.isDone() cost
 # ============================================================================
-printf("\n--- Benchmark 2: Future.isDone() Cost ---\n");
+report("\n--- Benchmark 2: Future.isDone() Cost ---\n");
 
 Promise p();
 Future f = p.getFuture();
@@ -81,12 +90,12 @@ for (int i = 0; i < ITERATIONS; i++) {
 }
 date elapsed2 = now_us() - start2;
 float ns_per_isdone = elapsed2.durationMicroseconds() * 1000.0 / ITERATIONS;
-printf("isDone(): %s/call\n", format_ns(ns_per_isdone));
+report("isDone(): %s/call\n", format_ns(ns_per_isdone));
 
 # ============================================================================
 # Benchmark 3: now_us() baseline cost
 # ============================================================================
-printf("\n--- Benchmark 3: now_us() Baseline Cost ---\n");
+report("\n--- Benchmark 3: now_us() Baseline Cost ---\n");
 
 ITERATIONS = 1000000;
 date start3 = now_us();
@@ -95,12 +104,12 @@ for (int i = 0; i < ITERATIONS; i++) {
 }
 date elapsed3 = now_us() - start3;
 float ns_per_now_us = elapsed3.durationMicroseconds() * 1000.0 / ITERATIONS;
-printf("now_us(): %s/call\n", format_ns(ns_per_now_us));
+report("now_us(): %s/call\n", format_ns(ns_per_now_us));
 
 # ============================================================================
 # Benchmark 4: Date subtraction and comparison
 # ============================================================================
-printf("\n--- Benchmark 4: Date Operations ---\n");
+report("\n--- Benchmark 4: Date Operations ---\n");
 
 date base = now_us();
 date future = base + 10s;
@@ -115,12 +124,12 @@ for (int i = 0; i < ITERATIONS; i++) {
 }
 date elapsed4 = now_us() - start4;
 float ns_per_date_op = elapsed4.durationMicroseconds() * 1000.0 / ITERATIONS;
-printf("Date subtraction + comparison: %s/op\n", format_ns(ns_per_date_op));
+report("Date subtraction + comparison: %s/op\n", format_ns(ns_per_date_op));
 
 # ============================================================================
 # Benchmark 5: on_exit block overhead
 # ============================================================================
-printf("\n--- Benchmark 5: on_exit Block Overhead ---\n");
+report("\n--- Benchmark 5: on_exit Block Overhead ---\n");
 
 int sub noOnExit() {
     int x = 1;
@@ -153,14 +162,14 @@ for (int i = 0; i < ITERATIONS; i++) {
 date elapsed5b = now_us() - start5b;
 float ns_per_with_onexit = elapsed5b.durationMicroseconds() * 1000.0 / ITERATIONS;
 
-printf("Function without on_exit: %s/call\n", format_ns(ns_per_no_onexit));
-printf("Function with on_exit: %s/call\n", format_ns(ns_per_with_onexit));
-printf("on_exit overhead: %s/call\n", format_ns(ns_per_with_onexit - ns_per_no_onexit));
+report("Function without on_exit: %s/call\n", format_ns(ns_per_no_onexit));
+report("Function with on_exit: %s/call\n", format_ns(ns_per_with_onexit));
+report("on_exit overhead: %s/call\n", format_ns(ns_per_with_onexit - ns_per_no_onexit));
 
 # ============================================================================
 # Benchmark 6: Simple while loop with lock and condition
 # ============================================================================
-printf("\n--- Benchmark 6: Simple Polling Loop Pattern ---\n");
+report("\n--- Benchmark 6: Simple Polling Loop Pattern ---\n");
 
 Mutex lock();
 int done_flag = 0;
@@ -184,13 +193,13 @@ while (True) {
 
 date elapsed6 = now_us() - start6;
 float ns_per_iteration = elapsed6.durationMicroseconds() * 1000.0 / total_iterations;
-printf("Polling loop: %d iterations in %.2f ms\n", total_iterations, elapsed6.durationMilliseconds());
-printf("Average: %s/iteration\n", format_ns(ns_per_iteration));
+report("Polling loop: %d iterations in %.2f ms\n", total_iterations, elapsed6.durationMilliseconds());
+report("Average: %s/iteration\n", format_ns(ns_per_iteration));
 
 # ============================================================================
 # Benchmark 7: Concurrent polling simulation
 # ============================================================================
-printf("\n--- Benchmark 7: Concurrent Polling (20 threads) ---\n");
+report("\n--- Benchmark 7: Concurrent Polling (20 threads) ---\n");
 
 Mutex shared_lock();
 int active_requests = 20;
@@ -220,18 +229,18 @@ for (int t = 0; t < 20; t++) {
 
 done.waitForZero();
 date elapsed7 = now_us() - start7;
-printf("Concurrent polling (20 threads): %.2f ms\n", elapsed7.durationMilliseconds());
+report("Concurrent polling (20 threads): %.2f ms\n", elapsed7.durationMilliseconds());
 
 # ============================================================================
 # Summary and Analysis
 # ============================================================================
-printf("\n--- Summary ---\n");
-printf("Lock acquisition: %s\n", format_ns(ns_per_lock));
-printf("isDone(): %s\n", format_ns(ns_per_isdone));
-printf("now_us(): %s\n", format_ns(ns_per_now_us));
-printf("Date operations: %s\n", format_ns(ns_per_date_op));
-printf("on_exit overhead: %s\n", format_ns(ns_per_with_onexit - ns_per_no_onexit));
-printf("Simple polling: %s/iteration\n", format_ns(ns_per_iteration));
+report("\n--- Summary ---\n");
+report("Lock acquisition: %s\n", format_ns(ns_per_lock));
+report("isDone(): %s\n", format_ns(ns_per_isdone));
+report("now_us(): %s\n", format_ns(ns_per_now_us));
+report("Date operations: %s\n", format_ns(ns_per_date_op));
+report("on_exit overhead: %s\n", format_ns(ns_per_with_onexit - ns_per_no_onexit));
+report("Simple polling: %s/iteration\n", format_ns(ns_per_iteration));
 
 # Estimate total per-iteration cost based on polling loop pattern:
 # while (!f.isDone())                           // 1x isDone(), 1x lock
@@ -241,14 +250,14 @@ printf("Simple polling: %s/iteration\n", format_ns(ns_per_iteration));
 
 float estimated_cost_per_iteration = ns_per_isdone + ns_per_lock +
                                      ns_per_now_us + ns_per_date_op;
-printf("\nEstimated per-iteration cost: %s\n", format_ns(estimated_cost_per_iteration));
-printf("  (isDone + lock + now_us + date_op)\n");
+report("\nEstimated per-iteration cost: %s\n", format_ns(estimated_cost_per_iteration));
+report("  (isDone + lock + now_us + date_op)\n");
 
 # ============================================================================
 # Benchmark 8: Qore method calls with on_exit (20 concurrent threads)
 # Tests ScopeExit + invalidateExternalCaches() overhead
 # ============================================================================
-printf("\n--- Benchmark 8: Qore Method with on_exit (20 threads) ---\n");
+report("\n--- Benchmark 8: Qore Method with on_exit (20 threads) ---\n");
 
 int sub qore_method_with_on_exit() {
     int x = 1;
@@ -277,15 +286,15 @@ for (int t = 0; t < 20; t++) {
 
 bench8_done.waitForZero();
 date bench8_elapsed = now_us() - bench8_start;
-printf("Qore method calls with on_exit (20 threads, 100k total calls): %.2f ms\n",
+report("Qore method calls with on_exit (20 threads, 100k total calls): %.2f ms\n",
        bench8_elapsed.durationMilliseconds());
-printf("Average: %s/call\n", format_ns(bench8_elapsed.durationMicroseconds() * 1000.0 / bench8_count));
+report("Average: %s/call\n", format_ns(bench8_elapsed.durationMicroseconds() * 1000.0 / bench8_count));
 
 # ============================================================================
 # Benchmark 9: Built-in C++ method calls concurrently
 # Tests InvokeMethodDirect + invalidateExternalCaches() overhead
 # ============================================================================
-printf("\n--- Benchmark 9: Built-in C++ Methods (20 threads) ---\n");
+report("\n--- Benchmark 9: Built-in C++ Methods (20 threads) ---\n");
 
 Promise bench9_promise();
 Future bench9_future = bench9_promise.getFuture();
@@ -310,15 +319,15 @@ for (int t = 0; t < 20; t++) {
 
 bench9_done.waitForZero();
 date bench9_elapsed = now_us() - bench9_start;
-printf("Built-in C++ method calls (20 threads, 200k total calls): %.2f ms\n",
+report("Built-in C++ method calls (20 threads, 200k total calls): %.2f ms\n",
        bench9_elapsed.durationMilliseconds());
-printf("Average: %s/call\n", format_ns(bench9_elapsed.durationMicroseconds() * 1000.0 / bench9_count));
+report("Average: %s/call\n", format_ns(bench9_elapsed.durationMicroseconds() * 1000.0 / bench9_count));
 
 # ============================================================================
 # Benchmark 10: Full polling pattern with method calls
 # Tests the exact HTTP3 polling loop structure: lock + method call + on_exit
 # ============================================================================
-printf("\n--- Benchmark 10: Full Polling Pattern (20 threads) ---\n");
+report("\n--- Benchmark 10: Full Polling Pattern (20 threads) ---\n");
 
 Promise bench10_promise();
 Future bench10_future = bench10_promise.getFuture();
@@ -352,5 +361,5 @@ for (int t = 0; t < 20; t++) {
 
 bench10_done.waitForZero();
 date bench10_elapsed = now_us() - bench10_start;
-printf("Full polling pattern (20 threads): %.2f ms\n", bench10_elapsed.durationMilliseconds());
-printf("Avg per polling iteration: %s\n", format_ns(bench10_elapsed.durationMicroseconds() * 1000.0 / (20 * 50)));
+report("Full polling pattern (20 threads): %.2f ms\n", bench10_elapsed.durationMilliseconds());
+report("Avg per polling iteration: %s\n", format_ns(bench10_elapsed.durationMicroseconds() * 1000.0 / (20 * 50)));

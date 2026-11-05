@@ -2690,7 +2690,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(root + DirSep + "qlib/DataProvider/i18n"));
-        assertEq(0, system(cmd),
+        assertEq(0, runQuiet(cmd),
             "qore-data-provider-i18n --check accepts the source catalog");
         assertEq(0, runCatalogTreeCheck(root, qore_bin,
                 root + DirSep + "qlib"),
@@ -2976,6 +2976,11 @@ class DataProviderPresentationTest inherits QUnit::Test {
             "source-tree verification rejects removed message ids");
     }
 
+    #! runs a command; its output, which is not checked, is shown only with verbosity 3
+    private int runQuiet(string command) {
+        return system(m_options.verbose > 2 ? command : command + " >/dev/null 2>&1");
+    }
+
     private int runCatalogCheck(string root, string qore_bin,
             string output) {
         list<string> module_path = (
@@ -2986,8 +2991,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
         }
-        return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore >/dev/null",
+        return runQuiet(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s -a Qore",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
@@ -3006,8 +3011,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
         }
-        return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s %s %s >/dev/null",
+        return runQuiet(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s %s %s",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
@@ -3030,8 +3035,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }
         list<string> module_args = map "--module " + shellQuote($1),
             modules;
-        return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s --owner %s %s >/dev/null",
+        return runQuiet(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check -o %s --owner %s %s",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
@@ -3055,8 +3060,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }
         list<string> owner_args = map "--owner " + shellQuote($1),
             modules;
-        return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s %s %s >/dev/null",
+        return runQuiet(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s %s %s",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
@@ -3080,8 +3085,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
         }
         list<string> owner_args = map "--owner " + shellQuote($1),
             modules;
-        return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --update-source-tree -o %s %s >/dev/null",
+        return runQuiet(sprintf(
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --update-source-tree -o %s %s",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),

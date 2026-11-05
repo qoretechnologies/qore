@@ -63,7 +63,8 @@ public class TryChildModuleTest inherits QUnit::Test {
     */
     private Program loadModule(string mod, *string extra_code) {
         Program p(PO_NEW_STYLE);
-        p.parse(sprintf("%%prepend-module-path %y\n%%requires %s\n%s", dir, mod, extra_code ?? ""), mod);
+        # the warnings of the module loader are returned, not printed
+        p.parse(sprintf("%%prepend-module-path %y\n%%requires %s\n%s", dir, mod, extra_code ?? ""), mod, WARN_MODULES);
         return p;
     }
 

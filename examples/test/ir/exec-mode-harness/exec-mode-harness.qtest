@@ -241,7 +241,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
     }
 
     private hash<ExecModeHarness::ModeRunResult> runScript(string mode, string script) {
-        return ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, script));
+        return ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, script), True);
     }
 
     private string write(string name, string code) {

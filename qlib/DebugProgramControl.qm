@@ -132,6 +132,10 @@ module DebugProgramControl {
     - fixed a thread that stopped while the last client disconnected: it waited for a client that no longer existed,
       and the code waiting for the program to end, such as the debug adapter of an IDE ending its session, waited for
       that thread forever
+    - fixed a thread that reached a stop while debugging ended, as when \c qdbg quits: it waited for a command that
+      nobody would send, and the process did not end
+    - fixed a stopped thread of a program that the debugger ended, when debugging ended before the thread continued, as
+      when \c qdbg quits after its \c kill command stopped waiting: the thread and the program continued
 
     @subsection dc_v0_1_2 v0.1.2
     - return breakpointId and statementId when creating breakpoint
@@ -216,7 +220,9 @@ public namespace DebugProgramControl {
             hash<string, bool> startedPrograms = {};
             #! the programs that the debugger ends, by program ID; see terminateProgram()
             hash<string, bool> terminatingPrograms = {};
-            #! serializes the access to startedPrograms and terminatingPrograms
+            #! the threads that have ended the code of a program, by program ID and TID; see threadEnds()
+            hash<string, hash<string, bool>> endedThreads = {};
+            #! serializes the access to startedPrograms, terminatingPrograms and endedThreads
             Mutex startedLock();
 
             #! the steps of threads into a call of their statement, by TID; see startStepInto() and checkStepInto()
@@ -553,35 +559,42 @@ public namespace DebugProgramControl {
             int pgm_id = pgm.getProgramId();
             list<int> stopped = ();
             {
+                AutoLock al(startedLock);
+                terminatingPrograms{pgm_id} = True;
+            }
+            # the threads that end with the cancellation end without an error; this is set before any thread is resumed
+            # or cancelled, as a thread that ended first would report its exception as unhandled
+            setProgramTerminating(pgm);
+            {
                 # no thread is registered as stopped while the program is marked, so each thread that is stopped is
                 # resumed here and no other one stops (see handleInterrupt())
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
-                {
-                    AutoLock al(startedLock);
-                    terminatingPrograms{pgm_id} = True;
-                }
                 foreach hash<auto> i in (ctxThread.pairIterator()) {
                     if (i.value.pgmId == pgm_id) {
                         push stopped, int(i.key);
                         # it runs, so that it leaves the program as a thread that is debugged (the detach is
                         # reported), also from the stop at the start of the program, where it was not yet debugged
-                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}});
+                        # the command itself tells the thread to end: the mark of the program is gone if debugging
+                        # ends before the thread continues, and the thread is not cancelled (see handleInterrupt())
+                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
                     }
                 }
             }
-            # the threads that end with the cancellation end without an error
-            setProgramTerminating(pgm);
             # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
-            # debugger; it ends when it continues (see handleInterrupt())
-            foreach int tid in (pgm.getThreadList()) {
-                if (tid == gettid() || inlist(tid, stopped)) {
-                    continue;
-                }
-                try {
-                    cancel_thread(tid, TerminateReason);
-                } catch (hash<ExceptionInfo> ex) {
-                    # a thread that has ended
+            # debugger; it ends when it continues (see handleInterrupt()); the lock makes checking and cancelling a
+            # thread atomic against a thread that ends its code (see threadEnds())
+            {
+                AutoLock al(startedLock);
+                foreach int tid in (pgm.getThreadList()) {
+                    if (tid == gettid() || inlist(tid, stopped) || endedThreads{pgm_id}{tid}) {
+                        continue;
+                    }
+                    try {
+                        cancel_thread(tid, TerminateReason);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a thread that has ended
+                    }
                 }
             }
             breakProgram(pgm);
@@ -2223,6 +2236,7 @@ public namespace DebugProgramControl {
                 AutoLock al(startedLock);
                 remove startedPrograms{program.getProgramId()};
                 remove terminatingPrograms{program.getProgramId()};
+                remove endedThreads{program.getProgramId()};
             }
             # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
             # while it takes that lock
@@ -2249,19 +2263,20 @@ public namespace DebugProgramControl {
             # detach are reported as for any thread that ends, so that the clients know when the program has ended
             # (see terminateProgram())
             bool ends = func == "exit" || func == "detach";
-            # a thread that ends its code is still cancelled if the debugger ended it while it waited, as for a lock, so
-            # the flag is read without startedLock, whose lock is a cancellation point; reading a member is atomic
-            if (ends ? boolean(terminatingPrograms{pgm.getProgramId()}) : isTerminating(pgm.getProgramId())) {
-                if (!ends) {
+            if (ends) {
+                threadEnds(pgm.getProgramId(), tid);
+            } else {
+                if (func == "attach") {
+                    # a thread that enters the program again, or a new thread with the TID of one that has ended
+                    threadStarts(pgm.getProgramId(), tid);
+                }
+                if (isTerminating(pgm.getProgramId())) {
                     # a thread that raises an exception, as the THREAD-CANCELLED exception that ends it, ends with it
                     if (func == "exception") {
                         return;
                     }
                     throw "THREAD-CANCELLED", TerminateReason;
                 }
-                # a thread that the debugger cancelled has ended its code; it is no longer cancelled, so that it can
-                # wait for the debugger
-                clear_thread_cancel();
             }
             # a thread that leaves the program has no more stops to give a returned value or to pause at a block; the
             # locks are cancellation points, so they are taken when the thread is no longer cancelled
@@ -2421,13 +2436,19 @@ public namespace DebugProgramControl {
             # check at the start of this method, and the threads that it resumes when it disconnects are those that are
             # registered then (see unregisterConnection(), which removes the connection before shutdown() takes the
             # thread lock); a thread that registered after that would wait for a client that no longer exists
+            # the same holds for a thread whose program is no longer debugged, also with a client: debugging ends by
+            # removing the programs and then calling shutdown() (see endDebugging() of qdbg), and a thread that was
+            # already in this method does not see the removal otherwise; so a thread that stops is either registered
+            # when shutdown() resumes the threads, or does not stop; the end of a thread is still reported, as a client
+            # resumes it
             bool unattended;
             {
                 rwlThread.writeLock();
                 on_exit rwlThread.writeUnlock();
                 @assert(!exists ctxThread{tid});
                 terminating = !ends && isTerminating(ctx.pgmId);
-                unattended = !terminating && !program_start && !hasConnection();
+                unattended = !terminating && ((!program_start && !hasConnection())
+                    || (!ends && !isDebugged(ctx.pgmId)));
                 if (!terminating && !unattended) {
                     ctxThread{tid} = ctx;
                 }
@@ -2492,8 +2513,13 @@ public namespace DebugProgramControl {
             ctxCT.frameId = 0;
             # wait to process command passed as marshalled call from websocket thread
             bool ret = False;
+            # True if terminateProgram() ended the program while this thread was stopped
+            bool terminated = False;
             while (!ret) {
                 auto qrd = ctx.queue.get();
+                if (qrd.terminate) {
+                    terminated = True;
+                }
                 {
                     auto result;
                     hash<auto> sd;
@@ -2769,6 +2795,9 @@ public namespace DebugProgramControl {
             # queued any more, as the thread is no longer registered as stopped
             while (ctx.queue.size()) {
                 hash<auto> qrd = ctx.queue.get();
+                if (qrd.terminate) {
+                    terminated = True;
+                }
                 if (qrd.cx) {
                     try {
                         sendDataImpl(qrd.cx, {
@@ -2802,10 +2831,48 @@ public namespace DebugProgramControl {
             } catch (hash<ExceptionInfo> ex) {
                 # suppress exceptions
             }
-            # a thread of a program that the debugger ends ends, unless it ends anyway
-            if (!ends && isTerminating(ctx.pgmId)) {
+            # a thread of a program that the debugger ends ends, unless it ends anyway; a thread that was stopped then
+            # has not been cancelled, so it must end here also if its program is no longer debugged, or nothing would
+            # end it
+            if (!ends && (terminated || isTerminating(ctx.pgmId))) {
                 throw "THREAD-CANCELLED", TerminateReason;
             }
+        }
+
+        #! Registers a thread that has ended the code of a program, so that the debugger no longer cancels it
+        /** A thread can reach the end of its code before terminateProgram() cancels it, as it also ends when it sees
+            that the program is ending.  A cancellation after that point would end the debugger's handling of the end of
+            the thread, so the registration and the check in terminateProgram() are made under the same lock: a thread is
+            either cancelled before this method, which clears the cancellation so that the thread can wait for the
+            debugger, or it is never cancelled.  The programs are marked before any thread is cancelled, so the flag is
+            set here if a cancellation of the debugger is pending.
+
+            The lock is taken with the cancellation deferred, as it is a cancellation point.
+        */
+        private:internal threadEnds(int pgm_id, int tid) {
+            defer_thread_cancel(sub () {
+                AutoLock al(startedLock);
+                endedThreads{pgm_id}{tid} = True;
+                if (terminatingPrograms{pgm_id}) {
+                    clear_thread_cancel();
+                }
+            });
+        }
+
+        #! Registers a thread that runs the code of a program; see threadEnds()
+        private:internal threadStarts(int pgm_id, int tid) {
+            AutoLock al(startedLock);
+            remove endedThreads{pgm_id}{tid};
+        }
+
+        #! Returns True if the program is debugged, which it no longer is once it has been removed
+        private:internal bool isDebugged(int pgm_id) {
+            foreach ProgramControl p in (getAllPrograms()) {
+                if (p.getProgramId() == pgm_id) {
+                    return True;
+                }
+            }
+            return False;
         }
 
         #! Returns True for the first thread of a program that attaches, which starts the program

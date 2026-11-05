@@ -160,9 +160,11 @@ public *string sub get_mode(string command) {
 #! runs a command that runs qore and returns its output and native compilation trace
 /** @param command the shell command; it must not redirect stderr, which holds the trace
 
+    @param quiet_loader_warnings if @ref True, the warnings of the module loader are only returned, for a test of them
+
     @return the result of the command; see ModeRunResult
 */
-public hash<ModeRunResult> sub run_command(string command) {
+public hash<ModeRunResult> sub run_command(string command, *bool quiet_loader_warnings) {
     *string mode = get_mode(command);
     TmpFile err("qore-exec-mode-", ".err");
     int rc;
@@ -176,7 +178,9 @@ public hash<ModeRunResult> sub run_command(string command) {
     hash<auto> sw = LoaderWarnings::split_loader_warning_lines(select err_lines, !is_trace_line($1));
     list<string> errors = sw.lines;
     list<string> loader_warnings = sw.warnings;
-    map stderr.printf("%s\n", $1), loader_warnings;
+    if (!quiet_loader_warnings) {
+        map stderr.printf("%s\n", $1), loader_warnings;
+    }
     string err_out = errors ? errors.join("\n") + "\n" : "";
     return <ModeRunResult>{
         "mode": mode,

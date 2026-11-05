@@ -103,7 +103,8 @@ if (SINGLE_COMPILATION_UNIT)
     foreach(_f ${KRB5_QPP_SOURCES})
         set(_scu_content "${_scu_content}#include \"${_f}\"\n")
     endforeach()
-    file(WRITE ${KRB5_SCU_PATH} "${_scu_content}")
+    # rewritten only when it changes, so a reconfigure does not rebuild the module (see qore_write_generated_source())
+    qore_write_generated_source(${KRB5_SCU_PATH} "${_scu_content}")
 
     add_library(${krb5_module_name} MODULE ${KRB5_SCU_PATH})
 

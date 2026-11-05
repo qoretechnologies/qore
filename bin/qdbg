@@ -149,7 +149,8 @@ class DebugProgramControlLocal inherits DebugProgramControl {
     }
     #! Ends debugging: the programs are no longer debugged, and their stopped threads continue
     /** The programs are removed first, so that a thread that continues does not stop again, as at the end of a
-        program, with nobody to resume it
+        program, with nobody to resume it; a thread that reaches a stop meanwhile does not stop, as its program is no
+        longer debugged when it registers as stopped (see DebugProgramControl::handleInterrupt())
     */
     endDebugging() {
         map removeProgram($1), getAllPrograms();
@@ -176,6 +177,8 @@ class DebugWrapper {
         Mutex shutdown();
         #! True when qdbg ends, so that only one of them ends it
         bool ending;
+        #! True when a signal ends qdbg: an error of a command that the end of the program ends is not reported
+        bool endingOnSignal;
     }
 
     private {
@@ -197,6 +200,7 @@ class DebugWrapper {
             "no_color": "no-color",
             "json": "json",
             "wait_timeout": "wait-timeout=i",
+            "pause_timeout": "pause-timeout=i",
         );
         DebugCommandLineLocal dcl;
         Logger logger;
@@ -316,7 +320,7 @@ class DebugWrapper {
                 }();
             }
             if (wait_start) {
-                dcl.waitForStop();
+                dcl.waitForStart();
             }
             # a command of a file can end the debugger
             if (dcl.runStartupCommandFiles(cmd_files)) {
@@ -332,6 +336,11 @@ class DebugWrapper {
             # in destructors when module programs are destroyed first
             dpcl.endDebugging();
         } catch (hash<ExceptionInfo> ex) {
+            # the signal handler ends the process with its exit code
+            if (endingOnSignal) {
+                Counter forever(1);
+                forever.waitForZero();
+            }
             # the call stack of the error with -v
             if (opt.verbose) {
                 stderr.printf("%s\n", get_exception_string(ex));
@@ -360,6 +369,7 @@ class DebugWrapper {
                 return;
             }
             ending = True;
+            endingOnSignal = True;
         }
         foreach ProgramControl pgm in (dcl.dpc.getAllPrograms()) {
             try {
@@ -403,7 +413,9 @@ class DebugWrapper {
             "                               prompt\n"
             "  --wait-timeout=ms            the time that a command that resumes a thread waits for a thread to pause\n"
             "                               when the input is not a terminal; then the script is paused (default: no\n"
-            "                               limit)\n"
+            "                               limit); it does not limit the wait for the start of the script\n"
+            "  --pause-timeout=ms           the time that such a command waits for that pause (default: as long as\n"
+            "                               --wait-timeout)\n"
             "\n"
             "A file of commands has one command on each line; lines that start with \"#\" are comments.  A command\n"
             "that resumes a thread waits until a thread pauses, and the first command that fails ends the file.  The\n"

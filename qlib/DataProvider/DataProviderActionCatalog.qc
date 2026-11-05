@@ -1007,6 +1007,83 @@ hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
 AbstractDataProviderType output_type = action.output_type;
     @endcode
 */
+#! Holds the catalog lock for a scope, and calls a function once it has released it; for the catalog only
+/** Like @ref Qore::Thread::AutoLock "AutoLock", it releases the lock when it goes out of scope, also when an
+    exception is raised; then it calls the function given, which delivers the changes made while the lock was held to
+    the catalog change listeners (see DataProviderActionCatalog::addCatalogChangeListener()).
+
+    @since %DataProvider 3.11
+*/
+class DataProviderCatalogLock {
+    private {
+        Mutex lck;
+        code after_unlock;
+    }
+
+    constructor(Mutex lck, code after_unlock) {
+        lck.lock();
+        self.lck = lck;
+        self.after_unlock = after_unlock;
+    }
+
+    #! Releases the lock, then delivers: both happen here, when the guard goes out of scope
+    destructor() {
+        lck.unlock();
+        call_function(after_unlock);
+    }
+}
+
+#! A failure of a catalog change listener, retained by the catalog
+/** @see DataProviderActionCatalog::getCatalogChangeListenerFailures()
+
+    @since %DataProvider 3.11
+*/
+public hashdecl DataProviderCatalogChangeListenerFailureInfo {
+    #! The listener's handle, as returned by @ref DataProviderActionCatalog::addCatalogChangeListener()
+    int listener_id;
+    #! The catalog revision the listener was called with
+    int revision;
+    #! When the listener failed
+    date failed;
+    #! The exception the listener raised
+    hash<ExceptionInfo> error;
+}
+
+#! Receives the changes of the data provider catalog
+/** Register an object of a subclass with @ref DataProviderActionCatalog::addCatalogChangeListener().  The catalog
+    keeps only a weak reference to it: it is called while its owner keeps it, and is dropped once its owner releases
+    it, so a listener never keeps an object or a @ref Qore::Program "Program" alive.
+
+    @par Example
+    @code{.py}
+class ReferenceRearm inherits DataProviderCatalogChangeListener {
+    catalogChanged(int revision) {
+        # only records the change; the work runs elsewhere
+        changes.push(revision);
+    }
+}
+    @endcode
+
+    @since %DataProvider 3.11
+*/
+public class DataProviderCatalogChangeListener {
+    #! Called after the catalog revision advanced
+    /** @param revision the catalog revision when the call was made; it is at least the revision of the change that
+        caused the call; see @ref DataProviderActionCatalog::getCatalogRevision()
+
+        @note
+        - called on the thread that changed the catalog, after it released the catalog lock, so the listener may
+          read the catalog; it must return quickly and must not wait for another thread that may be changing the
+          catalog
+        - calls for successive changes can run concurrently on different threads, and their revisions can arrive
+          out of order; one call can stand for several changes
+        - an exception raised here is retained by the catalog
+          (@ref DataProviderActionCatalog::getCatalogChangeListenerFailures()) and never reaches the code that
+          changed the catalog, or the other listeners
+    */
+    abstract catalogChanged(int revision);
+}
+
 public class DataProviderActionCatalog {
     public {
         #! Required application key set
@@ -1087,7 +1164,34 @@ public class DataProviderActionCatalog {
         static hash<string, bool> pending_generic_api_call_apps = {};
 
         #! Mutex for atomic operations
+        /** Every critical section holds it with a DataProviderCatalogLock, whose destructor releases it and then
+            delivers the changes made while it was held to the catalog change listeners (deliverCatalogChanges()); a
+            section entered only when the lock is not held already releases it with unlockCatalog(), which does the
+            same
+        */
         static Mutex lck();
+
+        #! Guards the catalog change listeners; never held while a listener runs or the catalog lock is taken
+        static Mutex listener_lck();
+
+        #! Signalled when a call of a listener being removed has ended
+        static Condition listener_cond();
+
+        #! Catalog change listeners by handle
+        /** Each entry has \c listener (a weak reference), \c since (the revision when it was added; it is called
+            only for later revisions), \c active (calls running), \c tids (thread ID -> calls running on that thread)
+            and \c removed
+        */
+        static hash<string, hash<auto>> listeners = {};
+
+        #! The last listener handle issued
+        static int listener_seq = 0;
+
+        #! The last catalog revision delivered to the listeners
+        static int notified_revision = 0;
+
+        #! Retained listener failures, oldest first, at most @ref MaxListenerFailures
+        static list<hash<DataProviderCatalogChangeListenerFailureInfo>> listener_failures = ();
 
         #! Top-level master application cache keyed by application name
         static hash<string, hash<DataProviderAppInfo>> appcache = {};
@@ -1170,6 +1274,12 @@ public class DataProviderActionCatalog {
         const string DefaultDescription = "";
     }
 
+    public {
+        #! The most catalog change listener failures retained; see @ref getCatalogChangeListenerFailures()
+        /** @since %DataProvider 3.11 */
+        const MaxListenerFailures = 100;
+    }
+
     #! Registers an app for deferred initialization / initialization on demand
     /** @param app the application to register
         @param init the initialization code that will register the app
@@ -1183,7 +1293,7 @@ public class DataProviderActionCatalog {
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         if (appcache{app}) {
@@ -1219,7 +1329,7 @@ public class DataProviderActionCatalog {
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         if (app_actionmap{app}{action}) {
@@ -1272,7 +1382,7 @@ public class DataProviderActionCatalog {
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         initialization_failure_map{app}{action ?? ""} = <DataProviderInitializationFailureInfo>{
@@ -1296,7 +1406,7 @@ public class DataProviderActionCatalog {
     */
     static list<hash<DataProviderInitializationFailureInfo>> getInitializationFailures(
             *list<string> apps = NOTHING) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         hash<string, bool> filter = apps ? map {$1: True}, apps.iterator() : {};
         list<hash<DataProviderInitializationFailureInfo>> rv = ();
         foreach string app in (sort(keys initialization_failure_map)) {
@@ -1320,8 +1430,175 @@ public class DataProviderActionCatalog {
         @since %DataProvider 3.8
     */
     static int getCatalogRevision() {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         return catalog_revision;
+    }
+
+    #! Registers a listener called after each change of the catalog revision
+    /** @param listener the listener; the catalog keeps a weak reference to it, so it is called only while its owner
+        keeps it, and is dropped once it has been released
+
+        @return the listener's handle, for @ref removeCatalogChangeListener()
+
+        The listener is called for every catalog revision after the one current when it was added (see
+        @ref getCatalogRevision()); a revision that does not change does not call it.  Calls run on the thread that
+        changed the catalog after it released the catalog lock; see
+        @ref DataProviderCatalogChangeListener::catalogChanged() for what a listener may do.  An exception raised by a
+        listener does not fail the change, nor stop the other listeners: it is retained, see
+        @ref getCatalogChangeListenerFailures().
+
+        @par Example
+        @code{.py}
+ReferenceRearm rearm();
+int id = DataProviderActionCatalog::addCatalogChangeListener(rearm);
+on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        @endcode
+
+        @since %DataProvider 3.11
+    */
+    static int addCatalogChangeListener(DataProviderCatalogChangeListener listener) {
+        # taken before the listener lock, which is never held while the catalog lock is taken
+        int since = getCatalogRevision();
+        AutoLock al(listener_lck);
+        string id = (++listener_seq).toString();
+        hash<auto!> entry = {"since": since, "active": 0, "tids": {}, "removed": False, "listener": NOTHING};
+        listeners{id} = entry;
+        listeners{id}.listener := listener;
+        return listener_seq;
+    }
+
+    #! Removes a catalog change listener
+    /** @param id the handle returned by @ref addCatalogChangeListener()
+
+        @return @ref True if the listener was registered, @ref False if not (also when it was removed already, or
+        dropped because its owner released it)
+
+        Once this returns, no call of the listener runs, except one running on this thread (a listener that removes
+        itself): calls running on other threads are waited for.  A notification running meanwhile does not call it.
+
+        @since %DataProvider 3.11
+    */
+    static bool removeCatalogChangeListener(int id) {
+        string key = id.toString();
+        int tid = gettid();
+        AutoLock al(listener_lck);
+        *hash<auto> entry = listeners{key};
+        if (!entry || entry.removed) {
+            return False;
+        }
+        listeners{key}.removed = True;
+        while (listeners{key}.active > (listeners{key}.tids{tid} ?? 0)) {
+            listener_cond.wait(listener_lck);
+        }
+        if (!listeners{key}.active) {
+            remove listeners{key};
+        }
+        # otherwise this thread is in a call of the listener: the entry is removed when the call ends
+        return True;
+    }
+
+    #! Returns the retained failures of catalog change listeners, oldest first
+    /** @param listener_id the handle of one listener; all listeners' failures when omitted
+
+        @return at most @ref MaxListenerFailures failures; reading them does not clear them
+
+        @since %DataProvider 3.11
+    */
+    static list<hash<DataProviderCatalogChangeListenerFailureInfo>> getCatalogChangeListenerFailures(
+            *int listener_id) {
+        AutoLock al(listener_lck);
+        return exists listener_id
+            ? (select listener_failures, $1.listener_id == listener_id)
+            : listener_failures;
+    }
+
+    #! Releases the catalog lock and delivers the changes made while it was held to the catalog change listeners
+    private static unlockCatalog() {
+        lck.unlock();
+        DataProviderActionCatalog::deliverCatalogChanges();
+    }
+
+    #! Calls the catalog change listeners if the revision advanced since the last delivery; never throws
+    /** Does nothing while this thread holds the catalog lock: the section that releases it delivers.
+    */
+    private static deliverCatalogChanges() {
+        if (lck.lockOwner()) {
+            return;
+        }
+        int revision;
+        list<hash<auto>> targets = ();
+        {
+            AutoLock al(listener_lck);
+            # the revision only advances, so a delivery never reports an older one than an earlier delivery
+            revision = catalog_revision;
+            if (revision == notified_revision) {
+                return;
+            }
+            notified_revision = revision;
+            foreach hash<auto> i in (listeners.pairIterator()) {
+                if (i.value.removed || revision <= i.value.since) {
+                    continue;
+                }
+                if (!(i.value.listener instanceof DataProviderCatalogChangeListener)) {
+                    # its owner released it
+                    if (!i.value.active) {
+                        remove listeners{i.key};
+                    }
+                    continue;
+                }
+                # a strong reference for the call only
+                hash<auto!> target = {"id": i.key, "listener": i.value.listener};
+                targets += target;
+            }
+        }
+        int tid = gettid();
+        foreach hash<auto> target in (targets) {
+            if (!DataProviderActionCatalog::beginListenerCall(target.id, tid)) {
+                # removed while this notification ran
+                continue;
+            }
+            *hash<ExceptionInfo> failure;
+            try {
+                target.listener.catalogChanged(revision);
+            } catch (hash<ExceptionInfo> ex) {
+                failure = ex;
+            }
+            DataProviderActionCatalog::endListenerCall(target.id, tid, revision, failure);
+        }
+    }
+
+    #! Records the start of a listener call unless the listener was removed; never throws
+    private static bool beginListenerCall(string id, int tid) {
+        AutoLock al(listener_lck);
+        if (!listeners{id} || listeners{id}.removed) {
+            return False;
+        }
+        ++listeners{id}.active;
+        listeners{id}.tids{tid} = (listeners{id}.tids{tid} ?? 0) + 1;
+        return True;
+    }
+
+    #! Records the end of a listener call, and its failure; never throws
+    private static endListenerCall(string id, int tid, int revision, *hash<ExceptionInfo> failure) {
+        AutoLock al(listener_lck);
+        if (failure && failure.err != "OBJECT-ALREADY-DELETED") {
+            listener_failures += <DataProviderCatalogChangeListenerFailureInfo>{
+                "listener_id": id.toInt(),
+                "revision": revision,
+                "failed": now_us(),
+                "error": failure,
+            };
+            if (listener_failures.size() > MaxListenerFailures) {
+                shift listener_failures;
+            }
+        }
+        if (!--listeners{id}.tids{tid}) {
+            remove listeners{id}.tids{tid};
+        }
+        if (!--listeners{id}.active && listeners{id}.removed) {
+            remove listeners{id};
+        }
+        listener_cond.broadcast();
     }
 
     #! Runs a registry mutation in the same critical section as discovery sealing and publication
@@ -1346,7 +1623,7 @@ public class DataProviderActionCatalog {
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
         bool changed = mutation();
         if (changed) {
@@ -1376,7 +1653,7 @@ public class DataProviderActionCatalog {
         }
         *code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()> previous_provider;
         {
-            AutoLock al(lck);
+            DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
             previous_provider = discovery_inventory_provider_map{name};
             discovery_inventory_provider_map{name} = provider;
             ++discovery_inventory_revision;
@@ -1387,7 +1664,7 @@ public class DataProviderActionCatalog {
         # module load. Restore the exact previous callback (if any) through
         # the same transaction used by apps, types, schemes, and factories.
         ImplicitModuleTransaction::add(sub () {
-            AutoLock al(lck);
+            DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
             if (discovery_inventory_provider_map{name} !== provider) {
                 return;
             }
@@ -1412,7 +1689,7 @@ public class DataProviderActionCatalog {
         @since %DataProvider 3.8
     */
     static markDiscoveryInventoryChanged(string name) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         if (!exists discovery_inventory_provider_map{name}) {
             throw "INVALID-ARGUMENT-ERROR", sprintf(
                 "data provider discovery inventory source %y is not registered",
@@ -1431,7 +1708,7 @@ public class DataProviderActionCatalog {
         @since %DataProvider 3.8
     */
     static deregisterDiscoveryInventoryProvider(string name) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         if (!exists discovery_inventory_provider_map{name}) {
             return;
         }
@@ -1456,7 +1733,7 @@ public class DataProviderActionCatalog {
         list<hash<DataProviderDiscoveryExpectedIdentityInfo>> normalized
             = DataProviderActionCatalog::normalizeDiscoveryExpectedInventory(
                 expected);
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = session.getGeneration().toString();
         *hash<DataProviderDiscoveryStateInfo> state
             = discovery_map{generation_key};
@@ -1498,7 +1775,7 @@ public class DataProviderActionCatalog {
         *hash<string, bool> app_scope;
         int generation = session.getGeneration();
         {
-            AutoLock al(lck);
+            DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
             *hash<DataProviderDiscoveryStateInfo> state
                 = discovery_map{generation.toString()};
             if (!state || state.session !== session) {
@@ -1538,7 +1815,7 @@ public class DataProviderActionCatalog {
                 };
             }
         }
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = generation.toString();
         *hash<DataProviderDiscoveryStateInfo> state
             = discovery_map{generation_key};
@@ -1597,7 +1874,7 @@ public class DataProviderActionCatalog {
         }, normalized.iterator();
         *hash<string, bool> app_scope = apps
             ? map {$1: True}, apps.iterator() : NOTHING;
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         foreach string declared_app in (sort(keys
                 expected_initialization_map)) {
             if (app_scope && !app_scope{declared_app}) {
@@ -1653,7 +1930,7 @@ public class DataProviderActionCatalog {
         @since %DataProvider 3.8
     */
     static checkpointDiscoverySnapshot(DataProviderDiscoverySession session) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = session.getGeneration().toString();
         *hash<DataProviderDiscoveryStateInfo> state
             = discovery_map{generation_key};
@@ -1748,7 +2025,7 @@ public class DataProviderActionCatalog {
                 "invalid data provider discovery failure: kind=%y phase=%y identity=%y error=%y",
                 kind, phase, identity, error);
         }
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = session.getGeneration().toString();
         *hash<DataProviderDiscoveryStateInfo> state
             = discovery_map{generation_key};
@@ -1780,7 +2057,7 @@ public class DataProviderActionCatalog {
         @since %DataProvider 3.8
     */
     static abortDiscovery(DataProviderDiscoverySession session) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = session.getGeneration().toString();
         if (discovery_map{generation_key}.session === session) {
             remove discovery_map{generation_key};
@@ -1850,7 +2127,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     static DataProviderQualifiedDiscovery sealDiscovery(
             DataProviderDiscoverySession session, bool record_app_failures = False) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         int generation = session.getGeneration();
         string generation_key = generation.toString();
         *hash<DataProviderDiscoveryStateInfo> state
@@ -1978,7 +2255,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     static assertQualifiedDiscovery(
             DataProviderQualifiedDiscovery qualification) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = qualification.getGeneration().toString();
         if (qualified_discovery_map{generation_key} !== qualification) {
             throw "DATA-PROVIDER-DISCOVERY-TOKEN-ERROR", sprintf(
@@ -2004,7 +2281,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     static discardQualifiedDiscovery(
             DataProviderQualifiedDiscovery qualification) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = qualification.getGeneration().toString();
         if (qualified_discovery_map{generation_key} === qualification) {
             remove qualified_discovery_map{generation_key};
@@ -2028,7 +2305,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     static auto publishQualifiedDiscovery(
             DataProviderQualifiedDiscovery qualification,
             code<auto()> publisher) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         string generation_key = qualification.getGeneration().toString();
         if (qualified_discovery_map{generation_key} !== qualification) {
             throw "DATA-PROVIDER-DISCOVERY-TOKEN-ERROR", sprintf(
@@ -2083,7 +2360,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 lck.lock();
             }
             on_exit if (needs_lock) {
-                lck.unlock();
+                DataProviderActionCatalog::unlockCatalog();
             }
             if (*hash<DataProviderAppInfo> existing_app = appcache{app.name}) {
                 # ignore if the application has the same definition; framework-managed fields
@@ -2383,7 +2660,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 lck.lock();
             }
             on_exit if (needs_lock) {
-                lck.unlock();
+                DataProviderActionCatalog::unlockCatalog();
             }
 
             if (cb_build_generic_api_call_action) {
@@ -2419,7 +2696,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         delete cb_build_generic_api_call_action;
@@ -2459,7 +2736,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         if (cb_lookup_scheme) {
@@ -2480,7 +2757,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         delete cb_lookup_scheme;
@@ -2533,7 +2810,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         # Complete deferred registrations before taking the ownership snapshot.
         DataProviderActionCatalog::getAllApps();
 
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         list<hash<auto>> rv = ();
         foreach hash<DataProviderAppInfo> app in (appcache.values()) {
             bool include_app = DataProviderActionCatalog::modulePathsContain(
@@ -2574,7 +2851,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         *hash<DataProviderAppInfo> app = appcache{name};
@@ -2776,7 +3053,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         string key = sprintf("%s/%s", action.app, action.action);
 
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         # check that the application exists
         if (*hash<auto> h = remove initmap{action.app}) {
             DataProviderActionCatalog::doInit(h);
@@ -3371,7 +3648,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         if (app_fileapimap{app}) {
@@ -3396,7 +3673,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         return app_fileapimap{app};
@@ -3415,7 +3692,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         return remove app_fileapimap{app};
@@ -3432,7 +3709,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
 
         return keys app_fileapimap;
@@ -3993,7 +4270,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         while (True) {
             list<hash<auto>> pending = ();
             {
-                AutoLock al(lck);
+                DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
                 foreach hash<auto> i in (resolve_output_types.pairIterator()) {
                     if (scope_apps && !app_filter{i.key}) {
                         continue;
@@ -4040,7 +4317,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 results += item;
             }
 
-            AutoLock al(lck);
+            DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
             foreach hash<auto> item in (results) {
                 if (item.ex) {
                     if (*hash<DataProviderInitializationFailureInfo> failure
@@ -4136,7 +4413,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
     private:internal static *bool deregisterApp(string name) {
-        AutoLock al(lck);
+        DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
 
         return deregisterAppIntern(name);
     }
@@ -4234,7 +4511,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
         # A dynamically registered app has no module owner.  Qore lvalues are
         # NOTHING until assigned, so normalize that valid state to an empty
@@ -4252,7 +4529,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lck.lock();
         }
         on_exit if (needs_lock) {
-            lck.unlock();
+            DataProviderActionCatalog::unlockCatalog();
         }
         string failure_key = action ?? "";
         bool changed;

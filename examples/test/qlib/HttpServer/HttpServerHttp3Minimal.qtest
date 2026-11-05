@@ -20,9 +20,18 @@ class SimpleHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-printf("=== Minimal HTTP/3 Polling Performance Test ===\n");
+#! the results are printed only with verbosity 3, as for a QUnit test
+our bool verbose = inlist("-vvv", ARGV ?? ());
+
+sub report(string fmt) {
+    if (verbose) {
+        vprintf(fmt, argv);
+    }
+}
+
+report("=== Minimal HTTP/3 Polling Performance Test ===\n");
 string exec_mode = ENV."QORE_EXEC_MODE" ?? "unknown";
-printf("Execution mode: %s\n\n", exec_mode);
+report("Execution mode: %s\n\n", exec_mode);
 
 # Create server
 HttpServer server = new HttpServer(<HttpServerOptionInfo>{
@@ -37,17 +46,17 @@ string url = sprintf("http://127.0.0.1:%d", port);
 HttpClientConnectionManager mgr = new HttpClientConnectionManager();
 
 # Warm up - let the system stabilize
-printf("Warm-up (5 requests)...\n");
+report("Warm-up (5 requests)...\n");
 for (int i = 0; i < 5; i++) {
     try {
         mgr.request(url, "GET", "/test");
     } catch (hash<ExceptionInfo> ex) {
-        printf("  Warmup error: %s\n", ex.desc);
+        report("  Warmup error: %s\n", ex.desc);
     }
 }
 
 # Test 1: Sequential requests (stress the polling loop)
-printf("\nTest 1: 20 sequential requests\n");
+report("\nTest 1: 20 sequential requests\n");
 date start1 = now_us();
 int success1 = 0;
 int error1 = 0;
@@ -70,11 +79,11 @@ float seconds1 = get_duration_microseconds(elapsed1).toFloat() / 1000000.0;
 if (seconds1 <= 0.0) {
     seconds1 = 0.000001;
 }
-printf("  Completed: %d success, %d errors in %.3f seconds (%.1f req/sec)\n",
+report("  Completed: %d success, %d errors in %.3f seconds (%.1f req/sec)\n",
        success1, error1, seconds1, 20.0 / seconds1);
 
 # Test 2: Concurrent requests (multiple threads polling simultaneously)
-printf("\nTest 2: 10 concurrent requests\n");
+report("\nTest 2: 10 concurrent requests\n");
 date start2 = now_us();
 Counter done(10);
 int success2 = 0;
@@ -103,17 +112,17 @@ for (int i = 0; i < 10; i++) {
 done.waitForZero();
 date elapsed2 = now_us() - start2;
 float seconds2 = get_duration_microseconds(elapsed2).toFloat() / 1000000.0;
-printf("  Completed: %d success, %d errors in %.3f seconds\n",
+report("  Completed: %d success, %d errors in %.3f seconds\n",
        success2, error2, seconds2);
 
 # Summary
-printf("\n=== Summary ===\n");
-printf("Sequential requests (20): %.3f seconds\n", seconds1);
-printf("Concurrent requests (10): %.3f seconds\n", seconds2);
-printf("Total time: %.3f seconds\n", seconds1 + seconds2);
+report("\n=== Summary ===\n");
+report("Sequential requests (20): %.3f seconds\n", seconds1);
+report("Concurrent requests (10): %.3f seconds\n", seconds2);
+report("Total time: %.3f seconds\n", seconds1 + seconds2);
 
 # Cleanup
 mgr.closeAll();
 server.stop();
 
-printf("\nDone.\n");
+report("\nDone.\n");

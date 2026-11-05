@@ -178,6 +178,8 @@ private:
    DLLLOCAL void stop_signal_thread();
    DLLLOCAL void wait_signal_thread_stopped();
    DLLLOCAL void setMask(sigset_t& mask);
+   //! Returns the signals that the signal thread waits for; the signal manager's mutex must be held
+   DLLLOCAL void getWaitMask(sigset_t& wait_mask);
    //! releases a signal taken over by a module; the signal manager's mutex must be held
    /** @param i the entry of the signal in fmap
    */
@@ -194,6 +196,9 @@ public:
 
    //! the signals the signal thread waits for by default (without a Qore-language handler)
    sigset_t default_wait_mask;
+
+   //! the signals that were ignored when their handler was set; they are ignored again when it is removed
+   sigset_t ignored_with_handler;
 
    //! the signals reserved by the library itself at initialization (see setMask())
    sig_map_t sys_fmap;

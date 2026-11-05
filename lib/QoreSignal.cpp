@@ -43,8 +43,45 @@ QoreSignalManager QSM;
 // SIGINT handler
 struct sigaction sa_int;
 
+// True if the process was started with the signal ignored, as SIGHUP with nohup: it stays ignored (see init())
+static bool sighup_ignored_at_start = false;
+static bool sigterm_ignored_at_start = false;
+
+//! Returns True if the signal was ignored when the process started
+static bool wasIgnoredAtStart(int sig, const struct sigaction& sa) {
+    return sa.sa_handler == SIG_IGN && (sig == SIGHUP || sig == SIGTERM);
+}
+
 static int qore_sigmask(int how, const sigset_t* set, sigset_t* oset) {
     return pthread_sigmask(how, set, oset);
+}
+
+//! Returns the set of signals that the signal thread waits for
+/** Every signal that a Qore thread has blocked must reach the signal thread, or its default action never runs.  The
+    other threads have them blocked, and the signal thread has only the signals in \c mask blocked, so that any other
+    signal is delivered to it with its usual disposition.
+
+    On macOS that does not hold while the thread waits: sigwait() blocks every signal that is not in its set for the
+    duration of the wait, so a signal that no thread waits for stays pending for ever, and a process that gets \c SIGTERM
+    or \c SIGUSR1 does not end.  So on macOS the thread waits for those signals too, and runs their disposition when it
+    receives them (see signal_handler_thread()).  A signal that a module manages is left to the module.
+*/
+void QoreSignalManager::getWaitMask(sigset_t& wait_mask) {
+#ifdef __APPLE__
+    setMask(wait_mask);
+    sigdelset(&wait_mask, SIGKILL);
+    sigdelset(&wait_mask, SIGSTOP);
+    for (const auto& i : fmap) {
+        sigdelset(&wait_mask, i.first);
+    }
+    for (int sig = 1; sig < QORE_SIGNAL_MAX; ++sig) {
+        if (sigismember(&mask, sig) == 1) {
+            sigaddset(&wait_mask, sig);
+        }
+    }
+#else
+    memcpy(&wait_mask, &mask, sizeof(sigset_t));
+#endif
 }
 
 void QoreSignalHandler::init() {
@@ -65,6 +102,7 @@ QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false
     //printd(5, "QoreSignalManager::QoreSignalManager() QORE_SIGNAL_MAX: %d\n", QORE_SIGNAL_MAX);
     sigemptyset(&mask);
     sigemptyset(&default_wait_mask);
+    sigemptyset(&ignored_with_handler);
     // initilize handlers
     for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
         handlers[i].init();
@@ -125,6 +163,15 @@ void QoreSignalManager::init(bool disable_signal_mask) {
     // get SIGINT handler
     sigaction(SIGINT, &sa, &sa_int);
     sigaction(SIGINT, &sa_int, nullptr);
+
+    // a signal that ends the process without a handler stays ignored if it was ignored when the process started
+    struct sigaction sa_start;
+    if (!sigaction(SIGHUP, nullptr, &sa_start)) {
+        sighup_ignored_at_start = wasIgnoredAtStart(SIGHUP, sa_start);
+    }
+    if (!sigaction(SIGTERM, nullptr, &sa_start)) {
+        sigterm_ignored_at_start = wasIgnoredAtStart(SIGTERM, sa_start);
+    }
 
     if (!disable_signal_mask) {
         setMask(mask);
@@ -444,6 +491,8 @@ void QoreSignalManager::signal_handler_thread() {
         "&ptid: %p\n", getpid(), tid, &ptid);
 
     sigset_t c_mask;
+    // the signals to wait for; see getWaitMask()
+    sigset_t wait_mask;
     int sig;
     {
         ExceptionSink xsink;
@@ -453,6 +502,7 @@ void QoreSignalManager::signal_handler_thread() {
 
         // reload copy of the signal mask for the sigwait command
         memcpy(&c_mask, &mask, sizeof(sigset_t));
+        getWaitMask(wait_mask);
         // block only signals we are catching in this thread
         qore_sigmask(SIG_SETMASK, &c_mask, 0);
 
@@ -467,6 +517,7 @@ void QoreSignalManager::signal_handler_thread() {
                 if (c == C_Reload) {
                     //printd(5, "QoreSignalManager::signal_handler_thread() C_Reload called:\n");
                     memcpy(&c_mask, &mask, sizeof(sigset_t));
+                    getWaitMask(wait_mask);
                     // block only signals we are catching in this thread
                     qore_sigmask(SIG_SETMASK, &c_mask, 0);
                     // confirm that the mask has been updated so updates are atomic
@@ -482,10 +533,10 @@ void QoreSignalManager::signal_handler_thread() {
 
 #ifdef HAVE_SIGTIMEDWAIT
             const struct timespec timeout = {0, 500000000};
-            sig = sigtimedwait(&c_mask, nullptr, &timeout);
+            sig = sigtimedwait(&wait_mask, nullptr, &timeout);
             int wait_error = sig < 0 ? errno : 0;
 #else
-            int wait_error = sigwait(&c_mask, &sig);
+            int wait_error = sigwait(&wait_mask, &sig);
 #endif
 
             // reacquire lock to check command and handler status
@@ -500,6 +551,11 @@ void QoreSignalManager::signal_handler_thread() {
                 }
                 fprintf(stderr, "Qore signal manager: signal wait failed: %s\n", strerror(wait_error));
                 _Exit(1);
+            }
+
+            // on macOS, sigwait() succeeds without a signal when two signals arrive together
+            if (!sig) {
+                continue;
             }
 
             //printd(5, "sigwait() sig: %d (cmd: %d) set: %d\n", sig, cmd, handlers[sig].isSet());
@@ -534,8 +590,20 @@ void QoreSignalManager::signal_handler_thread() {
                         sl.lock();
                         handler_running = false;
                     }
-                } else if (sig == SIGTERM /*|| sig == SIGHUP*/) {
-                    qore_exit_process(128 + sig);
+                } else if (sig == SIGTERM || sig == SIGHUP) {
+                    // ends the process, with or without a handler that was removed, unless the process was started
+                    // with the signal ignored, as with nohup
+                    if (!(sig == SIGTERM ? sigterm_ignored_at_start : sighup_ignored_at_start)) {
+                        qore_exit_process(128 + sig);
+                    }
+                } else if (sigismember(&default_wait_mask, sig) != 1) {
+                    // only on macOS: a signal that the thread waits for only to run its disposition, which it does as
+                    // it runs outside of the wait; see getWaitMask()
+                    handler_running = true;
+                    sl.unlock();
+                    raise(sig);
+                    sl.lock();
+                    handler_running = false;
                 }
                 continue;
             }
@@ -687,6 +755,17 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             if (!thread_running && start_signal_thread(xsink))
                 return -1;
 
+            // a handler must get a signal that the process inherited as ignored, as SIGHUP with nohup: macOS discards
+            // an ignored signal when it is sent, also if a thread waits for it; SIGPIPE stays ignored in any case
+            struct sigaction sa_old;
+            if (sig != SIGPIPE && !sigaction(sig, nullptr, &sa_old) && sa_old.sa_handler == SIG_IGN) {
+                struct sigaction sa_dfl;
+                sa_dfl.sa_handler = SIG_DFL;
+                sigemptyset(&sa_dfl.sa_mask);
+                sa_dfl.sa_flags = SA_RESTART;
+                sigaction(sig, &sa_dfl, nullptr);
+                sigaddset(&ignored_with_handler, sig);
+            }
             //printd(5, "setting handler for signal %d, pgm: %p\n", sig, pgm);
             qore_program_private::addSignal(*pgm, sig);
             // Reset status in case a prior take() left a stale SH_Delete state
@@ -747,9 +826,21 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
             return 0;
         }
 
-        // remove from the signal mask for sigwait
-        sigdelset(&mask, sig);
-        reload();
+        // the state of the signal is as if it never had a handler: the signal thread keeps waiting for a signal that it
+        // waits for without a handler, or the signal would no longer be processed as it was before, and it is removed
+        // from the signal mask for sigwait otherwise
+        if (sigismember(&default_wait_mask, sig) != 1) {
+            sigdelset(&mask, sig);
+            reload();
+        }
+        if (sigismember(&ignored_with_handler, sig) == 1) {
+            struct sigaction sa_ign;
+            sa_ign.sa_handler = SIG_IGN;
+            sigemptyset(&sa_ign.sa_mask);
+            sa_ign.sa_flags = SA_RESTART;
+            sigaction(sig, &sa_ign, nullptr);
+            sigdelset(&ignored_with_handler, sig);
+        }
 
         //printd(5, "removing handler for signal %d\n", sig);
 

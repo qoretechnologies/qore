@@ -434,4 +434,3 @@ foreach string path in ((enabled_exe, disabled_exe)) {
     }
 }
 
-printf("AOT_LATE_NATIVE_REMAINING_ROOT=%s\n", root);

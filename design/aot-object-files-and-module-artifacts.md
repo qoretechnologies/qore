@@ -870,6 +870,26 @@ output and sidecars are current. This makes no-op delta builds cheap and keeps
 the correctness decision close to the compiler state that can affect generated
 artifacts.
 
+### Module Depfiles with the Makefile Generators
+
+`QORE_USER_MODULE_AOT_RULES()` gives each `.qmod` rule its qcc depfile
+(`DEPFILE <qmod>.d`). The Makefile generators before CMake 4.0 consolidate a
+rewritten depfile by appending its paths to the target's
+`CMakeFiles/<name>-qmod.dir/compiler_depend.internal` and `.make`
+(`cmDependsCompiler::CheckDependencies()`; CMake 4.0 replaces them), so every
+file a module ever depended on stayed a dependency. Once such a file was
+removed (an installed `yaml-api-2.0.qmod` after yaml moved into the Qore
+build), the module was out of date in every build, and each compile appended
+another copy of its depfile: a Qore build tree compiled 24 qlib modules again
+in every `make`.
+
+With those generators the rule's first command removes the target's
+`compiler_depend.internal` (`_QORE_DEPFILE_FRESH_READ_COMMAND()`), so the next
+dependency check reads the depfile qcc has just written from scratch, and the
+target depends on what that depfile names. A build tree left with stale
+entries compiles each affected module once more and then settles. Test:
+`examples/test/cmake/test_qmod_depfile_dependencies.py`.
+
 ### Installing AOT Modules
 
 `QORE_INSTALL_QMOD_ATOMIC()` publishes each built `.qmod`; the standard

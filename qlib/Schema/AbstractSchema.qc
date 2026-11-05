@@ -60,6 +60,9 @@ public namespace Schema {
     */
     public class AbstractSchema {
         private {
+            #! True during an alignment with a negative verbosity level, in which nothing is logged
+            bool silent = False;
+
             #! the name of the schema
             string name;
             #! the version of the schema
@@ -153,25 +156,36 @@ public namespace Schema {
         }
 
         #! outputs a log message prefixed with the schema name
-        /** the log string is output with a following newline, and the terminal I/O is flushed
+        /** the log string is output with a following newline, and the terminal I/O is flushed; nothing is output
+            during an alignment with a negative verbosity level
         */
         logpf(string fmt, ...) {
+            if (silent) {
+                return;
+            }
             printf("%s: %s\n", db.getDatasourceDesc(), vsprintf(fmt, argv));
             flush();
         }
 
         #! outputs a log message
-        /** the log string is output with a following newline, and the terminal I/O is flushed
+        /** the log string is output with a following newline, and the terminal I/O is flushed; nothing is output
+            during an alignment with a negative verbosity level
         */
         log(string fmt, ...) {
+            if (silent) {
+                return;
+            }
             vprintf(fmt + "\n", argv);
             flush();
         }
 
         #! outputs a log message without any newline
-        /** the terminal I/O is flushed as well
+        /** the terminal I/O is flushed as well; nothing is output during an alignment with a negative verbosity level
         */
         logProgress(string str, ...) {
+            if (silent) {
+                return;
+            }
             printf(str, argv);
             flush();
         }
@@ -181,6 +195,11 @@ public namespace Schema {
             - the schema being created in an empty schema
             - the schema being upgraded if an older version of the schema exists in the database
             - the schema being downgraded if a newer version of the schema exists in the database
+
+            @param force align even when the stored version matches
+            @param verbose the verbosity level; a negative level silences all output of the alignment, also the
+            messages of \a do_msgs
+            @param do_msgs whether to print progress messages
 
             @return the number of changes made to the schema
 
@@ -200,6 +219,11 @@ public namespace Schema {
             - the schema being upgraded if an older version of the schema exists in the database
             - the schema being downgraded if a newer version of the schema exists in the database
 
+            @param force align even when the stored version matches
+            @param verbose the verbosity level; a negative level silences all output of the alignment, also the
+            messages of \a do_msgs
+            @param do_msgs whether to print progress messages
+
             @return the SchemaCallbackHelper with information on the changes made
 
             @note if other database objects not belonging to the schema already exist in the given database, they are
@@ -213,7 +237,8 @@ public namespace Schema {
 
         #! Aligns a schema while leaving the transaction under caller control.
         /** @param force align even when the stored version matches
-            @param verbose logging verbosity
+            @param verbose logging verbosity; a negative level silences all output of the alignment, also the messages
+            of \a do_msgs
             @param do_msgs whether to print progress messages
             @return the alignment result before the caller commits or rolls back
             @throw SCHEMA-TRANSACTION-ERROR if a DataSchema contains a migration
@@ -255,6 +280,10 @@ public namespace Schema {
         */
         private SchemaCallbackHelper alignIntern(bool force = False, int verbose = 0, bool do_msgs = True,
                 bool manage_transaction = True) {
+            bool old_silent = silent;
+            on_exit silent = old_silent;
+            silent = verbose < 0;
+
             SchemaCallbackHelper sch(self, verbose);
 
             pure_callback_opts = sch.getCallbacks();
@@ -648,8 +677,10 @@ public namespace Schema {
             try {
                 ddl_change_callback(ds, tables);
             } catch (hash<ExceptionInfo> ex) {
-                logpf("DDL metadata callback failed while preserving an "
-                    "active schema error: %s: %s", ex.err, ex.desc);
+                # an error that no exception reports is shown at any verbosity level
+                printf("%s: DDL metadata callback failed while preserving an active schema error: %s: %s\n",
+                    db.getDatasourceDesc(), ex.err, ex.desc);
+                flush();
             }
         }
 

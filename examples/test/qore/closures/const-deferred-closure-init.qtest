@@ -96,4 +96,3 @@ foreach int level in ((0, 3)) {
 if (errors) {
     exit(2);
 }
-printf("OK\n");

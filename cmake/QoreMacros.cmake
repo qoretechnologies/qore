@@ -543,6 +543,30 @@ function(_QORE_QCC_RESET_COMPILER_DEPENDS)
     endforeach()
 endfunction()
 
+# Sets _out_var to the COMMAND that a custom command with a DEPFILE in target
+# _target runs first, so that the Makefile generators read its depfile from
+# scratch the next time; empty where that is not needed.
+#
+# The Makefile generators before CMake 4.0 append a rewritten "custom" depfile
+# to the dependencies they consolidated from it before (cmDependsCompiler::
+# CheckDependencies() in CMakeFiles/<target>.dir/compiler_depend.internal and
+# .make) instead of replacing them, so a file that the command depended on once
+# stays a dependency forever.  When that file is removed, the command is out of
+# date in every build, and every rebuild appends another copy of its depfile.
+# Removing the consolidated file makes CMake read the target's depfiles again
+# when it next checks the target's dependencies, which keeps only what the
+# command's current depfile names.  It is removed when the command runs, as
+# the depfile is rewritten then; CMake 4.0 replaces the dependencies itself.
+function(_QORE_DEPFILE_FRESH_READ_COMMAND _out_var _target)
+    set(_qore_depfile_fresh_read_command)
+    if (CMAKE_GENERATOR MATCHES "Makefiles" AND CMAKE_VERSION VERSION_LESS 4.0)
+        set(_qore_depfile_fresh_read_command
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_target}.dir/compiler_depend.internal")
+    endif ()
+    set(${_out_var} ${_qore_depfile_fresh_read_command} PARENT_SCOPE)
+endfunction()
+
 function(_QORE_QCC_REGISTER_MANAGED_DIRS)
     foreach(_qore_qcc_managed_dir ${ARGN})
         get_filename_component(_qore_qcc_managed_dir_abs
@@ -2480,9 +2504,11 @@ FUNCTION (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_di
             set(_qore_aot_published_qmod "${_qore_aot_qmod_dir}/${_name}.qmod")
         endif()
     endif()
-    set(_qore_aot_candidates "${_name}.qmod" "${_name}.qmod.d")
+    # a depfile and its fingerprints describe the built module; installed beside a copy, they are stale
+    set(_qore_aot_candidates "${_name}.qmod" "${_name}.qmod.d" "${_name}.qmod.d.fingerprints")
     if (${_is_dir})
-        list(APPEND _qore_aot_candidates "${_name}/${_name}.qmod" "${_name}/${_name}.qmod.d")
+        list(APPEND _qore_aot_candidates "${_name}/${_name}.qmod" "${_name}/${_name}.qmod.d"
+            "${_name}/${_name}.qmod.d.fingerprints")
     endif()
     set(_qore_aot_stale_source_qmods "")
     set(_qore_aot_published_source_qmods "")
@@ -2655,8 +2681,13 @@ ENDFUNCTION (QORE_INSTALL_QMOD_ATOMIC)
 # Param #2: the module's source directory
 FUNCTION (QORE_USER_MODULE_RESOURCE_DIRS _out _source_root)
     set(_rv "")
-    # CONFIGURE_DEPENDS so that adding a resource directory re-runs configure, like the module's source glob
-    file(GLOB _children LIST_DIRECTORIES true CONFIGURE_DEPENDS RELATIVE "${_source_root}" "${_source_root}/*")
+    file(GLOB _children LIST_DIRECTORIES true RELATIVE "${_source_root}" "${_source_root}/*")
+    # Adding a resource directory re-runs configure, like the module's source glob.  The glob that watches for it
+    # lists what the subdirectories hold, not the module directory itself: the build links the module's AOT qmod into
+    # that directory (<name>/<name>.qmod, QORE_AOT_LINK_SOURCE_MODULES), so a CONFIGURE_DEPENDS glob of it found a
+    # new file after every configure that preceded a build, and the next build configured again.  A resource
+    # directory without files has nothing to make available.
+    file(GLOB _qore_resource_dir_files LIST_DIRECTORIES true CONFIGURE_DEPENDS "${_source_root}/*/*")
     foreach(_child ${_children})
         if (NOT IS_DIRECTORY "${_source_root}/${_child}" OR _child STREQUAL "jar" OR _child STREQUAL "i18n"
                 OR _child MATCHES "^\\.")
@@ -2831,6 +2862,9 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # whole-dir avoids.  Revisit per-file mode after the slice-4 fix and
     # add an opt-in option for dev-loop incremental builds.
     set(_qmod_dep ${_qmod_out}.d)
+    # the module's dependencies are what its current depfile names, not every
+    # file it ever depended on (see _QORE_DEPFILE_FRESH_READ_COMMAND())
+    _QORE_DEPFILE_FRESH_READ_COMMAND(_qmod_depfile_fresh_read_command ${_name}-qmod)
 
     # For split-dir modules, collect sibling resource files at cmake-time
     # so they can be declared as BYPRODUCTS of the copy step and tracked
@@ -2905,6 +2939,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # to ModuleManager::loadModuleIntern.
         add_custom_command(
             OUTPUT ${_qmod_out}
+            ${_qmod_depfile_fresh_read_command}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             ${_qmod_jar_stage_commands}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
@@ -2970,6 +3005,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # preference order pick the AOT artifact.
         add_custom_command(
             OUTPUT ${_qmod_out}
+            ${_qmod_depfile_fresh_read_command}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} ${_qmod_opt_flags} -m ${_source_root}
@@ -3038,8 +3074,23 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod")
     endif()
-    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod.d")
+    # A depfile (<qmod>.d) and the fingerprints beside it describe the module in the build tree; a copy of them
+    # beside an installed module is never current, so none is left in an install directory (the module loader
+    # also uses a depfile only when it names the module it is loaded beside; see qore_build_aot_module_is_stale())
+    foreach (_qmod_depfile_suffix .d .d.fingerprints)
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod${_qmod_depfile_suffix}")
+        if (${_is_dir})
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(_qmod_stale_install_paths "${QORE_USER_MODULES_DIR}"
+                "${_name}/${_name}.qmod${_qmod_depfile_suffix}")
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(_qmod_stale_install_paths "${_qmod_install_dir}"
+                "${_name}/${_name}.qmod${_qmod_depfile_suffix}")
+        endif()
+        if (NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+                _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod${_qmod_depfile_suffix}")
+        endif()
+    endforeach()
     if (${_is_dir})
         # Remove stale artifacts from older layouts.  Flat qmods shadow split
         # qmods within one module path entry, and old share-installed qmods can
@@ -3049,11 +3100,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
                 _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod")
         endif()
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod.d")
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod")
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod.d")
         install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
             COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         # Atomic stage-and-rename publish (new inode) so rebuilding under a live

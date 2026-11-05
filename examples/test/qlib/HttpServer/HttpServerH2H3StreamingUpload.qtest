@@ -532,7 +532,9 @@ l50Xb2GWQesIt9k5jF5IOw==
                 {"Content-Type": MimeTypeText});
         } catch (hash<ExceptionInfo> ex) {
             caught = True;
-            @debug(printf("Expected H3 callback exception: %s: %s\n", ex.err, ex.desc));
+            if (m_options.verbose > 2) {
+                printf("Expected H3 callback exception: %s: %s\n", ex.err, ex.desc);
+            }
         }
         assertTrue(caught, "H3 callback exception should propagate to caller");
     }

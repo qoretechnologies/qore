@@ -48,7 +48,6 @@ my hash<string, hash<DataProviderExpressionInfo>> data = (
 # Run test - this should NOT throw INVALID-MEMBER
 try {
     test_hash_access(data);
-    printf("PASS: Hash type conversion test successful\n");
 } catch (hash<ExceptionInfo> ex) {
     printf("FAIL: %s: %s\n", ex.err, ex.desc);
     exit(1);

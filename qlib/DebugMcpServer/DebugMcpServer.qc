@@ -237,6 +237,12 @@ public const DebugMcpFields = {
         "desc": "The time in milliseconds that the tool waits for a thread to pause; then the program is paused; the "
             "default is 30000",
     },
+    "pause_timeout_ms": {
+        "display_name": "Pause timeout",
+        "type": AbstractDataProviderTypeMap."*int",
+        "desc": "The time in milliseconds that the tool waits for the pause that it requests after `timeout_ms`; the "
+            "default is the time of `timeout_ms`",
+    },
 };
 
 #! An MCP server that lets coding agents debug %Qore programs; see @ref debugmcpserverintro
@@ -319,7 +325,7 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         addTool("qore_debug_continue", "Resumes a paused thread: runs it, steps into or over its statement, or "
             "runs it until its function returns; returns when a thread pauses, the program ends, or the timeout "
             "passes, and then the program is paused",
-            ("mode", "thread", "timeout_ms", "details"), \continueTool());
+            ("mode", "thread", "timeout_ms", "pause_timeout_ms", "details"), \continueTool());
         addTool("qore_debug_pause", "Pauses the threads of the current program; returns where the current thread "
             "is paused and its local variables", ("timeout_ms", "details"), \pauseTool());
         addTool("qore_debug_stack", "Returns the call stack of a paused thread", ("thread",),
@@ -508,6 +514,11 @@ public class DebugMcpServer inherits McpServerHandler::McpServerHandler {
         if (exists args.thread) {
             s.selectThread(args.thread);
         }
+        if (args.pause_timeout_ms < 0) {
+            throw "DEBUG-MCP-ERROR", sprintf("the pause timeout cannot be negative: %d", args.pause_timeout_ms);
+        }
+        s.pauseTimeout = args.pause_timeout_ms ?? 0;
+        on_exit s.pauseTimeout = 0;
         hash<auto> rv = s.execute(cmd, args.timeout_ms);
         # the program was paused after the timeout: where the thread is, as in a loop that does not end
         if (rv.timedOut && (args.details ?? True)) {

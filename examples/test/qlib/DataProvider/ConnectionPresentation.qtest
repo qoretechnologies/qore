@@ -203,7 +203,7 @@ class ConnectionPresentationTest inherits QUnit::Test {
         string command = "QORE_MODULE_DIR=" + shellQuote(module_path) + " " + shellQuote(QORE_ARGV[0])
             + " " + shellQuote(root + "/bin/qore-data-provider-i18n")
             + " -C -m ConnectionPresentationFixture --owner ConnectionPresentationFixture -o " + shellQuote(output);
-        assertEq(0, system(command));
+        assertEq(0, runQuiet(command));
         string domain = ConnectionPresentation::domain("ConnectionPresentationFixture");
         hash<auto> catalog = I18n::load_native_catalog(output + DirSep + domain + DirSep + "root.json");
         hash<auto> messages = catalog.locales.root.messages;
@@ -292,5 +292,10 @@ class ConnectionPresentationTest inherits QUnit::Test {
         assertEq("SGLangRestClient", sg.presentation_owner);
         assertEq(ConnectionSchemeCache::getSchemeEx("http").presentation_sources,
             ConnectionSchemeCache::getSchemeEx("https").presentation_sources);
+    }
+
+    #! runs a command; its output, which is not checked, is shown only with verbosity 3
+    private int runQuiet(string command) {
+        return system(m_options.verbose > 2 ? command : command + " >/dev/null 2>&1");
     }
 }

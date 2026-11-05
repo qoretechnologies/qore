@@ -16,7 +16,6 @@ int failed = 0;
     Mutex m();
     string result = auto_variant(m);
     if (result == "mutex") {
-        printf("PASS: assigned Mutex selects Mutex variant\n");
         ++passed;
     } else {
         printf("FAIL: assigned Mutex selected %s variant instead of Mutex\n", result);
@@ -29,7 +28,6 @@ int failed = 0;
     Mutex m;
     string result = auto_variant(m);
     if (result == "auto") {
-        printf("PASS: unassigned Mutex selects auto variant\n");
         ++passed;
     } else {
         printf("FAIL: unassigned Mutex selected %s variant instead of auto\n", result);
@@ -43,7 +41,6 @@ int failed = 0;
     auto x = m;
     string result = auto_variant(x);
     if (result == "mutex") {
-        printf("PASS: auto narrowed from assigned Mutex selects Mutex variant\n");
         ++passed;
     } else {
         printf("FAIL: auto narrowed from assigned Mutex selected %s variant\n", result);
@@ -57,7 +54,6 @@ int failed = 0;
     auto x = m;
     string result = auto_variant(x);
     if (result == "auto") {
-        printf("PASS: auto assigned from unassigned Mutex selects auto variant\n");
         ++passed;
     } else {
         printf("FAIL: auto assigned from unassigned Mutex selected %s variant\n", result);
@@ -71,7 +67,6 @@ int failed = 0;
     remove m;
     string result = auto_variant(m);
     if (result == "auto") {
-        printf("PASS: after remove, Mutex selects auto variant\n");
         ++passed;
     } else {
         printf("FAIL: after remove, Mutex selected %s variant instead of auto\n", result);
@@ -79,10 +74,6 @@ int failed = 0;
     }
 }
 
-printf("\n=== Parse Type Analysis Test Results ===\n");
-printf("Passed: %d\n", passed);
-printf("Failed: %d\n", failed);
-printf("Total: %d\n", passed + failed);
 
 if (failed > 0) {
     exit(1);

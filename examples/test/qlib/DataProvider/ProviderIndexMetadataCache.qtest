@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires DataProvider
 %requires ProviderIndexUtil
+%requires Logger
 
 %requires yaml
 
@@ -21,6 +22,11 @@
 
 public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
     constructor() : Test("ProviderIndex metadata cache test", "1.0") {
+        # the errors of the index that the test cases cause are checked by them, not printed
+        if (m_options.verbose <= 2) {
+            ProviderIndexUtil::setGlobalLogger(new Logger("provider-index-test", LoggerLevel::LevelOff));
+        }
+
         addTestCase("corrupt cache falls back to canonical index", \corruptCacheFallsBackToCanonicalIndex());
         addTestCase("a published index is read without the canonical index file", \serializedIndexTest());
         addTestCase("listing apps leaves their actions to be loaded when needed", \appsOnlyTest());

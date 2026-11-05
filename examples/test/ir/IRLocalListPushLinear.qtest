@@ -200,4 +200,3 @@ if (!is_file(base_path)) {
 if (failures) {
     exit(2);
 }
-printf("IRLocalListPushLinear: OK\n");

@@ -337,7 +337,7 @@ public class WebSocketUtilTest inherits QUnit::Test {
         assertEq(WS_RSV1, result.rsv_bits);
         assertTrue(result.data.size() < test_msg.size());
 
-        @debug {
+        if (m_options.verbose > 2) {
             printf("Original: %d bytes, Compressed: %d bytes\n", test_msg.size(), result.data.size());
         }
 

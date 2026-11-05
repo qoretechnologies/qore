@@ -1,0 +1,287 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class CatalogChangeListenerTest
+
+#! Records the revisions it is called with, and runs an optional action in each call
+class RecordingListener inherits DataProviderCatalogChangeListener {
+    public {
+        list<int> revisions = ();
+        list<bool> lock_free = ();
+        *code action;
+        Mutex m();
+    }
+
+    constructor(*code action) {
+        self.action = action;
+    }
+
+    catalogChanged(int revision) {
+        {
+            AutoLock al(m);
+            revisions += revision;
+            # the catalog lock is released before a listener is called, so the listener can read the catalog
+            lock_free += DataProviderActionCatalog::getCatalogRevision() >= revision;
+        }
+        if (action) {
+            action(revision);
+        }
+    }
+
+    list<int> calls() {
+        AutoLock al(m);
+        return revisions;
+    }
+}
+
+#! Verifies the catalog change listeners of the data provider catalog
+public class CatalogChangeListenerTest inherits QUnit::Test {
+    constructor() : Test("DataProvider catalog change listeners", "1.0") {
+        addTestCase("a listener is called after each change, outside the catalog lock", \changeTest());
+        addTestCase("a catalog that does not change calls no listener", \noChangeTest());
+        addTestCase("a throwing listener fails neither the change nor the other listeners", \throwingTest());
+        addTestCase("a removed listener is not called, also during a running notification", \removalTest());
+        addTestCase("a listener can remove itself, and removal waits for running calls", \removalWaitTest());
+        addTestCase("a listener does not keep its owner or its Program alive", \lifetimeTest());
+        addTestCase("a listener that changes the catalog is called again for its change", \reentrantTest());
+        set_return_value(main());
+    }
+
+    private string registerTestApp() {
+        string app = "CatalogChangeListener_" + get_random_string(8);
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": app,
+            "short_desc": "catalog change listener test",
+            "desc": "catalog change listener test",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": "image/svg+xml",
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        return app;
+    }
+
+    private changeTest() {
+        RecordingListener listener();
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        int before = DataProviderActionCatalog::getCatalogRevision();
+
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        int after = DataProviderActionCatalog::getCatalogRevision();
+        assertTrue(after > before, "registering an app changes the revision");
+        assertEq((after,), listener.calls(), "the listener is called once with the revision of the change");
+        assertEq((True,), listener.lock_free, "the listener runs after the catalog lock is released");
+
+        DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq(2, listener.calls().size(), "a removal is a change too");
+        assertEq(DataProviderActionCatalog::getCatalogRevision(), listener.calls()[1]);
+    }
+
+    private noChangeTest() {
+        # a change before the listener is added does not call it
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        RecordingListener listener();
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+
+        # reads take the catalog lock and release it without changing the catalog
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        DataProviderActionCatalog::getAllAppsNoInit();
+        DataProviderActionCatalog::getActionsNoInit(app);
+        DataProviderActionCatalog::getInitializationFailures();
+        DataProviderActionCatalog::getAppFileApiNames();
+        # a mutation that reports no change does not advance the revision
+        DataProviderActionCatalog::commitDiscoveryCatalogMutation(bool sub () { return False; });
+        assertEq(revision, DataProviderActionCatalog::getCatalogRevision());
+        assertEq((), listener.calls(), "no change, no call");
+    }
+
+    private throwingTest() {
+        RecordingListener thrower(sub (int revision) { throw "LISTENER-ERROR", sprintf("revision %d", revision); });
+        RecordingListener other();
+        int thrower_id = DataProviderActionCatalog::addCatalogChangeListener(thrower);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(thrower_id);
+        int other_id = DataProviderActionCatalog::addCatalogChangeListener(other);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(other_id);
+        int failures = DataProviderActionCatalog::getCatalogChangeListenerFailures(thrower_id).size();
+
+        # the registration succeeds
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertTrue(exists DataProviderActionCatalog::getApp(app), "the change was made");
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        assertEq((revision,), thrower.calls());
+        assertEq((revision,), other.calls(), "the other listener is called");
+
+        list<hash<DataProviderCatalogChangeListenerFailureInfo>> retained =
+            DataProviderActionCatalog::getCatalogChangeListenerFailures(thrower_id);
+        assertEq(failures + 1, retained.size(), "the failure is retained");
+        assertEq(thrower_id, retained.last().listener_id);
+        assertEq(revision, retained.last().revision);
+        assertEq("LISTENER-ERROR", retained.last().error.err);
+        assertEq(sprintf("revision %d", revision), retained.last().error.desc);
+        assertEq((), DataProviderActionCatalog::getCatalogChangeListenerFailures(other_id),
+            "a listener that does not fail has no failure");
+        assertTrue(DataProviderActionCatalog::getCatalogChangeListenerFailures().size()
+            <= DataProviderActionCatalog::MaxListenerFailures);
+    }
+
+    private removalTest() {
+        RecordingListener listener();
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        assertTrue(DataProviderActionCatalog::removeCatalogChangeListener(id));
+        assertFalse(DataProviderActionCatalog::removeCatalogChangeListener(id), "it is removed only once");
+        assertFalse(DataProviderActionCatalog::removeCatalogChangeListener(-1), "an unknown handle");
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq((), listener.calls(), "a removed listener is not called");
+
+        # one listener removes another during a notification: the other is not called by it
+        RecordingListener second();
+        int second_id = DataProviderActionCatalog::addCatalogChangeListener(second);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(second_id);
+        RecordingListener first(sub (int revision) {
+            DataProviderActionCatalog::removeCatalogChangeListener(second_id);
+        });
+        # listeners are called in handle order: "first" is added after "second", so add a third that runs first
+        int first_id = DataProviderActionCatalog::addCatalogChangeListener(first);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(first_id);
+        # re-add "second" after "first", so it is called after it
+        assertTrue(DataProviderActionCatalog::removeCatalogChangeListener(second_id));
+        second_id = DataProviderActionCatalog::addCatalogChangeListener(second);
+        string app2 = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app2);
+        assertEq(1, first.calls().size());
+        assertEq((), second.calls(), "removed during the notification, it is not called by it");
+        assertFalse(DataProviderActionCatalog::removeCatalogChangeListener(second_id), "it was removed");
+    }
+
+    private removalWaitTest() {
+        # a listener that removes itself from its own call: no deadlock, and it is not called again
+        int self_id;
+        RecordingListener self_remover(sub (int revision) {
+            assertTrue(DataProviderActionCatalog::removeCatalogChangeListener(self_id));
+        });
+        self_id = DataProviderActionCatalog::addCatalogChangeListener(self_remover);
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq(1, self_remover.calls().size(), "it is not called after it removed itself");
+
+        # a removal on another thread waits until the running call has ended
+        Queue entered();
+        Queue gate();
+        Queue order();
+        RecordingListener blocking(sub (int revision) {
+            entered.push(True);
+            gate.get();
+            order.push("call ended");
+        });
+        int id = DataProviderActionCatalog::addCatalogChangeListener(blocking);
+        Counter registered(1);
+        string app2;
+        background sub () {
+            on_exit registered.dec();
+            app2 = registerTestApp();
+        }();
+        entered.get();
+        Counter removed(1);
+        background sub () {
+            on_exit removed.dec();
+            DataProviderActionCatalog::removeCatalogChangeListener(id);
+            order.push("removed");
+        }();
+        gate.push(True);
+        removed.waitForZero();
+        registered.waitForZero();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app2);
+        assertEq(("call ended", "removed"), (order.get(), order.get()),
+            "the removal returns once the running call has ended");
+        assertFalse(DataProviderActionCatalog::removeCatalogChangeListener(id));
+    }
+
+    private lifetimeTest() {
+        # an owner that releases its listener: it is not called, and its handle is gone
+        int id;
+        {
+            RecordingListener listener();
+            id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        }
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertFalse(DataProviderActionCatalog::removeCatalogChangeListener(id),
+            "a listener its owner released is dropped");
+
+        # a listener defined in a Program does not keep the Program alive
+        Queue destroyed();
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_ALLOW_WEAK_REFERENCES);
+        p.loadModule("DataProvider");
+        p.setScriptPath(get_script_path());
+        p.parse("
+class ProgramListener inherits DataProviderCatalogChangeListener {
+    public { int calls = 0; }
+    catalogChanged(int revision) { ++calls; }
+}
+class Sentinel {
+    private { Queue destroyed; }
+    constructor(Queue destroyed) { self.destroyed = destroyed; }
+    destructor() { destroyed.push(True); }
+}
+our *ProgramListener listener;
+our *Sentinel sentinel;
+int sub init(Queue destroyed) {
+    sentinel = new Sentinel(destroyed);
+    listener = new ProgramListener();
+    return DataProviderActionCatalog::addCatalogChangeListener(listener);
+}
+int sub calls() { return listener.calls; }
+sub release() { remove listener; }
+", "program-listener");
+        int program_id = p.callFunction("init", destroyed);
+        string app2 = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app2);
+        assertEq(1, p.callFunction("calls"), "the Program's listener is called while the Program keeps it");
+        p.callFunction("release");
+        remove p;
+        assertEq(True, destroyed.get(), "the Program is destroyed: the catalog does not keep it");
+        DataProviderActionCatalog::deregisterDynamicApp(app2);
+        assertFalse(DataProviderActionCatalog::removeCatalogChangeListener(program_id),
+            "the listener of the destroyed Program is dropped");
+    }
+
+    private reentrantTest() {
+        list<string> apps = ();
+        on_exit map DataProviderActionCatalog::deregisterDynamicApp($1), apps;
+        bool registering = False;
+        RecordingListener listener(sub (int revision) {
+            if (!registering) {
+                # set first: the registration calls this listener again before it returns
+                registering = True;
+                # registered from the listener's call: the catalog lock is not held here
+                apps += registerTestApp();
+            }
+        });
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        string app = registerTestApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        assertEq(1, apps.size());
+        list<int> calls = listener.calls();
+        assertEq(2, calls.size(), "the listener's own change calls it again");
+        assertEq(DataProviderActionCatalog::getCatalogRevision(), max(calls));
+    }
+}

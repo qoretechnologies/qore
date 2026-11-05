@@ -24,4 +24,3 @@ try {
     rethrow;
 }
 
-printf("abstract invoke dot-eval method dispatch: ok\n");
