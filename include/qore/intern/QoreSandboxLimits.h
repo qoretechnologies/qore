@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QORESANDBOXLIMITS_H
 
 #include <atomic>
+#include <cstdint>
 #include <ctime>
 #include <map>
 #include <vector>
@@ -70,11 +71,11 @@ public:
     DLLLOCAL void release();
 
 private:
-#if defined(HAVE_PTHREAD_GETCPUCLOCKID)
-    clockid_t cid = 0;
-#elif defined(DARWIN)
-    unsigned port = 0;
-#endif
+    //! the platform's handle of the clock (a clockid_t, or a Mach thread port), 0 if not initialized
+    /** Not typed by platform: the layout of the class must not depend on the configuration macros, which a file
+        including this header may not have seen
+    */
+    uint64_t handle = 0;
 };
 
 //! Returns the static budget that marks a continuation of a call whose limits cannot be enforced
