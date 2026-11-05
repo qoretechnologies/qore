@@ -337,7 +337,8 @@ log("started listener on %s", lh.desc);
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
-    - request contexts get numeric \c "peer-info" without a reverse DNS lookup; the reverse DNS lookup is made in
+    - request contexts get numeric \c "peer-info" without a reverse DNS lookup; with the
+      @ref HttpServer::HttpServerOptionInfo::peer_hostname_lookup "peer_hostname_lookup" option the lookup is made in
       parallel and is available in the optional \c "peer-info-future" key for handlers that need it
     - added @ref HttpServer::HttpServer::addListenerAsync() "addListenerAsync()" and
       @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
@@ -766,6 +767,17 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.7
     */
     timeout lingering_close_timeout = 5s;
+
+    #! Resolves the host name of each client address, available to handlers in the request context
+    /** When @ref True "True", the reverse DNS lookup of the address of each accepted connection is started when the
+        connection is accepted and is available to handlers in the \c "peer-info-future" key of the request context
+        (a @ref Qore::Thread::Future "Future"); the lookup does not delay the request.  The default is
+        @ref False "False": the lookup costs a resolver channel and a query for every connection, which a server whose
+        handlers do not use the host name should not pay, and the key is not set.
+
+        @since HttpServer 1.7
+    */
+    bool peer_hostname_lookup = False;
 
     #! Enable HTTP/3 headers-only dispatch mode
     /** When @ref True "True", HTTP/3 (and HTTP/2) requests are dispatched to handlers as
@@ -3193,6 +3205,7 @@ ready.set(1);
             "quic_drain_timeout": opts.quic_drain_timeout,
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
+            "peer_hostname_lookup": opts.peer_hostname_lookup,
         });
         asyncIo.start();
     }

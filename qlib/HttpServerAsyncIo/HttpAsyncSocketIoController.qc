@@ -215,6 +215,9 @@ public class HttpAsyncSocketIoController {
         - \c lingering_close_timeout: the maximum time to wait for an HTTP/1.x client to close its side of the
           connection after the last response (default @ref DefaultLingeringCloseTimeout); 0 closes the connection
           immediately; see @ref lingeringClose()
+        - \c peer_hostname_lookup: if @ref True "True", the reverse DNS lookup of each client address is started when
+          the connection is accepted and is set in the \c "peer-info-future" key of the connection context (default
+          @ref False "False")
     */
     constructor(AsyncSocketIoController controller, *LoggerInterface logger,
             hash<auto> opts = {}) {
@@ -1447,6 +1450,10 @@ public class HttpAsyncSocketIoController {
     }
 
     private *Future startPeerInfoFuture(hash<auto> peer_info) {
+        # a reverse lookup costs a resolver channel and a query for every connection: only if asked for
+        if (!pool_opts.peer_hostname_lookup) {
+            return NOTHING;
+        }
         *string address = peer_info.address;
         if (!address || address == "unknown" || address == "quic") {
             return NOTHING;
