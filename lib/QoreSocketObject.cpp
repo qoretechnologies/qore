@@ -5487,6 +5487,11 @@ int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
     if (!p->isOpen()) {
         return -1;
     }
+    // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
+    // that sent its next request before the response to the previous one (pipelining) has it here
+    if (p->buflen > 0) {
+        return 1;
+    }
     if (p->ssl) {
         // TLS connection: use SSL_peek to drain TLS post-handshake records
         // (for example TLS 1.3 NewSessionTicket). SSL_peek consumes such

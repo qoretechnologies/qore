@@ -486,9 +486,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         on_exit hs.removeFastRoute("/pipe");
         Socket c = warmUp();
         # two requests in one send: the second is already buffered when the first is read, so the route does not
-        # answer the first; it takes the normal path.  (The normal path itself does not answer the second request of a
-        # pipelined pair today - the server only looks at the socket, not at its buffer, for the next request - so only
-        # the first answer is read.)
+        # answer the first (it must not, as the bytes of the second are in the buffer); it takes the normal path.  The
+        # second request is answered as well, after the first, and by the route: nothing is buffered then
         string one = "GET /pipe HTTP/1.1\r\nHost: x\r\n\r\n";
         int before = hs.getFastRouteInfo().fallbacks.pipelined;
         c.send(one + one);
@@ -496,6 +495,23 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq(200, r1.code);
         assertEq("handler", r1.body, "a request followed by another already received takes the normal path");
         assertEq(before + 1, hs.getFastRouteInfo().fallbacks.pipelined);
+        hash<auto> r2 = readResponse(c);
+        assertEq(200, r2.code);
+        assertEq("fast", r2.body, "the pipelined request is answered");
+
+        # three requests: each is answered in order; the route's request is followed by another one that is already
+        # received, so it takes the normal path
+        string normal = "GET /normal HTTP/1.1\r\nHost: x\r\n\r\n";
+        c.send(normal + one + normal);
+        assertEq("same", readResponse(c).body);
+        assertEq("handler", readResponse(c).body);
+        assertEq("same", readResponse(c).body);
+        # the last request of a burst has nothing after it
+        c.send(normal + one);
+        assertEq("same", readResponse(c).body);
+        assertEq("fast", readResponse(c).body);
+        # and the connection is usable afterwards
+        assertEq("fast", request(c, "GET", "/pipe").body);
     }
 
     testReplaceRemove() {
@@ -640,6 +656,13 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("handler", request(c, "GET", "/other").body);
         assertEq("fast", request(c, "GET", "/tls").body);
         assertEq(21, tls_hs.getFastRouteInfo().routes{"/tls"});
+
+        # pipelined requests over TLS: both are answered, the first by the handler (the second is already received)
+        # and the second by the route
+        string req = "GET /tls HTTP/1.1\r\nHost: x\r\n\r\n";
+        c.send(req + req);
+        assertEq("handler", readResponse(c).body);
+        assertEq("fast", readResponse(c).body);
     }
 
     testCounters() {

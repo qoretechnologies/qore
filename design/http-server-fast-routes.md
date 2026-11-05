@@ -331,10 +331,11 @@ request gets a new operation).  An operation that answers a request itself and d
 
 ## Risks and open questions
 
-- the normal path does not answer the second of two pipelined requests that arrive in one send: the server looks at the
-  socket, not at the buffer that the header read leaves its surplus in, for the next request, so the request waits
-  until more data arrives.  This is independent of fast routes (it happens with none registered); a route does not
-  answer a request when another is already buffered, so it does not make it worse.  Worth fixing separately
+- (fixed) the normal path did not answer the second of two pipelined requests that arrived in one send: the idle
+  check of a connection looked at the descriptor (and at OpenSSL's buffer), not at the bytes that the header read had
+  already taken into the socket's own buffer, so the request waited until more data arrived.
+  `QoreSocketObject::checkIdleDataForAsyncPollLocked()` now reports buffered bytes first.  A route still does not answer
+  a request when another is already buffered
 - bypassing the handler chain changes what an operator can rely on (logging, auth, tracing): mitigated by `public`,
   counters and documentation; whether a sampled access log is worth adding is open
 - a response too large for the socket buffer stays in the operation's send phase until the reader drains it; the
