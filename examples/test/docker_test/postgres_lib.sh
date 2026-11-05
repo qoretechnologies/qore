@@ -1,7 +1,7 @@
 #!/bin/sh
 
 start_postgres() {
-    docker run --name=postgres --network=host -e POSTGRES_PASSWORD=qore -e TZ=Europe/Prague -e PGTZ=Europe/Prague -d pgvector/pgvector:pg15
+    docker run --name=postgres --network=host -e POSTGRES_PASSWORD=qore -e TZ=Europe/Prague -e PGTZ=Europe/Prague -d pgvector/pgvector:pg18
 
     # wait for PostgreSQL server to start
     printf "waiting on PostgreSQL server: "
@@ -24,27 +24,27 @@ start_postgres() {
         waited=$((waited+1))
     done
 
-    export OMQ_DB_USER=postgres
-    export OMQ_DB_PASS=qore
-    export OMQ_DB_NAME=postgres
-    export OMQ_DB_HOST=`qore -ne 'printf("%s", (map $1.address, get_netif_list(), $1.family == AF_INET && $1.address !~ /^127/ && $1.address !~ /\.0$/)[0]);'`
-    export QORE_DB_CONNSTR_PGSQL=pgsql:${OMQ_DB_USER}/${OMQ_DB_PASS}@${OMQ_DB_NAME}%${OMQ_DB_HOST}
+    export QORE_DB_USER=postgres
+    export QORE_DB_PASS=qore
+    export QORE_DB_NAME=postgres
+    export QORE_DB_HOST=`qore -ne 'printf("%s", (map $1.address, get_netif_list(), $1.family == AF_INET && $1.address !~ /^127/ && $1.address !~ /\.0$/)[0]);'`
+    export QORE_DB_CONNSTR_PGSQL=pgsql:${QORE_DB_USER}/${QORE_DB_PASS}@${QORE_DB_NAME}%${QORE_DB_HOST}
 
     # make sure we can access the DB
     qore -nX "(new Datasource(\"${QORE_DB_CONNSTR_PGSQL}\")).getServerVersion()"
 
     # enable pgvector extension if available
-    psql -Upostgres -h ${OMQ_DB_HOST} -c "create extension if not exists vector;" ${OMQ_DB_NAME} 2>/dev/null || true
+    psql -Upostgres -h ${QORE_DB_HOST} -c "create extension if not exists vector;" ${QORE_DB_NAME} 2>/dev/null || true
 }
 
 setup_postgres_on_host() {
     # add env vars to environment file and load it
     # NOTE: must convert to lower case only, or the psql commands below will fail
     user=qore_test_`qore -lUtil -ne 'printf("%s", get_random_string(10));' | tr A-Z a-z`
-    echo export OMQ_DB_USER=${user} >> /tmp/env.sh
-    echo export OMQ_DB_PASS=qore >> /tmp/env.sh
-    echo export OMQ_DB_NAME=${user} >> /tmp/env.sh
-    echo export OMQ_DB_HOST=${RUNNER_HOST:=pgsql} >> /tmp/env.sh
+    echo export QORE_DB_USER=${user} >> /tmp/env.sh
+    echo export QORE_DB_PASS=qore >> /tmp/env.sh
+    echo export QORE_DB_NAME=${user} >> /tmp/env.sh
+    echo export QORE_DB_HOST=${RUNNER_HOST:=pgsql} >> /tmp/env.sh
     systemdb=pgsql:${user}/qore@${user}%${RUNNER_HOST:=pgsql}
     echo export QORE_DB_CONNSTR_PGSQL=${systemdb} >> /tmp/env.sh
     echo export QORE_DB_CONNSTR=${systemdb} >> /tmp/env.sh
@@ -63,15 +63,15 @@ setup_postgres_on_host() {
     # create user for test; CREATEROLE lets SqlUtil's PgsqlBoundedTransaction.qtest create (and drop) the role its
     # row-security case needs
     cat <<EOF | psql -Upostgres ${PSQL_ARGS}
-create database ${OMQ_DB_NAME} encoding = 'utf8';
-\connect ${OMQ_DB_NAME};
+create database ${QORE_DB_NAME} encoding = 'utf8';
+\connect ${QORE_DB_NAME};
 create extension if not exists vector;
-create user ${OMQ_DB_USER} password 'qore' createrole;
-grant create, connect, temp on database ${OMQ_DB_NAME} to ${OMQ_DB_USER};
-grant select on all tables in schema pg_catalog to ${OMQ_DB_USER};
-grant all on schema public to ${OMQ_DB_USER};
+create user ${QORE_DB_USER} password 'qore' createrole;
+grant create, connect, temp on database ${QORE_DB_NAME} to ${QORE_DB_USER};
+grant select on all tables in schema pg_catalog to ${QORE_DB_USER};
+grant all on schema public to ${QORE_DB_USER};
 EOF
-    echo created pgsql user ${OMQ_DB_USER} and db ${OMQ_DB_NAME}
+    echo created pgsql user ${QORE_DB_USER} and db ${QORE_DB_NAME}
 
     # make sure we can access the DB
     qore -nX "(new Datasource(\"${QORE_DB_CONNSTR_PGSQL}\")).getServerVersion()"
@@ -83,11 +83,11 @@ cleanup_postgres_on_host() {
     if [ "${POSTGRES_HOST}" = "1" ]; then
         # drop postgresql test user
         cat <<EOF | psql -Upostgres ${PSQL_ARGS}
-drop owned by ${OMQ_DB_USER};
-drop database ${OMQ_DB_NAME} with (force);
-drop role ${OMQ_DB_USER};
+drop owned by ${QORE_DB_USER};
+drop database ${QORE_DB_NAME} with (force);
+drop role ${QORE_DB_USER};
 EOF
-        echo dropped pgsql user ${OMQ_DB_USER}
+        echo dropped pgsql user ${QORE_DB_USER}
     fi
 }
 

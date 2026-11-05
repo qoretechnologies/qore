@@ -229,6 +229,8 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
+    - fixed logging sensitive data: the parameters of failed tool, prompt and completion calls are masked as with
+      @ref HttpServer::http_mask_value() "http_mask_value()"
     - fixed registering a tool whose input type has a binary field with a default value; describing it raised
       \c RUNTIME-TYPE-ERROR
     - a tool's input schema describes each type with fields that its input type refers to more than once, including

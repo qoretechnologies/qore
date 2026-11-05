@@ -1,0 +1,440 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests that REST and HTTP server log messages at every level do not contain sensitive values.  Every request is
+    made through a real server, and the log is read only after the server stops, so all its messages have been written
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServer
+%requires RestHandler
+%requires JsonRpcHandler
+%requires json
+
+%exec-class RestHandlerLogMaskingTest
+
+#! Keeps every message logged
+class CapturingAppender inherits LoggerAppenderWithLayout {
+    public {
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG) {
+            push messages, params.toString();
+        }
+    }
+}
+
+#! Sensitive values of a request and a response, and values that must remain readable
+const RequestArgs = {
+    "username": "public-request-user",
+    "pass": "SECRET-REQ-pass",
+    "password": "SECRET-REQ-password",
+    "token": "SECRET-REQ-token",
+    "apikey": "SECRET-REQ-apikey",
+    "refresh_token": "SECRET-REQ-refresh",
+    "max_tokens": 4321,
+    "connections": (
+        {
+            "name": "public-request-conn",
+            "url_hash": {"protocol": "https", "username": "public-request-url-user", "pass": "SECRET-REQ-url-pass"},
+            "opts": {"token": "SECRET-REQ-opts-token", "apikey": "SECRET-REQ-opts-apikey", "timeout": 8765},
+        },
+    ),
+};
+
+const ResponseBody = {
+    "user": "public-response-user",
+    "token": "SECRET-RSP-token",
+    "access_token": "SECRET-RSP-access",
+    "refresh_token": "SECRET-RSP-refresh",
+    "token_type": "public-response-type",
+    "connections": (
+        {
+            "name": "public-response-conn",
+            "url_hash": {"protocol": "https", "username": "public-response-url-user", "pass": "SECRET-RSP-url-pass"},
+        },
+    ),
+};
+
+class ItemRestClass inherits AbstractRestClass {
+    string name() {
+        return "item";
+    }
+
+    hash<HttpHandlerResponseInfo> post(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, ResponseBody, {"Set-Cookie": "session=SECRET-RSP-cookie"});
+    }
+
+    hash<HttpHandlerResponseInfo> getLeaf(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, "leaf");
+    }
+
+    *AbstractRestClass subClass(string name, hash<auto> cx, *hash<auto> args) {
+        return name == "sub" ? new ItemRestClass() : NOTHING;
+    }
+}
+
+class RootRestClass inherits ItemRestClass {
+    string name() {
+        return "root";
+    }
+}
+
+#! A handler with its own masking, to check that it is used
+class CustomMaskRestHandler inherits RestHandler {
+    constructor(Logger logger) : RestHandler(logger) {
+    }
+
+    string maskData(string msg) {
+        return "custom-mask:" + RestHandler::maskData(msg);
+    }
+}
+
+#! Counts the values masked for log messages
+class CountingRestHandler inherits RestHandler {
+    public {
+        Counter calls();
+    }
+
+    constructor(Logger logger) : RestHandler(logger) {
+    }
+
+    string maskData(string msg) {
+        calls.inc();
+        return RestHandler::maskData(msg);
+    }
+}
+
+#! Counts the values masked for log messages
+class CountingJsonRpcHandler inherits JsonRpcHandler {
+    public {
+        Counter calls();
+    }
+
+    constructor(Logger logger) : JsonRpcHandler(logger, new PermissiveAuthenticator(), ()) {
+    }
+
+    auto maskValue(auto value) {
+        calls.inc();
+        return JsonRpcHandler::maskValue(value);
+    }
+}
+
+#! Logs by itself, with no logger, so the default must prepare messages
+class NoLoggerRestHandler inherits RestHandler {
+    public {
+        list<string> messages = ();
+    }
+
+    logDebug(string fmt, ...) {
+        push messages, vsprintf(fmt, argv);
+    }
+}
+
+#! Has no logger and says that nothing will be logged
+class NoLoggerSilentRestHandler inherits CountingRestHandler {
+    constructor() : CountingRestHandler(new Logger("unused", LoggerLevel::getLevelAll())) {
+        setLogger();
+    }
+
+    bool isLogDebugEnabled() {
+        return False;
+    }
+
+    bool isLogTraceEnabled() {
+        return False;
+    }
+}
+
+public class RestHandlerLogMaskingTest inherits QUnit::Test {
+    constructor() : Test("RestHandlerLogMaskingTest", "1.0") {
+        addTestCase("no masking with levels off", \testLevelsOff());
+        addTestCase("masking at DEBUG", \testDebugOn());
+        addTestCase("handlers with no logger", \testNoLogger());
+        addTestCase("JSON-RPC masking follows the level", \testJsonRpc());
+        addTestCase("server masks bodies only if logging", \testServerInfoOff());
+        addTestCase("a request and a response dispatched to a subclass", \testSubclassDispatch());
+        addTestCase("a request and a response dispatched to the class itself", \testDirectDispatch());
+        addTestCase("an unknown subclass", \testUnknownSubclass());
+        addTestCase("listener header and body logging", \testListenerLogging());
+        addTestCase("no handler for a request with credentials", \testNoHandler());
+        addTestCase("rejected Authorization headers", \testRejectedAuthorization());
+        addTestCase("a subclass's maskData() is used", \testCustomMask());
+        addTestCase("trace messages off", \testTraceOff());
+        set_return_value(main());
+    }
+
+    #! makes requests to the given handler through a real server; requests have ended when this returns
+    private serve(AbstractHttpRequestHandler handler, string regex, code requests, *code mask, *int server_level) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevel(server_level ?? LoggerLevel::ERROR)),
+        });
+        on_exit server.stop();
+        if (mask) {
+            server.setMaskCode(mask);
+        }
+        server.setHandler("h", regex, NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d", port)});
+        requests(client);
+        client.disconnect();
+        server.stop();
+    }
+
+    private CountingRestHandler countingHandler(int level, CapturingAppender appender) {
+        Logger logger("capture", LoggerLevel::getLevel(level));
+        logger.addAppender(appender);
+        CountingRestHandler rest(logger);
+        rest.addClass(new RootRestClass());
+        return rest;
+    }
+
+    testLevelsOff() {
+        CapturingAppender appender();
+        CountingRestHandler rest = countingHandler(LoggerLevel::INFO, appender);
+        foreach string path in ("/root", "/root/sub", "/root/other") {
+            serve(rest, "^root", sub (HTTPClient client) { post(client, path); });
+        }
+        assertEq(0, rest.calls.getCount(), "maskData() calls with DEBUG and TRACE off");
+    }
+
+    testDebugOn() {
+        CapturingAppender appender();
+        CountingRestHandler rest = countingHandler(LoggerLevel::DEBUG, appender);
+        serve(rest, "^root", sub (HTTPClient client) { post(client, "/root/sub"); });
+        assertGt(0, rest.calls.getCount());
+        string log = foldl $1 + "\n" + $2, appender.messages;
+        assertRegex("dispatching to subclass", log);
+        testRequestPublic(log);
+        checkNoSecrets(log);
+    }
+
+    testNoLogger() {
+        NoLoggerRestHandler rest();
+        rest.addClass(new RootRestClass());
+        assertTrue(rest.isLogDebugEnabled());
+        assertTrue(rest.isLogTraceEnabled());
+        serve(rest, "^root", sub (HTTPClient client) { post(client, "/root/sub"); });
+        string log = foldl $1 + "\n" + $2, rest.messages;
+        assertRegex("dispatching to subclass", log);
+        testRequestPublic(log);
+        checkNoSecrets(log);
+
+        NoLoggerSilentRestHandler silent();
+        silent.addClass(new RootRestClass());
+        serve(silent, "^root", sub (HTTPClient client) { post(client, "/root/sub"); });
+        assertEq(0, silent.calls.getCount());
+    }
+
+    private int jsonRpcCalls(int level) {
+        CountingJsonRpcHandler handler(new Logger("capture", LoggerLevel::getLevel(level)));
+        serve(handler, "^JSON", sub (HTTPClient client) {
+            hash<auto> info;
+            client.send(make_json({"jsonrpc": "2.0", "method": "system.describe", "id": 1}), "POST", "/JSON",
+                {"Content-Type": "application/json"}, False, \info);
+        });
+        return handler.calls.getCount();
+    }
+
+    testJsonRpc() {
+        assertEq(0, jsonRpcCalls(LoggerLevel::INFO));
+        assertGt(0, jsonRpcCalls(LoggerLevel::DEBUG));
+    }
+
+    testServerInfoOff() {
+        list<string> masked = ();
+        Mutex lck();
+        CapturingAppender appender();
+        serve(countingHandler(LoggerLevel::INFO, appender), "^root", sub (HTTPClient client) {
+            post(client, "/root");
+        }, string sub (string msg) {
+            lck.lock();
+            on_exit lck.unlock();
+            push masked, msg;
+            return msg;
+        });
+        assertEq((), (select masked, $1 =~ /public-request-user/));
+    }
+
+    #! returns all log messages produced by the requests made by the given closure
+    private string run(code requests, *AbstractAuthenticator auth, *bool custom_mask, *int level, *int log_options) {
+        CapturingAppender appender();
+        Logger logger("capture", LoggerLevel::getLevel(level ?? LoggerLevel::ALL));
+        logger.addAppender(appender);
+
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+
+        RestHandler rest = custom_mask ? new CustomMaskRestHandler(logger) : new RestHandler(logger, auth);
+        rest.addClass(new RootRestClass());
+        server.setHandler("rest", "^root", NOTHING, rest);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        if (log_options) {
+            server.setListenerLogOptionsID(0, log_options);
+        }
+
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d", port)});
+        requests(client);
+        client.disconnect();
+        server.stop();
+        return foldl $1 + "\n" + $2, appender.messages;
+    }
+
+    private post(HTTPClient client, string path) {
+        hash<auto> info;
+        try {
+            client.send(make_json(RequestArgs), "POST", path, {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Authorization": "Bearer SECRET-REQ-header",
+            }, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            # an error response is expected for an unknown subclass; its log messages are what is tested
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        }
+    }
+
+    private checkNoSecrets(string log) {
+        *list<string> found = (log =~ x/(SECRET-[-A-Za-z]+)/g);
+        assertEq(NOTHING, found, "secret values in the log");
+    }
+
+    private checkPublic(string log, list<string> values) {
+        foreach string value in (values) {
+            assertTrue(log.find(value) >= 0, sprintf("%y is in the log", value));
+        }
+    }
+
+    private testRequestPublic(string log) {
+        checkPublic(log, ("public-request-user", "public-request-conn", "public-request-url-user", "4321", "8765"));
+    }
+
+    testSubclassDispatch() {
+        string log = run(sub (HTTPClient client) { post(client, "/root/sub"); });
+        assertRegex("dispatching to subclass", log);
+        checkNoSecrets(log);
+        testRequestPublic(log);
+        checkPublic(log, ("public-response-user", "public-response-type", "public-response-conn",
+            "public-response-url-user"));
+    }
+
+    testDirectDispatch() {
+        string log = run(sub (HTTPClient client) { post(client, "/root"); });
+        assertRegex("dispatching method", log);
+        checkNoSecrets(log);
+        testRequestPublic(log);
+        checkPublic(log, ("public-response-user",));
+    }
+
+    testUnknownSubclass() {
+        string log = run(sub (HTTPClient client) { post(client, "/root/other"); });
+        assertRegex("unknown subclass", log);
+        checkNoSecrets(log);
+        testRequestPublic(log);
+    }
+
+    testListenerLogging() {
+        string log = run(sub (HTTPClient client) { post(client, "/root"); }, NOTHING, NOTHING, NOTHING,
+            HttpServer::LLO_RECV_HEADERS | HttpServer::LLO_RECV_BODY | HttpServer::LLO_SEND_HEADERS
+                | HttpServer::LLO_SEND_BODY);
+        assertRegex("SEND HDR", log);
+        assertRegex("SEND BODY", log);
+        assertRegex("RECV BODY", log);
+        checkNoSecrets(log);
+        checkPublic(log, ("public-request-user", "Set-Cookie"));
+    }
+
+    testNoHandler() {
+        string log = run(sub (HTTPClient client) {
+            hash<auto> info;
+            try {
+                client.send(NOTHING, "GET", "/none", {
+                    "Authorization": "Bearer SECRET-REQ-header",
+                    "X-Api-Key": "SECRET-REQ-key",
+                    "X-Public": "public-header",
+                }, False, \info);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            }
+        });
+        assertRegex("no handler", log);
+        checkNoSecrets(log);
+        checkPublic(log, ("public-header",));
+    }
+
+    testRejectedAuthorization() {
+        string log = run(sub (HTTPClient client) {
+            foreach string value in ("Custom SECRET-REQ-custom",
+                "Basic " + make_base64_string("SECRET-REQ-basic:"),
+                "Basic " + make_base64_string(":SECRET-REQ-basic2")) {
+                hash<auto> info;
+                try {
+                    client.send(NOTHING, "GET", "/root/leaf", {"Authorization": value}, False, \info);
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+                }
+            }
+        }, new RejectingAuthenticator());
+        assertRegex("Unsupported 'Authorization' header scheme: \"Custom\"", log);
+        assertRegex("Invalid Basic Authorization header", log);
+        checkNoSecrets(log);
+    }
+
+    testCustomMask() {
+        string log = run(sub (HTTPClient client) { post(client, "/root/sub"); }, NOTHING, True);
+        assertRegex("args: custom-mask:", log);
+        assertRegex("response body: custom-mask:", log);
+        checkNoSecrets(log);
+    }
+
+    testTraceOff() {
+        string log = run(sub (HTTPClient client) { post(client, "/root"); }, NOTHING, NOTHING,
+            LoggerLevel::DEBUG);
+        assertRegex("dispatching method", log);
+        assertNRegex("response body:", log);
+        assertNRegex("public-response-user", log);
+        checkNoSecrets(log);
+    }
+}
+
+#! Requires authentication and accepts nobody
+class RejectingAuthenticator inherits AbstractAuthenticator {
+    bool requiresAuthentication() {
+        return True;
+    }
+
+    authenticate(reference<hash<auto>> cx, string user, string pass = "") {
+        throw "AUTHENTICATION-ERROR", "rejected";
+    }
+}
