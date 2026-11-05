@@ -75,7 +75,7 @@ An immutable snapshot, replaced as a whole when routes change (copy-on-write; re
 operation and never block).  Each entry:
 
 |!Field|!Meaning
-|`method`|`GET` only in phase 1.  `HEAD` takes the normal path: that path reports `Content-Length: 0` for a `HEAD` response, which a fast route would have to copy or contradict
+|`method`|`GET` only in phase 1.  `HEAD` takes the normal path, which answers it with the headers of the `GET` response (see the risks below)
 |`path`|an exact path, compared with the query string removed (`?` and everything after it); no patterns in phase 1
 |`spec`|what the route answers with: rules over cells and an optional `otherwise` response (below)
 |`public`|must be `True`: the route is served without the handler chain, and so without authentication
