@@ -118,7 +118,8 @@ public namespace HttpServerAsyncIo {
     public hashdecl HttpRequestResultInfo {
         #! The request was a \c HEAD request
         /** The response has no message body and no \c Content-Length is added to it; a \c Content-Length in \c hdr is
-            sent as it is (RFC 9110 section 9.3.2)
+            sent as it is (RFC 9110 section 9.3.2).  The socket methods that send the response check this: the body must be
+            empty, and a \c Content-Length in \c hdr must be a number of octets (digits only), or the call throws
 
             @since HttpServerAsyncIo 1.0
         */
