@@ -485,6 +485,11 @@
     see @ref csvutil_rfc4180.
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Waiting for a Thread to Terminate
+    @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
+    list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
+    (<a href="https://github.com/qoretechnologies/qore/issues/5575">issue 5575</a>).
+
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module
     parse option mask, which strips restrictions from what modules inherit from their loader or adds restrictions to

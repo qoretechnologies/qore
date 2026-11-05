@@ -5976,8 +5976,64 @@ void QoreThreadList::deleteDataRelease(int tid) {
     delete thread_data.get();
     thread_data.set(nullptr);
 
-    AutoLocker al(lck);
-    releaseIntern(tid);
+    {
+        AutoLocker al(lck);
+        releaseIntern(tid);
+    }
+    notifyJoiners();
+}
+
+int QoreThreadList::joinThread(int tid, int64 timeout_ms, ExceptionSink* xsink) {
+    if (tid <= 0 || tid >= MAX_QORE_THREADS) {
+        // no such thread can be running
+        return 0;
+    }
+    if (tid == q_gettid()) {
+        xsink->raiseException("THREAD-JOIN-ERROR", "thread_join(): a thread cannot join itself (TID %d)", tid);
+        return -1;
+    }
+
+    // the deadline is fixed once, as a wakeup is not necessarily for this thread
+    std::chrono::steady_clock::time_point deadline;
+    if (timeout_ms >= 0) {
+        deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    }
+
+    // lock order: join_lck, then lck (qore_check_cancel() in the wait takes lck)
+    AutoLocker jl(join_lck);
+    uint64_t count;
+    {
+        AutoLocker al(lck);
+        if (entry[tid].available()) {
+            return 0;
+        }
+        // a different count means that the thread has been released, even if its TID was given to another thread
+        // since
+        count = entry[tid].release_count;
+    }
+
+    while (true) {
+        int rc;
+        if (timeout_ms < 0) {
+            rc = join_cond.waitWithInterrupt(&join_lck, xsink);
+        } else {
+            int64 remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()).count();
+            if (remaining <= 0) {
+                return released(tid, count) ? 0 : ETIMEDOUT;
+            }
+            rc = join_cond.waitWithInterrupt(&join_lck, remaining, xsink);
+        }
+        if (rc == QORE_COND_RESULT_INTERRUPTED) {
+            return -1;
+        }
+        if (released(tid, count)) {
+            return 0;
+        }
+        if (rc == QORE_COND_RESULT_TIMEOUT) {
+            return ETIMEDOUT;
+        }
+    }
 }
 
 void QoreThreadList::deleteDataReleaseSignalThread() {
@@ -6417,6 +6473,9 @@ void QoreThreadList::forkChild(int tid) {
     num_threads = (tid > 0 && !entry[tid].available()) ? 1 : 0;
     // held by this thread since forkPrepare()
     lck.reinitAfterFork();
+    // the joiners of the parent do not exist in the child, and one of them may have held join_lck
+    join_lck.reinitAfterFork();
+    join_cond.reinitAfterFork();
 }
 
 int qore_fork_get_tid() {

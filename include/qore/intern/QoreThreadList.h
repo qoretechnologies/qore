@@ -36,7 +36,10 @@
 #include <qore/QoreRWLock.h>
 #include <qore/qore_thread.h>
 
+#include <qore/QoreCondition.h>
+
 #include <atomic>
+#include <chrono>
 #include <vector>
 #include <pthread.h>
 #include <sys/types.h>
@@ -115,6 +118,10 @@ public:
     ThreadData* thread_data;
     unsigned char status;
     bool joined; // if set to true then pthread_detach should not be called on exit
+
+    //! incremented each time the entry is released, so a waiter can tell a TID's reuse from the thread it waits for
+    /** only changed under thread_list.lck */
+    uint64_t release_count = 0;
 
     //! per-thread cooperative cancellation request bits (@ref QCR_THREAD_CANCEL, @ref QCR_SANDBOX_LIMIT), checked at
     //! cancellation points
@@ -298,17 +305,29 @@ public:
     }
 
     DLLLOCAL void release(int tid) {
-        AutoLocker al(lck);
-        releaseIntern(tid);
+        {
+            AutoLocker al(lck);
+            releaseIntern(tid);
+        }
+        notifyJoiners();
+    }
+
+    //! wakes the threads in joinThread(); lck must not be held
+    DLLLOCAL void notifyJoiners() {
+        AutoLocker al(join_lck);
+        join_cond.broadcast();
     }
 
     DLLLOCAL int releaseReserved(int tid) {
-        AutoLocker al(lck);
-        if (entry[tid].status != QTS_RESERVED) {
-            return -1;
-        }
+        {
+            AutoLocker al(lck);
+            if (entry[tid].status != QTS_RESERVED) {
+                return -1;
+            }
 
-        releaseIntern(tid);
+            releaseIntern(tid);
+        }
+        notifyJoiners();
         return 0;
     }
 
@@ -334,6 +353,25 @@ public:
     DLLLOCAL void deleteData(int tid);
 
     DLLLOCAL void deleteDataRelease(int tid);
+
+    //! waits until the thread with the given TID has left the thread list
+    /** @param tid the TID of the thread to wait for
+        @param timeout_ms the maximum time to wait in milliseconds; a negative value waits without a limit
+        @param xsink for the exception raised when the wait is interrupted or the current thread is the one given
+
+        @return 0 if the thread has terminated (also if no such thread is running), ETIMEDOUT if the timeout expired
+        first, or -1 if an exception was raised
+
+        The wait ends when the TID is released, i.e. when the thread is no longer in the list returned by
+        thread_list() and no longer counted by num_threads(); a thread that later gets the same TID is not waited for.
+    */
+    DLLLOCAL int joinThread(int tid, int64 timeout_ms, ExceptionSink* xsink);
+
+    //! returns true if the thread that had the given release count has been released; acquires lck
+    DLLLOCAL bool released(int tid, uint64_t count) {
+        AutoLocker al(lck);
+        return entry[tid].available() || entry[tid].release_count != count;
+    }
 
     DLLLOCAL void deleteDataReleaseSignalThread();
 
@@ -580,6 +618,13 @@ protected:
 
     // lock for reading the thread list
     mutable QoreThreadLock lck;
+    //! guards join_cond; see joinThread()
+    /** cannot be lck: a cancellable wait takes lck (qore_check_cancel()) while it holds the mutex it waits with.
+        Lock order: join_lck, then lck.  lck must never be held when join_lck is taken.
+    */
+    QoreThreadLock join_lck;
+    //! broadcast with join_lck held, after lck has been released, each time a TID is released; see joinThread()
+    QoreCondition join_cond;
     unsigned num_threads = 0;
     ThreadEntry entry[MAX_QORE_THREADS];
 
@@ -603,6 +648,7 @@ protected:
         // NOTE: cannot safely call printd here, because normally the thread_data has been deleted
         //printf("DEBUG: ThreadList.releaseIntern() TID %d terminated\n", tid);
         entry[tid].cleanup();
+        ++entry[tid].release_count;
         if (tid) {
             --num_threads;
         }
