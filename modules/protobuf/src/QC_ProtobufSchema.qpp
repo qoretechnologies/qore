@@ -130,7 +130,7 @@ binary data = schema.encode("mypackage.Point", {"x": 1.0, "y": 2.0, "label": "or
 
     @since %protobuf 1.0
 */
-qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf; dom=FILESYSTEM];
+qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf];
 
 //! Creates a ProtobufSchema from a <tt>.proto</tt> file on the filesystem
 /** @param path the directory path for <tt>.proto</tt> file imports
@@ -141,9 +141,14 @@ qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf; dom=FI
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow \a path to be read
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve \a path
 
+    @note this is the only constructor of the class that reads the filesystem, so it is the only one that needs the
+    @ref PO_NO_FILESYSTEM "filesystem" functional domain; a program that does not have it can create a schema from
+    <tt>.proto</tt> content, serialized descriptors or a schema hash.  The imports of a <tt>.proto</tt> text given as
+    content are not read from disk: only the content itself is parsed.
+
     @since %protobuf 1.0
 */
-ProtobufSchema::constructor(string path, string proto_file) {
+ProtobufSchema::constructor(string path, string proto_file) [dom=FILESYSTEM] {
     // a path with a NUL character would be cut at the NUL character
     if (q_check_path(*path, "PROTOBUF-SCHEMA-ERROR", xsink)
             || q_check_path(*proto_file, "PROTOBUF-SCHEMA-ERROR", xsink)) {

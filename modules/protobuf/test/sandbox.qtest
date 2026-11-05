@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Only the constructor of ProtobufSchema that loads a .proto file needs the filesystem domain: a program without it
+# (PO_NO_FILESYSTEM, as a sandboxed service has) can build a schema from content, serialized descriptors or a
+# definition, and is refused the constructor that reads a file.  The imports of .proto content are not read from disk.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires protobuf
+
+%exec-class ProtobufSandboxTest
+
+class ProtobufSandboxTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto3\";\npackage test;\nmessage Point { double x = 1; }\n";
+
+        #! a .proto text that imports another file, which exists on disk in some of the tests
+        const ImportingProto = "syntax = \"proto3\";\npackage test;\nimport \"other.proto\";\n"
+            "message Wrapper { Other other = 1; }\n";
+        const OtherProto = "syntax = \"proto3\";\npackage test;\nmessage Other { int32 n = 1; }\n";
+    }
+
+    constructor() : QUnit::Test("ProtobufSchema in a sandboxed program", "1.0", \ARGV) {
+        addTestCase("content, descriptors and definition without the filesystem domain", \testNoFilesystem());
+        addTestCase("the path constructor is refused without the filesystem domain", \testPathRefused());
+        addTestCase("imports of content are not read from disk", \testImportsNotRead());
+        addTestCase("a program with the filesystem domain is unchanged", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! returns a string as a Qore string literal
+    private static string quote(string str) {
+        return "\"" + replace(replace(replace(str, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n") + "\"";
+    }
+
+    #! returns a program that is not allowed the filesystem domain and that has the protobuf module
+    /** @param code the code of the program; it can use the constants Proto and ImportingProto
+
+        @note a program can be parsed only once, so the code is parsed with the module and the constants
+    */
+    private Program sandboxed(string code) {
+        Program p(PO_NO_FILESYSTEM);
+        p.parse("%requires protobuf\n"
+            "const Proto = " + quote(Proto) + ";\n"
+            "const ImportingProto = " + quote(ImportingProto) + ";\n" + code, "sandboxed");
+        return p;
+    }
+
+    #! runs the function run() of code in a program that is not allowed the filesystem domain
+    private auto runSandboxed(string code, *list<auto> args) {
+        Program p = sandboxed(code);
+        return p.callFunction("run", args);
+    }
+
+    testNoFilesystem() {
+        # each way of creating a schema that does not read a file works, and the schema is usable
+        string code = "auto sub run() {\n"
+            "    ProtobufSchema a(Proto);\n"
+            "    ProtobufSchema b = ProtobufSchema::fromContent(Proto, \"point.proto\");\n"
+            "    ProtobufSchema c(a.serializeFileDescriptors());\n"
+            "    ProtobufSchema d({\"package\": \"test\", \"messages\": {\"Point\": {\"fields\": "
+            "({\"name\": \"x\", \"type\": \"double\", \"number\": 1},)}}});\n"
+            "    list<hash<auto>> rv = ();\n"
+            "    foreach ProtobufSchema s in (a, b, c, d) {\n"
+            "        rv += s.decode(\"test.Point\", s.encode(\"test.Point\", {\"x\": 1.5}));\n"
+            "    }\n"
+            "    return rv;\n"
+            "}\n";
+        list<hash<auto>> rv = runSandboxed(code);
+        assertEq(4, rv.size());
+        foreach hash<auto> h in (rv) {
+            assertEq({"x": 1.5}, h);
+        }
+    }
+
+    testPathRefused() {
+        # the program cannot use the constructor that reads a file: it is refused when the code is parsed
+        *hash<ExceptionInfo> ex;
+        try {
+            sandboxed("sub run() { ProtobufSchema s(\"/tmp\", \"point.proto\"); }");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertTrue(exists ex, "the path constructor is refused");
+        assertEq("PARSE-EXCEPTION", ex.err);
+        assertTrue(ex.desc =~ /parse options do not allow|ProtobufSchema/, "the error names the restriction: " + ex.desc);
+        # it is the domain of the constructor that refuses it, not the class: content is allowed in the same program
+        sandboxed("sub run() { ProtobufSchema s(Proto); }");
+    }
+
+    testImportsNotRead() {
+        # other.proto exists on disk, in the directory that is the working directory of the test; content that imports
+        # it is refused, with or without the filesystem domain: the content is parsed as it is
+        TmpDir dir("protobuf-sandbox-");
+        File f();
+        f.open2(join_paths(dir.path, "other.proto"), O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(OtherProto);
+        f.close();
+        on_exit chdir(getcwd());
+        chdir(dir.path);
+
+        # an unrestricted program
+        assertThrows("PROTOBUF-SCHEMA-ERROR", sub () { ProtobufSchema s(ImportingProto); });
+        # a sandboxed program
+        string code = "auto sub run() {\n"
+            "    try {\n"
+            "        ProtobufSchema s(ImportingProto);\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "    return \"no exception\";\n"
+            "}\n";
+        assertEq("PROTOBUF-SCHEMA-ERROR", runSandboxed(code));
+    }
+
+    testUnrestricted() {
+        TmpDir dir("protobuf-sandbox-");
+        File f();
+        f.open2(join_paths(dir.path, "point.proto"), O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Proto);
+        f.close();
+        # the path constructor, and an import between files on disk, work in a program that has the domain
+        ProtobufSchema schema(dir.path, "point.proto");
+        assertEq({"x": 1.5}, schema.decode("test.Point", schema.encode("test.Point", {"x": 1.5})));
+
+        f.open2(join_paths(dir.path, "other.proto"), O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(OtherProto);
+        f.close();
+        f.open2(join_paths(dir.path, "wrapper.proto"), O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ImportingProto);
+        f.close();
+        ProtobufSchema w(dir.path, "wrapper.proto");
+        assertEq({"other": {"n": 7}}, w.decode("test.Wrapper", w.encode("test.Wrapper", {"other": {"n": 7}})));
+    }
+}
