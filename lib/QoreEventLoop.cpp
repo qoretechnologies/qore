@@ -33,6 +33,7 @@
 #include "qore/intern/QoreEventLoop.h"
 #include "qore/intern/QorePollCompat.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <climits>
 #include <cstring>
@@ -304,6 +305,43 @@ void QoreEventLoop::forEachRegistration(int fd, const std::function<void(uint64_
     }
 }
 
+#if defined(DARWIN) || defined(__linux__)
+int QoreEventLoop::sizePollBuffer(size_t needed, ExceptionSink* xsink) {
+    size_t size = poll_buf.size();
+    size_t new_size;
+    if (size < needed) {
+        // grows by half at least, so that a growing number of registrations resizes it a few times only
+        new_size = std::max(needed, std::max(POLL_BUF_MIN, size + size / 2));
+    } else if (size > POLL_BUF_MIN && size / 4 > needed) {
+        // far larger than needed: the registrations of a burst are gone; twice the need, so that it does not grow
+        // again at once
+        new_size = std::max(POLL_BUF_MIN, needed * 2);
+    } else {
+        return 0;
+    }
+    try {
+        // a new vector, as a vector that is resized to fewer entries keeps its storage
+        decltype(poll_buf) buf(new_size);
+        poll_buf.swap(buf);
+    } catch (std::bad_alloc&) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    return 0;
+}
+#else
+int QoreEventLoop::sizePollBuffer(size_t needed, ExceptionSink* xsink) {
+    // poll() is given the descriptors one by one (see poll()), so the buffer is only reserved
+    try {
+        poll_buf.reserve(needed);
+    } catch (std::bad_alloc&) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    return 0;
+}
+#endif
+
 void QoreEventLoop::expandRegistrations(std::vector<QoreEventInfo>& events) {
     expand_buf.clear();
     for (const QoreEventInfo& e : events) {
@@ -529,14 +567,16 @@ int QoreEventLoop::removeUserEvent(uintptr_t ident, ExceptionSink* xsink) {
     return 0;
 }
 
-int QoreEventLoop::waitWithFifos(int64_t wait_us, std::vector<struct kevent>& kevents,
-        std::vector<QoreEventInfo>& fifo_events, ExceptionSink* xsink) {
+int QoreEventLoop::waitWithFifos(int64_t wait_us, ExceptionSink* xsink) {
     assert(fifo_count);
-    // the kqueue descriptor, which is readable when kqueue has events, then the named pipes
-    std::vector<struct pollfd> pfds;
+    // the kqueue descriptor, which is readable when kqueue has events, then the named pipes; both buffers keep their
+    // storage from one poll to the next
+    std::vector<struct pollfd>& pfds = fifo_pfds_buf;
+    pfds.clear();
+    fifo_events_buf.clear();
     try {
         pfds.reserve(fifo_count + 1);
-        fifo_events.reserve(fifo_count);
+        fifo_events_buf.reserve(fifo_count);
     } catch (std::bad_alloc&) {
         xsink->outOfMemory();
         return -1;
@@ -585,7 +625,7 @@ int QoreEventLoop::waitWithFifos(int64_t wait_us, std::vector<struct kevent>& ke
     if (pfds[0].revents & POLLIN) {
         struct timespec ts = {0, 0};
         while (true) {
-            nkevents = kevent(event_fd, nullptr, 0, kevents.data(), kevents.size(), &ts);
+            nkevents = kevent(event_fd, nullptr, 0, poll_buf.data(), static_cast<int>(poll_buf.size()), &ts);
             if (nkevents >= 0 || errno != EINTR) {
                 break;
             }
@@ -627,7 +667,7 @@ int QoreEventLoop::waitWithFifos(int64_t wait_us, std::vector<struct kevent>& ke
             ev |= QORE_EV_WRITE;
         }
         // within the reserved capacity
-        fifo_events.push_back({fd, ev, it->second.udata});
+        fifo_events_buf.push_back({fd, ev, it->second.udata});
     }
     return nkevents;
 }
@@ -657,6 +697,10 @@ bool QoreEventLoop::cancelTimer(int64_t id) {
 }
 
 int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink) {
+    // the caller's vector is reused from one poll to the next: it holds the events of this poll only, also when it
+    // fails
+    events.clear();
+
     // The wait in microseconds, -1 for no limit, clamped to the earliest timer deadline.  It is kept in microseconds
     // and waited for with the resolution the system provides (kevent()'s timespec, epoll_pwait2(), ppoll()), and
     // rounded up where only whole milliseconds can be waited for: a timer due in less than a millisecond used to make
@@ -707,21 +751,22 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     }
 
 #ifdef DARWIN
-    // kqueue: use kevent() to wait for events
-    // Allocate space for events:
-    // - at most 2 per fd (read + write)
-    // - plus 1 per user event (EVFILT_USER)
-    std::vector<struct kevent> kevents(fd_map.size() * 2 + user_event_map.size());
+    // kqueue: use kevent() to wait for events; space for at most 2 per fd (read + write), plus 1 per user event
+    // (EVFILT_USER)
+    if (sizePollBuffer(fd_map.size() * 2 + user_event_map.size(), xsink)) {
+        return -1;
+    }
+    std::vector<struct kevent>& kevents = poll_buf;
 
-    // the events of the named pipes, which are watched with select(2)
-    std::vector<QoreEventInfo> fifo_events;
     int rc;
     if (fifo_count) {
-        rc = waitWithFifos(wait_us, kevents, fifo_events, xsink);
+        // the events of the named pipes, which are watched with select(2), are in fifo_events_buf
+        rc = waitWithFifos(wait_us, xsink);
         if (rc < 0) {
             return -1;
         }
     } else {
+        fifo_events_buf.clear();
         struct timespec ts;
         struct timespec* pts = nullptr;
         int64_t deadline_us = 0;
@@ -734,7 +779,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
 
         while (true) {
-            rc = kevent(event_fd, nullptr, 0, kevents.data(), kevents.size(), pts);
+            rc = kevent(event_fd, nullptr, 0, kevents.data(), static_cast<int>(kevents.size()), pts);
             if (rc >= 0 || errno != EINTR) {
                 break;
             }
@@ -759,28 +804,40 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     // Convert kevent results to QoreEventInfo
     events.clear();
-    events.reserve(rc + fifo_events.size());
+    events.reserve(rc + fifo_events_buf.size());
 
-    // Track which fds we've seen to combine read+write events
-    std::unordered_map<int, size_t> fd_to_idx;
+    // the read and write events of a descriptor are reported separately, and are combined into one event: the results
+    // are ordered by descriptor, so those of a descriptor are next to each other, without the hash table a poll had to
+    // allocate before; user events come after the descriptors, as their identifiers are not descriptors
+    std::sort(kevents.begin(), kevents.begin() + rc, [](const struct kevent& a, const struct kevent& b) {
+        bool a_user = a.filter == EVFILT_USER;
+        bool b_user = b.filter == EVFILT_USER;
+        if (a_user != b_user) {
+            return b_user;
+        }
+        return a.ident < b.ident;
+    });
+
+    // the index in events of the last descriptor's event, if any
+    size_t last_fd_idx = 0;
+    bool have_last_fd = false;
 
     for (int i = 0; i < rc; ++i) {
         uintptr_t ident = kevents[i].ident;
 
         int ev = 0;
-        if (kevents[i].flags & EV_ERROR) {
-            ev = QORE_EV_ERROR;
-        } else if (kevents[i].filter == EVFILT_USER) {
+        if (kevents[i].filter == EVFILT_USER) {
             // User event from EventNotifier - treat as read event
             // Look up the associated QoreObject* from user_event_map
             auto uit = user_event_map.find(ident);
             if (uit != user_event_map.end()) {
-                ev = QORE_EV_READ;
                 // Use -1 as a special fd value for user events
                 // The udata is the QoreObject* stored in addUserEvent()
-                events.push_back({-1, ev, uit->second});
+                events.push_back({-1, QORE_EV_READ, uit->second});
             }
             continue;
+        } else if (kevents[i].flags & EV_ERROR) {
+            ev = QORE_EV_ERROR;
         } else if (kevents[i].filter == EVFILT_READ) {
             ev = QORE_EV_READ;
             if (kevents[i].flags & EV_EOF) {
@@ -803,20 +860,18 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             // fd was removed after kevent() returned; skip stale event
             continue;
         }
-        void* udata = fd_it->second.udata;
 
-        auto it = fd_to_idx.find(fd);
-        if (it != fd_to_idx.end()) {
-            // Combine with existing entry
-            events[it->second].events |= ev;
+        if (have_last_fd && events[last_fd_idx].fd == fd) {
+            // the descriptor's other filter
+            events[last_fd_idx].events |= ev;
         } else {
-            // New entry
-            fd_to_idx[fd] = events.size();
-            events.push_back({fd, ev, udata});
+            last_fd_idx = events.size();
+            have_last_fd = true;
+            events.push_back({fd, ev, fd_it->second.udata});
         }
     }
     // named pipes are not registered with kqueue, so their events are separate
-    events.insert(events.end(), fifo_events.begin(), fifo_events.end());
+    events.insert(events.end(), fifo_events_buf.begin(), fifo_events_buf.end());
 
     // each registration of a descriptor gets the events it waits for
     expandRegistrations(events);
@@ -832,7 +887,10 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         ++epoll_size;
     }
 #endif
-    std::vector<struct epoll_event> epevents(epoll_size);
+    if (sizePollBuffer(epoll_size, xsink)) {
+        return -1;
+    }
+    std::vector<struct epoll_event>& epevents = poll_buf;
 
     int rc;
     int64_t epoll_wait_us = wait_us;
@@ -924,9 +982,13 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     return static_cast<int>(events.size());
 
 #else
-    // poll-based fallback implementation
-    std::vector<struct pollfd> pollfds;
-    pollfds.reserve(fd_map.size());
+    // poll-based fallback implementation; the buffer keeps its storage from one poll to the next, and is given to
+    // poll() with the number of descriptors
+    std::vector<struct pollfd>& pollfds = poll_buf;
+    pollfds.clear();
+    if (sizePollBuffer(fd_map.size(), xsink)) {
+        return -1;
+    }
 
     for (const auto& [fd, info] : fd_map) {
         struct pollfd pfd;
