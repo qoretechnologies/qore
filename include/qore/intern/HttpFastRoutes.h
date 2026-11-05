@@ -1,0 +1,331 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  HttpFastRoutes.h
+
+  Qore Programming Language
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#ifndef _QORE_INTERN_HTTPFASTROUTES_H
+
+#define _QORE_INTERN_HTTPFASTROUTES_H
+
+// ISOLATION RULE: this header and lib/HttpFastRoutes.cpp are executed on the async I/O threads and must not use the
+// Qore interpreter: no QoreValue, QoreHashNode, ExceptionSink, QoreProgram, QoreObject or any other Qore type, and no
+// call that can run Qore code, wait for another thread, or block.  They include only the standard library and the
+// visibility macros of qore/common.h.  The glue that turns a Qore request header into an HttpFastRequestView and the
+// Qore classes that register routes are in other files.  The test examples/test/qore/misc/HttpFastRoutesIsolation.qtest
+// fails the build if this rule is broken (see design/http-server-fast-routes.md, "Enforcement").
+#include <qore/common.h>
+
+#include <array>
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+//! The reasons a request is not answered by a fast route (the request then takes the normal path)
+/** See design/http-server-fast-routes.md.
+*/
+enum class HttpFastFallback : unsigned {
+    NoRoute,         //!< no route has the request's path (or the method is not GET)
+    NotHttp11,       //!< not an HTTP/1.1 request
+    Body,            //!< the request has a body (Content-Length other than 0, or Transfer-Encoding)
+    Expect,          //!< the request has an Expect header
+    Upgrade,         //!< the request has an Upgrade or HTTP2-Settings header
+    Connection,      //!< the request has a Connection header other than keep-alive
+    Pipelined,       //!< bytes of a following request are already buffered
+    Stale,           //!< a cell that the route's rules read is not current
+    NoRule,          //!< no rule of the route holds and the route has no otherwise response
+    Count
+};
+
+//! An immutable, serialized response of a fast route
+/** The response is serialized when it is created, off the I/O thread.  A request is answered with a shared reference to
+    the serialized bytes; the only per-request work is choosing the cached copy for the current second, because the
+    response carries a \c Date header.
+*/
+class HttpFastResponse {
+public:
+    //! The largest response (headers and body) that a fast route serves
+    static constexpr size_t MaxSize = 64 * 1024;
+
+    //! Creates a response
+    /** @param code the status code; one of the codes with a reason phrase known here
+        @param headers the response headers; the framing and connection headers (\c Content-Length,
+        \c Transfer-Encoding, \c Connection, \c Date) are set here and must not be given
+        @param body the response body
+        @param err set to the reason if the response is not valid
+
+        @return the response, or nullptr if it is not valid
+    */
+    DLLLOCAL static std::shared_ptr<const HttpFastResponse> create(int code,
+            const std::vector<std::pair<std::string, std::string>>& headers, const std::string& body,
+            std::string& err);
+
+    //! Returns the serialized response with the \c Date of the given second
+    /** The copy is cached; it is built again when the second changes.
+    */
+    DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s) const;
+
+    //! Returns the time that the response was created, in microseconds since the epoch
+    DLLLOCAL int64_t getCreatedUs() const {
+        return created_us;
+    }
+
+    //! Returns the size of the serialized response
+    DLLLOCAL size_t size() const {
+        return head_size + body.size();
+    }
+
+private:
+    DLLLOCAL HttpFastResponse() = default;
+
+    //! status line, the given headers, up to (and excluding) the \c Date header
+    std::string head_prefix;
+    //! the headers after \c Date, the empty line and the body are appended to the \c Date header in getWire()
+    std::string head_suffix;
+    std::string body;
+    size_t head_size = 0;
+    int64_t created_us = 0;
+
+    mutable std::mutex cache_lock;
+    mutable int64_t cache_second = -1;
+    mutable std::shared_ptr<const std::string> cache;
+};
+
+//! The parts of a request that decide whether a fast route answers it
+/** Built by the caller from the parsed request header; the views refer to storage that outlives the call.
+*/
+struct HttpFastRequestView {
+    std::string_view method;
+    std::string_view path;
+    std::string_view http_version;
+    //! the value of the \c Content-Length header, if the request has one
+    std::optional<std::string_view> content_length;
+    //! the value of the \c Connection header, if the request has one
+    std::optional<std::string_view> connection;
+    bool has_transfer_encoding = false;
+    bool has_expect = false;
+    bool has_upgrade = false;
+    //! true if bytes of a following request are already buffered
+    bool pending = false;
+};
+
+//! A value that code outside the I/O threads sets and a route reads
+/** The cell is the way a fast route sees state without any hand-off: Qore code (on any thread) sets the value, the
+    I/O thread reads it.  Both are single atomic operations on a lock-free integer, so neither can wait for the other,
+    and the cell is owned jointly (a shared pointer) by the code that sets it and by every route that reads it, so a
+    route can never refer to a cell that is gone.  A boolean is 0 or 1.
+
+    A cell can have a maximum age: when the value has not been set (or touched) for that long, it is stale.  A rule
+    never reads a stale cell: the request takes the normal path, so that the handler decides when the code that
+    should keep the cell current has stopped.
+*/
+class HttpFastCell {
+public:
+    static_assert(std::atomic<int64_t>::is_always_lock_free, "a cell must be lock free: the I/O thread cannot wait");
+
+    //! Creates a cell
+    /** @param initial the initial value
+        @param max_age_us the age in microseconds after which the value is stale; 0 for never
+    */
+    DLLLOCAL HttpFastCell(int64_t initial, int64_t max_age_us) : value(initial), updated_us(nowUs()),
+            max_age_us(max_age_us) {
+    }
+
+    //! Sets the value
+    DLLLOCAL void set(int64_t v) {
+        value.store(v, std::memory_order_relaxed);
+        updated_us.store(nowUs(), std::memory_order_release);
+    }
+
+    //! Marks the value as current without changing it
+    DLLLOCAL void touch() {
+        updated_us.store(nowUs(), std::memory_order_release);
+    }
+
+    //! Returns the value
+    DLLLOCAL int64_t get() const {
+        return value.load(std::memory_order_relaxed);
+    }
+
+    //! Returns the age of the value in microseconds
+    DLLLOCAL int64_t getAgeUs() const {
+        return nowUs() - updated_us.load(std::memory_order_acquire);
+    }
+
+    //! Reads the value if it is current
+    /** @param v set to the value
+        @return false if the value is stale
+    */
+    DLLLOCAL bool load(int64_t& v) const {
+        if (max_age_us && getAgeUs() > max_age_us) {
+            return false;
+        }
+        v = value.load(std::memory_order_relaxed);
+        return true;
+    }
+
+    //! Returns the maximum age in microseconds; 0 for none
+    DLLLOCAL int64_t getMaxAgeUs() const {
+        return max_age_us;
+    }
+
+private:
+    //! monotonic time in microseconds
+    DLLLOCAL static int64_t nowUs();
+
+    std::atomic<int64_t> value;
+    std::atomic<int64_t> updated_us;
+    const int64_t max_age_us;
+};
+
+//! How a rule compares a cell with its operand
+enum class HttpFastOp {
+    Eq, Ne, Lt, Le, Gt, Ge
+};
+
+//! One rule of a route: if the cell compares true with the operand, the route answers with the response
+struct HttpFastRule {
+    std::shared_ptr<HttpFastCell> cell;
+    HttpFastOp op = HttpFastOp::Eq;
+    int64_t operand = 0;
+    std::shared_ptr<const HttpFastResponse> response;
+};
+
+//! What a route answers with: the rules in order, the first that holds wins, otherwise the \c otherwise response
+/** There is no nesting, no loop and no computation: at most MaxRules comparisons of an atomic integer with a constant.
+    A route without rules answers with its \c otherwise response.  A route whose rules do not hold and that has no
+    \c otherwise response is not eligible, so the request takes the normal path.
+*/
+class HttpFastRouteSpec {
+public:
+    //! The most rules that a route has
+    static constexpr size_t MaxRules = 8;
+
+    //! Creates a route specification
+    /** @param rules the rules, in order
+        @param otherwise the response when no rule holds; can be null
+        @param err set to the reason if the specification is not valid
+
+        @return the specification, or nullptr if it is not valid
+    */
+    DLLLOCAL static std::shared_ptr<const HttpFastRouteSpec> create(std::vector<HttpFastRule> rules,
+            std::shared_ptr<const HttpFastResponse> otherwise, std::string& err);
+
+    //! Selects the response
+    /** @param why set to the reason if there is none: \c Stale if a cell that a rule reads is not current,
+        \c NoRule if no rule holds and there is no \c otherwise response
+
+        @return the response or nullptr
+    */
+    DLLLOCAL const HttpFastResponse* choose(HttpFastFallback& why) const;
+
+    DLLLOCAL const std::vector<HttpFastRule>& getRules() const {
+        return rules;
+    }
+
+private:
+    DLLLOCAL HttpFastRouteSpec() = default;
+
+    std::vector<HttpFastRule> rules;
+    std::shared_ptr<const HttpFastResponse> otherwise;
+};
+
+//! A route: a path and what it is answered with
+class HttpFastRoute {
+public:
+    DLLLOCAL HttpFastRoute(std::string path, std::shared_ptr<const HttpFastRouteSpec> spec) :
+            path(std::move(path)), spec(std::move(spec)) {
+    }
+
+    const std::string path;
+    const std::shared_ptr<const HttpFastRouteSpec> spec;
+    //! the number of requests answered
+    mutable std::atomic<uint64_t> hits{0};
+};
+
+//! The fast routes of a listener
+/** A listener's table is shared by the connections accepted from it, so a change of the routes reaches the connections
+    that are already open.  The table itself is an immutable snapshot that is replaced as a whole: the I/O thread
+    takes a reference to the current snapshot (one short lock, no waiting for anything else) and then reads it
+    without any lock.
+*/
+class HttpFastRoutes {
+public:
+    //! The longest route path
+    static constexpr size_t MaxPathSize = 2048;
+
+    //! Adds or replaces the route for a path
+    /** @return false and \c err set if the path is not valid
+    */
+    DLLLOCAL bool add(const std::string& path, std::shared_ptr<const HttpFastRouteSpec> spec, std::string& err);
+
+    //! Removes the route for a path; returns true if there was one
+    DLLLOCAL bool remove(const std::string& path);
+
+    //! Returns the number of routes
+    DLLLOCAL size_t size() const;
+
+    //! Answers a request if a route qualifies
+    /** @param req the request
+        @param epoch_s the current time in seconds since the epoch, for the \c Date header
+        @param fallback set to the reason if the request is not answered
+
+        @return the serialized response to send, or nullptr
+    */
+    DLLLOCAL std::shared_ptr<const std::string> match(const HttpFastRequestView& req, int64_t epoch_s,
+            HttpFastFallback& fallback);
+
+    //! Returns the number of requests that took the normal path for a reason
+    DLLLOCAL uint64_t getFallbacks(HttpFastFallback reason) const {
+        return fallbacks[static_cast<size_t>(reason)].load(std::memory_order_relaxed);
+    }
+
+    //! Returns the paths of the routes with the number of requests that each has answered
+    DLLLOCAL std::vector<std::pair<std::string, uint64_t>> getRouteHits() const;
+
+    //! Returns the name of a fallback reason
+    DLLLOCAL static const char* getFallbackName(HttpFastFallback reason);
+
+private:
+    typedef std::unordered_map<std::string, std::shared_ptr<HttpFastRoute>> table_t;
+
+    DLLLOCAL std::shared_ptr<const table_t> snapshot() const;
+
+    mutable std::mutex lock;
+    std::shared_ptr<const table_t> table = std::make_shared<const table_t>();
+    std::array<std::atomic<uint64_t>, static_cast<size_t>(HttpFastFallback::Count)> fallbacks{};
+};
+
+#endif
