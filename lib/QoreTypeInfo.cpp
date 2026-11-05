@@ -3525,12 +3525,13 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                                 lvh.suppressObjectScan();
                             }
                         }
-                        // we set ok unconditionally here, because any exception thrown above is enough if there is an error
-                        ok = true;
-                    } else if (!xsink || !*xsink) {
-                        // issue #2891 the lvalue may not exist, but we can still perform the assignment
-                        ok = true;
                     }
+                    // the type of the reference has been accepted at this point, so this is never a type mismatch:
+                    // an exception raised above, including one raised while resolving the lvalue, such as
+                    // STACK-LIMIT-EXCEEDED in a long chain of references, is the error to report, and reporting a
+                    // type error as well would name two identical types as a mismatch; otherwise, issue #2891: the
+                    // lvalue may not exist, but we can still perform the assignment
+                    ok = true;
                 }
             }
             break;

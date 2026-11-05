@@ -614,9 +614,12 @@ public class AbstractTable inherits AbstractSqlUtilBase {
 
         @throw OPTION-ERROR invalid or unsupported option passed
     */
-    private constructor(AbstractDatasource nds, string nname, *hash nopts) : AbstractSqlUtilBase(nds, nopts) {
+    private constructor(AbstractDatasource nds, string nname, *hash nopts)
+            : AbstractSqlUtilBase(nds, nopts ? nopts - "template" : NOTHING) {
         name = nname;
-        doTableOptions(nopts);
+        # "template" is internal: set by the constructors of template tables (see getTable()); it is neither
+        # validated nor kept, as its value is the template cache, which holds the table
+        doTableOptions(nopts ? nopts - "template" : NOTHING);
     }
 
     #! copies the object
@@ -12884,6 +12887,20 @@ on_exit printf("SQL> %s\n", sql);
         stmt.execArgs(args);
     }
 
+    #! returns the driver's AbstractTable object for the given table
+    /** @param nds the datasource of the table
+        @param nname the name of the table
+        @param opts @ref SqlUtil::AbstractTable::TableOptions; besides them, the internal option \c template, a
+        @ref SqlUtil::Tables "Tables" object, is given by the code that builds a template table from a description
+        (the @ref SqlUtil::Table "Table" constructor with a description,
+        @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
+        @ref SqlUtil::Tables::populate() "Tables::populate()"): the table describes a table to create or align,
+        not an existing one, so a driver reads nothing from the catalog for it but values of the connection, which it
+        reads once for the cache with @ref SqlUtil::Tables::getConnectionValue() "Tables::getConnectionValue()";
+        the option is not validated and not kept by the table
+
+        @throw TABLE-DRIVER-ERROR no driver module could be loaded for the datasource, or it raised an error
+    */
     static AbstractTable getTable(AbstractDatasource nds, string nname, *hash<auto> opts) {
         string drv;
         string mn = AbstractDatabase::loadModule(nds, \drv);

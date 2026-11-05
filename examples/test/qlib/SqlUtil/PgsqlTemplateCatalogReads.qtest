@@ -1,0 +1,269 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%exec-class PgsqlTemplateCatalogReadsTest
+
+#! A datasource that records every statement sent through it
+class RecordingDatasource inherits Datasource {
+    public {
+        #! the statements sent since the last reset()
+        list<string> sql = ();
+    }
+
+    constructor(string connstr) : Datasource(connstr) {
+    }
+
+    reset() {
+        sql = ();
+    }
+
+    auto select(string str, ...) {
+        sql += str;
+        return Datasource::vselect(str, argv);
+    }
+
+    auto vselect(string str, *softlist<auto> args) {
+        sql += str;
+        return Datasource::vselect(str, args);
+    }
+
+    auto selectRow(string str, ...) {
+        sql += str;
+        return Datasource::vselectRow(str, argv);
+    }
+
+    auto vselectRow(string str, *softlist<auto> args) {
+        sql += str;
+        return Datasource::vselectRow(str, args);
+    }
+
+    auto selectRows(string str, ...) {
+        sql += str;
+        return Datasource::vselectRows(str, argv);
+    }
+
+    auto vselectRows(string str, *softlist<auto> args) {
+        sql += str;
+        return Datasource::vselectRows(str, args);
+    }
+
+    auto exec(string str, ...) {
+        sql += str;
+        return Datasource::vexec(str, argv);
+    }
+
+    auto vexec(string str, *softlist<auto> args) {
+        sql += str;
+        return Datasource::vexec(str, args);
+    }
+
+    auto execRaw(string str) {
+        sql += str;
+        return Datasource::execRaw(str);
+    }
+}
+
+#! Templates of PostgreSQL tables do not read the catalog (issue #5584)
+/** A template table, built from a description to create or align a table, does not describe an existing table: it
+    reads neither the tablespace of a table of its name nor whether the connection has a temporary table of its name,
+    and the default schema of an unqualified name is read once for all the templates of a schema.  The SQL created and
+    the alignment of the templates are the same as for a table built from a description after reading the catalog.
+*/
+class PgsqlTemplateCatalogReadsTest inherits QUnit::Test {
+    constructor() : Test("PgsqlTemplateCatalogReadsTest", "1.0", \ARGV) {
+        addTestCase("the templates of a schema read the catalog once, whatever their number", \populateReads());
+        addTestCase("templates with schema-qualified names read nothing", \qualifiedReads());
+        addTestCase("templates built one by one share the default schema of their cache", \makeTableReads());
+        addTestCase("templates create the same SQL as tables built after reading the catalog", \createSql());
+        addTestCase("templates align a schema as tables built after reading the catalog", \alignSql());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    #! Skips the test case if the server of a connection string cannot be reached
+    private skipIfNoConnection(string connstr) {
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        ds.close();
+    }
+
+    #! Returns a recording datasource whose tables are created in the run's own schema
+    private RecordingDatasource datasource() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        skipIfNoConnection(ENV.QORE_DB_CONNSTR_PGSQL);
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlTemplateCatalogReads");
+        RecordingDatasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        ds.open();
+        return ds;
+    }
+
+    #! Returns the descriptions of \a n tables named with \a prefix; each table after the first references the first
+    private hash<auto> tables(string prefix, int n) {
+        hash<auto> rv = {};
+        for (int i = 0; i < n; ++i) {
+            string name = sprintf("%s_%d", prefix, i);
+            hash<auto> desc = {
+                "columns": {
+                    "id": {"native_type": "integer", "notnull": True},
+                    "code": {"native_type": "varchar", "size": 20, "notnull": True},
+                    "parent_id": {"native_type": "integer"},
+                    "created": {"native_type": "timestamp"},
+                },
+                "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+                "indexes": {"ix_" + name + "_created": {"columns": ("created",)}},
+                "unique_constraints": {"uk_" + name + "_code": {"columns": ("code",)}},
+            };
+            if (i) {
+                desc.foreign_constraints = {"fk_" + name: {"columns": ("parent_id",), "table": prefix + "_0",
+                    "target_columns": ("id",)}};
+            }
+            rv{name} = desc;
+        }
+        return rv;
+    }
+
+    populateReads() {
+        RecordingDatasource ds = datasource();
+        on_exit ds.rollback();
+        foreach int n in ((5, 20)) {
+            ds.reset();
+            Tables cache();
+            cache.populate(ds, tables("tmpl_reads_" + n, n));
+            assertEq(n, cache.size(), "every template is built");
+            assertEq(1, ds.sql.size(), sprintf("%d templates read the catalog once: %y", n, ds.sql));
+            assertRegex("current_schema\\(\\)", ds.sql[0], "the one read is the default schema");
+        }
+    }
+
+    qualifiedReads() {
+        RecordingDatasource ds = datasource();
+        on_exit ds.rollback();
+        string schema = PgsqlRunSchema::getName();
+        hash<auto> qualified = map {schema + "." + $1.key: $1.value}, tables("tmpl_qual", 5).pairIterator();
+        # the foreign constraints of the descriptions reference the first table with the qualified name
+        foreach string name in (keys qualified) {
+            if (qualified{name}.foreign_constraints) {
+                foreach string fk in (keys qualified{name}.foreign_constraints) {
+                    qualified{name}.foreign_constraints{fk}.table = schema + ".tmpl_qual_0";
+                }
+            }
+        }
+        ds.reset();
+        Tables cache();
+        cache.populate(ds, qualified);
+        assertEq((), ds.sql, "templates with schema-qualified names read nothing");
+        foreach string name in (keys qualified) {
+            assertEq(schema, cast<PgsqlTable>(cache.get(ds, name)).getSchemaName(), name + " is built");
+        }
+    }
+
+    makeTableReads() {
+        RecordingDatasource ds = datasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        Tables cache();
+        ds.reset();
+        foreach hash<auto> i in (tables("tmpl_make", 4).pairIterator()) {
+            db.makeTable(i.key, i.value, {"table_cache": cache});
+        }
+        assertEq(1, ds.sql.size(), sprintf("the templates of one cache read the default schema once: %y", ds.sql));
+        # a table built from a description with no cache reads it once for itself
+        ds.reset();
+        Table t(ds, tables("tmpl_single", 1).tmpl_single_0, "tmpl_single_0");
+        assertEq(1, ds.sql.size(), sprintf("a single template reads the default schema only: %y", ds.sql));
+    }
+
+    #! Returns a table built from a description after reading the catalog, as templates were before
+    private AbstractTable catalogTable(AbstractDatasource ds, string name, hash<auto> desc, *hash<auto> opts) {
+        AbstractTable t = AbstractTable::getTable(ds, name);
+        t.setupTable(desc, opts);
+        return t;
+    }
+
+    createSql() {
+        RecordingDatasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> descs = tables("tmpl_create", 3);
+        foreach hash<auto> opts in (({}, {"data_tablespace": "pg_default", "index_tablespace": "pg_default"})) {
+            Tables cache();
+            cache.populate(ds, descs, opts);
+            # the tables built after reading the catalog share a cache too, built in the order of the descriptions
+            # (each table references the first one), so that their foreign constraints are resolved from it
+            Tables catalog_cache();
+            foreach string name in (keys descs) {
+                AbstractTable template = cache.get(ds, name);
+                AbstractTable catalog = catalogTable(ds, name, descs{name}, opts + {"table_cache": catalog_cache});
+                assertEq(catalog.getCreateSql(opts), template.getCreateSql(opts),
+                    sprintf("%s %y: the same creation SQL", name, opts));
+                assertEq(catalog.getSqlName(), template.getSqlName(), name + ": the same name in SQL");
+                assertEq(cast<PgsqlTable>(catalog).getSchemaName(), cast<PgsqlTable>(template).getSchemaName(),
+                    name + ": the same schema");
+            }
+        }
+    }
+
+    alignSql() {
+        RecordingDatasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> descs = tables("tmpl_align", 3);
+        # the first two tables exist in the database, but differ from their descriptions
+        ds.execRaw("drop table if exists tmpl_align_2");
+        ds.execRaw("drop table if exists tmpl_align_1");
+        ds.execRaw("drop table if exists tmpl_align_0");
+        ds.execRaw("create table tmpl_align_0 (id integer not null, code varchar(10) not null, "
+            "constraint pk_tmpl_align_0 primary key (id))");
+        ds.execRaw("create table tmpl_align_1 (id integer not null, code varchar(20) not null, extra integer, "
+            "constraint pk_tmpl_align_1 primary key (id))");
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table if exists tmpl_align_2");
+            ds.execRaw("drop table if exists tmpl_align_1");
+            ds.execRaw("drop table if exists tmpl_align_0");
+            ds.commit();
+        }
+
+        Tables cache();
+        cache.populate(ds, descs);
+        foreach string name in ("tmpl_align_0", "tmpl_align_1") {
+            Table live(ds, name);
+            AbstractTable catalog = catalogTable(ds, name, descs{name});
+            list<auto> expected = live.getAlignSql(catalog);
+            assertTrue(expected.size() > 0, name + ": the table differs from its description");
+            assertEq(expected, live.getAlignSql(cache.get(ds, name)), name + ": the same alignment SQL");
+        }
+
+        # the templates align the database, and the aligned schema needs no more SQL
+        Database db(ds);
+        map ds.execRaw($1), db.getAlignSql({"tables": descs});
+        ds.commit();
+        assertEq((), db.getAlignSql({"tables": descs}), "the aligned schema needs no more SQL");
+    }
+}

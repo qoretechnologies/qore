@@ -976,6 +976,9 @@
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
         \c search_path (see @ref pgsql_schema_scope and @ref qore_3_0_0_compatibility)
       - fixed listing materialized views, which listed the ordinary tables of every schema instead
+      - the template tables of a schema description read the default schema once for all tables instead of reading
+        the catalog three times per table (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue
+        5584</a>)
 
     - @ref providerindexintro "ProviderIndex" module
       - indexes can be built with worker processes, which
@@ -1417,6 +1420,13 @@
 
     - the C++ API function \c BinaryNode::writeTo() did not extend the size of the value when it wrote past its end,
       so the data written there was not part of the value; it now does, and fills a gap with zero bytes
+    - an argument for a parameter declared as \c reference<T> whose target could not be resolved, as with
+      \c STACK-LIMIT-EXCEEDED in a recursion that passes on the reference, raised a second \c RUNTIME-TYPE-ERROR
+      naming two identical types after the actual error; only the actual error is raised now, in all execution modes
+    - an argument for a parameter declared as \c reference<T> that refers to a member that an object does not have
+      yet, of a class that declares no members, crashed the process
+    - resolving a long chain of references, as made by a recursion that passes on a reference, could overflow the
+      stack and crash the process instead of raising \c STACK-LIMIT-EXCEEDED, seen in JIT and AOT code on Linux
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date

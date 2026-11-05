@@ -1405,16 +1405,17 @@ int LValueHelper::doObjLValue(QoreObject* o, const char* mem, bool for_remove, c
     if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), ctx)) {
         ctx = nullptr;
     }
-    if (!qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink)) {
-        if (!ctx) {
-            vl.addMemberNotification(o, mem); // add member notification for external updates
-        }
+    int rc = qore_object_private::getLValue(*o, mem, *this, ctx, for_remove, vl.xsink);
+    if (!rc && !ctx) {
+        vl.addMemberNotification(o, mem); // add member notification for external updates
     }
     if (*vl.xsink) {
         return -1;
     }
 
-    return 0;
+    // without an exception, this means that there is no lvalue: the member does not exist and was not created because
+    // for_remove is set; there is no value for the caller to read, as with a missing hash key in doHashLValue()
+    return rc;
 }
 
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove) {
@@ -1515,6 +1516,12 @@ void LValueHelper::setObjectContext(qore_object_private* obj) {
 }
 
 int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
+    // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
+    // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
+    // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
+    if (check_stack(vl.xsink)) {
+        return -1;
+    }
     const lvalue_ref* r = lvalue_ref::get(ref);
     if (!lvid_set) {
         lvid_set = new lvid_set_t;
@@ -1529,6 +1536,12 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
 }
 
 int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove) {
+    // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
+    // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
+    // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
+    if (check_stack(vl.xsink)) {
+        return -1;
+    }
     const lvalue_ref* r = lvalue_ref::get(ref);
     if (!lvid_set) {
         lvid_set = new lvid_set_t;

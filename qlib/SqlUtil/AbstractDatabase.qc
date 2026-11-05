@@ -828,8 +828,11 @@ AbstractTable table = db.makeTable("table", th);
         if (!opts.native_case) {
             name = name.lwr();
         }
-        AbstractTable t = AbstractTable::getTable(ds, name, opts);
-        t.setupTable(desc, opts);
+        # the table is a template: the driver reads nothing from the catalog for it, but values of the connection,
+        # which it shares through the template cache (issue #5584)
+        Tables cache = opts.table_cache ?? new Tables();
+        AbstractTable t = AbstractTable::getTable(ds, name, opts + {"template": cache});
+        t.setupTable(desc, opts + {"table_cache": cache});
         return t;
     }
 

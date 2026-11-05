@@ -116,7 +116,12 @@ Table table("pgsql:user/pass@db%host", "table");
         @throw DESCRIPTION-ERROR invalid or unsupported description hash value passed
     */
     constructor(AbstractDatasource ds, hash<auto> desc, string name, *hash<auto> opts) {
-        t = AbstractTable::getTable(ds, name);
+        # the table is a template: the driver reads nothing from the catalog for it, but values of the connection,
+        # which it shares through the template cache (issue #5584)
+        if (!opts.table_cache) {
+            opts.table_cache = new Tables();
+        }
+        t = AbstractTable::getTable(ds, name, {"template": opts.table_cache});
         t.setupTable(desc, opts);
     }
 
