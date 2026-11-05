@@ -40,7 +40,7 @@
 %requires reflection
 
 module RestHandler {
-    version = "1.6.7";
+    version = "1.6.8";
     desc = "user module for implementing REST services with the Qore HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -420,6 +420,14 @@ Content-Length: 16
     @endcode
 */
 /** @page resthandler_relnotes RestHandler Release Notes
+
+    @section rh_1_6_8 RestHandler v1.6.8
+    - fixed logging sensitive data: request arguments dispatched to subclasses were logged without masking, and the
+      response body was logged at the trace level with its serialized form; arguments and response bodies are masked
+      at any depth with
+      @ref HttpServer::AbstractHttpRequestHandler::getMaskedLogString() "getMaskedLogString()", and a serialized
+      response body is logged only by its size
+    - added @ref RestHandler::RestHandler::isLogTraceEnabled() "RestHandler::isLogTraceEnabled()"
 
     @section rh_1_6_7 RestHandler v1.6.7
     - fixed responses with headers whose values all have the same type, such as a literal
@@ -1021,19 +1029,18 @@ public namespace RestHandler {
                         }
                     }
 
-                    rh.logDebug("REST DBG: class %y: unknown subclass %y: method %y args: %y", name(), cname, mn,
-                        args);
+                    rh.logDebug("REST DBG: class %y: unknown subclass %y: method %y args: %s", name(), cname, mn,
+                        rh.getMaskedLogString(args));
                     return unknownSubClassError(cname, cx, args);
                 }
 
-                rh.logDebug("REST DBG: class %y: dispatching to subclass %y: method %y args: %y", name(), cname, mn,
-                    args);
+                rh.logDebug("REST DBG: class %y: dispatching to subclass %y: method %y args: %s", name(), cname, mn,
+                    rh.getMaskedLogString(args));
 
                 return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
             }
-            # try to mask passwords and sensitive data in args
-            string astr = rh.maskData(sprintf("%y", args));
-            rh.logDebug("REST DBG: class %y: dispatching method %y args: %s", name(), mn, astr);
+            rh.logDebug("REST DBG: class %y: dispatching method %y args: %s", name(), mn,
+                rh.getMaskedLogString(args));
             return dispatchStream(listener, rh, s, mn, args, cx);
         }
 
@@ -1137,8 +1144,7 @@ public namespace RestHandler {
                 return cast<hash<HttpHandlerResponseInfo>>(call_object_method_args(self, mn, (cx, ah)));
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "METHOD-DOES-NOT-EXIST") {
-                    # try to mask passwords in args
-                    string astr = rh.maskData(sprintf("%y", ah));
+                    string astr = rh.getMaskedLogString(ah);
                     rh.logError("DISPATCH-ERROR: cannot dispatch to unimplemented method %y: class %y, args: %s: %s",
                         mn, name(), astr, get_exception_string(ex));
                     # see if alternate methods would work
@@ -1585,7 +1591,7 @@ public namespace RestHandler {
 
                 req = validator.parseRequest(hdr.method, path, body, \hdr);
             } catch (hash<ExceptionInfo> ex) {
-                logDebug("REST DBG: %s", get_exception_string(ex));
+                logDebug("REST DBG: %s", maskData(get_exception_string(ex)));
                 # return a 400 Bad Request response to encoding, serialization, or validation errors
                 if (isRequestBodyError(ex.err))
                     return AbstractHttpRequestHandler::makeResponse(400, sprintf("%s: %s", ex.err, ex.desc),
@@ -1754,7 +1760,7 @@ public namespace RestHandler {
                         res = validator.processResponse(hdr.method, req.path, rv."code", rv.body, rv.hdr,
                             aih."*/*" ? NOTHING : keys aih);
                     } catch (hash<ExceptionInfo> ex) {
-                        logDebug("REST DBG: %s", get_exception_string(ex));
+                        logDebug("REST DBG: %s", maskData(get_exception_string(ex)));
                         if (ex.err == "ACCEPT-ERROR") {
                             # Allow subclasses to sanitize the response body and retry
                             auto orig_body = rv.body;
@@ -1765,7 +1771,8 @@ public namespace RestHandler {
                                     res = validator.processResponse(hdr.method, req.path, rv."code", rv.body,
                                         rv.hdr, aih."*/*" ? NOTHING : keys aih);
                                 } catch (hash<ExceptionInfo> ex2) {
-                                    logDebug("REST DBG retry failed: %s", get_exception_string(ex2));
+                                    logDebug("REST DBG retry failed: %s",
+                                        maskData(get_exception_string(ex2)));
                                     # http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html: If an Accept header
                                     # field is present, and if the server cannot send a response which is acceptable
                                     # according to the combined Accept field value, then the server SHOULD send a
@@ -1782,8 +1789,8 @@ public namespace RestHandler {
 
                         # add original resp to the exception (only if it was an error)
                         if (rv."code" >= 400 && rv."code" < 600) {
-                            ex.desc += sprintf(" ... Original response: code: %d, body: %y, hdr: %y", rv."code",
-                                rv.body, rv.hdr);
+                            ex.desc += sprintf(" ... Original response: code: %d, body: %s, hdr: %s", rv."code",
+                                getMaskedLogString(rv.body), getMaskedLogString(rv.hdr));
                         }
 
                         rethrow ex.err, ex.desc;
@@ -1792,10 +1799,15 @@ public namespace RestHandler {
                     # TRACE (not DEBUG) because both rv.body and res.body can be multi-MB — e.g. a
                     # scroll response returning 500 vector points balloons to > 10 MB of YAML.  At
                     # DEBUG level this floods the HTTP log and stalls logging under heavy REST
-                    # traffic.  Operators who need the raw serialized body for a protocol-level
-                    # issue can opt in by raising the logger level to TRACE.
-                    logTrace("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
-                        res.body);
+                    # traffic.  Operators can opt in by raising the logger level to TRACE.
+                    #
+                    # INVARIANT: only the masked value of the response body is logged, and the serialized body only
+                    # by its size: a serialized body cannot be reliably masked, and responses carry issued tokens and
+                    # stored passwords.  The value is masked only if it will be logged, because of its size.
+                    if (isLogTraceEnabled()) {
+                        logTrace("REST DBG: response body: %s -> serialized body (%s): %d bytes",
+                            getMaskedLogString(rv.body), res.hdr."Content-Type", res.body.size());
+                    }
 
                     rv += {
                         "body": res.body,
@@ -1905,7 +1917,7 @@ public namespace RestHandler {
             try {
                 cx.body = validator.parseRequest(hdr.method, getRequestPath(cx), body, \hdr).body;
             } catch (hash<ExceptionInfo> ex) {
-                logDebug("REST DBG: %s", get_exception_string(ex));
+                logDebug("REST DBG: %s", maskData(get_exception_string(ex)));
                 if (isRequestBodyError(ex.err)) {
                     return cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(400,
                         sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)));
@@ -2004,6 +2016,17 @@ public namespace RestHandler {
         */
         logTrace(string fmt, ...) {
             logArgs(LoggerLevel::TRACE, fmt, argv);
+        }
+
+        #! Returns @ref True if the arguments of messages for @ref logTrace() should be prepared
+        /** Reimplement in a subclass that reimplements @ref logTrace() and can tell that the message will not be logged;
+            this implementation returns @ref True if a logger allowing trace messages is set, or if no logger is set,
+            as a subclass can reimplement @ref logTrace() without one
+
+            @since RestHandler 1.6.8
+        */
+        bool isLogTraceEnabled() {
+            return !getLogger() || isTraceEnabled();
         }
 
         #! creates a hash for an HTTP 200 OK error response with the response message body as a string

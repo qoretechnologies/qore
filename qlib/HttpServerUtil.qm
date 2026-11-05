@@ -134,6 +134,16 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - fixed logging sensitive data: @ref HttpServer::http_mask_data() "http_mask_data()" masked only the first
+      \c pass or \c password value and no other credentials such as tokens, API keys and cookies; it now masks every
+      value of the names listed in @ref HttpServer::http_is_sensitive_key() "http_is_sensitive_key()" and URL
+      passwords, and leaves readable the values after a quoted secret
+    - added @ref HttpServer::http_mask_value() "http_mask_value()",
+      @ref HttpServer::AbstractHttpRequestHandler::maskValue() "AbstractHttpRequestHandler::maskValue()" and
+      @ref HttpServer::AbstractHttpRequestHandler::getMaskedLogString() "AbstractHttpRequestHandler::getMaskedLogString()"
+      to mask hashes and lists at any depth before they are logged
+    - a rejected \c Authorization header is no longer logged, only the name of its scheme, and logged RPC call
+      arguments are masked
     - fixed @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" to accept a response or header hash
       whose values all have the same type, such as a literal <tt>{"code": 204}</tt>; setting the response headers
       raised \c RUNTIME-TYPE-ERROR
@@ -1350,15 +1360,114 @@ public nothing sub http_send_streamed_response(Socket sock, int code, string sta
 
     @param msg a log message with potentially sensitive data; expected to be a string of serialized data
 
-    @return a string with sensitive data removed; currently the function masks data after
-    \c 'pass', \c 'password', \c 'sensitive', and \c 'sensitive_data'' followed by a colon,
-    an equals sign, and optionally whitespace
+    @return a string with sensitive data removed: the value of every key whose name ends in one of the names in
+    @ref http_is_sensitive_key() followed by a colon, an equals sign or \c ">" is replaced by \c "<masked>...", on every
+    line of the string, as is the password of a URL.  A value in matching quotes is replaced alone, so that the values
+    after it remain readable; any other value is replaced up to the end of its line, because its end is not known.
 
-    @note this algorithm can have false positives and also can miss sensitive data
+    A string with invalid UTF-8 cannot be processed and is replaced by a message giving its size.
+
+    @note this algorithm works on text, so it can have false positives and it can miss sensitive data, such as a value
+    continuing on further lines; when the data is available before serialization, use @ref http_mask_value()
+
+    @since HttpServerUtil 1.6 masks all lines and all values on a line, the same names as @ref http_is_sensitive_key()
+    and URL passwords; before, it masked only the first \c pass or \c password
 */
 public string sub http_mask_data(string msg) {
-    msg =~ s/((?:pass(?:[^a-zA-Z_]|(?:word)))"?[=:>\s]*).*/$1<masked>.../;
+    # a regular expression does not match a string with invalid UTF-8, so nothing in it would be masked; this expression
+    # matches every valid string
+    if (!(msg =~ /^/)) {
+        return sprintf("<masked: invalid string of %d bytes>", msg.size());
+    }
+    # INVARIANT: keep the names in step with http_is_sensitive_key(), and consume a value only when its end is certain;
+    # a quantifier here must be possessive, because a value can be many megabytes long; a value already masked is kept,
+    # with what follows it
+    msg =~ s/((?:(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[-_]?key|authorization|cookie|credentials?|private[-_]?key|bearer|jwt|auth|sensitive(?:_data)?)\\*["']?\s*[=:>]+|pass(?:word)?\s)\s*+)(?!"?<masked>(?:\.\.\.)?(?:"|[,;&})\]\s]|$))(?:\\*"[^"\\\n]*+(?:\\.[^"\\\n]*+)*+"(?=\s*(?:[,;&})\]\n]|$))|'[^'\\\n]*+(?:\\.[^'\\\n]*+)*+'(?=\s*(?:[,;&})\]\n]|$))|.*)/$1<masked>.../gi;
+    msg =~ s/(:\/\/[^\/\s:@]*:)[^\s@"']+@/$1<masked>@/g;
     return msg;
+}
+
+#! returns @ref True if the value of a key with the given name must not be logged
+/** Without regard to case, a key is sensitive if its name ends in \c pass, \c password, \c passwd, \c passphrase,
+    \c pwd, \c secret, \c token, \c apikey, \c api_key, \c api-key, \c authorization, \c cookie, \c credential,
+    \c credentials, \c privatekey, \c private_key, \c private-key, \c bearer, \c jwt, \c auth, \c sensitive or
+    \c sensitive_data, such as \c refresh_token, \c clientSecret and \c Set-Cookie.  Names like \c max_tokens,
+    \c token_type, \c passenger and \c author describe data and are not sensitive.
+
+    Masking too much in a log message is harmless; a credential in a log file has to be treated as compromised.
+
+    @param key the key or header name
+
+    @return @ref True if the value of the key must not be logged
+
+    @since HttpServerUtil 1.6
+*/
+public bool sub http_is_sensitive_key(string key) {
+    # INVARIANT: keep the names in step with http_mask_data()
+    return key =~ /(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[-_]?key|authorization|cookie|credentials?|private[-_]?key|bearer|jwt|auth|sensitive(?:_data)?)$/i;
+}
+
+#! returns a copy of a value that is safe to log
+/** INVARIANT: request and response data, including headers, are logged only through this function or
+    @ref http_mask_data(), and a serialized body is never logged when the value it was made from can be logged instead:
+    masking a serialized body depends on its format, and a value that is not masked there is written out in the log.
+
+    @par Example:
+    @code{.py}
+logger.debug("request args: %y", http_mask_value(args));
+    @endcode
+
+    @param value the value to mask; hashes and lists are processed at any depth
+
+    @return a copy of the value where:
+    - the value of each key for which @ref http_is_sensitive_key() returns @ref True is \c "<masked>"
+    - strings are processed with @ref http_mask_data(), as they can be serialized data; one that cannot be processed
+      is replaced by a message giving its size
+    - binary values are replaced by a message giving their size, as the bytes of a credential are not hidden by being
+      logged in hexadecimal
+    - hashes and lists more than 32 levels deep are replaced by a message
+
+    @note this function does not throw exceptions for any value of \a value
+
+    @since HttpServerUtil 1.6
+*/
+public auto sub http_mask_value(auto value) {
+    return http_mask_value_intern(value, 0);
+}
+
+# masks a value at the given depth; see http_mask_value()
+auto sub http_mask_value_intern(auto value, int depth) {
+    switch (value.typeCode()) {
+        case NT_HASH: {
+            if (depth >= 32) {
+                return "<masked: nested too deeply>";
+            }
+            hash<auto!> rv = {};
+            foreach hash<auto> item in (value.pairIterator()) {
+                rv{item.key} = http_is_sensitive_key(item.key)
+                    ? "<masked>"
+                    : http_mask_value_intern(item.value, depth + 1);
+            }
+            return rv;
+        }
+        case NT_LIST: {
+            if (depth >= 32) {
+                return "<masked: nested too deeply>";
+            }
+            return map http_mask_value_intern($1, depth + 1), value;
+        }
+        case NT_STRING: {
+            try {
+                return http_mask_data(value);
+            } catch () {
+                return sprintf("<masked: string of %d bytes>", value.size());
+            }
+        }
+        case NT_BINARY: {
+            return sprintf("<masked: binary of %d bytes>", value.size());
+        }
+    }
+    return value;
 }
 
 #! returns a listener option info hash from flat arguments
@@ -1904,8 +2013,9 @@ public class AbstractAuthenticator {
                         return rv;
                     }
                 } else {
-                    listener.logError("Unsupported 'Authorization' header: %y (from %s)", hdr.authorization,
-                        cx."peer-info".address_desc);
+                    # the header value is a credential; only the name of its scheme can be logged
+                    listener.logError("Unsupported 'Authorization' header scheme: %y (from %s)",
+                        (hdr.authorization =~ x/^([-A-Za-z0-9._~+\/]+)/)[0], cx."peer-info".address_desc);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "AUTHENTICATION-ERROR") {
@@ -1958,8 +2068,8 @@ public class AbstractAuthenticator {
         string str = parse_base64_string_to_string(bstr);
         int i = str.find(":");
         if (i < 1 || i == (str.size() -1)) {
-            listener.logError("Invalid Basic Authorization header (decoded to %y) received from %s", str,
-                cx."peer-info".address_desc);
+            # the decoded value contains a user name or a password
+            listener.logError("Invalid Basic Authorization header received from %s", cx."peer-info".address_desc);
             return;
         }
 
@@ -3593,6 +3703,35 @@ public class AbstractHttpRequestHandler {
         return http_mask_data(msg);
     }
 
+    #! this method can be used to mask a value before it is logged
+    /** Overriding this method or @ref maskData() changes how a value is masked for @ref getMaskedLogString()
+
+        @param value the value to mask
+
+        @return a copy of the value with sensitive information masked; see @ref HttpServer::http_mask_value()
+
+        @since HttpServerUtil 1.6
+    */
+    auto maskValue(auto value) {
+        return http_mask_value(value);
+    }
+
+    #! returns a string for a log message describing the given value with sensitive information masked
+    /** @param value the value to log
+
+        @return the value as with the \c "%y" format, processed with @ref maskValue() and @ref maskData(); this method
+        does not throw exceptions: a log message must not make a request fail
+
+        @since HttpServerUtil 1.6
+    */
+    string getMaskedLogString(auto value) {
+        try {
+            return maskData(sprintf("%y", maskValue(value)));
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("<masked: %s>", ex.err);
+        }
+    }
+
     #! removes the thread-local data key in case the object is destroyed in another thread
     static staticNotificationCleanup() {
         remove_thread_data(NotificationThreadKey);
@@ -3980,7 +4119,8 @@ public class AbstractHttpRequestHandler {
             hash amh;
             if (api.maskargs)
                 map amh.$1 = True, api.maskargs;
-            foreach auto arg in (params) {
+            # params itself is the argument list of the call and must not be changed
+            foreach auto arg in (http_mask_value(params)) {
                 if (amh.(i++))
                     args += "<masked>, ";
                 else if (arg.typeCode() == NT_HASH && arg) {

@@ -43,7 +43,7 @@
 %modern
 
 module JsonRpcHandler {
-    version = "2.0.1";
+    version = "2.0.2";
     desc = "JsonRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -92,6 +92,10 @@ http.waitStop();
     @endcode
 
     @section jsonrpchandler_relnotes JsonRpcHandler Release Notes
+
+    @subsection jsonrpchandler_2_0_2 JsonRpcHandler v2.0.2
+    - fixed logging sensitive data: a logged request is masked as with
+      @ref HttpServer::http_mask_value() "http_mask_value()"
 
     @subsection jsonrpchandler_2_0_1 JsonRpcHandler v2.0.1
     - the query of a \c GET request is split into its parameters before their names and values are URL-decoded, as
@@ -550,7 +554,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
                         throw ex.err, ex.desc, JRE_ParseError;
                     }
                 }
-                debug("JSON-RPC REQ: %N", req);
+                debug("JSON-RPC REQ: %N", http_mask_value(req));
                 int t = req.typeCode();
                 if (t == NT_LIST) {
                     return processBatchMessage(cx, req);

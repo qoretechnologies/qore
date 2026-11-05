@@ -1945,7 +1945,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             if (inlist(ex.err, ProtocolErrorCodes)) {
                 rethrow;
             }
-            error("Error executing tool with params %y: %s", params, get_exception_string(ex));
+            error("Error executing tool with params %y: %s", http_mask_value(params),
+                http_mask_data(get_exception_string(ex)));
             return {
                 "content": ({
                     "type": "text",
@@ -2090,7 +2091,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             if (ex.err == "MCP-CAPABILITY-ERROR" || ex.err == "MCP-REQUEST-STATE-ERROR") {
                 rethrow;
             }
-            error("Error getting prompt with params %y: %s", params, get_exception_string(ex));
+            error("Error getting prompt with params %y: %s", http_mask_value(params),
+                http_mask_data(get_exception_string(ex)));
             throw "MCP-PROMPT-ERROR", sprintf("%s: %s", ex.err, ex.desc);
         }
     }
@@ -2354,7 +2356,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         try {
             return completionCompleteIntern(cx, params);
         } catch (hash<ExceptionInfo> ex) {
-            error("Error in completion/complete with params %y: %s", params, get_exception_string(ex));
+            error("Error in completion/complete with params %y: %s", http_mask_value(params),
+                http_mask_data(get_exception_string(ex)));
             return {
                 "completion": {
                     "values": (),
