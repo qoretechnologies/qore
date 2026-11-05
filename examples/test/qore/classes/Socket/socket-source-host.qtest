@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketSourceHostTest
+
+#! Tests Socket::setSourceHostLookup(): the peer's hostname is only resolved on accept when it is asked for
+class SocketSourceHostTest inherits QUnit::Test {
+    public {
+        #! the time allowed for a call that the test expects to end at once
+        const Timeout = 60s;
+    }
+
+    constructor() : QUnit::Test("SocketSourceHostTest", "1.0", \ARGV) {
+        addTestCase("the lookup is off by default", \testDefault());
+        addTestCase("accept with the lookup on", \testEnabled());
+        addTestCase("accept after the lookup is turned off again", \testToggle());
+        addTestCase("getPeerInfo() still resolves the hostname on request", \testGetPeerInfo());
+        set_return_value(main());
+    }
+
+    private Socket listener() {
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+        return s;
+    }
+
+    #! connects a client (which the caller keeps open) and returns the accepted socket
+    private Socket acceptOne(Socket l, Socket c) {
+        c.connect("127.0.0.1:" + l.getPort());
+        return l.accept(Timeout);
+    }
+
+    testDefault() {
+        Socket l = listener();
+        assertFalse(l.getSourceHostLookup(), "the lookup is off by default");
+        Socket c();
+        Socket a = acceptOne(l, c);
+        assertEq("127.0.0.1", a.source, "source is always set");
+        assertNothing(a.source_host, "source_host is not resolved by default");
+    }
+
+    testEnabled() {
+        Socket l = listener();
+        l.setSourceHostLookup();
+        assertTrue(l.getSourceHostLookup(), "the argument defaults to True");
+        Socket c();
+        Socket a = acceptOne(l, c);
+        assertEq("127.0.0.1", a.source);
+        # whether the host resolves 127.0.0.1 depends on its configuration: source_host must be what is resolved
+        # on request
+        assertEq(a.getPeerInfo(True).hostname, a.source_host, "source_host is resolved when asked for");
+    }
+
+    testToggle() {
+        Socket l = listener();
+        l.setSourceHostLookup(True);
+        l.setSourceHostLookup(False);
+        assertFalse(l.getSourceHostLookup());
+        Socket c();
+        Socket a = acceptOne(l, c);
+        assertEq("127.0.0.1", a.source);
+        assertNothing(a.source_host);
+    }
+
+    testGetPeerInfo() {
+        Socket l = listener();
+        Socket c();
+        Socket a = acceptOne(l, c);
+        hash<auto> info = a.getPeerInfo(True);
+        assertEq("127.0.0.1", info.address);
+        assertNothing(a.getPeerInfo(False).hostname, "no lookup without the argument");
+        assertEq(info.hostname, a.getPeerInfo(True).hostname, "the lookup is repeatable");
+    }
+}

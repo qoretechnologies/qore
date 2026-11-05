@@ -920,7 +920,8 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
         return QoreValue();
     }
 
-    my_socket_priv::setAccept(**n, ns);
+    // the hostname is only resolved if the listening socket asks for it (see Socket::setSourceHostLookup())
+    my_socket_priv::setAccept(**n, ns, my_socket_priv::getPriv(*s)->source_host_lookup.load());
     return output.release();
 }
 
@@ -6613,6 +6614,53 @@ if (sock.setNoDelay(True))
 */
 int Socket::setNoDelay(bool enabled = True) [flags=NAMED_ARGS] {
     return s->setNoDelay(enabled);
+}
+
+//! Sets whether accepting a connection resolves the peer's hostname for the new Socket's \c source_host member
+/** Call this on the listening socket.  When this setting is @ref True, Socket::accept() and Socket::acceptSSL() look
+    up the peer's hostname (a reverse DNS lookup) and set the new Socket object's \c source_host member; the lookup
+    delays the call until it completes, and a slow or unreachable name server delays every accepted connection.  The
+    default is @ref False: \c source_host is then @ref nothing, and the \c source member (the peer's IP address) is
+    set as before.
+
+    The peer's hostname can be requested for one connection with Socket::getPeerInfo(), which takes a
+    \c host_lookup argument.
+
+    @par Example:
+    @code{.py}
+Socket listener();
+listener.bindINET(NOTHING, 8080);
+listener.listen();
+listener.setSourceHostLookup();
+Socket conn = listener.accept();
+printf("connection from %s\n", conn.source_host ?? conn.source);
+    @endcode
+
+    @param enabled @ref True to resolve the peer's hostname on accept, @ref False not to
+
+    @see Socket::getSourceHostLookup()
+
+    @since %Qore 3.0
+*/
+nothing Socket::setSourceHostLookup(bool enabled = True) [flags=NAMED_ARGS] {
+    my_socket_priv::getPriv(*s)->source_host_lookup.store(enabled);
+}
+
+//! Returns the setting of Socket::setSourceHostLookup()
+/** @par Example:
+    @code{.py}
+bool b = sock.getSourceHostLookup();
+    @endcode
+
+    @return @ref True if accepting a connection resolves the peer's hostname for the new Socket's \c source_host
+    member; the default is @ref False
+
+    @see Socket::setSourceHostLookup()
+
+    @since %Qore 3.0
+*/
+bool Socket::getSourceHostLookup() [flags=RET_VALUE_ONLY] {
+    return my_socket_priv::getPriv(*s)->source_host_lookup.load();
 }
 
 //! Returns the \c TCP_NODELAY setting for the socket

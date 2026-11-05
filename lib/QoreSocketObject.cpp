@@ -3255,10 +3255,10 @@ static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
     return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, err, xsink);
 }
 
-void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o) {
+void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o, bool host_lookup) {
     ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> info(qore_socket_object_exec_address_info(&sock,
-        QoreSocketObjectAddressInfoPollOperation::Action::Peer, true, "setAccept",
+        QoreSocketObjectAddressInfoPollOperation::Action::Peer, host_lookup, "setAccept",
         "SOCKET-GETPEERINFO-ERROR", &xsink), &xsink);
     if (!xsink && info) {
         qore_socket_private::setAccept(o, **info);

@@ -65,6 +65,8 @@ DLLLOCAL void qore_socket_raise_accept_without_connection(const QoreHashNode* re
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSocketObject.h>
 #include <qore/qore_thread.h>
+
+#include <atomic>
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 
@@ -78,6 +80,9 @@ public:
     std::string ssl_cipher_version_cache;
     unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
+    //! true if Socket::accept() and Socket::acceptSSL() resolve the peer's hostname for the accepted socket's
+    //! \c source_host member (see Socket::setSourceHostLookup())
+    std::atomic<bool> source_host_lookup{false};
     int async_io_count = 0;
     int async_sequence_owner_tid[3] = {-1, -1, -1};
     int async_sequence_count[3] = {0, 0, 0};
@@ -475,7 +480,12 @@ public:
         socket->setAccept(o);
     }
 
-    DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o);
+    //! sets the backwards-compatible \c source and \c source_host members of an accepted socket's object
+    /** @param sock the accepted socket
+        @param o the accepted socket's object
+        @param host_lookup if true, the peer's hostname is resolved for \c source_host
+    */
+    DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o, bool host_lookup);
 
     //! Returns the my_socket_priv pointer for a QoreSocketObject (for internal use)
     /** @since %Qore 3.0

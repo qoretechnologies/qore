@@ -80,6 +80,12 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
+    Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
+    \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the
+    lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
+    still resolves the hostname on request.
+
     @par Module Code Runs with the Restrictions of Its Caller
     A method of a user-module class, a closure created in module code and the module code they call run with the
     restrictions of their caller as well as their own, and a module function looks up names at run time in its
