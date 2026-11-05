@@ -190,7 +190,7 @@ Rules in prose are not enough; the design relies on mechanisms that fail a build
 |Registration-time validation|the response size cap, header and path syntax, the rule limit, the status codes allowed; an invalid route cannot be registered|implemented
 |Sanitized core tests|the core runs under AddressSanitizer, UBSan and ThreadSanitizer with a thread that changes cells and the route table while another matches|`test/cpp/run-sanitizers.sh` (CI job `check-fast-routes-core-sanitizers`)
 |Glue limited to reading|the only Qore-aware code on the path is the glue in the header-reading operations that builds an `HttpFastRequestView` from the parsed header hash; it only reads values and cannot throw into user code|implemented (`SocketSendAndReadHeaderPollOperation::serveFastRoute()`)
-|Runtime guard in debug builds|a thread-local "in a fast route" scope, asserted against by the interpreter's entry points (calling a method, raising an exception) and by the blocking primitives (Mutex, Queue, Condition waits), exempting the logging call that the controller already makes on the I/O thread (see `async-socket-io.md`)|implemented (`include/qore/intern/FastRouteGuard.h`; asserts in `CodeEvaluationHelper` and `qore_cond_wait_cancellable()`)
+|Runtime guard in debug builds|a thread-local "in a fast route" scope, asserted against by the interpreter's entry points (calling a method, raising an exception) and by the blocking primitives (Mutex, Queue, Condition waits), exempting the logging call that the controller already makes on the I/O thread (see `async-socket-io.md`)|implemented (`include/qore/intern/FastRouteGuard.h`; asserts in `CodeEvaluationHelper` and `qore_cond_wait_cancellable()`; tested by `examples/test/qore/misc/HttpFastRoutesGuard.qtest`, which counts the reports in a probe scope and checks in a child process that the guard aborts when nothing probes)
 |Existing controller guards|`SocketPollOperationBase::needsWorkerDispatch()` (an operation that runs Qore code or blocks must say so and runs on a worker) and `SocketSyncPoll::assertNotOnIoThread()` (a synchronous `Socket` call on an I/O thread raises)|already in the controller
 
 What the mechanisms do not cover, stated plainly: the controller has no general runtime check that arbitrary Qore code
@@ -351,3 +351,9 @@ request gets a new operation).  An operation that answers a request itself and d
   separately, but each request still runs Qore-level code on a worker, so it cannot approach the fast path
 - running the handler on the I/O thread: rejected; it breaks the rule that I/O threads never run Qore code
 - AOT-compiling the Qore operations: lowers the baseline but keeps the hand-offs
+
+### Testing time-dependent behavior without waiting
+
+Cells and slots measure their age by a monotonic clock that tests can move forward (`HttpFastCell::advanceClockForTest()`
+in the core test, `qore_test_advance_fast_clock(ms)` in Qore tests), so a test of staleness neither sleeps nor polls.
+The soak test is the exception by design: it runs for longer than the idle time-to-live to check the real timers.

@@ -100,7 +100,7 @@ int main() {
     HttpFastRoutes rs;
     rs.add("/s", HttpFastRouteSpec::create({sr}, down, err), err);
     CHECK(rs.match(req("/s"), 1, fb));
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    HttpFastCell::advanceClockForTest(5000);   // 5 ms
     CHECK(!rs.match(req("/s"), 1, fb));
     CHECK(fb == HttpFastFallback::Stale);
     stale->touch();
@@ -131,7 +131,7 @@ int main() {
     HttpFastRoutes ra;
     ra.add("/a", HttpFastRouteSpec::create({}, aged, err), err);
     CHECK(ra.match(req("/a"), 1, fb));
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    HttpFastCell::advanceClockForTest(5000);   // 5 ms
     CHECK(!ra.match(req("/a"), 1, fb));
     CHECK(fb == HttpFastFallback::Stale);
     aged->set(resp(200, "fresh"));

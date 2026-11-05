@@ -199,7 +199,7 @@ std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
 
 int64_t HttpFastCell::nowUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+        std::chrono::steady_clock::now().time_since_epoch()).count() + clock_offset_us.load(std::memory_order_relaxed);
 }
 
 void HttpFastSlot::set(std::shared_ptr<const HttpFastResponse> new_response) {

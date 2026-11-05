@@ -207,9 +207,19 @@ public:
         return nowUs();
     }
 
+    //! Moves the clock that cells and slots age by forward; for tests, so that they need not wait for time to pass
+    /** The clock only moves forward, for every cell and slot of the process.
+    */
+    DLLLOCAL static void advanceClockForTest(int64_t us) {
+        clock_offset_us.fetch_add(us, std::memory_order_relaxed);
+    }
+
 private:
     //! monotonic time in microseconds
     DLLLOCAL static int64_t nowUs();
+
+    //! the total of advanceClockForTest()
+    static inline std::atomic<int64_t> clock_offset_us{0};
 
     std::atomic<int64_t> value;
     std::atomic<int64_t> updated_us;

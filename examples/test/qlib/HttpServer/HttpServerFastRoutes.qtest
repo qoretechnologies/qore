@@ -137,12 +137,11 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq(60000, c3.getMaxAge());
         assertThrows("FASTCELL-ERROR", sub () { new FastCell(0, -1); });
 
-        # a cell with a short maximum age becomes stale, and touch() makes it current again; a 1 ms age is exceeded by
-        # waiting for the cell to age past it
-        FastCell shortlived(1, 1ms);
-        while (!shortlived.isStale()) {
-            usleep(1ms);
-        }
+        # a cell with a maximum age becomes stale, and touch() makes it current again; the test moves the clock that
+        # ages are measured by, so that it need not wait
+        FastCell shortlived(1, 10s);
+        assertFalse(shortlived.isStale());
+        qore_test_advance_fast_clock(11000);
         assertTrue(shortlived.isStale());
         assertEq(1, shortlived.get(), "the value is not changed by staleness");
         shortlived.set(2);
@@ -326,7 +325,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
     }
 
     testStale() {
-        FastCell ready(1, 100ms);
+        FastCell ready(1, 10s);
         hs.addFastRoute("/state", {
             "public": True,
             "rules": ({"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},),
@@ -336,10 +335,9 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         # the cell is current as long as it is touched
         ready.touch();
         assertEq("ready", request(c, "GET", "/state").body);
-        # wait until the value is older than its maximum age: a stale cell is never read
-        while (!ready.isStale()) {
-            usleep(10ms);
-        }
+        # the value is older than its maximum age: a stale cell is never read
+        qore_test_advance_fast_clock(11000);
+        assertTrue(ready.isStale());
         assertEq("handler", request(c, "GET", "/state").body, "a stale cell takes the normal path");
         assertTrue(hs.getFastRouteInfo().fallbacks.stale > 0);
         ready.touch();
@@ -404,13 +402,12 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("back", request(c, "GET", "/slot").body);
 
         # a slot with a maximum age that is exceeded is not served
-        FastResponseSlot shortlived(1ms);
+        FastResponseSlot shortlived(10s);
         hs.addFastRoute("/short", {"public": True, "response": shortlived});
         on_exit hs.removeFastRoute("/short");
         shortlived.set({"code": 200, "body": "short", "content_type": "text/plain"});
-        while (!shortlived.isStale()) {
-            usleep(1ms);
-        }
+        assertEq("short", request(c, "GET", "/short").body);
+        qore_test_advance_fast_clock(11000);
         assertEq("handler", request(c, "GET", "/short").body, "a stale slot takes the normal path");
 
         # a slot is the response of a rule and the otherwise response
@@ -561,6 +558,11 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
             ),
         });
         on_exit hs.removeFastRoute("/cc");
+        # a slot that the same thread replaces: every response is one of the two, whole
+        FastResponseSlot slot();
+        slot.set({"code": 200, "body": "slot-0", "content_type": "text/plain"});
+        hs.addFastRoute("/ccs", {"public": True, "response": slot});
+        on_exit hs.removeFastRoute("/ccs");
 
         Queue errors();
         # a thread changes the cell (and, now and then, replaces the route) once for every request that the client
@@ -576,6 +578,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
                     break;
                 }
                 ready.set(i & 1);
+                slot.set({"code": 200 + (i & 1), "body": "slot-" + string(i & 1), "content_type": "text/plain"});
                 if (!(i % 10)) {
                     hs.addFastRoute("/cc", {
                         "public": True,
@@ -599,6 +602,10 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
                 ++fast;
             } else {
                 errors.push(sprintf("unexpected response %y", r));
+            }
+            r = request(c, "GET", "/ccs");
+            if (!((r.code == 200 && r.body == "slot-0") || (r.code == 201 && r.body == "slot-1"))) {
+                errors.push(sprintf("unexpected slot response %y", r));
             }
         }
         tokens.push(-1);

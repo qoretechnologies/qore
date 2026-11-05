@@ -43,6 +43,8 @@
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/HttpFastRoutes.h"
 
 #include <pthread.h>
 #include <thread>
@@ -2319,5 +2321,27 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
     waiter->deref();
 
     return result_val;
+}
+
+// Test support for the HTTP fast routes (design/http-server-fast-routes.md); not documented as API.
+
+//! Runs an action inside a fast route scope and returns the number of times the debug-build guard reported it
+/** @return the number of reports, or -1 in a build without the guard
+
+    @param kind "none" (does nothing), "code" (calls the code argument) or "wait" (waits on a condition variable)
+*/
+int qore_test_fast_route_guard(string kind, *code cb) {
+    return qore_fast_route_guard_probe(kind->c_str(), cb, xsink);
+}
+
+//! Moves the clock that FastCell and FastResponseSlot ages are measured by forward, so that a test need not wait
+/** @param ms the time to move the clock forward by, in milliseconds
+*/
+nothing qore_test_advance_fast_clock(softint ms) {
+    if (ms < 0) {
+        xsink->raiseException("FASTCELL-ERROR", "the clock cannot move backward (" QLLD " ms)", (int64)ms);
+        return QoreValue();
+    }
+    HttpFastCell::advanceClockForTest(ms * 1000);
 }
 ///@}
