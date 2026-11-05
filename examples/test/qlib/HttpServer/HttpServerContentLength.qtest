@@ -31,9 +31,11 @@ class ContentLengthTestHandler inherits AbstractHttpRequestHandler {
 
 #! Tests how the HTTP server reads the Content-Length of a request (RFC 9110 section 8.6): the value is the digits and
 #! nothing else; a value that another parser would read differently is refused, and a length of 0 is no body
-/** A value such as \c 00, \c +0, \c -1 or \c 0x0 used to be handed to a general conversion and the result to the socket
-    read, whose length 0 (or less) means "read until the connection closes": the request waited for a body that never
-    came until the read timed out.
+/** The header value used to be handed to a general conversion and the result to the socket read, whose length 0 (or
+    less) means "read until the connection closes".  A value that is a valid length of 0 (\c 0, \c 00) or that the
+    conversion read as 0 or less (\c +0, \c -1, \c 0x0) made the request wait for a body that never came until the
+    read timed out.  Now a length of 0 is no body, and a value that is not digits only (\c +0, \c -1, \c 0x0) is
+    refused with 400.
 */
 class HttpServerContentLengthTest inherits QUnit::Test {
     public {
