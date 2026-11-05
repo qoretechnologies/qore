@@ -502,6 +502,11 @@
     handler's; a @ref Qore::FastCell "FastCell" or a @ref Qore::FastResponseSlot "FastResponseSlot" that Qore code sets
     selects or supplies the response without waiting.  See @ref Qore::HttpFastRoutes "HttpFastRoutes".
 
+    @par Thread Entry and Exit Handlers
+    @ref Qore::Program::setThreadEntryHandler() "Program::setThreadEntryHandler()" sets code that runs every time a
+    thread enters and leaves a Program, so that an embedding application can keep a context of its own for each
+    Program on threads that run the code of many Programs, such as async I/O callback workers.
+
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module
     parse option mask, which strips restrictions from what modules inherit from their loader or adds restrictions to

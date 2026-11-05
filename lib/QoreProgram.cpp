@@ -1249,6 +1249,23 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
     return (bool)old;
 }
 
+bool qore_program_private::setThreadEntryHandler(const ResolvedCallReferenceNode* on_enter,
+        const ResolvedCallReferenceNode* on_exit, ExceptionSink* xsink) {
+    QoreThreadEntryHandlers* nh = (on_enter || on_exit) ? new QoreThreadEntryHandlers(on_enter, on_exit) : nullptr;
+    QoreThreadEntryHandlers* old;
+    {
+        AutoLocker al(tlock);
+        old = thread_entry_handlers.exchange(nh, std::memory_order_relaxed);
+    }
+    // threads that ran the old entry handler hold their own reference until they have run the paired exit handler;
+    // releasing the handlers can run destructors, so it is done without the lock
+    if (!old) {
+        return false;
+    }
+    old->deref(xsink);
+    return true;
+}
+
 void qore_program_private_base::newProgram() {
     base_object = true;
     po_locked = false;
@@ -1636,6 +1653,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 thr_init = 0;
             }
         }
+
+        // clear the thread entry and exit handlers: they ran for the destructors run above, which are the last code
+        // that runs in the Program on behalf of other threads' data
+        setThreadEntryHandler(nullptr, nullptr, xsink);
 
         // free the thread-local data of every thread in this Program's family if it is a root; this is where the
         // data of the tearing-down thread used to be cleared, so that destructors run above can still use it
@@ -2577,6 +2598,9 @@ void qore_program_private::del(ExceptionSink* xsink) {
 
     if (thr_init)
         thr_init->deref(xsink);
+
+    // a Program that never ran waitForTerminationAndClear() can still have handlers
+    setThreadEntryHandler(nullptr, nullptr, xsink);
 
     base_object = false;
 

@@ -10804,9 +10804,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     QoreProgram* caller_pgm = getProgram();
     QoreProgram* exec_pgm = qore_rt_function_execution_program(pgm, caller_pgm, uvb);
 
-    // Set up program thread context (only if program differs from caller's program)
+    // Set up program thread context (only if program differs from caller's program, or if the caller's program is
+    // current but not entered and has thread entry handlers to run)
     std::optional<ProgramThreadCountContextHelper> ptcch;
-    if (exec_pgm != caller_pgm) {
+    if (exec_pgm != caller_pgm
+            || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
         ptcch.emplace(xsink, exec_pgm, true);
         if (*xsink) {
             return toBits(QoreValue());
@@ -15360,9 +15362,11 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         QoreProgram* caller_pgm = getProgram();
         QoreProgram* exec_pgm = qore_rt_function_execution_program(target.pgm, caller_pgm, uvb);
 
-        // Set up program thread context (only if program differs from caller's program)
+        // Set up program thread context (only if program differs from caller's program, or if the caller's program
+        // is current but not entered and has thread entry handlers to run)
         std::optional<ProgramThreadCountContextHelper> ptcch;
-        if (exec_pgm != caller_pgm) {
+        if (exec_pgm != caller_pgm
+                || (qore_program_private::hasThreadEntryHandlers(*exec_pgm) && thread_entry_pending(exec_pgm))) {
             ptcch.emplace(xsink, exec_pgm, true);
             if (*xsink) {
                 return toBits(QoreValue());

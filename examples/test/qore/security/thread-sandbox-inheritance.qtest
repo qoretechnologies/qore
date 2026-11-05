@@ -236,6 +236,8 @@ code sub get_reader() {
         addTestCase("a thread started by an inheriting thread", \testNested());
         addTestCase("a Program with its own sandbox governs the code it runs in an inheriting thread",
             \testInnermostSandbox());
+        addTestCase("the thread entry handler and thread initialization code of a thread started for sandboxed code",
+            \testThreadEntryAndInit());
         addTestCase("a program interrupt reaches an inheriting thread", \testInterrupt());
         addTestCase("the sandboxed code can cancel an inheriting thread", \testCancelInScope());
         addTestCase("the sandboxed code cannot cancel a thread started for another caller", \testCancelOutOfScope());
@@ -370,6 +372,51 @@ code sub get_reader() {
         # code of a Program with its own sandbox is governed by that sandbox on an inheriting thread
         assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("call", background_call, strict.callFunction("get_reader"),
             secret));
+    }
+
+    #! the code that runs when a thread started for the sandboxed code enters its Program (the thread entry handler,
+    #! then the thread initialization code) runs under the inherited sandbox, like the thread's own code
+    testThreadEntryAndInit() {
+        Program u = getTrusted();
+        Queue events();
+        code read = auto sub () {
+            try {
+                return ReadOnlyFile::readTextFile(secret);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex.err;
+            }
+        };
+        u.setThreadEntryHandler(auto sub () { events.push({"tid": gettid(), "what": "enter", "read": read()}); });
+        u.setThreadInit(sub () { events.push({"tid": gettid(), "what": "init", "read": read()}); });
+        code starter = u.callFunction("get_starter", "background");
+
+        # returns the events of threads other than this one, in the order they were recorded
+        code take_thread_events = list<hash<auto>> sub () {
+            list<hash<auto>> rv = ();
+            while (events.size()) {
+                hash<auto> h = events.get();
+                if (h.tid != gettid()) {
+                    rv += h - "tid";
+                }
+            }
+            return rv;
+        };
+        take_thread_events();
+
+        # unsandboxed, the started thread's entry handler and thread initialization code read the file
+        assertEq(SecretContent, starter(secret));
+        assertEq((
+            {"what": "enter", "read": SecretContent},
+            {"what": "init", "read": SecretContent},
+        ), take_thread_events());
+
+        # started for the sandboxed code, they are denied
+        Program p = getSandboxed();
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("run", starter, secret));
+        assertEq((
+            {"what": "enter", "read": "FILESYSTEM-ACCESS-DENIED"},
+            {"what": "init", "read": "FILESYSTEM-ACCESS-DENIED"},
+        ), take_thread_events());
     }
 
     testInterrupt() {

@@ -58,9 +58,9 @@ public:
         if (!pgm || getProgram()) {
             return;
         }
-        // use a temporary sink: a failure to enter the context is not the caller's exception, and
-        // the caller's sink may already hold an unrelated exception
-        ExceptionSink xsink;
+        // use a sink of the helper: a failure to enter the context is not the caller's exception, and
+        // the caller's sink may already hold an unrelated exception; the context keeps the sink for the
+        // exceptions of leaving it, which are handled when the helper is destroyed
         pch.set(&xsink, pgm, true);
         if (xsink) {
             xsink.clear();
@@ -73,6 +73,8 @@ public:
     }
 
 private:
+    //! the sink of the context, declared first so that it outlives the context
+    ExceptionSink xsink;
     ProgramThreadCountContextHelper pch;
     bool valid = true;
 };

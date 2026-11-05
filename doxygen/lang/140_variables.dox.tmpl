@@ -215,4 +215,7 @@ list<int> l1(1);
       <tt><b>thread_local</b></tt> variable
     - @ref Qore::set_thread_init() and @ref Qore::Program::setThreadInit() "Program::setThreadInit()" can be used to
       automatically assign values to @ref thread_local variables when threads are started
+    - @ref Qore::Program::setThreadEntryHandler() "Program::setThreadEntryHandler()" can be used to set and restore
+      the values of @ref thread_local variables every time a thread enters and leaves a child Program, for threads
+      that run the code of more than one Program
 */

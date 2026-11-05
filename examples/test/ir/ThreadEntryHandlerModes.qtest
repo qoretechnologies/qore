@@ -1,0 +1,318 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+%requires ../ExecModeHarness.qm
+
+%exec-class ThreadEntryHandlerModesTest
+
+#! Program::setThreadEntryHandler() in every execution mode and with AOT-compiled code
+/** A driver script embeds two child Programs, A and B, and keeps the name of the child whose code runs in a
+    thread_local variable, set and restored by the children's thread entry and exit handlers.  The children's code
+    calls functions of a fixture module, which run in the child, so that compiled module code runs inside an entry
+    and calls across Programs.  The driver runs:
+    - from source in each execution mode, with native compilation checked;
+    - with the fixture module compiled by qcc;
+    - compiled by qcc into an executable, with the fixture module compiled by qcc, so that the calls into the children
+      are made by compiled code.
+
+    Each scenario runs four times, so that tiered execution compiles the functions it calls.
+*/
+class ThreadEntryHandlerModesTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        #! bounds each command so that a hang fails the test instead of stalling the run
+        string timeout_prefix = timeoutPrefix(120);
+    }
+
+    constructor() : Test("ThreadEntryHandlerModesTest", "1.0", \ARGV) {
+        addTestCase("source in each execution mode", \source());
+        addTestCase("compiled fixture module", \compiledModule());
+        addTestCase("compiled driver and fixture module", \compiledDriver());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! A command prefix that kills what follows after \a seconds, or an empty string when there is none
+    private static string timeoutPrefix(int seconds) {
+        string cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? trim(backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd) {
+            return sprintf("%s %d ", quote(cmd), seconds);
+        }
+        string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (perl) {
+            return sprintf("%s -e 'alarm shift; exec @ARGV' %d ", quote(perl), seconds);
+        }
+        return "";
+    }
+
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    #! the children of the driver run in \a mode, if given (an execution mode of a command applies to its Program only)
+    private string run(list<string> args, string fixture, *string mode) {
+        string command = timeout_prefix + "env LD_LIBRARY_PATH=" + quote(lib_dir)
+            + " DYLD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir)
+            + " ENTRY_FIXTURE=" + quote(fixture) + (mode ? " ENTRY_EXEC_MODE=" + mode : "") + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+
+    private static setup(string dir) {
+        write(dir + "/EntryFixture.qm", Module);
+        write(dir + "/driver.qr", Driver);
+    }
+
+    private source() {
+        TmpDir dir("qore-thread-entry-source-");
+        setup(dir.path);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, dir.path + "/driver.qr"),
+                dir.path + "/EntryFixture.qm", mode), mode);
+        }
+    }
+
+    private compiledModule() {
+        TmpDir dir("qore-thread-entry-module-");
+        setup(dir.path);
+        run((qcc_bin, "-m", dir.path + "/EntryFixture.qm", "-o", dir.path + "/EntryFixture.qmod"),
+            dir.path + "/EntryFixture.qmod");
+        assertEq(Expected, run((qore_bin, "-b", "--enable-debug", dir.path + "/driver.qr"),
+            dir.path + "/EntryFixture.qmod"));
+    }
+
+    private compiledDriver() {
+        TmpDir dir("qore-thread-entry-driver-");
+        setup(dir.path);
+        run((qcc_bin, "-m", dir.path + "/EntryFixture.qm", "-o", dir.path + "/EntryFixture.qmod"),
+            dir.path + "/EntryFixture.qmod");
+        run((qcc_bin, "-o", dir.path + "/driver", dir.path + "/driver.qr"), dir.path + "/EntryFixture.qmod");
+        assertEq(Expected, run((dir.path + "/driver",), dir.path + "/EntryFixture.qmod"));
+    }
+
+    public {
+        #! the fixture module: its functions run in the Program that calls them
+        const Module = "%modern
+module EntryFixture {
+    version = \"1.0\";
+    desc = \"thread entry handler test fixture\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace EntryFixture {
+    #! calls code of another Program
+    public auto sub fixture_call(code c) {
+        return c();
+    }
+
+    #! reports the context through a direct call of another function of the module
+    public auto sub fixture_report(code report) {
+        return fixture_inner(report);
+    }
+
+    public auto sub fixture_inner(code report) {
+        return report();
+    }
+}
+";
+
+        #! the driver: the embedding code
+        const Driver = "%modern
+%no-child-restrictions
+
+thread_local *string ctx;
+our Mutex m();
+our list<string> events = ();
+our bool fail_enter;
+our bool fail_exit;
+
+sub log(string e) {
+    m.lock();
+    on_exit m.unlock();
+    events += e;
+}
+
+string sub take() {
+    m.lock();
+    on_exit m.unlock();
+    string rv = events.join(\",\");
+    events = ();
+    return rv;
+}
+
+const Child = \"%modern
+our *code report;
+
+sub set_report(code r) {
+    report = r;
+}
+
+auto sub get_ctx() {
+    return fixture_report(report);
+}
+
+auto sub call(code c) {
+    return fixture_call(c);
+}
+
+code sub make_callback() {
+    return auto sub () { return fixture_report(report); };
+}
+
+code sub make_push_callback(Queue q) {
+    return sub () { q.push({\\\"ctx\\\": report(), \\\"tid\\\": gettid()}); };
+}
+
+sub fail(string err) {
+    throw err, \\\"child\\\";
+}
+
+class Obj {
+    auto get() {
+        return fixture_report(report);
+    }
+}
+
+Obj sub new_obj() {
+    return new Obj();
+}
+\";
+
+Program sub make(string name) {
+    Program p(PO_MODERN);
+    switch (ENV.ENTRY_EXEC_MODE) {
+        case \"ast\": p.setExecMode(EM_AST); break;
+        case \"ir\": p.setExecMode(EM_IR); break;
+        case \"jit\": p.setExecMode(EM_JIT); break;
+        case \"tiered\": p.setExecMode(EM_TIERED); break;
+    }
+    p.loadModule(ENV.ENTRY_FIXTURE);
+    p.parse(Child, name);
+    p.callFunction(\"set_report\", auto sub () { return ctx; });
+    p.setThreadEntryHandler(
+        auto sub () {
+            log(\"+\" + name);
+            if (fail_enter) {
+                throw \"ENTER-ERROR\", name;
+            }
+            auto old = ctx;
+            ctx = name;
+            return old;
+        },
+        sub (auto old) {
+            log(\"-\" + name);
+            ctx = old;
+            if (fail_exit) {
+                throw \"EXIT-ERROR\", name;
+            }
+        }
+    );
+    return p;
+}
+
+AsyncIoController::setMaxCallbackWorkers(1);
+Program a = make(\"A\");
+Program b = make(\"B\");
+code cb = a.callFunction(\"make_callback\");
+object o = a.callFunction(\"new_obj\");
+take();
+
+for (int i = 0; i < 4; ++i) {
+    # single entries: function, closure, method
+    printf(\"single %y %y %y %s %y\\n\", a.callFunction(\"get_ctx\"), cb(), o.get(), take(), ctx);
+
+    # nested: A -> driver -> B -> driver -> A, through compiled module code in the children
+    list<auto> seen = ();
+    code c2 = string sub () {
+        seen += ctx;
+        seen += a.callFunction(\"get_ctx\");
+        seen += ctx;
+        return \"c2\";
+    };
+    code c1 = string sub () {
+        seen += ctx;
+        seen += b.callFunction(\"call\", c2);
+        seen += ctx;
+        return \"c1\";
+    };
+    a.callFunction(\"call\", c1);
+    printf(\"nested %s %s %y\\n\", (map $1 ?? \"-\", seen).join(\",\"), take(), ctx);
+
+    # A, B, A on one callback worker
+    Queue q();
+    AsyncIoController::submitTask(a.callFunction(\"make_push_callback\", q));
+    AsyncIoController::submitTask(b.callFunction(\"make_push_callback\", q));
+    AsyncIoController::submitTask(a.callFunction(\"make_push_callback\", q));
+    AsyncIoController::submitTask(sub () { q.push({\"ctx\": ctx, \"tid\": gettid()}); });
+    list<hash<auto>> r = map q.get(), xrange(4);
+    take();
+    printf(\"worker %s same-tid:%y\\n\", (map $1.ctx ?? \"-\", r).join(\",\"),
+        (map $1.tid, r) == (map r[0].tid, r) && r[0].tid != gettid());
+
+    # a failed entry runs none of the child's code and no exit handler
+    fail_enter = True;
+    try {
+        a.callFunction(\"get_ctx\");
+        printf(\"enter-fail none\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"enter-fail %s %s %y\\n\", ex.err, take(), ctx);
+    }
+    fail_enter = False;
+
+    # the exit handler's exception follows the child's
+    fail_exit = True;
+    try {
+        a.callFunction(\"fail\", \"CODE-ERROR\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"exit-fail %s %s %s %y\\n\", ex.err, ex.next.err ?? \"-\", take(), ctx);
+    }
+    fail_exit = False;
+}
+";
+
+        #! the output of one iteration of the driver
+        const ExpectedLine = "single \"A\" \"A\" \"A\" +A,-A,+A,-A,+A,-A null
+nested A,B,A,B,c2,A +A,+B,+A,-A,-B,-A null
+worker A,B,A,- same-tid:True
+enter-fail ENTER-ERROR +A null
+exit-fail CODE-ERROR EXIT-ERROR +A,-A null
+";
+        const Expected = ExpectedLine + ExpectedLine + ExpectedLine + ExpectedLine;
+    }
+}

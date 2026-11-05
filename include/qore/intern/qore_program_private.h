@@ -156,13 +156,20 @@ public:
     // top-level vars instantiated (for backwards compatibility, true if inst_count > 0)
     bool inst : 1;
 
+    //! the Program's thread initialization code has not yet run for the thread
+    /** Set when the thread's data is created for a runtime entry, and cleared when the code runs on the thread's
+        first entry that succeeds: an entry whose thread entry handler fails runs none of the Program's code, so the
+        initialization code runs on the next entry (see design/program-thread-entry-handlers.md).
+    */
+    bool thread_init_pending : 1;
+
     // number of top-level local variables instantiated (for REPL mode)
     unsigned inst_count = 0;
 
     // declaration order counter for proper destruction order (issue #5168)
     uint64_t var_order_counter = 0;
 
-    DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), inst_count(0) {
+    DLLLOCAL ThreadLocalProgramData() : tz_set(false), inst(false), thread_init_pending(false), inst_count(0) {
         printd(5, "ThreadLocalProgramData::ThreadLocalProgramData() this: %p\n", this);
     }
 
@@ -914,6 +921,12 @@ public:
     // thread initialization user code
     ResolvedCallReferenceNode* thr_init = nullptr;
 
+    //! the thread entry and exit handlers (Program::setThreadEntryHandler()), or nullptr
+    /** Written only under tlock.  Atomic because a thread entering the Program reads it without the lock first, so
+        that entering a Program without handlers takes no lock.
+    */
+    std::atomic<QoreThreadEntryHandlers*> thread_entry_handlers{nullptr};
+
     // return value for use with %exec-class
     QoreValue exec_class_rv{};
 
@@ -1243,6 +1256,51 @@ private:
 };
 
 class QoreBreakpoint;
+
+//! The thread entry and exit handlers of a Program, set with Program::setThreadEntryHandler()
+/** Immutable once created; replacing a Program's handlers creates a new object.  A thread that runs the entry handler
+    holds a reference until it has run the paired exit handler, so a replacement takes effect for later entries only.
+    See design/program-thread-entry-handlers.md.
+*/
+class QoreThreadEntryHandlers {
+public:
+    //! the entry handler or nullptr
+    ResolvedCallReferenceNode* const on_enter;
+    //! the exit handler or nullptr
+    ResolvedCallReferenceNode* const on_exit;
+
+    //! creates the object with one reference and a reference to each handler given
+    DLLLOCAL QoreThreadEntryHandlers(const ResolvedCallReferenceNode* on_enter,
+            const ResolvedCallReferenceNode* on_exit) : on_enter(on_enter ? on_enter->refRefSelf() : nullptr),
+            on_exit(on_exit ? on_exit->refRefSelf() : nullptr) {
+        assert(on_enter || on_exit);
+    }
+
+    DLLLOCAL QoreThreadEntryHandlers(const QoreThreadEntryHandlers&) = delete;
+    DLLLOCAL QoreThreadEntryHandlers& operator=(const QoreThreadEntryHandlers&) = delete;
+
+    DLLLOCAL void ref() {
+        refs.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! dereferences the object; the last reference releases the handlers, which can run destructors
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            if (on_enter) {
+                on_enter->deref(xsink);
+            }
+            if (on_exit) {
+                on_exit->deref(xsink);
+            }
+            delete this;
+        }
+    }
+
+private:
+    std::atomic<int> refs{1};
+
+    DLLLOCAL ~QoreThreadEntryHandlers() = default;
+};
 
 class qore_program_private : public qore_program_private_base {
 public:
@@ -2854,6 +2912,31 @@ public:
     // returns true if there was already a thread init closure set, false if not
     DLLLOCAL bool setThreadInit(const ResolvedCallReferenceNode* n_thr_init, ExceptionSink* xsink);
 
+    //! sets, replaces or clears (both arguments null) the thread entry and exit handlers
+    /** @return true if the Program had handlers before
+    */
+    DLLLOCAL bool setThreadEntryHandler(const ResolvedCallReferenceNode* on_enter,
+            const ResolvedCallReferenceNode* on_exit, ExceptionSink* xsink);
+
+    //! returns true if the Program has thread entry and exit handlers
+    DLLLOCAL bool hasThreadEntryHandlers() const {
+        return thread_entry_handlers.load(std::memory_order_relaxed);
+    }
+
+    //! returns a reference to the thread entry and exit handlers, or nullptr if there are none
+    DLLLOCAL QoreThreadEntryHandlers* refThreadEntryHandlers() const {
+        // a Program without handlers takes no lock
+        if (!thread_entry_handlers.load(std::memory_order_relaxed)) {
+            return nullptr;
+        }
+        AutoLocker al(tlock);
+        QoreThreadEntryHandlers* h = thread_entry_handlers.load(std::memory_order_relaxed);
+        if (h) {
+            h->ref();
+        }
+        return h;
+    }
+
     DLLLOCAL void setThreadTZ(ThreadProgramData* tpd, const AbstractQoreZoneInfo* tz) {
         AutoLocker al(tlock);
         pgm_data_map_t::iterator i = pgm_data_map.find(tpd);
@@ -3315,6 +3398,19 @@ public:
     DLLLOCAL static bool setThreadInit(QoreProgram& pgm, const ResolvedCallReferenceNode* n_thr_init,
             ExceptionSink* xsink) {
         return pgm.priv->setThreadInit(n_thr_init, xsink);
+    }
+
+    DLLLOCAL static bool setThreadEntryHandler(QoreProgram& pgm, const ResolvedCallReferenceNode* on_enter,
+            const ResolvedCallReferenceNode* on_exit, ExceptionSink* xsink) {
+        return pgm.priv->setThreadEntryHandler(on_enter, on_exit, xsink);
+    }
+
+    DLLLOCAL static bool hasThreadEntryHandlers(const QoreProgram& pgm) {
+        return pgm.priv->hasThreadEntryHandlers();
+    }
+
+    DLLLOCAL static QoreThreadEntryHandlers* refThreadEntryHandlers(const QoreProgram& pgm) {
+        return pgm.priv->refThreadEntryHandlers();
     }
 
     DLLLOCAL static ResolvedCallReferenceNode* runtimeGetCallReference(QoreProgram* pgm, const char* name,

@@ -1,0 +1,824 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadEntryHandlerTest
+
+#! the context of the embedding code: the name of the Program whose code the thread runs
+thread_local *string ctx;
+
+#! returns the context; imported into a child Program, it runs in this Program
+string sub host_ctx() {
+    return ctx ?? "-";
+}
+
+#! A value whose destructor records when the handlers that hold it are released
+class Marker {
+    private {
+        ThreadEntryHandlerTest test;
+        string name;
+    }
+
+    constructor(ThreadEntryHandlerTest test, string name) {
+        self.test = test;
+        self.name = name;
+    }
+
+    destructor() {
+        test.log("released " + name);
+    }
+}
+
+#! Tests for Program::setThreadEntryHandler()
+/** The embedding code here keeps its context in a thread_local variable, as an embedding application does: the entry
+    handler of each child Program saves it and sets the name of the Program, and the exit handler restores it.  Each
+    child reports the context it runs in through a closure of the embedding code.
+
+    The tests do not sleep or retry: every wait is on a Queue that is signalled explicitly, or on thread_join().
+*/
+class ThreadEntryHandlerTest inherits QUnit::Test {
+    public {
+        #! the code of the child Programs
+        const Child = "%modern
+our *code report;
+our int runs = 0;
+
+sub set_report(code r) {
+    report = r;
+}
+
+auto sub get_ctx() {
+    ++runs;
+    return report();
+}
+
+string sub inner() {
+    return report() ?? \"-\";
+}
+
+string sub get_ctx_nested() {
+    return (get_ctx() ?? \"-\") + \":\" + (get_ctx() ?? \"-\") + \":\" + inner();
+}
+
+code sub make_callback() {
+    return auto sub () {
+        ++runs;
+        return report();
+    };
+}
+
+code sub make_push_callback(Queue q) {
+    return sub () {
+        q.push({\"ctx\": report(), \"tid\": gettid()});
+    };
+}
+
+auto sub call(code c) {
+    return c();
+}
+
+sub fail(string err) {
+    ++runs;
+    throw err, \"child failure\";
+}
+
+sub wait_in(Queue inside, Queue release) {
+    inside.push(report());
+    release.get();
+}
+
+int sub start_thread(Queue q) {
+    return background q.push({\"ctx\": report(), \"tid\": gettid()});
+}
+
+bool sub set_own(object pgm) {
+    return pgm.setThreadEntryHandler();
+}
+
+class Obj {
+    private {
+        Queue q;
+    }
+
+    constructor(Queue q) {
+        self.q = q;
+    }
+
+    auto get() {
+        return report();
+    }
+
+    static auto sget() {
+        return report();
+    }
+
+    destructor() {
+        q.push(report());
+    }
+}
+
+Obj sub new_obj(Queue q) {
+    return new Obj(q);
+}
+";
+
+        #! the code of a Program that provides the handlers of another Program
+        const HandlerSource = "%modern
+code sub make_enter() {
+    return auto sub () { return 1; };
+}
+
+code sub make_exit() {
+    return sub (auto v) {};
+}
+";
+    }
+
+    private {
+        Mutex m();
+        #! the events recorded by the handlers, with the TID of the thread that recorded them
+        list<hash<auto>> events = ();
+        #! if set, every event is also pushed here
+        *Queue event_q;
+        #! makes the entry handlers fail
+        bool fail_enter;
+        #! makes the entry handlers fail in threads other than this one
+        int fail_enter_tid_except;
+        #! makes the exit handlers fail
+        bool fail_exit;
+    }
+
+    constructor() : Test("ThreadEntryHandlerTest", "1.0") {
+        # one callback worker, so that callbacks of different Programs run on the same thread; this must be set
+        # before the pools are created
+        AsyncIoController::setMaxCallbackWorkers(1);
+
+        addTestCase("single entry", \testSingleEntry());
+        addTestCase("calls within the entered Program", \testNoReentry());
+        addTestCase("A, B, A on one callback worker", \testWorkerLeakShape());
+        addTestCase("A, B, A on one timer worker", \testTimerWorker());
+        addTestCase("nested entries", \testNested());
+        addTestCase("calls made by a handler", \testHandlerCalls());
+        addTestCase("first entry and thread initialization", \testThreadInit());
+        addTestCase("thread initialization after a failed first entry", \testThreadInitAfterFailedEntry());
+        addTestCase("thread started in the Program", \testThreadStartedInProgram());
+        addTestCase("entry handler exceptions", \testEnterException());
+        addTestCase("entry handler exception in a started thread", \testEnterExceptionThread());
+        addTestCase("exit handler exceptions", \testExitException());
+        addTestCase("exit handler during unwinding", \testUnwinding());
+        addTestCase("handlers of a deleted Program", \testDeletedHandlerProgram());
+        addTestCase("Program deleted while a thread is inside", \testDeleteWhileInside());
+        addTestCase("handlers released", \testHandlersReleased());
+        addTestCase("replacement while a thread is inside", \testReplaceWhileInside());
+        addTestCase("replacement under concurrency", \testConcurrentReplacement());
+        addTestCase("clearing while a thread is inside", \testClearWhileInside());
+        addTestCase("return values", \testReturnValues());
+        addTestCase("the exit handler gets the entry handler's value", \testExitGetsEnterValue());
+        addTestCase("parse commit", \testParseCommit());
+        addTestCase("functional domains", \testDomains());
+        addTestCase("own Program", \testOwnProgram());
+
+        set_return_value(main());
+    }
+
+    #! records an event
+    log(string event) {
+        hash<auto> h = {"tid": gettid(), "event": event};
+        {
+            m.lock();
+            on_exit m.unlock();
+            events += h;
+        }
+        if (event_q) {
+            event_q.push(h);
+        }
+    }
+
+    #! removes and returns the events of the given thread, or of all threads
+    private list<string> takeEvents(*int tid) {
+        m.lock();
+        on_exit m.unlock();
+        list<string> rv = map $1.event, events, !tid || $1.tid == tid;
+        events = tid ? (select events, $1.tid != tid) : ();
+        return rv;
+    }
+
+    #! returns a child Program whose code reports the context of the embedding code
+    private Program makeProgram(string name, bool handlers = True) {
+        Program pgm(PO_MODERN);
+        pgm.parse(Child, name);
+        # initializes the global variables
+        pgm.run();
+        pgm.callFunction("set_report", auto sub () { return ctx; });
+        if (handlers) {
+            setHandlers(pgm, name);
+        }
+        return pgm;
+    }
+
+    #! sets the handlers that save, set and restore the context
+    private bool setHandlers(Program pgm, string name) {
+        return pgm.setThreadEntryHandler(
+            auto sub () {
+                log("enter " + name);
+                if (fail_enter || (fail_enter_tid_except && gettid() != fail_enter_tid_except)) {
+                    throw "ENTER-ERROR", name;
+                }
+                auto old = ctx;
+                ctx = name;
+                return old;
+            },
+            sub (auto old) {
+                log("exit " + name);
+                ctx = old;
+                if (fail_exit) {
+                    throw "EXIT-ERROR", name;
+                }
+            }
+        );
+    }
+
+    testSingleEntry() {
+        Program a = makeProgram("A");
+        takeEvents();
+        assertEq(NOTHING, ctx);
+
+        # function
+        assertEq("A", a.callFunction("get_ctx"));
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        # call reference to a function
+        code f = a.getCallReference("get_ctx");
+        takeEvents();
+        assertEq("A", f());
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        # closure
+        code cb = a.callFunction("make_callback");
+        takeEvents();
+        assertEq("A", cb());
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        # constructor, method, static method and destructor
+        Queue q();
+        object o = a.callFunction("new_obj", q);
+        assertEq(("enter A", "exit A"), takeEvents());
+        assertEq("A", o.get());
+        assertEq(("enter A", "exit A"), takeEvents());
+        code sm = a.getCallReference("Obj::sget");
+        takeEvents();
+        assertEq("A", sm());
+        assertEq(("enter A", "exit A"), takeEvents());
+        delete o;
+        assertEq("A", q.get());
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        # a Program without handlers runs in the caller's context
+        Program n = makeProgram("N", False);
+        ctx = "caller";
+        on_exit ctx = NOTHING;
+        assertEq("caller", n.callFunction("get_ctx"));
+        assertEq((), takeEvents());
+    }
+
+    testNoReentry() {
+        Program a = makeProgram("A");
+        takeEvents();
+        assertEq("A:A:A", a.callFunction("get_ctx_nested"));
+        assertEq(("enter A", "exit A"), takeEvents());
+        assertEq(NOTHING, ctx);
+    }
+
+    #! the shape of the defect the handlers fix: a shared worker runs callbacks of A, then B, then A again
+    testWorkerLeakShape() {
+        Program a = makeProgram("A");
+        Program b = makeProgram("B");
+        Queue q();
+        code cba = a.callFunction("make_push_callback", q);
+        code cbb = b.callFunction("make_push_callback", q);
+        takeEvents();
+
+        AsyncIoController::submitTask(cba);
+        AsyncIoController::submitTask(cbb);
+        AsyncIoController::submitTask(cba);
+        # a callback of the embedding code itself, after the others: the worker's context has been restored
+        AsyncIoController::submitTask(sub () { q.push({"ctx": ctx, "tid": gettid()}); });
+
+        list<hash<auto>> results = map q.get(), xrange(4);
+        assertEq(("A", "B", "A", NOTHING), (map $1.ctx, results));
+        # the callbacks ran on one worker thread, which is not this thread
+        int tid = results[0].tid;
+        assertNeq(gettid(), tid);
+        assertEq((tid, tid, tid, tid), (map $1.tid, results));
+        assertEq(("enter A", "exit A", "enter B", "exit B", "enter A", "exit A"), takeEvents(tid));
+    }
+
+    #! the same shape with timer callbacks, which run on the dispatcher's worker
+    testTimerWorker() {
+        Program a = makeProgram("A");
+        Program b = makeProgram("B");
+        Queue q();
+        code cba = a.callFunction("make_push_callback", q);
+        code cbb = b.callFunction("make_push_callback", q);
+        takeEvents();
+
+        list<hash<auto>> results = ();
+        foreach code cb in ((cba, cbb, cba)) {
+            AsyncIoController::addTimer(now_us(), cb);
+            results += q.get();
+        }
+        AsyncIoController::addTimer(now_us(), sub () { q.push({"ctx": ctx, "tid": gettid()}); });
+        results += q.get();
+
+        assertEq(("A", "B", "A", NOTHING), (map $1.ctx, results));
+        int tid = results[0].tid;
+        assertNeq(gettid(), tid);
+        assertEq((tid, tid, tid, tid), (map $1.tid, results));
+        assertEq(("enter A", "exit A", "enter B", "exit B", "enter A", "exit A"), takeEvents(tid));
+    }
+
+    #! A calls the embedding code, which calls B, which calls the embedding code, which calls A
+    testNested() {
+        Program a = makeProgram("A");
+        Program b = makeProgram("B");
+        list<auto> seen = ();
+        code c2 = string sub () {
+            seen += ctx;
+            seen += a.callFunction("get_ctx");
+            seen += ctx;
+            return "c2";
+        };
+        code c1 = string sub () {
+            seen += ctx;
+            seen += b.callFunction("call", c2);
+            seen += ctx;
+            return "c1";
+        };
+        takeEvents();
+        assertEq("c1", a.callFunction("call", c1));
+        assertEq(("A", "B", "A", "B", "c2", "A"), seen);
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "enter B", "enter A", "exit A", "exit B", "exit A"), takeEvents());
+
+        # an exception propagating through the nested entries runs every exit handler
+        code c3 = sub () {
+            b.callFunction("fail", "NESTED-ERROR");
+        };
+        takeEvents();
+        assertThrows("NESTED-ERROR", \a.callFunction(), ("call", c3));
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "enter B", "exit B", "exit A"), takeEvents());
+    }
+
+    #! code called by a handler enters other Programs without running their handlers, so handlers cannot recurse
+    testHandlerCalls() {
+        Program a = makeProgram("A", False);
+        Program b = makeProgram("B", False);
+        # each Program's handlers call into the other Program
+        a.setThreadEntryHandler(auto sub () { log("enter A"); b.callFunction("get_ctx"); },
+            sub (auto v) { log("exit A"); b.callFunction("get_ctx"); });
+        b.setThreadEntryHandler(auto sub () { log("enter B"); a.callFunction("get_ctx"); },
+            sub (auto v) { log("exit B"); a.callFunction("get_ctx"); });
+        # the handlers of each Program refer to the other Program: the cycle is broken when the test ends
+        on_exit {
+            assertTrue(a.setThreadEntryHandler());
+            assertTrue(b.setThreadEntryHandler());
+        }
+        takeEvents();
+        a.callFunction("get_ctx");
+        assertEq(("enter A", "exit A"), takeEvents());
+        assertEq(2, b.getGlobalVariable("runs"));
+        # after a handler has returned, entries run handlers again
+        b.callFunction("get_ctx");
+        assertEq(("enter B", "exit B"), takeEvents());
+        assertEq(3, a.getGlobalVariable("runs"));
+    }
+
+    #! the entry handler runs before the thread initialization code, which runs in the context it sets
+    testThreadInit() {
+        Program a = makeProgram("A");
+        a.setThreadInit(sub () { log("init " + (ctx ?? "-")); });
+        Queue q();
+        int tid = background sub () {
+            q.push(a.callFunction("get_ctx"));
+            q.push(a.callFunction("get_ctx"));
+        }();
+        assertEq("A", q.get());
+        assertEq("A", q.get());
+        thread_join(tid);
+        # the initialization code runs once, in the first entry
+        assertEq(("enter A", "init A", "exit A", "enter A", "exit A"), takeEvents(tid));
+    }
+
+    #! a thread whose first entry fails runs the thread initialization code on its first entry that succeeds
+    testThreadInitAfterFailedEntry() {
+        Program a = makeProgram("A");
+        a.setThreadInit(sub () { log("init " + (ctx ?? "-")); });
+        Queue q();
+        Queue retry();
+        # the entry handlers fail in every thread but this one
+        fail_enter_tid_except = gettid();
+        on_exit fail_enter_tid_except = 0;
+        int tid = background sub () {
+            try {
+                a.callFunction("get_ctx");
+                q.push("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+            retry.get();
+            q.push(a.callFunction("get_ctx"));
+            q.push(a.callFunction("get_ctx"));
+        }();
+        assertEq("ENTER-ERROR", q.get());
+        fail_enter_tid_except = 0;
+        retry.push(True);
+        assertEq("A", q.get());
+        assertEq("A", q.get());
+        thread_join(tid);
+        # the initialization code runs once, in the first entry that succeeds, in the context it sets
+        assertEq(("enter A", "enter A", "init A", "exit A", "enter A", "exit A"), takeEvents(tid));
+        assertEq(2, a.getGlobalVariable("runs"));
+    }
+
+    #! a thread started in the Program is in the Program for its whole life
+    testThreadStartedInProgram() {
+        Program a = makeProgram("A");
+        a.setThreadInit(sub () { log("init " + (ctx ?? "-")); });
+        Queue q();
+        takeEvents();
+        int tid = a.callFunction("start_thread", q);
+        hash<auto> h = q.get();
+        thread_join(tid);
+        assertEq("A", h.ctx);
+        assertEq(tid, h.tid);
+        assertEq(("enter A", "init A", "exit A"), takeEvents(tid));
+        # this thread entered A to start the thread; it ran the initialization code in a test before
+        assertEq(("enter A", "exit A"), takeEvents(gettid()));
+    }
+
+    testEnterException() {
+        Program a = makeProgram("A");
+        Queue q();
+        code cb = a.callFunction("make_callback");
+        object o = a.callFunction("new_obj", q);
+        takeEvents();
+
+        fail_enter = True;
+        on_exit fail_enter = False;
+
+        # the Program's code does not run, and no exit handler runs
+        assertThrows("ENTER-ERROR", "A", \a.callFunction(), "get_ctx");
+        assertThrows("ENTER-ERROR", "A", cb);
+        assertThrows("ENTER-ERROR", "A", \o.get());
+        assertEq(0, a.getGlobalVariable("runs"));
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "enter A", "enter A"), takeEvents());
+
+        # the destructor cannot enter the Program either
+        try {
+            delete o;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ENTER-ERROR", ex.err);
+        }
+        assertEq(0, q.size());
+        assertEq(("enter A",), takeEvents());
+
+        fail_enter = False;
+        assertEq("A", a.callFunction("get_ctx"));
+        assertEq(1, a.getGlobalVariable("runs"));
+        assertEq(("enter A", "exit A"), takeEvents());
+    }
+
+    #! a thread started in the Program whose entry fails runs none of the Program's code
+    testEnterExceptionThread() {
+        Program a = makeProgram("A");
+        Queue q();
+        takeEvents();
+        fail_enter_tid_except = gettid();
+        on_exit fail_enter_tid_except = 0;
+        # the thread's exception is handled in the thread: it prints the exception
+        int tid = a.callFunction("start_thread", q);
+        thread_join(tid);
+        assertEq(0, q.size());
+        assertEq(("enter A",), takeEvents(tid));
+        assertEq(("enter A", "exit A"), takeEvents(gettid()));
+    }
+
+    testExitException() {
+        Program a = makeProgram("A");
+        takeEvents();
+        fail_exit = True;
+        on_exit fail_exit = False;
+
+        # the code ran, the context is restored, and the call raises the exit handler's exception
+        assertThrows("EXIT-ERROR", "A", \a.callFunction(), "get_ctx");
+        assertEq(1, a.getGlobalVariable("runs"));
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        # with an exception propagating, the exit handler's exception follows it
+        try {
+            a.callFunction("fail", "CODE-ERROR");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("CODE-ERROR", ex.err);
+            assertEq("EXIT-ERROR", ex.next.err);
+        }
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        fail_exit = False;
+        assertEq("A", a.callFunction("get_ctx"));
+        assertEq(("enter A", "exit A"), takeEvents());
+    }
+
+    testUnwinding() {
+        Program a = makeProgram("A");
+        Queue q();
+        takeEvents();
+
+        # the exit handler runs for an entry that ends with an exception
+        assertThrows("CODE-ERROR", \a.callFunction(), ("fail", "CODE-ERROR"));
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "exit A"), takeEvents());
+
+        # a destructor that runs while an exception propagates enters the Program
+        try {
+            object o = a.callFunction("new_obj", q);
+            assertEq(("enter A", "exit A"), takeEvents());
+            throw "HOST-ERROR";
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HOST-ERROR", ex.err);
+        }
+        assertEq("A", q.get());
+        assertEq(NOTHING, ctx);
+        assertEq(("enter A", "exit A"), takeEvents());
+    }
+
+    #! handlers whose Program has been deleted fail, and the Program's code does not run
+    testDeletedHandlerProgram() {
+        Program a = makeProgram("A", False);
+        Program h(PO_MODERN);
+        h.parse(HandlerSource, "handlers");
+        a.setThreadEntryHandler(h.callFunction("make_enter"), h.callFunction("make_exit"));
+        a.callFunction("get_ctx");
+        assertEq(1, a.getGlobalVariable("runs"));
+        delete h;
+        assertThrows("PROGRAM-ERROR", \a.callFunction(), "get_ctx");
+        assertEq(1, a.getGlobalVariable("runs"));
+        assertTrue(a.setThreadEntryHandler());
+        a.callFunction("get_ctx");
+        assertEq(2, a.getGlobalVariable("runs"));
+    }
+
+    #! the thread inside the Program runs its exit handler before the deletion of the Program completes
+    testDeleteWhileInside() {
+        Program d = makeProgram("D");
+        code cb = d.callFunction("make_callback");
+        Queue inside();
+        Queue release();
+        Queue out();
+        takeEvents();
+        int tid = background d.callFunction("wait_in", inside, release);
+        assertEq("D", inside.get());
+        int deleter = background sub () {
+            delete d;
+            log("deleted");
+            out.push(True);
+        }();
+        release.push(True);
+        out.get();
+        thread_join(tid);
+        thread_join(deleter);
+        assertEq(("enter D", "exit D"), takeEvents(tid));
+        assertEq(("deleted",), takeEvents(deleter));
+        # a Program that has been deleted cannot be entered, and runs no handler
+        assertThrows("PROGRAM-ERROR", cb);
+        assertEq((), takeEvents());
+    }
+
+    #! the handlers are released when they are replaced, cleared or when their Program is deleted
+    testHandlersReleased() {
+        Program a = makeProgram("A", False);
+        {
+            Marker m1(self, "v1");
+            a.setThreadEntryHandler(auto sub () { return m1; }, sub (auto v) {});
+        }
+        {
+            Marker m2(self, "v2");
+            a.setThreadEntryHandler(auto sub () { return m2; }, sub (auto v) {});
+        }
+        assertEq(("released v1",), takeEvents());
+        a.callFunction("get_ctx");
+        assertEq((), takeEvents());
+        {
+            Marker m3(self, "v3");
+            a.setThreadEntryHandler(NOTHING, sub (auto v) { if (!m3) { throw "NO-MARKER"; } });
+        }
+        assertEq(("released v2",), takeEvents());
+        delete a;
+        assertEq(("released v3",), takeEvents());
+    }
+
+    #! the exit handler that runs is the one paired with the entry handler that ran
+    testReplaceWhileInside() {
+        Program a = makeProgram("A", False);
+        a.setThreadEntryHandler(auto sub () { log("enter v1"); return "v1"; },
+            sub (auto v) { log("exit v1 " + v); });
+        Queue inside();
+        Queue release();
+        int tid = background sub () {
+            a.callFunction("wait_in", inside, release);
+            a.callFunction("get_ctx");
+        }();
+        inside.get();
+        a.setThreadEntryHandler(auto sub () { log("enter v2"); return "v2"; },
+            sub (auto v) { log("exit v2 " + v); });
+        release.push(True);
+        thread_join(tid);
+        assertEq(("enter v1", "exit v1 v1", "enter v2", "exit v2 v2"), takeEvents(tid));
+    }
+
+    #! handlers replaced while other threads enter and leave the Program stay paired
+    testConcurrentReplacement() {
+        const int Threads = 4;
+        const int Calls = 300;
+        const int Versions = 100;
+
+        Program a = makeProgram("A", False);
+        Mutex lock();
+        hash<string, int> entered = {};
+        hash<string, int> exited = {};
+        list<string> errors = ();
+
+        code set_version = sub (int v) {
+            string ver = v.toString();
+            a.setThreadEntryHandler(
+                auto sub () {
+                    lock.lock();
+                    on_exit lock.unlock();
+                    entered{ver} = (entered{ver} ?? 0) + 1;
+                    return ver;
+                },
+                sub (auto token) {
+                    lock.lock();
+                    on_exit lock.unlock();
+                    if (token != ver) {
+                        errors += sprintf("exit handler %s got %y", ver, token);
+                    }
+                    exited{ver} = (exited{ver} ?? 0) + 1;
+                }
+            );
+        };
+        set_version(0);
+
+        Queue start();
+        list<int> tids = ();
+        for (int t = 0; t < Threads; ++t) {
+            tids += background sub () {
+                start.get();
+                for (int i = 0; i < Calls; ++i) {
+                    a.callFunction("get_ctx");
+                }
+            }();
+        }
+        map start.push(True), xrange(Threads);
+        for (int v = 1; v <= Versions; ++v) {
+            set_version(v);
+        }
+        map thread_join($1), tids;
+
+        assertEq((), errors);
+        assertEq(entered, exited);
+        assertEq(Threads * Calls, foldl $1 + $2, entered.values());
+    }
+
+    #! handlers cleared with NOTHING while a thread is inside: the entry that ran the entry handler still runs its exit
+    #! handler, and later entries run none
+    testClearWhileInside() {
+        Program a = makeProgram("A");
+        Queue inside();
+        Queue release();
+        Queue after();
+        takeEvents();
+        int tid = background sub () {
+            a.callFunction("wait_in", inside, release);
+            after.push(a.callFunction("get_ctx"));
+        }();
+        assertEq("A", inside.get());
+        assertTrue(a.setThreadEntryHandler(NOTHING, NOTHING));
+        release.push(True);
+        # the second call runs in the context of the thread, which the exit handler restored
+        assertEq(NOTHING, after.get());
+        thread_join(tid);
+        assertEq(("enter A", "exit A"), takeEvents(tid));
+        # cleared handlers stay cleared
+        assertFalse(a.setThreadEntryHandler(NOTHING, NOTHING));
+        assertEq(NOTHING, a.callFunction("get_ctx"));
+        assertEq((), takeEvents());
+    }
+
+    testReturnValues() {
+        Program a = makeProgram("A", False);
+        assertFalse(a.setThreadEntryHandler());
+        assertFalse(setHandlers(a, "A"));
+        assertTrue(setHandlers(a, "A"));
+        assertTrue(a.setThreadEntryHandler());
+        assertFalse(a.setThreadEntryHandler());
+        takeEvents();
+        a.callFunction("get_ctx");
+        assertEq((), takeEvents());
+
+        # only an exit handler: it receives no value
+        a.setThreadEntryHandler(NOTHING, sub (auto v) { log("exit " + (v ?? "-")); });
+        a.callFunction("get_ctx");
+        assertEq(("exit -",), takeEvents());
+
+        # only an entry handler
+        a.setThreadEntryHandler(auto sub () { log("enter"); return "v"; });
+        a.callFunction("get_ctx");
+        assertEq(("enter",), takeEvents());
+    }
+
+    #! each exit handler gets the value that the entry handler of its own entry returned, also for nested entries
+    testExitGetsEnterValue() {
+        Program a = makeProgram("A", False);
+        int seq = 0;
+        list<auto> got = ();
+        a.setThreadEntryHandler(
+            auto sub () {
+                ++seq;
+                return {"seq": seq, "marker": new Marker(self, "token " + seq)};
+            },
+            sub (auto token) {
+                got += token;
+            }
+        );
+        takeEvents();
+        code reenter = auto sub () { return a.callFunction("get_ctx"); };
+        # the outer entry calls the embedding code, which enters A again: two entries, two tokens
+        Program b = makeProgram("B", False);
+        a.callFunction("call", auto sub () { return b.callFunction("call", reenter); });
+        # the inner entry's exit handler ran first, with the inner entry's token
+        assertEq((2, 1), (map $1.seq, got));
+        # the tokens are the values returned, not copies: they are released only when nothing holds them any more
+        assertEq((), takeEvents());
+        got = ();
+        assertEq(("released token 2", "released token 1"), takeEvents());
+    }
+
+    #! a parse commit started from another Program is an entry: the code it runs runs in the Program's context
+    testParseCommit() {
+        Program c(PO_MODERN);
+        c.importFunction("host_ctx");
+        setHandlers(c, "C");
+        takeEvents();
+        # the constant and the static member are initialized by the commit
+        c.parse("const K = host_ctx(); class X { public { static string s = host_ctx(); } } "
+            "auto sub get_k() { return K; } auto sub get_s() { return X::s; }", "commit");
+        assertEq(("enter C", "exit C"), takeEvents());
+        assertEq("C", c.callFunction("get_k"));
+        assertEq("C", c.callFunction("get_s"));
+        assertEq(("enter C", "exit C", "enter C", "exit C"), takeEvents());
+    }
+
+    #! the method needs the functional domains of thread control and of embedded logic
+    testDomains() {
+        Program a = makeProgram("A", False);
+        foreach int po in ((PO_NO_THREAD_CONTROL, PO_NO_EMBEDDED_LOGIC)) {
+            # refused at parse time
+            Program s(PO_MODERN | po);
+            assertThrows("PARSE-EXCEPTION", "setThreadEntryHandler", \s.parse(),
+                ("sub f(Program p) { p.setThreadEntryHandler(); }", "restricted"));
+
+            # and at runtime: a call through an untyped value, and a dynamic call
+            s = new Program(PO_MODERN | po);
+            s.parse("sub f(object p) { p.setThreadEntryHandler(); } "
+                "sub g(object p) { call_object_method(p, \"setThreadEntryHandler\"); }", "restricted-runtime");
+            assertThrows("INVALID-FUNCTION-ACCESS", "setThreadEntryHandler", \s.callFunction(), ("f", a));
+            assertThrows("INVALID-FUNCTION-ACCESS", "setThreadEntryHandler", \s.callFunction(), ("g", a));
+        }
+        # the handlers were not set
+        assertFalse(a.setThreadEntryHandler());
+    }
+
+    #! code cannot set the handlers of the Program it runs in
+    testOwnProgram() {
+        Program a = makeProgram("A");
+        takeEvents();
+        assertThrows("THREAD-ENTRY-HANDLER-ERROR", \a.callFunction(), ("set_own", a));
+        # the handlers are still set
+        takeEvents();
+        assertEq("A", a.callFunction("get_ctx"));
+        assertEq(("enter A", "exit A"), takeEvents());
+    }
+}

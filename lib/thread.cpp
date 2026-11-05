@@ -486,6 +486,15 @@ public:
     // current program context helper
     ProgramThreadCountContextHelper* current_pgm_ctx = nullptr;
 
+    //! the Program the thread has entered: the Program of its innermost ThreadEntryHandlerFrame, or nullptr
+    /** Unlike current_pgm, which is also set without entering a Program (to parse it or to look up its metadata), this
+        is set only where the thread starts running a Program's code; see ThreadEntryHandlerFrame.
+    */
+    QoreProgram* entry_pgm = nullptr;
+
+    //! the number of thread entry or exit handlers running on the thread; while non-zero, entries run no handlers
+    unsigned entry_handler_depth = 0;
+
     // issue #4285: sandbox policy barrier depth; when non-zero, POLICY resolution
     // (filesystem/network) does not walk out to enclosing caller Programs, so trusted
     // infrastructure code does not inherit a sandboxed caller's policy for the call it
@@ -946,10 +955,11 @@ void QoreThreadList::activate(int tid, pthread_t ptid, QoreProgram* p, bool fore
         entry[tid].activate(tid, ptid, p, foreign, flags);
         td = entry[tid].thread_data;
     }
-    // set lvstack if QoreProgram set; this runs the Program's thread initialization code, which is user code: it
-    // can start threads, list them, or check for cancellation, all of which take the thread list lock
+    // set lvstack if QoreProgram set; the Program's thread initialization code runs when the thread enters the
+    // Program in op_background_thread(), after the Program's thread entry handler, and without the thread list lock:
+    // it is user code that can start threads, list them, or check for cancellation, all of which take that lock
     if (p) {
-        td->tpd->saveProgram(true, nullptr);
+        td->tpd->saveProgram(true);
     }
 }
 
@@ -1154,9 +1164,10 @@ void ThreadProgramData::delProgram(QoreProgram* pgm) {
     deref();
 }
 
-bool ThreadProgramData::saveProgram(bool runtime, ExceptionSink* xsink) {
-    if (!qore_program_private::setThreadVarData(td->current_pgm, this, td->tlpd, runtime))
+bool ThreadProgramData::saveProgram(bool runtime) {
+    if (!qore_program_private::setThreadVarData(td->current_pgm, this, td->tlpd, runtime)) {
         return false;
+    }
     printd(5, "ThreadProgramData::saveProgram() this: %p pgm: %p\n", this, td->current_pgm);
     ref();
     td->current_pgm->depRef();
@@ -1164,9 +1175,6 @@ bool ThreadProgramData::saveProgram(bool runtime, ExceptionSink* xsink) {
         AutoLocker al(pslock);
         assert(pgm_set.find(td->current_pgm) == pgm_set.end());
         pgm_set.insert(td->current_pgm);
-    }
-    if (runtime) {
-        qore_program_private::doThreadInit(*td->current_pgm, xsink);
     }
     return true;
 }
@@ -1574,6 +1582,17 @@ public:
         derefClosureObjs(xsink);
         derefObj(xsink);
         derefCallObj();
+    }
+
+    //! releases the expression without evaluating it, for a thread that could not enter its Program
+    DLLLOCAL void discardExpression(ExceptionSink* xsink) {
+        fc.discard(xsink);
+        fc = QoreValue();
+        if (helper) {
+            helper->discardValues(xsink);
+            helper.reset();
+        }
+        derefClosureObjs(xsink);
     }
 
     DLLLOCAL void derefClosureObjs(ExceptionSink* xsink) {
@@ -3324,6 +3343,111 @@ const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti) {
     return old;
 }
 
+namespace {
+//! marks a thread entry or exit handler running on the thread: entries made while it runs run no handlers
+class ThreadEntryHandlerRunHelper {
+public:
+    ThreadEntryHandlerRunHelper(ThreadData* td) : td(td) {
+        ++td->entry_handler_depth;
+    }
+
+    ~ThreadEntryHandlerRunHelper() {
+        assert(td->entry_handler_depth);
+        --td->entry_handler_depth;
+    }
+
+private:
+    ThreadData* td;
+};
+
+//! runs a thread entry or exit handler; its exceptions are raised in the given sink
+QoreValue run_thread_entry_handler(ThreadData* td, ResolvedCallReferenceNode* handler, const QoreListNode* args,
+        ExceptionSink& xsink) {
+    ThreadEntryHandlerRunHelper rh(td);
+    try {
+        return handler->execValue(args, &xsink);
+    } catch (AbstractException& e) {
+        e.convert(&xsink);
+    }
+    return QoreValue();
+}
+}
+
+bool thread_entry_pending(QoreProgram* pgm) {
+    return qore_program_private::hasThreadEntryHandlers(*pgm) && thread_data.get()->entry_pgm != pgm;
+}
+
+int ThreadEntryHandlerFrame::enter(QoreProgram* pgm, ExceptionSink* xsink) {
+    return enter(thread_data.get(), pgm, xsink);
+}
+
+int ThreadEntryHandlerFrame::enter(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink) {
+    assert(!active);
+    assert(!handlers);
+    assert(pgm);
+    old_entry_pgm = td->entry_pgm;
+    td->entry_pgm = pgm;
+    active = true;
+    // no handler runs for a thread that stays in the Program it has entered, or for an entry made by a handler, so
+    // that a handler can call into Programs that have handlers without recursion
+    if (old_entry_pgm == pgm || td->entry_handler_depth) {
+        return 0;
+    }
+    handlers = qore_program_private::refThreadEntryHandlers(*pgm);
+    if (!handlers || !handlers->on_enter) {
+        return 0;
+    }
+    // the caller's sink can already hold an exception, as when a destructor runs while the stack unwinds, so the
+    // handler gets a sink of its own, which also tells whether it failed
+    ExceptionSink handler_xsink;
+    token = run_thread_entry_handler(td, handlers->on_enter, nullptr, handler_xsink);
+    if (!handler_xsink) {
+        return 0;
+    }
+    // the entry failed: no exit handler runs for it
+    token.discard(&handler_xsink);
+    token = QoreValue();
+    handlers->deref(&handler_xsink);
+    handlers = nullptr;
+    td->entry_pgm = old_entry_pgm;
+    active = false;
+    if (xsink) {
+        xsink->assimilate(handler_xsink);
+    }
+    return -1;
+}
+
+void ThreadEntryHandlerFrame::exit(ExceptionSink* xsink) {
+    if (!active) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    // the frames of a thread are exited in the reverse order of their entry
+    assert(td->entry_pgm);
+    if (handlers) {
+        // the handler runs even if an exception is pending; it gets a sink of its own, whose exceptions are added
+        // after the pending ones
+        ExceptionSink handler_xsink;
+        if (handlers->on_exit) {
+            ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &handler_xsink);
+            // the list takes the reference to the value returned by the entry handler
+            args->push(token, &handler_xsink);
+            token = QoreValue();
+            ValueHolder rv(run_thread_entry_handler(td, handlers->on_exit, *args, handler_xsink), &handler_xsink);
+        } else {
+            token.discard(&handler_xsink);
+            token = QoreValue();
+        }
+        handlers->deref(&handler_xsink);
+        handlers = nullptr;
+        if (xsink) {
+            xsink->assimilate(handler_xsink);
+        }
+    }
+    td->entry_pgm = old_entry_pgm;
+    active = false;
+}
+
 ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
         bool runtime) {
     set(xsink, pgm, runtime);
@@ -3332,13 +3456,23 @@ ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* 
 ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     if (!restore) {
         printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this:%p cur_ctx:%p no restore\n", this, old_ctx);
+        // the Program was current but not entered: set() entered it without switching
+        if (entry_frame.isActive()) {
+            entry_frame.exit(xsink);
+        }
         return;
     }
+    // the exit handler runs while the thread is still in the Program, before anything is restored
+    entry_frame.exit(xsink);
+    restoreContext();
+}
+
+void ProgramThreadCountContextHelper::restoreContext() {
     // restore thread stacks
     ThreadData* td = thread_data.get();
 
     QoreProgram* pgm = td->current_pgm;
-    printd(5, "ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() this: %p current_pgm: %p " \
+    printd(5, "ProgramThreadCountContextHelper::restoreContext() this: %p current_pgm: %p " \
         "pgmid: " QLLD ", restoring old pgm: %p old_pgmid: " QLLD " old tlpd: %p old_ctx: %p savefc: %d oldfc: %d " \
         "init_tlpd: %d\n", this, td->current_pgm, td->current_pgm ? (int64)td->current_pgm->getProgramId() : -1LL,
         old_pgm, old_pgm ? (int64)old_pgm->getProgramId() : -1LL, old_tlpd, old_ctx, save_frameCount, old_frameCount,
@@ -3366,6 +3500,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         return;
     }
     assert(!old_pgm);
+    assert(!entry_frame.isActive());
 
     ThreadData* td = thread_data.get();
     // ProgramRuntimeParseContextHelper can set current_pgm without setting
@@ -3373,6 +3508,13 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // variable access, so only skip setup when the current program already has
     // a live thread-local program data frame.
     if (pgm == td->current_pgm && td->tlpd) {
+        // the current Program is not always the entered one: it is also set to parse or commit a Program, or to
+        // look up its metadata, and code that runs then enters the Program here, which runs its entry handler; a
+        // call within the entered Program, the usual case, costs only this comparison
+        if (td->entry_pgm != pgm) {
+            this->xsink = xsink;
+            entry_frame.enter(td, pgm, xsink);
+        }
         return;
     }
     old_pgm = td->current_pgm;
@@ -3404,7 +3546,11 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     // set up thread stacks
     restore = true;
     td->current_pgm = pgm;
-    init_tlpd = td->tpd->saveProgram(runtime, xsink); // set new td->tlpd
+    init_tlpd = td->tpd->saveProgram(runtime); // set new td->tlpd
+    if (init_tlpd && runtime) {
+        // the thread initialization code runs on the thread's first entry that succeeds
+        td->tlpd->thread_init_pending = true;
+    }
     td->current_pgm_ctx = this;
     sync_runtime_config_program(td);
     save_frameCount = td->tlpd->lvstack.getFrameCount();
@@ -3416,6 +3562,22 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         if (sm) {
             td->sandbox_budgets.enter(td->tid, *sm, this);
         }
+    }
+
+    // the entry handler runs once the thread is in the Program, and before any of the Program's code, including its
+    // thread initialization code; the Program holds the thread count, so it is not being destroyed.  If the handler
+    // fails, the Program's code must not run: the switch is undone, and the exception tells the caller not to run it
+    if (entry_frame.enter(td, pgm, xsink)) {
+        restoreContext();
+        restore = false;
+        return;
+    }
+
+    // the Program's thread initialization code runs on the thread's first entry into the Program that succeeds; a
+    // first entry whose entry handler failed left it pending
+    if (runtime && td->tlpd->thread_init_pending) {
+        td->tlpd->thread_init_pending = false;
+        qore_program_private::doThreadInit(*pgm, xsink);
     }
 
     printd(5, "ProgramThreadCountContextHelper::set() this:%p tlpd:%p savefc:%d oldfc:%d "
@@ -4011,7 +4173,7 @@ void qore_pop_sandbox_policy_barrier() {
 }
 
 ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink,
-        QoreProgram* pgm) : old_pgm(0), old_tlpd(0), restore(false) {
+        QoreProgram* pgm) : old_pgm(0), old_tlpd(0), xsink(xsink), restore(false) {
     if (!pgm)
         return;
 
@@ -4028,8 +4190,16 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
         td->current_pgm = pgm;
-        td->tpd->saveProgram(false, 0);
+        td->tpd->saveProgram(false);
         sync_runtime_config_program(td);
+        // the commit runs code of the Program: initializers, and the code they call
+        if (entry_frame.enter(pgm, xsink)) {
+            td->current_pgm = old_pgm;
+            td->tlpd = old_tlpd;
+            sync_runtime_config_program(td);
+            qore_program_private::unlockParsing(*pgm);
+            restore = false;
+        }
     } else {
         assert(qore_program_private::get(*pgm)->parsingLocked());
     }
@@ -4045,6 +4215,8 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
     QoreProgram* pgm = td->current_pgm;
     printd(5, "ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper() current_pgm: %p " \
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
+    // the exit handler runs while the thread is still in the Program
+    entry_frame.exit(xsink);
     td->current_pgm = old_pgm;
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
@@ -5056,6 +5228,16 @@ namespace {
             // register thread in Program object
             btp->startThread(xsink);
 
+            // the thread runs the Program's code for its whole life: it enters the Program here, which runs the
+            // Program's thread entry handler, and then the Program's thread initialization code; if the entry handler
+            // fails, the thread runs none of the Program's code
+            ThreadEntryHandlerFrame entry_frame;
+            bool entered = !entry_frame.enter(btp->pgm, &xsink);
+            if (entered) {
+                // the code's exceptions do not end the thread; they are handled here, as they always were
+                qore_program_private::doThreadInit(*btp->pgm, nullptr);
+            }
+
             {
                 QoreValue rv{};
                 ThreadData* td = thread_data.get();
@@ -5076,9 +5258,11 @@ namespace {
                     }
                     // run thread expression; it is the statement of the thread, so its temporaries live until it
                     // returns
-                    {
+                    if (entered) {
                         QoreStatementTempScope temps(&xsink);
                         rv = btp->exec(&xsink);
+                    } else {
+                        btp->discardExpression(&xsink);
                     }
                     // the thread expression has returned; everything from here on is teardown
                     end_thread_cancellation(true);
@@ -5099,6 +5283,10 @@ namespace {
 
                 // cleanup thread resources
                 purge_thread_resources(&xsink);
+
+                // the thread has run its code in the Program: the exit handler runs while the thread still holds the
+                // Program's thread count, so the Program is not being destroyed
+                entry_frame.exit(&xsink);
 
                 int tid = btp->tid;
                 // the thread's work has ended: it stops counting against the sandbox's thread limit before the

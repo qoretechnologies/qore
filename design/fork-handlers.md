@@ -93,8 +93,8 @@ which the stripes alone would reach, so TSan builds only initialize them again i
   before it runs the `pthread_atfork()` handlers (see "The dynamic linker" below), so such a hold deadlocks with any
   `fork()` in the process, made by any code.
 - No user code runs while a registered `ACQUIRE` lock is held. The thread list lock used to be held while a
-  Program's thread initialization code ran (`QoreThreadList::activate()`); that code now runs after the lock is
-  released.
+  Program's thread initialization code ran (`QoreThreadList::activate()`); that code now runs when the thread enters
+  its Program in `op_background_thread()`, without the lock (see program-thread-entry-handlers.md).
 - A `RESET` lock that can be held across `fork()` by the forking thread itself must count its holds per thread, so
   that the child can take it again as often (the AOT lazy constant initialization lock runs compiled initializers,
   which can call `fork()`).

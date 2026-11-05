@@ -3270,14 +3270,115 @@ Program::importSystemApi() {
 pgm.setThreadInit(sub () { var = 123; });
     @endcode
 
-    @note the code will be run for all new threads, but is not run by this method for the current thread
+    @note
+    - the code will be run for all new threads, but is not run by this method for the current thread
+    - the code runs only on a thread's first entry into the Program; to set a context every time a thread enters the
+      Program, for threads that run the code of more than one Program, use
+      @ref Qore::Program::setThreadEntryHandler() "setThreadEntryHandler()"
 
-    @see @ref Qore::set_thread_init()
+    @see
+    - @ref Qore::set_thread_init()
+    - @ref Qore::Program::setThreadEntryHandler() "setThreadEntryHandler()"
 
     @since %Qore 0.8.13
 */
 bool Program::setThreadInit(*code callback) [dom=THREAD_CONTROL; flags=NAMED_ARGS] {
     return qore_program_private::setThreadInit(*p, callback, xsink);
+}
+
+//! Sets, replaces or clears the code that runs every time a thread enters and leaves this Program
+/** An embedding application that keeps a context of its own for each Program it runs (the identity of the code, or
+    the restrictions that apply to it) can use these handlers to make that context follow each thread that runs the
+    Program's code: the entry handler saves the thread's context and sets the Program's, and the exit handler restores
+    the context it saved.  A thread runs the code of many Programs over its life (an async I/O callback worker or a
+    thread pool worker runs the callbacks of every Program that uses it), so code that sets the context only on a
+    thread's first entry into a Program, as code set with @ref Qore::Program::setThreadInit() "setThreadInit()" does,
+    leaves the context of the last Program entered for the code of the next one.
+
+    @param on_enter the code that runs when a thread enters this Program; it is called with no arguments, and the
+    value it returns is passed to \a on_exit; @ref nothing for none
+    @param on_exit the code that runs when the thread leaves the Program again; it is called with one argument, the
+    value returned by \a on_enter (@ref nothing if there is no \a on_enter), so it must accept an argument; @ref
+    nothing for none
+
+    @return @ref True if the Program had handlers before, @ref False if not
+
+    @par Example:
+    @code{.py}
+thread_local *string context;
+
+Program pgm(PO_NO_THREAD_CONTROL);
+pgm.setThreadEntryHandler(
+    auto sub () { auto old = context; context = "pgm"; return old; },
+    sub (auto old) { context = old; }
+);
+    @endcode
+
+    @par When the Handlers Run
+    - a thread enters this Program when it starts running the Program's code while it was running the code of
+      another Program, or of no Program: a call of a function, method, closure or call reference that runs in this
+      Program, a thread started by the Program's code (for its whole life), and a parse commit started from another
+      Program; calls made in the Program while it is entered do not enter it again, and run no handlers
+    - \a on_enter runs before any of the Program's code; on a thread's first entry into the Program, it runs before
+      the Program's thread initialization code (see @ref Qore::Program::setThreadInit() "setThreadInit()"), so that
+      code runs in the context that \a on_enter sets
+    - \a on_exit runs when the entry ends, while the thread is still in the Program, and also when the entry ends
+      because an exception is propagating
+    - entries nest: if the Program's code calls code in another Program that then calls back into this Program, the
+      callback is a new entry with its own pair of calls, and the context of the outer entry is restored when it
+      returns; the handlers of each entry run in the reverse order of the entries
+    - the entry and exit of a thread are paired: the \a on_exit that runs is the one set when \a on_enter ran, with
+      the value it returned, even if the handlers have been replaced or cleared since; a replacement applies to the
+      entries made after it, and handlers can be replaced while other threads run the Program's code
+    - the handlers run in the thread's current context, including any sandbox restrictions of the calling code; code
+      that a handler calls enters other Programs without running their handlers, so a handler cannot recurse into
+      handlers
+    - a thread cannot enter a Program that is being destroyed (the call raises \c PROGRAM-ERROR before any handler
+      runs), except the thread destroying it, whose entries to run the destructors of the Program's data run the
+      handlers; the handlers are cleared after that
+
+    @par Exceptions
+    If \a on_enter raises an exception, the thread does not run the Program's code: the call that entered the
+    Program raises the exception instead, and no \a on_exit runs for that entry (a thread started in the Program
+    ends without running its code).  An exception raised by \a on_exit is raised after any exception that was already
+    propagating; the Program has been left in any case.
+
+    @par Restrictions
+    This method requires both @ref Qore::Program::setThreadInit() "setThreadInit()"'s functional domain (@ref
+    Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") and the domain of creating Program objects (@ref
+    Qore::PO_NO_EMBEDDED_LOGIC "PO_NO_EMBEDDED_LOGIC"): it controls the context that
+    every thread entering the Program runs in, which is a decision of the code that embeds the Program.  In addition,
+    code cannot set the handlers of the Program it runs in, so that code that has its own Program object cannot remove
+    or replace the context that the embedding code set for it.
+
+    @par Performance
+    Entering a Program that has no handlers costs one atomic load; a call within the entered Program costs one
+    pointer comparison.  With handlers set, each entry takes the Program's thread data lock briefly to reference the
+    handlers, and makes the calls of the handlers themselves.
+
+    @throw THREAD-ENTRY-HANDLER-ERROR the calling code runs in this Program
+
+    @note
+    - the handlers are not run by this method for the current thread
+    - the Program keeps strong references to the handlers until they are replaced or cleared, or the Program is
+      destroyed; handlers that refer to this Program object, directly or through other objects or Programs (for
+      example the handlers of two Programs that call each other's Program), form a reference cycle that keeps the
+      Program alive, so clear the handlers with @ref nothing to release it
+
+    @see @ref Qore::Program::setThreadInit() "setThreadInit()"
+
+    @since %Qore 3.0
+*/
+bool Program::setThreadEntryHandler(*code on_enter, *code on_exit)
+        [dom=THREAD_CONTROL,EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    // code that has its own Program object must not change the context that the embedding code set for its thread
+    // entries
+    if (getProgram() == p) {
+        xsink->raiseException("THREAD-ENTRY-HANDLER-ERROR", "code cannot set the thread entry handlers of the "
+            "Program it runs in");
+        return QoreValue();
+    }
+    return qore_program_private::setThreadEntryHandler(*p, on_enter, on_exit, xsink);
 }
 
 //! returns a hash of global variables

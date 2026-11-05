@@ -1402,6 +1402,80 @@ public:
 };
 
 struct ThreadLocalProgramData;
+class QoreThreadEntryHandlers;
+
+//! A thread's entry into a Program, for the Program's thread entry and exit handlers
+/** See Program::setThreadEntryHandler() and design/program-thread-entry-handlers.md.
+
+    Every point where a thread starts running the code of a Program enters a frame: a ProgramThreadCountContextHelper
+    that switches to the Program (or that finds the Program current but not entered), a background thread for its
+    whole life, and a parse commit started from another Program.  The thread's entered Program is set for the life of
+    the frame.  If the Program differs from the thread's entered Program before, has handlers, and no handler is
+    running on the thread, the entry handler runs when the frame is entered and the exit handler runs, with the value
+    returned by the entry handler, when the frame is exited.
+
+    The frame holds a reference to the handlers that it ran, so that the exit handler that runs is the one paired with
+    the entry handler that ran, even if the handlers of the Program are replaced or cleared in the meantime.
+*/
+class ThreadEntryHandlerFrame {
+public:
+    DLLLOCAL ThreadEntryHandlerFrame() = default;
+
+    //! exits the frame if it is still entered; exceptions raised by the exit handler then are handled here
+    DLLLOCAL ~ThreadEntryHandlerFrame() {
+        if (active) {
+            exit(nullptr);
+        }
+    }
+
+    DLLLOCAL ThreadEntryHandlerFrame(const ThreadEntryHandlerFrame&) = delete;
+    DLLLOCAL ThreadEntryHandlerFrame& operator=(const ThreadEntryHandlerFrame&) = delete;
+
+    //! enters the frame for the given Program, running its entry handler if there is one to run
+    /** @param pgm the Program the thread enters; the caller guarantees that it stays valid while the frame is entered
+        @param xsink receives the exceptions of the entry handler; if null, they are handled here
+
+        @return 0 if the frame is entered, -1 if the entry handler raised an exception, in which case the frame is not
+        entered, the thread's entered Program is unchanged, and the caller must not run the Program's code
+    */
+    DLLLOCAL int enter(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! enters the frame for the given Program on the given thread, which is the current thread
+    DLLLOCAL int enter(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! exits the frame, running the exit handler paired with the entry handler that ran, if any
+    /** The exit handler runs while the thread's entered Program is still the frame's Program; it is restored
+        afterwards.  The exit handler runs even when an exception is pending, as when the frame is exited while the
+        stack unwinds.
+
+        @param xsink receives the exceptions of the exit handler, after any exception already there; if null, they are
+        handled here
+    */
+    DLLLOCAL void exit(ExceptionSink* xsink);
+
+    //! returns true if the frame is entered
+    DLLLOCAL bool isActive() const {
+        return active;
+    }
+
+private:
+    //! the thread's entered Program before the frame
+    QoreProgram* old_entry_pgm = nullptr;
+    //! the handlers whose entry handler ran, or nullptr; a reference is held while the frame is entered
+    QoreThreadEntryHandlers* handlers = nullptr;
+    //! the value returned by the entry handler, passed to the exit handler
+    QoreValue token;
+    //! true while the frame is entered
+    bool active = false;
+};
+
+//! returns true if a call into the given Program must enter it although it is the thread's current Program
+/** This is the case when the Program has thread entry handlers and is not the thread's entered Program: the current
+    Program can be set without entering it, for example while a Program is parsed or committed, or while metadata
+    of a Program is looked up.  Callers that skip ProgramThreadCountContextHelper for a call within the current
+    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.
+*/
+DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
 
 class ProgramThreadCountContextHelper {
 public:
@@ -1434,9 +1508,15 @@ protected:
     int old_frameCount = 0;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
     ExceptionSink* xsink = nullptr;
+    //! the thread's entry into the Program, for its thread entry and exit handlers
+    ThreadEntryHandlerFrame entry_frame;
     bool restore = false;
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+
+private:
+    //! restores the thread's context as it was before set() switched it
+    DLLLOCAL void restoreContext();
 };
 
 class ProgramRuntimeParseContextHelper {
@@ -1454,6 +1534,10 @@ class ProgramRuntimeParseCommitContextHelper {
 protected:
     QoreProgram* old_pgm;
     ThreadLocalProgramData* old_tlpd;
+    //! the thread's entry into the Program, for its thread entry and exit handlers
+    ThreadEntryHandlerFrame entry_frame;
+    //! receives the exceptions of the exit handler
+    ExceptionSink* xsink;
     bool restore;
 
 public:
@@ -1897,7 +1981,13 @@ public:
    DLLLOCAL void freeAllThreadData(ExceptionSink* xsink);
 
    DLLLOCAL void delProgram(QoreProgram* pgm);
-   DLLLOCAL bool saveProgram(bool runtime, ExceptionSink* xsink);
+   //! saves the thread's data for the current Program and sets the thread's local Program data
+   /** @param runtime true to instantiate the Program's top-level local variables for the thread
+
+       @return true if this is the thread's first entry into the Program; the caller then runs the Program's thread
+       initialization code (qore_program_private::doThreadInit()), after the Program's thread entry handler
+   */
+   DLLLOCAL bool saveProgram(bool runtime);
    DLLLOCAL void del(ExceptionSink* xsink);
    DLLLOCAL bool canRunDebugCallbacks() const;
    DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;

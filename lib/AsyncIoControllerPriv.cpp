@@ -1757,12 +1757,18 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         // if ptid is already set (program past the teardown gate); in that
         // case we proceed best-effort without program context — same behavior
         // as before this fix.
+        //
+        // The helper keeps the sink it is given for its destructor, which reports there the exceptions of the
+        // Program's thread exit handler and of clearing a Program deleted while the helper was active, so the sink
+        // must outlive the helper; exceptions left in it then are handled when it goes out of scope.
+        ExceptionSink pgm_guard_xsink;
         std::unique_ptr<ProgramThreadCountContextHelper> pgm_guard;
         if (async_item.pgm) {
             pgm_guard.reset(new ProgramThreadCountContextHelper);
-            ExceptionSink ignore_xsink;
-            pgm_guard->set(&ignore_xsink, async_item.pgm, true);
-            ignore_xsink.clear();
+            pgm_guard->set(&pgm_guard_xsink, async_item.pgm, true);
+            // a failure to enter, including a failed thread entry handler, leaves the worker outside the Program;
+            // each callback below enters the Program itself, and a failure there is the callback's exception
+            pgm_guard_xsink.clear();
         }
 
         ExceptionSink work_xsink;
