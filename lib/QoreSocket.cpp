@@ -18870,6 +18870,13 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
     }
 
     if (!sock->priv->setNonBlock(xsink)) {
+        if (!size) {
+            // nothing to send (the first request of a new connection): wait for it
+            send_data.discard();
+            phase = Phase::Idle;
+            set_non_block = true;
+            return;
+        }
         poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
         if (!poll_state) {
             sock->priv->clearNonBlock();

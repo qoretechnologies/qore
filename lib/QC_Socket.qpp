@@ -6684,6 +6684,67 @@ nothing Socket::setHttpFastRoutes(*HttpFastRoutes[QoreHttpFastRoutes] routes) {
         fr ? fr->r : std::shared_ptr<HttpFastRoutes>());
 }
 
+//! Returns @ref True if the socket has HTTP fast routes
+/** An accepted socket has the routes of the listening socket that it was accepted from.
+
+    @return @ref True if routes were set with @ref setHttpFastRoutes() (or the socket was accepted from a socket that
+    has them)
+
+    @par Example:
+    @code{.py}
+if (sock.hasHttpFastRoutes()) {
+    # the first request of the connection can be answered by a route
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
+    return (bool)qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getFastRoutes();
+}
+
+//! Starts a poll operation that waits for the first HTTP request of a connection and reads its header
+/** This is the fused send, idle wait and header read operation of
+    @ref startPollSendHttpResponseAndReadHeader() without the response to send: it waits for data, reads the request
+    header and completes with the parsed header, like @ref startPollReadHttpHeader(); in addition, a request that a
+    fast route of the socket qualifies for is answered by the operation itself on the async I/O thread, and the
+    operation goes on waiting for the next request without completing (see @ref Qore::HttpFastRoutes "HttpFastRoutes").
+
+    @param idle_timeout how long to wait for a request; when the time expires, the operation completes with state
+    \c "timeout"
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; the results are those of
+    @ref startPollSendHttpResponseAndReadHeader()
+
+    @par Example:
+    @code{.py}
+AbstractPollOperation op = sock.startPollIdleAndReadHttpHeader(30s);
+    @endcode
+
+    @since %Qore 3.0
+*/
+AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_timeout) [flags=NAMED_ARGS] {
+    // an empty response: the operation starts in its idle phase
+    SimpleRefHolder<BinaryNode> nothing_to_send(new BinaryNode);
+
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 deadline_ms = now_s * 1000 + us / 1000 + idle_timeout;
+
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendAndReadHeaderPollOperation(xsink, nothing_to_send.release(), s, deadline_ms), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns the \c TCP_NODELAY setting for the socket
 /** @par Example:
     @code{.py}

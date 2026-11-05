@@ -53,7 +53,7 @@ class HttpServerFastRoutesSoakTest inherits QUnit::Test {
         string req = "GET /soak HTTP/1.1\r\nHost: x\r\n\r\n";
         c.send(req);
         hash<auto> h = c.readHTTPHeader(Timeout);
-        assertEq("handler", c.recv(h."content-length".toInt(), Timeout), "the first request takes the normal path");
+        assertEq("fast", c.recv(h."content-length".toInt(), Timeout), "the first request is answered by the route");
 
         int start = clock_getmillis();
         int n = 0;
@@ -68,11 +68,11 @@ class HttpServerFastRoutesSoakTest inherits QUnit::Test {
             ++n;
         }
         assertGt(1000, n, "many requests were served");
-        assertEq(0, not_fast, "every request after the first was answered by the route");
+        assertEq(0, not_fast, "every request was answered by the route");
         # still open after longer than the operation timeout
         c.send(req);
         h = c.readHTTPHeader(Timeout);
         assertEq("fast", c.recv(h."content-length".toInt(), Timeout));
-        assertEq(n + 1, hs.getFastRouteInfo().routes{"/soak"}, "the route answered every request but the first");
+        assertEq(n + 2, hs.getFastRouteInfo().routes{"/soak"}, "the route answered every request");
     }
 }

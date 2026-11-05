@@ -32,7 +32,8 @@ class RecordingHandler inherits AbstractHttpRequestHandler {
     what the normal parser rejects or reads differently: whenever the route answers a request, the server without
     routes must accept the same bytes, with the same method and path and with headers that decide the same thing.
     The requests are a fixed list of corner cases and seeded random mutations of a valid request.  Each request is the
-    second on its connection.
+    second on its connection, and then the first one (the first request of a plain TCP connection is read by the same
+    operation).
 */
 class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
     public {
@@ -52,11 +53,17 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
         RecordingHandler plain_handler();
         int fast_port;
         int plain_port;
+
+        #! true if a request is sent as the second one of its connection (after a request for /warm), false for the
+        #! first one
+        bool second = True;
     }
 
     constructor() : QUnit::Test("HttpServerFastRequestDifferentialTest", "1.0", \ARGV) {
         addTestCase("fixed requests", \testFixed());
         addTestCase("random mutations", \testMutations());
+        addTestCase("fixed requests as the first request of a connection", \testFixedFirst());
+        addTestCase("random mutations as the first request of a connection", \testMutationsFirst());
         set_return_value(main());
     }
 
@@ -82,10 +89,12 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
         Socket c();
         c.connect("127.0.0.1:" + port);
         on_exit c.close();
-        # the first request of a connection takes the normal path
-        c.send("GET /warm HTTP/1.1\r\nHost: x\r\n\r\n");
-        hash<auto> h = c.readHTTPHeader(Timeout);
-        c.recv(h."content-length".toInt(), Timeout);
+        hash<auto> h;
+        if (second) {
+            c.send("GET /warm HTTP/1.1\r\nHost: x\r\n\r\n");
+            h = c.readHTTPHeader(Timeout);
+            c.recv(h."content-length".toInt(), Timeout);
+        }
         c.send(raw);
         try {
             h = c.readHTTPHeader(timeout);
@@ -104,6 +113,11 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
 
     #! checks one request: if the route answers it, the normal path must read it the same way
     private bool check(string raw, string desc, timeout timeout = Timeout) {
+        # a route answers only a request with a complete header; the server cannot answer one without the empty line, so
+        # there is nothing to compare and nothing to wait for
+        if (raw !~ /\r\n\r\n/) {
+            return False;
+        }
         if (!isFast(exchange(fast_port, raw, timeout))) {
             return False;
         }
@@ -125,6 +139,18 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
             sprintf("%s: connection %y of %y", desc, h.connection, raw));
         assertEq("1.1", h.http_version, desc);
         return True;
+    }
+
+    testFixedFirst() {
+        second = False;
+        on_exit second = True;
+        testFixed();
+    }
+
+    testMutationsFirst() {
+        second = False;
+        on_exit second = True;
+        testMutations();
     }
 
     testFixed() {
@@ -156,8 +182,6 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
             "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n",
             "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nContent-Length: 5\r\n\r\nabcde",
             "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nabcde",
-            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: +0\r\n\r\n",
-            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 00\r\n\r\n",
             "GET /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
             "GET /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: identity\r\nContent-Length: 0\r\n\r\n",
             "GET /p HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n\r\n",
@@ -185,6 +209,13 @@ class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
             if (check(r, sprintf("fixed #%d", $#))) {
                 ++fast;
             }
+        }
+        # a Content-Length that is not exactly 0 but is read as a length by some parsers: the normal path waits for a body
+        # that never comes (also without any route), so the route must not answer these, and they are not waited for
+        foreach string r in (("+0", "00", "-1", "0x0", "00000", "1e0", "0,0")) {
+            assertFalse(check(sprintf("GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: %s\r\n\r\n", r),
+                "non-canonical Content-Length " + r, MutationTimeout),
+                "the route does not answer Content-Length " + r);
         }
         assertTrue(fast >= 7, "the valid requests are answered by the route");
         assertTrue(check(Base, "base"));

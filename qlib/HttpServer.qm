@@ -2907,8 +2907,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     /** A request for the path that qualifies is answered on the async I/O thread, with no hand-off to a worker
         thread and no Qore code; every other request takes the normal path.  A route answers a \c GET request for its
         exact path (the query string is not part of the path) that has no body, no \c Expect or \c Upgrade header, is
-        HTTP/1.1 with a keep-alive connection, and has no further request already received.  Only the second and later
-        requests of a connection are covered.  The route is answered without the handler chain, and so without
+        HTTP/1.1 with a keep-alive connection, and has no further request already received.  Every request of a plain TCP
+        connection is covered, the first one included; over TLS only the second and later requests are.  The route is answered without the handler chain, and so without
         authentication, logging or request preprocessing: \c public must be \c True.
 
         The server's configured response headers (and the \c Server header) are added to each response, so that it has

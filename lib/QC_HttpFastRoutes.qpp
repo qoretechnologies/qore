@@ -363,7 +363,7 @@ static std::shared_ptr<const HttpFastRouteSpec> fast_route_parse_spec(const Qore
 
     A route answers a @c GET request for its exact path (the query string is not part of the path) that has no body,
     no @c Expect or @c Upgrade header, is HTTP/1.1 with a keep-alive connection, and has no further request already
-    received.  Anything else takes the normal path.  Only the second and later requests of a connection are covered.
+    received.  Anything else takes the normal path.  The first request of a plain TCP connection is covered as well as the later ones; over TLS only the second and later requests are.
 
     @par Example:
     @code{.py}

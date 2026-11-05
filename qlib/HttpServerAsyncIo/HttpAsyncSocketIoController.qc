@@ -1638,6 +1638,16 @@ public class HttpAsyncSocketIoController {
             "is_http2": False,
             "ssl": output.secure ?? False,
         };
+        if (sock.hasHttpFastRoutes()) {
+            # the listener has fast routes: the first request is read by the fused idle + read header operation,
+            # which answers a request that a route qualifies for on the I/O thread (no handler hand-off), and
+            # completes with the parsed header for every other request, as the ReadHeader operation does; the wait
+            # for the first request is the time that the ReadHeader operation had
+            timeout first_request_wait = AsyncSocketIoController::DefaultIoOperationTimeout;
+            new_cinfo.state = HttpConnectionState::SendAndReadHeader;
+            new_cinfo.stream_op = sock.startPollIdleAndReadHttpHeader(first_request_wait);
+            new_cinfo.ttl = first_request_wait;
+        }
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);

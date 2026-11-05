@@ -32,8 +32,9 @@ class FastRouteTestHandler inherits AbstractHttpRequestHandler {
 }
 
 #! Tests the fast routes of the HTTP server: requests answered on the async I/O thread without calling a handler
-/** A client keeps one connection open and sends requests on it.  The first request on a connection always takes the
-    normal path (the handler answers "handler"); the later ones that qualify are answered by the route.  See
+/** A client keeps one connection open and sends requests on it.  A request that qualifies is answered by the route,
+    the first one of a plain TCP connection included; a request for a path that is not a route (or over TLS, where the
+    first request still takes the normal path) is answered by the handler, which answers "handler".  See
     design/http-server-fast-routes.md.
 */
 class HttpServerFastRoutesTest inherits QUnit::Test {
@@ -55,6 +56,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         addTestCase("cell rules and otherwise", \testCells());
         addTestCase("a stale cell takes the normal path", \testStale());
         addTestCase("FastResponseSlot", \testSlot());
+        addTestCase("the first request of a connection", \testFirstRequest());
         addTestCase("requests that do not qualify take the normal path", \testFallbacks());
         addTestCase("pipelined requests", \testPipelined());
         addTestCase("replace and remove a route", \testReplaceRemove());
@@ -102,7 +104,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         return c;
     }
 
-    #! the first request of a connection takes the normal path
+    #! a request that is not for a route (/warm-up) is answered by the handler; the connection is then in its
+    #! keep-alive state
     private Socket warmUp() {
         Socket c = connect();
         assertEq("handler", request(c, "GET", "/warm-up").body);
@@ -220,8 +223,9 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         on_exit hs.removeFastRoute("/ping");
 
         Socket c = connect();
-        assertEq("handler", request(c, "GET", "/ping").body, "the first request takes the normal path");
         int calls = FastRouteTestHandler::calls.getCount();
+        assertEq("pong", request(c, "GET", "/ping").body, "the first request of a connection is answered by the route");
+        assertEq(calls, FastRouteTestHandler::calls.getCount(), "the handler was not called for the first request");
         for (int i = 0; i < 20; ++i) {
             hash<auto> r = request(c, "GET", "/ping");
             assertEq(200, r.code);
@@ -442,6 +446,90 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         });
     }
 
+    testFirstRequest() {
+        hs.addFastRoute("/first", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/first");
+        string req = "GET /first HTTP/1.1\r\nHost: x\r\n\r\n";
+        int calls = FastRouteTestHandler::calls.getCount();
+
+        # the first request of a new connection is answered by the route, and the handler is not called
+        Socket c = connect();
+        c.send(req);
+        assertEq("fast", readResponse(c).body);
+        assertEq(calls, FastRouteTestHandler::calls.getCount());
+        # and so are the following requests, and a request that is not for a route is answered by the handler
+        assertEq("fast", request(c, "GET", "/first").body);
+        assertEq("handler", request(c, "GET", "/not-a-route").body);
+        assertEq("fast", request(c, "GET", "/first").body);
+
+        # a request that does not qualify as the first request of a connection is answered by the handler, with the
+        # full header
+        foreach hash<auto> t in ((
+            {"desc": "a body", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\n\r\nabc"},
+            {"desc": "Expect", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n\r\n", "interim": True},
+            {"desc": "Upgrade", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n"},
+            {"desc": "Connection: close", "raw": "GET /first HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"},
+            {"desc": "HTTP/1.0", "raw": "GET /first HTTP/1.0\r\nHost: x\r\n\r\n"},
+            {"desc": "POST", "raw": "POST /first HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n"},
+            {"desc": "no route", "raw": "GET /nothing HTTP/1.1\r\nHost: x\r\n\r\n"},
+        )) {
+            Socket tc = connect();
+            tc.send(t.raw);
+            if (t.interim) {
+                # the interim 100 Continue response
+                assertEq(100, readResponse(tc).code, t.desc);
+            }
+            assertEq("handler", readResponse(tc).body, t.desc);
+        }
+
+        # a request that no parser accepts (an obsolete line fold): the normal path answers with its 400 response, as
+        # it does when no route exists
+        Socket fc = connect();
+        fc.send("GET /first HTTP/1.1\r\nHost: x\r\nX-A: a\r\n b\r\n\r\n");
+        assertEq(400, readResponse(fc).code, "a request that the strict parser rejects is left to the normal path");
+
+        # a header that the strict parser rejects but that the normal parser accepts (a non-ASCII value): the request is
+        # parsed by the normal parser, and a route that qualifies answers it
+        Socket nc = connect();
+        nc.send("GET /first HTTP/1.1\r\nHost: x\r\nX-A: \xc3\xa9\r\n\r\n");
+        assertEq("fast", readResponse(nc).body, "a request that only the normal parser reads is answered by the route");
+
+        # two requests in one send: the first is not answered by the route (the second is already received), both are
+        # answered
+        Socket pc = connect();
+        pc.send(req + req);
+        assertEq("handler", readResponse(pc).body);
+        assertEq("fast", readResponse(pc).body);
+
+        # a request that arrives in pieces is read to completion: the strict parser sees the whole header
+        Socket sc = connect();
+        for (int i = 0; i < req.size(); ++i) {
+            sc.send(substr(req, i, 1));
+        }
+        assertEq("fast", readResponse(sc).body);
+
+        # the same request answered by a stale cell route: the handler answers
+        FastCell cell(1, 10s);
+        hs.addFastRoute("/first-cell", {
+            "public": True,
+            "rules": ({"cell": cell, "op": "==", "value": 1, "response": textResponse(200, "fast")},),
+        });
+        on_exit hs.removeFastRoute("/first-cell");
+        Socket cc = connect();
+        cc.send("GET /first-cell HTTP/1.1\r\nHost: x\r\n\r\n");
+        assertEq("fast", readResponse(cc).body);
+        qore_test_advance_fast_clock(11000);
+        Socket cc2 = connect();
+        cc2.send("GET /first-cell HTTP/1.1\r\nHost: x\r\n\r\n");
+        assertEq("handler", readResponse(cc2).body, "a stale cell takes the normal path for the first request");
+
+        # connections that wait for their first request when the server stops are closed without a leak: the
+        # connection is left open until the test ends
+        Socket idle1 = connect();
+        Socket idle2 = connect();
+        idle2.send("GET /fir");
+    }
+
     testFallbacks() {
         hs.addFastRoute("/fb", {"public": True, "response": textResponse(200, "fast")});
         on_exit hs.removeFastRoute("/fb");
@@ -534,8 +622,8 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         int port2 = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         Socket c();
         c.connect("127.0.0.1:" + port2);
-        assertEq("handler", request(c, "GET", "/late").body);
         assertEq("fast", request(c, "GET", "/late").body, "a listener added after the route has it");
+        assertEq("fast", request(c, "GET", "/late").body);
     }
 
     testSocketRoutes() {

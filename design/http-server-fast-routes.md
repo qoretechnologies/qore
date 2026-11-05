@@ -266,7 +266,7 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 |0|Spike: fixed route in `SocketSendAndReadHeaderPollOperation` (branch `spike/http-fast-route`)|keep-alive CPU per request measured: 10 - 16 us against 3.0 - 3.5 ms
 |1|Route table, `static` and `slot` blocks, counters, eligibility rules, API, tests, benchmark; requests after the first on a connection|parity and fallback tests pass; benchmark guards the gain
 |1.5 (done)|Fast request parsing: a strict parser in the interpreter-free core (`HttpFastRequest.h/.cpp`) that reads the raw header bytes straight into the `HttpFastRequestView`, before any Qore hash is built; it accepts only a conservative subset and everything else takes the existing parser|differential and fuzz tests show that whatever the fast parser accepts, the normal parser accepts with the same method, path and headers; keep-alive CPU per request falls from 50 - 60 us towards 10 - 15 us
-|2a|The accept operation reads the first request after accept (and the TLS handshake) and answers it from a route; see "Phase 2 design".  The per-accept reverse lookup is already opt-in (`peer_hostname_lookup`)|a new connection's first request is also served without a hand-off
+|2a (done for plain TCP)|The first request of a connection is read by the fused idle + read header operation, which answers it from a route; see "Phase 2 design".  The per-accept reverse lookup is already opt-in (`peer_hostname_lookup`)|a new connection's first request is also served without a hand-off
 |2b|Only if 2a leaves a measured gap: connections owned by C++ until a request needs the handler|measured
 |3|HTTP/2 and HTTP/3|same tests over h2 and h3
 |4|Only if measured and justified: `Connection: close` handling, prefix routes, further blocks|each addition reviewed for boundedness
@@ -285,8 +285,9 @@ or opt-in as `Socket::setSourceHostLookup()` did for `Socket::accept()`.
 
 ## Phase 2 design: accept and the first request in C++
 
-Status: design only; nothing of this is implemented.  It is written down now because it decides how phase 1.5 shares
-its parser and because it changes what a route means for the first request of a connection.
+Status: phase 2a (plain TCP) is implemented, by the simpler mechanism described under "Implemented"; the accept-operation
+state proposed below is not needed for it and is kept as the design of the alternative.  TLS (2a') and C++-owned
+connections (2b) are not implemented.
 
 ### What phase 1 leaves on the slow path
 
@@ -302,7 +303,21 @@ pays, for every request, the part of the lifecycle that phase 1 does not touch:
 The per-accept reverse lookup, which used to be the largest avoidable cost of the accept completion, is now opt-in
 (`peer_hostname_lookup`), so what remains of the accept completion is Qore bookkeeping and two worker hand-offs.
 
-### Proposal (phase 2a): the accept operation answers the first request
+### Implemented (phase 2a, plain TCP)
+
+The first request of a connection is read by the operation that already answers fast routes for the later ones: the
+fused idle wait and header read, `SocketSendAndReadHeaderPollOperation`, started with nothing to send
+(`Socket::startPollIdleAndReadHttpHeader()`; its constructor starts in the idle phase when the response is empty).
+`handleAcceptComplete()` starts a plain HTTP/1.x connection in the `SendAndReadHeader` state with that operation when
+the accepted socket has fast routes (`Socket::hasHttpFastRoutes()`), and in the `ReadHeader` state with
+`SocketReadHttpHeaderPollOperation` as before when it does not.  So a listener without routes is unchanged, and a request
+that no route answers completes the operation with the parsed header, exactly as a later request of a connection does.
+
+The wait for the first request is the time that the `ReadHeader` operation had (`DefaultIoOperationTimeout`, 30
+seconds): it is the idle time of the fused operation, and the controller's operation timeout is that plus the same
+again.  The accept completion (one worker callback per connection) remains.
+
+### Alternative that was considered (phase 2a): the accept operation answers the first request
 
 `HttpAcceptPollOperationPriv` already is a C++ state machine (`ACCEPTING`, `SSL_HANDSHAKE`, `COMPLETE`).  The TLS
 handshake can run inside it (`do_ssl_handshake`), but `HttpServer` does not use that: it passes `False`, and
@@ -370,8 +385,8 @@ limits and tracing see it as they do today.
 
 ### Semantics visible to users
 
-- A fast route answers the first request of a connection too.  The statement in the API documentation that "only the
-  second and later requests are covered" is replaced by "every request that qualifies".  The tests that open a
+- A fast route answers the first request of a plain TCP connection too (implemented).  The statement in the API
+  documentation that "only the second and later requests are covered" is replaced by "every request that qualifies".  The tests that open a
   connection and expect the handler for the first request of a route's path change; the ones that use a warm-up path
   that is not a route (`/warm-up`) do not.
 - A listener without fast routes is unaffected: `FIRST_REQUEST` is not entered, so there is no extra state or read.
@@ -457,6 +472,19 @@ The gap to the spike's 10 - 16 us (which included the measurement harness) is cl
 and the send system calls, the operation's state machine and the allocation of the response copy.  A request that the
 strict parser rejects, or that no route answers, goes through the hash path as before and pays the strict parse (about
 a microsecond) on top.
+
+## Measured (phase 2a: the first request of a plain TCP connection)
+
+`HttpServerFastRoutesBench.qtest`, Release build, a Qore client that opens a connection, sends one request and closes it
+(best of 5 rounds of 300), the handler path against a fast route for the same response:
+
+|!Path|!Time per connection and request
+|handler (normal path)|about 2.2 ms
+|fast route, first request answered by the route|about 0.5 ms
+
+The remaining half millisecond is the accept, its completion callback in Qore (connection registration, context) and
+the start of the next operation; that is what phase 2b (C++-owned connections) would address, and what a measurement of
+phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at most 0.7) rather than the times.
 
 ## Performance plan
 
