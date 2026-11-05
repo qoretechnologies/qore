@@ -134,6 +134,8 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::http_parse_content_length() "http_parse_content_length()", a strict parser of the
+      \c Content-Length header (RFC 9110 section 8.6)
     - fixed @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" to accept a response or header hash
       whose values all have the same type, such as a literal <tt>{"code": 204}</tt>; setting the response headers
       raised \c RUNTIME-TYPE-ERROR
@@ -950,6 +952,37 @@ public class CookieHelper {
             bool set_cache_control = True) {
         HttpUtil::set_cookie_header(\hdr, cookie, set_cache_control);
     }
+}
+
+#! Parses the value of a \c Content-Length header
+/** RFC 9110 section 8.6: the value is one or more ASCII digits.  A sign, a hexadecimal or exponent notation, a list of
+    values, white space inside the value or a number too large for the server to handle is not a valid
+    \c Content-Length; reading such a value as a number (as a general conversion does) gives a different length than
+    another parser would, which is how a request is smuggled or its body is waited for until the connection times out.
+
+    @param value the header value; leading and trailing white space is ignored
+
+    @return the length in octets, or @ref nothing if the value is not a valid \c Content-Length (at most 18 digits)
+
+    @par Example:
+    @code{.py}
+*int len = http_parse_content_length(hdr."content-length");
+if (!exists len) {
+    # answer 400 Bad Request
+}
+    @endcode
+
+    @since %HttpServerUtil 1.6
+*/
+public *int sub http_parse_content_length(*string value) {
+    if (!exists value) {
+        return;
+    }
+    string v = trim(value);
+    if (v !~ /^[0-9]{1,18}$/) {
+        return;
+    }
+    return int(v);
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)

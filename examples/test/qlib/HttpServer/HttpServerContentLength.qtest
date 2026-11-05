@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerContentLengthTest
+
+#! answers with the length of the request body it received, and counts the requests
+class ContentLengthTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        static Counter calls = new Counter();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        ContentLengthTestHandler::calls.inc();
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": sprintf("%d", body.size()),
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+}
+
+#! Tests how the HTTP server reads the Content-Length of a request (RFC 9110 section 8.6): the value is the digits and
+#! nothing else; a value that another parser would read differently is refused, and a length of 0 is no body
+/** A value such as \c 00, \c +0, \c -1 or \c 0x0 used to be handed to a general conversion and the result to the socket
+    read, whose length 0 (or less) means "read until the connection closes": the request waited for a body that never
+    came until the read timed out.
+*/
+class HttpServerContentLengthTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    private {
+        HttpServer hs;
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServerContentLengthTest", "1.0", \ARGV) {
+        addTestCase("the parser", \testParser());
+        addTestCase("a valid Content-Length is read", \testValid());
+        addTestCase("an invalid Content-Length is refused without waiting", \testInvalid());
+        addTestCase("a Content-Length that is zero is no body, however it is written", \testZero());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        hs = new HttpServer();
+        hs.setDefaultHandler("handler", new ContentLengthTestHandler());
+        port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        hs.stop();
+        delete hs;
+    }
+
+    private hash<auto> exchange(string content_length, string body = "") {
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        on_exit c.close();
+        c.send("POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: " + content_length + "\r\n\r\n" + body);
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        int len = (h."content-length" ?? 0).toInt();
+        return {"code": h.status_code, "body": len ? c.recv(len, Timeout) : ""};
+    }
+
+    testParser() {
+        assertEq(0, http_parse_content_length("0"));
+        assertEq(0, http_parse_content_length("00"));
+        assertEq(5, http_parse_content_length("5"));
+        assertEq(5, http_parse_content_length("005"));
+        assertEq(5, http_parse_content_length("  5 \t"));
+        assertEq(123456789012345678, http_parse_content_length("123456789012345678"));
+        foreach string bad in ("", " ", "+0", "+5", "-1", "-0", "0x0", "0x10", "1e0", "1e3", "5, 5", "5,5", "5 5", "5a",
+                "a5", "0.0", "5.", ".5", "١٢", "9999999999999999999", "1234567890123456789") {
+            assertFalse(exists http_parse_content_length(bad), "invalid: " + bad);
+        }
+        assertFalse(exists http_parse_content_length(), "no value");
+    }
+
+    testValid() {
+        hash<auto> r = exchange("5", "hello");
+        assertEq((200, "5"), (r.code, r.body));
+        r = exchange("000012", "abcdefghijkl");
+        assertEq((200, "12"), (r.code, r.body), "leading zeros are digits");
+    }
+
+    testInvalid() {
+        int calls = ContentLengthTestHandler::calls.getCount();
+        # none of these waits for a body: the request is refused at once (the timeout of the read is long)
+        date start = now_us();
+        foreach string bad in ("+0", "+5", "-1", "0x0", "0x5", "1e0", "5, 5", "5a", "0.0", "99999999999999999999") {
+            hash<auto> r = exchange(bad, "hello");
+            assertEq(400, r.code, "Content-Length: " + bad);
+            assertTrue(r.body =~ /Content-Length/i, "the error names the header: " + bad);
+        }
+        assertLt(Timeout, now_us() - start, "refused without waiting for a body to be read");
+        assertEq(calls, ContentLengthTestHandler::calls.getCount(), "the handler was not called");
+    }
+
+    testZero() {
+        int calls = ContentLengthTestHandler::calls.getCount();
+        date start = now_us();
+        foreach string zero in ("0", "00", "000", " 0 ") {
+            hash<auto> r = exchange(zero);
+            assertEq((200, "0"), (r.code, r.body), "Content-Length: '" + zero + "'");
+        }
+        assertLt(Timeout, now_us() - start, "no wait for a body");
+        assertEq(calls + 4, ContentLengthTestHandler::calls.getCount());
+    }
+}

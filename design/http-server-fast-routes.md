@@ -534,11 +534,11 @@ phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at mos
 
 ## Risks and open questions
 
-- `HEAD` requests are not answered by a route (they take the normal path).  The normal path answers a `HEAD` request to
-  a handler with `Content-Length: 0` and without the `;charset=utf-8` that a `GET` response has, which is not what RFC
-  9110 says (a `HEAD` response has the headers of the `GET` response, including its `Content-Length`).  A route that
-  copied that would copy what looks like a defect of the normal path, and one that did what the RFC says would differ
-  from it, so `HEAD` waits until the normal path's behavior is settled.
+- `HEAD` requests are not answered by a route (they take the normal path).  The normal path used to answer a `HEAD`
+  request with `Content-Length: 0` and a `Content-Type` without the character encoding of the `GET` response; it now
+  sends the headers of the `GET` response (RFC 9110 section 9.3.2), with a `Content-Length` only when it is that of the
+  `GET` message body.  A route could answer `HEAD` the same way, from the same pre-serialized response without the body
+  and with its `Content-Length`; this is not done yet.
 - bypassing the handler chain changes what an operator can rely on (logging, auth, tracing): mitigated by `public`,
   counters and documentation; whether a sampled access log is worth adding is open
 - a response too large for the socket buffer stays in the operation's send phase until the reader drains it; the

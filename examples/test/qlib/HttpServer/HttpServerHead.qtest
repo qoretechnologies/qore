@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerHeadTest
+
+#! answers each path with a different kind of message body
+class HeadTestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        switch (cx.raw_path) {
+            case "/ascii":
+                return <HttpResponseInfo>{"code": 200, "body": "hello world", "hdr": {"Content-Type": "text/plain"}};
+            case "/utf8":
+                return <HttpResponseInfo>{"code": 200, "body": "héllo wörld",
+                    "hdr": {"Content-Type": "text/plain"}};
+            case "/binary":
+                return <HttpResponseInfo>{"code": 200, "body": <0102030405>,
+                    "hdr": {"Content-Type": "application/octet-stream"}};
+            case "/big":
+                return <HttpResponseInfo>{"code": 200, "body": strmul("0123456789abcdef", 1000),
+                    "hdr": {"Content-Type": "text/plain"}};
+            case "/no-type":
+                return <HttpResponseInfo>{"code": 200, "body": "no content type"};
+            case "/own-length":
+                return <HttpResponseInfo>{"code": 200, "body": "twelve bytes",
+                    "hdr": {"Content-Type": "text/plain", "Content-Length": "12"}};
+            case "/empty":
+                return <HttpResponseInfo>{"code": 200};
+            case "/not-modified":
+                return <HttpResponseInfo>{"code": 304, "hdr": {"ETag": "\"x\""}};
+        }
+        return <HttpResponseInfo>{"code": 404, "body": "not found", "hdr": {"Content-Type": "text/plain"}};
+    }
+}
+
+#! Tests the responses of the HTTP server to HEAD requests (RFC 9110 section 9.3.2)
+/** A response to a HEAD request has the headers of the response to a GET request, no message body, and a
+    Content-Length only if it is the length of the GET response's message body.  The server used to send
+    \c Content-Length: 0 and a Content-Type without the character encoding of the GET response.
+*/
+class HttpServerHeadTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    private {
+        HttpServer hs;
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServerHeadTest", "1.0", \ARGV) {
+        addTestCase("a HEAD response has the headers of the GET response", \testHeaders());
+        addTestCase("the Content-Length of a HEAD response is that of the GET response, or none", \testLength());
+        addTestCase("the Content-Type has the character encoding", \testContentType());
+        addTestCase("an empty response, a 304 and an error", \testStatus());
+        addTestCase("the connection is usable after HEAD requests", \testConnection());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        hs = new HttpServer();
+        hs.setDefaultHandler("handler", new HeadTestHandler());
+        port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        hs.stop();
+        delete hs;
+    }
+
+    #! sends a request and returns the status, the headers and the message body that the response framing says
+    private hash<auto> request(Socket c, string method, string path, *hash<auto> hdr) {
+        string req = sprintf("%s %s HTTP/1.1\r\nHost: x\r\n", method, path);
+        foreach hash<auto> h in (hdr.pairIterator()) {
+            req += sprintf("%s: %s\r\n", h.key, h.value);
+        }
+        c.send(req + "\r\n");
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        # a response to a HEAD request, and a 1xx, 204 or 304 response, has no message body whatever its headers say
+        binary body = binary();
+        if (method != "HEAD" && h.status_code >= 200 && h.status_code != 204 && h.status_code != 304) {
+            int len = (h."content-length" ?? 0).toInt();
+            if (len) {
+                body = c.recvBinary(len, Timeout);
+            }
+        }
+        return {"code": h.status_code, "hdr": h, "body": body};
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        return c;
+    }
+
+    testHeaders() {
+        Socket c = connect();
+        foreach string path in ("/ascii", "/utf8", "/binary", "/no-type", "/own-length") {
+            hash<auto> get = request(c, "GET", path);
+            hash<auto> head = request(c, "HEAD", path);
+            assertEq(get.code, head.code, path);
+            assertEq(0, head.body.size(), path + ": no message body");
+            hash<auto> gh = get.hdr - ("date",);
+            hash<auto> hh = head.hdr - ("date", "content-length");
+            # the headers of the HEAD response are those of the GET response, except that its length can be left out
+            foreach string name in (keys hh) {
+                assertEq(gh{name}, hh{name}, path + ": header " + name);
+            }
+            foreach string name in (keys (gh - ("content-length",))) {
+                assertTrue(exists hh{name}, path + ": header " + name + " of the GET response is there");
+            }
+        }
+    }
+
+    testLength() {
+        Socket c = connect();
+        foreach string path in ("/ascii", "/utf8", "/binary", "/big", "/no-type", "/own-length") {
+            foreach list<auto> enc in ((NOTHING,), ("gzip",), ("br",)) {
+                *hash<auto> req_hdr = enc[0] ? {"Accept-Encoding": enc[0]} : NOTHING;
+                hash<auto> get = request(c, "GET", path, req_hdr);
+                hash<auto> head = request(c, "HEAD", path, req_hdr);
+                string label = sprintf("%s (%s)", path, enc[0] ?? "no encoding");
+                # a Content-Length is sent only if it is the length that the GET response's message body has
+                if (exists head.hdr."content-length") {
+                    assertEq(get.hdr."content-length", head.hdr."content-length", label + ": same length as GET");
+                    assertTrue(head.hdr."content-length" != "0" || get.body.size() == 0,
+                        label + ": no Content-Length: 0 for a body");
+                }
+                assertEq(get.hdr."content-encoding", head.hdr."content-encoding", label + ": same encoding");
+            }
+        }
+        # the length is sent when it is known: text in ASCII, binary data, a length that the handler gave
+        assertEq("11", request(c, "HEAD", "/ascii").hdr."content-length");
+        assertEq("5", request(c, "HEAD", "/binary").hdr."content-length");
+        assertEq("12", request(c, "HEAD", "/own-length").hdr."content-length");
+    }
+
+    testContentType() {
+        Socket c = connect();
+        assertEq("text/plain;charset=utf-8", request(c, "HEAD", "/ascii").hdr."content-type");
+        assertEq("text/plain;charset=utf-8", request(c, "HEAD", "/utf8").hdr."content-type");
+        assertEq("application/octet-stream", request(c, "HEAD", "/binary").hdr."content-type");
+        # a body without a Content-Type has the default of the GET response
+        assertEq(request(c, "GET", "/no-type").hdr."content-type", request(c, "HEAD", "/no-type").hdr."content-type");
+        assertTrue(exists request(c, "HEAD", "/no-type").hdr."content-type");
+    }
+
+    testStatus() {
+        Socket c = connect();
+        # a 200 response without a body is a 204 response, to GET and to HEAD
+        assertEq(204, request(c, "GET", "/empty").code);
+        assertEq(204, request(c, "HEAD", "/empty").code);
+        assertEq(304, request(c, "HEAD", "/not-modified").code);
+        assertEq("\"x\"", request(c, "HEAD", "/not-modified").hdr.etag);
+        # an error: no message body, and a length only if it is the GET response's
+        hash<auto> get = request(c, "GET", "/nothing-here");
+        hash<auto> head = request(c, "HEAD", "/nothing-here");
+        assertEq(404, head.code);
+        assertEq(0, head.body.size());
+        assertEq(get.hdr."content-type", head.hdr."content-type");
+        if (exists head.hdr."content-length") {
+            assertEq(get.hdr."content-length", head.hdr."content-length");
+        }
+    }
+
+    testConnection() {
+        # HEAD requests, one after another and mixed with others, leave the connection framed correctly
+        Socket c = connect();
+        for (int i = 0; i < 20; ++i) {
+            assertEq(200, request(c, "HEAD", "/ascii").code);
+            hash<auto> get = request(c, "GET", "/ascii");
+            assertEq("hello world", get.body.toString(), "request " + i);
+            assertEq(404, request(c, "HEAD", "/missing").code);
+            assertEq(204, request(c, "HEAD", "/empty").code);
+        }
+    }
+}

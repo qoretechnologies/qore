@@ -307,6 +307,15 @@ log("started listener on %s", lh.desc);
       delimited by closing the connection (RFC 9112 section 6.3);
       @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" sends a streamed error message to an HTTP/1.0
       client with a \c Content-Length, and sends no message body in a response to a \c HEAD request
+    - fixed the \c Content-Length of a request (RFC 9110 section 8.6): the value is the digits and nothing else
+      (@ref HttpServer::http_parse_content_length()); a value such as \c +0, \c -1 or \c 0x0 is refused with
+      \c 400 instead of making the server wait for a message body until the read timed out, and \c 00 is a message
+      body of length 0
+    - fixed the response to a \c HEAD request (RFC 9110 section 9.3.2): it has the headers of the response to a
+      \c GET request, including the character encoding of the \c Content-Type and the \c Content-Encoding, no message
+      body, and a \c Content-Length only if it is the length of the \c GET response's message body (it was always
+      \c 0); a \c 200 response without a body is a \c 204 response to a \c HEAD request too, and an error response
+      to a \c HEAD request has no message body
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
     - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
       \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
@@ -2685,6 +2694,75 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return NOTHING;
     }
 
+    #! Sets the headers of the response to a \c HEAD request that depend on the message body, which the response does not send
+    /** RFC 9110 section 9.3.2: the server should send the headers that a response to a \c GET request would have, and
+        must not send a \c Content-Length unless it is the number of octets that the response to a \c GET request would
+        have.  The \c Content-Type is that of the \c GET response (a body without one has a default, and a string body
+        has its character encoding).  The \c Content-Length is set only when it is known to be the length of the body
+        that a \c GET response sends: an in-memory body of binary data, or of text in ASCII sent in an encoding that
+        has ASCII as its subset, which is not compressed; otherwise none is sent, which is allowed.
+
+        A \c 200 response without a message body is a \c 204 response, as it is to a \c GET request.
+
+        @param rv the response, with the message body that a \c GET request would get; its headers are set
+        @param cx the connection context
+        @param s the client socket
+    */
+    private static prepareHeadResponse(reference<hash<auto>> rv, hash<auto> cx, Socket s) {
+        string encoding = cx."response-encoding" ?? s.getEncoding().lwr();
+        bool is_sse = (rv.hdr."Content-Type" ?? "").lwr().startsWith(MimeTypeSse);
+        if (rv."code" == 200 && !rv.streaming && !is_sse && !rv.hasKey("chunked_body")
+                && !(rv.body instanceof InputStream) && !rv.send_callback) {
+            int body_tc = rv.body.typeCode();
+            if (body_tc == NT_NOTHING || body_tc == NT_NULL
+                    || ((body_tc == NT_STRING || body_tc == NT_BINARY) && rv.body.size() == 0)) {
+                rv."code" = 204;
+                return;
+            }
+        }
+        if (!rv.hdr."Content-Type") {
+            if (*string default_content_type = getDefaultContentType(rv, encoding)) {
+                rv.hdr."Content-Type" = default_content_type;
+            }
+        }
+        # the character encoding of a string body is given in the Content-Type, as for a GET response
+        hash<auto> probe = rv;
+        HttpServer::http_set_reply_headers(s, cx, \probe);
+        if (probe.hdr."Content-Type") {
+            rv.hdr."Content-Type" = probe.hdr."Content-Type";
+        }
+
+        # a body above the compression threshold is compressed for a client that accepts it: the GET response then has
+        # a Content-Encoding header, and the length of the compressed body, which is not known without compressing it
+        if (rv.body && !(rv.body instanceof InputStream) && !rv.send_callback && !rv.no_content_encoding
+                && !rv.hdr."Content-Encoding" && rv.body.size() > CompressionThreshold
+                && inlist(cx.encoding, ("br", "zstd", "deflate", "gzip", "bzip2"))) {
+            rv.hdr."Content-Encoding" = cx.encoding;
+            remove rv.hdr."Content-Length";
+            return;
+        }
+
+        if (rv.hdr."Content-Length" || rv.hdr."Transfer-Encoding" || rv.hdr."Content-Encoding"
+                || rv.hasKey("chunked_body") || rv.send_callback || rv.body instanceof InputStream) {
+            # a Content-Length of the handler is sent as it is; a length that is not known is not sent
+            return;
+        }
+        int tc = rv.body.typeCode();
+        int len;
+        if (tc == NT_BINARY) {
+            len = rv.body.size();
+        } else if (tc == NT_STRING) {
+            string label = http_get_charset_label(encoding);
+            if ((label != "utf-8" && label != "us-ascii" && label != "iso-8859-1") || rv.body !~ /^[\x00-\x7f]*$/) {
+                return;
+            }
+            len = strlen(rv.body);
+        } else {
+            return;
+        }
+        rv.hdr."Content-Length" = string(len);
+    }
+
     #! sends an HTTP error message on the socket
     sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
             *hash<auto> extra_hdrs, *string encoding, bool head) {
@@ -4341,7 +4419,7 @@ ready.set(1);
                     # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
                     body = decodeRequestText(hdr, cx."header-info".body);
                 }
-            } else if (hdr."content-length" && !is_multiplexed) {
+            } else if (exists hdr."content-length" && !is_multiplexed) {
                 # HTTP/1.x only: the request body is read from the raw socket here.
                 #
                 # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
@@ -4351,32 +4429,47 @@ ready.set(1);
                 # itself.  Reaching a synchronous socket read on a multiplexed connection
                 # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
                 # that still owns the socket, turning a valid request into a 400.
+                # the length is the digits of the header and nothing else: a value that another parser would read
+                # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
+                # conversion would make a length of 0 or less, for which the read below would wait for the connection
+                # to close (RFC 9110 section 8.6)
+                *int content_length = http_parse_content_length(hdr."content-length");
+                if (!exists content_length) {
+                    string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
+                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                    cx.close = True;
+                    sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                        hdr.method == "HEAD");
+                    return;
+                }
                 # Pre-read Content-Length check against max body size limit
-                if (max_body > 0 && hdr."content-length" > max_body) {
+                if (max_body > 0 && content_length > max_body) {
                     string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
-                        hdr."content-length", max_body);
+                        content_length, max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
                         cx."response-encoding", hdr.method == "HEAD");
                     return;
                 }
-                # HTTP/1.x: read body from socket
+                # HTTP/1.x: read body from socket; a length of 0 is no body
                 try {
+                    if (!content_length) {
+                        # nothing to read
                     # a multipart container stays binary here too, so that a direct read and a
                     # buffered one hand the handler the same bytes
-                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                    } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
                             || hdr."content-type" =~ /^multipart\//i) {
-                        body = s.recvBinary(hdr."content-length", HttpServer::ReadTimeout);
+                        body = s.recvBinary(content_length, HttpServer::ReadTimeout);
                     } else {
                         # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
                         # body was buffered
-                        body = decodeRequestText(hdr, s.recvBinary(hdr."content-length", HttpServer::ReadTimeout));
+                        body = decodeRequestText(hdr, s.recvBinary(content_length, HttpServer::ReadTimeout));
                     }
                     #printf("HTTP DEBUG: %s\n", body);
                 } catch (hash<ExceptionInfo> ex) {
                     string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
-                        hdr."content-length", ex.err, ex.desc);
+                        content_length, ex.err, ex.desc);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
                     listener.logError("%s", str);
@@ -4724,6 +4817,11 @@ ready.set(1);
 
         # the names of the fields managed by the server are canonical from here on
         rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
+
+        # a response to a HEAD request has the headers of the GET response (RFC 9110 section 9.3.2)
+        if (head && rv."code" >= 200 && rv."code" != 204 && rv."code" != 304) {
+            prepareHeadResponse(\rv, cx, s);
+        }
 
         if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")) || rv.send_callback)
             && (head
@@ -6905,15 +7003,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     };
                 }
             }
+            # a response to a HEAD request has no message body, also an error message that was built with one
+            bool is_head = !is_multiplexed && cx.hdr.method == "HEAD";
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "head": is_head,
                 "code": async_response.code,
                 "status_message": HttpServer::HttpCodes{async_response.code},
                 "hdr": hdr,
-                "body": async_response.body,
-                "input_stream": async_response.input_stream,
-                "send_callback": async_response.send_callback,
+                "body": is_head ? NOTHING : async_response.body,
+                "input_stream": is_head ? NOTHING : async_response.input_stream,
+                "send_callback": is_head ? NOTHING : async_response.send_callback,
                 "send_timeout": async_response.send_timeout,
-                "chunked": async_response.chunked && !is_multiplexed,
+                "chunked": async_response.chunked && !is_multiplexed && !is_head,
                 "close": do_close,
                 "return_to_idle": !do_close,
                 "ttl": serv.getTtl(),

@@ -3416,7 +3416,10 @@ public class HttpAsyncSocketIoController {
         # Expect: 100-continue requests fall through to the handler (which sends
         # 100-continue and reads the body synchronously) to avoid a round-trip.
         if (!output.info.http2 && !output.info.http3) {
-            auto content_length = output.hdr."content-length";
+            # the length is parsed as the server does (digits only): a value read differently here would pre-read a
+            # body that the handler does not expect, or none that it waits for; an invalid length is left to the
+            # handler, which refuses the request
+            *int content_length = HttpServer::http_parse_content_length(output.hdr."content-length");
             bool has_expect = (output.hdr.expect =~ /100-continue/i);
             bool has_body = (content_length > 0);
 
@@ -3831,7 +3834,7 @@ public class HttpAsyncSocketIoController {
                 string status_msg = result.status_message ?? "Unknown";
                 timeout ttl = result.ttl ?? DefaultIdleTimeout;
                 AbstractPollOperation fused_op = sock.startPollSendHttpResponseAndReadHeader(
-                    result.code, status_msg, "1.1", result.hdr ?? {}, result.body, ttl);
+                    result.code, status_msg, "1.1", result.hdr ?? {}, result.body, ttl, result.head);
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
                     "listener": linfo.listener,
@@ -3919,7 +3922,7 @@ public class HttpAsyncSocketIoController {
                     # Use async poll operation for all other H1 responses
                     AbstractPollOperation send_op = sock.startPollSendHttpResponse(
                         result.code, status_msg, "1.1", result.hdr ?? {},
-                        result.body);
+                        result.body, result.head);
                     hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                         "sock": sock,
                         "listener": linfo.listener,

@@ -364,6 +364,42 @@ static int socket_check_http_request(const QoreStringNode* method, const QoreStr
 // the strings of an HTTP/1 response are written to the message as C strings, which would be cut at a NUL character,
 // and a CR or LF would end the status line and start a header; headers are only given here when the message is made
 // without my_socket_priv, which checks them otherwise
+// Checks the arguments of the response to a HEAD request: no body, and a Content-Length of digits only
+static int socket_check_head_response(bool head, const QoreHashNode* headers, const QoreValue& body,
+        const char* err, ExceptionSink* xsink) {
+    if (!head) {
+        return 0;
+    }
+    if (body.getType() == NT_STRING ? !body.get<const QoreStringNode>()->empty()
+            : (body.getType() == NT_BINARY && body.get<const BinaryNode>()->size())) {
+        xsink->raiseException(err, "the response to a HEAD request has no message body");
+        return -1;
+    }
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            if (strcasecmp(hi.getKey(), "content-length")) {
+                continue;
+            }
+            QoreStringValueHelper str(hi.get());
+            const char* v = str->c_str();
+            bool ok = *v != '\0';
+            for (const char* c = v; *c; ++c) {
+                if (*c < '0' || *c > '9') {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) {
+                xsink->raiseException(err, "the Content-Length of the response to a HEAD request must be a number of "
+                    "octets (digits only)");
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int socket_check_http_response(const QoreStringNode* status_description, const QoreStringNode* http_version,
         const QoreHashNode* headers, const char* err, ExceptionSink* xsink) {
     if (q_check_http_text(status_description->c_str(), status_description->size(), "HTTP status message",
@@ -2641,6 +2677,10 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     ignored and replaced with the actual body size
     @param body optional message body to send with the response; must be a @ref string or @ref binary value if
     provided
+    @param head if @ref True, the response is to a \c HEAD request (RFC 9110 section 9.3.2): it has no message body
+    (\a body must be empty) and no \c Content-Length header is added; a \c Content-Length header in \a headers is
+    sent as given and must be the number of octets that the response to a \c GET request would have (digits only); the
+    default is @ref False
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send the HTTP response in
     non-blocking mode
@@ -2666,9 +2706,10 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, string status_description,
-        string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
+        string http_version, *hash<auto> headers, *data body, bool head = False) [flags=NAMED_ARGS] {
     if (socket_check_http_response(status_description, http_version, headers,
-            "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)) {
+            "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)
+            || socket_check_head_response(head, headers, body, "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)) {
         return QoreValue();
     }
     // Validate status code (must be between 100 and 599)
@@ -2694,8 +2735,9 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
         return QoreValue();
     }
 
-    // Add headers using the standard do_headers() function which properly handles Content-Length
-    qore_socket_private::do_headers(hdr, headers, body_size);
+    // Add headers using the standard do_headers() function which properly handles Content-Length; a response to a HEAD
+    // request has no Content-Length added, and one that is given is sent as it is
+    qore_socket_private::do_headers(hdr, headers, body_size, !head);
 
     // Create binary result with header + body
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
@@ -2734,6 +2776,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     @param body optional message body to send with the response
     @param idle_timeout idle timeout for waiting for the next request; when the timeout expires, the
     operation completes with state "timeout"
+    @param head if @ref True, the response is to a \c HEAD request: see
+    @ref startPollSendHttpResponse() "startPollSendHttpResponse()"; the default is @ref False
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; when goal is reached:
     - If \c getState() returns \c "header-complete": \c getOutput() returns a hash with \c "hdr" (parsed
@@ -2745,8 +2789,11 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
-        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
+        string http_version, *hash<auto> headers, *data body, timeout idle_timeout, bool head = False)
+        [flags=NAMED_ARGS] {
     if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR", xsink)
+            || socket_check_head_response(head, headers, body,
             "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR", xsink)) {
         return QoreValue();
     }
@@ -2773,8 +2820,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
         return QoreValue();
     }
 
-    // Add headers
-    qore_socket_private::do_headers(hdr, headers, body_size);
+    // Add headers; a response to a HEAD request has no Content-Length added, and one that is given is sent as it is
+    qore_socket_private::do_headers(hdr, headers, body_size, !head);
 
     // Create binary result with header + body
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
