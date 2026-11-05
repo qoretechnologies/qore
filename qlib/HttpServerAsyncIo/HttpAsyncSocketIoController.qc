@@ -2418,6 +2418,13 @@ public class HttpAsyncSocketIoController {
                     cinfo = connections{uh} @= conn_info;
                 }
             } else {
+                # the listener has fast routes: the first request is read by the fused idle + read header operation,
+                # which answers a request that a route qualifies for on the I/O thread (see handleAcceptComplete())
+                *AbstractPollOperation first_request_op;
+                timeout first_request_wait = AsyncSocketIoController::DefaultIoOperationTimeout;
+                if (sock.hasHttpFastRoutes()) {
+                    first_request_op = sock.startPollIdleAndReadHttpHeader(first_request_wait);
+                }
                 {
                     AutoWriteLock al(m);
                     # Check if connection still exists (may have been removed during shutdown)
@@ -2427,7 +2434,13 @@ public class HttpAsyncSocketIoController {
                     }
                     # Cast to typed hash to update fields and assign back
                     hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                    conn_info.state = HttpConnectionState::ReadHeader;
+                    if (first_request_op) {
+                        conn_info.state = HttpConnectionState::SendAndReadHeader;
+                        conn_info.stream_op = first_request_op;
+                        conn_info.ttl = first_request_wait;
+                    } else {
+                        conn_info.state = HttpConnectionState::ReadHeader;
+                    }
                     conn_info.is_http2 = False;
                     conn_info.ssl = True;
                     # Update cx with real peer info now that socket is stable

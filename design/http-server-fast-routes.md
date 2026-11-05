@@ -285,8 +285,8 @@ or opt-in as `Socket::setSourceHostLookup()` did for `Socket::accept()`.
 
 ## Phase 2 design: accept and the first request in C++
 
-Status: phase 2a (plain TCP) is implemented, by the simpler mechanism described under "Implemented"; the accept-operation
-state proposed below is not needed for it and is kept as the design of the alternative.  TLS (2a') and C++-owned
+Status: phase 2a (plain TCP) and 2a' (TLS) are implemented, by the simpler mechanism described under "Implemented"; the
+accept-operation state proposed below is not needed for them and is kept as the design of the alternative.  C++-owned
 connections (2b) are not implemented.
 
 ### What phase 1 leaves on the slow path
@@ -353,10 +353,12 @@ This removes the handler pool hand-off and the header hash for the first request
 of a new connection.  It does not remove the accept completion itself: for a probe that opens a connection per request
 the accept completion remains the dominant Qore cost.
 
-### Phase 2a': TLS
+### Phase 2a': TLS (implemented as the first alternative)
 
 The handshake of a TLS connection is a second operation that Qore starts, so its completion is another callback and the
-first request is read after it.  Two ways to cover it, to be chosen when 2a is measured:
+first request is read after it.  When the handshake completes for an HTTP/1.1 connection (not h2), the post-handshake
+setup of the controller starts the same fused idle + read header operation as for plain TCP, so the first request over
+TLS is answered by a route too; the per-listener TLS setup stays in Qore.  Two ways to cover it were considered:
 
 - the same `FIRST_REQUEST` state after the handshake operation of the controller (a C++ operation that wraps the
   handshake and continues into the first request), keeping the per-listener TLS setup in Qore where it is
@@ -403,7 +405,7 @@ response is at most 64 KiB and goes through the same send phase and deadline as 
 
 ### Testing
 
-- the fast route suite runs with the first request answered by the route, over plain TCP (TLS with 2a'); the fallback matrix
+- the fast route suite runs with the first request answered by the route, over plain TCP and over TLS; the fallback matrix
   of phase 1 is repeated for the first request (a body, `Expect`, `Upgrade`, `Connection: close`, a pipelined second
   request, HTTP/1.0, a header the strict parser rejects, no route)
 - the differential test of phase 1.5 sends every request as the first request of a connection as well

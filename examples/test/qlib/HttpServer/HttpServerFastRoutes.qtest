@@ -33,8 +33,8 @@ class FastRouteTestHandler inherits AbstractHttpRequestHandler {
 
 #! Tests the fast routes of the HTTP server: requests answered on the async I/O thread without calling a handler
 /** A client keeps one connection open and sends requests on it.  A request that qualifies is answered by the route,
-    the first one of a plain TCP connection included; a request for a path that is not a route (or over TLS, where the
-    first request still takes the normal path) is answered by the handler, which answers "handler".  See
+    the first one of a connection included; a request for a path that is not a route is answered by the handler, which
+    answers "handler".  See
     design/http-server-fast-routes.md.
 */
 class HttpServerFastRoutesTest inherits QUnit::Test {
@@ -734,8 +734,9 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
 
         Socket c();
         c.connectSSL("127.0.0.1:" + tls_port);
-        assertEq("handler", request(c, "GET", "/tls").body, "the first request takes the normal path");
         int calls = FastRouteTestHandler::calls.getCount();
+        assertEq("fast", request(c, "GET", "/tls").body, "the first request of a TLS connection is answered by the route");
+        assertEq(calls, FastRouteTestHandler::calls.getCount(), "the handler was not called for the first request");
         for (int i = 0; i < 20; ++i) {
             hash<auto> r = request(c, "GET", "/tls");
             assertEq((200, "fast"), (r.code, r.body));
@@ -743,7 +744,24 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq(calls, FastRouteTestHandler::calls.getCount(), "the handler was not called over TLS");
         assertEq("handler", request(c, "GET", "/other").body);
         assertEq("fast", request(c, "GET", "/tls").body);
-        assertEq(21, tls_hs.getFastRouteInfo().routes{"/tls"});
+        assertEq(22, tls_hs.getFastRouteInfo().routes{"/tls"});
+
+        # the first request of other TLS connections: a path that is not a route, a request with a body and a request in
+        # pieces
+        Socket c2();
+        c2.connectSSL("127.0.0.1:" + tls_port);
+        assertEq("handler", request(c2, "GET", "/other").body, "a path that is not a route is answered by the handler");
+        assertEq("fast", request(c2, "GET", "/tls").body);
+        Socket c3();
+        c3.connectSSL("127.0.0.1:" + tls_port);
+        assertEq("handler", request(c3, "GET", "/tls", {"Content-Length": "3"}, "abc").body, "a body: the handler");
+        Socket c4();
+        c4.connectSSL("127.0.0.1:" + tls_port);
+        string one_req = "GET /tls HTTP/1.1\r\nHost: x\r\n\r\n";
+        for (int i = 0; i < one_req.size(); ++i) {
+            c4.send(substr(one_req, i, 1));
+        }
+        assertEq("fast", readResponse(c4).body, "a request that arrives in pieces over TLS");
 
         # pipelined requests over TLS: both are answered, the first by the handler (the second is already received)
         # and the second by the route
