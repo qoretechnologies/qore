@@ -11,9 +11,9 @@
 %exec-class HttpFastRoutesIsolationTest
 
 #! Checks the isolation rule of the HTTP fast route code, which runs on the async I/O threads
-/** include/qore/intern/HttpFastRoutes.h and lib/HttpFastRoutes.cpp are executed on the async I/O threads, where no Qore
-    code may run and nothing may wait for another thread.  They must not use the Qore interpreter (no Qore value,
-    object, program or exception sink types), must include only the standard library and the visibility macros, and
+/** include/qore/intern/HttpFastRoutes.h, lib/HttpFastRoutes.cpp and the request parser (HttpFastRequest.h/.cpp) are
+    executed on the async I/O threads, where no Qore code may run and nothing may wait for another thread.  They must
+    not use the Qore interpreter (no Qore value, object, program or exception sink types), must include only the standard library and the visibility macros, and
     must not call anything that blocks or does I/O.  The glue that turns a Qore request into a plain request view, and
     the Qore classes that register routes, are in other files.  The check works on the sources with the comments and
     string literals removed.  A test case proves that the checks can fail.  See design/http-server-fast-routes.md
@@ -25,12 +25,15 @@ class HttpFastRoutesIsolationTest inherits QUnit::Test {
         const Files = (
             "include/qore/intern/HttpFastRoutes.h",
             "lib/HttpFastRoutes.cpp",
+            "include/qore/intern/HttpFastRequest.h",
+            "lib/HttpFastRequest.cpp",
         );
 
         #! the headers that these files may include besides the standard library
         const AllowedQoreIncludes = (
             "qore/common.h",
             "qore/intern/HttpFastRoutes.h",
+            "qore/intern/HttpFastRequest.h",
         );
 
         #! types and keywords of the Qore interpreter, of threads and of I/O that these files must not name

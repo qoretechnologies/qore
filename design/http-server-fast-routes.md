@@ -265,8 +265,9 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 |!Phase|!Scope|!Done when
 |0|Spike: fixed route in `SocketSendAndReadHeaderPollOperation` (branch `spike/http-fast-route`)|keep-alive CPU per request measured: 10 - 16 us against 3.0 - 3.5 ms
 |1|Route table, `static` and `slot` blocks, counters, eligibility rules, API, tests, benchmark; requests after the first on a connection|parity and fallback tests pass; benchmark guards the gain
-|1.5|Fast request parsing: a strict parser in the interpreter-free core (`HttpFastRequest.h/.cpp`) that reads the raw header bytes straight into the `HttpFastRequestView`, before any Qore hash is built; it accepts only a conservative subset and everything else takes the existing parser|differential and fuzz tests show that whatever the fast parser accepts, the normal parser accepts with the same method, path and headers; keep-alive CPU per request falls from 50 - 60 us towards 10 - 15 us
-|2|Accept and the first request in C++ (connection ownership without a Qore `onComplete` per accept); remove the per-accept reverse lookup from `HttpServer`|a new connection's first request is also served without a hand-off
+|1.5 (done)|Fast request parsing: a strict parser in the interpreter-free core (`HttpFastRequest.h/.cpp`) that reads the raw header bytes straight into the `HttpFastRequestView`, before any Qore hash is built; it accepts only a conservative subset and everything else takes the existing parser|differential and fuzz tests show that whatever the fast parser accepts, the normal parser accepts with the same method, path and headers; keep-alive CPU per request falls from 50 - 60 us towards 10 - 15 us
+|2a|The accept operation reads the first request after accept (and the TLS handshake) and answers it from a route; see "Phase 2 design".  The per-accept reverse lookup is already opt-in (`peer_hostname_lookup`)|a new connection's first request is also served without a hand-off
+|2b|Only if 2a leaves a measured gap: connections owned by C++ until a request needs the handler|measured
 |3|HTTP/2 and HTTP/3|same tests over h2 and h3
 |4|Only if measured and justified: `Connection: close` handling, prefix routes, further blocks|each addition reviewed for boundedness
 
@@ -281,6 +282,116 @@ Phase 2 matters for the clients that probe: a Kubernetes probe or a metrics scra
 request, so only phase 1 would leave the accept and the first request on the slow path.  The per-accept reverse
 lookup (`getnameinfo_async`, visible in the connection trace) is independent of fast routes and should be made lazy
 or opt-in as `Socket::setSourceHostLookup()` did for `Socket::accept()`.
+
+## Phase 2 design: accept and the first request in C++
+
+Status: design only; nothing of this is implemented.  It is written down now because it decides how phase 1.5 shares
+its parser and because it changes what a route means for the first request of a connection.
+
+### What phase 1 leaves on the slow path
+
+A client that opens a connection per request (a Kubernetes probe, a metrics scraper, a load balancer health check)
+pays, for every request, the part of the lifecycle that phase 1 does not touch:
+
+|!Step|!Cost today
+|accept (and TLS handshake) in `HttpAcceptPollOperation`|C++ on the I/O thread
+|accept completion: `handleAcceptResult()` and `handleAcceptComplete()` in Qore|a callback worker wake-up, connection registration under the controller lock, `getAcceptConnectionContext()`, building the `HttpActiveConnectionInfo` hash, starting the next operation
+|first request: `SocketReadHttpHeaderPollOperation`, then `handleHeaderComplete()` in Qore|a second worker wake-up and the header hash
+|handler dispatch|a handler pool thread, as for any request
+
+The per-accept reverse lookup, which used to be the largest avoidable cost of the accept completion, is now opt-in
+(`peer_hostname_lookup`), so what remains of the accept completion is Qore bookkeeping and two worker hand-offs.
+
+### Proposal (phase 2a): the accept operation answers the first request
+
+`HttpAcceptPollOperationPriv` already is a C++ state machine (`ACCEPTING`, `SSL_HANDSHAKE`, `COMPLETE`), and the TLS
+handshake already runs inside it (`do_ssl_handshake`).  Phase 2a adds a state after the handshake:
+
+```
+ACCEPTING -> [SSL_HANDSHAKE] -> FIRST_REQUEST -> COMPLETE
+```
+
+`FIRST_REQUEST` exists only if the listener socket has fast routes and the connection is HTTP/1.1 (not an h2c
+preface, not an ALPN `h2` connection).  It reads the first header with the receive state machine that the other
+header operations use (`startRecvUntilBytes()`), hands the bytes to the strict parser of phase 1.5 and matches the
+route table.
+
+- If a route answers, the state sends the response with the operation's own send phase and then completes with
+  `first_request_answered = True`: no header was ever turned into a hash, no handler thread was involved.
+- If nothing answers (no route, a request that is not eligible, a header the strict parser rejects, an error in
+  reading), the state completes with the bytes it read **left in the socket's buffer** (they are not consumed or
+  copied: the existing `read_header` operation of the Qore side finds them there, the same way the idle check now
+  finds the buffered next request of a pipelined connection).  The connection then continues exactly as it does today.
+
+What is left in Qore is the registration of the connection, once per connection and not once per request:
+`handleAcceptComplete()` creates the context and the `HttpActiveConnectionInfo` as now; when
+`first_request_answered` is set it puts the connection into the idle state with an idle-wait operation
+(`addIdleConnection()`, which `returnConnectionToAsyncIo()` uses after a handler response) instead of starting
+`read_header`.  A client that reuses the connection continues in the phase 1 path with no further callback; a client
+that closes it is seen by the idle check.
+
+This removes the handler pool hand-off and the header hash for the first request, and one of the two worker wake-ups
+of a new connection.  It does not remove the accept completion itself: for a probe that opens a connection per request
+the accept completion remains the dominant Qore cost.
+
+### Why not keep the connection in C++ for its whole life (phase 2b)?
+
+A C++-owned connection would skip the accept completion as well: the accept operation would register the connection
+in a C++ table and the idle operation would be driven without Qore ever seeing it until a request needs the handler.
+It is deferred, and only to be done if phase 2a leaves a measured gap that matters, because the Qore side owns things
+that a C++ table would have to reproduce exactly:
+
+- the connection map (`connections`) that the shutdown path walks to close, drain and lingering-close connections, and
+  that `HttpActiveConnectionInfo` is the entry of
+- connection limits, idle time-to-live and the per-connection context (`cx`: peer and socket info, ssl, listener id)
+  that handlers receive; a connection that is first handed to Qore after many fast requests needs the context built
+  late, from the socket, which is possible but is a second code path that must produce the same hash
+- `stop()` semantics: a listener that is removed must stop serving new fast requests on its established connections
+  at the same moment as the normal path does
+- observability: the connection trace, the active-connection counters and the logs
+
+Phase 2a keeps all of this in Qore unchanged: the connection is registered before the first idle wait, so shutdown,
+limits and tracing see it as they do today.
+
+### Semantics visible to users
+
+- A fast route answers the first request of a connection too.  The statement in the API documentation that "only the
+  second and later requests are covered" is replaced by "every request that qualifies".  The tests that open a
+  connection and expect the handler for the first request of a route's path change; the ones that use a warm-up path
+  that is not a route (`/warm-up`) do not.
+- A listener without fast routes is unaffected: `FIRST_REQUEST` is not entered, so there is no extra state or read.
+- A request that a route does not answer costs the extra strict parse (about a microsecond) and nothing else.
+- The routes are attached to a listener socket, not to a connection, and are read when the first header is complete,
+  so a route added after the connection was accepted but before its first request applies, as for later requests.
+
+### Boundedness
+
+`FIRST_REQUEST` reads at most the header limit (`HttpFastRequestParser::MaxHeaderSize` for the strict parse; the
+receive state machine's own limit for the bytes it buffers) and has the accept operation's existing timeout for a
+client that sends nothing (an idle connection must not hold the I/O thread: it is polled like any other).  The
+response is at most 64 KiB and goes through the same send phase and deadline as in phase 1.
+
+### Testing
+
+- the fast route suite runs with the first request answered by the route, over plain TCP and TLS; the fallback matrix
+  of phase 1 is repeated for the first request (a body, `Expect`, `Upgrade`, `Connection: close`, a pipelined second
+  request, HTTP/1.0, a header the strict parser rejects, no route)
+- the differential test of phase 1.5 sends every request as the first request of a connection as well
+- a request that the strict parser rejects reaches the handler with the full header (the bytes were left in the
+  buffer), and a request split across several packets is read to completion (a byte at a time test)
+- shutdown during `FIRST_REQUEST` (listener removed, server stopped) closes the connection without a response and
+  without a leak (valgrind)
+- connect-per-request benchmark next to the keep-alive one: the new connection, the first request and the close, normal
+  path against a fast route, so that the gain of 2a is measured before 2b is considered
+
+### Open questions
+
+- should `first_request_answered` connections be counted separately in `getFastRouteInfo()` (accepted-and-answered
+  versus accepted-and-handed-to-the-handler)?  Probably yes: it is the number an operator wants for probes
+- the accept operation's timeout today is "none" for the listener's accept and the connection operations have their own
+  idle time-to-live: the `FIRST_REQUEST` read needs a deadline for a client that connects and sends nothing; use the
+  idle time-to-live of the listener's connections
+- HTTP/1.1 only in 2a; h2c and ALPN `h2` connections are not entered, and phase 3 covers them
 
 ## Testing
 
@@ -316,6 +427,21 @@ time-to-live plus 30 seconds in the controller, counted from the first poll and 
 request gets a new operation).  An operation that answers a request itself and does not complete renews its timeout
 (`SocketPollOperationBase::renewsTimeout()`, forwarded by the delegating wrapper), and
 `HttpServerFastRoutesSoak.qtest` keeps one connection busy for 34 seconds to check it.
+
+## Measured (phase 1.5: the strict request parser)
+
+Same setup (Release build, one keep-alive connection, 30000 `GET` requests of a trivial JSON response), server CPU read
+from `/proc/<pid>/stat` over all threads (10 ms resolution, so the figure has about 1 us of granularity at this count):
+
+|!Path|!Server CPU per request
+|fast route, request turned into a hash first (phase 1)|50 - 60 us
+|fast route, request read by the strict parser (phase 1.5)|about 8 us
+|handler (normal path)|2.9 - 3.6 ms
+
+The gap to the spike's 10 - 16 us (which included the measurement harness) is closed: what remains is the receive
+and the send system calls, the operation's state machine and the allocation of the response copy.  A request that the
+strict parser rejects, or that no route answers, goes through the hash path as before and pays the strict parse (about
+a microsecond) on top.
 
 ## Performance plan
 

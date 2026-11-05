@@ -1,8 +1,12 @@
 // standalone check of the isolated fast-route core (lib/HttpFastRoutes.cpp), not part of the repository
 #include "qore/intern/HttpFastRoutes.h"
+#include "qore/intern/HttpFastRequest.h"
 
 #include <cassert>
+#include <cstring>
+#include <memory>
 #include <cstdio>
+#include <random>
 #include <thread>
 
 static int failures = 0;
@@ -246,6 +250,134 @@ int main() {
     reader.join();
     CHECK(served > 0);
     CHECK(bad_answers == 0);
+
+
+    // --- the strict request parser
+    {
+        // the views of a parsed request refer to the input, which is kept until the next parse
+        std::string keep;
+        auto parse = [&keep](const std::string& h, HttpFastRequestView& v) {
+            keep = h;
+            return HttpFastRequestParser::parse(keep.data(), keep.size(), v);
+        };
+        const std::string base = "GET /ready HTTP/1.1\r\nHost: x\r\n\r\n";
+        HttpFastRequestView pv;
+        CHECK(parse(base, pv));
+        CHECK(pv.method == "GET" && pv.path == "/ready" && pv.http_version == "1.1");
+        CHECK(!pv.content_length && !pv.connection && !pv.has_transfer_encoding && !pv.has_expect && !pv.has_upgrade);
+        // the views refer to the input
+        CHECK(pv.path.data() >= keep.data() && pv.path.data() < keep.data() + keep.size());
+
+        CHECK(parse("GET /a/b?x=1&y=2;z=3 HTTP/1.1\r\nhOsT:   x \t\r\nConnection: keep-alive\r\n"
+            "Content-Length: 0\r\nAccept: */*\r\nUser-Agent: a b: c\r\nX-Empty:\r\n\r\n", pv));
+        CHECK(pv.path == "/a/b?x=1&y=2;z=3");
+        CHECK(pv.connection && *pv.connection == "keep-alive");
+        CHECK(pv.content_length && *pv.content_length == "0");
+        CHECK(parse("GET / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n"
+            "Upgrade: h2c\r\n\r\n", pv));
+        CHECK(pv.has_transfer_encoding && pv.has_expect && pv.has_upgrade);
+        CHECK(parse("GET / HTTP/1.1\r\nHost: x\r\nHTTP2-Settings: AAMAAABk\r\n\r\n", pv) && pv.has_upgrade);
+
+        // everything else is rejected
+        const char* rejected[] = {
+            "",
+            "GET /ready HTTP/1.1\r\n\r\n",                                   // no Host
+            "GET /ready HTTP/1.0\r\nHost: x\r\n\r\n",                         // not 1.1
+            "POST /ready HTTP/1.1\r\nHost: x\r\n\r\n",
+            "get /ready HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET  /ready HTTP/1.1\r\nHost: x\r\n\r\n",                        // two spaces
+            "GET ready HTTP/1.1\r\nHost: x\r\n\r\n",                         // no leading slash
+            "GET http://x/ready HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /re%61dy HTTP/1.1\r\nHost: x\r\n\r\n",                      // percent-encoding
+            "GET /re#ady HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /re ady HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /ready HTTP/1.1\nHost: x\n\n",                                // bare LF
+            "GET /ready HTTP/1.1\r\nHost: x\r\n\n",
+            "GET /ready HTTP/1.1\r\nHost: x\rX: y\r\n\r\n",                    // bare CR
+            "GET /ready HTTP/1.1\r\nHost : x\r\n\r\n",                        // space before the colon
+            "GET /ready HTTP/1.1\r\n Host: x\r\n\r\n",                        // leading whitespace / fold
+            "GET /ready HTTP/1.1\r\nHost: x\r\n y\r\n\r\n",                   // obsolete fold
+            "GET /ready HTTP/1.1\r\nHost: x\r\nX: a\tb\x01\r\n\r\n",           // control character
+            "GET /ready HTTP/1.1\r\nHost: x\r\nX: \xc3\xa9\r\n\r\n",           // non-ASCII
+            "GET /ready HTTP/1.1\r\nHost: x\r\nBad Name: y\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\n: y\r\n\r\n",                  // empty name
+            "GET /ready HTTP/1.1\r\nHost: x\r\nNoColon\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\nHost: y\r\n\r\n",              // duplicates
+            "GET /ready HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\nConnection: a\r\nconnection: b\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\nContent-Length: +1\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\nContent-Length: 1 2\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\nContent-Length:\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost:\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x\r\n\r\nGET / HTTP/1.1\r\n\r\n",   // bytes beyond the header
+            "GET /ready HTTP/1.1\r\nHost: x\r\n\r\n\r\n",
+            "GET /ready HTTP/1.1\r\nHost: x",                                // no end
+            "GET /ready HTTP/1.1\r\nHost: x\r\n",
+        };
+        for (const char* r : rejected) {
+            std::string h(r);
+            HttpFastRequestView rv;
+            if (parse(h, rv)) {
+                printf("FAIL: accepted: %s\n", r);
+                ++failures;
+            }
+        }
+        // the NUL character, which a C string literal cannot hold
+        std::string nul = "GET /ready HTTP/1.1\r\nHost: x\r\nX: a_b\r\n\r\n";
+        nul[nul.find('_')] = '\0';
+        CHECK(!parse(nul, pv));
+        // limits
+        std::string longpath = "GET /" + std::string(HttpFastRequestParser::MaxTargetSize, 'a') + " HTTP/1.1\r\nHost: x\r\n\r\n";
+        CHECK(!parse(longpath, pv));
+        std::string many = "GET / HTTP/1.1\r\nHost: x\r\n";
+        for (size_t i = 0; i < HttpFastRequestParser::MaxHeaders; ++i) {
+            many += "X-" + std::to_string(i) + ": v\r\n";
+        }
+        CHECK(!parse(many + "\r\n", pv));
+        std::string big = "GET / HTTP/1.1\r\nHost: x\r\nX: " + std::string(HttpFastRequestParser::MaxHeaderSize, 'v') + "\r\n\r\n";
+        CHECK(!parse(big, pv));
+
+        // a parsed request goes through the matcher like one built from a hash
+        HttpFastRoutes rp;
+        rp.add("/ready", HttpFastRouteSpec::create({}, up, err), err);
+        CHECK(parse("GET /ready?x=1 HTTP/1.1\r\nHost: x\r\n\r\n", pv) && rp.match(pv, 1, fb));
+        CHECK(parse("GET /ready HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\n", pv));
+        CHECK(!rp.match(pv, 1, fb) && fb == HttpFastFallback::Body);
+
+        // random mutations of an accepted header never crash (this runs under the sanitizers) and the parser never
+        // reads past the input: it is given a buffer of exactly the size
+        std::mt19937 rng(20260101);
+        const std::string seed_hdr = "GET /a/b?c=d HTTP/1.1\r\nHost: example.org\r\nConnection: keep-alive\r\n"
+            "Content-Length: 0\r\nAccept: */*\r\n\r\n";
+        size_t accepted = 0;
+        for (int i = 0; i < 200000; ++i) {
+            std::string m = seed_hdr;
+            int edits = 1 + rng() % 4;
+            for (int e = 0; e < edits; ++e) {
+                size_t pos = rng() % m.size();
+                switch (rng() % 4) {
+                    case 0: m[pos] = static_cast<char>(rng() % 256); break;
+                    case 1: m.erase(pos, 1 + rng() % 3); break;
+                    case 2: m.insert(pos, 1, static_cast<char>(rng() % 256)); break;
+                    default: m.insert(pos, "\r\n"); break;
+                }
+                if (m.empty()) {
+                    break;
+                }
+            }
+            std::unique_ptr<char[]> exact(new char[m.size()]);
+            memcpy(exact.get(), m.data(), m.size());
+            HttpFastRequestView fv;
+            if (HttpFastRequestParser::parse(exact.get(), m.size(), fv)) {
+                ++accepted;
+                // an accepted request is whole: it is GET, 1.1, and its views are inside the input
+                CHECK(fv.method == "GET" && fv.http_version == "1.1");
+                CHECK(fv.path.data() >= exact.get() && fv.path.data() + fv.path.size() <= exact.get() + m.size());
+                CHECK(m.size() >= 4 && m.compare(m.size() - 4, 4, "\r\n\r\n") == 0);
+            }
+        }
+        CHECK(accepted > 0);
+    }
 
     printf(failures ? "FAILED: %d\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;

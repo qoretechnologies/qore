@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
-# Builds the interpreter-free core of the HTTP server fast routes (lib/HttpFastRoutes.cpp) with its standalone test
+# Builds the interpreter-free core of the HTTP server fast routes (lib/HttpFastRoutes.cpp, lib/HttpFastRequest.cpp) with its standalone test
 # (test/cpp/http_fast_routes_core_test.cpp) under AddressSanitizer + UndefinedBehaviorSanitizer and under
 # ThreadSanitizer, and runs both.  The core depends only on the standard library and qore/common.h, so no Qore build is
 # needed.  See design/http-server-fast-routes.md.
@@ -26,7 +26,7 @@ build_and_run() {
     shift
     echo "-- $name --"
     $cxx -std=c++17 -g -O1 -fno-omit-frame-pointer "$@" $inc \
-        "$src/lib/HttpFastRoutes.cpp" "$src/test/cpp/http_fast_routes_core_test.cpp" -o "$out/core-$name" -lpthread
+        "$src/lib/HttpFastRoutes.cpp" "$src/lib/HttpFastRequest.cpp" "$src/test/cpp/http_fast_routes_core_test.cpp" -o "$out/core-$name" -lpthread
     "$out/core-$name"
 }
 

@@ -57,6 +57,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/HttpFastRequest.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -18980,6 +18981,17 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             SimpleRefHolder<BinaryNode> raw(poll_state->takeOutput().get<BinaryNode>());
             poll_state.reset();
 
+            // a route of the listener may answer a plain request from its bytes, before any hash is built
+            fast_decided = false;
+            {
+                QoreHashNode* fast_info = nullptr;
+                int fast_rc = serveFastRaw(reinterpret_cast<const char*>(raw->getPtr()), raw->size(), fast_info,
+                    xsink);
+                if (fast_rc) {
+                    return fast_rc > 0 ? fast_info : nullptr;
+                }
+            }
+
             // Convert binary to string for HTTP header parsing
             size_t len = raw->size();
             char* buf = reinterpret_cast<char*>(raw->giveBuffer());
@@ -19007,8 +19019,9 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             }
 
             // a route of the listener may answer the request here, on the I/O thread, without completing the
-            // operation (and so without a callback on a worker thread)
-            {
+            // operation (and so without a callback on a worker thread); a request that the strict parser accepted
+            // was matched already
+            if (!fast_decided) {
                 QoreHashNode* fast_info = nullptr;
                 int fast_rc = serveFastRoute(*hdr, fast_info, xsink);
                 if (fast_rc) {
@@ -19087,6 +19100,42 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
         return 0;
     }
 
+    return startFastSend(std::move(wire), info, xsink);
+}
+
+int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t size, QoreHashNode*& info,
+        ExceptionSink* xsink) {
+    qore_socket_private* sp = sock->priv->socket->priv;
+    std::shared_ptr<HttpFastRoutes> routes = sp->getFastRoutes();
+    if (!routes) {
+        return 0;
+    }
+
+#ifndef NDEBUG
+    FastRouteScope fast_route_scope;
+#endif
+
+    HttpFastRequestView view;
+    if (!HttpFastRequestParser::parse(data, size, view)) {
+        // the normal parser decides
+        return 0;
+    }
+    view.pending = sp->buflen > 0;
+
+    int us;
+    int64 epoch_s = q_epoch_us(us);
+    HttpFastFallback why;
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why);
+    if (!wire) {
+        // the request was parsed and counted: it takes the normal path without being matched again
+        fast_decided = true;
+        return 0;
+    }
+    return startFastSend(std::move(wire), info, xsink);
+}
+
+int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const std::string> wire, QoreHashNode*& info,
+        ExceptionSink* xsink) {
     // the operation does not complete for this request: its timeout, which covers one request, starts again
     timeout_renewal = true;
 

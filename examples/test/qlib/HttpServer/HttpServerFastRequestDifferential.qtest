@@ -1,0 +1,229 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerFastRequestDifferentialTest
+
+#! records what the normal parser made of a request
+class RecordingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue q();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        if (cx.raw_path != "/warm") {
+            q.push({"method": hdr.method, "path": cx.raw_path, "hdr": hdr});
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "handler", "hdr": {"Content-Type": "text/plain"}};
+    }
+}
+
+#! Differential test of the strict request parser of the HTTP server fast routes
+/** A server with a fast route for \c /p and a server with the same handler and no routes receive the same bytes.
+    The safety rule of the strict parser (see design/http-server-fast-routes.md, phase 1.5) is that it never accepts
+    what the normal parser rejects or reads differently: whenever the route answers a request, the server without
+    routes must accept the same bytes, with the same method and path and with headers that decide the same thing.
+    The requests are a fixed list of corner cases and seeded random mutations of a valid request.  Each request is the
+    second on its connection.
+*/
+class HttpServerFastRequestDifferentialTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+
+        #! how long to wait for the answer to a mutated request, which may be incomplete: a request that is not
+        #! answered in time is taken as not answered by the route, which the check allows
+        const MutationTimeout = 1s;
+        const Mutations = 400;
+        const Seed = 20260101;
+    }
+
+    private {
+        HttpServer fast_hs();
+        HttpServer plain_hs();
+        RecordingHandler fast_handler();
+        RecordingHandler plain_handler();
+        int fast_port;
+        int plain_port;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRequestDifferentialTest", "1.0", \ARGV) {
+        addTestCase("fixed requests", \testFixed());
+        addTestCase("random mutations", \testMutations());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        fast_hs.setDefaultHandler("handler", fast_handler);
+        plain_hs.setDefaultHandler("handler", plain_handler);
+        fast_hs.addFastRoute("/p", {"public": True, "response": {"code": 200, "body": "fast",
+            "content_type": "text/plain"}});
+        fast_port = fast_hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        plain_port = plain_hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        fast_hs.stop();
+        plain_hs.stop();
+    }
+
+    #! sends raw bytes as the second request of a connection and returns the status code and body of the answer
+    /** @param timeout how long to wait for the answer; a request that the server does not answer (an incomplete
+        one, or one that waits for a body) or answers by closing the connection has the status 0
+    */
+    private hash<auto> exchange(int port, string raw, timeout timeout) {
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        on_exit c.close();
+        # the first request of a connection takes the normal path
+        c.send("GET /warm HTTP/1.1\r\nHost: x\r\n\r\n");
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        c.recv(h."content-length".toInt(), Timeout);
+        c.send(raw);
+        try {
+            h = c.readHTTPHeader(timeout);
+            int len = (h."content-length" ?? 0).toInt();
+            return {"status": h.status_code, "body": len ? c.recv(len, Timeout) : ""};
+        } catch (hash<ExceptionInfo> ex) {
+            # no answer in time, or the connection was closed or reset by the server (a rejected request)
+            return {"status": 0, "body": ""};
+        }
+    }
+
+    #! returns True if the route answered
+    private bool isFast(hash<auto> response) {
+        return response.status == 200 && response.body == "fast";
+    }
+
+    #! checks one request: if the route answers it, the normal path must read it the same way
+    private bool check(string raw, string desc, timeout timeout = Timeout) {
+        if (!isFast(exchange(fast_port, raw, timeout))) {
+            return False;
+        }
+        hash<auto> plain = exchange(plain_port, raw, Timeout);
+        assertTrue(plain.status == 200 && plain.body == "handler",
+            sprintf("%s: the route answered, but the normal path did not accept %y: %y", desc, raw, plain));
+        hash<auto> rec = plain_handler.q.get(Timeout);
+        assertEq("GET", rec.method, desc);
+        # the target is "/p" followed by an optional query string
+        assertTrue(rec.path == "/p" || rec.path =~ /^\/p\?/, sprintf("%s: path %y of %y", desc, rec.path, raw));
+        # the headers that decide the framing and the connection are read the same way
+        hash<auto> h = rec.hdr;
+        assertTrue(!exists h."content-length" || h."content-length" == "0" || h."content-length" == 0,
+            sprintf("%s: content-length %y of %y", desc, h."content-length", raw));
+        assertFalse(exists h."transfer-encoding", desc + ": transfer-encoding");
+        assertFalse(exists h.expect, desc + ": expect");
+        assertFalse(exists h.upgrade, desc + ": upgrade");
+        assertTrue(!exists h.connection || h.connection =~ /^keep-alive$/i,
+            sprintf("%s: connection %y of %y", desc, h.connection, raw));
+        assertEq("1.1", h.http_version, desc);
+        return True;
+    }
+
+    testFixed() {
+        const string Base = "GET /p HTTP/1.1\r\nHost: x\r\n\r\n";
+        list<string> requests = (
+            Base,
+            "GET /p?a=1&b=2 HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n",
+            "GET /p HTTP/1.1\r\nhost: x\r\nconnection: Keep-Alive\r\ncontent-length: 0\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nAccept: */*\r\nUser-Agent: a b: c\r\nX-Empty:\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost:   x  \r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n",
+            # rejected by the strict parser, so the normal path answers them (the route may still answer some of
+            # them through the parse of the normal parser, which the check below covers as well)
+            "GET /p HTTP/1.0\r\nHost: x\r\n\r\n",
+            "GET /p HTTP/1.1\r\n\r\n",
+            "GET  /p HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p  HTTP/1.1\r\nHost: x\r\n\r\n",
+            "get /p HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p HTTP/1.1\nHost: x\n\n",
+            "GET /p HTTP/1.1\r\nHost: x\n\r\n",
+            "GET /p HTTP/1.1\r\nHost : x\r\n\r\n",
+            "GET /p HTTP/1.1\r\n Host: x\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nX: a\r\n b\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nX: a\x01b\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nX: a\x00b\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nX: \xc3\xa9\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nHost: y\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nContent-Length: 5\r\n\r\nabcde",
+            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\nabcde",
+            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: +0\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nContent-Length: 00\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: identity\r\nContent-Length: 0\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n",
+            "GET /p HTTP/1.1\r\nHost: x\r\nConnection: keep-alive, Upgrade\r\n\r\n",
+            "GET /p%20 HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /%70 HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p#frag HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET //p HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p/ HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /P HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p;a=b HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET /p?q=%00 HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET http://x/p HTTP/1.1\r\nHost: x\r\n\r\n",
+            "GET * HTTP/1.1\r\nHost: x\r\n\r\n",
+            "HEAD /p HTTP/1.1\r\nHost: x\r\n\r\n",
+            "POST /p HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n",
+            "GET /p HTTP/1.1 \r\nHost: x\r\n\r\n",
+            "GET /p HTTP/1.10\r\nHost: x\r\n\r\n",
+            "GET /p HTTP/1.1\r\n\r\nHost: x\r\n\r\n",
+        );
+        int fast = 0;
+        foreach string r in (requests) {
+            if (check(r, sprintf("fixed #%d", $#))) {
+                ++fast;
+            }
+        }
+        assertTrue(fast >= 7, "the valid requests are answered by the route");
+        assertTrue(check(Base, "base"));
+    }
+
+    testMutations() {
+        srand(Seed);
+        const string Seed1 = "GET /p?c=d HTTP/1.1\r\nHost: example.org\r\nConnection: keep-alive\r\nContent-Length: 0\r\n"
+            "Accept: */*\r\n\r\n";
+        list<string> chars = ("\r", "\n", "\x00", "\x01", "\x7f", " ", "\t", ":", "%", "#", "?", "/", "p", "P", "0",
+            "1", "\xc3\xa9", "\\", "\"", "<", ">");
+        int fast = 0;
+        for (int i = 0; i < Mutations; ++i) {
+            string m = Seed1;
+            int edits = 1 + (rand() % 3);
+            for (int e = 0; e < edits; ++e) {
+                int pos = rand() % m.size();
+                switch (rand() % 4) {
+                    case 0:
+                        m = substr(m, 0, pos) + chars[rand() % chars.size()] + substr(m, pos + 1);
+                        break;
+                    case 1:
+                        m = substr(m, 0, pos) + substr(m, pos + 1 + (rand() % 3));
+                        break;
+                    case 2:
+                        m = substr(m, 0, pos) + chars[rand() % chars.size()] + substr(m, pos);
+                        break;
+                    default:
+                        m = substr(m, 0, pos) + "\r\n" + substr(m, pos);
+                        break;
+                }
+                if (!m.size()) {
+                    break;
+                }
+            }
+            if (check(m, sprintf("mutation #%d", i), MutationTimeout)) {
+                ++fast;
+            }
+        }
+        assertTrue(fast > 0, "some mutations are still valid requests that the route answers");
+    }
+}

@@ -1814,6 +1814,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSSLPrivateKey.cpp
     lib/QoreSocketObject.cpp
     lib/HttpFastRoutes.cpp
+    lib/HttpFastRequest.cpp
     lib/QoreCondition.cpp
     lib/QoreModuleCppApi.cpp
     lib/QoreQueue.cpp
@@ -2169,6 +2170,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLPrivateKey.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/HttpFastRoutes.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/HttpFastRequest.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreModuleCppApi.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
