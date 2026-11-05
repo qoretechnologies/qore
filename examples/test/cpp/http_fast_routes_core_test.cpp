@@ -42,6 +42,27 @@ int main() {
     CHECK(wire->substr(wire->size() - 6) == "\r\n\r\nok");
     CHECK(ok->getWire(1730000000) == wire);   // cached for the second
     CHECK(ok->getWire(1730000001) != wire);
+    {
+        // the wire for a HEAD request: the same headers, with the Content-Length of the body, and no body
+        auto gwire = ok->getWire(1730000001);
+        auto head = ok->getWire(1730000001, false, nullptr, true);
+        CHECK(head != gwire);
+        CHECK(head->find("Content-Length: 2\r\n") != std::string::npos);
+        CHECK(head->size() == gwire->size() - 2);
+        CHECK(*head == gwire->substr(0, gwire->size() - 2));
+        CHECK(head->substr(head->size() - 4) == "\r\n\r\n");
+        CHECK(ok->getWire(1730000001, false, nullptr, true) == head);   // cached apart from the GET wire
+        CHECK(ok->getWire(1730000001) == gwire);                          // and the GET wire is not replaced
+        auto head_close = ok->getWire(1730000001, true, nullptr, true);
+        CHECK(head_close->find("Connection: close\r\n") != std::string::npos);
+        CHECK(head_close->substr(head_close->size() - 4) == "\r\n\r\n");
+        // the response without a body
+        auto none = resp(204, "");
+        auto none_head = none->getWire(1730000000, false, nullptr, true);
+        CHECK(none_head->find("Content-Length") == std::string::npos);
+        CHECK(none->getWire(1730000000)->find("Content-Length: 0\r\n") != std::string::npos);
+        CHECK(none_head->substr(none_head->size() - 4) == "\r\n\r\n");
+    }
     CHECK(!HttpFastResponse::create(299, {}, "", err));
     CHECK(!HttpFastResponse::create(200, {{"Content-Length", "3"}}, "", err));
     CHECK(!HttpFastResponse::create(200, {{"Connection", "close"}}, "", err));
@@ -168,6 +189,21 @@ int main() {
     HttpFastRequestView v = req("/e");
     v.method = "POST";
     CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::NoRoute);
+    // HEAD is answered like GET, with a wire that has no body
+    v = req("/e");
+    v.method = "HEAD";
+    {
+        std::shared_ptr<const std::string> hw = re.match(v, 1, fb);
+        CHECK(hw);
+        CHECK(hw->substr(hw->size() - 4) == "\r\n\r\n");
+        v.method = "GET";
+        std::shared_ptr<const std::string> gw = re.match(v, 1, fb);
+        CHECK(gw && gw->size() > hw->size() && gw->compare(0, hw->size(), *hw) == 0);
+        v.method = "head";
+        CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::NoRoute);
+        v.method = "DELETE";
+        CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::NoRoute);
+    }
     v = req("/e"); v.http_version = "1.0";
     CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::NotHttp11);
     v = req("/e"); v.content_length = "5";
@@ -458,6 +494,17 @@ int main() {
         // the views refer to the input
         CHECK(pv.path.data() >= keep.data() && pv.path.data() < keep.data() + keep.size());
 
+        // HEAD is parsed like GET
+        CHECK(parse("HEAD /ready HTTP/1.1\r\nHost: x\r\n\r\n", pv));
+        CHECK(pv.method == "HEAD" && pv.path == "/ready" && pv.http_version == "1.1");
+        CHECK(parse("HEAD / HTTP/1.1\r\nHost: x\r\n\r\n", pv) && pv.path == "/");
+        CHECK(!parse("HEAD  /ready HTTP/1.1\r\nHost: x\r\n\r\n", pv));
+        CHECK(!parse("HEAD/ready HTTP/1.1\r\nHost: x\r\n\r\n", pv));
+        CHECK(!parse("HEAD ready HTTP/1.1\r\nHost: x\r\n\r\n", pv));
+        CHECK(!parse("HEAD /ready HTTP/1.0\r\nHost: x\r\n\r\n", pv));
+        CHECK(!parse("HEAD /ready HTTP/1.1\r\n\r\n", pv));
+        CHECK(!parse("head /ready HTTP/1.1\r\nHost: x\r\n\r\n", pv));
+        CHECK(!parse("HEADS /ready HTTP/1.1\r\nHost: x\r\n\r\n", pv));
         CHECK(parse("GET /a/b?x=1&y=2;z=3 HTTP/1.1\r\nhOsT:   x \t\r\nConnection: keep-alive\r\n"
             "Content-Length: 0\r\nAccept: */*\r\nUser-Agent: a b: c\r\nX-Empty:\r\n\r\n", pv));
         CHECK(pv.path == "/a/b?x=1&y=2;z=3");

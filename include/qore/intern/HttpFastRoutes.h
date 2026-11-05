@@ -58,7 +58,7 @@
 /** See design/http-server-fast-routes.md.
 */
 enum class HttpFastFallback : unsigned {
-    NoRoute,         //!< no route has the request's path (or the method is not GET)
+    NoRoute,         //!< no route has the request's path (or the method is not GET or HEAD)
     NotHttp11,       //!< not an HTTP/1.1 request
     Body,            //!< the request has a body (Content-Length other than 0, or Transfer-Encoding)
     Expect,          //!< the request has an Expect header
@@ -131,9 +131,11 @@ public:
         closed, instead of \c Connection: Keep-Alive
         @param extra the headers that the listener adds, if any; the serialized response is cached for each set of
         extra headers (by identity) that is used with it
+        @param head if true, the response to a \c HEAD request: the headers of the response (with its
+        \c Content-Length, except for a 204 response) and no body (RFC 9110 section 9.3.2)
     */
     DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s, bool close = false,
-            const std::shared_ptr<const HttpFastExtraHeaders>& extra = nullptr) const;
+            const std::shared_ptr<const HttpFastExtraHeaders>& extra = nullptr, bool head = false) const;
 
     //! Returns the status code
     DLLLOCAL int getCode() const {
@@ -184,6 +186,7 @@ private:
     struct WireEntry {
         std::shared_ptr<const HttpFastExtraHeaders> extra;
         bool close = false;
+        bool head = false;
         int64_t second = -1;
         std::shared_ptr<const std::string> wire;
     };
@@ -463,7 +466,7 @@ public:
             const std::shared_ptr<const HttpFastExtraHeaders>& extra = nullptr);
 
     //! Answers an HTTP/2 or HTTP/3 request if a route qualifies
-    /** The request is a \c GET without a body (\c END_STREAM, or \c FIN, was on its \c HEADERS frame).  The eligibility rules are
+    /** The request is a \c GET or \c HEAD without a body (\c END_STREAM, or \c FIN, was on its \c HEADERS frame).  The eligibility rules are
         those of match(); \c http_version is not checked and the request must not have a \c Connection header
         (connection-specific headers are not allowed in HTTP/2 and HTTP/3).
 

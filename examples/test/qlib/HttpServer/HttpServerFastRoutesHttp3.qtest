@@ -47,6 +47,7 @@ class HttpServerFastRoutesHttp3Test inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerFastRoutesHttp3Test", "1.0", \ARGV) {
         addTestCase("a route answers over HTTP/3", \testBasic());
         addTestCase("the response is that of the handler", \testParity());
+        addTestCase("HEAD requests", \testHead());
         addTestCase("cells, slots and fallbacks", \testRulesAndFallbacks());
         addTestCase("a large response", \testLarge());
         addTestCase("concurrent requests", \testConcurrent());
@@ -145,6 +146,39 @@ class HttpServerFastRoutesHttp3Test inherits QUnit::Test {
         assertEq(sort(keys stable(n2.headers)), sort(keys stable(f2.headers)), "the same header names, 204");
 
         assertEq("v1", get("/fast-hdr").headers."x-custom");
+    }
+
+    testHead() {
+        hs.addFastRoute("/hd", {"public": True, "response": textResponse(200, "hello")});
+        hs.addFastRoute("/hd-empty", {"public": True, "response": {"code": 200}});
+        on_exit {
+            hs.removeFastRoute("/hd");
+            hs.removeFastRoute("/hd-empty");
+        }
+        int calls = Http3RouteTestHandler::calls.getCount();
+        int hits = hs.getFastRouteInfo().routes{"/hd"} ?? 0;
+        hash<auto> g = get("/hd");
+        hash<auto> h = mgr.request(url, "HEAD", "/hd");
+        # answered by the route: the headers of the GET response, with its content-length, and no body
+        assertEq(hits + 2, hs.getFastRouteInfo().routes{"/hd"});
+        assertEq(calls, Http3RouteTestHandler::calls.getCount(), "the handler was not called");
+        assertEq("h3", h.protocol);
+        assertEq(200, h.status_code);
+        assertTrue(!h.body, "no body");
+        assertEq("5", h.headers."content-length");
+        assertEq(sort(keys stable(g.headers)), sort(keys stable(h.headers)), "the same header names");
+        assertEq(g.headers."content-type", h.headers."content-type");
+
+        for (int i = 0; i < 20; ++i) {
+            assertEq(200, mgr.request(url, "HEAD", "/hd?x=" + i).status_code);
+            assertEq("hello", get("/hd").body, "request " + i);
+        }
+        hash<auto> e = mgr.request(url, "HEAD", "/hd-empty");
+        assertEq(204, e.status_code);
+        assertEq(NOTHING, e.headers."content-length");
+        calls = Http3RouteTestHandler::calls.getCount();
+        assertEq(200, mgr.request(url, "HEAD", "/other").status_code);
+        assertEq(calls + 1, Http3RouteTestHandler::calls.getCount());
     }
 
     testRulesAndFallbacks() {

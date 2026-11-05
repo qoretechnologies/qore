@@ -3047,6 +3047,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         Every request of a connection is covered, the first one included.  The route is answered without the handler
         chain, and so without authentication, logging or request preprocessing: \c public must be \c True.
 
+        A \c HEAD request for the path is answered the same way, with the headers of the response to a \c GET request
+        (with its \c Content-Length, except for a \c 204 response, which has none) and no message body
+        (RFC 9110 section 9.3.2).
+
         An HTTP/2 or HTTP/3 request is answered the same way, when its headers have been received (a request with a body
         takes the normal path).
 

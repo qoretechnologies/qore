@@ -75,7 +75,7 @@ An immutable snapshot, replaced as a whole when routes change (copy-on-write; re
 operation and never block).  Each entry:
 
 |!Field|!Meaning
-|`method`|`GET` only in phase 1.  `HEAD` takes the normal path, which answers it with the headers of the `GET` response (see the risks below)
+|`method`|`GET`, and `HEAD`, which is answered with the headers of the `GET` response and no body (see the risks below)
 |`path`|an exact path, compared with the query string removed (`?` and everything after it); no patterns in phase 1
 |`spec`|what the route answers with: rules over cells and an optional `otherwise` response (below)
 |`public`|must be `True`: the route is served without the handler chain, and so without authentication
@@ -86,7 +86,7 @@ attaching it to that listener only.
 
 A fast route is eligible for a request only if all of the following hold; otherwise the request takes the normal path:
 
-- HTTP/1.1, method `GET`, a path that matches exactly
+- HTTP/1.1, method `GET` or `HEAD`, a path that matches exactly
 - no `Content-Length` (or `0`), no `Transfer-Encoding`, no `Expect`, no `Upgrade`, no `HTTP2-Settings`
 - no `Connection` header other than `keep-alive` or `close`: a `Connection: close` request is answered with `Connection:
   close` (the value that the handler path sends) and the connection is closed when the response has been sent (the
@@ -534,11 +534,11 @@ phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at mos
 
 ## Risks and open questions
 
-- `HEAD` requests are not answered by a route (they take the normal path).  The normal path used to answer a `HEAD`
-  request with `Content-Length: 0` and a `Content-Type` without the character encoding of the `GET` response; it now
-  sends the headers of the `GET` response (RFC 9110 section 9.3.2), with a `Content-Length` only when it is that of the
-  `GET` message body.  A route could answer `HEAD` the same way, from the same pre-serialized response without the body
-  and with its `Content-Length`; this is not done yet.
+- a route answers `HEAD` with the headers of the response to `GET`, including its `Content-Length`, and no body
+  (RFC 9110 section 9.3.2), from the same pre-serialized response (the wire is cached apart from the `GET` wire; over
+  HTTP/2 and HTTP/3 the headers are sent without a body).  A `204` response has no `Content-Length` in answer to `HEAD`
+  (RFC 9110 section 8.6), as when the handler path answers it.  The handler path may leave out the `Content-Length`
+  of a `HEAD` response when it cannot know the length without producing the body; a route always knows it.
 - bypassing the handler chain changes what an operator can rely on (logging, auth, tracing): mitigated by `public`,
   counters and documentation; whether a sampled access log is worth adding is open
 - a response too large for the socket buffer stays in the operation's send phase until the reader drains it; the

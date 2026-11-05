@@ -114,11 +114,16 @@ bool HttpFastRequestParser::parse(const char* data, size_t size, HttpFastRequest
         return false;
     }
 
-    // request line: exactly GET <target> HTTP/1.1
-    if (memcmp(data, "GET /", 5)) {
+    // request line: exactly GET <target> HTTP/1.1, or HEAD <target> HTTP/1.1
+    size_t method_size;
+    if (!memcmp(data, "GET /", 5)) {
+        method_size = 3;
+    } else if (size >= 19 && !memcmp(data, "HEAD /", 6)) {
+        method_size = 4;
+    } else {
         return false;
     }
-    const char* target = data + 4;
+    const char* target = data + method_size + 1;
     const char* t = target;
     while (t < end && fastreq_target_char(static_cast<unsigned char>(*t))) {
         ++t;
@@ -133,7 +138,7 @@ bool HttpFastRequestParser::parse(const char* data, size_t size, HttpFastRequest
     }
 
     HttpFastRequestView v;
-    v.method = std::string_view(data, 3);
+    v.method = std::string_view(data, method_size);
     v.path = std::string_view(target, static_cast<size_t>(t - target));
     v.http_version = std::string_view("1.1");
 

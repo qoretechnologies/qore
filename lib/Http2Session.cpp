@@ -1643,9 +1643,12 @@ bool Http2Session::serveFastRoute(Http2StreamInfo& stream) {
     int us;
     int64 epoch_s = q_epoch_us(us);
     const std::string& body = response->getBody();
+    // the response to a HEAD request has the headers of the response to a GET request (with its content-length), and no
+    // body (RFC 9110 section 9.3.2)
+    const size_t body_size = stream.method == "HEAD" ? 0 : body.size();
     ExceptionSink xs;
     if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s, fast.extra.get()), body.data(),
-            body.size(), &xs) || xs) {
+            body_size, &xs) || xs) {
         // the stream could not be answered here: the normal path takes it (the exception is dropped)
         xs.clear();
         return false;

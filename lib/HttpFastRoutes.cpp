@@ -387,12 +387,12 @@ std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(
 }
 
 std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close,
-        const std::shared_ptr<const HttpFastExtraHeaders>& extra) const {
+        const std::shared_ptr<const HttpFastExtraHeaders>& extra, bool head) const {
     std::lock_guard<std::mutex> lg(cache_lock);
     // the variant: a handful at most (a listener has one set of extra headers), found by identity
     WireEntry* entry = nullptr;
     for (WireEntry& e : wires) {
-        if (e.close == close && e.extra == extra) {
+        if (e.close == close && e.head == head && e.extra == extra) {
             if (e.second == epoch_s) {
                 return e.wire;
             }
@@ -428,8 +428,14 @@ std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bo
             }
         }
     }
-    *wire += head_suffix;
-    *wire += body;
+    if (head) {
+        // the response to a HEAD request has the headers of the GET response, with its Content-Length, and no body;
+        // a 204 response has no Content-Length (RFC 9110 section 8.6), as when the handler path answers HEAD
+        *wire += code == 204 ? "\r\n" : head_suffix;
+    } else {
+        *wire += head_suffix;
+        *wire += body;
+    }
 
     if (!entry) {
         if (wires.size() < MaxWireEntries) {
@@ -441,6 +447,7 @@ std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bo
         }
         entry->extra = extra;
         entry->close = close;
+        entry->head = head;
     }
     entry->second = epoch_s;
     entry->wire = std::move(wire);
@@ -523,7 +530,8 @@ std::shared_ptr<const HttpFastResponse> HttpFastRoutes::select(const HttpFastReq
         return nullptr;
     };
 
-    if (req.method != "GET") {
+    // a HEAD request is answered with the headers of the response to a GET request
+    if (req.method != "GET" && req.method != "HEAD") {
         return fail(HttpFastFallback::NoRoute);
     }
     // the query string is not part of the route
@@ -593,7 +601,7 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
     if (!response) {
         return nullptr;
     }
-    return response->getWire(epoch_s, close_after && *close_after, extra);
+    return response->getWire(epoch_s, close_after && *close_after, extra, req.method == "HEAD");
 }
 
 std::shared_ptr<const HttpFastResponse> HttpFastRoutes::matchH2(const HttpFastRequestView& req,

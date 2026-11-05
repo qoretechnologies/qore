@@ -58,6 +58,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         addTestCase("FastResponseSlot", \testSlot());
         addTestCase("the first request of a connection", \testFirstRequest());
         addTestCase("requests that do not qualify take the normal path", \testFallbacks());
+        addTestCase("HEAD requests", \testHead());
         addTestCase("pipelined requests", \testPipelined());
         addTestCase("replace and remove a route", \testReplaceRemove());
         addTestCase("a listener added later has the routes", \testLateListener());
@@ -575,12 +576,11 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("handler", request(c, "POST", "/fb", {"Content-Length": "3"}, "abc").body, "POST (and its body)");
         assertEq("handler", request(c, "GET", "/fb", {"Content-Length": "3"}, "abc").body, "GET with a body");
         assertEq("fast", request(c, "GET", "/fb", {"Content-Length": "0"}).body, "an empty body is no body");
-        assertEq("handler", request(c, "HEAD", "/fb").body == "" ? "handler" : "bad", "HEAD");
         assertEq("handler", request(c, "OPTIONS", "/fb").body);
         assertEq("fast", request(c, "GET", "/fb").body, "the connection is still served by the route");
 
         hash<auto> fb = hs.getFastRouteInfo().fallbacks;
-        assertTrue(fb.no_route >= 3, "POST, HEAD and OPTIONS had no route");
+        assertTrue(fb.no_route >= 2, "POST and OPTIONS had no route");
         assertTrue(fb.body >= 1, "the body");
 
         # a Connection header other than keep-alive and close takes the normal path
@@ -824,6 +824,55 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         c.send(req + req);
         assertEq("handler", readResponse(c).body);
         assertEq("fast", readResponse(c).body);
+    }
+
+    testHead() {
+        hs.addFastRoute("/hd", {"public": True, "response": textResponse(200, "hello")});
+        hs.addFastRoute("/hd-empty", {"public": True, "response": {"code": 204}});
+        on_exit {
+            hs.removeFastRoute("/hd");
+            hs.removeFastRoute("/hd-empty");
+        }
+        Socket c = warmUp();
+        int before = hs.getFastRouteInfo().routes{"/hd"};
+        hash<auto> get = request(c, "GET", "/hd");
+        hash<auto> head = request(c, "HEAD", "/hd");
+        # answered by the route, with the headers of the GET response, its Content-Length, and no body
+        assertEq(before + 2, hs.getFastRouteInfo().routes{"/hd"});
+        assertEq(200, head.code);
+        assertEq("", head.body);
+        assertEq("5", head.hdr."content-length");
+        assertEq(get.hdr."content-type", head.hdr."content-type");
+        assertEq(get.hdr.connection, head.hdr.connection);
+        assertEq(sort(keys get.hdr), sort(keys head.hdr));
+
+        # with a query string, and many times over one connection, mixed with GET requests: the framing holds
+        for (int i = 0; i < 30; ++i) {
+            assertEq("", request(c, "HEAD", "/hd?x=" + i).body);
+            assertEq("hello", request(c, "GET", "/hd").body, "request " + i);
+        }
+        assertEq(before + 2 + 60, hs.getFastRouteInfo().routes{"/hd"});
+
+        # a response without a body
+        hash<auto> h204 = request(c, "HEAD", "/hd-empty");
+        assertEq(204, h204.code);
+        assertEq(request(c, "GET", "/hd-empty").hdr.connection, h204.hdr.connection);
+
+        # a HEAD request that asks for the connection to be closed is answered, and the connection is closed
+        Socket c2 = warmUp();
+        c2.send("HEAD /hd HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+        hash<auto> closed = readResponse(c2, True);
+        assertEq(200, closed.code);
+        assertEq("close", closed.hdr.connection);
+        assertEq("", closed.body);
+        assertThrows("SOCKET-CLOSED", \c2.recv(), (1, Timeout));
+
+        # a HEAD request with a body, and a lower-case method, take the normal path
+        Socket c3 = warmUp();
+        int hits = hs.getFastRouteInfo().routes{"/hd"};
+        request(c3, "HEAD", "/hd", {"Content-Length": "3"}, "abc");
+        assertEq(hits, hs.getFastRouteInfo().routes{"/hd"});
+        assertEq("hello", request(c3, "GET", "/hd").body, "the connection is usable");
     }
 
     testCounters() {

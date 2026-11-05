@@ -46,6 +46,7 @@ class HttpServerFastRoutesHttp2Test inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerFastRoutesHttp2Test", "1.0", \ARGV) {
         addTestCase("a route answers over HTTP/2", \testBasic());
         addTestCase("the response is that of the handler", \testParity());
+        addTestCase("HEAD requests", \testHead());
         addTestCase("cells, slots and fallbacks", \testRulesAndFallbacks());
         addTestCase("a large response", \testLarge());
         addTestCase("concurrent streams", \testConcurrent());
@@ -154,6 +155,42 @@ class HttpServerFastRoutesHttp2Test inherits QUnit::Test {
 
         # a header of the route
         assertEq("v1", client.restGet("/fast-hdr").headers."x-custom");
+    }
+
+    testHead() {
+        hs.addFastRoute("/hd", {"public": True, "response": textResponse(200, "hello")});
+        hs.addFastRoute("/hd-empty", {"public": True, "response": {"code": 200}});
+        on_exit {
+            hs.removeFastRoute("/hd");
+            hs.removeFastRoute("/hd-empty");
+        }
+        int calls = Http2RouteTestHandler::calls.getCount();
+        int hits = hs.getFastRouteInfo().routes{"/hd"} ?? 0;
+        hash<auto> g = client.restGet("/hd");
+        hash<auto> h = client.restHead("/hd");
+        # answered by the route: the headers of the GET response, with its content-length, and no body
+        assertEq(hits + 2, hs.getFastRouteInfo().routes{"/hd"});
+        assertEq(calls, Http2RouteTestHandler::calls.getCount(), "the handler was not called");
+        assertEq(200, h.status_code);
+        assertTrue(!h.body, "no body");
+        assertEq("5", h.headers."content-length");
+        assertEq(sort(keys stable(g.headers)), sort(keys stable(h.headers)), "the same header names");
+        assertEq(g.headers."content-type", h.headers."content-type");
+        assertEq(g.headers."alt-svc", h.headers."alt-svc");
+
+        # many HEAD requests, mixed with GET requests, on one connection
+        for (int i = 0; i < 20; ++i) {
+            assertEq(200, client.restHead("/hd?x=" + i).status_code);
+            assertEq("hello", client.restGet("/hd").body, "request " + i);
+        }
+        # a response without a body (204): no content-length
+        hash<auto> e = client.restHead("/hd-empty");
+        assertEq(204, e.status_code);
+        assertEq(NOTHING, e.headers."content-length");
+        # a path that is not a route is answered by the handler
+        calls = Http2RouteTestHandler::calls.getCount();
+        assertEq(200, client.restHead("/other").status_code);
+        assertEq(calls + 1, Http2RouteTestHandler::calls.getCount());
     }
 
     testRulesAndFallbacks() {

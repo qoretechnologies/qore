@@ -151,7 +151,9 @@ class HttpServerFastRoutesParityTest inherits QUnit::Test {
         string status_line = lines[0];
         list<hash<auto>> headers = ();
         int len = 0;
-        foreach string line in (lines[1..]) {
+        foreach string raw_line in (lines[1..]) {
+            # the end of the header block can leave a line end on the last line
+            string line = trim(raw_line, "\r\n");
             if (!line.val()) {
                 continue;
             }
@@ -169,7 +171,7 @@ class HttpServerFastRoutesParityTest inherits QUnit::Test {
     }
 
     #! returns the differences between two responses; the date is not compared, and the order of the headers is not
-    private list<string> compare(hash<auto> a, hash<auto> b) {
+    private list<string> compare(hash<auto> a, hash<auto> b, bool head = False) {
         list<string> diffs = ();
         if (a.status != b.status) {
             diffs += sprintf("status line: %y != %y", a.status, b.status);
@@ -177,7 +179,7 @@ class HttpServerFastRoutesParityTest inherits QUnit::Test {
         list<string> ah = sort(map $1.name + ": " + $1.value, a.headers, $1.name.lwr() != "date");
         list<string> bh = sort(map $1.name + ": " + $1.value, b.headers, $1.name.lwr() != "date");
         if (ah != bh) {
-            diffs += sprintf("headers: %y != %y", ah, bh);
+            diffs += sprintf("headers: only in the first: %y; only in the second: %y", (map $1, ah, !inlist($1, bh)), (map $1, bh, !inlist($1, ah)));
         }
         # the same set of names without regard to case, in case the values were equal but a name were missing
         if (sort(map $1.name.lwr(), a.headers) != sort(map $1.name.lwr(), b.headers)) {
@@ -190,7 +192,8 @@ class HttpServerFastRoutesParityTest inherits QUnit::Test {
             diffs += sprintf("Content-Length: %d != %d", a.length, b.length);
         }
         foreach hash<auto> r in (a, b) {
-            if (r.body.size() != r.length) {
+            # the response to a HEAD request has the Content-Length of the GET response and no body
+            if (!head && r.body.size() != r.length) {
                 diffs += sprintf("a response has Content-Length %d and a body of %d bytes", r.length,
                     r.body.size());
             }
@@ -288,15 +291,32 @@ class HttpServerFastRoutesParityTest inherits QUnit::Test {
     }
 
     testHead() {
-        # HEAD is not answered by a route: the same handler answers it, so the two are the same by construction;
-        # this checks that a route does not change the answer to HEAD for its path
+        # a route answers HEAD from the pre-serialized response without the body.  The handler path answers it with
+        # the headers of the GET response too, but it may leave out the Content-Length when it does not know the
+        # length without producing the body (RFC 9110 section 9.3.2): the route always has it, and it is the length
+        # of the GET response
         Socket c = connect();
-        hash<auto> h1 = rawRequest(c, "HEAD", "/n/text");
-        hash<auto> h2 = rawRequest(c, "HEAD", "/f/text");
-        # the handler answers /f/text too (no route for HEAD), as the default
-        assertEq(h1.status, h2.status);
-        assertEq(0, h1.body.size());
-        assertEq(0, h2.body.size());
+        foreach string name in (ParityCases::Cases.keys()) {
+            hash<auto> n = rawRequest(c, "HEAD", "/n/" + name);
+            hash<auto> f = rawRequest(c, "HEAD", "/f/" + name);
+            hash<auto> g = rawRequest(c, "GET", "/f/" + name);
+            assertEq(0, n.body.size(), name);
+            assertEq(0, f.body.size(), name);
+            assertEq(g.status, f.status, name);
+            # the length is that of the GET response (a 204 response has none)
+            assertEq(g.body.size(), f.length, name);
+            hash<auto> fl = f;
+            if (g.status =~ / 204 /) {
+                assertTrue(!(select f.headers, $1.name.lwr() == "content-length"), name + " (204: no Content-Length)");
+            }
+            if (!(select n.headers, $1.name.lwr() == "content-length")) {
+                fl.headers = (select f.headers, $1.name.lwr() != "content-length");
+                fl.length = n.length;
+            } else if (g.status =~ / 204 /) {
+                fl.length = n.length;
+            }
+            assertEq((), compare(n, fl, True), name);
+        }
         # the connection is usable
         assertEq("hello", rawRequest(c, "GET", "/f/text").body.toString());
     }
