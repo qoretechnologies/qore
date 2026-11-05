@@ -216,6 +216,12 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - added @ref HttpServer::HttpServer::addFastRoute() "fast routes": a path that is answered on the async I/O thread,
+      without a hand-off to a worker thread and without calling a handler, for the requests that qualify
+      (@ref HttpServer::HttpServer::addFastRoute(), @ref HttpServer::HttpServer::removeFastRoute(),
+      @ref HttpServer::HttpServer::getFastRouteInfo(), @ref Qore::FastCell "FastCell" and
+      @ref Qore::HttpFastRoutes "HttpFastRoutes"); a request served by a fast route costs about 10 to 20 microseconds
+      of server CPU instead of milliseconds
     - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
       have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
       (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
@@ -941,6 +947,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         # quit server flag
         bool exit = False;
+
+        # the fast routes of the listeners (see addFastRoute()), created by the first route
+        *HttpFastRoutes fast_routes;
+
+        # guards fast_routes
+        Mutex fast_routes_lock();
 
         # if True then verbose exception info will be logged
         bool debug;
@@ -2879,6 +2891,146 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return debug;
     }
 
+    #! Adds or replaces a fast route: a path that the async I/O thread answers without calling a handler
+    /** A request for the path that qualifies is answered on the async I/O thread, with no hand-off to a worker
+        thread and no Qore code; every other request takes the normal path.  A route answers a \c GET request for its
+        exact path (the query string is not part of the path) that has no body, no \c Expect or \c Upgrade header, is
+        HTTP/1.1 with a keep-alive connection, and has no further request already received.  Only the second and later
+        requests of a connection are covered.  The route is answered without the handler chain, and so without
+        authentication, logging or request preprocessing: \c public must be \c True.
+
+        The server's configured response headers (and the \c Server header) are added to each response, so that it has
+        the headers that the normal path sends.
+
+        @param path the exact path of the route, starting with \c "/"
+        @param info the route; see @ref Qore::HttpFastRoutes::addRoute() "HttpFastRoutes::addRoute()" for the keys.  A response
+        in it can set \c hdr to add or replace response headers
+
+        @par Example:
+        @code{.py}
+FastCell ready(0, 30s);
+hs.addFastRoute("/ready", {
+    "public": True,
+    "rules": (
+        {"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "ok", "content_type": "text/plain"}},
+    ),
+    "otherwise": {"code": 503, "body": "not ready", "content_type": "text/plain"},
+});
+
+# later, from any thread
+ready.set(1);
+        @endcode
+
+        @throw HTTP-FAST-ROUTE-ERROR the route is not valid
+
+        @see @ref Qore::FastCell "FastCell"
+
+        @since HttpServer 1.7
+    */
+    addFastRoute(string path, hash<auto> info) {
+        getOrCreateFastRoutes().addRoute(path, addServerHeadersToFastRoute(info));
+    }
+
+    #! Removes a fast route
+    /** @param path the path of the route
+
+        @return @ref True if there was a route for the path
+
+        @since HttpServer 1.7
+    */
+    bool removeFastRoute(string path) {
+        *HttpFastRoutes routes = getFastRoutes();
+        return routes ? routes.removeRoute(path) : False;
+    }
+
+    #! Returns the number of requests that each fast route answered, and why the other requests took the normal path
+    /** @return a hash with the keys \c routes and \c fallbacks; see @ref Qore::HttpFastRoutes::getInfo()
+
+        @since HttpServer 1.7
+    */
+    hash<auto> getFastRouteInfo() {
+        *HttpFastRoutes routes = getFastRoutes();
+        return routes ? routes.getInfo() : {"routes": {}, "fallbacks": {}};
+    }
+
+    #! Returns the fast routes, if any route was added
+    /** The listeners of the server (the existing ones and those added later) have them attached to their sockets.
+    */
+    private *HttpFastRoutes getFastRoutes() {
+        fast_routes_lock.lock();
+        on_exit fast_routes_lock.unlock();
+        return fast_routes;
+    }
+
+    #! Returns the fast routes, creating them and attaching them to the listeners if there are none yet
+    private HttpFastRoutes getOrCreateFastRoutes() {
+        bool created = False;
+        HttpFastRoutes routes;
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            if (!fast_routes) {
+                fast_routes = new HttpFastRoutes();
+                created = True;
+            }
+            routes = fast_routes;
+        }
+        if (created) {
+            # a listener added from now on attaches the routes itself (see addListenerIntern()); the existing ones
+            # are attached here
+            *hash<string, HttpListener> llist;
+            {
+                lm.enter();
+                on_exit lm.exit();
+                llist = listeners;
+            }
+            map $1.setHttpFastRoutes(routes), llist.iterator();
+        }
+        return routes;
+    }
+
+    #! Adds the server's response headers to the responses of a fast route description
+    private hash<auto> addServerHeadersToFastRoute(hash<auto> info0) {
+        hash<auto> base = getResponseHeaders(0);
+        if (!(map $1, keys base, $1.lwr() == "server")) {
+            base.Server = HttpServerString;
+        }
+        # the hashes are copied to "auto!" locals: a literal such as {"code": 204} has the type hash<string, int>
+        code add = hash<auto> sub (auto response) {
+            if (response.typeCode() != NT_HASH) {
+                # not a response: the route parser reports it
+                return response;
+            }
+            hash<auto!> r = response;
+            # as for the response of a handler, a 200 response without a body is a 204 response (see
+            # sendResponse()), and has no body
+            if ((r.code ?? 200) == 200) {
+                *auto body = r.body;
+                int tc = body.typeCode();
+                bool empty = tc == NT_NOTHING || tc == NT_NULL || ((tc == NT_STRING || tc == NT_BINARY)
+                    && !body.size());
+                if (empty) {
+                    r.code = 204;
+                    remove r.body;
+                }
+            }
+            r.hdr = HttpServer::mergeResponseHeaders(base, r.hdr);
+            return r;
+        };
+        hash<auto!> info = info0;
+        if (info.response) {
+            info.response = add(info.response);
+        }
+        if (info.otherwise) {
+            info.otherwise = add(info.otherwise);
+        }
+        if (info.rules.typeCode() == NT_LIST) {
+            info.rules = map (($1.typeCode() == NT_HASH && $1.response) ? $1 + {"response": add($1.response)} : $1),
+                info.rules;
+        }
+        return info;
+    }
+
     #! Returns a connection to the async I/O controller for keep-alive handling
     /** @param sock the socket to return
         @param cx the connection context
@@ -3422,6 +3574,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     "listener %d; continuing with TCP-only (no H3) on port %d: "
                     "last error: %s: %s",
                     max_attempts, id, l.getInfo().port, h3_err, h3_desc);
+            }
+
+            # the fast routes of the server, if any, are answered for the connections accepted from the listener
+            if (*HttpFastRoutes fast = getFastRoutes()) {
+                l.setHttpFastRoutes(fast);
             }
 
             # Add the TCP listener to the async I/O controller — start accepting.

@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerFastRoutesSoakTest
+
+#! the handler answers the first request of a connection
+class SoakHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "handler", "hdr": {"Content-Type": "text/plain"}};
+    }
+}
+
+#! A connection served by a fast route stays open for longer than the operation timeout
+/** The async I/O controller's timeout of the operation that reads the requests of a connection (the idle time-to-live
+    plus 30 seconds) covers one request: a connection served by the handler gets a new operation for every request.  A
+    fast route answers a request inside the operation, which does not complete, so the operation renews its own
+    timeout.  This test keeps one connection busy with fast-route requests for longer than that timeout; the
+    connection must not be closed, and the answers must keep coming from the route.  It runs for about 35 seconds.
+*/
+class HttpServerFastRoutesSoakTest inherits QUnit::Test {
+    public {
+        #! how long the connection is kept busy: longer than the 30 second margin of the operation timeout
+        const Duration = 34s;
+        const Timeout = 30s;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRoutesSoakTest", "1.0", \ARGV) {
+        addTestCase("a busy connection outlives the operation timeout", \testBusyConnection());
+        set_return_value(main());
+    }
+
+    testBusyConnection() {
+        # a short idle time-to-live: the connection's timeout is this plus 30 seconds
+        HttpServer hs(<HttpServerOptionInfo>{"ttl": 2s});
+        on_exit hs.stop();
+        hs.setDefaultHandler("handler", new SoakHandler());
+        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        hs.addFastRoute("/soak", {"public": True, "response": {"code": 200, "body": "fast",
+            "content_type": "text/plain"}});
+
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        string req = "GET /soak HTTP/1.1\r\nHost: x\r\n\r\n";
+        c.send(req);
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        assertEq("handler", c.recv(h."content-length".toInt(), Timeout), "the first request takes the normal path");
+
+        int start = clock_getmillis();
+        int n = 0;
+        int not_fast = 0;
+        while (clock_getmillis() - start < Duration.durationMilliseconds()) {
+            c.send(req);
+            h = c.readHTTPHeader(Timeout);
+            string body = c.recv(h."content-length".toInt(), Timeout);
+            if (body != "fast") {
+                ++not_fast;
+            }
+            ++n;
+        }
+        assertGt(1000, n, "many requests were served");
+        assertEq(0, not_fast, "every request after the first was answered by the route");
+        # still open after longer than the operation timeout
+        c.send(req);
+        h = c.readHTTPHeader(Timeout);
+        assertEq("fast", c.recv(h."content-length".toInt(), Timeout));
+        assertEq(n + 1, hs.getFastRouteInfo().routes{"/soak"}, "the route answered every request but the first");
+    }
+}

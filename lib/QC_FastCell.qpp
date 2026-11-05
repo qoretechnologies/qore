@@ -1,0 +1,202 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  QC_FastCell.qpp
+
+  Qore Programming Language
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_FastCell.h"
+
+//! A value that the HTTP server's fast routes read without ever waiting for it
+/** A FastCell holds one integer (a boolean is 0 or 1) that code in any thread sets and that
+    @ref Qore::HttpFastRoutes "fast route" rules compare with a constant on the async I/O thread, to choose between
+    pre-serialized responses.  Setting and reading are single atomic operations on a lock-free integer: neither side
+    waits for the other, and no thread hand-off is involved.  The routes that use a cell share ownership of it, so a
+    route never refers to a cell that has been destroyed.
+
+    A cell can have a maximum age.  When it has not been set (or touched) for that long it is stale, and a route
+    that would read it does not answer: the request takes the normal path, where the handler decides.  Use
+    @ref touch() as a heartbeat from the code that keeps the state.
+
+    @par Example:
+    @code{.py}
+FastCell ready(0, 30s);
+HttpFastRoutes routes();
+routes.addRoute("/ready", {
+    "public": True,
+    "rules": (
+        {"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "{}",
+            "content_type": "application/json"}},
+        {"cell": ready, "op": "==", "value": 0, "response": {"code": 503, "body": "{}",
+            "content_type": "application/json"}},
+    ),
+});
+listener_socket.setHttpFastRoutes(routes);
+
+# later, from any thread
+ready.set(1);
+    @endcode
+
+    @see @ref Qore::HttpFastRoutes "HttpFastRoutes"
+
+    @since %Qore 3.0
+ */
+qclass FastCell [arg=QoreFastCell* fc; ns=Qore];
+
+//! Creates a cell
+/** @param initial the initial value
+    @param max_age the maximum age of the value before it is stale; a @ref timeout_type "timeout" value (integers are
+    milliseconds); 0 (the default) means the value never becomes stale
+
+    @par Example:
+    @code{.py}
+FastCell ready(0, 30s);
+    @endcode
+
+    @throw FASTCELL-ERROR the maximum age is negative
+ */
+FastCell::constructor(softint initial = 0, timeout max_age = 0) [flags=NAMED_ARGS] {
+    if (max_age < 0) {
+        xsink->raiseException("FASTCELL-ERROR", "the maximum age cannot be negative (" QLLD " ms)", (int64)max_age);
+        return;
+    }
+    self->setPrivate(CID_FASTCELL, new QoreFastCell(initial, (int64)max_age * 1000));
+}
+
+//! Destroys the cell
+/** Routes that use the cell keep it (and its last value) alive.
+ */
+FastCell::destructor() {
+    fc->deref();
+}
+
+//! Creates a new, independent cell with the same value and maximum age
+/** @par Example:
+    @code{.py}
+FastCell other = cell.copy();
+    @endcode
+ */
+FastCell::copy() {
+    self->setPrivate(CID_FASTCELL, new QoreFastCell(fc->c->get(), fc->c->getMaxAgeUs()));
+}
+
+//! Sets the value
+/** The value is current after this call.
+
+    @param value the new value; a boolean is 0 or 1
+
+    @par Example:
+    @code{.py}
+ready.set(1);
+    @endcode
+ */
+nothing FastCell::set(softint value) [flags=NAMED_ARGS] {
+    fc->c->set(value);
+}
+
+//! Sets the value to 1 for @ref True and 0 for @ref False
+/** @param value the new value
+
+    @par Example:
+    @code{.py}
+ready.setBool(True);
+    @endcode
+ */
+nothing FastCell::setBool(bool value) [flags=NAMED_ARGS] {
+    fc->c->set(value ? 1 : 0);
+}
+
+//! Marks the value as current without changing it
+/** Call this regularly from the code that keeps the state when the cell has a maximum age.
+
+    @par Example:
+    @code{.py}
+ready.touch();
+    @endcode
+ */
+nothing FastCell::touch() {
+    fc->c->touch();
+}
+
+//! Returns the value
+/** @return the value
+
+    @par Example:
+    @code{.py}
+int v = ready.get();
+    @endcode
+ */
+int FastCell::get() [flags=RET_VALUE_ONLY] {
+    return fc->c->get();
+}
+
+//! Returns the value as a boolean
+/** @return @ref False if the value is 0, @ref True otherwise
+
+    @par Example:
+    @code{.py}
+bool b = ready.getBool();
+    @endcode
+ */
+bool FastCell::getBool() [flags=RET_VALUE_ONLY] {
+    return fc->c->get() != 0;
+}
+
+//! Returns the time since the value was set or touched
+/** @return the age of the value in milliseconds
+
+    @par Example:
+    @code{.py}
+int age_ms = ready.getAge();
+    @endcode
+ */
+int FastCell::getAge() [flags=RET_VALUE_ONLY] {
+    return fc->c->getAgeUs() / 1000;
+}
+
+//! Returns the maximum age of the value
+/** @return the maximum age in milliseconds; 0 if the value never becomes stale
+ */
+int FastCell::getMaxAge() [flags=RET_VALUE_ONLY] {
+    return fc->c->getMaxAgeUs() / 1000;
+}
+
+//! Returns @ref True if the value is stale
+/** @return @ref True if the cell has a maximum age and the value is older than that
+
+    @par Example:
+    @code{.py}
+if (ready.isStale()) {
+    ready.touch();
+}
+    @endcode
+ */
+bool FastCell::isStale() [flags=RET_VALUE_ONLY] {
+    int64_t v;
+    return !fc->c->load(v);
+}

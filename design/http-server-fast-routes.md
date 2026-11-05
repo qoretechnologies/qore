@@ -145,6 +145,11 @@ otherwise:  (none: the request takes the normal path)
   second on "ready", say).  The responses are serialized once, when the route is registered, so a state change costs one
   atomic store in Qore and nothing on the I/O thread.
 
+A cell is read once per request: rules over the same cell see the same value even if it is set while the rules are
+evaluated.  Without that, two rules `ready == 1` and `ready == 0` could both fail when the value changes between their
+two reads, and the request would take the normal path for no reason (the concurrency test found this).  Different
+cells are read one after the other and are not atomic together.
+
 Cells are the right block for a fixed set of answers selected by state.  A `slot` is for a body that itself changes.
 
 ### Slots: state without hand-offs
@@ -178,7 +183,7 @@ Rules in prose are not enough; the design relies on mechanisms that fail a build
 |Leaf locks only|the route table lookup takes one mutex only to copy a shared pointer, and a response's per-second cache takes one while it builds a string of at most 64 KiB once a second; neither is held across a call, and no other lock is taken while holding one|implemented; the isolation test bans the Qore lock types and the blocking thread primitives
 |Registration-time validation|the response size cap, header and path syntax, the rule limit, the status codes allowed; an invalid route cannot be registered|implemented
 |Sanitized core tests|the core runs under AddressSanitizer, UBSan and ThreadSanitizer with a thread that changes cells and the route table while another matches|run during development; to be added to CI
-|Glue limited to reading|the only Qore-aware code on the path is the glue in the header-reading operations that builds an `HttpFastRequestView` from the parsed header hash; it only reads values and cannot throw into user code|phase 1
+|Glue limited to reading|the only Qore-aware code on the path is the glue in the header-reading operations that builds an `HttpFastRequestView` from the parsed header hash; it only reads values and cannot throw into user code|implemented (`SocketSendAndReadHeaderPollOperation::serveFastRoute()`)
 |Runtime guard in debug builds|a thread-local "in a fast route" scope, asserted against by the interpreter's entry points (calling a method, raising an exception) and by the blocking primitives (Mutex, Queue, Condition waits), exempting the logging call that the controller already makes on the I/O thread (see `async-socket-io.md`)|planned for phase 1
 |Existing controller guards|`SocketPollOperationBase::needsWorkerDispatch()` (an operation that runs Qore code or blocks must say so and runs on a worker) and `SocketSyncPoll::assertNotOnIoThread()` (a synchronous `Socket` call on an I/O thread raises)|already in the controller
 
@@ -190,32 +195,55 @@ test, and be reviewed for boundedness before it is added.
 
 ### Parity with the normal path
 
-The bytes of a fast response are the bytes the normal path would send for the same registered response.  What the fast
-path does not do: authentication, `preprocessRequest`, handler logging, request-id or tracing hooks, per-request
-Program thread-local data.  These are the reason `public` must be explicit.  Observability replaces them: per route
-hit counters and per-reason fallback counters (body, expect, upgrade, close, pipelined, stale slot, no match), exposed
-through `HttpServer` so an operator can see how many requests bypassed the handler chain.
+A fast response is functionally identical to the normal path's response for the same definition: the same status
+line, the same headers (names, the case of the names, and values), the same framing and the same body bytes; the
+headers can be in a different order and the `Date` is the time of the response.  This is tested, not assumed:
+`examples/test/qlib/HttpServer/HttpServerFastRoutesParity.qtest` sends each of 29 response shapes (texts, JSON, HTML,
+binary and UTF-8 bodies, a 60 KB body, 2xx, 3xx with `Location`, 4xx and 5xx with their headers, custom and
+overriding headers, an empty body) to a handler path and to a fast route on the same keep-alive connection and
+compares the raw responses, then checks that the connection is intact.  Building it found the places where the two
+differed, which the fast route now mirrors:
 
-### Qore API (sketch)
+- a handler's `200` response without a body is answered as `204 No Content` (the route registration does the same
+  conversion and removes the body, so that its `Content-Type` and other headers are kept as on the normal path)
+- a `204` response carries `Content-Length: 0`, as the normal path sends it (RFC 9110 section 8.6 says that a server
+  must not send one; the two paths agree so that they cannot be told apart, and the parity test catches a change of
+  either)
+- the `Server` header and the server's configured headers (the `hdr` option) are added to every route response, and
+  a header named in the route replaces the configured one without regard to case
+- a string body is sent as UTF-8 and `;charset=utf-8` is added to a content type that has no charset, as for a handler
+
+What the fast path does not do: authentication, `preprocessRequest`, handler logging, request-id or tracing hooks,
+per-request Program thread-local data.  These are the reason `public` must be explicit.  Observability replaces
+them: per route hit counters and per-reason fallback counters (no route, not HTTP/1.1, body, expect, upgrade,
+connection, pipelined, stale cell, no rule), exposed through `HttpServer::getFastRouteInfo()` so an operator can see
+how many requests bypassed the handler chain.
+
+### Qore API (implemented in phase 1; `FastResponseSlot` is not yet)
 
 ```
 FastCell ready(0, 30s);                       # initial value, maximum age (none if omitted)
-ready.set(1);  ready.touch();  ready.get();
+ready.set(1);  ready.setBool(True);  ready.touch();  ready.get();  ready.isStale();
 
-HttpServer::addFastRoute("/ready", <FastRouteInfo>{
+hs.addFastRoute("/ready", {                   # HttpServer::addFastRoute(string path, hash<auto> info)
     "public": True,
     "rules": (
-        <FastRuleInfo>{"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "{}",
+        {"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "{}",
             "content_type": "application/json"}},
-        <FastRuleInfo>{"cell": ready, "op": "==", "value": 0, "response": {"code": 503, "body": "{}",
+        {"cell": ready, "op": "==", "value": 0, "response": {"code": 503, "body": "{}",
             "content_type": "application/json"}},
     ),
 });                                           # or "response": {...} for a route without rules
-HttpServer::removeFastRoute(string path)
-hash<auto> HttpServer::getFastRouteInfo()     # hits per route, fallbacks by reason
+hs.removeFastRoute("/ready");
+hash<auto> hs.getFastRouteInfo();             # hits per route, fallbacks by reason
 
-FastResponseSlot slot(30s);  slot.set({"code": 200, "body": text, "content_type": "text/plain"});
+HttpFastRoutes routes();                      # the underlying class: routes.addRoute(path, info), removeRoute(path)
+listener_socket.setHttpFastRoutes(routes);    # attaches routes to any listening socket
+
+FastResponseSlot slot(30s);  slot.set({"code": 200, "body": text, "content_type": "text/plain"});   # planned
 ```
+
+(`remove` and `delete` are Qore keywords, so the `HttpFastRoutes` methods are `addRoute()` and `removeRoute()`.)
 
 Registration functions are in the same sandboxing domain as the other `HttpServer` registration calls.
 
@@ -253,6 +281,27 @@ or opt-in as `Socket::setSourceHostLookup()` did for `Socket::accept()`.
 - TLS and plain, and (phase 3) h2 and h3
 - valgrind on the C++ changes; no leaks, no use of a replaced table or slot after the swap
 
+## Measured (phase 1 implementation)
+
+Linux x86_64, Release build, the repo's modules loaded from source, one keep-alive connection, 5000 `GET` requests of a
+trivial JSON response, 3 interleaved repetitions, the same server answering the handler path and the fast route:
+
+|!Path|!Server CPU per request|!Client wall per request
+|handler (normal path)|2.9 - 3.6 ms|1.6 - 1.8 ms
+|fast route|50 - 60 us|36 - 41 us
+
+The fast route's profile has 99.9% of the CPU on a single thread, the async I/O thread: no hand-off remains.  What is
+left is the existing parse of the request header into a hash (`convertHeaderToHash`), memory allocation and the
+system calls of a request; the route code itself (the glue and the matcher) is about 1%.  The measurement spike, which
+answered one fixed route and skipped the glue, measured 10 - 16 us; closing that gap means parsing the request line and
+the few headers that matter without building a hash, which is a later optimization.
+
+A connection that a route keeps busy must not be cut by the timeout of the operation that reads its requests (the idle
+time-to-live plus 30 seconds in the controller, counted from the first poll and covering one request, since a handler
+request gets a new operation).  An operation that answers a request itself and does not complete renews its timeout
+(`SocketPollOperationBase::renewsTimeout()`, forwarded by the delegating wrapper), and
+`HttpServerFastRoutesSoak.qtest` keeps one connection busy for 34 seconds to check it.
+
 ## Performance plan
 
 - a repeatable benchmark next to `examples/test/qore/classes/AsyncIoController/asyncio_bench.qr`: one keep-alive
@@ -267,6 +316,10 @@ or opt-in as `Socket::setSourceHostLookup()` did for `Socket::accept()`.
 
 ## Risks and open questions
 
+- the normal path does not answer the second of two pipelined requests that arrive in one send: the server looks at the
+  socket, not at the buffer that the header read leaves its surplus in, for the next request, so the request waits
+  until more data arrives.  This is independent of fast routes (it happens with none registered); a route does not
+  answer a request when another is already buffered, so it does not make it worse.  Worth fixing separately
 - bypassing the handler chain changes what an operator can rely on (logging, auth, tracing): mitigated by `public`,
   counters and documentation; whether a sampled access log is worth adding is open
 - a response too large for the socket buffer stays in the operation's send phase until the reader drains it; the

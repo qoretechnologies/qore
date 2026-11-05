@@ -356,6 +356,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_HttpClientConnectionManagerBase.qpp
     lib/QC_HttpIdlePollOperationBase.qpp
     lib/QC_HttpKeepAlivePollOperationBase.qpp
+    lib/QC_FastCell.qpp
+    lib/QC_HttpFastRoutes.qpp
     lib/QC_HttpAcceptPollOperationBase.qpp
     lib/QC_Http2PollOperationBase.qpp
     lib/QC_HttpWebSocketPollOperationBase.qpp
@@ -2428,6 +2430,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpIdlePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpKeepAlivePollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FastCell.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpFastRoutes.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2PollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpWebSocketPollOperationBase.cpp\"

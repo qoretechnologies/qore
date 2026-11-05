@@ -55,6 +55,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -18852,6 +18853,13 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
           buf(reinterpret_cast<const char*>(response_data->getPtr())),
           size(response_data->size()),
           idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
+    {
+        // the idle timeout is given as a deadline; a request answered by a fast route moves it on
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
+    }
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -18910,6 +18918,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             // Send complete — free send data and poll state, transition to idle
             poll_state.reset();
             send_data.discard();
+            fast_wire.reset();
             phase = Phase::Idle;
             // Return POLLIN to wait for incoming data
             return getSocketPollInfoHash(xsink, SOCK_POLLIN);
@@ -18996,6 +19005,16 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 return nullptr;
             }
 
+            // a route of the listener may answer the request here, on the I/O thread, without completing the
+            // operation (and so without a callback on a worker thread)
+            {
+                QoreHashNode* fast_info = nullptr;
+                int fast_rc = serveFastRoute(*hdr, fast_info, xsink);
+                if (fast_rc) {
+                    return fast_rc > 0 ? fast_info : nullptr;
+                }
+            }
+
             // Store result for getOutput()
             header_output = new QoreHashNode(autoTypeInfo);
             header_output->setKeyValue("hdr", hdr.release(), xsink);
@@ -19012,6 +19031,96 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
         default:
             return nullptr;
     }
+}
+
+// the value of a header of a parsed request as a string; false if the header is not there
+static bool fast_route_header(const QoreHashNode* hdr, const char* name, std::string& value) {
+    QoreValue v = hdr->getKeyValue(name);
+    if (v.isNothing()) {
+        return false;
+    }
+    QoreStringDataHelper str(v);
+    value = str ? str.c_str() : "";
+    return true;
+}
+
+int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info,
+        ExceptionSink* xsink) {
+    qore_socket_private* sp = sock->priv->socket->priv;
+    std::shared_ptr<HttpFastRoutes> routes = sp->getFastRoutes();
+    if (!routes) {
+        return 0;
+    }
+
+    // this glue only reads the parsed header; the decision is made by the interpreter-free core
+    std::string method, path, version, content_length, connection, tmp;
+    fast_route_header(hdr, "method", method);
+    fast_route_header(hdr, "path", path);
+    fast_route_header(hdr, "http_version", version);
+    HttpFastRequestView view;
+    view.method = method;
+    view.path = path;
+    view.http_version = version;
+    if (fast_route_header(hdr, "content-length", content_length)) {
+        view.content_length = content_length;
+    }
+    if (fast_route_header(hdr, "connection", connection)) {
+        view.connection = connection;
+    }
+    view.has_transfer_encoding = fast_route_header(hdr, "transfer-encoding", tmp);
+    view.has_expect = fast_route_header(hdr, "expect", tmp);
+    view.has_upgrade = fast_route_header(hdr, "upgrade", tmp) || fast_route_header(hdr, "http2-settings", tmp);
+    // bytes of the next request are already buffered (buflen is the number of unread bytes in the buffer)
+    view.pending = sp->buflen > 0;
+
+    int us;
+    int64 epoch_s = q_epoch_us(us);
+    HttpFastFallback why;
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why);
+    if (!wire) {
+        return 0;
+    }
+
+    // the operation does not complete for this request: its timeout, which covers one request, starts again
+    timeout_renewal = true;
+
+    // send the response with this operation's own send phase, then wait for the next request
+    fast_wire = std::move(wire);
+    buf = fast_wire->data();
+    size = fast_wire->size();
+    poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
+    if (*xsink || !poll_state) {
+        fast_wire.reset();
+        phase = Phase::Error;
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return -1;
+    }
+    phase = Phase::Sending;
+    if (idle_ttl_ms > 0) {
+        int us2;
+        int64 now_s = q_epoch_us(us2);
+        idle_timeout_ms = now_s * 1000 + us2 / 1000 + idle_ttl_ms;
+    }
+    int rc = poll_state->continuePoll(xsink);
+    if (*xsink) {
+        fast_wire.reset();
+        phase = Phase::Error;
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return -1;
+    }
+    if (rc) {
+        // the socket did not take it all: the send phase continues when it can
+        info = getSocketPollInfoHash(xsink, rc);
+        return 1;
+    }
+    poll_state.reset();
+    fast_wire.reset();
+    phase = Phase::Idle;
+    info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return 1;
 }
 
 QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {

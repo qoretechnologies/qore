@@ -6340,6 +6340,26 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             ssl_deferred_hashes.insert(sock_hash);
                         }
 
+                        // an operation that serves more than one request without completing renews its timeout,
+                        // which covers one request
+                        if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
+                            bool renew = false;
+                            if (pinfo.spop_base) {
+                                renew = pinfo.spop_base->renewsTimeout();
+                            } else if (pinfo.spop_obj
+                                    && pinfo.spop_obj->getClass()->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+                                SocketPollOperationBase* spop = static_cast<SocketPollOperationBase*>(
+                                    pinfo.spop_obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+                                if (spop) {
+                                    renew = spop->renewsTimeout();
+                                    spop->deref(xsink);
+                                }
+                            }
+                            if (renew) {
+                                pinfo.timeout_date_us = get_epoch_us() + pinfo.timeout_us;
+                            }
+                        }
+
                         // Arm the operation timeout in the heap for Phase 1 Step C
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
                             armTimeoutHeap(t, pinfo);

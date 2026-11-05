@@ -169,16 +169,14 @@ std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
         err = "a response with a body needs a Content-Type header";
         return nullptr;
     }
-    // a response without a body (1xx, 204, 304) must not have a Content-Length header; none of the codes here is
-    // 1xx or 304, and 204 has none
-    std::string suffix = "Connection: Keep-Alive\r\n";
-    if (code != 204) {
-        suffix += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-    } else if (!body.empty()) {
+    if (code == 204 && !body.empty()) {
         err = "a 204 response cannot have a body";
         return nullptr;
     }
-    suffix += "\r\n";
+    // the response of a handler to a request that is not a HEAD request has a Content-Length header, also with the
+    // status 204 (RFC 9110 section 8.6 says that a server must not send one with 204; the handler path does, and a
+    // fast route answers exactly as it does so that the two cannot be told apart)
+    std::string suffix = "Connection: Keep-Alive\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n";
 
     // "Date: " + a 29-character date + the line end
     static constexpr size_t DateLineSize = 6 + 29 + 2;
@@ -232,11 +230,30 @@ std::shared_ptr<const HttpFastRouteSpec> HttpFastRouteSpec::create(std::vector<H
 }
 
 const HttpFastResponse* HttpFastRouteSpec::choose(HttpFastFallback& why) const {
+    // a cell is read once per request, so that rules over the same cell see the same value even if it is set
+    // meanwhile (with "ready == 1" and "ready == 0" as the rules, a change between two reads would hold for neither);
+    // different cells are read one after the other and are not atomic together
+    const HttpFastCell* seen_cell[MaxRules];
+    int64_t seen_value[MaxRules];
+    size_t seen = 0;
     for (const HttpFastRule& r : rules) {
-        int64_t v;
-        if (!r.cell->load(v)) {
-            why = HttpFastFallback::Stale;
-            return nullptr;
+        int64_t v = 0;
+        bool found = false;
+        for (size_t i = 0; i < seen; ++i) {
+            if (seen_cell[i] == r.cell.get()) {
+                v = seen_value[i];
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            if (!r.cell->load(v)) {
+                why = HttpFastFallback::Stale;
+                return nullptr;
+            }
+            seen_cell[seen] = r.cell.get();
+            seen_value[seen] = v;
+            ++seen;
         }
         bool holds;
         switch (r.op) {

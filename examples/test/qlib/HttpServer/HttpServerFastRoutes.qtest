@@ -1,0 +1,520 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerFastRoutesTest
+
+#! the handler: answers with "handler" or, for /normal, with the body that /fast has
+class FastRouteTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests that reached the handler
+        static Counter calls = new Counter();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        FastRouteTestHandler::calls.inc();
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": cx.raw_path == "/normal" ? "same" : "handler",
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+}
+
+#! Tests the fast routes of the HTTP server: requests answered on the async I/O thread without calling a handler
+/** A client keeps one connection open and sends requests on it.  The first request on a connection always takes the
+    normal path (the handler answers "handler"); the later ones that qualify are answered by the route.  See
+    design/http-server-fast-routes.md.
+*/
+class HttpServerFastRoutesTest inherits QUnit::Test {
+    public {
+        #! the time allowed for a response
+        const Timeout = 30s;
+    }
+
+    private {
+        HttpServer hs;
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRoutesTest", "1.0", \ARGV) {
+        addTestCase("FastCell", \testFastCell());
+        addTestCase("route description errors", \testRouteErrors());
+        addTestCase("a route answers the later requests of a connection", \testBasic());
+        addTestCase("the response has the headers of the normal path", \testParity());
+        addTestCase("cell rules and otherwise", \testCells());
+        addTestCase("a stale cell takes the normal path", \testStale());
+        addTestCase("requests that do not qualify take the normal path", \testFallbacks());
+        addTestCase("pipelined requests", \testPipelined());
+        addTestCase("replace and remove a route", \testReplaceRemove());
+        addTestCase("a listener added later has the routes", \testLateListener());
+        addTestCase("Socket::setHttpFastRoutes()", \testSocketRoutes());
+        addTestCase("routes and cells change while a client sends requests", \testConcurrentChanges());
+        addTestCase("counters", \testCounters());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        hs = new HttpServer();
+        hs.setDefaultHandler("handler", new FastRouteTestHandler());
+        port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        hs.stop();
+        delete hs;
+    }
+
+    #! a response: the code, the body and the headers
+    private hash<auto> request(Socket c, string method, string path, *hash<auto> hdr, string body = "",
+            string version = "1.1") {
+        string req = sprintf("%s %s HTTP/%s\r\nHost: x\r\n", method, path, version);
+        foreach hash<auto> h in (hdr.pairIterator()) {
+            req += sprintf("%s: %s\r\n", h.key, h.value);
+        }
+        req += "\r\n" + body;
+        c.send(req);
+        return readResponse(c, method == "HEAD");
+    }
+
+    private hash<auto> readResponse(Socket c, bool head = False) {
+        hash<auto> h = c.readHTTPHeader(Timeout);
+        int len = (h."content-length" ?? 0).toInt();
+        string rbody = len && !head ? c.recv(len, Timeout) : "";
+        return {"code": h.status_code, "body": rbody, "hdr": h};
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        return c;
+    }
+
+    #! the first request of a connection takes the normal path
+    private Socket warmUp() {
+        Socket c = connect();
+        assertEq("handler", request(c, "GET", "/warm-up").body);
+        return c;
+    }
+
+    private static hash<auto> textResponse(int code, string body) {
+        return {"code": code, "body": body, "content_type": "text/plain"};
+    }
+
+    testFastCell() {
+        FastCell cell();
+        assertEq(0, cell.get());
+        assertFalse(cell.getBool());
+        assertFalse(cell.isStale());
+        assertEq(0, cell.getMaxAge());
+        cell.set(5);
+        assertEq(5, cell.get());
+        assertTrue(cell.getBool());
+        cell.setBool(False);
+        assertEq(0, cell.get());
+        cell.setBool(True);
+        assertEq(1, cell.get());
+
+        FastCell c2(7, 60s);
+        assertEq(7, c2.get());
+        assertEq(60000, c2.getMaxAge());
+        assertFalse(c2.isStale());
+        FastCell c3 = c2.copy();
+        c2.set(8);
+        assertEq(7, c3.get(), "a copy is independent");
+        assertEq(60000, c3.getMaxAge());
+        assertThrows("FASTCELL-ERROR", sub () { new FastCell(0, -1); });
+
+        # a cell with a short maximum age becomes stale, and touch() makes it current again; a 1 ms age is exceeded by
+        # waiting for the cell to age past it
+        FastCell shortlived(1, 1ms);
+        while (!shortlived.isStale()) {
+            usleep(1ms);
+        }
+        assertTrue(shortlived.isStale());
+        assertEq(1, shortlived.get(), "the value is not changed by staleness");
+        shortlived.set(2);
+        assertFalse(shortlived.isStale() && shortlived.getAge() < 1);
+    }
+
+    testRouteErrors() {
+        HttpFastRoutes r();
+        hash<auto> ok = textResponse(200, "ok");
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("/a", {"response": ok}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("/a", {"public": False, "response": ok}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("/a", {"public": True}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("a", {"public": True, "response": ok}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("/a?x", {"public": True, "response": ok}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("/a b", {"public": True, "response": ok}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": ok, "otherwise": ok});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { r.addRoute("/a", {"public": True, "bogus": 1}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": {"code": 299, "body": ""}});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": {"code": 200, "body": "x"}});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": {"body": "x", "content_type": "text/plain",
+                "hdr": {"Content-Length": "3"}}});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": {"body": "x", "content_type": "text/plain",
+                "hdr": {"X-Evil": "a\r\nInjected: 1"}}});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": {"body": "x", "content_type": "text/plain",
+                "hdr": {"Content-Type": "text/html"}}});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "response": {"body": strmul("x", 70000), "content_type": "text/plain"}});
+        });
+
+        FastCell cell();
+        hash<auto> rule = {"cell": cell, "op": "==", "value": 1, "response": ok};
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "rules": map rule, xrange(9)});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "rules": (rule + {"op": "~="},)});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "rules": (rule + {"cell": "not a cell"},)});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "rules": (rule - "value",)});
+        });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            r.addRoute("/a", {"public": True, "rules": (rule + {"extra": 1},)});
+        });
+        assertEq(0, r.size(), "no invalid route was added");
+
+        # valid forms
+        r.addRoute("/a", {"public": True, "response": ok});
+        r.addRoute("/b", {"public": True, "rules": (rule,)});
+        r.addRoute("/c", {"public": True, "rules": map rule, xrange(8)});
+        r.addRoute("/d", {"public": True, "response": {"code": 204}});
+        r.addRoute("/e", {"public": True, "response": {"code": 200, "body": <01020304>,
+            "content_type": "application/octet-stream"}});
+        assertEq(5, r.size());
+        assertTrue(r.removeRoute("/a"));
+        assertFalse(r.removeRoute("/a"));
+        assertEq(4, r.size());
+    }
+
+    testBasic() {
+        hs.addFastRoute("/ping", {"public": True, "response": textResponse(200, "pong")});
+        on_exit hs.removeFastRoute("/ping");
+
+        Socket c = connect();
+        assertEq("handler", request(c, "GET", "/ping").body, "the first request takes the normal path");
+        int calls = FastRouteTestHandler::calls.getCount();
+        for (int i = 0; i < 20; ++i) {
+            hash<auto> r = request(c, "GET", "/ping");
+            assertEq(200, r.code);
+            assertEq("pong", r.body);
+        }
+        assertEq(calls, FastRouteTestHandler::calls.getCount(), "the handler was not called for the requests the route answered");
+        # the connection still works for a path without a route
+        assertEq("handler", request(c, "GET", "/other").body);
+        assertEq("pong", request(c, "GET", "/ping").body);
+        # the query string is not part of the route
+        assertEq("pong", request(c, "GET", "/ping?a=1&b=2").body);
+        # an exact match only
+        assertEq("handler", request(c, "GET", "/ping/").body);
+        assertEq("handler", request(c, "GET", "/PING").body);
+        assertEq("pong", request(c, "GET", "/ping", {"Connection": "keep-alive"}).body);
+    }
+
+    testParity() {
+        hs.addFastRoute("/fast", {"public": True, "response": textResponse(200, "same")});
+        on_exit hs.removeFastRoute("/fast");
+
+        Socket c = warmUp();
+        hash<auto> normal = request(c, "GET", "/normal");
+        hash<auto> fast = request(c, "GET", "/fast");
+        assertEq("same", normal.body);
+        assertEq("same", fast.body);
+        assertEq(normal.code, fast.code);
+        # the headers are the same, apart from the date: names and values
+        hash<auto> nh = normal.hdr - ("date",);
+        hash<auto> fh = fast.hdr - ("date",);
+        assertEq(sort(keys nh), sort(keys fh), "the same header names");
+        foreach string name in (keys nh) {
+            assertEq(nh{name}, fh{name}, "header " + name);
+        }
+        assertTrue(exists fast.hdr.date, "the response has a Date header");
+        assertEq("Keep-Alive", fast.hdr.connection);
+        assertTrue(fast.hdr."x-powered-by" =~ /^Qore\//, "the server's headers are added");
+        assertTrue(fast.hdr.server =~ /Qore-HTTP-Server/, "the Server header is added");
+        assertEq("text/plain;charset=utf-8", fast.hdr."content-type");
+    }
+
+    testCells() {
+        FastCell ready(1);
+        hs.addFastRoute("/ready", {
+            "public": True,
+            "rules": (
+                {"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},
+                {"cell": ready, "op": "==", "value": 0, "response": textResponse(503, "starting")},
+            ),
+            "otherwise": textResponse(500, "unexpected"),
+        });
+        on_exit hs.removeFastRoute("/ready");
+        Socket c = warmUp();
+        int calls = FastRouteTestHandler::calls.getCount();
+        hash<auto> r = request(c, "GET", "/ready");
+        assertEq((200, "ready"), (r.code, r.body));
+        ready.set(0);
+        r = request(c, "GET", "/ready");
+        assertEq((503, "starting"), (r.code, r.body));
+        ready.setBool(True);
+        r = request(c, "GET", "/ready");
+        assertEq((200, "ready"), (r.code, r.body));
+        ready.set(42);
+        r = request(c, "GET", "/ready");
+        assertEq((500, "unexpected"), (r.code, r.body), "otherwise");
+        assertEq(calls, FastRouteTestHandler::calls.getCount(), "no request reached the handler");
+
+        # every comparison operator, with the cell at 5 and the operand 5
+        FastCell five(5);
+        hash<string, bool> expected = {"==": True, "!=": False, "<": False, "<=": True, ">": False, ">=": True};
+        foreach hash<auto> e in (expected.pairIterator()) {
+            string path = "/op" + (map ($1 =~ /\w/ ? $1 : sprintf("%d", ord($1))), e.key.split("")).join("");
+            hs.addFastRoute(path, {
+                "public": True,
+                "rules": ({"cell": five, "op": e.key, "value": 5, "response": textResponse(200, "holds")},),
+                "otherwise": textResponse(200, "does not hold"),
+            });
+            on_exit hs.removeFastRoute(path);
+            assertEq(e.value ? "holds" : "does not hold", request(c, "GET", path).body, "operator " + e.key);
+        }
+
+        # the first rule that holds wins, with several cells
+        FastCell draining(0);
+        hs.addFastRoute("/two", {
+            "public": True,
+            "rules": (
+                {"cell": draining, "op": "==", "value": 1, "response": textResponse(503, "draining")},
+                {"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},
+            ),
+        });
+        on_exit hs.removeFastRoute("/two");
+        ready.set(1);
+        assertEq("ready", request(c, "GET", "/two").body);
+        draining.set(1);
+        assertEq("draining", request(c, "GET", "/two").body);
+        draining.set(0);
+        ready.set(0);
+        # no rule holds and there is no otherwise response: the normal path answers
+        assertEq("handler", request(c, "GET", "/two").body);
+        assertEq(1, hs.getFastRouteInfo().fallbacks.no_rule);
+    }
+
+    testStale() {
+        FastCell ready(1, 100ms);
+        hs.addFastRoute("/state", {
+            "public": True,
+            "rules": ({"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},),
+        });
+        on_exit hs.removeFastRoute("/state");
+        Socket c = warmUp();
+        # the cell is current as long as it is touched
+        ready.touch();
+        assertEq("ready", request(c, "GET", "/state").body);
+        # wait until the value is older than its maximum age: a stale cell is never read
+        while (!ready.isStale()) {
+            usleep(10ms);
+        }
+        assertEq("handler", request(c, "GET", "/state").body, "a stale cell takes the normal path");
+        assertTrue(hs.getFastRouteInfo().fallbacks.stale > 0);
+        ready.touch();
+        assertEq("ready", request(c, "GET", "/state").body, "touch() makes the cell current again");
+    }
+
+    testFallbacks() {
+        hs.addFastRoute("/fb", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/fb");
+        Socket c = warmUp();
+        assertEq("fast", request(c, "GET", "/fb").body);
+
+        # a method other than GET, a body, Expect and Upgrade headers: the normal path answers
+        assertEq("handler", request(c, "POST", "/fb", {"Content-Length": "3"}, "abc").body, "POST (and its body)");
+        assertEq("handler", request(c, "GET", "/fb", {"Content-Length": "3"}, "abc").body, "GET with a body");
+        assertEq("fast", request(c, "GET", "/fb", {"Content-Length": "0"}).body, "an empty body is no body");
+        assertEq("handler", request(c, "HEAD", "/fb").body == "" ? "handler" : "bad", "HEAD");
+        assertEq("handler", request(c, "OPTIONS", "/fb").body);
+        assertEq("fast", request(c, "GET", "/fb").body, "the connection is still served by the route");
+
+        hash<auto> fb = hs.getFastRouteInfo().fallbacks;
+        assertTrue(fb.no_route >= 3, "POST, HEAD and OPTIONS had no route");
+        assertTrue(fb.body >= 1, "the body");
+
+        # Connection: close takes the normal path, which closes the connection after the response
+        Socket c2 = warmUp();
+        assertEq("handler", request(c2, "GET", "/fb", {"Connection": "close"}).body);
+        assertThrows("SOCKET-CLOSED", sub () { c2.recv(1, Timeout); });
+        assertTrue(hs.getFastRouteInfo().fallbacks.connection >= 1);
+
+        # an HTTP/1.0 request takes the normal path
+        Socket c3 = connect();
+        assertEq("handler", request(c3, "GET", "/fb", NOTHING, "", "1.0").body);
+        assertTrue(hs.getFastRouteInfo().fallbacks.not_http_1_1 >= 0);
+
+        # Expect: the normal path answers
+        Socket c4 = warmUp();
+        hash<auto> er = request(c4, "GET", "/fb", {"Expect": "100-continue"});
+        if (er.code == 100) {
+            # the server answers an Expect header with an interim response, then the final one
+            er = readResponse(c4);
+        }
+        assertEq("handler", er.body);
+    }
+
+    testPipelined() {
+        hs.addFastRoute("/pipe", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/pipe");
+        Socket c = warmUp();
+        # two requests in one send: the second is already buffered when the first is read, so the route does not
+        # answer the first; it takes the normal path.  (The normal path itself does not answer the second request of a
+        # pipelined pair today - the server only looks at the socket, not at its buffer, for the next request - so only
+        # the first answer is read.)
+        string one = "GET /pipe HTTP/1.1\r\nHost: x\r\n\r\n";
+        int before = hs.getFastRouteInfo().fallbacks.pipelined;
+        c.send(one + one);
+        hash<auto> r1 = readResponse(c);
+        assertEq(200, r1.code);
+        assertEq("handler", r1.body, "a request followed by another already received takes the normal path");
+        assertEq(before + 1, hs.getFastRouteInfo().fallbacks.pipelined);
+    }
+
+    testReplaceRemove() {
+        Socket c = warmUp();
+        hs.addFastRoute("/rr", {"public": True, "response": textResponse(200, "one")});
+        assertEq("one", request(c, "GET", "/rr").body, "a route added after the connection was opened applies");
+        hs.addFastRoute("/rr", {"public": True, "response": textResponse(200, "two")});
+        assertEq("two", request(c, "GET", "/rr").body, "replaced");
+        assertTrue(hs.removeFastRoute("/rr"));
+        assertFalse(hs.removeFastRoute("/rr"));
+        assertEq("handler", request(c, "GET", "/rr").body, "removed");
+        hs.addFastRoute("/rr", {"public": True, "response": textResponse(200, "three")});
+        assertEq("three", request(c, "GET", "/rr").body, "added again");
+        hs.removeFastRoute("/rr");
+    }
+
+    testLateListener() {
+        hs.addFastRoute("/late", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/late");
+        int port2 = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket c();
+        c.connect("127.0.0.1:" + port2);
+        assertEq("handler", request(c, "GET", "/late").body);
+        assertEq("fast", request(c, "GET", "/late").body, "a listener added after the route has it");
+    }
+
+    testSocketRoutes() {
+        # a server of its own, whose listener gets the routes with Socket::setHttpFastRoutes()
+        HttpServer hs2();
+        on_exit hs2.stop();
+        hs2.setDefaultHandler("handler", new FastRouteTestHandler());
+        HttpFastRoutes routes();
+        routes.addRoute("/sock", {"public": True, "response": textResponse(200, "fast")});
+        assertEq(1, routes.size());
+        assertEq({"/sock": 0}, routes.getInfo().routes);
+        hash<auto> li = hs2.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
+        # the listener is a Socket of the server; find it through a connection that the routes are set on
+        Socket c();
+        c.connect("127.0.0.1:" + li.port);
+        assertEq("handler", request(c, "GET", "/sock").body);
+        assertEq("handler", request(c, "GET", "/sock").body, "no routes are attached to this listener");
+        assertThrows("HTTPFASTROUTES-COPY-ERROR", sub () { routes.copy(); });
+
+        # attach to a plain listening socket
+        Socket l();
+        l.bindINET("127.0.0.1", 0);
+        l.listen();
+        l.setHttpFastRoutes(routes);
+        l.setHttpFastRoutes(NOTHING);
+        l.setHttpFastRoutes(routes);
+    }
+
+    testConcurrentChanges() {
+        FastCell ready(1);
+        hs.addFastRoute("/cc", {
+            "public": True,
+            "rules": (
+                {"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},
+                {"cell": ready, "op": "==", "value": 0, "response": textResponse(503, "starting")},
+            ),
+        });
+        on_exit hs.removeFastRoute("/cc");
+
+        Queue errors();
+        # a thread changes the cell (and, now and then, replaces the route) once for every request that the client
+        # sends, at the moment that the client sends it, so that each change races the processing of a request; it
+        # waits for the client's token, so it cannot starve the server threads
+        Queue tokens();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            while (True) {
+                int i = tokens.get();
+                if (i < 0) {
+                    break;
+                }
+                ready.set(i & 1);
+                if (!(i % 10)) {
+                    hs.addFastRoute("/cc", {
+                        "public": True,
+                        "rules": (
+                            {"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},
+                            {"cell": ready, "op": "==", "value": 0, "response": textResponse(503, "starting")},
+                        ),
+                    });
+                }
+            }
+        }();
+
+        Socket c = warmUp();
+        int fast = 0;
+        for (int i = 0; i < 400; ++i) {
+            tokens.push(i);
+            hash<auto> r = request(c, "GET", "/cc");
+            if (r.body == "ready" && r.code == 200) {
+                ++fast;
+            } else if (r.body == "starting" && r.code == 503) {
+                ++fast;
+            } else {
+                errors.push(sprintf("unexpected response %y", r));
+            }
+        }
+        tokens.push(-1);
+        done.waitForZero(Timeout);
+        assertEq(0, errors.size(), "no torn or unexpected response: " + (errors.size() ? errors.get() : ""));
+        assertEq(400, fast);
+    }
+
+    testCounters() {
+        hs.addFastRoute("/count", {"public": True, "response": textResponse(200, "x")});
+        on_exit hs.removeFastRoute("/count");
+        Socket c = warmUp();
+        int before = hs.getFastRouteInfo().routes{"/count"};
+        for (int i = 0; i < 7; ++i) {
+            request(c, "GET", "/count");
+        }
+        assertEq(before + 7, hs.getFastRouteInfo().routes{"/count"});
+        assertEq(("no_route", "not_http_1_1", "body", "expect", "upgrade", "connection", "pipelined", "stale",
+            "no_rule"), keys hs.getFastRouteInfo().fallbacks);
+    }
+}

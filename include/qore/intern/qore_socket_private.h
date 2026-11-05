@@ -125,6 +125,7 @@ static constexpr int SOCK_POLLTIMER = (1 << 3);
 
 struct qore_socket_private;
 class QoreFuture;
+class HttpFastRoutes;
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
@@ -1710,6 +1711,28 @@ struct qore_socket_private : public QoreReferenceCounter {
         @since %Qore 3.0
     */
     std::string async_io_route_key;
+
+    //! The HTTP fast routes of the socket; the sockets accepted from a listener share its routes
+    /** See design/http-server-fast-routes.md.  Set on a listening socket by Socket::setHttpFastRoutes(); the routes
+        change as a whole, so a change reaches the connections that are already open.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<HttpFastRoutes> getFastRoutes() const {
+        std::lock_guard<std::mutex> lg(fast_routes_lock);
+        return fast_routes;
+    }
+
+    DLLLOCAL void setFastRoutes(std::shared_ptr<HttpFastRoutes> routes) {
+        std::lock_guard<std::mutex> lg(fast_routes_lock);
+        fast_routes = std::move(routes);
+    }
+
+private:
+    mutable std::mutex fast_routes_lock;
+    std::shared_ptr<HttpFastRoutes> fast_routes;
+
+public:
 
     //! Directional ownership for controller-backed raw socket I/O sections.
     /** Bare QoreSocket instances do not have the QoreSocketObject mutex and

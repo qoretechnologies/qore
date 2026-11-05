@@ -39,6 +39,7 @@
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/QC_HttpFastRoutes.h"
 #include "qore/QoreSSLCertificate.h"
 #include "qore/QoreSSLPrivateKey.h"
 
@@ -6661,6 +6662,26 @@ bool b = sock.getSourceHostLookup();
 */
 bool Socket::getSourceHostLookup() [flags=RET_VALUE_ONLY] {
     return my_socket_priv::getPriv(*s)->source_host_lookup.load();
+}
+
+//! Sets the HTTP fast routes of a listening socket
+/** The connections accepted from the socket share the routes, so a change of the routes reaches the connections that
+    are already open.  The routes are answered by the async I/O thread for the qualifying requests; see
+    @ref Qore::HttpFastRoutes "HttpFastRoutes".
+
+    @param routes the routes; @ref nothing removes the socket's routes
+
+    @par Example:
+    @code{.py}
+listener.setHttpFastRoutes(routes);
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttpFastRoutes(*HttpFastRoutes[QoreHttpFastRoutes] routes) {
+    QoreHttpFastRoutes* fr = routes ? *routes : nullptr;
+    qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->setFastRoutes(
+        fr ? fr->r : std::shared_ptr<HttpFastRoutes>());
 }
 
 //! Returns the \c TCP_NODELAY setting for the socket
