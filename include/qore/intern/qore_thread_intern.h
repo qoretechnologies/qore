@@ -1473,12 +1473,24 @@ protected:
     bool restore;
 };
 
+// raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
+DLLLOCAL int check_stack(ExceptionSink* xsink);
+
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
             : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
         //printd(5, "RuntimeReferenceHelperBase::RuntimeReferenceHelperBase() this: %p vexp: %p %s %d\n", this,
         //  r.vexp, get_type_name(r.vexp), get_node_type(r.vexp));
+        // a reference is resolved by evaluating its lvalue expression, which can be a reference itself; each step of a
+        // chain of references recurses, so the stack is checked here, as a recursion that passes on a reference makes
+        // the chain as long as the recursion is deep, and resolving it at the deepest call overflowed the stack instead
+        // of raising STACK-LIMIT-EXCEEDED where the frames are large
+        if (check_stack(n_xsink)) {
+            ref = nullptr;
+            valid = false;
+            return;
+        }
         if (thread_ref_set(&r)) {
             ref = nullptr;
             n_xsink->raiseException("CIRCULAR-REFERENCE-ERROR", "a circular lvalue reference was detected");

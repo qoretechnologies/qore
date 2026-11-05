@@ -1516,6 +1516,12 @@ void LValueHelper::setObjectContext(qore_object_private* obj) {
 }
 
 int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
+    // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
+    // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
+    // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
+    if (check_stack(vl.xsink)) {
+        return -1;
+    }
     const lvalue_ref* r = lvalue_ref::get(ref);
     if (!lvid_set) {
         lvid_set = new lvid_set_t;
@@ -1530,6 +1536,12 @@ int LValueHelper::doLValue(const ReferenceNode* ref, bool for_remove) {
 }
 
 int LValueHelper::doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove) {
+    // each reference in a chain of references is resolved by a recursion here, so the stack is checked for each one:
+    // a recursion that passes on a reference makes the chain as long as the recursion is deep, and resolving it at
+    // the deepest call overflowed the stack instead of raising STACK-LIMIT-EXCEEDED where the frames are large
+    if (check_stack(vl.xsink)) {
+        return -1;
+    }
     const lvalue_ref* r = lvalue_ref::get(ref);
     if (!lvid_set) {
         lvid_set = new lvid_set_t;

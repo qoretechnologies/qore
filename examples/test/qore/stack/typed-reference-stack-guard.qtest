@@ -182,7 +182,7 @@ hash<string, code> cases = {
 };
 foreach hash<auto> c in (cases.pairIterator()) {
     # the stack check that fails depends on what the last frame needs, so more than one stack size is used
-    foreach int size in ((256, 320, 384, 448)) {
+    foreach int size in ((256, 320, 384, 448, 512, 640)) {
         printf(\"%s (%d): %s\\n\", c.key, size, on_stack(size * 1024, c.value));
     }
 }
@@ -252,7 +252,7 @@ printf(\"DONE\\n\");
         assertRegex("EXIT=0\n", out, label + ": exit status");
         list<string> lines = out.split("\n");
         foreach string name in (StackCases) {
-            foreach int size in ((256, 320, 384, 448)) {
+            foreach int size in ((256, 320, 384, 448, 512, 640)) {
                 string prefix = sprintf("%s (%d): ", name, size);
                 list<string> found = select lines, $1.equalPartial(prefix);
                 assertEq((prefix + "STACK-LIMIT-EXCEEDED",), found, label + ": " + prefix);
