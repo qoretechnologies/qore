@@ -118,6 +118,41 @@ std::string format_http_date(int64_t epoch_s) {
 
 } // anonymous namespace
 
+std::shared_ptr<const HttpFastExtraHeaders> HttpFastExtraHeaders::create(
+        const std::vector<std::pair<std::string, std::string>>& headers, std::string& err) {
+    if (headers.size() > MaxHeaders) {
+        err = "a listener has at most " + std::to_string(MaxHeaders) + " extra headers";
+        return nullptr;
+    }
+    for (const auto& [name, value] : headers) {
+        if (name.empty()) {
+            err = "a header name is empty";
+            return nullptr;
+        }
+        for (unsigned char ch : name) {
+            if (!is_token_char(ch)) {
+                err = "the header name '" + name + "' is not valid";
+                return nullptr;
+            }
+        }
+        if (iequals(name, "content-length") || iequals(name, "transfer-encoding") || iequals(name, "connection")
+                || iequals(name, "date") || iequals(name, "upgrade") || iequals(name, "keep-alive")) {
+            err = "the header '" + name + "' is set by the server and cannot be given";
+            return nullptr;
+        }
+        for (unsigned char ch : value) {
+            if (ch == '\r' || ch == '\n' || ch == '\0') {
+                err = "the value of the header '" + name + "' has a control character";
+                return nullptr;
+            }
+        }
+    }
+    // the constructor is private
+    std::shared_ptr<HttpFastExtraHeaders> rv(new HttpFastExtraHeaders);
+    rv->headers = headers;
+    return rv;
+}
+
 std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
         const std::vector<std::pair<std::string, std::string>>& headers, const std::string& body, std::string& err) {
     const char* reason = nullptr;
@@ -323,10 +358,26 @@ std::shared_ptr<const HttpFastResponse> HttpFastRouteSpec::choose(HttpFastFallba
     return nullptr;
 }
 
-std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(int64_t epoch_s) const {
+std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(int64_t epoch_s,
+        const HttpFastExtraHeaders* extra) const {
     std::vector<std::pair<std::string, std::string>> rv;
-    rv.reserve(headers.size() + 2);
+    rv.reserve(headers.size() + 2 + (extra ? extra->getHeaders().size() : 0));
     rv = headers;
+    if (extra) {
+        // a header that the route has replaces the listener's
+        for (const auto& h : extra->getHeaders()) {
+            bool found = false;
+            for (const auto& r : headers) {
+                if (iequals(r.first, h.first.c_str())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                rv.push_back(h);
+            }
+        }
+    }
     rv.emplace_back("date", format_http_date(epoch_s));
     // as the handler path sends them over HTTP/2: a Content-Length when there is a body
     if (!body.empty()) {
@@ -335,14 +386,23 @@ std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(
     return rv;
 }
 
-std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close) const {
-    const size_t i = close ? 1 : 0;
+std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close,
+        const std::shared_ptr<const HttpFastExtraHeaders>& extra) const {
     std::lock_guard<std::mutex> lg(cache_lock);
-    if (cache[i] && cache_second[i] == epoch_s) {
-        return cache[i];
+    // the variant: a handful at most (a listener has one set of extra headers), found by identity
+    WireEntry* entry = nullptr;
+    for (WireEntry& e : wires) {
+        if (e.close == close && e.extra == extra) {
+            if (e.second == epoch_s) {
+                return e.wire;
+            }
+            entry = &e;
+            break;
+        }
     }
+
     auto wire = std::make_shared<std::string>();
-    wire->reserve(head_size + body.size());
+    wire->reserve(head_size + body.size() + (extra ? 64 : 0));
     *wire += head_prefix;
     *wire += "Date: ";
     *wire += format_http_date(epoch_s);
@@ -350,11 +410,41 @@ std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bo
     // as the handler path sends them: "Keep-Alive" for a request that keeps the connection, "close" for one that
     // closes it
     *wire += close ? "Connection: close\r\n" : "Connection: Keep-Alive\r\n";
+    if (extra) {
+        // the headers of the listener, except those that the route has itself
+        for (const auto& h : extra->getHeaders()) {
+            bool found = false;
+            for (const auto& r : headers) {
+                if (iequals(r.first, h.first.c_str())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                *wire += h.first;
+                *wire += ": ";
+                *wire += h.second;
+                *wire += "\r\n";
+            }
+        }
+    }
     *wire += head_suffix;
     *wire += body;
-    cache[i] = std::move(wire);
-    cache_second[i] = epoch_s;
-    return cache[i];
+
+    if (!entry) {
+        if (wires.size() < MaxWireEntries) {
+            wires.emplace_back();
+            entry = &wires.back();
+        } else {
+            // more variants than are cached: the oldest entry is replaced
+            entry = &wires[wire_next++ % MaxWireEntries];
+        }
+        entry->extra = extra;
+        entry->close = close;
+    }
+    entry->second = epoch_s;
+    entry->wire = std::move(wire);
+    return entry->wire;
 }
 
 std::shared_ptr<const HttpFastRoutes::table_t> HttpFastRoutes::snapshot() const {
@@ -497,12 +587,13 @@ std::shared_ptr<const HttpFastResponse> HttpFastRoutes::select(const HttpFastReq
 }
 
 std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestView& req, int64_t epoch_s,
-        HttpFastFallback& fallback, bool* close_after) {
+        HttpFastFallback& fallback, bool* close_after,
+        const std::shared_ptr<const HttpFastExtraHeaders>& extra) {
     std::shared_ptr<const HttpFastResponse> response = select(req, fallback, close_after, false);
     if (!response) {
         return nullptr;
     }
-    return response->getWire(epoch_s, close_after && *close_after);
+    return response->getWire(epoch_s, close_after && *close_after, extra);
 }
 
 std::shared_ptr<const HttpFastResponse> HttpFastRoutes::matchH2(const HttpFastRequestView& req,

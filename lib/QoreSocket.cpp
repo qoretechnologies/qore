@@ -19076,7 +19076,12 @@ static bool fast_route_header(const QoreHashNode* hdr, const char* name, std::st
 int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info,
         ExceptionSink* xsink) {
     qore_socket_private* sp = sock->priv->socket->priv;
-    std::shared_ptr<HttpFastRoutes> routes = sp->getFastRoutes();
+    std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
+    if (!fast_ctx) {
+        return 0;
+    }
+    HttpFastContext::Snapshot fast = fast_ctx->get();
+    std::shared_ptr<HttpFastRoutes>& routes = fast.routes;
     if (!routes) {
         return 0;
     }
@@ -19111,7 +19116,7 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
     int64 epoch_s = q_epoch_us(us);
     HttpFastFallback why;
     bool close_after = false;
-    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after);
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after, fast.extra);
     if (!wire) {
         return 0;
     }
@@ -19122,7 +19127,12 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
 int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t size, QoreHashNode*& info,
         ExceptionSink* xsink) {
     qore_socket_private* sp = sock->priv->socket->priv;
-    std::shared_ptr<HttpFastRoutes> routes = sp->getFastRoutes();
+    std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
+    if (!fast_ctx) {
+        return 0;
+    }
+    HttpFastContext::Snapshot fast = fast_ctx->get();
+    std::shared_ptr<HttpFastRoutes>& routes = fast.routes;
     if (!routes) {
         return 0;
     }
@@ -19142,7 +19152,7 @@ int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t 
     int64 epoch_s = q_epoch_us(us);
     HttpFastFallback why;
     bool close_after = false;
-    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after);
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after, fast.extra);
     if (!wire) {
         // the request was parsed and counted: it takes the normal path without being matched again
         fast_decided = true;

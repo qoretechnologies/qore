@@ -4648,8 +4648,9 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
     dst->async_io_route_key = getIoIdentityHash();
-    // the connections accepted from a listener share its HTTP fast routes
-    dst->setFastRoutes(src->getFastRoutes());
+    // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
+    // reaches the connections that are already open
+    dst->setFastContext(src->getOrCreateFastContext());
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {

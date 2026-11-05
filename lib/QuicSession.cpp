@@ -1109,7 +1109,7 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     is_server_ = true;
     dispatcher_ = dispatcher;
     if (sock) {
-        fast_routes_ = sock->getFastRoutes();
+        fast_ctx_ = sock->getOrCreateFastContext();
     }
 
     // Store addresses for path construction
@@ -3434,7 +3434,11 @@ void QuicSession::takeResponseHeaderEvents(const std::unordered_set<int64_t>& st
 }
 
 bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
-    if (!fast_routes_) {
+    if (!fast_ctx_) {
+        return false;
+    }
+    HttpFastContext::Snapshot fast = fast_ctx_->get();
+    if (!fast.routes) {
         return false;
     }
 
@@ -3467,7 +3471,7 @@ bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
     view.has_upgrade = find("upgrade") != nullptr || find("http2-settings") != nullptr;
 
     HttpFastFallback why;
-    std::shared_ptr<const HttpFastResponse> response = fast_routes_->matchH2(view, why);
+    std::shared_ptr<const HttpFastResponse> response = fast.routes->matchH2(view, why);
     if (!response) {
         return false;
     }
@@ -3476,7 +3480,7 @@ bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
     int64 epoch_s = q_epoch_us(us);
     const std::string& body = response->getBody();
     ExceptionSink xs;
-    if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s), body.data(),
+    if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s, fast.extra.get()), body.data(),
             body.size(), &xs) || xs) {
         // the stream could not be answered here: the normal path takes it (the exception is dropped)
         xs.clear();

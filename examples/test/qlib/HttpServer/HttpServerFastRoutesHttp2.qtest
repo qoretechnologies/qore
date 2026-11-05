@@ -87,10 +87,9 @@ class HttpServerFastRoutesHttp2Test inherits QUnit::Test {
         return {"code": code, "body": body, "content_type": "text/plain"};
     }
 
-    #! the response headers without those that differ by nature: the date, and the Alt-Svc header that the listener
-    #! adds to the handler's responses (a fast route is not per listener)
+    #! the response headers without the date, which differs by nature
     private static hash<auto> stable(hash<auto> hdr) {
-        return hdr - ("date", "alt-svc");
+        return hdr - ("date",);
     }
 
     testBasic() {
@@ -141,6 +140,8 @@ class HttpServerFastRoutesHttp2Test inherits QUnit::Test {
         foreach string name in (keys stable(normal.headers)) {
             assertEq(normal.headers{name}, stable(fast.headers){name}, "header " + name);
         }
+        assertTrue(exists normal.headers."alt-svc", "the listener advertises HTTP/3 to the handler's responses");
+        assertEq(normal.headers."alt-svc", fast.headers."alt-svc", "and to the responses of a route");
         assertTrue(exists fast.headers.date, "the response has a date header");
         assertTrue(fast.headers."x-powered-by" =~ /^Qore\//, "the server's headers are added");
 

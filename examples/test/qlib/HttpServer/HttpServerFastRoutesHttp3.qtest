@@ -83,7 +83,7 @@ class HttpServerFastRoutesHttp3Test inherits QUnit::Test {
     }
 
     private static hash<auto> stable(hash<auto> hdr) {
-        return hdr - ("date", "alt-svc");
+        return hdr - ("date",);
     }
 
     testBasic() {
@@ -254,12 +254,15 @@ class HttpServerFastRoutesHttp3Test inherits QUnit::Test {
         # no routes yet: the handler answers
         assertEq("handler", mgr2.request(url2, "GET", "/late").body);
         hs2.addFastRoute("/late", {"public": True, "response": textResponse(200, "fast")});
-        # a new connection (a session created after the routes) is answered by the route
+        # the session that exists answers from the routes too: it shares the listener's context
+        assertEq("fast", mgr2.request(url2, "GET", "/late").body, "a session created before the routes");
+        # and so does a new connection
         HttpClientIo::HttpClientConnectionManager mgr3();
         on_exit mgr3.closeAll();
         assertEq("fast", mgr3.request(url2, "GET", "/late").body);
-        # and a route added to the table later applies to its sessions
+        # and a route added to the table later applies to both
         hs2.addFastRoute("/later", {"public": True, "response": textResponse(200, "fast2")});
         assertEq("fast2", mgr3.request(url2, "GET", "/later").body);
+        assertEq("fast2", mgr2.request(url2, "GET", "/later").body);
     }
 }

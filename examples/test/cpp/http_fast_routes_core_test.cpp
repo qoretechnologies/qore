@@ -259,6 +259,125 @@ int main() {
         CHECK(r2.getRouteHits()[0].second >= 3);
     }
 
+    // --- extra headers of a listener (Alt-Svc)
+    {
+        std::string e2;
+        CHECK(!HttpFastExtraHeaders::create({{"", "x"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"Bad Name", "x"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"Content-Length", "1"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"connection", "close"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"Date", "x"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"Upgrade", "x"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"Alt-Svc", "a\r\nInjected: 1"}}, e2));
+        CHECK(!HttpFastExtraHeaders::create({{"Alt-Svc", std::string("a\0b", 3)}}, e2));
+        std::vector<std::pair<std::string, std::string>> many;
+        for (size_t i = 0; i <= HttpFastExtraHeaders::MaxHeaders; ++i) {
+            many.emplace_back("X-" + std::to_string(i), "v");
+        }
+        CHECK(!HttpFastExtraHeaders::create(many, e2));
+
+        auto alt = HttpFastExtraHeaders::create({{"Alt-Svc", "h3=\":443\"; ma=3600"}}, e2);
+        auto alt2 = HttpFastExtraHeaders::create({{"Alt-Svc", "h3=\":8443\"; ma=60"}}, e2);
+        CHECK(alt && alt2);
+        auto plain = resp(200, "x");
+        // the headers are on the wire, after Date and Connection, and not on a wire without them
+        auto w0 = plain->getWire(1730000000, false, nullptr);
+        auto w1 = plain->getWire(1730000000, false, alt);
+        auto w2 = plain->getWire(1730000000, false, alt2);
+        CHECK(w0->find("Alt-Svc") == std::string::npos);
+        CHECK(w1->find("Alt-Svc: h3=\":443\"; ma=3600\r\n") != std::string::npos);
+        CHECK(w2->find("Alt-Svc: h3=\":8443\"; ma=60\r\n") != std::string::npos);
+        CHECK(w1->find("Connection: Keep-Alive\r\nAlt-Svc") != std::string::npos);
+        CHECK(w1->find("\r\n\r\nx") != std::string::npos);
+        // each variant is cached on its own, by identity, and with the close variant
+        CHECK(plain->getWire(1730000000, false, alt) == w1);
+        CHECK(plain->getWire(1730000000, false, alt2) == w2);
+        CHECK(plain->getWire(1730000000, false, nullptr) == w0);
+        auto wc = plain->getWire(1730000000, true, alt);
+        CHECK(wc != w1 && wc->find("Connection: close\r\nAlt-Svc") != std::string::npos);
+        // a new second builds the variants again
+        auto w1b = plain->getWire(1730000001, false, alt);
+        CHECK(w1b != w1 && w1b->find("Date: Sun, 27 Oct 2024 03:33:21 GMT") != std::string::npos);
+        // more variants than are cached: all are still correct
+        std::vector<std::shared_ptr<const HttpFastExtraHeaders>> sets;
+        for (int i = 0; i < 20; ++i) {
+            sets.push_back(HttpFastExtraHeaders::create({{"X-Set", std::to_string(i)}}, e2));
+        }
+        for (int round = 0; round < 3; ++round) {
+            for (int i = 0; i < 20; ++i) {
+                auto ww = plain->getWire(1730000002, false, sets[i]);
+                CHECK(ww->find("X-Set: " + std::to_string(i) + "\r\n") != std::string::npos);
+            }
+        }
+        // a header that the route's response has is not replaced
+        auto own = HttpFastResponse::create(200, {{"Content-Type", "text/plain"}, {"alt-svc", "clear"}}, "y", e2);
+        auto wo = own->getWire(1730000000, false, alt);
+        CHECK(wo->find("alt-svc: clear\r\n") != std::string::npos);
+        CHECK(wo->find("Alt-Svc: h3") == std::string::npos);
+        // HTTP/2 and HTTP/3: the pairs
+        auto hx = plain->getH2Headers(1730000000, alt.get());
+        bool found_alt = false;
+        for (const auto& h : hx) {
+            if (h.first == "Alt-Svc" && h.second == "h3=\":443\"; ma=3600") {
+                found_alt = true;
+            }
+        }
+        CHECK(found_alt);
+        auto hy = own->getH2Headers(1730000000, alt.get());
+        size_t alts = 0;
+        for (const auto& h : hy) {
+            if (!strcasecmp(h.first.c_str(), "alt-svc")) {
+                ++alts;
+            }
+        }
+        CHECK(alts == 1);
+        CHECK(plain->getH2Headers(1730000000, nullptr).size() == plain->getH2Headers(1730000000).size());
+
+        // match() passes the headers on
+        HttpFastRoutes rx;
+        rx.add("/x", HttpFastRouteSpec::create({}, plain, e2), e2);
+        auto mw = rx.match(req("/x"), 1730000000, fb, nullptr, alt);
+        CHECK(mw && mw->find("Alt-Svc: h3") != std::string::npos);
+        mw = rx.match(req("/x"), 1730000000, fb, nullptr);
+        CHECK(mw && mw->find("Alt-Svc") == std::string::npos);
+
+        // the context shares routes and extra headers; a change is seen by whoever holds it
+        auto ctx = std::make_shared<HttpFastContext>();
+        auto ctx_copy = ctx;
+        CHECK(!ctx->get().routes && !ctx->get().extra);
+        auto rts = std::make_shared<HttpFastRoutes>();
+        ctx->setRoutes(rts);
+        ctx->setExtraHeaders(alt);
+        CHECK(ctx_copy->get().routes == rts && ctx_copy->get().extra == alt);
+        ctx->setExtraHeaders(nullptr);
+        CHECK(!ctx_copy->get().extra && ctx_copy->get().routes == rts);
+
+        // many threads read the variants of a response while the extra headers change
+        std::atomic<bool> stop2{false};
+        std::atomic<uint64_t> bad2{0};
+        std::vector<std::thread> readers;
+        for (int t = 0; t < 4; ++t) {
+            readers.emplace_back([&] {
+                while (!stop2.load()) {
+                    auto snap = ctx->get();
+                    auto ww = plain->getWire(1730000000, false, snap.extra);
+                    bool has = ww->find("Alt-Svc") != std::string::npos;
+                    if (has != (snap.extra != nullptr)) {
+                        ++bad2;
+                    }
+                }
+            });
+        }
+        for (int i = 0; i < 20000; ++i) {
+            ctx->setExtraHeaders((i & 1) ? alt : (i & 2 ? alt2 : nullptr));
+        }
+        stop2 = true;
+        for (auto& th : readers) {
+            th.join();
+        }
+        CHECK(bad2 == 0);
+    }
+
     // --- registration
     HttpFastRoutes rg;
     auto okspec = HttpFastRouteSpec::create({}, up, err);

@@ -6684,6 +6684,56 @@ nothing Socket::setHttpFastRoutes(*HttpFastRoutes[QoreHttpFastRoutes] routes) {
         fr ? fr->r : std::shared_ptr<HttpFastRoutes>());
 }
 
+//! Sets the extra response headers that the HTTP fast routes of a listening socket add to their responses
+/** The headers are added to every response that a fast route sends for a connection accepted from the socket (a header
+    that the route's response has itself is not replaced), as the HTTP server does for its own responses; the
+    @c Alt-Svc header that advertises HTTP/3 is the use.  The headers are shared with the connections that are already
+    open, so a change applies to them; adding them costs nothing per request (the serialized response is cached with
+    them).  The headers that the server sets itself (@c Content-Length, @c Transfer-Encoding, @c Connection, @c Date,
+    @c Upgrade and @c Keep-Alive) cannot be given.
+
+    @param headers the headers, with string values; @ref nothing or an empty hash removes the extra headers; at most 8
+
+    @par Example:
+    @code{.py}
+listener.setHttpFastExtraHeaders({"Alt-Svc": "h3=\":8443\"; ma=3600"});
+    @endcode
+
+    @throw HTTP-FAST-ROUTE-ERROR a header is not valid
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttpFastExtraHeaders(*hash<auto> headers) [flags=NAMED_ARGS] {
+    std::vector<std::pair<std::string, std::string>> list;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue v = hi.get();
+            if (v.getType() != NT_STRING) {
+                fast_route_error(xsink, "header \"%s\" must be a string, got type '%s'", hi.getKey(),
+                    v.getFullTypeName());
+                return QoreValue();
+            }
+            TempEncodingHelper t(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            list.emplace_back(hi.getKey(), std::string(t->c_str(), t->size()));
+        }
+    }
+    std::shared_ptr<const HttpFastExtraHeaders> extra;
+    if (!list.empty()) {
+        std::string err;
+        extra = HttpFastExtraHeaders::create(list, err);
+        if (!extra) {
+            fast_route_error(xsink, "%s", err.c_str());
+            return QoreValue();
+        }
+    }
+    qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getOrCreateFastContext()->setExtraHeaders(
+        std::move(extra));
+}
+
 //! Returns @ref True if the socket has HTTP fast routes
 /** An accepted socket has the routes of the listening socket that it was accepted from.
 

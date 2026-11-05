@@ -798,6 +798,26 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         }
         assertEq("fast", readResponse(c4).body, "a request that arrives in pieces over TLS");
 
+        # the Alt-Svc header that the listener adds to the handler's responses (it has an HTTP/3 companion) is on the
+        # responses of a route, and the response headers are the same
+        tls_hs.addFastRoute("/tls-same", {"public": True, "response": textResponse(200, "same")});
+        Socket c5();
+        c5.connectSSL("127.0.0.1:" + tls_port);
+        hash<auto> nr = request(c5, "GET", "/normal");
+        hash<auto> fr = request(c5, "GET", "/tls-same");
+        assertEq("same", nr.body);
+        assertEq("same", fr.body);
+        assertTrue(exists nr.hdr."alt-svc", "the listener advertises HTTP/3 to the handler's responses");
+        assertEq(nr.hdr."alt-svc", fr.hdr."alt-svc", "and to the responses of a route");
+        assertEq(sort(keys (nr.hdr - ("date",))), sort(keys (fr.hdr - ("date",))), "the same header names");
+        foreach string name in (keys (nr.hdr - ("date",))) {
+            assertEq(nr.hdr{name}, fr.hdr{name}, "TLS header " + name);
+        }
+        # a route that sets Alt-Svc itself keeps its own
+        tls_hs.addFastRoute("/tls-own", {"public": True, "response": {"code": 200, "body": "x",
+            "content_type": "text/plain", "hdr": {"Alt-Svc": "clear"}}});
+        assertEq("clear", request(c5, "GET", "/tls-own").hdr."alt-svc", "a header of the route replaces the listener's");
+
         # pipelined requests over TLS: both are answered, the first by the handler (the second is already received)
         # and the second by the route
         string req = "GET /tls HTTP/1.1\r\nHost: x\r\n\r\n";

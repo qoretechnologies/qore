@@ -1596,7 +1596,12 @@ bool Http2Session::serveFastRoute(Http2StreamInfo& stream) {
     if (stream.is_connect) {
         return false;
     }
-    std::shared_ptr<HttpFastRoutes> routes = sock->getFastRoutes();
+    std::shared_ptr<HttpFastContext> fast_ctx = sock->getFastContext();
+    if (!fast_ctx) {
+        return false;
+    }
+    HttpFastContext::Snapshot fast = fast_ctx->get();
+    std::shared_ptr<HttpFastRoutes>& routes = fast.routes;
     if (!routes) {
         return false;
     }
@@ -1639,7 +1644,7 @@ bool Http2Session::serveFastRoute(Http2StreamInfo& stream) {
     int64 epoch_s = q_epoch_us(us);
     const std::string& body = response->getBody();
     ExceptionSink xs;
-    if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s), body.data(),
+    if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s, fast.extra.get()), body.data(),
             body.size(), &xs) || xs) {
         // the stream could not be answered here: the normal path takes it (the exception is dropped)
         xs.clear();

@@ -215,7 +215,7 @@ struct QuicStreamingBodyData {
 };
 
 class qore_socket_private;
-class HttpFastRoutes;
+class HttpFastContext;
 
 //! Result from processTimerAndWrite() — coalesces timer check + packet generation
 struct QuicTimerWriteResult {
@@ -1694,9 +1694,9 @@ private:
     SSL* ssl_ = nullptr;                            //!< OpenSSL connection
     ngtcp2_crypto_conn_ref conn_ref_{};              //!< TLS<->ngtcp2 connection reference
     qore_socket_private* sock_ = nullptr;           //!< associated socket
-    //! the fast routes of the listening socket, taken when a server session is created (the socket pointer above is
-    //! cleared after initialization); routes added to the listener's table later apply, a table attached later does not
-    std::shared_ptr<HttpFastRoutes> fast_routes_;
+    //! the fast context (routes and extra headers) of the listening socket, taken when a server session is created (the
+    //! socket pointer above is cleared after initialization); it is shared with the socket, so routes set later apply
+    std::shared_ptr<HttpFastContext> fast_ctx_;
     bool is_server_ = false;                        //!< true if server-side session
     //! True once ngtcp2 asked a server to drop this connection (NGTCP2_ERR_RETRY / NGTCP2_ERR_DROP_CONN)
     /** Set when the first client Initial does not start the ClientHello (the client's first

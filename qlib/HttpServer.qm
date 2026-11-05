@@ -970,6 +970,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # the listener are created from them)
         hash<string, Socket> quic_udp_sockets;
 
+        # the TCP listeners by listener ID, whose sockets get the listener's Alt-Svc header for the responses of the fast
+        # routes (guarded by fast_routes_lock)
+        hash<string, HttpListener> alt_svc_targets;
+
         # if True then verbose exception info will be logged
         bool debug;
 
@@ -2078,6 +2082,11 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         }
 
         string lid = string(l.getID());
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            remove alt_svc_targets{lid};
+        }
 
         # If this TCP listener had an auto-created QUIC listener, stop it too
         if (quic_listener_map.hasKey(lid)) {
@@ -2938,12 +2947,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         chain, and so without authentication, logging or request preprocessing: \c public must be \c True.
 
         An HTTP/2 or HTTP/3 request is answered the same way, when its headers have been received (a request with a body
-        takes the normal path).  An HTTP/3 session answers from routes if the server had a route when the session was
-        created.
+        takes the normal path).
 
         The server's configured response headers (and the \c Server header) are added to each response, so that it has
-        the headers that the normal path sends; the per-listener \c Alt-Svc header that the normal path adds for a
-        listener with HTTP/3 enabled is not added.
+        the headers that the normal path sends, including the per-listener \c Alt-Svc header that advertises HTTP/3
+        on a listener that has it (a header that the route's response has itself replaces it).
 
         @param path the exact path of the route, starting with \c "/"
         @param info the route; see @ref Qore::HttpFastRoutes::addRoute() "HttpFastRoutes::addRoute()" for the keys.  A response
@@ -3333,6 +3341,30 @@ ready.set(1);
         }
         # Keep global hdr clean (no Alt-Svc) — it's injected per-listener
         remove hdr."Alt-Svc";
+
+        # the responses of the fast routes carry the listener's Alt-Svc header too
+        list<HttpListener> targets;
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            targets = alt_svc_targets.values();
+        }
+        foreach HttpListener l in (targets) {
+            applyAltSvcToFastRoutes(l);
+        }
+    }
+
+    #! Gives the socket of a TCP listener its Alt-Svc header (or removes it) for the responses of the fast routes
+    /** The sockets accepted from the listener, also those that are open, use it.  A listener whose socket is being
+        stopped is ignored.
+    */
+    private applyAltSvcToFastRoutes(HttpListener l) {
+        *string value = listener_alt_svc{string(l.getID())};
+        try {
+            l.setHttpFastExtraHeaders(value ? {"Alt-Svc": value} : NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            # a listener that is being stopped
+        }
     }
 
     #! Returns response headers with per-listener Alt-Svc injected
@@ -3639,7 +3671,14 @@ ready.set(1);
                     max_attempts, id, l.getInfo().port, h3_err, h3_desc);
             }
 
-            # the fast routes of the server, if any, are answered for the connections accepted from the listener
+            # the fast routes of the server, if any, are answered for the connections accepted from the listener, with
+            # the listener's Alt-Svc header
+            {
+                fast_routes_lock.lock();
+                on_exit fast_routes_lock.unlock();
+                alt_svc_targets{string(l.getID())} = l;
+            }
+            applyAltSvcToFastRoutes(l);
             if (*HttpFastRoutes fast = getFastRoutes()) {
                 l.setHttpFastRoutes(fast);
             }

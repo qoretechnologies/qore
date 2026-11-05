@@ -70,6 +70,36 @@ enum class HttpFastFallback : unsigned {
     Count
 };
 
+//! Response headers that a listener adds to the responses of its routes (such as \c Alt-Svc)
+/** The headers are validated when the object is created, off the I/O thread, and the object is immutable, so a response
+    can cache its serialized form for a set of extra headers by the object's identity.  A header that a route's
+    response has itself is not added (the route's replaces the listener's, as with the server's configured headers).
+*/
+class HttpFastExtraHeaders {
+public:
+    //! The most extra headers a listener has
+    static constexpr size_t MaxHeaders = 8;
+
+    //! Creates the headers
+    /** @param headers the headers; the framing and connection headers (\c Content-Length, \c Transfer-Encoding,
+        \c Connection, \c Date, \c Upgrade, \c Keep-Alive) cannot be given
+        @param err set to the reason if the headers are not valid
+
+        @return the headers, or nullptr if they are not valid
+    */
+    DLLLOCAL static std::shared_ptr<const HttpFastExtraHeaders> create(
+            const std::vector<std::pair<std::string, std::string>>& headers, std::string& err);
+
+    DLLLOCAL const std::vector<std::pair<std::string, std::string>>& getHeaders() const {
+        return headers;
+    }
+
+private:
+    DLLLOCAL HttpFastExtraHeaders() = default;
+
+    std::vector<std::pair<std::string, std::string>> headers;
+};
+
 //! An immutable, serialized response of a fast route
 /** The response is serialized when it is created, off the I/O thread.  A request is answered with a shared reference to
     the serialized bytes; the only per-request work is choosing the cached copy for the current second, because the
@@ -99,8 +129,11 @@ public:
         @param epoch_s the time, in seconds since the epoch
         @param close if true, the response has \c Connection: close, for a request that asked for the connection to be
         closed, instead of \c Connection: Keep-Alive
+        @param extra the headers that the listener adds, if any; the serialized response is cached for each set of
+        extra headers (by identity) that is used with it
     */
-    DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s, bool close = false) const;
+    DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s, bool close = false,
+            const std::shared_ptr<const HttpFastExtraHeaders>& extra = nullptr) const;
 
     //! Returns the status code
     DLLLOCAL int getCode() const {
@@ -118,7 +151,8 @@ public:
 
         @param epoch_s the time for the \c date header, in seconds since the epoch
     */
-    DLLLOCAL std::vector<std::pair<std::string, std::string>> getH2Headers(int64_t epoch_s) const;
+    DLLLOCAL std::vector<std::pair<std::string, std::string>> getH2Headers(int64_t epoch_s,
+            const HttpFastExtraHeaders* extra = nullptr) const;
 
     //! Returns the time that the response was created, in microseconds since the epoch
     DLLLOCAL int64_t getCreatedUs() const {
@@ -146,9 +180,18 @@ private:
     int64_t created_us = 0;
 
     mutable std::mutex cache_lock;
-    //! the serialized responses for a request that keeps the connection and for one that closes it
-    mutable int64_t cache_second[2] = {-1, -1};
-    mutable std::shared_ptr<const std::string> cache[2];
+    //! A serialized response for a variant: whether it closes the connection, and the extra headers
+    struct WireEntry {
+        std::shared_ptr<const HttpFastExtraHeaders> extra;
+        bool close = false;
+        int64_t second = -1;
+        std::shared_ptr<const std::string> wire;
+    };
+    //! the most variants that are cached for a response; a listener has one set of extra headers, so a handful covers
+    //! a server, and a response that sees more replaces the entries in turn
+    static constexpr size_t MaxWireEntries = 8;
+    mutable std::vector<WireEntry> wires;
+    mutable size_t wire_next = 0;
 };
 
 //! The parts of a request that decide whether a fast route answers it
@@ -416,7 +459,8 @@ public:
         @return the serialized response to send, or nullptr
     */
     DLLLOCAL std::shared_ptr<const std::string> match(const HttpFastRequestView& req, int64_t epoch_s,
-            HttpFastFallback& fallback, bool* close_after = nullptr);
+            HttpFastFallback& fallback, bool* close_after = nullptr,
+            const std::shared_ptr<const HttpFastExtraHeaders>& extra = nullptr);
 
     //! Answers an HTTP/2 or HTTP/3 request if a route qualifies
     /** The request is a \c GET without a body (\c END_STREAM, or \c FIN, was on its \c HEADERS frame).  The eligibility rules are
@@ -454,6 +498,38 @@ private:
     mutable std::mutex lock;
     std::shared_ptr<const table_t> table = std::make_shared<const table_t>();
     std::array<std::atomic<uint64_t>, static_cast<size_t>(HttpFastFallback::Count)> fallbacks{};
+};
+
+//! The fast routes and the extra response headers of a listener, shared by the listener and the sockets accepted from it
+/** The listener and every connection accepted from it (and every QUIC session of a listener) refer to one context, so
+    that routes or extra headers that are set after a connection was accepted apply to it.  A request reads both with
+    one short lock (a copy of two shared pointers).
+*/
+class HttpFastContext {
+public:
+    struct Snapshot {
+        std::shared_ptr<HttpFastRoutes> routes;
+        std::shared_ptr<const HttpFastExtraHeaders> extra;
+    };
+
+    DLLLOCAL Snapshot get() const {
+        std::lock_guard<std::mutex> lg(lock);
+        return snapshot;
+    }
+
+    DLLLOCAL void setRoutes(std::shared_ptr<HttpFastRoutes> routes) {
+        std::lock_guard<std::mutex> lg(lock);
+        snapshot.routes = std::move(routes);
+    }
+
+    DLLLOCAL void setExtraHeaders(std::shared_ptr<const HttpFastExtraHeaders> extra) {
+        std::lock_guard<std::mutex> lg(lock);
+        snapshot.extra = std::move(extra);
+    }
+
+private:
+    mutable std::mutex lock;
+    Snapshot snapshot;
 };
 
 #endif

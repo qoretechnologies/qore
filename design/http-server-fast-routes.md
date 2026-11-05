@@ -222,11 +222,16 @@ differed, which the fast route now mirrors:
   a header named in the route replaces the configured one without regard to case
 - a string body is sent as UTF-8 and `;charset=utf-8` is added to a content type that has no charset, as for a handler
 
-One difference remains, by design: the normal path adds the per-listener `Alt-Svc` header (the HTTP/3 advertisement of
-a listener that also has a QUIC listener) to its responses, and a route does not, because the routes are registered for
-the server and not per listener.  A client learns that HTTP/3 is available from the first response that a handler
-answers; a probe or a metrics scraper does not use it.  The HTTP/2 parity test leaves this header out of the
-comparison and says so.
+The per-listener `Alt-Svc` header (the HTTP/3 advertisement of a listener that also has a QUIC listener) is on the
+responses of a route as well.  The routes are registered for the server and `Alt-Svc` is per listener, so the header is
+not part of a route's response: the listener's socket holds it as extra response headers (`Socket::setHttpFastExtraHeaders()`,
+set by `HttpServer` when the listener's `Alt-Svc` value is set or changes), they are shared with the connections
+accepted from the listener (and with the sessions of a QUIC listener), and a route's serialized response is cached
+for each set of extra headers (`HttpFastResponse::getWire()`, keyed by the identity of the immutable
+`HttpFastExtraHeaders` object, at most 8 variants per response).  A request reads the routes and the extra headers
+with one short lock (`HttpFastContext::get()`), so the header costs one pointer comparison per request.  A header that
+a route has itself (any case) replaces the listener's.  The parity tests compare the header over HTTP/1.1 with TLS and
+over HTTP/2.
 
 What the fast path does not do: authentication, `preprocessRequest`, handler logging, request-id or tracing hooks,
 per-request Program thread-local data.  These are the reason `public` must be explicit.  Observability replaces
@@ -283,9 +288,8 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
   `takeHeadersReadyStreamCopy()` and erased when it closes.  The routes come from the UDP socket of the QUIC listener:
   `HttpServer` attaches them to the socket when the listener is added, and to the sockets of the existing QUIC
   listeners when the first route is created; a session takes the routes object of its socket when it is created, so
-  routes added to the table later apply to existing sessions, but a session created before the first route of the
-  server exists does not answer from routes until its connection is replaced by a new one (routes are normally
-  registered at start-up).
+  routes set later apply to existing sessions, because a session shares the socket's `HttpFastContext` (it takes the
+  context when it is created, and the context is created with the socket's first use).
 - HTTP/1.0, WebSocket upgrade, SSE and anything with a body: normal path
 
 ## Phases
@@ -535,8 +539,6 @@ phase 2a' (TLS) has to be compared with.  The benchmark guards the ratio (at mos
   9110 says (a `HEAD` response has the headers of the `GET` response, including its `Content-Length`).  A route that
   copied that would copy what looks like a defect of the normal path, and one that did what the RFC says would differ
   from it, so `HEAD` waits until the normal path's behavior is settled.
-- an HTTP/3 session created before the server has any fast route does not answer from routes for as long as it lives
-  (see Protocols); fixing it needs the session to refer to the socket's routes holder instead of a copy of the pointer
 - bypassing the handler chain changes what an operator can rely on (logging, auth, tracing): mitigated by `public`,
   counters and documentation; whether a sampled access log is worth adding is open
 - a response too large for the socket buffer stays in the operation's send phase until the reader drains it; the
