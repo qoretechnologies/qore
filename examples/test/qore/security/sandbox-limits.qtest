@@ -31,6 +31,12 @@ class SandboxLimitsTest inherits QUnit::Test {
         #! the description of the exception for the given limit
         const TimeoutDesc = "the sandbox wall time limit of %d ms was exceeded";
 
+        #! the CPU time limit used by the tests, in milliseconds
+        const CpuLimit = 300;
+
+        #! the description of the CPU time exception for the given limit
+        const CpuDesc = "the sandbox CPU time limit of %d ms was exceeded";
+
         #! the stack limit used by the tests, in bytes
         const StackLimit = 256 * 1024;
 
@@ -248,6 +254,40 @@ sub call_then_report_in_background(code c, Queue result) {
     c();
     report_in_background(result);
 }
+# starts threads that spin and waits for their results; the waiting thread uses (almost) no CPU time
+list<string> sub spin_threads_and_wait(int n) {
+    Queue result();
+    for (int i = 0; i < n; ++i) {
+        background sub () {
+            try {
+                spin_while();
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+    }
+    list<string> errs = ();
+    for (int i = 0; i < n; ++i) {
+        errs += result.get();
+    }
+    return errs;
+}
+# runs two tasks one after the other on a one-thread pool: the first uses CPU time, the second starts after the first
+# has left the call; each reports the CPU time of the call as the watchdog measures it
+list<int> sub cpu_across_tasks(Qore::Thread::ThreadPool pool, int iterations) {
+    Queue q();
+    pool.submit(sub () {
+        int n = 0;
+        for (int i = 0; i < iterations; ++i) {
+            n += i;
+        }
+        q.push(call_function(\"dbg_sandbox_cpu_used\"));
+    });
+    pool.submit(sub () {
+        q.push(call_function(\"dbg_sandbox_cpu_used\"));
+    });
+    return (q.get(), q.get());
+}
 class Spinner {
     int spin() {
         return spin_while();
@@ -271,6 +311,11 @@ code sub get_closure() {
     }
 
     constructor() : QUnit::Test("SandboxLimitsTest", "1.0", \ARGV) {
+        addTestCase("CPU time limit API", \testCpuApi());
+        addTestCase("the CPU time limit stops busy code", \testCpuLoop());
+        addTestCase("waiting uses no CPU time", \testCpuWaiting());
+        addTestCase("the CPU time of all threads of a call counts", \testCpuThreads());
+        addTestCase("the CPU time of a thread that left the call still counts", \testCpuDetached());
         addTestCase("stack limit API", \testStackApi());
         addTestCase("a call whose limits cannot be tracked fails naming those limits", \testFailClosed());
         addTestCase("the stack limit bounds recursion", \testStackRecursion());
@@ -329,8 +374,8 @@ code sub get_closure() {
         sm.setWallTimeLimit(1500);
         assertEq(1500, sm.getWallTimeLimit());
         assertEq(1500, sm.getConfiguration().wall_time_limit, "configuration key");
-        assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "max_stack_size", "interrupt_requested"),
-            keys sm.getConfiguration(), "configuration keys");
+        assertEq(("filesystem", "network", "max_threads", "wall_time_limit", "cpu_time_limit", "max_stack_size",
+            "interrupt_requested"), keys sm.getConfiguration(), "configuration keys");
         sm.setWallTimeLimit(max_wall_time_ms: 2500);
         assertEq(2500, sm.getWallTimeLimit(), "named argument");
 
@@ -347,6 +392,93 @@ code sub get_closure() {
 
         assertEq(5000, SandboxManager::createLockdown().getWallTimeLimit(), "lockdown preset");
         assertEq(30000, SandboxManager::createWebSafe().getWallTimeLimit(), "web-safe preset");
+    }
+
+    #! returns a sandbox manager with the given CPU time limit
+    private SandboxManager cpuLimited(int ms = CpuLimit) {
+        SandboxManager sm();
+        sm.setCPUTimeLimit(ms);
+        return sm;
+    }
+
+    #! checks that an exception is the CPU time timeout
+    private checkCpuTimeout(hash<ExceptionInfo> ex, string label) {
+        assertEq("SANDBOX-TIMEOUT", ex.err, sprintf("%s: %s: %s", label, ex.err, ex.desc));
+        assertRegex(sprintf(CpuDesc, CpuLimit), ex.desc, label);
+        assertEq({"cpu_time_limit": CpuLimit}, ex.arg, label + ": exception argument");
+    }
+
+    testCpuApi() {
+        SandboxManager sm();
+        assertEq(0, sm.getCPUTimeLimit(), "no limit by default");
+        sm.setCPUTimeLimit(1500);
+        assertEq(1500, sm.getCPUTimeLimit());
+        assertEq(1500, sm.getConfiguration().cpu_time_limit, "configuration key");
+        sm.setCPUTimeLimit(max_cpu_time_ms: 2500);
+        assertEq(2500, sm.getCPUTimeLimit(), "named argument");
+        SandboxManager copy = sm.copy();
+        assertEq(2500, copy.getCPUTimeLimit(), "copy() copies the limit");
+        sm.setCPUTimeLimit(0);
+        assertEq(0, sm.getCPUTimeLimit(), "0 removes the limit");
+        assertEq(2500, copy.getCPUTimeLimit(), "the copy is independent");
+        assertThrows("SANDBOX-CONFIG-ERROR", "cannot be negative", \sm.setCPUTimeLimit(), -1);
+        assertEq(0, sm.getCPUTimeLimit(), "a rejected value does not change the limit");
+        assertEq(1000, SandboxManager::createLockdown().getCPUTimeLimit(), "lockdown preset");
+        assertEq(10000, SandboxManager::createWebSafe().getCPUTimeLimit(), "web-safe preset");
+    }
+
+    testCpuLoop() {
+        Program p = sandboxed(cpuLimited());
+        foreach string func in ("spin_while", "spin_foreach") {
+            int start = clock_get_monotonic_us();
+            try {
+                p.callFunction(func);
+                fail(func + "() returned");
+            } catch (hash<ExceptionInfo> ex) {
+                checkCpuTimeout(ex, func + "()");
+            }
+            # a thread cannot use more CPU time than wall-clock time
+            assertGe(CpuLimit, (clock_get_monotonic_us() - start) / 1000, func + "() cannot time out early");
+        }
+        assertEq("done", p.callFunction("quick"), "the next call is not affected");
+    }
+
+    testCpuWaiting() {
+        # a call that sleeps for three times its CPU time limit completes
+        Program p = sandboxed(cpuLimited());
+        assertEq("rested", p.callFunction("nap", CpuLimit * 3));
+    }
+
+    testCpuThreads() {
+        # the calling thread waits (using almost no CPU time) while the threads it started spin: only their CPU time
+        # can use up the limit, so without it the call would never end
+        Program p = sandboxed(cpuLimited());
+        try {
+            list<string> errs = p.callFunction("spin_threads_and_wait", 4);
+            # the waiting thread received every result before it saw the timeout itself
+            assertEq(("SANDBOX-TIMEOUT",) * 4, errs);
+        } catch (hash<ExceptionInfo> ex) {
+            checkCpuTimeout(ex, "the waiting thread");
+        }
+    }
+
+    testCpuDetached() {
+        # the measurement needs a debug hook
+        try {
+            call_function("dbg_sandbox_cpu_used");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("dbg_sandbox_cpu_used() is only available in debug builds");
+            }
+            rethrow;
+        }
+        assertEq(-1, call_function("dbg_sandbox_cpu_used"), "no call with a CPU time limit");
+        Program p = sandboxed(cpuLimited(120000));
+        Qore::Thread::ThreadPool pool(1);
+        on_exit pool.stopWait();
+        list<int> used = p.callFunction("cpu_across_tasks", pool, 200000);
+        assertGt(0, used[0], "the first task used CPU time");
+        assertGe(used[0], used[1], "the CPU time of the first task still counts after it has left the call");
     }
 
     #! returns a sandbox manager with the given stack limit
@@ -475,6 +607,24 @@ code sub get_closure() {
         assertRegex("the sandbox wall time limit of " + Limit + " ms and the sandbox stack size limit of "
             + StackLimit + " bytes" + sprintf(tail, "them"), ex.desc);
         assertEq({"wall_time_limit": Limit, "max_stack_size": StackLimit}, ex.arg);
+
+        # a CPU time limit
+        p = sandboxed(cpuLimited());
+        ex = failClosed(p, "spin_while");
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox CPU time limit of " + CpuLimit + " ms" + sprintf(tail, "it"), ex.desc);
+        assertEq({"cpu_time_limit": CpuLimit}, ex.arg);
+
+        # all limits
+        sm = limited();
+        sm.setCPUTimeLimit(CpuLimit);
+        sm.setMaxStackSize(StackLimit);
+        p = sandboxed(sm);
+        ex = failClosed(p, "spin_while");
+        assertEq("SANDBOX-ERROR", ex.err, ex.desc);
+        assertRegex("the sandbox wall time limit of " + Limit + " ms, the sandbox CPU time limit of " + CpuLimit
+            + " ms and the sandbox stack size limit of " + StackLimit + " bytes" + sprintf(tail, "them"), ex.desc);
+        assertEq({"wall_time_limit": Limit, "cpu_time_limit": CpuLimit, "max_stack_size": StackLimit}, ex.arg);
 
         # a thread that continues a call and cannot record its budget
         p = sandboxed(limited(120000));

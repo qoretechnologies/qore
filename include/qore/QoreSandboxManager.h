@@ -558,6 +558,31 @@ public:
     //! Gets the wall-clock time limit of each call into the sandbox in milliseconds; 0 = unlimited
     DLLEXPORT int64 getWallTimeLimit() const;
 
+    //! Sets the CPU time limit of each call into the sandbox in milliseconds
+    /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
+
+        The limit applies to the CPU time used by all threads of a call together (see setWallTimeLimit() for what a
+        call is and which threads continue it): the thread that entered the sandbox, threads the call starts, and
+        thread pool tasks and async I/O operations that run for it, each from the moment it starts working for the
+        call.  Time spent waiting (sleeping, blocked on a lock or on I/O) does not count.
+
+        When the CPU time is used up, the threads of the call raise \c SANDBOX-TIMEOUT at their next cancellation
+        point, as with the wall-time limit; the exception names the CPU time limit.  The CPU time is measured by the
+        sandbox watchdog at the earliest point it could be used up (the remaining time divided by the number of the
+        call's threads, at least 1 ms apart), so the call can exceed its limit by up to about 1 ms per thread plus
+        the time to the next cancellation point.
+
+        Where the platform has no per-thread CPU clock (\c pthread_getcpuclockid() or the Mach thread API), a call
+        with a CPU time limit fails with \c SANDBOX-ERROR instead of running without it.  Changing the limit affects
+        calls that start afterwards.
+
+        @since Qore 3.0
+    */
+    DLLEXPORT void setCPUTimeLimit(int64 ms);
+
+    //! Gets the CPU time limit of each call into the sandbox in milliseconds; 0 = unlimited
+    DLLEXPORT int64 getCPUTimeLimit() const;
+
     //! Sets the stack size that each call into the sandbox may use, in bytes
     /** @param bytes the limit in bytes; 0 (or a negative value) = unlimited
 
@@ -709,6 +734,7 @@ public:
         - No filesystem access (empty allow list)
         - No network access (empty allow list)
         - Wall time limit per call: 5000ms
+        - CPU time limit per call: 1000ms
         - Stack size limit per call: 1MB
         - Max threads: 1
     */
@@ -721,6 +747,7 @@ public:
         - No filesystem access
         - Network allowed but private networks blocked
         - Wall time limit per call: 30000ms
+        - CPU time limit per call: 10000ms
         - Stack size limit per call: 2MB
         - Max threads: 4
     */
@@ -746,6 +773,9 @@ private:
 
     //! The wall-clock time limit of each call in milliseconds (0 = unlimited)
     std::atomic<int64> wall_time_limit;
+
+    //! The CPU time limit of each call in milliseconds (0 = unlimited)
+    std::atomic<int64> cpu_time_limit;
 
     //! The stack size limit of each call in bytes (0 = unlimited)
     std::atomic<int64> max_stack_size;

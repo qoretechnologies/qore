@@ -33,6 +33,7 @@
 #define _QORE_INTERN_QORESANDBOXLIMITS_H
 
 #include <atomic>
+#include <ctime>
 #include <map>
 #include <vector>
 
@@ -44,20 +45,48 @@ class QoreSandboxCallBudget;
 constexpr unsigned QSB_LIMIT_WALL_TIME = (1u << 0);
 //! a per-call limit: the stack size limit (see QoreSandboxManager::setMaxStackSize())
 constexpr unsigned QSB_LIMIT_STACK = (1u << 1);
+//! a per-call limit: the CPU time limit (see QoreSandboxManager::setCPUTimeLimit())
+constexpr unsigned QSB_LIMIT_CPU_TIME = (1u << 2);
+//! all per-call limits
+constexpr unsigned QSB_LIMIT_ALL = QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK | QSB_LIMIT_CPU_TIME;
+
+//! The CPU clock of a thread, which other threads can read; see QoreSandboxCallBudget
+/** Linux and the BSDs: pthread_getcpuclockid(); macOS: the thread's Mach port and thread_info().  Where neither is
+    available, init() fails and a call with a CPU-time limit fails closed.
+*/
+class QoreThreadCpuClock {
+public:
+    //! Sets the clock to the current thread's clock; returns 0 for OK, -1 if this platform has no thread CPU clock
+    DLLLOCAL int init();
+
+    //! Reads the thread's CPU time in nanoseconds; returns -1 on error (for example after the thread has ended)
+    DLLLOCAL int64 read() const;
+
+    //! Releases the resources of an initialized clock
+    DLLLOCAL void release();
+
+private:
+#if defined(HAVE_PTHREAD_GETCPUCLOCKID)
+    clockid_t cid = 0;
+#elif defined(DARWIN)
+    unsigned port = 0;
+#endif
+};
 
 //! Returns the static budget that marks a continuation of a call whose limits cannot be enforced
-/** @param kinds the limits that cannot be enforced (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_STACK); not 0
+/** @param kinds the limits that cannot be enforced (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME,
+    @ref QSB_LIMIT_STACK); not 0
 
     See QoreSandboxBudgetStack: a call whose budget could not be recorded fails closed.
 */
 DLLLOCAL QoreSandboxCallBudget* qore_sandbox_lost_budget(unsigned kinds);
 
-//! The budget of one call into a sandbox with a wall-time or stack limit
+//! The budget of one call into a sandbox with a wall-time, CPU-time or stack limit
 /** Created when a thread enters a sandbox manager with a per-call limit that has no budget on the thread yet, and
     shared by everything the call continues on other threads (threads it starts, pool tasks, async I/O operations).
-    With a wall-time limit, the process-wide watchdog expires it at its deadline and sets the sandbox limit bit of
-    every attached thread; the stack limit is applied by each thread from the stack position where it attaches.
-    See design/sandbox-resource-limits.md.
+    With a wall-time or CPU-time limit, the process-wide watchdog expires it at its deadline or when the CPU time of
+    its threads reaches the limit, and sets the sandbox limit bit of every attached thread; the stack limit is applied
+    by each thread from the stack position where it attaches.  See design/sandbox-resource-limits.md.
 
     The watchdog's deadline map does not hold a reference: the last dereference removes the budget from the map, and
     the watchdog only acts on a budget that it could reference with tryRef().
@@ -67,9 +96,11 @@ public:
     //! Creates a budget with one reference; the deadline is now + limit_ms; references the manager
     /** @param manager the manager whose limits the budget enforces
         @param limit_ms the wall-time limit in milliseconds, or 0 for none
+        @param cpu_limit_ms the CPU-time limit in milliseconds, or 0 for none
         @param stack_bytes the stack limit in bytes, or 0 for none
     */
-    DLLLOCAL QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 stack_bytes);
+    DLLLOCAL QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 cpu_limit_ms,
+            int64 stack_bytes);
 
     DLLLOCAL QoreSandboxCallBudget(const QoreSandboxCallBudget&) = delete;
     DLLLOCAL QoreSandboxCallBudget& operator=(const QoreSandboxCallBudget&) = delete;
@@ -99,9 +130,14 @@ public:
         return stack_bytes;
     }
 
-    //! Returns true if the budget has a wall-time limit and so a deadline that the watchdog enforces
+    //! The CPU-time limit in milliseconds that the budget was created with, 0 for none
+    DLLLOCAL int64 getCPULimitMs() const {
+        return cpu_limit_ms;
+    }
+
+    //! Returns true if the budget has a wall-time or CPU-time limit, which the watchdog enforces
     DLLLOCAL bool isTimed() const {
-        return limit_ms > 0;
+        return limit_ms > 0 || cpu_limit_ms > 0;
     }
 
     //! Returns true if the deadline has passed (set by the watchdog)
@@ -120,18 +156,37 @@ private:
     QoreSandboxManager* manager;
     //! the wall-time limit in milliseconds, 0 for none
     int64 limit_ms;
+    //! the CPU-time limit in milliseconds, 0 for none
+    int64 cpu_limit_ms;
     //! the stack limit in bytes, 0 for none
     int64 stack_bytes;
     //! the monotonic deadline (q_get_monotonic_us())
     int64 deadline_us;
-    //! true once the deadline has passed; set under the watchdog lock
+    //! true once the deadline has passed or the CPU time is used up; set under the watchdog lock
     std::atomic<bool> expired{false};
+    //! the limit that expired the budget (@ref QSB_LIMIT_WALL_TIME or @ref QSB_LIMIT_CPU_TIME); set before expired
+    unsigned expired_kind = 0;
 
-    //! the TIDs of the threads attached to the budget, one entry per attachment; guarded by the watchdog lock
-    std::vector<int> tids;
-    //! the budget's entry in the watchdog's deadline map; valid while scheduled is set (watchdog lock)
+    //! a thread attached to the budget; guarded by the watchdog lock
+    struct Attachment {
+        //! the thread's TID
+        int tid;
+        //! the number of times the thread is attached (a thread can continue a call that it is already running)
+        int count;
+        //! the thread's CPU clock (with a CPU-time limit only)
+        QoreThreadCpuClock clock;
+        //! the thread's CPU time in nanoseconds when it attached (with a CPU-time limit only)
+        int64 baseline_ns;
+    };
+    //! the threads attached to the budget; guarded by the watchdog lock
+    std::vector<Attachment> attachments;
+    //! the CPU time in nanoseconds that threads used under the budget before they detached; watchdog lock
+    int64 cpu_used_ns = 0;
+    //! the budget's entry in the watchdog's event map; valid while scheduled is set (watchdog lock)
     std::multimap<int64, QoreSandboxCallBudget*>::iterator pos;
-    //! true while the budget is in the watchdog's deadline map; guarded by the watchdog lock
+    //! the time of the budget's next event while it is scheduled; guarded by the watchdog lock
+    int64 next_us = 0;
+    //! true while the budget is in the watchdog's event map; guarded by the watchdog lock
     bool scheduled = false;
     //! for a static budget marking a call whose limits cannot be enforced: those limits; 0 for any other budget
     unsigned lost_kinds = 0;
@@ -139,10 +194,10 @@ private:
     //! creates the static budget that marks a call whose limits (\a kinds) cannot be enforced
     DLLLOCAL QoreSandboxCallBudget(unsigned kinds);
 
-    //! Returns the limits of the budget (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_STACK)
+    //! Returns the limits of the budget (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)
     DLLLOCAL unsigned getKinds() const {
         return lost_kinds ? lost_kinds : ((limit_ms > 0 ? QSB_LIMIT_WALL_TIME : 0)
-            | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0));
+            | (cpu_limit_ms > 0 ? QSB_LIMIT_CPU_TIME : 0) | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0));
     }
 
     DLLLOCAL ~QoreSandboxCallBudget();
@@ -177,7 +232,7 @@ public:
     }
 
     //! Starts a new budget for \a sm and for each constituent of a composite manager that has a per-call limit (wall
-    //! time or stack) and no budget on this thread yet
+    //! time, CPU time or stack) and no budget on this thread yet
     /** @param tid the current thread's TID
         @param sm the manager that governs the code the thread enters
         @param owner the helper that will call leave()
@@ -204,6 +259,9 @@ public:
     /** Used to report which limit a thread exceeded (see check_stack())
     */
     DLLLOCAL int64 findStackLimit(size_t limit) const;
+
+    //! Returns the innermost budget with a CPU-time limit, or nullptr if there is none
+    DLLLOCAL const QoreSandboxCallBudget* findCPUBudget() const;
 
     //! Returns true if the current call's limits cannot be enforced (see the class documentation)
     DLLLOCAL bool isLost() const {
@@ -237,10 +295,12 @@ private:
     std::vector<Frame> frames;
     //! the helper whose frame could not be recorded, or nullptr; see the class documentation
     const void* lost_owner = nullptr;
-    //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_STACK)
+    //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)
     unsigned lost_kinds = 0;
     //! the wall-time limit of the lost call, or 0 if it is not known (a continuation of a lost call)
     int64 lost_limit_ms = 0;
+    //! the CPU-time limit of the lost call, or 0 if it is not known (a continuation of a lost call)
+    int64 lost_cpu_limit_ms = 0;
     //! the stack limit of the lost call, or 0 if it is not known (a continuation of a lost call)
     int64 lost_stack_bytes = 0;
     //! the thread's stack limit address before a lost call with a stack limit closed it, see lose()
@@ -249,19 +309,32 @@ private:
     bool lost_stack_closed = false;
 
     DLLLOCAL bool hasBudgetFor(const QoreSandboxManager* sm) const;
-    DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 stack_bytes, const void* owner);
+    DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 cpu_limit_ms, int64 stack_bytes,
+            const void* owner);
     //! Pushes a frame for a referenced budget and applies its stack limit; may throw std::bad_alloc (nothing changed)
     DLLLOCAL void pushFrame(QoreSandboxCallBudget* budget, const void* owner);
     //! Pops the top frame and restores the stack limit; returns its budget (the reference passes to the caller)
     DLLLOCAL QoreSandboxCallBudget* popFrame();
     //! Fails the call closed: \a kinds are the limits that cannot be enforced, the values 0 if they are not known
-    DLLLOCAL void lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 stack_bytes);
+    DLLLOCAL void lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 cpu_limit_ms,
+            int64 stack_bytes);
+
+    //! Fails the call of a budget closed
+    DLLLOCAL void lose(int tid, const void* owner, const QoreSandboxCallBudget* budget);
     DLLLOCAL void leaveIntern(int tid, const void* owner);
 };
 
 #ifdef DEBUG
 //! Makes the next \a count budget recordings fail as if no memory could be allocated (debug builds, for tests)
 DLLLOCAL void qore_sandbox_dbg_fail_next_budgets(int count);
+
+//! Returns the CPU time in nanoseconds that the threads of a budget have used, as the watchdog measures it
+DLLLOCAL int64 qore_sandbox_dbg_measure_cpu(const QoreSandboxCallBudget* budget);
+
+//! Returns the CPU time used by the current thread's innermost call with a CPU-time limit, or -1 if there is none
+/** Defined in thread.cpp (debug builds, for tests)
+*/
+DLLLOCAL int64 qore_sandbox_dbg_cpu_used();
 #endif
 
 //! Tightens the current thread's stack limit to \a bytes from the current stack position if that is tighter

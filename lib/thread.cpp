@@ -1770,6 +1770,14 @@ size_t qore_sandbox_tighten_stack(int64 bytes, size_t& saved) {
 #endif
 }
 
+#ifdef DEBUG
+int64 qore_sandbox_dbg_cpu_used() {
+    ThreadData* td = thread_data.get();
+    const QoreSandboxCallBudget* budget = td ? td->sandbox_budgets.findCPUBudget() : nullptr;
+    return budget ? qore_sandbox_dbg_measure_cpu(budget) : -1;
+}
+#endif
+
 void qore_sandbox_restore_stack(size_t saved) {
 #ifdef QORE_MANAGE_STACK
     thread_data.get()->stack_limit = saved;

@@ -97,6 +97,8 @@ hashdecl SandboxConfigInfo {
     int max_threads;
     //! Wall-clock time limit of each call into the sandbox in milliseconds (0 = unlimited)
     int wall_time_limit;
+    //! CPU time limit of each call into the sandbox in milliseconds (0 = unlimited)
+    int cpu_time_limit;
     //! Stack size limit of each call into the sandbox in bytes (0 = unlimited)
     int max_stack_size;
     //! Whether an interrupt has been requested
@@ -148,7 +150,7 @@ const QSEC_NET_ALL = QSEC_NET_ALL;
     sandboxing features including:
 
     - A limit on the number of threads that sandboxed code runs at once
-    - A wall-clock time limit and a stack size limit for each call into the sandbox
+    - Wall-clock time, CPU time and stack size limits for each call into the sandbox
     - Safe interruption of sandboxed code
 
     @par Example:
@@ -250,6 +252,44 @@ int SandboxManager::getWallTimeLimit() {
     return sm->getWallTimeLimit();
 }
 
+//! Sets the CPU time limit of each call into the sandbox
+/** @param max_cpu_time_ms the limit in milliseconds; 0 = unlimited
+
+    The limit applies to the CPU time used by all threads of a call together (see setWallTimeLimit() for what a call
+    is): the thread that entered the sandbox, threads that the call starts, and thread pool tasks and asynchronous
+    I/O operations that run for it.  Time spent waiting (sleeping, blocked on a lock, a queue or I/O) does not count.
+
+    When the CPU time is used up, the threads of the call raise a \c SANDBOX-TIMEOUT exception naming the CPU time
+    limit at their next cancellation point, as with the wall time limit.  See @ref sandbox_cpu_limit for how it is
+    measured and the platforms where it is enforced.
+
+    @par Example:
+    @code{.py}
+sm.setCPUTimeLimit(max_cpu_time_ms: 1000);  # 1 second of CPU time per call
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR the limit is negative
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setCPUTimeLimit(int max_cpu_time_ms) [flags=NAMED_ARGS] {
+    if (max_cpu_time_ms < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the CPU time limit cannot be negative; got: " QLLD,
+            max_cpu_time_ms);
+        return QoreValue();
+    }
+    sm->setCPUTimeLimit(max_cpu_time_ms);
+}
+
+//! Gets the CPU time limit of each call into the sandbox
+/** @return the limit in milliseconds, or 0 for unlimited
+
+    @since %Qore 3.0
+*/
+int SandboxManager::getCPUTimeLimit() {
+    return sm->getCPUTimeLimit();
+}
+
 //! Sets the stack size that each call into the sandbox may use
 /** @param max_stack_bytes the limit in bytes; 0 = unlimited
 
@@ -335,6 +375,7 @@ hash<SandboxConfigInfo> SandboxManager::getConfiguration() {
     - No filesystem access (empty allow list)
     - No network access (empty allow list)
     - Wall time limit per call: 5000ms (see setWallTimeLimit())
+    - CPU time limit per call: 1000ms (see setCPUTimeLimit())
     - Stack size limit per call: 1MB (see setMaxStackSize())
     - Max threads: 1
 
@@ -356,6 +397,7 @@ static SandboxManager SandboxManager::createLockdown() {
     - No filesystem access
     - Network allowed but private networks blocked
     - Wall time limit per call: 30000ms (see setWallTimeLimit())
+    - CPU time limit per call: 10000ms (see setCPUTimeLimit())
     - Stack size limit per call: 2MB (see setMaxStackSize())
     - Max threads: 4
 

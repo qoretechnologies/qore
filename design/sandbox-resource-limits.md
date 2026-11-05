@@ -14,7 +14,7 @@ enforcement, in four phases:
 |---|---|---|---|
 | 1 | wall time per call, plus interrupt reason codes | `SANDBOX-TIMEOUT` | implemented |
 | 2 | stack size per call | `STACK-LIMIT-EXCEEDED` | implemented |
-| 3 | CPU time per call | `SANDBOX-TIMEOUT` | planned |
+| 3 | CPU time per call | `SANDBOX-TIMEOUT` | implemented |
 | 4 | memory, then the `q_sb_*` allocation API | `SANDBOX-MEMORY-LIMIT` | planned |
 
 It builds on [cooperative-cancellation.md](cooperative-cancellation.md) (how a request reaches a running or blocked
@@ -239,12 +239,56 @@ every fail-closed path deterministically (`testFailClosed()` in `sandbox-limits.
 
 ## Phase 3: CPU-time limit
 
-- `setCPUTimeLimit(int ms)`: the CPU time of all threads attached to the call's budget, summed.
-- Per-thread CPU clocks: `pthread_getcpuclockid()` + `clock_gettime()` on Linux, `thread_info(THREAD_BASIC_INFO)` on
-  macOS. A detaching thread adds its consumption to the budget's total.
-- The watchdog schedules the budget at `now + remaining / attached_threads` (the earliest point the budget could be
-  exhausted), measures, and either expires it with the limit bit (`SANDBOX-TIMEOUT`, naming the CPU limit) or
-  reschedules. The CPU clock is never read at cancellation points.
+### API
+
+| C++ (`QoreSandboxManager`) | Qore (`SandboxManager`) | Notes |
+|---|---|---|
+| `setCPUTimeLimit(int64 ms)` | `setCPUTimeLimit(int max_cpu_time_ms)` | 0 = unlimited; negative: `SANDBOX-CONFIG-ERROR` in Qore, 0 in C++ |
+| `getCPUTimeLimit()` | `getCPUTimeLimit()` | tightest constituent limit for a composite manager |
+| — | `SandboxConfigInfo::cpu_time_limit` | |
+| `createLockdown()` / `createWebSafe()` | same | 1 s / 10 s (the values the removed presets documented) |
+
+### Design
+
+- **What counts:** the CPU time of every thread attached to the call's budget, from the moment it attaches (the
+  thread that entered, threads the call starts, pool tasks and async I/O operations running for it). The same call
+  records serve all three per-call limits; a budget is timed (managed by the watchdog) if it has a wall-time or a
+  CPU-time limit.
+- **Attachments:** a budget holds one `Attachment` per thread (`tid`, a reference `count`, the thread's
+  `QoreThreadCpuClock` and its CPU time at attach as `baseline_ns`). A thread attached twice (a continuation of a call
+  it is already running, such as an operation run at once on the thread that submitted it) is counted once. When a
+  thread's last attachment ends, it adds `now - baseline` to the budget's `cpu_used_ns`, so the CPU time of threads
+  that have left the call keeps counting.
+- **Thread CPU clocks:** `pthread_getcpuclockid()` + `clock_gettime()` (Linux, BSDs; configure check
+  `HAVE_PTHREAD_GETCPUCLOCKID`), or the Mach thread port + `thread_info(THREAD_BASIC_INFO)` on macOS. Another thread
+  can read them, which the watchdog does under its lock; an attached thread is alive, because it detaches under the
+  same lock before it ends. Where neither is available, `init()` fails and the call fails closed (`SANDBOX-ERROR`
+  naming the CPU limit, `QSB_LIMIT_CPU_TIME`).
+- **Scheduling (no polling):** each timed budget has one event in the watchdog's map: the wall deadline or the next
+  CPU check, whichever comes first. A CPU check is due at the earliest point the CPU time could be used up:
+  `now + (limit - used) / attached threads`, at least `QSB_MIN_CPU_CHECK_US` (1 ms) away. At a check the watchdog
+  measures `cpu_used_ns + sum(clock - baseline)`; if the limit is reached it expires the budget (`expired_kind =
+  QSB_LIMIT_CPU_TIME`, then the same limit bits and wakeups as the wall-time limit), otherwise it schedules the next
+  check. The first thread's event is computed when it starts the call; a thread joining a call with a CPU limit
+  schedules a check at once (the CPU time may now run out sooner); a call with no attached thread uses no CPU time
+  and has no CPU check until a thread attaches.
+- **Overshoot:** at most the 1 ms floor per attached thread, plus the scheduling latency of the watchdog, plus the
+  distance to the next cancellation point. The CPU clock is never read at cancellation points.
+- **Exception:** `SANDBOX-TIMEOUT`, `<operation>: the sandbox CPU time limit of <N> ms was exceeded`,
+  `arg: {"cpu_time_limit": N}`; the wall-time one has `arg: {"wall_time_limit": N}`.
+
+### Tests
+
+- API, configuration key, `copy()`, presets, negative value.
+- A busy loop (`while`, `foreach`) is stopped with the CPU message and `arg`; it cannot be stopped before the limit
+  in wall-clock time either.
+- A call that sleeps for three times its CPU limit completes (waiting is not counted).
+- The calling thread blocks on a queue while 4 threads it started spin: only their CPU time can end the call, so the
+  test would hang if it did not count.
+- With the debug-only `dbg_sandbox_cpu_used()` (the call's CPU time as the watchdog measures it): two tasks run one
+  after the other on a one-thread pool; the second, which starts after the first has left the call, sees at least
+  the total the first saw (observed: 1656.6 ms then 1656.8 ms; without the detach accounting it would be ~0.2 ms).
+- Fail-closed: a CPU-only failure and a failure with all three limits name exactly those limits.
 
 ## Phase 4: memory
 

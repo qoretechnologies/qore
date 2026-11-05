@@ -41,7 +41,7 @@
 
     <i>Sandboxing and execution control:</i>
     - @ref sandboxing "sandboxing" with @ref Qore::SandboxManager "SandboxManager": filesystem, network
-      (including SSRF prevention), thread, wall-time and stack limits and interrupt controls
+      (including SSRF prevention), thread, wall-time, CPU-time and stack limits and interrupt controls
 
     <i>Networking and I/O:</i>
     - all I/O runs through the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController"), so a
@@ -594,8 +594,8 @@
       and controlled with @ref Qore::HTTPClient::setHttp2Mode() "setHttp2Mode()" and
       @ref Qore::HTTPClient::setHttp3Mode() "setHttp3Mode()"; see also @ref httpclientiointro "HttpClientIo"
     - @ref Qore::SandboxManager "SandboxManager" for filesystem, network, thread and
-      per-call @ref sandbox_resource_limits "wall time" and @ref sandbox_stack_limit "stack size" limits and safe
-      interruption of running code; see
+      per-call @ref sandbox_resource_limits "wall time", @ref sandbox_cpu_limit "CPU time" and
+      @ref sandbox_stack_limit "stack size" limits and safe interruption of running code; see
       @ref sandboxing (<a href="https://github.com/qoretechnologies/qore/issues/5000">issue 5000</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/5581">issue 5581</a>)
     - @ref thread_cancellation "cooperative thread cancellation" with @ref Qore::cancel_thread() "cancel_thread()"

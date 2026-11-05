@@ -135,8 +135,9 @@ Program p(opts);
 
     - @ref sandbox_filesystem "Filesystem access control" with allow/deny path lists
     - @ref sandbox_network "Network access control" with IP range and hostname filtering
-    - @ref sandbox_resources "resource limits": a thread limit, and a @ref sandbox_resource_limits "wall time limit"
-      and a @ref sandbox_stack_limit "stack size limit" for each call into the sandbox
+    - @ref sandbox_resources "resource limits": a thread limit, and a @ref sandbox_resource_limits "wall time limit",
+      a @ref sandbox_cpu_limit "CPU time limit" and a @ref sandbox_stack_limit "stack size limit" for each call into
+      the sandbox
     - @ref sandbox_interrupt "Safe code interruption" for stopping runaway code
 
     @subsection sandbox_manager_usage Basic Usage
@@ -531,9 +532,9 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @section sandbox_resources Resource Limits
 
     A SandboxManager limits the number of threads that sandboxed code runs at once, which prevents it from
-    exhausting the process's threads, and the wall-clock time and stack size of each call into the sandbox (see
-    @ref sandbox_resource_limits and @ref sandbox_stack_limit); unlike a parse option, a limit restricts the feature
-    rather than disabling it.
+    exhausting the process's threads, and the wall-clock time, CPU time and stack size of each call into the sandbox
+    (see @ref sandbox_resource_limits, @ref sandbox_cpu_limit and @ref sandbox_stack_limit); unlike a parse option, a
+    limit restricts the feature rather than disabling it.
     All sandboxed code can also be stopped at any time with
     @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()" (see @ref sandbox_interrupt), and the stack
     used by each thread is bounded as for all %Qore code.
@@ -546,6 +547,9 @@ sm.setMaxThreads(4);
 
 # Each call into the sandbox may run for at most 5 seconds
 sm.setWallTimeLimit(5000);
+
+# use at most 1 second of CPU time
+sm.setCPUTimeLimit(1000);
 
 # and use at most 1MB of stack
 sm.setMaxStackSize(1024 * 1024);
@@ -620,8 +624,36 @@ try {
     - If the resources to track a call's limits cannot be allocated, the call fails with \c SANDBOX-ERROR
       instead of running without them: at its next cancellation point, and, if it has a stack limit, at its next
       call.  The exception names the limits that cannot be enforced, and its \c arg hash has a key for each of them
-      as in @ref Qore::SandboxConfigInfo "SandboxConfigInfo" (\c wall_time_limit, \c max_stack_size) with its
+      as in @ref Qore::SandboxConfigInfo "SandboxConfigInfo" (\c wall_time_limit, \c cpu_time_limit,
+      \c max_stack_size) with its
       value (no value for a thread that continues such a call, where it is not known).
+
+    @subsection sandbox_cpu_limit CPU Time Limit
+
+    @ref Qore::SandboxManager::setCPUTimeLimit() "SandboxManager::setCPUTimeLimit()" limits the CPU time of each
+    @ref sandbox_resource_limits "call" into the sandbox: the CPU time used by all threads of the call together,
+    including the threads it starts and the thread pool tasks and asynchronous I/O operations that run for it, each
+    from the moment it starts working for the call.  Time spent waiting (sleeping, blocked on a lock, a queue or
+    I/O) does not count, so a call that mostly waits is bounded by the wall time limit, and a call that computes by
+    the CPU time limit.
+
+    When the CPU time is used up, every thread of the call raises a \c SANDBOX-TIMEOUT exception (with
+    <tt>arg = {"cpu_time_limit": </tt><em>ms</em><tt>}</tt>) at its next check point, exactly as with the wall time
+    limit; the description names the CPU time limit.
+
+    The CPU time is not measured at the check points.  The sandbox watchdog measures it at the earliest point at which
+    it could be used up (the remaining time divided by the number of threads of the call, but at least 1 ms apart), so
+    a call can use up to about 1 ms of CPU time per thread more than its limit before it is stopped, plus the time to
+    its next check point.
+
+    @code{.py}
+SandboxManager sm();
+sm.setCPUTimeLimit(1000);  # 1 second of CPU time per call
+    @endcode
+
+    @note The CPU time limit needs a per-thread CPU clock (\c pthread_getcpuclockid() on Linux and the BSDs, the
+    Mach thread API on macOS).  On a platform without one, a call into a sandbox with a CPU time limit fails with
+    \c SANDBOX-ERROR instead of running without the limit.
 
     @subsection sandbox_stack_limit Stack Size Limit
 
@@ -723,6 +755,7 @@ SandboxManager sm = SandboxManager::createLockdown();
 # - No filesystem access
 # - No network access
 # - Wall time limit per call: 5 seconds
+# - CPU time limit per call: 1 second
 # - Stack size limit per call: 1MB
 # - Max threads: 1
     @endcode
@@ -736,6 +769,7 @@ SandboxManager sm = SandboxManager::createWebSafe();
 # - No filesystem access
 # - Network allowed but private networks blocked (SSRF prevention)
 # - Wall time limit per call: 30 seconds
+# - CPU time limit per call: 10 seconds
 # - Stack size limit per call: 2MB
 # - Max threads: 4
     @endcode
@@ -786,7 +820,7 @@ hash<auto> net_config = sm.getNetworkConfiguration();
     |\c FILESYSTEM-ACCESS-DENIED|SandboxManager|Filesystem access blocked by security policy
     |\c NETWORK-ACCESS-DENIED|SandboxManager|Network connection blocked by security policy
     |\c PROGRAM-INTERRUPTED|SandboxManager|Execution interrupted via requestInterrupt()
-    |\c SANDBOX-TIMEOUT|SandboxManager|The @ref sandbox_resource_limits "wall time limit" of a call was exceeded
+    |\c SANDBOX-TIMEOUT|SandboxManager|The @ref sandbox_resource_limits "wall time limit" or the @ref sandbox_cpu_limit "CPU time limit" of a call was exceeded
     |\c SANDBOX-ERROR|SandboxManager|The limits of a call named in the exception could not be enforced (no resources to track them)
     |\c STACK-LIMIT-EXCEEDED|SandboxManager|The @ref sandbox_stack_limit "stack size limit" of a call was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit

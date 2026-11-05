@@ -16139,6 +16139,13 @@ static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, Run
 }
 #endif
 
+#ifdef DEBUG
+//! Returns the CPU time in nanoseconds used by the current call into a sandbox with a CPU time limit, or -1
+static QoreValue f_dbg_sandbox_cpu_used(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_sandbox_dbg_cpu_used();
+}
+#endif
+
 //! functional domain for debug and unit-test hooks
 /** These builtins reach into process-global state and library internals, so they must only be
     callable by trusted (unsandboxed) code; tagging them keeps %Qore's sandboxing controls effective
@@ -16157,6 +16164,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");

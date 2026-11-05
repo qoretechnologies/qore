@@ -46,72 +46,172 @@
 #include <pthread.h>
 #include <unistd.h>
 
-//! The process-wide thread that expires call budgets at their deadlines
-/** It waits on a condition for the earliest deadline; a new earliest deadline signals it, so there is no polling.
+#ifdef DARWIN
+#include <mach/mach.h>
+#endif
+
+//! the shortest interval between two checks of the CPU time of a call, in microseconds
+/** Close to the end of a CPU budget, the earliest point it could run out comes ever sooner; the floor bounds the
+    number of checks, and so the amount by which a call can exceed its CPU-time limit, to this interval per thread
+*/
+static constexpr int64 QSB_MIN_CPU_CHECK_US = 1000;
+
+int QoreThreadCpuClock::init() {
+#if defined(HAVE_PTHREAD_GETCPUCLOCKID)
+    return pthread_getcpuclockid(pthread_self(), &cid) ? -1 : 0;
+#elif defined(DARWIN)
+    port = mach_thread_self();
+    return port == MACH_PORT_NULL ? -1 : 0;
+#else
+    return -1;
+#endif
+}
+
+int64 QoreThreadCpuClock::read() const {
+#if defined(HAVE_PTHREAD_GETCPUCLOCKID)
+    struct timespec ts;
+    if (clock_gettime(cid, &ts)) {
+        return -1;
+    }
+    return static_cast<int64>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
+#elif defined(DARWIN)
+    thread_basic_info_data_t info;
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    if (thread_info(port, THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&info), &count) != KERN_SUCCESS) {
+        return -1;
+    }
+    return (static_cast<int64>(info.user_time.seconds) + info.system_time.seconds) * 1000000000LL
+        + (static_cast<int64>(info.user_time.microseconds) + info.system_time.microseconds) * 1000LL;
+#else
+    return -1;
+#endif
+}
+
+void QoreThreadCpuClock::release() {
+#if defined(DARWIN) && !defined(HAVE_PTHREAD_GETCPUCLOCKID)
+    if (port != MACH_PORT_NULL) {
+        mach_port_deallocate(mach_task_self(), port);
+        port = MACH_PORT_NULL;
+    }
+#endif
+}
+
+//! The process-wide thread that expires call budgets
+/** It waits on a condition for the earliest event of any budget: a wall-time deadline, or the earliest point at which
+    the CPU time of a call could be used up (the remaining CPU time divided by the number of its threads); a new
+    earliest event signals it, so there is no polling interval.  At a CPU check it measures the CPU time of the
+    call's threads and either expires the budget or schedules the next check.
+
     The lock is a leaf: nothing else is acquired while it is held (expiry releases it before it takes the thread
     list lock).  Started on the first timed call, stopped by qore_cleanup(), and started again on demand in a child
     created with fork(), like the condition waker.
 */
 class QoreSandboxWatchdog {
 public:
+    //! the result of attaching a thread
+    enum AttachResult {
+        //! attached
+        ATTACHED = 0,
+        //! no memory, or the watchdog thread cannot be started
+        NO_RESOURCES = -1,
+        //! the platform has no thread CPU clock
+        NO_CPU_CLOCK = -2,
+    };
+
     ~QoreSandboxWatchdog() {
         // qore_cleanup() stops the thread; this covers a host that reaches static destruction without it
         stop();
     }
 
-    //! Schedules a new budget and attaches the current thread to it; returns -1 if it cannot (nothing is changed)
-    int add(QoreSandboxCallBudget* budget, int tid) {
+    //! Attaches the current thread to a timed budget and schedules the budget's next event
+    /** @param first true for the thread that starts the call, whose budget is not scheduled yet
+    */
+    AttachResult attach(QoreSandboxCallBudget* budget, int tid, bool first) {
+        assert(budget->isTimed());
         AutoLocker al(lck);
         if (ensureStarted()) {
-            return -1;
+            return NO_RESOURCES;
         }
-        try {
-            budget->tids.push_back(tid);
-            try {
-                budget->pos = deadlines.emplace(budget->deadline_us, budget);
-            } catch (...) {
-                budget->tids.pop_back();
-                throw;
+        for (auto& a : budget->attachments) {
+            if (a.tid == tid) {
+                // the thread already runs the call; it is counted once
+                ++a.count;
+                return ATTACHED;
             }
-        } catch (std::bad_alloc&) {
-            return -1;
         }
-        budget->scheduled = true;
-        if (budget->pos == deadlines.begin()) {
-            // a new earliest deadline
-            cond.signal();
+        QoreSandboxCallBudget::Attachment a{tid, 1, QoreThreadCpuClock(), 0};
+        if (budget->cpu_limit_ms > 0) {
+            if (a.clock.init()) {
+                return NO_CPU_CLOCK;
+            }
+            a.baseline_ns = a.clock.read();
+            if (a.baseline_ns < 0) {
+                a.clock.release();
+                return NO_CPU_CLOCK;
+            }
         }
-        return 0;
-    }
-
-    //! Attaches a thread to a budget; returns -1 if it cannot (nothing is changed)
-    int attach(QoreSandboxCallBudget* budget, int tid) {
-        AutoLocker al(lck);
         try {
-            budget->tids.push_back(tid);
+            budget->attachments.push_back(a);
         } catch (std::bad_alloc&) {
-            return -1;
+            a.clock.release();
+            return NO_RESOURCES;
         }
-        return 0;
+        // the first thread of a call: its next event can be computed without measuring (it has used nothing yet);
+        // a thread joining a call with a CPU limit makes the CPU time run out sooner: check at once
+        int64 now = q_get_monotonic_us();
+        int64 next;
+        if (first) {
+            next = nextEvent(budget, now, 0);
+        } else if (budget->cpu_limit_ms > 0 && !budget->isExpired()) {
+            next = now;
+        } else {
+            // the call's events do not change
+            return ATTACHED;
+        }
+        if (schedule(budget, next)) {
+            budget->attachments.back().clock.release();
+            budget->attachments.pop_back();
+            return NO_RESOURCES;
+        }
+        return ATTACHED;
     }
 
-    //! Detaches a thread attached with add() or attach()
+    //! Detaches the current thread from a timed budget; its CPU time is added to the budget's total
     void detach(QoreSandboxCallBudget* budget, int tid) {
         AutoLocker al(lck);
-        auto i = std::find(budget->tids.begin(), budget->tids.end(), tid);
-        assert(i != budget->tids.end());
-        if (i != budget->tids.end()) {
-            budget->tids.erase(i);
+        for (auto i = budget->attachments.begin(), e = budget->attachments.end(); i != e; ++i) {
+            if (i->tid != tid) {
+                continue;
+            }
+            if (--i->count) {
+                return;
+            }
+            if (budget->cpu_limit_ms > 0) {
+                int64 now = i->clock.read();
+                if (now > i->baseline_ns) {
+                    budget->cpu_used_ns += now - i->baseline_ns;
+                }
+                i->clock.release();
+            }
+            budget->attachments.erase(i);
+            return;
         }
+        assert(false);
     }
 
-    //! Removes a budget whose last reference is gone from the deadline map
+#ifdef DEBUG
+    //! Returns the CPU time in nanoseconds that the threads of a budget have used (debug builds, for tests)
+    int64 dbgMeasure(const QoreSandboxCallBudget* budget) {
+        AutoLocker al(lck);
+        return measure(budget);
+    }
+#endif
+
+    //! Removes a budget whose last reference is gone from the event map
     void unschedule(QoreSandboxCallBudget* budget) {
         AutoLocker al(lck);
-        if (budget->scheduled) {
-            deadlines.erase(budget->pos);
-            budget->scheduled = false;
-        }
+        unscheduleIntern(budget);
+        assert(budget->attachments.empty());
     }
 
     void stop() {
@@ -135,7 +235,7 @@ public:
     //! Starts the thread in a child created with fork() if budgets are scheduled
     void afterFork() {
         AutoLocker al(lck);
-        if (!deadlines.empty() && ensureStarted()) {
+        if (!events.empty() && ensureStarted()) {
             // the budgets of the forking thread cannot expire; the next timed call fails closed if the thread still
             // cannot be started
             fprintf(stderr, "qore: cannot start the sandbox watchdog thread in the child process: %s\n",
@@ -156,8 +256,8 @@ public:
 
 private:
     QoreCondition cond;
-    //! the scheduled budgets by deadline; no references are held (see QoreSandboxCallBudget)
-    std::multimap<int64, QoreSandboxCallBudget*> deadlines;
+    //! the scheduled budgets by the time of their next event; no references are held (see QoreSandboxCallBudget)
+    std::multimap<int64, QoreSandboxCallBudget*> events;
     pthread_t native_id{};
     pid_t started_pid = 0;
     bool started = false;
@@ -181,6 +281,69 @@ private:
         return 0;
     }
 
+    //! Returns the CPU time in nanoseconds that the budget's threads have used; lck must be held
+    static int64 measure(const QoreSandboxCallBudget* budget) {
+        int64 used = budget->cpu_used_ns;
+        for (const auto& a : budget->attachments) {
+            int64 now = a.clock.read();
+            // a thread that cannot be read (in a child after fork(), the threads of the parent) counts nothing more
+            if (now > a.baseline_ns) {
+                used += now - a.baseline_ns;
+            }
+        }
+        return used;
+    }
+
+    //! Returns the time of the budget's next event, or 0 if it has none; lck must be held
+    /** @param now the current monotonic time
+        @param used the CPU time used by the budget's threads in nanoseconds
+    */
+    static int64 nextEvent(const QoreSandboxCallBudget* budget, int64 now, int64 used) {
+        int64 next = budget->limit_ms > 0 ? budget->deadline_us : 0;
+        if (budget->cpu_limit_ms > 0 && !budget->attachments.empty()) {
+            int64 remaining_us = (budget->cpu_limit_ms * 1000000LL - used) / 1000;
+            int64 interval = remaining_us / static_cast<int64>(budget->attachments.size());
+            int64 check = now + (interval > QSB_MIN_CPU_CHECK_US ? interval : QSB_MIN_CPU_CHECK_US);
+            if (!next || check < next) {
+                next = check;
+            }
+        }
+        return next;
+    }
+
+    //! (Re)schedules the budget's next event; lck must be held; returns -1 if it cannot (nothing is changed)
+    int schedule(QoreSandboxCallBudget* budget, int64 next) {
+        if (budget->scheduled && budget->next_us == next) {
+            return 0;
+        }
+        if (!next) {
+            unscheduleIntern(budget);
+            return 0;
+        }
+        std::multimap<int64, QoreSandboxCallBudget*>::iterator pos;
+        try {
+            pos = events.emplace(next, budget);
+        } catch (std::bad_alloc&) {
+            return -1;
+        }
+        unscheduleIntern(budget);
+        budget->pos = pos;
+        budget->next_us = next;
+        budget->scheduled = true;
+        if (pos == events.begin()) {
+            // a new earliest event
+            cond.signal();
+        }
+        return 0;
+    }
+
+    void unscheduleIntern(QoreSandboxCallBudget* budget) {
+        if (budget->scheduled) {
+            events.erase(budget->pos);
+            budget->scheduled = false;
+        }
+    }
+
     static void* entry(void* arg) {
         static_cast<QoreSandboxWatchdog*>(arg)->run();
         return nullptr;
@@ -199,37 +362,58 @@ void QoreSandboxWatchdog::run() {
     std::vector<int> tids;
     SafeLocker sl(lck);
     while (!stopping) {
-        if (deadlines.empty()) {
+        if (events.empty()) {
             cond.wait(lck);
             continue;
         }
         int64 now = q_get_monotonic_us();
-        int64 next = deadlines.begin()->first;
+        int64 next = events.begin()->first;
         if (next > now) {
-            // round up, so that the wait never ends before the deadline
+            // round up, so that the wait never ends before the event
             cond.wait2(lck, (next - now + 999) / 1000);
             continue;
         }
-        // expire every budget whose deadline has passed; the TIDs are copied before the lock is released, since the
-        // threads detach under it
+        // handle every budget whose event has come; the TIDs of expired budgets are copied before the lock is
+        // released, since the threads detach under it
         try {
-            while (!deadlines.empty() && deadlines.begin()->first <= now) {
-                QoreSandboxCallBudget* budget = deadlines.begin()->second;
-                // allocate before referencing: a reference cannot be dropped under the lock (the last dereference
-                // takes it)
-                due.reserve(due.size() + 1);
-                size_t old_size = tids.size();
-                tids.insert(tids.end(), budget->tids.begin(), budget->tids.end());
-                if (!budget->tryRef()) {
-                    // being destroyed; its destructor waits for the lock
-                    tids.resize(old_size);
-                } else {
-                    due.push_back(budget);
-                    // a thread that attaches from now on sees the flag (see QoreSandboxBudgetStack::attach())
-                    budget->expired.store(true, std::memory_order_release);
+            while (!events.empty() && events.begin()->first <= now) {
+                QoreSandboxCallBudget* budget = events.begin()->second;
+                unsigned kind = 0;
+                if (budget->limit_ms > 0 && budget->deadline_us <= now) {
+                    kind = QSB_LIMIT_WALL_TIME;
+                } else if (budget->cpu_limit_ms > 0) {
+                    int64 used = measure(budget);
+                    if (used >= budget->cpu_limit_ms * 1000000LL) {
+                        kind = QSB_LIMIT_CPU_TIME;
+                    } else {
+                        // not used up: check again at the earliest point it could be
+                        if (schedule(budget, nextEvent(budget, now, used))) {
+                            // cannot reschedule (no memory): check again at the next iteration
+                            throw std::bad_alloc();
+                        }
+                        continue;
+                    }
                 }
-                deadlines.erase(deadlines.begin());
-                budget->scheduled = false;
+                if (kind) {
+                    // allocate before referencing: a reference cannot be dropped under the lock (the last
+                    // dereference takes it)
+                    due.reserve(due.size() + 1);
+                    size_t old_size = tids.size();
+                    tids.reserve(tids.size() + budget->attachments.size());
+                    for (const auto& a : budget->attachments) {
+                        tids.push_back(a.tid);
+                    }
+                    if (!budget->tryRef()) {
+                        // being destroyed; its destructor waits for the lock
+                        tids.resize(old_size);
+                    } else {
+                        due.push_back(budget);
+                        budget->expired_kind = kind;
+                        // a thread that attaches from now on sees the flag (see QoreSandboxBudgetStack::attach())
+                        budget->expired.store(true, std::memory_order_release);
+                    }
+                }
+                unscheduleIntern(budget);
             }
         } catch (std::bad_alloc&) {
             // the budgets processed so far are delivered below; the rest stay scheduled and are processed in the
@@ -272,19 +456,29 @@ QoreSandboxWatchdogForkHandler sandbox_watchdog_fork_handler;
 }
 
 QoreSandboxCallBudget* qore_sandbox_lost_budget(unsigned kinds) {
-    assert(kinds && !(kinds & ~(QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK)));
-    // never freed: they are referenced like any other budget, and their counts never drop to zero
+    assert(kinds && !(kinds & ~QSB_LIMIT_ALL));
+    // one for each combination of limits; never freed: they are referenced like any other budget, and their counts
+    // never drop to zero
     static QoreSandboxCallBudget* lost[] = {
-        new QoreSandboxCallBudget(QSB_LIMIT_WALL_TIME),
-        new QoreSandboxCallBudget(QSB_LIMIT_STACK),
-        new QoreSandboxCallBudget(QSB_LIMIT_WALL_TIME | QSB_LIMIT_STACK),
+        new QoreSandboxCallBudget(1),
+        new QoreSandboxCallBudget(2),
+        new QoreSandboxCallBudget(3),
+        new QoreSandboxCallBudget(4),
+        new QoreSandboxCallBudget(5),
+        new QoreSandboxCallBudget(6),
+        new QoreSandboxCallBudget(7),
     };
+    static_assert(QSB_LIMIT_ALL == 7, "one static budget per combination of limits");
     return lost[kinds - 1];
 }
 
 #ifdef DEBUG
 //! the number of budget recordings that fail as if no memory could be allocated; see qore_sandbox_dbg_fail_budget()
 static std::atomic<int> sandbox_dbg_fail_budgets{0};
+
+int64 qore_sandbox_dbg_measure_cpu(const QoreSandboxCallBudget* budget) {
+    return sandbox_watchdog.dbgMeasure(budget);
+}
 
 void qore_sandbox_dbg_fail_next_budgets(int count) {
     sandbox_dbg_fail_budgets.store(count > 0 ? count : 0);
@@ -310,21 +504,22 @@ void qore_sandbox_watchdog_after_fork() {
     sandbox_watchdog.afterFork();
 }
 
-QoreSandboxCallBudget::QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 stack_bytes)
-        : manager(manager), limit_ms(limit_ms > 0 ? limit_ms : 0), stack_bytes(stack_bytes > 0 ? stack_bytes : 0),
+QoreSandboxCallBudget::QoreSandboxCallBudget(QoreSandboxManager* manager, int64 limit_ms, int64 cpu_limit_ms,
+        int64 stack_bytes) : manager(manager), limit_ms(limit_ms > 0 ? limit_ms : 0),
+        cpu_limit_ms(cpu_limit_ms > 0 ? cpu_limit_ms : 0), stack_bytes(stack_bytes > 0 ? stack_bytes : 0),
         deadline_us(limit_ms > 0 ? q_get_monotonic_us() + limit_ms * 1000 : 0) {
     assert(manager);
-    assert(limit_ms > 0 || stack_bytes > 0);
+    assert(limit_ms > 0 || cpu_limit_ms > 0 || stack_bytes > 0);
     manager->ref();
 }
 
-QoreSandboxCallBudget::QoreSandboxCallBudget(unsigned kinds) : manager(nullptr), limit_ms(0), stack_bytes(0),
-        deadline_us(0), expired(true), lost_kinds(kinds) {
+QoreSandboxCallBudget::QoreSandboxCallBudget(unsigned kinds) : manager(nullptr), limit_ms(0), cpu_limit_ms(0),
+        stack_bytes(0), deadline_us(0), expired(true), lost_kinds(kinds) {
     assert(kinds);
 }
 
 QoreSandboxCallBudget::~QoreSandboxCallBudget() {
-    assert(tids.empty());
+    assert(attachments.empty());
     if (manager) {
         manager->deref(nullptr);
     }
@@ -382,9 +577,10 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
         for (QoreSandboxManager* member : *members) {
             // the constituents are plain managers, so their getters report their own limits
             int64 limit = member->getWallTimeLimit();
+            int64 cpu = member->getCPUTimeLimit();
             int64 stack = member->getMaxStackSize();
-            if ((limit > 0 || stack > 0) && !hasBudgetFor(member)) {
-                startBudget(tid, member, limit, stack, owner);
+            if ((limit > 0 || cpu > 0 || stack > 0) && !hasBudgetFor(member)) {
+                startBudget(tid, member, limit, cpu, stack, owner);
                 if (lost_owner) {
                     return;
                 }
@@ -393,9 +589,10 @@ void QoreSandboxBudgetStack::enter(int tid, QoreSandboxManager* sm, const void* 
         return;
     }
     int64 limit = sm->getWallTimeLimit();
+    int64 cpu = sm->getCPUTimeLimit();
     int64 stack = sm->getMaxStackSize();
-    if ((limit > 0 || stack > 0) && !hasBudgetFor(sm)) {
-        startBudget(tid, sm, limit, stack, owner);
+    if ((limit > 0 || cpu > 0 || stack > 0) && !hasBudgetFor(sm)) {
+        startBudget(tid, sm, limit, cpu, stack, owner);
     }
 }
 
@@ -418,32 +615,33 @@ QoreSandboxCallBudget* QoreSandboxBudgetStack::popFrame() {
     return budget;
 }
 
-void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 stack_bytes,
-        const void* owner) {
-    unsigned kinds = (limit_ms > 0 ? QSB_LIMIT_WALL_TIME : 0) | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0);
+void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 cpu_limit_ms,
+        int64 stack_bytes, const void* owner) {
+    unsigned kinds = (limit_ms > 0 ? QSB_LIMIT_WALL_TIME : 0) | (cpu_limit_ms > 0 ? QSB_LIMIT_CPU_TIME : 0)
+        | (stack_bytes > 0 ? QSB_LIMIT_STACK : 0);
 #ifdef DEBUG
     if (qore_sandbox_dbg_fail_budget()) {
-        lose(tid, owner, kinds, limit_ms, stack_bytes);
+        lose(tid, owner, kinds, limit_ms, cpu_limit_ms, stack_bytes);
         return;
     }
 #endif
     QoreSandboxCallBudget* budget;
     try {
-        budget = new QoreSandboxCallBudget(sm, limit_ms, stack_bytes);
+        budget = new QoreSandboxCallBudget(sm, limit_ms, cpu_limit_ms, stack_bytes);
     } catch (std::bad_alloc&) {
-        lose(tid, owner, kinds, limit_ms, stack_bytes);
+        lose(tid, owner, kinds, limit_ms, cpu_limit_ms, stack_bytes);
         return;
     }
     try {
         pushFrame(budget, owner);
     } catch (std::bad_alloc&) {
         budget->deref();
-        lose(tid, owner, kinds, limit_ms, stack_bytes);
+        lose(tid, owner, kinds, limit_ms, cpu_limit_ms, stack_bytes);
         return;
     }
-    if (budget->isTimed() && sandbox_watchdog.add(budget, tid)) {
+    if (budget->isTimed() && sandbox_watchdog.attach(budget, tid, true) != QoreSandboxWatchdog::ATTACHED) {
         popFrame()->deref();
-        lose(tid, owner, kinds, limit_ms, stack_bytes);
+        lose(tid, owner, kinds, limit_ms, cpu_limit_ms, stack_bytes);
     }
 }
 
@@ -454,41 +652,47 @@ void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budget
     for (QoreSandboxCallBudget* budget : budgets) {
         if (budget->lost_kinds) {
             // a continuation of a call whose limits cannot be enforced; their values are not known here
-            lose(tid, owner, budget->lost_kinds, 0, 0);
+            lose(tid, owner, budget->lost_kinds, 0, 0, 0);
             return;
         }
 #ifdef DEBUG
         if (qore_sandbox_dbg_fail_budget()) {
-            lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->stack_bytes);
+            lose(tid, owner, budget);
             return;
         }
 #endif
         try {
             pushFrame(budget, owner);
         } catch (std::bad_alloc&) {
-            lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->stack_bytes);
+            lose(tid, owner, budget);
             return;
         }
         budget->ref();
-        if (budget->isTimed() && sandbox_watchdog.attach(budget, tid)) {
+        if (budget->isTimed() && sandbox_watchdog.attach(budget, tid, false) != QoreSandboxWatchdog::ATTACHED) {
             popFrame()->deref();
-            lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->stack_bytes);
+            lose(tid, owner, budget);
             return;
         }
-        // checked after the TID was added under the watchdog lock: either the watchdog copied the TID and sets the
-        // bit, or it had already set the flag, which is seen here
+        // checked after the thread was attached under the watchdog lock: either the watchdog copied the TID and sets
+        // the bit, or it had already set the flag, which is seen here
         if (budget->isExpired()) {
             thread_list.requestSandboxLimit({tid});
         }
     }
 }
 
-void QoreSandboxBudgetStack::lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 stack_bytes) {
+void QoreSandboxBudgetStack::lose(int tid, const void* owner, const QoreSandboxCallBudget* budget) {
+    lose(tid, owner, budget->getKinds(), budget->limit_ms, budget->cpu_limit_ms, budget->stack_bytes);
+}
+
+void QoreSandboxBudgetStack::lose(int tid, const void* owner, unsigned kinds, int64 limit_ms, int64 cpu_limit_ms,
+        int64 stack_bytes) {
     assert(!lost_owner);
     assert(kinds);
     lost_owner = owner;
     lost_kinds = kinds;
     lost_limit_ms = limit_ms;
+    lost_cpu_limit_ms = cpu_limit_ms;
     lost_stack_bytes = stack_bytes;
     // a call with a stack limit that is not enforced must not recurse: the next stack check fails
     if (kinds & QSB_LIMIT_STACK) {
@@ -508,7 +712,7 @@ void QoreSandboxBudgetStack::leaveIntern(int tid, const void* owner) {
         }
         lost_owner = nullptr;
         lost_kinds = 0;
-        lost_limit_ms = lost_stack_bytes = 0;
+        lost_limit_ms = lost_cpu_limit_ms = lost_stack_bytes = 0;
         limited = true;
     }
     while (!frames.empty() && frames.back().owner == owner) {
@@ -555,6 +759,15 @@ const QoreSandboxCallBudget* QoreSandboxBudgetStack::findExpired() const {
     return nullptr;
 }
 
+const QoreSandboxCallBudget* QoreSandboxBudgetStack::findCPUBudget() const {
+    for (auto i = frames.rbegin(), e = frames.rend(); i != e; ++i) {
+        if (i->budget->cpu_limit_ms > 0) {
+            return i->budget;
+        }
+    }
+    return nullptr;
+}
+
 int64 QoreSandboxBudgetStack::findStackLimit(size_t limit) const {
     for (const Frame& frame : frames) {
         if (frame.applied_stack_limit && frame.applied_stack_limit == limit) {
@@ -572,6 +785,13 @@ void QoreSandboxBudgetStack::raise(const QoreSandboxCallBudget* budget, Exceptio
         return;
     }
     ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    if (budget->expired_kind == QSB_LIMIT_CPU_TIME) {
+        arg->setKeyValue("cpu_time_limit", budget->cpu_limit_ms, xsink);
+        xsink->raiseExceptionArg("SANDBOX-TIMEOUT", arg.release(), new QoreStringNodeMaker("%s: the sandbox CPU "
+            "time limit of " QLLD " ms was exceeded", operation, budget->cpu_limit_ms));
+        return;
+    }
+    assert(budget->expired_kind == QSB_LIMIT_WALL_TIME);
     arg->setKeyValue("wall_time_limit", budget->limit_ms, xsink);
     xsink->raiseExceptionArg("SANDBOX-TIMEOUT", arg.release(), new QoreStringNodeMaker("%s: the sandbox wall time "
         "limit of " QLLD " ms was exceeded", operation, budget->limit_ms));
@@ -581,32 +801,46 @@ void QoreSandboxBudgetStack::raiseLost(ExceptionSink* xsink, const char* operati
     assert(lost_owner && lost_kinds);
     // the exception names exactly the limits that cannot be enforced, with their values where they are known; the
     // argument has the keys of the configuration (SandboxConfigInfo), with no value where it is not known
+    struct LimitDesc {
+        unsigned kind;
+        const char* name;
+        const char* key;
+        int64 value;
+        const char* unit;
+    };
+    const LimitDesc limits[] = {
+        {QSB_LIMIT_WALL_TIME, "the sandbox wall time limit", "wall_time_limit", lost_limit_ms, "ms"},
+        {QSB_LIMIT_CPU_TIME, "the sandbox CPU time limit", "cpu_time_limit", lost_cpu_limit_ms, "ms"},
+        {QSB_LIMIT_STACK, "the sandbox stack size limit", "max_stack_size", lost_stack_bytes, "bytes"},
+    };
+    unsigned count = 0;
+    for (const LimitDesc& limit : limits) {
+        if (lost_kinds & limit.kind) {
+            ++count;
+        }
+    }
     ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
-    QoreStringNodeMaker* desc = new QoreStringNodeMaker("%s: ", operation);
-    SimpleRefHolder<QoreStringNode> holder(desc);
-    if (lost_kinds & QSB_LIMIT_WALL_TIME) {
-        desc->concat("the sandbox wall time limit");
-        if (lost_limit_ms) {
-            desc->sprintf(" of " QLLD " ms", lost_limit_ms);
-            arg->setKeyValue("wall_time_limit", lost_limit_ms, xsink);
-        } else {
-            arg->setKeyValue("wall_time_limit", QoreValue(), xsink);
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("%s: ", operation));
+    unsigned done = 0;
+    for (const LimitDesc& limit : limits) {
+        if (!(lost_kinds & limit.kind)) {
+            continue;
         }
-    }
-    if (lost_kinds & QSB_LIMIT_STACK) {
-        desc->concat((lost_kinds & QSB_LIMIT_WALL_TIME) ? " and the sandbox stack size limit"
-            : "the sandbox stack size limit");
-        if (lost_stack_bytes) {
-            desc->sprintf(" of " QLLD " bytes", lost_stack_bytes);
-            arg->setKeyValue("max_stack_size", lost_stack_bytes, xsink);
-        } else {
-            arg->setKeyValue("max_stack_size", QoreValue(), xsink);
+        if (done) {
+            desc->concat(done == count - 1 ? " and " : ", ");
         }
+        desc->concat(limit.name);
+        if (limit.value) {
+            desc->sprintf(" of " QLLD " %s", limit.value, limit.unit);
+            arg->setKeyValue(limit.key, limit.value, xsink);
+        } else {
+            arg->setKeyValue(limit.key, QoreValue(), xsink);
+        }
+        ++done;
     }
-    bool both = (lost_kinds & QSB_LIMIT_WALL_TIME) && (lost_kinds & QSB_LIMIT_STACK);
     desc->sprintf(" cannot be enforced for this call: the resources to track %s could not be allocated",
-        both ? "them" : "it");
-    xsink->raiseExceptionArg("SANDBOX-ERROR", arg.release(), holder.release());
+        count > 1 ? "them" : "it");
+    xsink->raiseExceptionArg("SANDBOX-ERROR", arg.release(), desc.release());
 }
 
 void QoreSandboxBudgetStack::raiseStackLimit(ExceptionSink* xsink, int64 bytes) {

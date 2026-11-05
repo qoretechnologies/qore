@@ -1037,7 +1037,8 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 //------------------------------------------------------------------------------
 
 QoreSandboxManager::QoreSandboxManager()
-    : max_threads(0), interrupt_flags(0), wall_time_limit(0), max_stack_size(0), active_threads(0) {
+    : max_threads(0), interrupt_flags(0), wall_time_limit(0), cpu_time_limit(0), max_stack_size(0),
+    active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
@@ -1088,6 +1089,14 @@ void QoreSandboxManager::setWallTimeLimit(int64 ms) {
 
 int64 QoreSandboxManager::getWallTimeLimit() const {
     return sandbox_intersection_limit<int64>(this, wall_time_limit.load(), &QoreSandboxManager::getWallTimeLimit);
+}
+
+void QoreSandboxManager::setCPUTimeLimit(int64 ms) {
+    cpu_time_limit = ms > 0 ? ms : 0;
+}
+
+int64 QoreSandboxManager::getCPUTimeLimit() const {
+    return sandbox_intersection_limit<int64>(this, cpu_time_limit.load(), &QoreSandboxManager::getCPUTimeLimit);
 }
 
 void QoreSandboxManager::setMaxStackSize(int64 bytes) {
@@ -1241,6 +1250,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
 
     config->setKeyValue("max_threads", max_threads.load(), xsink);
     config->setKeyValue("wall_time_limit", wall_time_limit.load(), xsink);
+    config->setKeyValue("cpu_time_limit", cpu_time_limit.load(), xsink);
     config->setKeyValue("max_stack_size", max_stack_size.load(), xsink);
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
@@ -1326,6 +1336,7 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     // Copy the thread limit; the copy governs no threads yet
     result->max_threads = max_threads.load();
     result->wall_time_limit = wall_time_limit.load();
+    result->cpu_time_limit = cpu_time_limit.load();
     result->max_stack_size = max_stack_size.load();
     // Don't copy interrupt state
 
@@ -1344,8 +1355,9 @@ QoreSandboxManager* QoreSandboxManager::createLockdown() {
     // one thread started by the sandboxed code at a time
     sm->setMaxThreads(1);
 
-    // 5 seconds per call
+    // 5 seconds per call, of which 1 second of CPU time
     sm->setWallTimeLimit(5000);
+    sm->setCPUTimeLimit(1000);
 
     // 1MB of stack per call
     sm->setMaxStackSize(1024 * 1024);
@@ -1366,8 +1378,9 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
     // up to 4 threads
     sm->setMaxThreads(4);
 
-    // 30 seconds per call
+    // 30 seconds per call, of which 10 seconds of CPU time
     sm->setWallTimeLimit(30000);
+    sm->setCPUTimeLimit(10000);
 
     // 2MB of stack per call
     sm->setMaxStackSize(2 * 1024 * 1024);
