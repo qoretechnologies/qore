@@ -9,6 +9,7 @@
 %requires Util
 %requires HttpServer
 %requires HttpServerUtil
+%requires ../../TestCertificates.qm
 
 %exec-class HttpServerFastRoutesTest
 
@@ -59,6 +60,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         addTestCase("a listener added later has the routes", \testLateListener());
         addTestCase("Socket::setHttpFastRoutes()", \testSocketRoutes());
         addTestCase("routes and cells change while a client sends requests", \testConcurrentChanges());
+        addTestCase("over TLS", \testTls());
         addTestCase("counters", \testCounters());
         set_return_value(main());
     }
@@ -503,6 +505,34 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         done.waitForZero(Timeout);
         assertEq(0, errors.size(), "no torn or unexpected response: " + (errors.size() ? errors.get() : ""));
         assertEq(400, fast);
+    }
+
+    testTls() {
+        # the operation that answers a route is the same over TLS: the requests after the first of a TLS connection are
+        # answered by the route as well
+        HttpServer tls_hs();
+        on_exit tls_hs.stop();
+        tls_hs.setDefaultHandler("handler", new FastRouteTestHandler());
+        tls_hs.addFastRoute("/tls", {"public": True, "response": textResponse(200, "fast")});
+        int tls_port = tls_hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+
+        Socket c();
+        c.connectSSL("127.0.0.1:" + tls_port);
+        assertEq("handler", request(c, "GET", "/tls").body, "the first request takes the normal path");
+        int calls = FastRouteTestHandler::calls.getCount();
+        for (int i = 0; i < 20; ++i) {
+            hash<auto> r = request(c, "GET", "/tls");
+            assertEq((200, "fast"), (r.code, r.body));
+        }
+        assertEq(calls, FastRouteTestHandler::calls.getCount(), "the handler was not called over TLS");
+        assertEq("handler", request(c, "GET", "/other").body);
+        assertEq("fast", request(c, "GET", "/tls").body);
+        assertEq(21, tls_hs.getFastRouteInfo().routes{"/tls"});
     }
 
     testCounters() {

@@ -258,9 +258,17 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 |!Phase|!Scope|!Done when
 |0|Spike: fixed route in `SocketSendAndReadHeaderPollOperation` (branch `spike/http-fast-route`)|keep-alive CPU per request measured: 10 - 16 us against 3.0 - 3.5 ms
 |1|Route table, `static` and `slot` blocks, counters, eligibility rules, API, tests, benchmark; requests after the first on a connection|parity and fallback tests pass; benchmark guards the gain
+|1.5|Fast request parsing: a strict parser in the interpreter-free core (`HttpFastRequest.h/.cpp`) that reads the raw header bytes straight into the `HttpFastRequestView`, before any Qore hash is built; it accepts only a conservative subset and everything else takes the existing parser|differential and fuzz tests show that whatever the fast parser accepts, the normal parser accepts with the same method, path and headers; keep-alive CPU per request falls from 50 - 60 us towards 10 - 15 us
 |2|Accept and the first request in C++ (connection ownership without a Qore `onComplete` per accept); remove the per-accept reverse lookup from `HttpServer`|a new connection's first request is also served without a hand-off
 |3|HTTP/2 and HTTP/3|same tests over h2 and h3
 |4|Only if measured and justified: `Connection: close` handling, prefix routes, further blocks|each addition reviewed for boundedness
+
+Phase 1.5 comes before phase 2 because phase 2 reads the first request of a connection in the `read_header` operation,
+which builds a hash today as well: the parser is written once, in the core, and both operations use it.  Its safety
+rule is that it must never accept what the normal parser would reject or read differently (a bare CR, whitespace
+before the colon, an obsolete line fold, a NUL character, a duplicate `Content-Length`, a request line that is not
+exactly `GET <target> HTTP/1.1` with CRLF line ends, a header over the size limit): such a request falls back, and
+the normal path answers it, including the 400 response.
 
 Phase 2 matters for the clients that probe: a Kubernetes probe or a metrics scraper often opens a new connection per
 request, so only phase 1 would leave the accept and the first request on the slow path.  The per-accept reverse
