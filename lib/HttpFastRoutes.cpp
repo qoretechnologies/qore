@@ -189,6 +189,8 @@ std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
 
     // the constructor is private
     std::shared_ptr<HttpFastResponse> rv(new HttpFastResponse);
+    rv->code = code;
+    rv->headers = headers;
     rv->head_prefix = std::move(prefix);
     rv->head_suffix = std::move(suffix);
     rv->body = body;
@@ -321,6 +323,18 @@ std::shared_ptr<const HttpFastResponse> HttpFastRouteSpec::choose(HttpFastFallba
     return nullptr;
 }
 
+std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(int64_t epoch_s) const {
+    std::vector<std::pair<std::string, std::string>> rv;
+    rv.reserve(headers.size() + 2);
+    rv = headers;
+    rv.emplace_back("date", format_http_date(epoch_s));
+    // as the handler path sends them over HTTP/2: a Content-Length when there is a body
+    if (!body.empty()) {
+        rv.emplace_back("content-length", std::to_string(body.size()));
+    }
+    return rv;
+}
+
 std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close) const {
     const size_t i = close ? 1 : 0;
     std::lock_guard<std::mutex> lg(cache_lock);
@@ -401,8 +415,8 @@ size_t HttpFastRoutes::size() const {
     return snapshot()->size();
 }
 
-std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestView& req, int64_t epoch_s,
-        HttpFastFallback& fallback, bool* close_after) {
+std::shared_ptr<const HttpFastResponse> HttpFastRoutes::select(const HttpFastRequestView& req,
+        HttpFastFallback& fallback, bool* close_after, bool h2) {
     if (close_after) {
         *close_after = false;
     }
@@ -413,7 +427,7 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
         return nullptr;
     }
 
-    auto fail = [this, &fallback](HttpFastFallback reason) -> std::shared_ptr<const std::string> {
+    auto fail = [this, &fallback](HttpFastFallback reason) -> std::shared_ptr<const HttpFastResponse> {
         fallback = reason;
         fallbacks[static_cast<size_t>(reason)].fetch_add(1, std::memory_order_relaxed);
         return nullptr;
@@ -438,7 +452,7 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
         return fail(HttpFastFallback::NoRoute);
     }
 
-    if (req.http_version != "1.1") {
+    if (!h2 && req.http_version != "1.1") {
         return fail(HttpFastFallback::NotHttp11);
     }
     // anything that changes the framing or the connection takes the normal path
@@ -452,12 +466,18 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
         return fail(HttpFastFallback::Upgrade);
     }
     bool close = false;
-    if (req.connection && !iequals(*req.connection, "keep-alive")) {
-        // a request that asks for the connection to be closed is answered if the caller closes it afterwards
-        if (!close_after || !iequals(*req.connection, "close")) {
+    if (req.connection) {
+        // HTTP/2 has no Connection header
+        if (h2) {
             return fail(HttpFastFallback::Connection);
         }
-        close = true;
+        if (!iequals(*req.connection, "keep-alive")) {
+            // a request that asks for the connection to be closed is answered if the caller closes it afterwards
+            if (!close_after || !iequals(*req.connection, "close")) {
+                return fail(HttpFastFallback::Connection);
+            }
+            close = true;
+        }
     }
     if (req.pending) {
         return fail(HttpFastFallback::Pipelined);
@@ -469,12 +489,25 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
     if (!response) {
         return fail(why);
     }
-    std::shared_ptr<const std::string> wire = response->getWire(epoch_s, close);
     route.hits.fetch_add(1, std::memory_order_relaxed);
     if (close_after) {
         *close_after = close;
     }
-    return wire;
+    return response;
+}
+
+std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestView& req, int64_t epoch_s,
+        HttpFastFallback& fallback, bool* close_after) {
+    std::shared_ptr<const HttpFastResponse> response = select(req, fallback, close_after, false);
+    if (!response) {
+        return nullptr;
+    }
+    return response->getWire(epoch_s, close_after && *close_after);
+}
+
+std::shared_ptr<const HttpFastResponse> HttpFastRoutes::matchH2(const HttpFastRequestView& req,
+        HttpFastFallback& fallback) {
+    return select(req, fallback, nullptr, true);
 }
 
 std::vector<std::pair<std::string, uint64_t>> HttpFastRoutes::getRouteHits() const {

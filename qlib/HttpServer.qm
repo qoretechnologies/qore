@@ -2912,8 +2912,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         Every request of a connection is covered, the first one included.  The route is answered without the handler
         chain, and so without authentication, logging or request preprocessing: \c public must be \c True.
 
+        An HTTP/2 request is answered the same way, when its headers have been received (a request with a body takes the
+        normal path); an HTTP/3 request takes the normal path.
+
         The server's configured response headers (and the \c Server header) are added to each response, so that it has
-        the headers that the normal path sends.
+        the headers that the normal path sends; the per-listener \c Alt-Svc header that the normal path adds for a
+        listener with HTTP/3 enabled is not added.
 
         @param path the exact path of the route, starting with \c "/"
         @param info the route; see @ref Qore::HttpFastRoutes::addRoute() "HttpFastRoutes::addRoute()" for the keys.  A response

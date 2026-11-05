@@ -35,6 +35,8 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -1590,10 +1592,69 @@ void Http2Session::setHeadersOnlyMode(bool v) {
 }
 
 
+bool Http2Session::serveFastRoute(Http2StreamInfo& stream) {
+    if (stream.is_connect) {
+        return false;
+    }
+    std::shared_ptr<HttpFastRoutes> routes = sock->getFastRoutes();
+    if (!routes) {
+        return false;
+    }
+
+#ifndef NDEBUG
+    // debug builds: Qore code and blocking waits assert if reached from here
+    FastRouteScope fast_route_scope;
+#endif
+
+    // the request as the core sees it: a view of the stream's strings (which outlive the call)
+    HttpFastRequestView view;
+    view.method = stream.method;
+    view.path = stream.path;
+    view.http_version = "2";
+    auto find = [&stream](const char* name) -> const std::vector<std::string>* {
+        auto i = stream.headers.find(name);
+        return i == stream.headers.end() ? nullptr : &i->second;
+    };
+    if (const std::vector<std::string>* v = find("content-length")) {
+        if (v->size() != 1) {
+            // repeated: not a request for a fast route
+            return false;
+        }
+        view.content_length = std::string_view((*v)[0]);
+    }
+    if (const std::vector<std::string>* v = find("connection")) {
+        view.connection = v->empty() ? std::string_view() : std::string_view((*v)[0]);
+    }
+    view.has_transfer_encoding = find("transfer-encoding") != nullptr;
+    view.has_expect = find("expect") != nullptr;
+    view.has_upgrade = find("upgrade") != nullptr || find("http2-settings") != nullptr;
+
+    HttpFastFallback why;
+    std::shared_ptr<const HttpFastResponse> response = routes->matchH2(view, why);
+    if (!response) {
+        return false;
+    }
+
+    int us;
+    int64 epoch_s = q_epoch_us(us);
+    const std::string& body = response->getBody();
+    ExceptionSink xs;
+    if (submitResponse(stream.stream_id, response->getCode(), response->getH2Headers(epoch_s), body.data(),
+            body.size(), &xs) || xs) {
+        // the stream could not be answered here: the normal path takes it (the exception is dropped)
+        xs.clear();
+        return false;
+    }
+    stream.fast_served = true;
+    // closing the stream must not report the request as complete
+    stream.marked_complete = true;
+    return true;
+}
+
 std::unique_ptr<Http2StreamInfo> Http2Session::takeHeadersReadyStreamCopy() {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [id, info] : streams) {
-        if (info->headers_complete && !info->dispatched) {
+        if (info->headers_complete && !info->dispatched && !info->fast_served) {
             // Copy stream info for the caller (headers, method, path, etc.)
             auto copy = std::make_unique<Http2StreamInfo>(*info);
             // Clear body on the COPY: any DATA that arrived with HEADERS stays
@@ -2056,7 +2117,10 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                                     frame->hd.stream_id, stream->is_connect ? 1 : 0);
                                 fflush(stderr);
                             }
-                            h2->markStreamComplete(frame->hd.stream_id);
+                            // a request that a fast route of the listener answers is not dispatched
+                            if (!(h2->is_server && h2->serveFastRoute(*stream))) {
+                                h2->markStreamComplete(frame->hd.stream_id);
+                            }
                         } else if (h2->is_server && stream->is_connect) {
                             // RFC 8441: Extended CONNECT with :protocol when
                             // ENABLE_CONNECT_PROTOCOL is not advertised must be rejected.

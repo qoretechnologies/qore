@@ -102,6 +102,24 @@ public:
     */
     DLLLOCAL std::shared_ptr<const std::string> getWire(int64_t epoch_s, bool close = false) const;
 
+    //! Returns the status code
+    DLLLOCAL int getCode() const {
+        return code;
+    }
+
+    //! Returns the body
+    DLLLOCAL const std::string& getBody() const {
+        return body;
+    }
+
+    //! Returns the headers of the response for HTTP/2: the given headers, \c date and, if there is a body,
+    //! \c content-length
+    /** The names are as given (the HTTP/2 session lower cases them); there are no connection-specific headers.
+
+        @param epoch_s the time for the \c date header, in seconds since the epoch
+    */
+    DLLLOCAL std::vector<std::pair<std::string, std::string>> getH2Headers(int64_t epoch_s) const;
+
     //! Returns the time that the response was created, in microseconds since the epoch
     DLLLOCAL int64_t getCreatedUs() const {
         return created_us;
@@ -121,6 +139,9 @@ private:
     //! between the \c Date header and this in getWire()
     std::string head_suffix;
     std::string body;
+    int code = 0;
+    //! the headers as given when the response was created
+    std::vector<std::pair<std::string, std::string>> headers;
     size_t head_size = 0;
     int64_t created_us = 0;
 
@@ -397,6 +418,19 @@ public:
     DLLLOCAL std::shared_ptr<const std::string> match(const HttpFastRequestView& req, int64_t epoch_s,
             HttpFastFallback& fallback, bool* close_after = nullptr);
 
+    //! Answers an HTTP/2 request if a route qualifies
+    /** The request is a \c GET without a body (\c END_STREAM was on its \c HEADERS frame).  The eligibility rules are
+        those of match(); \c http_version is not checked and the request must not have a \c Connection header
+        (connection-specific headers are not allowed in HTTP/2).
+
+        @param req the request
+        @param fallback set to the reason if the request is not answered
+
+        @return the response to send with HTTP/2, or nullptr
+    */
+    DLLLOCAL std::shared_ptr<const HttpFastResponse> matchH2(const HttpFastRequestView& req,
+            HttpFastFallback& fallback);
+
     //! Returns the number of requests that took the normal path for a reason
     DLLLOCAL uint64_t getFallbacks(HttpFastFallback reason) const {
         return fallbacks[static_cast<size_t>(reason)].load(std::memory_order_relaxed);
@@ -412,6 +446,10 @@ private:
     typedef std::unordered_map<std::string, std::shared_ptr<HttpFastRoute>> table_t;
 
     DLLLOCAL std::shared_ptr<const table_t> snapshot() const;
+
+    //! Selects the response for a request; the shared part of match() and matchH2()
+    DLLLOCAL std::shared_ptr<const HttpFastResponse> select(const HttpFastRequestView& req,
+            HttpFastFallback& fallback, bool* close_after, bool h2);
 
     mutable std::mutex lock;
     std::shared_ptr<const table_t> table = std::make_shared<const table_t>();

@@ -212,6 +212,53 @@ int main() {
     CHECK(!re.match(v, 1, fb) && fb == HttpFastFallback::Pipelined);
     CHECK(re.getFallbacks(HttpFastFallback::Body) == 2);
 
+    // --- HTTP/2: the same rules, no version check, no Connection header, the response parts instead of a wire
+    {
+        HttpFastRoutes r2;
+        auto h2resp = HttpFastResponse::create(200, {{"Content-Type", "text/plain"}, {"X-A", "1"}}, "hello", err);
+        CHECK(h2resp);
+        CHECK(r2.add("/h2", HttpFastRouteSpec::create({}, h2resp, err), err));
+        HttpFastRequestView hv = req("/h2");
+        hv.http_version = "2";
+        auto got = r2.matchH2(hv, fb);
+        CHECK(got && got->getCode() == 200 && got->getBody() == "hello");
+        auto hh = got->getH2Headers(1730000000);
+        CHECK(hh.size() == 4);
+        CHECK(hh[0].first == "Content-Type" && hh[1].first == "X-A");
+        CHECK(hh[2].first == "date" && hh[2].second == "Sun, 27 Oct 2024 03:33:20 GMT");
+        CHECK(hh[3].first == "content-length" && hh[3].second == "5");
+        // no connection-specific header is among them
+        for (const auto& h : hh) {
+            CHECK(strcasecmp(h.first.c_str(), "connection") && strcasecmp(h.first.c_str(), "transfer-encoding")
+                && strcasecmp(h.first.c_str(), "keep-alive"));
+        }
+        // the query string is not part of the route; an exact path only; GET only
+        hv = req("/h2?x=1"); hv.http_version = "2";
+        CHECK(r2.matchH2(hv, fb));
+        hv = req("/h2/"); hv.http_version = "2";
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::NoRoute);
+        hv = req("/h2"); hv.http_version = "2"; hv.method = "POST";
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::NoRoute);
+        // a body, Expect, Upgrade, a Connection header: the normal path
+        hv = req("/h2"); hv.content_length = "5";
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::Body);
+        hv = req("/h2"); hv.content_length = "0";
+        CHECK(r2.matchH2(hv, fb));
+        hv = req("/h2"); hv.has_transfer_encoding = true;
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::Body);
+        hv = req("/h2"); hv.has_expect = true;
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::Expect);
+        hv = req("/h2"); hv.has_upgrade = true;
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::Upgrade);
+        hv = req("/h2"); hv.connection = "keep-alive";
+        CHECK(!r2.matchH2(hv, fb) && fb == HttpFastFallback::Connection);
+        // a response without a body has no content-length header
+        auto empty = HttpFastResponse::create(204, {}, "", err);
+        CHECK(empty && empty->getH2Headers(1730000000).size() == 1);
+        // the hits are counted for HTTP/2 too
+        CHECK(r2.getRouteHits()[0].second >= 3);
+    }
+
     // --- registration
     HttpFastRoutes rg;
     auto okspec = HttpFastRouteSpec::create({}, up, err);

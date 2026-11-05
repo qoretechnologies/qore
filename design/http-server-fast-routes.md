@@ -222,6 +222,12 @@ differed, which the fast route now mirrors:
   a header named in the route replaces the configured one without regard to case
 - a string body is sent as UTF-8 and `;charset=utf-8` is added to a content type that has no charset, as for a handler
 
+One difference remains, by design: the normal path adds the per-listener `Alt-Svc` header (the HTTP/3 advertisement of
+a listener that also has a QUIC listener) to its responses, and a route does not, because the routes are registered for
+the server and not per listener.  A client learns that HTTP/3 is available from the first response that a handler
+answers; a probe or a metrics scraper does not use it.  The HTTP/2 parity test leaves this header out of the
+comparison and says so.
+
 What the fast path does not do: authentication, `preprocessRequest`, handler logging, request-id or tracing hooks,
 per-request Program thread-local data.  These are the reason `public` must be explicit.  Observability replaces
 them: per route hit counters and per-reason fallback counters (no route, not HTTP/1.1, body, expect, upgrade,
@@ -260,7 +266,18 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 ### Protocols
 
 - HTTP/1.1 over plain TCP and over TLS: the same operations run over either, so both are covered from phase 1
-- HTTP/2 and HTTP/3: per-stream responses are produced in C++ in the HTTP/2 and HTTP/3 server operations; phase 3
+- HTTP/2 (implemented, phase 3): when the `HEADERS` frame of a request without a body (`END_STREAM` on it) has been
+  received, the session (`Http2Session::serveFastRoute()`, called from `onFrameRecvCallback()` on the thread that reads
+  the connection) builds the same `HttpFastRequestView` from the stream and asks the core (`HttpFastRoutes::matchH2()`)
+  for a response; if a route qualifies, the response (status, the route's headers, `date`, `content-length` when
+  there is a body) is submitted to nghttp2 with the session's own `submitResponse()`, the stream is marked as served
+  (`Http2StreamInfo::fast_served`, `marked_complete`) so that it is never dispatched or reported to Qore, and nghttp2
+  closes it when the response has been sent.  The rules are those of HTTP/1.1 except that there is no version check
+  and a `Connection` header (illegal in HTTP/2) takes the normal path.  Plain `h2c` and TLS use the same session.
+  Responses are flow controlled by nghttp2 as any other, so a 64 KiB response needs no special handling.  The stream
+  and connection are unaffected for requests that do not qualify.
+- HTTP/3 (phase 3, not implemented): the same hook belongs in the QUIC session when the request `HEADERS` of a stream
+  without a body have been decoded; the core needs no change
 - HTTP/1.0, WebSocket upgrade, SSE and anything with a body: normal path
 
 ## Phases
@@ -271,7 +288,7 @@ Registration functions are in the same sandboxing domain as the other `HttpServe
 |1.5 (done)|Fast request parsing: a strict parser in the interpreter-free core (`HttpFastRequest.h/.cpp`) that reads the raw header bytes straight into the `HttpFastRequestView`, before any Qore hash is built; it accepts only a conservative subset and everything else takes the existing parser|differential and fuzz tests show that whatever the fast parser accepts, the normal parser accepts with the same method, path and headers; keep-alive CPU per request falls from 50 - 60 us towards 10 - 15 us
 |2a (done for plain TCP)|The first request of a connection is read by the fused idle + read header operation, which answers it from a route; see "Phase 2 design".  The per-accept reverse lookup is already opt-in (`peer_hostname_lookup`)|a new connection's first request is also served without a hand-off
 |2b|Only if 2a leaves a measured gap: connections owned by C++ until a request needs the handler|measured
-|3|HTTP/2 and HTTP/3|same tests over h2 and h3
+|3|HTTP/2 (done) and HTTP/3 (open)|same tests over h2 and h3
 |4|`Connection: close` handling (done); only if measured and justified: prefix routes, further blocks|each addition reviewed for boundedness
 
 Phase 1.5 comes before phase 2 because phase 2 reads the first request of a connection in the `read_header` operation,
