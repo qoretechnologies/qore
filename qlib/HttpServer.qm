@@ -2996,7 +2996,12 @@ ready.set(1);
             base.Server = HttpServerString;
         }
         # the hashes are copied to "auto!" locals: a literal such as {"code": 204} has the type hash<string, int>
-        code add = hash<auto> sub (auto response) {
+        code add = auto sub (auto response) {
+            if (response instanceof FastResponseSlot) {
+                # the slot builds its responses with the server's headers and the 204 rule, as for a hash below
+                cast<FastResponseSlot>(response).setDefaults(base);
+                return response;
+            }
             if (response.typeCode() != NT_HASH) {
                 # not a response: the route parser reports it
                 return response;

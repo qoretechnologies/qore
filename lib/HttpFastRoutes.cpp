@@ -202,8 +202,44 @@ int64_t HttpFastCell::nowUs() {
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+void HttpFastSlot::set(std::shared_ptr<const HttpFastResponse> new_response) {
+    int64_t now = HttpFastCell::monotonicUs();
+    {
+        std::lock_guard<std::mutex> l(lock);
+        // the previous response is destroyed after the lock is released
+        response.swap(new_response);
+        set_us = now;
+    }
+}
+
+std::shared_ptr<const HttpFastResponse> HttpFastSlot::get() const {
+    std::shared_ptr<const HttpFastResponse> rv;
+    int64_t when;
+    {
+        std::lock_guard<std::mutex> l(lock);
+        rv = response;
+        when = set_us;
+    }
+    if (rv && max_age_us && HttpFastCell::monotonicUs() - when > max_age_us) {
+        return nullptr;
+    }
+    return rv;
+}
+
+int64_t HttpFastSlot::getAgeUs() const {
+    int64_t when;
+    {
+        std::lock_guard<std::mutex> l(lock);
+        if (!response) {
+            return -1;
+        }
+        when = set_us;
+    }
+    return HttpFastCell::monotonicUs() - when;
+}
+
 std::shared_ptr<const HttpFastRouteSpec> HttpFastRouteSpec::create(std::vector<HttpFastRule> rules,
-        std::shared_ptr<const HttpFastResponse> otherwise, std::string& err) {
+        HttpFastResponseSource otherwise, std::string& err) {
     if (rules.size() > MaxRules) {
         err = "a route has at most " + std::to_string(MaxRules) + " rules";
         return nullptr;
@@ -229,7 +265,7 @@ std::shared_ptr<const HttpFastRouteSpec> HttpFastRouteSpec::create(std::vector<H
     return rv;
 }
 
-const HttpFastResponse* HttpFastRouteSpec::choose(HttpFastFallback& why) const {
+std::shared_ptr<const HttpFastResponse> HttpFastRouteSpec::choose(HttpFastFallback& why) const {
     // a cell is read once per request, so that rules over the same cell see the same value even if it is set
     // meanwhile (with "ready == 1" and "ready == 0" as the rules, a change between two reads would hold for neither);
     // different cells are read one after the other and are not atomic together
@@ -266,11 +302,19 @@ const HttpFastResponse* HttpFastRouteSpec::choose(HttpFastFallback& why) const {
             default: holds = false; break;
         }
         if (holds) {
-            return r.response.get();
+            std::shared_ptr<const HttpFastResponse> rv = r.response.get();
+            if (!rv) {
+                why = HttpFastFallback::Stale;
+            }
+            return rv;
         }
     }
     if (otherwise) {
-        return otherwise.get();
+        std::shared_ptr<const HttpFastResponse> rv = otherwise.get();
+        if (!rv) {
+            why = HttpFastFallback::Stale;
+        }
+        return rv;
     }
     why = HttpFastFallback::NoRule;
     return nullptr;
@@ -408,7 +452,7 @@ std::shared_ptr<const std::string> HttpFastRoutes::match(const HttpFastRequestVi
 
     const HttpFastRoute& route = *it->second;
     HttpFastFallback why = HttpFastFallback::NoRule;
-    const HttpFastResponse* response = route.spec->choose(why);
+    std::shared_ptr<const HttpFastResponse> response = route.spec->choose(why);
     if (!response) {
         return fail(why);
     }

@@ -49,6 +49,80 @@ public:
     const std::shared_ptr<HttpFastCell> c;
 };
 
+//! The parts of a response description (a hash with \c code, \c body, \c content_type and \c hdr), as C++ data
+struct FastRouteResponseParts {
+    int64 code = 200;
+    std::string body;
+    //! true if the body was a string (a charset is added to the content type)
+    bool string_body = false;
+    std::string content_type;
+    std::vector<std::pair<std::string, std::string>> headers;
+};
+
+DLLLOCAL void fast_route_error(ExceptionSink* xsink, const char* fmt, ...);
+DLLLOCAL bool fast_route_parse_parts(const char* what, QoreValue val, FastRouteResponseParts& parts,
+        ExceptionSink* xsink);
+DLLLOCAL std::shared_ptr<const HttpFastResponse> fast_route_build_response(const char* what,
+        FastRouteResponseParts parts, const std::vector<std::pair<std::string, std::string>>* base, bool normalize,
+        ExceptionSink* xsink);
+
+//! The private data of a FastResponseSlot object: the slot, which routes share
+/** The slot holds the serialized response.  This object also keeps the parts of the last response and the default
+    headers, as C++ data, so that the response can be built again when the defaults are set after it.  The mutex
+    serializes the Qore threads that publish; the I/O thread never takes it.
+*/
+class QoreFastResponseSlot : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreFastResponseSlot(int64 max_age_us) : s(std::make_shared<HttpFastSlot>(max_age_us)) {
+    }
+
+    //! Builds and publishes a response; returns -1 with an exception on error
+    DLLLOCAL int publish(FastRouteResponseParts parts, ExceptionSink* xsink) {
+        std::lock_guard<std::mutex> l(m);
+        std::shared_ptr<const HttpFastResponse> r = fast_route_build_response("response", parts,
+            have_defaults ? &base : nullptr, have_defaults, xsink);
+        if (!r) {
+            return -1;
+        }
+        s->set(std::move(r));
+        last = std::move(parts);
+        have_last = true;
+        return 0;
+    }
+
+    //! Sets the default headers and the 200-without-a-body rule; the current response is built again with them
+    DLLLOCAL int setDefaults(std::vector<std::pair<std::string, std::string>> headers, ExceptionSink* xsink) {
+        std::lock_guard<std::mutex> l(m);
+        if (have_last) {
+            std::shared_ptr<const HttpFastResponse> r = fast_route_build_response("response", last, &headers, true,
+                xsink);
+            if (!r) {
+                return -1;
+            }
+            s->set(std::move(r));
+        }
+        base = std::move(headers);
+        have_defaults = true;
+        return 0;
+    }
+
+    //! Removes the response
+    DLLLOCAL void clear() {
+        std::lock_guard<std::mutex> l(m);
+        s->set(nullptr);
+        have_last = false;
+    }
+
+    const std::shared_ptr<HttpFastSlot> s;
+
+private:
+    std::mutex m;
+    FastRouteResponseParts last;
+    bool have_last = false;
+    std::vector<std::pair<std::string, std::string>> base;
+    bool have_defaults = false;
+};
+
 //! The private data of an HttpFastRoutes object: the routes of a listener
 class QoreHttpFastRoutes : public AbstractPrivateData {
 public:

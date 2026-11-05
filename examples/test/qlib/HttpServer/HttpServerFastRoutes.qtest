@@ -54,6 +54,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         addTestCase("the response has the headers of the normal path", \testParity());
         addTestCase("cell rules and otherwise", \testCells());
         addTestCase("a stale cell takes the normal path", \testStale());
+        addTestCase("FastResponseSlot", \testSlot());
         addTestCase("requests that do not qualify take the normal path", \testFallbacks());
         addTestCase("pipelined requests", \testPipelined());
         addTestCase("replace and remove a route", \testReplaceRemove());
@@ -343,6 +344,105 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertTrue(hs.getFastRouteInfo().fallbacks.stale > 0);
         ready.touch();
         assertEq("ready", request(c, "GET", "/state").body, "touch() makes the cell current again");
+    }
+
+    testSlot() {
+        assertThrows("FASTRESPONSESLOT-ERROR", sub () { new FastResponseSlot(-1); });
+        FastResponseSlot slot(60s);
+        assertEq(60000, slot.getMaxAge());
+        assertEq(-1, slot.getAge());
+        assertTrue(slot.isStale(), "an empty slot is stale");
+        assertThrows("FASTRESPONSESLOT-COPY-ERROR", sub () { slot.copy(); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { slot.set({"code": 299}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { slot.set({"body": "x"}); });
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { slot.setDefaults({"X-A": 1}); });
+        assertTrue(slot.isStale(), "an invalid response is not kept");
+
+        # a response set before the route is added has the server's headers once the route is added
+        slot.set({"code": 200, "body": "one", "content_type": "text/plain"});
+        assertFalse(slot.isStale());
+        assertTrue(slot.getAge() >= 0);
+        hs.addFastRoute("/slot", {"public": True, "response": slot});
+        hs.addFastRoute("/fixed", {"public": True, "response": textResponse(200, "one")});
+        on_exit hs.removeFastRoute("/slot");
+        on_exit hs.removeFastRoute("/fixed");
+        Socket c = warmUp();
+        hash<auto> a = request(c, "GET", "/slot");
+        hash<auto> b = request(c, "GET", "/fixed");
+        assertEq("one", a.body);
+        assertEq(b.code, a.code);
+        assertEq(sort(keys (b.hdr - ("date",))), sort(keys (a.hdr - ("date",))), "the same headers as a fixed response");
+        assertEq(b.hdr."content-type", a.hdr."content-type");
+        assertEq(b.hdr.server, a.hdr.server);
+
+        # the response is replaced as a whole
+        int calls = FastRouteTestHandler::calls.getCount();
+        slot.set({"code": 200, "body": "two", "content_type": "text/plain"});
+        assertEq("two", request(c, "GET", "/slot").body);
+        slot.set({"code": 503, "body": "down", "content_type": "text/plain", "hdr": {"X-Mode": "m"}});
+        a = request(c, "GET", "/slot");
+        assertEq(503, a.code);
+        assertEq("down", a.body);
+        assertEq("m", a.hdr."x-mode");
+        assertEq(calls, FastRouteTestHandler::calls.getCount(), "the handler was not called");
+
+        # a 200 response without a body is a 204 response, as for the handler
+        slot.set({"code": 200});
+        assertEq(204, request(c, "GET", "/slot").code);
+
+        # an invalid response keeps the previous one
+        slot.set({"code": 200, "body": "kept", "content_type": "text/plain"});
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () { slot.set({"code": 200, "body": "no content type"}); });
+        assertEq("kept", request(c, "GET", "/slot").body);
+
+        # clear(): the normal path answers
+        slot.clear();
+        assertTrue(slot.isStale());
+        assertEq("handler", request(c, "GET", "/slot").body, "an empty slot takes the normal path");
+        assertTrue(hs.getFastRouteInfo().fallbacks.stale > 0);
+        slot.set({"code": 200, "body": "back", "content_type": "text/plain"});
+        assertEq("back", request(c, "GET", "/slot").body);
+
+        # a slot with a maximum age that is exceeded is not served
+        FastResponseSlot shortlived(1ms);
+        hs.addFastRoute("/short", {"public": True, "response": shortlived});
+        on_exit hs.removeFastRoute("/short");
+        shortlived.set({"code": 200, "body": "short", "content_type": "text/plain"});
+        while (!shortlived.isStale()) {
+            usleep(1ms);
+        }
+        assertEq("handler", request(c, "GET", "/short").body, "a stale slot takes the normal path");
+
+        # a slot is the response of a rule and the otherwise response
+        FastCell cell(1);
+        FastResponseSlot on_slot();
+        FastResponseSlot off_slot();
+        on_slot.set({"code": 200, "body": "on", "content_type": "text/plain"});
+        hs.addFastRoute("/rule", {
+            "public": True,
+            "rules": ({"cell": cell, "op": "==", "value": 1, "response": on_slot},),
+            "otherwise": off_slot,
+        });
+        on_exit hs.removeFastRoute("/rule");
+        assertEq("on", request(c, "GET", "/rule").body);
+        cell.set(0);
+        assertEq("handler", request(c, "GET", "/rule").body, "the otherwise slot is empty");
+        off_slot.set({"code": 200, "body": "off", "content_type": "text/plain"});
+        assertEq("off", request(c, "GET", "/rule").body);
+
+        # a route keeps the slot, so the Qore object can go away
+        {
+            FastResponseSlot gone();
+            gone.set({"code": 200, "body": "gone", "content_type": "text/plain"});
+            hs.addFastRoute("/gone", {"public": True, "response": gone});
+        }
+        on_exit hs.removeFastRoute("/gone");
+        assertEq("gone", request(c, "GET", "/gone").body);
+
+        # an object that is not a slot is not a response
+        assertThrows("HTTP-FAST-ROUTE-ERROR", sub () {
+            hs.addFastRoute("/bad", {"public": True, "response": new Counter()});
+        });
     }
 
     testFallbacks() {

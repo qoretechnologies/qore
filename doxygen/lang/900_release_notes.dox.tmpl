@@ -498,9 +498,9 @@
 
     @par HTTP Server Fast Routes
     A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
-    thread answers its qualifying requests, in about 10 to 20 microseconds of CPU instead of milliseconds, with no
-    worker hand-off and a response identical to the handler's; a @ref Qore::FastCell "FastCell" that Qore code sets
-    selects the response without waiting.  See @ref Qore::HttpFastRoutes "HttpFastRoutes".
+    thread answers its qualifying requests in microseconds, with no worker hand-off and a response identical to the
+    handler's; a @ref Qore::FastCell "FastCell" or a @ref Qore::FastResponseSlot "FastResponseSlot" that Qore code sets
+    selects or supplies the response without waiting.  See @ref Qore::HttpFastRoutes "HttpFastRoutes".
 
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module

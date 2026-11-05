@@ -212,6 +212,7 @@ DLLLOCAL QoreClass* initAbstractHttpPollConnectionClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpIdlePollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpKeepAlivePollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initFastCellClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initFastResponseSlotClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpFastRoutesClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpAcceptPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp2PollOperationBaseClass(QoreNamespace& ns);
@@ -1549,6 +1550,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initSSLPrivateKeyClass(qns));
     // FastCell and HttpFastRoutes must be before Socket, which takes HttpFastRoutes in Socket::setHttpFastRoutes()
     qns.addSystemClass(initFastCellClass(qns));
+    qns.addSystemClass(initFastResponseSlotClass(qns));
     qns.addSystemClass(initHttpFastRoutesClass(qns));
     qns.addSystemClass(initSocketClass(qns));
     qns.addSystemClass(initEventNotifierClass(qns));

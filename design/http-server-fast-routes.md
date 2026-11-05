@@ -154,9 +154,15 @@ Cells are the right block for a fixed set of answers selected by state.  A `slot
 
 ### Slots: state without hand-offs
 
-A `FastResponseSlot` holds one serialized response behind an atomic shared pointer.  Qore code (on any thread) calls
-`slot.set(hash<HttpResponseInfo>)`, which validates, serializes and swaps it in.  The I/O thread takes a reference to
-the current buffer for the duration of the send.  A slot also carries a maximum age: when the published value is
+A `FastResponseSlot` (core class `HttpFastSlot`) holds one serialized response behind a shared pointer that a mutex
+guards for the copy or the exchange of the pointer only; building and destroying a response happen outside the lock, so
+neither side waits for more than that (`std::atomic<std::shared_ptr>` is not guaranteed lock-free).  Qore code (on any
+thread) calls `slot.set(hash)`, which validates, serializes and swaps it in; an invalid response throws and the previous
+one is kept.  The I/O thread takes a reference to the current buffer for the duration of the send.  A route's rule or
+`response`/`otherwise` is a response source: a fixed response or a slot.  `HttpServer::addFastRoute()` gives the slot
+the server's headers and the 200-without-a-body-is-204 rule (`setDefaults()`), and the slot keeps the parts of its last
+response as C++ data so that defaults set after `set()` are applied.  An empty or stale slot counts as `stale` in the
+fallback counters.  A slot also carries a maximum age: when the published value is
 older than `max_age`, the route is not eligible and requests take the normal path.  This matters for readiness: if
 the code that publishes the state has stopped, the fast route must not keep answering from a stale value; the normal
 handler then decides.
@@ -182,14 +188,14 @@ Rules in prose are not enough; the design relies on mechanisms that fail a build
 |Lock-free state|the cell is a lock-free atomic (`static_assert`); a stale cell is never read; the value is read with no lock|implemented
 |Leaf locks only|the route table lookup takes one mutex only to copy a shared pointer, and a response's per-second cache takes one while it builds a string of at most 64 KiB once a second; neither is held across a call, and no other lock is taken while holding one|implemented; the isolation test bans the Qore lock types and the blocking thread primitives
 |Registration-time validation|the response size cap, header and path syntax, the rule limit, the status codes allowed; an invalid route cannot be registered|implemented
-|Sanitized core tests|the core runs under AddressSanitizer, UBSan and ThreadSanitizer with a thread that changes cells and the route table while another matches|run during development; to be added to CI
+|Sanitized core tests|the core runs under AddressSanitizer, UBSan and ThreadSanitizer with a thread that changes cells and the route table while another matches|`test/cpp/run-sanitizers.sh` (CI job `check-fast-routes-core-sanitizers`)
 |Glue limited to reading|the only Qore-aware code on the path is the glue in the header-reading operations that builds an `HttpFastRequestView` from the parsed header hash; it only reads values and cannot throw into user code|implemented (`SocketSendAndReadHeaderPollOperation::serveFastRoute()`)
-|Runtime guard in debug builds|a thread-local "in a fast route" scope, asserted against by the interpreter's entry points (calling a method, raising an exception) and by the blocking primitives (Mutex, Queue, Condition waits), exempting the logging call that the controller already makes on the I/O thread (see `async-socket-io.md`)|planned for phase 1
+|Runtime guard in debug builds|a thread-local "in a fast route" scope, asserted against by the interpreter's entry points (calling a method, raising an exception) and by the blocking primitives (Mutex, Queue, Condition waits), exempting the logging call that the controller already makes on the I/O thread (see `async-socket-io.md`)|implemented (`include/qore/intern/FastRouteGuard.h`; asserts in `CodeEvaluationHelper` and `qore_cond_wait_cancellable()`)
 |Existing controller guards|`SocketPollOperationBase::needsWorkerDispatch()` (an operation that runs Qore code or blocks must say so and runs on a worker) and `SocketSyncPoll::assertNotOnIoThread()` (a synchronous `Socket` call on an I/O thread raises)|already in the controller
 
 What the mechanisms do not cover, stated plainly: the controller has no general runtime check that arbitrary Qore code
 is not evaluated on an I/O thread today (`needsWorkerDispatch()` defaults to `false`, by convention); the fast-route
-code gets its guarantee from the structure above, and the runtime guard in debug builds is the planned way to catch a
+code gets its guarantee from the structure above, and the runtime guard in debug builds is the way to catch a
 future mistake in the glue or in a new block.  A new block must keep the core interpreter-free, pass the isolation
 test, and be reviewed for boundedness before it is added.
 
@@ -219,7 +225,7 @@ them: per route hit counters and per-reason fallback counters (no route, not HTT
 connection, pipelined, stale cell, no rule), exposed through `HttpServer::getFastRouteInfo()` so an operator can see
 how many requests bypassed the handler chain.
 
-### Qore API (implemented in phase 1; `FastResponseSlot` is not yet)
+### Qore API (implemented in phase 1)
 
 ```
 FastCell ready(0, 30s);                       # initial value, maximum age (none if omitted)
@@ -240,7 +246,8 @@ hash<auto> hs.getFastRouteInfo();             # hits per route, fallbacks by rea
 HttpFastRoutes routes();                      # the underlying class: routes.addRoute(path, info), removeRoute(path)
 listener_socket.setHttpFastRoutes(routes);    # attaches routes to any listening socket
 
-FastResponseSlot slot(30s);  slot.set({"code": 200, "body": text, "content_type": "text/plain"});   # planned
+FastResponseSlot slot(30s);  slot.set({"code": 200, "body": text, "content_type": "text/plain"});   
+hs.addFastRoute("/metrics", {"public": True, "response": slot});     # a slot as a response, otherwise or rule response
 ```
 
 (`remove` and `delete` are Qore keywords, so the `HttpFastRoutes` methods are `addRoute()` and `removeRoute()`.)

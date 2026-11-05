@@ -43,6 +43,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -201,6 +202,11 @@ public:
         return max_age_us;
     }
 
+    //! Returns the monotonic time in microseconds
+    DLLLOCAL static int64_t monotonicUs() {
+        return nowUs();
+    }
+
 private:
     //! monotonic time in microseconds
     DLLLOCAL static int64_t nowUs();
@@ -215,12 +221,79 @@ enum class HttpFastOp {
     Eq, Ne, Lt, Le, Gt, Ge
 };
 
+//! A response that code outside the I/O threads publishes and a route serves
+/** The holder keeps one immutable serialized response.  Qore code (on any thread) replaces it as a whole with set(); the
+    I/O thread takes a reference to the current one with get().  The lock covers only the copy or the exchange of a
+    shared pointer, never an allocation, a serialization or the destruction of a response, so neither side can wait
+    for more than that.  A slot can have a maximum age: when the response has not been set for that long, or was never
+    set, get() returns nothing and the request takes the normal path, so that the handler decides when the code that
+    should keep the slot current has stopped.
+*/
+class HttpFastSlot {
+public:
+    //! Creates an empty slot
+    /** @param max_age_us the age in microseconds after which the response is stale; 0 for never
+    */
+    DLLLOCAL explicit HttpFastSlot(int64_t max_age_us) : max_age_us(max_age_us) {
+    }
+
+    //! Replaces the response
+    DLLLOCAL void set(std::shared_ptr<const HttpFastResponse> response);
+
+    //! Returns the current response, or nullptr if there is none or it is stale
+    DLLLOCAL std::shared_ptr<const HttpFastResponse> get() const;
+
+    //! Returns the age of the response in microseconds, or -1 if none was set
+    DLLLOCAL int64_t getAgeUs() const;
+
+    //! Returns the maximum age in microseconds; 0 for none
+    DLLLOCAL int64_t getMaxAgeUs() const {
+        return max_age_us;
+    }
+
+private:
+    mutable std::mutex lock;
+    std::shared_ptr<const HttpFastResponse> response;
+    int64_t set_us = 0;
+    const int64_t max_age_us;
+};
+
+//! What a route answers a rule (or the route) with: a fixed response or the response of a slot
+class HttpFastResponseSource {
+public:
+    DLLLOCAL HttpFastResponseSource() = default;
+    DLLLOCAL HttpFastResponseSource(std::nullptr_t) {
+    }
+    DLLLOCAL HttpFastResponseSource(std::shared_ptr<const HttpFastResponse> fixed) : fixed(std::move(fixed)) {
+    }
+    DLLLOCAL HttpFastResponseSource(std::shared_ptr<HttpFastSlot> slot) : slot(std::move(slot)) {
+    }
+
+    //! true if there is a fixed response or a slot
+    DLLLOCAL explicit operator bool() const {
+        return fixed || slot;
+    }
+
+    //! Returns the response to serve, or nullptr if the source is a slot with no current response
+    DLLLOCAL std::shared_ptr<const HttpFastResponse> get() const {
+        return slot ? slot->get() : fixed;
+    }
+
+    DLLLOCAL const std::shared_ptr<HttpFastSlot>& getSlot() const {
+        return slot;
+    }
+
+private:
+    std::shared_ptr<const HttpFastResponse> fixed;
+    std::shared_ptr<HttpFastSlot> slot;
+};
+
 //! One rule of a route: if the cell compares true with the operand, the route answers with the response
 struct HttpFastRule {
     std::shared_ptr<HttpFastCell> cell;
     HttpFastOp op = HttpFastOp::Eq;
     int64_t operand = 0;
-    std::shared_ptr<const HttpFastResponse> response;
+    HttpFastResponseSource response;
 };
 
 //! What a route answers with: the rules in order, the first that holds wins, otherwise the \c otherwise response
@@ -241,15 +314,16 @@ public:
         @return the specification, or nullptr if it is not valid
     */
     DLLLOCAL static std::shared_ptr<const HttpFastRouteSpec> create(std::vector<HttpFastRule> rules,
-            std::shared_ptr<const HttpFastResponse> otherwise, std::string& err);
+            HttpFastResponseSource otherwise, std::string& err);
 
     //! Selects the response
-    /** @param why set to the reason if there is none: \c Stale if a cell that a rule reads is not current,
-        \c NoRule if no rule holds and there is no \c otherwise response
+    /** @param why set to the reason if there is none: \c Stale if a cell that a rule reads is not current or the
+        slot of the chosen response has no current response, \c NoRule if no rule holds and there is no \c otherwise
+        response
 
-        @return the response or nullptr
+        @return the response (a reference that keeps it alive while it is sent) or nullptr
     */
-    DLLLOCAL const HttpFastResponse* choose(HttpFastFallback& why) const;
+    DLLLOCAL std::shared_ptr<const HttpFastResponse> choose(HttpFastFallback& why) const;
 
     DLLLOCAL const std::vector<HttpFastRule>& getRules() const {
         return rules;
@@ -259,7 +333,7 @@ private:
     DLLLOCAL HttpFastRouteSpec() = default;
 
     std::vector<HttpFastRule> rules;
-    std::shared_ptr<const HttpFastResponse> otherwise;
+    HttpFastResponseSource otherwise;
 };
 
 //! A route: a path and what it is answered with

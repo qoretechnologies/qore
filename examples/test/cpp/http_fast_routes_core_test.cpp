@@ -107,6 +107,53 @@ int main() {
     CHECK(rs.match(req("/s"), 1, fb));
     CHECK(rs.getFallbacks(HttpFastFallback::Stale) == 1);
 
+    // --- slots: a response that is published from outside and replaced as a whole
+    auto slot = std::make_shared<HttpFastSlot>(0);
+    CHECK(!slot->get());                 // never set: nothing to serve
+    CHECK(slot->getAgeUs() == -1);
+    HttpFastRoutes rsl;
+    CHECK(rsl.add("/m", HttpFastRouteSpec::create({}, slot, err), err));
+    CHECK(!rsl.match(req("/m"), 1, fb));
+    CHECK(fb == HttpFastFallback::Stale);
+    slot->set(resp(200, "one"));
+    w = rsl.match(req("/m"), 1730000000, fb);
+    CHECK(w && w->find("\r\n\r\none") != std::string::npos);
+    auto held = slot->get();             // a reference taken for a send survives the replacement
+    slot->set(resp(200, "two"));
+    w = rsl.match(req("/m"), 1730000000, fb);
+    CHECK(w && w->find("\r\n\r\ntwo") != std::string::npos);
+    CHECK(held && held->getWire(1730000000)->find("one") != std::string::npos);
+    CHECK(slot->getAgeUs() >= 0);
+
+    // a slot with a maximum age is not served when stale, and is again when set
+    auto aged = std::make_shared<HttpFastSlot>(1000);   // 1 ms
+    aged->set(resp(200, "aged"));
+    HttpFastRoutes ra;
+    ra.add("/a", HttpFastRouteSpec::create({}, aged, err), err);
+    CHECK(ra.match(req("/a"), 1, fb));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    CHECK(!ra.match(req("/a"), 1, fb));
+    CHECK(fb == HttpFastFallback::Stale);
+    aged->set(resp(200, "fresh"));
+    CHECK(ra.match(req("/a"), 1, fb));
+
+    // a rule can answer from a slot
+    auto rcell = std::make_shared<HttpFastCell>(1, 0);
+    auto rslot = std::make_shared<HttpFastSlot>(0);
+    HttpFastRule slr;
+    slr.cell = rcell;
+    slr.op = HttpFastOp::Eq;
+    slr.operand = 1;
+    slr.response = rslot;
+    HttpFastRoutes rr;
+    rr.add("/r", HttpFastRouteSpec::create({slr}, down, err), err);
+    CHECK(!rr.match(req("/r"), 1, fb) && fb == HttpFastFallback::Stale);   // the rule holds, its slot is empty
+    rslot->set(up);
+    CHECK(rr.match(req("/r"), 1, fb));
+    rcell->set(0);
+    w = rr.match(req("/r"), 1, fb);                                         // the rule does not hold
+    CHECK(w && w->find("503") != std::string::npos);
+
     // --- eligibility
     HttpFastRoutes re;
     re.add("/e", HttpFastRouteSpec::create({}, up, err), err);
@@ -166,11 +213,18 @@ int main() {
     HttpFastRule cr; cr.cell = cc; cr.op = HttpFastOp::Eq; cr.operand = 1; cr.response = up;
     auto cspec = HttpFastRouteSpec::create({cr}, down, err);
     rc.add("/c", cspec, err);
+    auto cslot = std::make_shared<HttpFastSlot>(0);
+    cslot->set(up);
+    rc.add("/slot", HttpFastRouteSpec::create({}, cslot, err), err);
     std::atomic<bool> stop{false};
     std::atomic<uint64_t> served{0}, bad_answers{0};
     std::thread reader([&] {
         while (!stop.load()) {
             HttpFastFallback f;
+            auto sgot = rc.match(req("/slot"), 1, f);
+            if (!sgot || (sgot->find("ready") == std::string::npos && sgot->find("not ready") == std::string::npos)) {
+                ++bad_answers;
+            }
             auto got = rc.match(req("/c"), 1, f);
             if (got) {
                 ++served;
@@ -182,6 +236,7 @@ int main() {
     });
     for (int i = 0; i < 20000; ++i) {
         cc->set(i & 1);
+        cslot->set(i & 1 ? up : down);
         if (i % 100 == 0) {
             rc.add("/c", cspec, err);
             rc.add("/other" + std::to_string(i % 7), cspec, err);
