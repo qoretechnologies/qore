@@ -161,6 +161,11 @@ public:
         return inner_base == nullptr;
     }
 
+    // the controller asks the operation that it was given: the renewal of the timeout is the inner operation's
+    DLLLOCAL bool renewsTimeout() override {
+        return inner_base && inner_base->renewsTimeout();
+    }
+
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (inner_base) {
             return inner_base->continuePoll(xsink);

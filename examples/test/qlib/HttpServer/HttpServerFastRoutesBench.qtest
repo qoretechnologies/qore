@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerFastRoutesBenchTest
+
+class FastRouteBenchHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "{}", "hdr": {"Content-Type": "application/json"}};
+    }
+}
+
+#! Regression benchmark of the HTTP server fast routes
+/** A client sends keep-alive requests on one connection, alternately to a fast route and to the handler with the same
+    response.  The ratio of the two times is checked rather than an absolute time, so the check holds on slow or loaded
+    machines: a fast route that is no longer answered on the async I/O thread (a hand-off to a worker is back) loses
+    most of its advantage and fails the threshold.  The numbers are printed with -v.  See
+    design/http-server-fast-routes.md.
+*/
+class HttpServerFastRoutesBenchTest inherits QUnit::Test {
+    public {
+        #! the requests per path in a round
+        const Requests = 1500;
+
+        #! the rounds; the best (lowest) time of each path is compared, which discards interference
+        const Rounds = 5;
+
+        #! the fast route must take at most this fraction of the time of the handler
+        const MaxRatio = 0.25;
+
+        #! the requests per path in a round, and the fraction, when each request has a connection of its own: the
+        #! accept of the connection is the same for both paths, so the gain is smaller
+        const NewConnectionRequests = 300;
+        const MaxNewConnectionRatio = 0.7;
+
+        const Timeout = 30s;
+    }
+
+    private {
+        HttpServer hs;
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRoutesBenchTest", "1.0", \ARGV) {
+        addTestCase("fast route vs handler", \testBench());
+        addTestCase("fast route vs handler, a connection per request", \testBenchNewConnection());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        hs = new HttpServer();
+        hs.setDefaultHandler("handler", new FastRouteBenchHandler());
+        port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        hs.addFastRoute("/fast", {"public": True, "response": {"code": 200, "body": "{}",
+            "content_type": "application/json"}});
+    }
+
+    globalTearDown() {
+        hs.stop();
+        delete hs;
+    }
+
+    #! sends n requests for path on the connection and returns the elapsed microseconds
+    private int run(Socket c, string path, int n) {
+        string req = sprintf("GET %s HTTP/1.1\r\nHost: x\r\n\r\n", path);
+        date start = now_us();
+        for (int i = 0; i < n; ++i) {
+            c.send(req);
+            hash<auto> h = c.readHTTPHeader(Timeout);
+            if (h.status_code != 200) {
+                throw "BENCH-ERROR", sprintf("unexpected status %d for %s", h.status_code, path);
+            }
+            int len = (h."content-length" ?? 0).toInt();
+            if (len) {
+                c.recv(len, Timeout);
+            }
+        }
+        return (now_us() - start).durationMicroseconds();
+    }
+
+    #! sends n requests for path, each on a new connection, and returns the elapsed microseconds
+    private int runNewConnections(string path, int n) {
+        # like a Kubernetes probe: a connection for each request, with Connection: close
+        string req = sprintf("GET %s HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", path);
+        date start = now_us();
+        for (int i = 0; i < n; ++i) {
+            Socket c();
+            c.connect("127.0.0.1:" + port);
+            c.send(req);
+            hash<auto> h = c.readHTTPHeader(Timeout);
+            if (h.status_code != 200) {
+                throw "BENCH-ERROR", sprintf("unexpected status %d for %s", h.status_code, path);
+            }
+            int len = (h."content-length" ?? 0).toInt();
+            if (len) {
+                c.recv(len, Timeout);
+            }
+            c.close();
+        }
+        return (now_us() - start).durationMicroseconds();
+    }
+
+    testBenchNewConnection() {
+        runNewConnections("/normal", 50);
+        runNewConnections("/fast", 50);
+
+        int best_fast = MAXINT;
+        int best_normal = MAXINT;
+        for (int r = 0; r < Rounds; ++r) {
+            best_normal = min(best_normal, runNewConnections("/normal", NewConnectionRequests));
+            best_fast = min(best_fast, runNewConnections("/fast", NewConnectionRequests));
+        }
+        float fast_us = best_fast.toFloat() / NewConnectionRequests;
+        float normal_us = best_normal.toFloat() / NewConnectionRequests;
+        float ratio = fast_us / normal_us;
+        if (m_options.verbose) {
+            printf("new connection per request: fast route: %.1f us/request, handler: %.1f us/request, ratio %.2f "
+                "(max %.2f)\n", fast_us, normal_us, ratio, MaxNewConnectionRatio);
+        }
+        assertLt(MaxNewConnectionRatio, ratio, sprintf("fast %.1f us, handler %.1f us", fast_us, normal_us));
+    }
+
+    testBench() {
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        # warm up both paths
+        run(c, "/fast", 1);
+        run(c, "/normal", 200);
+        run(c, "/fast", 200);
+
+        int best_fast = MAXINT;
+        int best_normal = MAXINT;
+        for (int r = 0; r < Rounds; ++r) {
+            best_normal = min(best_normal, run(c, "/normal", Requests));
+            best_fast = min(best_fast, run(c, "/fast", Requests));
+        }
+        float fast_us = best_fast.toFloat() / Requests;
+        float normal_us = best_normal.toFloat() / Requests;
+        float ratio = fast_us / normal_us;
+        if (m_options.verbose) {
+            printf("fast route: %.1f us/request, handler: %.1f us/request, ratio %.2f (max %.2f)\n", fast_us,
+                normal_us, ratio, MaxRatio);
+        }
+        assertLt(MaxRatio, ratio, sprintf("fast %.1f us, handler %.1f us", fast_us, normal_us));
+    }
+}

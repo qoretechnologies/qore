@@ -39,6 +39,7 @@
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/QC_HttpFastRoutes.h"
 #include "qore/QoreSSLCertificate.h"
 #include "qore/QoreSSLPrivateKey.h"
 
@@ -363,6 +364,42 @@ static int socket_check_http_request(const QoreStringNode* method, const QoreStr
 // the strings of an HTTP/1 response are written to the message as C strings, which would be cut at a NUL character,
 // and a CR or LF would end the status line and start a header; headers are only given here when the message is made
 // without my_socket_priv, which checks them otherwise
+// Checks the arguments of the response to a HEAD request: no body, and a Content-Length of digits only
+static int socket_check_head_response(bool head, const QoreHashNode* headers, const QoreValue& body,
+        const char* err, ExceptionSink* xsink) {
+    if (!head) {
+        return 0;
+    }
+    if (body.getType() == NT_STRING ? !body.get<const QoreStringNode>()->empty()
+            : (body.getType() == NT_BINARY && body.get<const BinaryNode>()->size())) {
+        xsink->raiseException(err, "the response to a HEAD request has no message body");
+        return -1;
+    }
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            if (strcasecmp(hi.getKey(), "content-length")) {
+                continue;
+            }
+            QoreStringValueHelper str(hi.get());
+            const char* v = str->c_str();
+            bool ok = *v != '\0';
+            for (const char* c = v; *c; ++c) {
+                if (*c < '0' || *c > '9') {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) {
+                xsink->raiseException(err, "the Content-Length of the response to a HEAD request must be a number of "
+                    "octets (digits only)");
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int socket_check_http_response(const QoreStringNode* status_description, const QoreStringNode* http_version,
         const QoreHashNode* headers, const char* err, ExceptionSink* xsink) {
     if (q_check_http_text(status_description->c_str(), status_description->size(), "HTTP status message",
@@ -920,7 +957,8 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
         return QoreValue();
     }
 
-    my_socket_priv::setAccept(**n, ns);
+    // the hostname is only resolved if the listening socket asks for it (see Socket::setSourceHostLookup())
+    my_socket_priv::setAccept(**n, ns, my_socket_priv::getPriv(*s)->source_host_lookup.load());
     return output.release();
 }
 
@@ -2639,6 +2677,10 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     ignored and replaced with the actual body size
     @param body optional message body to send with the response; must be a @ref string or @ref binary value if
     provided
+    @param head if @ref True, the response is to a \c HEAD request (RFC 9110 section 9.3.2): it has no message body
+    (\a body must be empty) and no \c Content-Length header is added; a \c Content-Length header in \a headers is
+    sent as given and must be the number of octets that the response to a \c GET request would have (digits only); the
+    default is @ref False
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send the HTTP response in
     non-blocking mode
@@ -2664,9 +2706,10 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, string status_description,
-        string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
+        string http_version, *hash<auto> headers, *data body, bool head = False) [flags=NAMED_ARGS] {
     if (socket_check_http_response(status_description, http_version, headers,
-            "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)) {
+            "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)
+            || socket_check_head_response(head, headers, body, "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)) {
         return QoreValue();
     }
     // Validate status code (must be between 100 and 599)
@@ -2692,8 +2735,9 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
         return QoreValue();
     }
 
-    // Add headers using the standard do_headers() function which properly handles Content-Length
-    qore_socket_private::do_headers(hdr, headers, body_size);
+    // Add headers using the standard do_headers() function which properly handles Content-Length; a response to a HEAD
+    // request has no Content-Length added, and one that is given is sent as it is
+    qore_socket_private::do_headers(hdr, headers, body_size, !head);
 
     // Create binary result with header + body
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
@@ -2732,6 +2776,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     @param body optional message body to send with the response
     @param idle_timeout idle timeout for waiting for the next request; when the timeout expires, the
     operation completes with state "timeout"
+    @param head if @ref True, the response is to a \c HEAD request: see
+    @ref startPollSendHttpResponse() "startPollSendHttpResponse()"; the default is @ref False
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; when goal is reached:
     - If \c getState() returns \c "header-complete": \c getOutput() returns a hash with \c "hdr" (parsed
@@ -2743,8 +2789,11 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
-        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
+        string http_version, *hash<auto> headers, *data body, timeout idle_timeout, bool head = False)
+        [flags=NAMED_ARGS] {
     if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR", xsink)
+            || socket_check_head_response(head, headers, body,
             "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR", xsink)) {
         return QoreValue();
     }
@@ -2771,8 +2820,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
         return QoreValue();
     }
 
-    // Add headers
-    qore_socket_private::do_headers(hdr, headers, body_size);
+    // Add headers; a response to a HEAD request has no Content-Length added, and one that is given is sent as it is
+    qore_socket_private::do_headers(hdr, headers, body_size, !head);
 
     // Create binary result with header + body
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
@@ -6613,6 +6662,184 @@ if (sock.setNoDelay(True))
 */
 int Socket::setNoDelay(bool enabled = True) [flags=NAMED_ARGS] {
     return s->setNoDelay(enabled);
+}
+
+//! Sets whether accepting a connection resolves the peer's hostname for the new Socket's \c source_host member
+/** Call this on the listening socket.  When this setting is @ref True, Socket::accept() and Socket::acceptSSL() look
+    up the peer's hostname (a reverse DNS lookup) and set the new Socket object's \c source_host member; the lookup
+    delays the call until it completes, and a slow or unreachable name server delays every accepted connection.  The
+    default is @ref False: \c source_host is then @ref nothing, and the \c source member (the peer's IP address) is
+    set as before.
+
+    The peer's hostname can be requested for one connection with Socket::getPeerInfo(), which takes a
+    \c host_lookup argument.
+
+    @par Example:
+    @code{.py}
+Socket listener();
+listener.bindINET(NOTHING, 8080);
+listener.listen();
+listener.setSourceHostLookup();
+Socket conn = listener.accept();
+printf("connection from %s\n", conn.source_host ?? conn.source);
+    @endcode
+
+    @param enabled @ref True to resolve the peer's hostname on accept, @ref False not to
+
+    @see Socket::getSourceHostLookup()
+
+    @since %Qore 3.0
+*/
+nothing Socket::setSourceHostLookup(bool enabled = True) [flags=NAMED_ARGS] {
+    my_socket_priv::getPriv(*s)->source_host_lookup.store(enabled);
+}
+
+//! Returns the setting of Socket::setSourceHostLookup()
+/** @par Example:
+    @code{.py}
+bool b = sock.getSourceHostLookup();
+    @endcode
+
+    @return @ref True if accepting a connection resolves the peer's hostname for the new Socket's \c source_host
+    member; the default is @ref False
+
+    @see Socket::setSourceHostLookup()
+
+    @since %Qore 3.0
+*/
+bool Socket::getSourceHostLookup() [flags=RET_VALUE_ONLY] {
+    return my_socket_priv::getPriv(*s)->source_host_lookup.load();
+}
+
+//! Sets the HTTP fast routes of a listening socket
+/** The connections accepted from the socket share the routes, so a change of the routes reaches the connections that
+    are already open.  The routes are answered by the async I/O thread for the qualifying requests; see
+    @ref Qore::HttpFastRoutes "HttpFastRoutes".
+
+    @param routes the routes; @ref nothing removes the socket's routes
+
+    @par Example:
+    @code{.py}
+listener.setHttpFastRoutes(routes);
+    @endcode
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttpFastRoutes(*HttpFastRoutes[QoreHttpFastRoutes] routes) {
+    QoreHttpFastRoutes* fr = routes ? *routes : nullptr;
+    qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->setFastRoutes(
+        fr ? fr->r : std::shared_ptr<HttpFastRoutes>());
+}
+
+//! Sets the extra response headers that the HTTP fast routes of a listening socket add to their responses
+/** The headers are added to every response that a fast route sends for a connection accepted from the socket (a header
+    that the route's response has itself is not replaced), as the HTTP server does for its own responses; the
+    @c Alt-Svc header that advertises HTTP/3 is the use.  The headers are shared with the connections that are already
+    open, so a change applies to them; adding them costs nothing per request (the serialized response is cached with
+    them).  The headers that the server sets itself (@c Content-Length, @c Transfer-Encoding, @c Connection, @c Date,
+    @c Upgrade and @c Keep-Alive) cannot be given.
+
+    @param headers the headers, with string values; @ref nothing or an empty hash removes the extra headers; at most 8
+
+    @par Example:
+    @code{.py}
+listener.setHttpFastExtraHeaders({"Alt-Svc": "h3=\":8443\"; ma=3600"});
+    @endcode
+
+    @throw HTTP-FAST-ROUTE-ERROR a header is not valid
+
+    @since %Qore 3.0
+*/
+nothing Socket::setHttpFastExtraHeaders(*hash<auto> headers) [flags=NAMED_ARGS] {
+    std::vector<std::pair<std::string, std::string>> list;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue v = hi.get();
+            if (v.getType() != NT_STRING) {
+                fast_route_error(xsink, "header \"%s\" must be a string, got type '%s'", hi.getKey(),
+                    v.getFullTypeName());
+                return QoreValue();
+            }
+            TempEncodingHelper t(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            list.emplace_back(hi.getKey(), std::string(t->c_str(), t->size()));
+        }
+    }
+    std::shared_ptr<const HttpFastExtraHeaders> extra;
+    if (!list.empty()) {
+        std::string err;
+        extra = HttpFastExtraHeaders::create(list, err);
+        if (!extra) {
+            fast_route_error(xsink, "%s", err.c_str());
+            return QoreValue();
+        }
+    }
+    qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getOrCreateFastContext()->setExtraHeaders(
+        std::move(extra));
+}
+
+//! Returns @ref True if the socket has HTTP fast routes
+/** An accepted socket has the routes of the listening socket that it was accepted from.
+
+    @return @ref True if routes were set with @ref setHttpFastRoutes() (or the socket was accepted from a socket that
+    has them)
+
+    @par Example:
+    @code{.py}
+if (sock.hasHttpFastRoutes()) {
+    # the first request of the connection can be answered by a route
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+bool Socket::hasHttpFastRoutes() [flags=RET_VALUE_ONLY] {
+    return (bool)qore_socket_private::get(*my_socket_priv::getPriv(*s)->socket)->getFastRoutes();
+}
+
+//! Starts a poll operation that waits for the first HTTP request of a connection and reads its header
+/** This is the fused send, idle wait and header read operation of
+    @ref startPollSendHttpResponseAndReadHeader() without the response to send: it waits for data, reads the request
+    header and completes with the parsed header, like @ref startPollReadHttpHeader(); in addition, a request that a
+    fast route of the socket qualifies for is answered by the operation itself on the async I/O thread, and the
+    operation goes on waiting for the next request without completing (see @ref Qore::HttpFastRoutes "HttpFastRoutes").
+
+    @param idle_timeout how long to wait for a request; when the time expires, the operation completes with state
+    \c "timeout"
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; the results are those of
+    @ref startPollSendHttpResponseAndReadHeader()
+
+    @par Example:
+    @code{.py}
+AbstractPollOperation op = sock.startPollIdleAndReadHttpHeader(30s);
+    @endcode
+
+    @since %Qore 3.0
+*/
+AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_timeout) [flags=NAMED_ARGS] {
+    // an empty response: the operation starts in its idle phase
+    SimpleRefHolder<BinaryNode> nothing_to_send(new BinaryNode);
+
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 deadline_ms = now_s * 1000 + us / 1000 + idle_timeout;
+
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendAndReadHeaderPollOperation(xsink, nothing_to_send.release(), s, deadline_ms), xsink);
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns the \c TCP_NODELAY setting for the socket

@@ -80,6 +80,12 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
+    Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
+    \c source_host member is @ref nothing unless the listening socket was set with Socket::setSourceHostLookup(); the
+    lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
+    still resolves the hostname on request.
+
     @par Module Code Runs with the Restrictions of Its Caller
     A method of a user-module class, a closure created in module code and the module code they call run with the
     restrictions of their caller as well as their own, and a module function looks up names at run time in its
@@ -489,6 +495,12 @@
     @ref Qore::thread_join() "thread_join()" waits until a thread started with @ref background has left the thread
     list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
     (<a href="https://github.com/qoretechnologies/qore/issues/5575">issue 5575</a>).
+
+    @par HTTP Server Fast Routes
+    A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
+    thread answers its qualifying requests in microseconds, with no worker hand-off and a response identical to the
+    handler's; a @ref Qore::FastCell "FastCell" or a @ref Qore::FastResponseSlot "FastResponseSlot" that Qore code sets
+    selects or supplies the response without waiting.  See @ref Qore::HttpFastRoutes "HttpFastRoutes".
 
     @par Module Parse Option Masks
     A process can let code with fewer privileges load trusted modules that use more functionality with a module

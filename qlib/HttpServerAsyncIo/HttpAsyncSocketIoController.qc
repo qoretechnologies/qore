@@ -215,6 +215,9 @@ public class HttpAsyncSocketIoController {
         - \c lingering_close_timeout: the maximum time to wait for an HTTP/1.x client to close its side of the
           connection after the last response (default @ref DefaultLingeringCloseTimeout); 0 closes the connection
           immediately; see @ref lingeringClose()
+        - \c peer_hostname_lookup: if @ref True "True", the reverse DNS lookup of each client address is started when
+          the connection is accepted and is set in the \c "peer-info-future" key of the connection context (default
+          @ref False "False")
     */
     constructor(AsyncSocketIoController controller, *LoggerInterface logger,
             hash<auto> opts = {}) {
@@ -1447,6 +1450,10 @@ public class HttpAsyncSocketIoController {
     }
 
     private *Future startPeerInfoFuture(hash<auto> peer_info) {
+        # a reverse lookup costs a resolver channel and a query for every connection: only if asked for
+        if (!pool_opts.peer_hostname_lookup) {
+            return NOTHING;
+        }
         *string address = peer_info.address;
         if (!address || address == "unknown" || address == "quic") {
             return NOTHING;
@@ -1631,6 +1638,16 @@ public class HttpAsyncSocketIoController {
             "is_http2": False,
             "ssl": output.secure ?? False,
         };
+        if (sock.hasHttpFastRoutes()) {
+            # the listener has fast routes: the first request is read by the fused idle + read header operation,
+            # which answers a request that a route qualifies for on the I/O thread (no handler hand-off), and
+            # completes with the parsed header for every other request, as the ReadHeader operation does; the wait
+            # for the first request is the time that the ReadHeader operation had
+            timeout first_request_wait = AsyncSocketIoController::DefaultIoOperationTimeout;
+            new_cinfo.state = HttpConnectionState::SendAndReadHeader;
+            new_cinfo.stream_op = sock.startPollIdleAndReadHttpHeader(first_request_wait);
+            new_cinfo.ttl = first_request_wait;
+        }
         hash<HttpActiveConnectionInfo> cinfo;
         {
             AutoWriteLock al(m);
@@ -2401,6 +2418,13 @@ public class HttpAsyncSocketIoController {
                     cinfo = connections{uh} @= conn_info;
                 }
             } else {
+                # the listener has fast routes: the first request is read by the fused idle + read header operation,
+                # which answers a request that a route qualifies for on the I/O thread (see handleAcceptComplete())
+                *AbstractPollOperation first_request_op;
+                timeout first_request_wait = AsyncSocketIoController::DefaultIoOperationTimeout;
+                if (sock.hasHttpFastRoutes()) {
+                    first_request_op = sock.startPollIdleAndReadHttpHeader(first_request_wait);
+                }
                 {
                     AutoWriteLock al(m);
                     # Check if connection still exists (may have been removed during shutdown)
@@ -2410,7 +2434,13 @@ public class HttpAsyncSocketIoController {
                     }
                     # Cast to typed hash to update fields and assign back
                     hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                    conn_info.state = HttpConnectionState::ReadHeader;
+                    if (first_request_op) {
+                        conn_info.state = HttpConnectionState::SendAndReadHeader;
+                        conn_info.stream_op = first_request_op;
+                        conn_info.ttl = first_request_wait;
+                    } else {
+                        conn_info.state = HttpConnectionState::ReadHeader;
+                    }
                     conn_info.is_http2 = False;
                     conn_info.ssl = True;
                     # Update cx with real peer info now that socket is stable
@@ -3386,7 +3416,10 @@ public class HttpAsyncSocketIoController {
         # Expect: 100-continue requests fall through to the handler (which sends
         # 100-continue and reads the body synchronously) to avoid a round-trip.
         if (!output.info.http2 && !output.info.http3) {
-            auto content_length = output.hdr."content-length";
+            # the length is parsed as the server does (digits only): a value read differently here would pre-read a
+            # body that the handler does not expect, or none that it waits for; an invalid length is left to the
+            # handler, which refuses the request
+            *int content_length = HttpServer::http_parse_content_length(output.hdr."content-length");
             bool has_expect = (output.hdr.expect =~ /100-continue/i);
             bool has_body = (content_length > 0);
 
@@ -3801,7 +3834,7 @@ public class HttpAsyncSocketIoController {
                 string status_msg = result.status_message ?? "Unknown";
                 timeout ttl = result.ttl ?? DefaultIdleTimeout;
                 AbstractPollOperation fused_op = sock.startPollSendHttpResponseAndReadHeader(
-                    result.code, status_msg, "1.1", result.hdr ?? {}, result.body, ttl);
+                    result.code, status_msg, "1.1", result.hdr ?? {}, result.body, ttl, result.head);
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
                     "listener": linfo.listener,
@@ -3889,7 +3922,7 @@ public class HttpAsyncSocketIoController {
                     # Use async poll operation for all other H1 responses
                     AbstractPollOperation send_op = sock.startPollSendHttpResponse(
                         result.code, status_msg, "1.1", result.hdr ?? {},
-                        result.body);
+                        result.body, result.head);
                     hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                         "sock": sock,
                         "listener": linfo.listener,

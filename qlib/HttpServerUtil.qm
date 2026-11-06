@@ -116,7 +116,7 @@ module HttpServerUtil {
     |\c masked_path|string|the URI path after URL decoding the resource path and masking sensitive information
     |\c orig_path|string|the URI path in the request after URL decoding the resource path; the query string remains percent-encoded until parsed
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
-    |\c peer-info-future|@ref Qore::Thread::Future "Future"|optional Future resolving to peer information with reverse DNS hostname fields; handlers may wait on it if hostname resolution is required
+    |\c peer-info-future|*@ref Qore::Thread::Future "Future"|Future resolving to peer information with reverse DNS hostname fields; set only if the server has the \c peer_hostname_lookup option; handlers may wait on it if hostname resolution is required
     |\c raw_path|string|the raw URI request path in the request
     |\c response-encoding|*string|any value given by any \c "Accept-Charset" in the request
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
@@ -134,6 +134,8 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::http_parse_content_length() "http_parse_content_length()", a strict parser of the
+      \c Content-Length header (RFC 9110 section 8.6)
     - fixed logging sensitive data: @ref HttpServer::http_mask_data() "http_mask_data()" masked only the first
       \c pass or \c password value and no other credentials such as tokens, API keys and cookies; it now masks every
       value of the names listed in @ref HttpServer::http_is_sensitive_key() "http_is_sensitive_key()" and URL
@@ -960,6 +962,37 @@ public class CookieHelper {
             bool set_cache_control = True) {
         HttpUtil::set_cookie_header(\hdr, cookie, set_cache_control);
     }
+}
+
+#! Parses the value of a \c Content-Length header
+/** RFC 9110 section 8.6: the value is one or more ASCII digits.  A sign, a hexadecimal or exponent notation, a list of
+    values, white space inside the value or a number too large for the server to handle is not a valid
+    \c Content-Length; reading such a value as a number (as a general conversion does) gives a different length than
+    another parser would, which is how a request is smuggled or its body is waited for until the connection times out.
+
+    @param value the header value; leading and trailing white space is ignored
+
+    @return the length in octets, or @ref nothing if the value is not a valid \c Content-Length (at most 18 digits)
+
+    @par Example:
+    @code{.py}
+*int len = http_parse_content_length(hdr."content-length");
+if (!exists len) {
+    # answer 400 Bad Request
+}
+    @endcode
+
+    @since %HttpServerUtil 1.6
+*/
+public *int sub http_parse_content_length(*string value) {
+    if (!exists value) {
+        return;
+    }
+    string v = trim(value);
+    if (v !~ /^[0-9]{1,18}$/) {
+        return;
+    }
+    return int(v);
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)

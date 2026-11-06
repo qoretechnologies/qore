@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
@@ -6643,8 +6644,72 @@ void QoreThreadList::wakeCondWaiter(int tid) {
     cond_waker.queue(entry, tid, te.waiting_on, te.waiting_mutex);
 }
 
+#ifndef NDEBUG
+namespace qore_fast_route_guard {
+    thread_local int depth = 0;
+    thread_local int* probe = nullptr;
+
+    void violation(const char* where) {
+        if (probe) {
+            ++*probe;
+            return;
+        }
+        fprintf(stderr, "FATAL: %s() was reached from inside an HTTP fast route: fast routes run on an async I/O "
+            "thread and must not run Qore code or block (see design/http-server-fast-routes.md)\n", where);
+        fflush(stderr);
+        abort();
+    }
+}
+#endif
+
+int qore_fast_route_guard_probe(const char* kind, const ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+#ifdef NDEBUG
+    (void)kind;
+    (void)cb;
+    (void)xsink;
+    return -1;
+#else
+    // a kind with the prefix "abort-" is run without counting, so that the guard aborts the process
+    bool counting = true;
+    if (!strncmp(kind, "abort-", 6)) {
+        counting = false;
+        kind += 6;
+    }
+    struct ProbeHolder {
+        int violations = 0;
+        FastRouteScope scope;
+        explicit ProbeHolder(bool counting) {
+            if (counting) {
+                qore_fast_route_guard::probe = &violations;
+            }
+        }
+        ~ProbeHolder() {
+            qore_fast_route_guard::probe = nullptr;
+        }
+    } probe(counting);
+
+    if (!strcmp(kind, "code")) {
+        if (cb) {
+            ValueHolder rv(cb->invoke(nullptr, xsink), xsink);
+        }
+    } else if (!strcmp(kind, "wait")) {
+        pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+        QoreCondition cond;
+        pthread_mutex_lock(&m);
+        qore_cond_wait_cancellable(cond, &m, 1, xsink, "guard test");
+        pthread_mutex_unlock(&m);
+    } else if (strcmp(kind, "none")) {
+        xsink->raiseException("FAST-ROUTE-GUARD-TEST-ERROR", "unknown kind '%s'", kind);
+        return 0;
+    }
+    return probe.violations;
+#endif
+}
+
 int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink,
         const char* operation) {
+    // a fast route must never block
+    QORE_ASSERT_NOT_IN_FAST_ROUTE();
     // a request made before the wait
     if (qore_check_cancel(xsink, operation)) {
         return QORE_COND_RESULT_INTERRUPTED;

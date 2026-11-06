@@ -55,6 +55,9 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/HttpFastRoutes.h"
+#include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/HttpFastRequest.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
@@ -7286,6 +7289,70 @@ int QoreCaresAddrInfoResolver::getPollTimeoutMs() const {
     return ms <= 0 ? 1 : static_cast<int>(std::min<int64_t>(ms, INT_MAX));
 }
 
+bool QoreCaresAddrInfoResolver::startNumeric() {
+    // other flags change the answer (a canonical name, a wildcard address, address configuration checks): c-ares
+    // resolves those
+    if (!has_host || (flags & ~(AI_NUMERICHOST | AI_NUMERICSERV))) {
+        return false;
+    }
+
+    // a numeric port, or none; a service name needs the services database
+    unsigned port = 0;
+    if (has_service) {
+        if (service.empty() || service.size() > 5 || service.find_first_not_of("0123456789") != std::string::npos) {
+            return false;
+        }
+        port = static_cast<unsigned>(strtoul(service.c_str(), nullptr, 10));
+        if (port > 65535) {
+            return false;
+        }
+    }
+
+    SocketResolvedAddrInfo ai;
+    ai.socktype = type;
+    ai.protocol = protocol;
+    struct sockaddr_in* in4 = reinterpret_cast<struct sockaddr_in*>(&ai.addr);
+    struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&ai.addr);
+
+    // the same tests as ares_getaddrinfo() makes (ares_getaddrinfo.c, ares_addrinfo_numeric()), including its
+    // handling of the family hint: an IPv4 address is also given for an IPv6 hint, and an IPv6 address is not given
+    // for an IPv4 hint
+    bool is_v4 = false;
+    if (family == AF_INET || family == AF_INET6 || family == AF_UNSPEC) {
+        // it only looks like an IPv4 address if it is all digits and dots, with three dots
+        size_t numdots = 0;
+        bool valid = true;
+        for (char c : host) {
+            if (c == '.') {
+                ++numdots;
+            } else if (c < '0' || c > '9') {
+                valid = false;
+                break;
+            }
+        }
+        is_v4 = valid && numdots == 3 && ares_inet_pton(AF_INET, host.c_str(), &in4->sin_addr) == 1;
+    }
+    if (is_v4) {
+        in4->sin_family = AF_INET;
+        in4->sin_port = htons(static_cast<uint16_t>(port));
+        ai.family = AF_INET;
+        ai.addrlen = sizeof(struct sockaddr_in);
+    } else if ((family == AF_INET6 || family == AF_UNSPEC)
+            && ares_inet_pton(AF_INET6, host.c_str(), &in6->sin6_addr) == 1) {
+        in6->sin6_family = AF_INET6;
+        in6->sin6_port = htons(static_cast<uint16_t>(port));
+        ai.family = AF_INET6;
+        ai.addrlen = sizeof(struct sockaddr_in6);
+    } else {
+        // not an address, or an IPv6 address for an IPv4 hint: c-ares answers (or fails)
+        return false;
+    }
+    addrs.push_back(ai);
+    status = ARES_SUCCESS;
+    started = done = true;
+    return true;
+}
+
 int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     // c-ares defines ARES_AI_NUMERICHOST but does not enforce it in ares_getaddrinfo(). Do not let a
     // numeric-only request fall through to /etc/hosts or DNS, including a resolvable name such as localhost.
@@ -7297,6 +7364,10 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
             status = ARES_ENONAME;
             return raiseError(xsink);
         }
+    }
+    // an address literal needs no lookup
+    if (startNumeric()) {
+        return 0;
     }
     if (qore_cares_library_init(xsink)) {
         return -1;
@@ -18784,6 +18855,13 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
           buf(reinterpret_cast<const char*>(response_data->getPtr())),
           size(response_data->size()),
           idle_timeout_ms(idle_timeout_ms), header_output(nullptr) {
+    {
+        // the idle timeout is given as a deadline; a request answered by a fast route moves it on
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        idle_ttl_ms = idle_timeout_ms > now_ms ? idle_timeout_ms - now_ms : 0;
+    }
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -18792,6 +18870,13 @@ SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(Excep
     }
 
     if (!sock->priv->setNonBlock(xsink)) {
+        if (!size) {
+            // nothing to send (the first request of a new connection): wait for it
+            send_data.discard();
+            phase = Phase::Idle;
+            set_non_block = true;
+            return;
+        }
         poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
         if (!poll_state) {
             sock->priv->clearNonBlock();
@@ -18842,6 +18927,15 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             // Send complete — free send data and poll state, transition to idle
             poll_state.reset();
             send_data.discard();
+            fast_wire.reset();
+            if (fast_close) {
+                // the response of a fast route to a request that asked for the connection to be closed was sent: the
+                // controller closes the connection when the operation completes in this phase
+                phase = Phase::Closed;
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
             phase = Phase::Idle;
             // Return POLLIN to wait for incoming data
             return getSocketPollInfoHash(xsink, SOCK_POLLIN);
@@ -18858,7 +18952,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink);
+            int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
             if (*xsink || idle_rc < 0) {
                 phase = Phase::Closed;
                 qore_socket_close_from_controller(sock->priv->socket);
@@ -18902,6 +18996,17 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             SimpleRefHolder<BinaryNode> raw(poll_state->takeOutput().get<BinaryNode>());
             poll_state.reset();
 
+            // a route of the listener may answer a plain request from its bytes, before any hash is built
+            fast_decided = false;
+            {
+                QoreHashNode* fast_info = nullptr;
+                int fast_rc = serveFastRaw(reinterpret_cast<const char*>(raw->getPtr()), raw->size(), fast_info,
+                    xsink);
+                if (fast_rc) {
+                    return fast_rc > 0 ? fast_info : nullptr;
+                }
+            }
+
             // Convert binary to string for HTTP header parsing
             size_t len = raw->size();
             char* buf = reinterpret_cast<char*>(raw->giveBuffer());
@@ -18928,6 +19033,17 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 return nullptr;
             }
 
+            // a route of the listener may answer the request here, on the I/O thread, without completing the
+            // operation (and so without a callback on a worker thread); a request that the strict parser accepted
+            // was matched already
+            if (!fast_decided) {
+                QoreHashNode* fast_info = nullptr;
+                int fast_rc = serveFastRoute(*hdr, fast_info, xsink);
+                if (fast_rc) {
+                    return fast_rc > 0 ? fast_info : nullptr;
+                }
+            }
+
             // Store result for getOutput()
             header_output = new QoreHashNode(autoTypeInfo);
             header_output->setKeyValue("hdr", hdr.release(), xsink);
@@ -18944,6 +19060,159 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
         default:
             return nullptr;
     }
+}
+
+// the value of a header of a parsed request as a string; false if the header is not there
+static bool fast_route_header(const QoreHashNode* hdr, const char* name, std::string& value) {
+    QoreValue v = hdr->getKeyValue(name);
+    if (v.isNothing()) {
+        return false;
+    }
+    QoreStringDataHelper str(v);
+    value = str ? str.c_str() : "";
+    return true;
+}
+
+int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info,
+        ExceptionSink* xsink) {
+    qore_socket_private* sp = sock->priv->socket->priv;
+    std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
+    if (!fast_ctx) {
+        return 0;
+    }
+    HttpFastContext::Snapshot fast = fast_ctx->get();
+    std::shared_ptr<HttpFastRoutes>& routes = fast.routes;
+    if (!routes) {
+        return 0;
+    }
+
+#ifndef NDEBUG
+    // debug builds: Qore code and blocking waits assert if reached from here
+    FastRouteScope fast_route_scope;
+#endif
+
+    // this glue only reads the parsed header; the decision is made by the interpreter-free core
+    std::string method, path, version, content_length, connection, tmp;
+    fast_route_header(hdr, "method", method);
+    fast_route_header(hdr, "path", path);
+    fast_route_header(hdr, "http_version", version);
+    HttpFastRequestView view;
+    view.method = method;
+    view.path = path;
+    view.http_version = version;
+    if (fast_route_header(hdr, "content-length", content_length)) {
+        view.content_length = content_length;
+    }
+    if (fast_route_header(hdr, "connection", connection)) {
+        view.connection = connection;
+    }
+    view.has_transfer_encoding = fast_route_header(hdr, "transfer-encoding", tmp);
+    view.has_expect = fast_route_header(hdr, "expect", tmp);
+    view.has_upgrade = fast_route_header(hdr, "upgrade", tmp) || fast_route_header(hdr, "http2-settings", tmp);
+    // bytes of the next request are already buffered (buflen is the number of unread bytes in the buffer)
+    view.pending = sp->buflen > 0;
+
+    int us;
+    int64 epoch_s = q_epoch_us(us);
+    HttpFastFallback why;
+    bool close_after = false;
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after, fast.extra);
+    if (!wire) {
+        return 0;
+    }
+
+    return startFastSend(std::move(wire), close_after, info, xsink);
+}
+
+int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t size, QoreHashNode*& info,
+        ExceptionSink* xsink) {
+    qore_socket_private* sp = sock->priv->socket->priv;
+    std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
+    if (!fast_ctx) {
+        return 0;
+    }
+    HttpFastContext::Snapshot fast = fast_ctx->get();
+    std::shared_ptr<HttpFastRoutes>& routes = fast.routes;
+    if (!routes) {
+        return 0;
+    }
+
+#ifndef NDEBUG
+    FastRouteScope fast_route_scope;
+#endif
+
+    HttpFastRequestView view;
+    if (!HttpFastRequestParser::parse(data, size, view)) {
+        // the normal parser decides
+        return 0;
+    }
+    view.pending = sp->buflen > 0;
+
+    int us;
+    int64 epoch_s = q_epoch_us(us);
+    HttpFastFallback why;
+    bool close_after = false;
+    std::shared_ptr<const std::string> wire = routes->match(view, epoch_s, why, &close_after, fast.extra);
+    if (!wire) {
+        // the request was parsed and counted: it takes the normal path without being matched again
+        fast_decided = true;
+        return 0;
+    }
+    return startFastSend(std::move(wire), close_after, info, xsink);
+}
+
+int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const std::string> wire, bool close_after,
+        QoreHashNode*& info, ExceptionSink* xsink) {
+    // a request that asked for the connection to be closed: the operation ends when the response is sent
+    fast_close = close_after;
+    // the operation does not complete for this request: its timeout, which covers one request, starts again
+    timeout_renewal = true;
+
+    // send the response with this operation's own send phase, then wait for the next request
+    fast_wire = std::move(wire);
+    buf = fast_wire->data();
+    size = fast_wire->size();
+    poll_state.reset(sock->priv->socket->startSend(xsink, buf, size));
+    if (*xsink || !poll_state) {
+        fast_wire.reset();
+        phase = Phase::Error;
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return -1;
+    }
+    phase = Phase::Sending;
+    if (idle_ttl_ms > 0) {
+        int us2;
+        int64 now_s = q_epoch_us(us2);
+        idle_timeout_ms = now_s * 1000 + us2 / 1000 + idle_ttl_ms;
+    }
+    int rc = poll_state->continuePoll(xsink);
+    if (*xsink) {
+        fast_wire.reset();
+        phase = Phase::Error;
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        return -1;
+    }
+    if (rc) {
+        // the socket did not take it all: the send phase continues when it can
+        info = getSocketPollInfoHash(xsink, rc);
+        return 1;
+    }
+    poll_state.reset();
+    fast_wire.reset();
+    if (fast_close) {
+        // the controller closes the connection when the operation completes in this phase
+        phase = Phase::Closed;
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+        info = nullptr;
+        return 1;
+    }
+    phase = Phase::Idle;
+    info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return 1;
 }
 
 QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
@@ -19265,7 +19534,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                     set_non_block = false;
                     return nullptr;
                 }
-                int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink);
+                int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
                 if (*xsink || idle_rc < 0) {
                     phase = Phase::Closed;
                     qore_socket_close_from_controller(sock->priv->socket);

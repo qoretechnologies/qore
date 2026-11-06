@@ -12,8 +12,10 @@
 #! A c-ares lookup whose query c-ares lost is started again instead of waiting forever
 /** c-ares 1.34.7 and 1.34.8 can lose a query when a completion callback starts a new query with the id of the
     query that completed (ares_getaddrinfo() moving on to the next search domain, for example); the lookup then
-    never completes.  Every c-ares lookup recognizes that state - an unfinished lookup with active queries but no
-    timeout - and starts again on a new channel, and fails after it lost its query more often than it restarts.
+    never completes.  c-ares 1.34.9, the minimum version, fixes this.  Every c-ares lookup still recognizes that
+    state - an unfinished lookup with active queries but no timeout - and starts again on a new channel, and fails
+    after it lost its query more often than it restarts: the recovery is a safety net for a defect that c-ares could
+    have again.
 
     The defect itself happens for about one query in 65536, so the debug hook dbg_cares_lose_query() makes the next
     checks find the query lost; the test only runs against a debug build.  Only lookups that wait for a DNS answer

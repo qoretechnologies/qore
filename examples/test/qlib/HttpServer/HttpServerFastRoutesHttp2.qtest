@@ -1,0 +1,284 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires HttpServer
+%requires HttpServerUtil
+%requires RestClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerFastRoutesHttp2Test
+
+#! the handler: answers with "handler", or with "same" for /normal, and counts the requests that reach it
+class Http2RouteTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        static Counter calls = new Counter();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        Http2RouteTestHandler::calls.inc();
+        if (cx.raw_path == "/normal-empty") {
+            return <HttpResponseInfo>{"code": 200};
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": cx.raw_path == "/normal" ? "same" : "handler",
+            "hdr": {"Content-Type": "text/plain"},
+        };
+    }
+}
+
+#! Tests the HTTP server fast routes over HTTP/2: the request is answered when its HEADERS frame arrives, on the async
+#! I/O thread, and never reaches a handler (see design/http-server-fast-routes.md, phase 3)
+class HttpServerFastRoutesHttp2Test inherits QUnit::Test {
+    private {
+        HttpServer hs;
+        int port;
+        RestClientIo client;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRoutesHttp2Test", "1.0", \ARGV) {
+        addTestCase("a route answers over HTTP/2", \testBasic());
+        addTestCase("the response is that of the handler", \testParity());
+        addTestCase("HEAD requests", \testHead());
+        addTestCase("cells, slots and fallbacks", \testRulesAndFallbacks());
+        addTestCase("a large response", \testLarge());
+        addTestCase("concurrent streams", \testConcurrent());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        hs = new HttpServer();
+        hs.setDefaultHandler("handler", new Http2RouteTestHandler());
+        port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        client = new RestClientIo({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False,
+            "http_version": "2.0"});
+    }
+
+    globalTearDown() {
+        delete client;
+        hs.stop();
+        delete hs;
+    }
+
+    #! a GET request; the response of an error status is returned as well, not thrown
+    private hash<auto> get(string path) {
+        try {
+            return client.restGet(path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
+                return ex.arg;
+            }
+            rethrow;
+        }
+    }
+
+    private static hash<auto> textResponse(int code, string body) {
+        return {"code": code, "body": body, "content_type": "text/plain"};
+    }
+
+    #! the response headers without the date, which differs by nature
+    private static hash<auto> stable(hash<auto> hdr) {
+        return hdr - ("date",);
+    }
+
+    testBasic() {
+        hs.addFastRoute("/ping", {"public": True, "response": textResponse(200, "pong")});
+        on_exit hs.removeFastRoute("/ping");
+
+        # the first request: the connection is opened and the request answered by the route
+        int calls = Http2RouteTestHandler::calls.getCount();
+        hash<auto> r = client.restGet("/ping");
+        assertEq(200, r.status_code);
+        assertEq("pong", r.body);
+        assertEq("h2", r.protocol ?? "h2");
+        for (int i = 0; i < 30; ++i) {
+            assertEq("pong", client.restGet("/ping").body);
+        }
+        assertEq(calls, Http2RouteTestHandler::calls.getCount(), "the handler was not called");
+        assertEq(31, hs.getFastRouteInfo().routes{"/ping"});
+
+        # other requests on the same connection are answered by the handler
+        assertEq("handler", client.restGet("/other").body);
+        assertEq("pong", client.restGet("/ping").body);
+        # the query string is not part of the route
+        assertEq("pong", client.restGet("/ping?a=1&b=2").body);
+        # an exact match only
+        assertEq("handler", client.restGet("/ping/").body);
+        # removing the route: the handler answers
+        assertTrue(hs.removeFastRoute("/ping"));
+        assertEq("handler", client.restGet("/ping").body);
+    }
+
+    testParity() {
+        hs.addFastRoute("/fast", {"public": True, "response": textResponse(200, "same")});
+        hs.addFastRoute("/fast-empty", {"public": True, "response": {"code": 200}});
+        hs.addFastRoute("/fast-hdr", {"public": True, "response": {"code": 200, "body": "same",
+            "content_type": "text/plain", "hdr": {"X-Custom": "v1"}}});
+        on_exit {
+            hs.removeFastRoute("/fast");
+            hs.removeFastRoute("/fast-empty");
+            hs.removeFastRoute("/fast-hdr");
+        }
+
+        hash<auto> normal = client.restGet("/normal");
+        hash<auto> fast = client.restGet("/fast");
+        assertEq("same", normal.body);
+        assertEq("same", fast.body);
+        assertEq(normal.status_code, fast.status_code);
+        assertEq(sort(keys stable(normal.headers)), sort(keys stable(fast.headers)), "the same header names");
+        foreach string name in (keys stable(normal.headers)) {
+            assertEq(normal.headers{name}, stable(fast.headers){name}, "header " + name);
+        }
+        assertTrue(exists normal.headers."alt-svc", "the listener advertises HTTP/3 to the handler's responses");
+        assertEq(normal.headers."alt-svc", fast.headers."alt-svc", "and to the responses of a route");
+        assertTrue(exists fast.headers.date, "the response has a date header");
+        assertTrue(fast.headers."x-powered-by" =~ /^Qore\//, "the server's headers are added");
+
+        # a 200 response without a body is a 204 response, as for the handler
+        hash<auto> n2 = client.restGet("/normal-empty");
+        hash<auto> f2 = client.restGet("/fast-empty");
+        assertEq(204, n2.status_code);
+        assertEq(204, f2.status_code);
+        assertEq(sort(keys stable(n2.headers)), sort(keys stable(f2.headers)), "the same header names, 204");
+
+        # a header of the route
+        assertEq("v1", client.restGet("/fast-hdr").headers."x-custom");
+    }
+
+    testHead() {
+        hs.addFastRoute("/hd", {"public": True, "response": textResponse(200, "hello")});
+        hs.addFastRoute("/hd-empty", {"public": True, "response": {"code": 200}});
+        on_exit {
+            hs.removeFastRoute("/hd");
+            hs.removeFastRoute("/hd-empty");
+        }
+        int calls = Http2RouteTestHandler::calls.getCount();
+        int hits = hs.getFastRouteInfo().routes{"/hd"} ?? 0;
+        hash<auto> g = client.restGet("/hd");
+        hash<auto> h = client.restHead("/hd");
+        # answered by the route: the headers of the GET response, with its content-length, and no body
+        assertEq(hits + 2, hs.getFastRouteInfo().routes{"/hd"});
+        assertEq(calls, Http2RouteTestHandler::calls.getCount(), "the handler was not called");
+        assertEq(200, h.status_code);
+        assertTrue(!h.body, "no body");
+        assertEq("5", h.headers."content-length");
+        assertEq(sort(keys stable(g.headers)), sort(keys stable(h.headers)), "the same header names");
+        assertEq(g.headers."content-type", h.headers."content-type");
+        assertEq(g.headers."alt-svc", h.headers."alt-svc");
+
+        # many HEAD requests, mixed with GET requests, on one connection
+        for (int i = 0; i < 20; ++i) {
+            assertEq(200, client.restHead("/hd?x=" + i).status_code);
+            assertEq("hello", client.restGet("/hd").body, "request " + i);
+        }
+        # a response without a body (204): no content-length
+        hash<auto> e = client.restHead("/hd-empty");
+        assertEq(204, e.status_code);
+        assertEq(NOTHING, e.headers."content-length");
+        # a path that is not a route is answered by the handler
+        calls = Http2RouteTestHandler::calls.getCount();
+        assertEq(200, client.restHead("/other").status_code);
+        assertEq(calls + 1, Http2RouteTestHandler::calls.getCount());
+    }
+
+    testRulesAndFallbacks() {
+        FastCell ready(1, 10s);
+        hs.addFastRoute("/state", {
+            "public": True,
+            "rules": (
+                {"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},
+                {"cell": ready, "op": "==", "value": 0, "response": textResponse(503, "starting")},
+            ),
+        });
+        FastResponseSlot slot(10s);
+        hs.addFastRoute("/slot", {"public": True, "response": slot});
+        on_exit {
+            hs.removeFastRoute("/state");
+            hs.removeFastRoute("/slot");
+        }
+
+        hash<auto> r = get("/state");
+        assertEq((200, "ready"), (r.status_code, r.body));
+        ready.set(0);
+        r = get("/state");
+        assertEq((503, "starting"), (r.status_code, r.body));
+
+        # an empty slot: the handler answers; a slot with a response: the route
+        assertEq("handler", client.restGet("/slot").body);
+        slot.set({"code": 200, "body": "one", "content_type": "text/plain"});
+        assertEq("one", client.restGet("/slot").body);
+        slot.set({"code": 200, "body": "two", "content_type": "text/plain"});
+        assertEq("two", client.restGet("/slot").body);
+
+        # a stale cell takes the normal path
+        qore_test_advance_fast_clock(11000);
+        assertEq("handler", get("/state").body);
+        assertEq("handler", get("/slot").body);
+        ready.touch();
+        slot.set({"code": 200, "body": "three", "content_type": "text/plain"});
+        r = get("/state");
+        assertEq((503, "starting"), (r.status_code, r.body), "a cell that is touched is current again");
+        assertEq("three", client.restGet("/slot").body);
+
+        # a request with a body is not answered by a route
+        hs.addFastRoute("/post", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/post");
+        hash<auto> p = client.restPost("/post", "x");
+        assertEq("handler", p.body, "POST takes the normal path");
+        assertTrue(hs.getFastRouteInfo().fallbacks.no_route > 0);
+    }
+
+    testLarge() {
+        # a body larger than the HTTP/2 initial window (65535 bytes) minus the headers needs flow control: the response
+        # cap of a fast route is 64 KiB, so use the largest body that fits
+        string body = strmul("0123456789abcdef", 3900);
+        hs.addFastRoute("/large", {"public": True, "response": textResponse(200, body)});
+        on_exit hs.removeFastRoute("/large");
+        for (int i = 0; i < 5; ++i) {
+            hash<auto> r = client.restGet("/large");
+            assertEq(body.size(), r.body.size());
+            assertEq(body, r.body);
+        }
+        assertEq("handler", client.restGet("/other").body, "the connection is still usable");
+    }
+
+    testConcurrent() {
+        hs.addFastRoute("/c", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/c");
+        int calls = Http2RouteTestHandler::calls.getCount();
+        Counter done(8);
+        Queue errors();
+        for (int t = 0; t < 8; ++t) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    for (int i = 0; i < 40; ++i) {
+                        string path = i % 4 ? "/c" : "/other";
+                        string expected = i % 4 ? "fast" : "handler";
+                        string got = client.restGet(path).body;
+                        if (got != expected) {
+                            errors.push(sprintf("%s: expected %y, got %y", path, expected, got));
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(sprintf("%s: %s", ex.err, ex.desc));
+                }
+            }();
+        }
+        done.waitForZero(60s);
+        assertEq(0, errors.size(), "no wrong or failed response: " + (errors.size() ? errors.get() : ""));
+        assertEq(8 * 10, Http2RouteTestHandler::calls.getCount() - calls, "only the requests for /other reached the handler");
+    }
+}

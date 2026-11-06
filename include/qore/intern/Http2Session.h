@@ -153,6 +153,9 @@ struct Http2StreamInfo {
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
+    //! True if a fast route answered the request on the I/O thread (see Http2Session::serveFastRoute()): the stream is
+    //! never dispatched, and nghttp2 closes it when the response has been sent
+    bool fast_served = false;
     //! True once the peer ended the stream with END_STREAM (on HEADERS, trailing HEADERS, or DATA)
     /** Unlike @ref body_complete, which is also set when the stream is closed by RST_STREAM or otherwise, this flag
         tells whether the peer sent its complete message body.
@@ -956,6 +959,17 @@ private:
     DLLLOCAL int32_t submitRequestImpl(const char* method, const char* path,
         const HeaderRange& headers, const void* body, size_t body_len,
         ExceptionSink* xsink, bool streaming);
+    //! Answers a request with a fast route of the socket, if one qualifies (see design/http-server-fast-routes.md)
+    /** Called from onFrameRecvCallback() for a server session when the HEADERS frame of a request without a body has
+        been received, on the thread that is reading the connection, with the session lock held.  Nothing here runs
+        Qore code or blocks: the decision is made by the interpreter-free core and the response is submitted to
+        nghttp2, which sends it when the session is next flushed.
+
+        @param stream the stream of the request
+        @return true if the request was answered (the stream must not be dispatched)
+    */
+    DLLLOCAL bool serveFastRoute(Http2StreamInfo& stream);
+
     template<typename HeaderRange>
     DLLLOCAL int submitResponseImpl(int32_t stream_id, int status_code,
         const HeaderRange& headers, const void* body, size_t body_len,

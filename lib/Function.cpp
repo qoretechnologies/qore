@@ -79,6 +79,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "qore/intern/FastRouteGuard.h"
+
 static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
     return ti == softBigIntTypeInfo
         || ti == softFloatTypeInfo
@@ -964,6 +966,8 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+    // Qore code must never be started on an async I/O thread answering a fast route
+    QORE_ASSERT_NOT_IN_FAST_ROUTE();
     if (self && !self->isValid()) {
         assert(n_qc);
         qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \

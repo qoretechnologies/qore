@@ -356,6 +356,9 @@ set(LIBQORE_QPP_SRC
     lib/QC_HttpClientConnectionManagerBase.qpp
     lib/QC_HttpIdlePollOperationBase.qpp
     lib/QC_HttpKeepAlivePollOperationBase.qpp
+    lib/QC_FastCell.qpp
+    lib/QC_FastResponseSlot.qpp
+    lib/QC_HttpFastRoutes.qpp
     lib/QC_HttpAcceptPollOperationBase.qpp
     lib/QC_Http2PollOperationBase.qpp
     lib/QC_HttpWebSocketPollOperationBase.qpp
@@ -645,10 +648,12 @@ endif()
 # release from source via FetchContent (statically linked) when the system
 # package is missing or older than the minimum.
 #
-# Require 1.34.8 for the 1.34.7 DNS security fixes (CVE-2026-33630,
-# CVE-2026-69184, CVE-2026-69186) and the 1.34.8 callback API compatibility
-# fix. Apply the same minimum to system libraries and the source fallback:
-# updating only the fallback leaves older system resolvers in use.
+# Require 1.34.9 for its DNS security fixes (the 1.34.7 fixes for CVE-2026-33630,
+# CVE-2026-69184 and CVE-2026-69186, and the use-after-free and cache fixes of
+# 1.34.9), the 1.34.8 callback API compatibility fix and the lost-query fix
+# that Qore patched into 1.34.7 and 1.34.8. Apply the same minimum to system
+# libraries and the source fallback: updating only the fallback leaves older
+# system resolvers in use.
 #
 # IMPORTANT: consume the pkg-config IMPORTED_TARGET (PkgConfig::CARES_PKG),
 # NOT the bare ${CARES_PKG_LIBRARIES} name, so the linker resolves the exact
@@ -717,10 +722,6 @@ if (NOT CARES_FOUND_SYSTEM)
     FetchContent_Declare(cares
         ${_qore_cares_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
-        # c-ares 1.34.7 and 1.34.8 can lose a query when a completion callback starts a new query with the
-        # qid just freed, so that the lookup never completes; lib/QoreSocket.cpp also recovers from it with
-        # a system c-ares
-        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchCaresLostQuery.cmake
         EXCLUDE_FROM_ALL
     )
     FetchContent_MakeAvailable(cares)
@@ -1812,6 +1813,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreSSLCertificate.cpp
     lib/QoreSSLPrivateKey.cpp
     lib/QoreSocketObject.cpp
+    lib/HttpFastRoutes.cpp
+    lib/HttpFastRequest.cpp
     lib/QoreCondition.cpp
     lib/QoreModuleCppApi.cpp
     lib/QoreQueue.cpp
@@ -2166,6 +2169,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLCertificate.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSSLPrivateKey.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocketObject.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/HttpFastRoutes.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/HttpFastRequest.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCondition.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreModuleCppApi.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreQueue.cpp\"
@@ -2428,6 +2433,9 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpIdlePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpKeepAlivePollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FastCell.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FastResponseSlot.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpFastRoutes.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2PollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpWebSocketPollOperationBase.cpp\"

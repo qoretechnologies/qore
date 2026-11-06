@@ -216,6 +216,12 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - added @ref HttpServer::HttpServer::addFastRoute() "fast routes": a path that is answered on the async I/O thread,
+      without a hand-off to a worker thread and without calling a handler, for the requests that qualify
+      (@ref HttpServer::HttpServer::addFastRoute(), @ref HttpServer::HttpServer::removeFastRoute(),
+      @ref HttpServer::HttpServer::getFastRouteInfo(), @ref Qore::FastCell "FastCell" and
+      @ref Qore::HttpFastRoutes "HttpFastRoutes"); a request served by a fast route costs about 10 to 20 microseconds
+      of server CPU instead of milliseconds
     - fixed logging sensitive data: logged message headers and bodies are masked as with
       @ref HttpServer::http_mask_value() "http_mask_value()", and a binary body sent is logged only by its size
     - fixed @ref HttpServer::HttpServer::setListenerLogOptions() "setListenerLogOptions()": logging response bodies
@@ -307,6 +313,14 @@ log("started listener on %s", lh.desc);
       delimited by closing the connection (RFC 9112 section 6.3);
       @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" sends a streamed error message to an HTTP/1.0
       client with a \c Content-Length, and sends no message body in a response to a \c HEAD request
+    - fixed the \c Content-Length of a request (RFC 9110 section 8.6): the value is the digits and nothing else
+      (@ref HttpServer::http_parse_content_length()); a value such as \c +0, \c -1 or \c 0x0 is refused with
+      \c 400 instead of making the server wait for a message body until the read timed out, and \c 00 is a message
+      body of length 0
+    - fixed the response to a \c HEAD request (RFC 9110 section 9.3.2): it has the headers of the response to a
+      \c GET request, including the character encoding of the \c Content-Type and the \c Content-Encoding, no message
+      body, and a \c Content-Length only if it is the length of the \c GET response's message body (it was always
+      \c 0), and an error response to a \c HEAD request has no message body
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
     - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
       \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
@@ -337,7 +351,8 @@ log("started listener on %s", lh.desc);
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
-    - request contexts get numeric \c "peer-info" without a reverse DNS lookup; the reverse DNS lookup is made in
+    - request contexts get numeric \c "peer-info" without a reverse DNS lookup; with the
+      @ref HttpServer::HttpServerOptionInfo::peer_hostname_lookup "peer_hostname_lookup" option the lookup is made in
       parallel and is available in the optional \c "peer-info-future" key for handlers that need it
     - added @ref HttpServer::HttpServer::addListenerAsync() "addListenerAsync()" and
       @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
@@ -767,6 +782,17 @@ public hashdecl HttpServerOptionInfo {
     */
     timeout lingering_close_timeout = 5s;
 
+    #! Resolves the host name of each client address, available to handlers in the request context
+    /** When @ref True "True", the reverse DNS lookup of the address of each accepted connection is started when the
+        connection is accepted and is available to handlers in the \c "peer-info-future" key of the request context
+        (a @ref Qore::Thread::Future "Future"); the lookup does not delay the request.  The default is
+        @ref False "False": the lookup costs a resolver channel and a query for every connection, which a server whose
+        handlers do not use the host name should not pay, and the key is not set.
+
+        @since HttpServer 1.7
+    */
+    bool peer_hostname_lookup = False;
+
     #! Enable HTTP/3 headers-only dispatch mode
     /** When @ref True "True", HTTP/3 (and HTTP/2) requests are dispatched to handlers as
         soon as headers arrive, before the full body is received.  Handlers that override
@@ -947,6 +973,20 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         # quit server flag
         bool exit = False;
+
+        # the fast routes of the listeners (see addFastRoute()), created by the first route
+        *HttpFastRoutes fast_routes;
+
+        # guards fast_routes and quic_udp_sockets
+        Mutex fast_routes_lock();
+
+        # the UDP sockets of the QUIC listeners by listener ID, which the fast routes are attached to (the sessions of
+        # the listener are created from them)
+        hash<string, Socket> quic_udp_sockets;
+
+        # the TCP listeners by listener ID, whose sockets get the listener's Alt-Svc header for the responses of the fast
+        # routes (guarded by fast_routes_lock)
+        hash<string, HttpListener> alt_svc_targets;
 
         # if True then verbose exception info will be logged
         bool debug;
@@ -1734,6 +1774,22 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         c.add();
         on_error c.done();
 
+        # the fast routes of the server, if any, are answered for the HTTP/3 requests of the listener's sessions; the
+        # socket is kept so that routes created later are attached to it as well
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            quic_udp_sockets{string(lid)} = udp_sock;
+            if (fast_routes) {
+                udp_sock.setHttpFastRoutes(fast_routes);
+            }
+        }
+        on_error {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            remove quic_udp_sockets{string(lid)};
+        }
+
         # Register with the async I/O controller
         if (!asyncIo) {
             throw "HTTP3-ERROR", "async I/O controller not initialized";
@@ -2040,12 +2096,22 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         }
 
         string lid = string(l.getID());
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            remove alt_svc_targets{lid};
+        }
 
         # If this TCP listener had an auto-created QUIC listener, stop it too
         if (quic_listener_map.hasKey(lid)) {
             int quic_lid = remove quic_listener_map{lid};
             remove quic_port_map{lid};
             remove quic_alt_svc_max_age{lid};
+            {
+                fast_routes_lock.lock();
+                on_exit fast_routes_lock.unlock();
+                remove quic_udp_sockets{string(quic_lid)};
+            }
             updateAltSvcHeader();
             # Stop the QUIC listener if it still exists.
             # NOTE: stop() triggers the QUIC listener's own listenerStopped()
@@ -2645,6 +2711,67 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return NOTHING;
     }
 
+    #! Sets the headers of the response to a \c HEAD request that depend on the message body, which the response does not send
+    /** RFC 9110 section 9.3.2: the server should send the headers that a response to a \c GET request would have, and
+        must not send a \c Content-Length unless it is the number of octets that the response to a \c GET request would
+        have.  The \c Content-Type is that of the \c GET response (a body without one has a default, and a string body
+        has its character encoding).  The \c Content-Length is set only when it is known to be the length of the body
+        that a \c GET response sends: an in-memory body of binary data, or of text in ASCII sent in an encoding that
+        has ASCII as its subset, which is not compressed; otherwise none is sent, which is allowed.
+
+        The status code is the handler's: a handler that answers a \c HEAD request with a \c 200 response and no message
+        body (the usual way to answer one) keeps its \c 200 status; only a \c GET response without a body is changed to
+        \c 204.
+
+        @param rv the response, with the message body that a \c GET request would get; its headers are set
+        @param cx the connection context
+        @param s the client socket
+    */
+    private static prepareHeadResponse(reference<hash<auto>> rv, hash<auto> cx, Socket s) {
+        string encoding = cx."response-encoding" ?? s.getEncoding().lwr();
+        if (!rv.hdr."Content-Type") {
+            if (*string default_content_type = getDefaultContentType(rv, encoding)) {
+                rv.hdr."Content-Type" = default_content_type;
+            }
+        }
+        # the character encoding of a string body is given in the Content-Type, as for a GET response
+        hash<auto> probe = rv;
+        HttpServer::http_set_reply_headers(s, cx, \probe);
+        if (probe.hdr."Content-Type") {
+            rv.hdr."Content-Type" = probe.hdr."Content-Type";
+        }
+
+        # a body above the compression threshold is compressed for a client that accepts it: the GET response then has
+        # a Content-Encoding header, and the length of the compressed body, which is not known without compressing it
+        if (rv.body && !(rv.body instanceof InputStream) && !rv.send_callback && !rv.no_content_encoding
+                && !rv.hdr."Content-Encoding" && rv.body.size() > CompressionThreshold
+                && inlist(cx.encoding, ("br", "zstd", "deflate", "gzip", "bzip2"))) {
+            rv.hdr."Content-Encoding" = cx.encoding;
+            remove rv.hdr."Content-Length";
+            return;
+        }
+
+        if (rv.hdr."Content-Length" || rv.hdr."Transfer-Encoding" || rv.hdr."Content-Encoding"
+                || rv.hasKey("chunked_body") || rv.send_callback || rv.body instanceof InputStream) {
+            # a Content-Length of the handler is sent as it is; a length that is not known is not sent
+            return;
+        }
+        int tc = rv.body.typeCode();
+        int len;
+        if (tc == NT_BINARY) {
+            len = rv.body.size();
+        } else if (tc == NT_STRING) {
+            string label = http_get_charset_label(encoding);
+            if ((label != "utf-8" && label != "us-ascii" && label != "iso-8859-1") || rv.body !~ /^[\x00-\x7f]*$/) {
+                return;
+            }
+            len = strlen(rv.body);
+        } else {
+            return;
+        }
+        rv.hdr."Content-Length" = string(len);
+    }
+
     #! sends an HTTP error message on the socket
     sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
             *hash<auto> extra_hdrs, *string encoding, bool head) {
@@ -2777,6 +2904,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 } else {
                     s.submitQuicResponse(session_id, stream_id, status_code, hdr, send_body);
                 }
+            } else if (head && status_code >= 200) {
+                # the response to a HEAD request has no Content-Length added: the length of the GET response is not
+                # that of the (empty) message body sent here
+                execAsyncPollOperation(s, s.startPollSendHttpResponse(status_code,
+                    HttpServer::HttpCodes{status_code}, "1.1", hdr, NOTHING, True));
             } else {
                 s.sendHTTPResponse(status_code, HttpServer::HttpCodes{status_code}, "1.1", hdr,
                     response_msg ?? chunked_msg);
@@ -2895,6 +3027,174 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     #! returns the current status of the debug flag
     bool getDebug() {
         return debug;
+    }
+
+    #! Adds or replaces a fast route: a path that the async I/O thread answers without calling a handler
+    /** A request for the path that qualifies is answered on the async I/O thread, with no hand-off to a worker
+        thread and no Qore code; every other request takes the normal path.  A route answers a \c GET request for its
+        exact path (the query string is not part of the path) that has no body, no \c Expect or \c Upgrade header, is
+        HTTP/1.1 (with a keep-alive connection, or with \c Connection: \c close, in which case the response has
+        \c Connection: \c close and the connection is closed after it), and has no further request already received.
+        Every request of a connection is covered, the first one included.  The route is answered without the handler
+        chain, and so without authentication, logging or request preprocessing: \c public must be \c True.
+
+        A \c HEAD request for the path is answered the same way, with the headers of the response to a \c GET request
+        (with its \c Content-Length, except for a \c 204 response, which has none) and no message body
+        (RFC 9110 section 9.3.2).
+
+        An HTTP/2 or HTTP/3 request is answered the same way, when its headers have been received (a request with a body
+        takes the normal path).
+
+        The server's configured response headers (and the \c Server header) are added to each response, so that it has
+        the headers that the normal path sends, including the per-listener \c Alt-Svc header that advertises HTTP/3
+        on a listener that has it (a header that the route's response has itself replaces it).
+
+        @param path the exact path of the route, starting with \c "/"
+        @param info the route; see @ref Qore::HttpFastRoutes::addRoute() "HttpFastRoutes::addRoute()" for the keys.  A response
+        in it can set \c hdr to add or replace response headers
+
+        @par Example:
+        @code{.py}
+FastCell ready(0, 30s);
+hs.addFastRoute("/ready", {
+    "public": True,
+    "rules": (
+        {"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "ok", "content_type": "text/plain"}},
+    ),
+    "otherwise": {"code": 503, "body": "not ready", "content_type": "text/plain"},
+});
+
+# later, from any thread
+ready.set(1);
+        @endcode
+
+        @throw HTTP-FAST-ROUTE-ERROR the route is not valid
+
+        @see @ref Qore::FastCell "FastCell"
+
+        @since HttpServer 1.7
+    */
+    addFastRoute(string path, hash<auto> info) {
+        getOrCreateFastRoutes().addRoute(path, addServerHeadersToFastRoute(info));
+    }
+
+    #! Removes a fast route
+    /** @param path the path of the route
+
+        @return @ref True if there was a route for the path
+
+        @since HttpServer 1.7
+    */
+    bool removeFastRoute(string path) {
+        *HttpFastRoutes routes = getFastRoutes();
+        return routes ? routes.removeRoute(path) : False;
+    }
+
+    #! Returns the number of requests that each fast route answered, and why the other requests took the normal path
+    /** @return a hash with the keys \c routes and \c fallbacks; see @ref Qore::HttpFastRoutes::getInfo()
+
+        @since HttpServer 1.7
+    */
+    hash<auto> getFastRouteInfo() {
+        *HttpFastRoutes routes = getFastRoutes();
+        return routes ? routes.getInfo() : {"routes": {}, "fallbacks": {}};
+    }
+
+    #! Returns the fast routes, if any route was added
+    /** The listeners of the server (the existing ones and those added later) have them attached to their sockets.
+    */
+    private *HttpFastRoutes getFastRoutes() {
+        fast_routes_lock.lock();
+        on_exit fast_routes_lock.unlock();
+        return fast_routes;
+    }
+
+    #! Returns the fast routes, creating them and attaching them to the listeners if there are none yet
+    private HttpFastRoutes getOrCreateFastRoutes() {
+        bool created = False;
+        HttpFastRoutes routes;
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            if (!fast_routes) {
+                fast_routes = new HttpFastRoutes();
+                created = True;
+            }
+            routes = fast_routes;
+        }
+        if (created) {
+            # a listener added from now on attaches the routes itself (see addListenerIntern()); the existing ones
+            # are attached here
+            *hash<string, HttpListener> llist;
+            {
+                lm.enter();
+                on_exit lm.exit();
+                llist = listeners;
+            }
+            map $1.setHttpFastRoutes(routes), llist.iterator();
+            # the sockets of the QUIC listeners (their sessions are created from them)
+            list<Socket> usocks;
+            {
+                fast_routes_lock.lock();
+                on_exit fast_routes_lock.unlock();
+                usocks = quic_udp_sockets.values();
+            }
+            foreach Socket usock in (usocks) {
+                try {
+                    usock.setHttpFastRoutes(routes);
+                } catch (hash<ExceptionInfo> ex) {
+                    # a listener that is being stopped
+                }
+            }
+        }
+        return routes;
+    }
+
+    #! Adds the server's response headers to the responses of a fast route description
+    private hash<auto> addServerHeadersToFastRoute(hash<auto> info0) {
+        hash<auto> base = getResponseHeaders(0);
+        if (!(map $1, keys base, $1.lwr() == "server")) {
+            base.Server = HttpServerString;
+        }
+        # the hashes are copied to "auto!" locals: a literal such as {"code": 204} has the type hash<string, int>
+        code add = auto sub (auto response) {
+            if (response instanceof FastResponseSlot) {
+                # the slot builds its responses with the server's headers and the 204 rule, as for a hash below
+                cast<FastResponseSlot>(response).setDefaults(base);
+                return response;
+            }
+            if (response.typeCode() != NT_HASH) {
+                # not a response: the route parser reports it
+                return response;
+            }
+            hash<auto!> r = response;
+            # as for the response of a handler, a 200 response without a body is a 204 response (see
+            # sendResponse()), and has no body
+            if ((r.code ?? 200) == 200) {
+                *auto body = r.body;
+                int tc = body.typeCode();
+                bool empty = tc == NT_NOTHING || tc == NT_NULL || ((tc == NT_STRING || tc == NT_BINARY)
+                    && !body.size());
+                if (empty) {
+                    r.code = 204;
+                    remove r.body;
+                }
+            }
+            r.hdr = HttpServer::mergeResponseHeaders(base, r.hdr);
+            return r;
+        };
+        hash<auto!> info = info0;
+        if (info.response) {
+            info.response = add(info.response);
+        }
+        if (info.otherwise) {
+            info.otherwise = add(info.otherwise);
+        }
+        if (info.rules.typeCode() == NT_LIST) {
+            info.rules = map (($1.typeCode() == NT_HASH && $1.response) ? $1 + {"response": add($1.response)} : $1),
+                info.rules;
+        }
+        return info;
     }
 
     #! Returns a connection to the async I/O controller for keep-alive handling
@@ -3054,6 +3354,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "quic_drain_timeout": opts.quic_drain_timeout,
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
+            "peer_hostname_lookup": opts.peer_hostname_lookup,
         });
         asyncIo.start();
     }
@@ -3136,6 +3437,30 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
         # Keep global hdr clean (no Alt-Svc) — it's injected per-listener
         remove hdr."Alt-Svc";
+
+        # the responses of the fast routes carry the listener's Alt-Svc header too
+        list<HttpListener> targets;
+        {
+            fast_routes_lock.lock();
+            on_exit fast_routes_lock.unlock();
+            targets = alt_svc_targets.values();
+        }
+        foreach HttpListener l in (targets) {
+            applyAltSvcToFastRoutes(l);
+        }
+    }
+
+    #! Gives the socket of a TCP listener its Alt-Svc header (or removes it) for the responses of the fast routes
+    /** The sockets accepted from the listener, also those that are open, use it.  A listener whose socket is being
+        stopped is ignored.
+    */
+    private applyAltSvcToFastRoutes(HttpListener l) {
+        *string value = listener_alt_svc{string(l.getID())};
+        try {
+            l.setHttpFastExtraHeaders(value ? {"Alt-Svc": value} : NOTHING);
+        } catch (hash<ExceptionInfo> ex) {
+            # a listener that is being stopped
+        }
     }
 
     #! Returns response headers with per-listener Alt-Svc injected
@@ -3440,6 +3765,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     "listener %d; continuing with TCP-only (no H3) on port %d: "
                     "last error: %s: %s",
                     max_attempts, id, l.getInfo().port, h3_err, h3_desc);
+            }
+
+            # the fast routes of the server, if any, are answered for the connections accepted from the listener, with
+            # the listener's Alt-Svc header
+            {
+                fast_routes_lock.lock();
+                on_exit fast_routes_lock.unlock();
+                alt_svc_targets{string(l.getID())} = l;
+            }
+            applyAltSvcToFastRoutes(l);
+            if (*HttpFastRoutes fast = getFastRoutes()) {
+                l.setHttpFastRoutes(fast);
             }
 
             # Add the TCP listener to the async I/O controller — start accepting.
@@ -4102,7 +4439,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
                     body = decodeRequestText(hdr, cx."header-info".body);
                 }
-            } else if (hdr."content-length" && !is_multiplexed) {
+            } else if (exists hdr."content-length" && !is_multiplexed) {
                 # HTTP/1.x only: the request body is read from the raw socket here.
                 #
                 # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
@@ -4112,32 +4449,47 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # itself.  Reaching a synchronous socket read on a multiplexed connection
                 # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
                 # that still owns the socket, turning a valid request into a 400.
+                # the length is the digits of the header and nothing else: a value that another parser would read
+                # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
+                # conversion would make a length of 0 or less, for which the read below would wait for the connection
+                # to close (RFC 9110 section 8.6)
+                *int content_length = http_parse_content_length(hdr."content-length");
+                if (!exists content_length) {
+                    string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
+                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                    cx.close = True;
+                    sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                        hdr.method == "HEAD");
+                    return;
+                }
                 # Pre-read Content-Length check against max body size limit
-                if (max_body > 0 && hdr."content-length" > max_body) {
+                if (max_body > 0 && content_length > max_body) {
                     string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
-                        hdr."content-length", max_body);
+                        content_length, max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
                         cx."response-encoding", hdr.method == "HEAD");
                     return;
                 }
-                # HTTP/1.x: read body from socket
+                # HTTP/1.x: read body from socket; a length of 0 is no body
                 try {
+                    if (!content_length) {
+                        # nothing to read
                     # a multipart container stays binary here too, so that a direct read and a
                     # buffered one hand the handler the same bytes
-                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                    } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
                             || hdr."content-type" =~ /^multipart\//i) {
-                        body = s.recvBinary(hdr."content-length", HttpServer::ReadTimeout);
+                        body = s.recvBinary(content_length, HttpServer::ReadTimeout);
                     } else {
                         # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
                         # body was buffered
-                        body = decodeRequestText(hdr, s.recvBinary(hdr."content-length", HttpServer::ReadTimeout));
+                        body = decodeRequestText(hdr, s.recvBinary(content_length, HttpServer::ReadTimeout));
                     }
                     #printf("HTTP DEBUG: %s\n", body);
                 } catch (hash<ExceptionInfo> ex) {
                     string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
-                        hdr."content-length", ex.err, ex.desc);
+                        content_length, ex.err, ex.desc);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
                     listener.logError("%s", str);
@@ -4485,6 +4837,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         # the names of the fields managed by the server are canonical from here on
         rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
+
+        # a response to a HEAD request has the headers of the GET response (RFC 9110 section 9.3.2)
+        if (head && rv."code" >= 200 && rv."code" != 204 && rv."code" != 304) {
+            prepareHeadResponse(\rv, cx, s);
+        }
 
         if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")) || rv.send_callback)
             && (head
@@ -6694,15 +7051,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     };
                 }
             }
+            # a response to a HEAD request has no message body, also an error message that was built with one
+            bool is_head = !is_multiplexed && cx.hdr.method == "HEAD";
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "head": is_head,
                 "code": async_response.code,
                 "status_message": HttpServer::HttpCodes{async_response.code},
                 "hdr": hdr,
-                "body": async_response.body,
-                "input_stream": async_response.input_stream,
-                "send_callback": async_response.send_callback,
+                "body": is_head ? NOTHING : async_response.body,
+                "input_stream": is_head ? NOTHING : async_response.input_stream,
+                "send_callback": is_head ? NOTHING : async_response.send_callback,
                 "send_timeout": async_response.send_timeout,
-                "chunked": async_response.chunked && !is_multiplexed,
+                "chunked": async_response.chunked && !is_multiplexed && !is_head,
                 "close": do_close,
                 "return_to_idle": !do_close,
                 "ttl": serv.getTtl(),
@@ -6833,6 +7193,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 is.reassignThread();
                 http_send_streamed_response(s, response.code, HttpServer::HttpCodes{response.code},
                     response.hdr ?? {}, auto sub () { return is.read(65536); }, response.send_timeout ?? -1);
+            } else if (response.cx.hdr.method == "HEAD" && response.code >= 200) {
+                # HTTP/1.x: a response to a HEAD request has no Content-Length added (RFC 9110 section 9.3.2)
+                serv.execAsyncPollOperation(s, s.startPollSendHttpResponse(response.code,
+                    HttpServer::HttpCodes{response.code}, "1.1", response.hdr ?? {}, NOTHING, True));
             } else {
                 # HTTP/1.x: send normal response
                 s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",

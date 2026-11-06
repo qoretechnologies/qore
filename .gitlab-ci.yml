@@ -76,6 +76,19 @@ check-module-release-notes:
     - python3 examples/test/cmake/test_module_mainpage_layout.py
     - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'qlib/**/*.qc' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-mainpage.py --sources
 
+# The interpreter-free core of the HTTP server fast routes (lib/HttpFastRoutes.cpp), built with its standalone test under
+# AddressSanitizer + UndefinedBehaviorSanitizer and under ThreadSanitizer (it needs no Qore build)
+check-fast-routes-core-sanitizers:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/cpp/run-sanitizers.sh
+
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
   stage: build

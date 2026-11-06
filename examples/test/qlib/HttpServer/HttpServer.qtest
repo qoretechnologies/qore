@@ -587,6 +587,7 @@ public class HttpServerTest inherits QUnit::Test {
         addTestCase("async mode basic", \asyncModeBasicTest());
         addTestCase("async listener setup futures", \asyncListenerSetupFutureTest());
         addTestCase("async mode peer info future", \asyncModePeerInfoFutureTest());
+        addTestCase("async mode: no peer host name lookup by default", \asyncModePeerHostnameLookupDefaultTest());
         addTestCase("async mode keep-alive", \asyncModeKeepAliveTest());
         addTestCase("async mode concurrent", \asyncModeConcurrentTest());
         addTestCase("async mode HTTPS", \asyncModeHttpsTest());
@@ -669,6 +670,7 @@ public class HttpServerTest inherits QUnit::Test {
         hash<HttpServerOptionInfo> async_opts = <HttpServerOptionInfo>{
             "logger": asyncLogger,
             "debug": True,
+            "peer_hostname_lookup": True,
         };
         mAsyncServer = new HttpServer(async_opts);
         mAsyncServer.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
@@ -1553,6 +1555,23 @@ public class HttpServerTest inherits QUnit::Test {
         assertEq(peer_info.address, resolved.address);
         assertEq(peer_info.port, resolved.port);
         assertEq(peer_info.family, resolved.family);
+    }
+
+    asyncModePeerHostnameLookupDefaultTest() {
+        # without the peer_hostname_lookup option no reverse lookup is started: the context has no future
+        HttpServer hs();
+        on_exit hs.stop();
+        Queue q();
+        hs.setHandler("peer-info-future", "/peer-info-future", MimeTypeText, new PeerInfoFutureHandler(q));
+        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        HTTPClient client({"url": "http://127.0.0.1:" + port, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+        assertEq("ok", client.get("/peer-info-future"));
+        hash<auto> report = q.get(5s);
+        assertTrue(exists report{"peer-info"}.address);
+        assertFalse(report{"has-peer-info-future"}, "no reverse lookup by default");
     }
 
     asyncModeKeepAliveTest() {

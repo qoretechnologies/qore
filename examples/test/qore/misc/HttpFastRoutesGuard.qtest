@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class HttpFastRoutesGuardTest
+
+#! Tests the debug-build guard of the HTTP fast routes: Qore code and blocking waits must not be reached while an async
+#! I/O thread answers a request from a fast route (see design/http-server-fast-routes.md)
+/** The guard is compiled only into debug builds of the library (the probe returns -1 in a release build, and the
+    tests are skipped).  The probe runs an action inside a fast route scope with the reports of the guard counted
+    instead of aborting the process, which is what the guard does when nothing is probing.
+*/
+class HttpFastRoutesGuardTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpFastRoutesGuardTest", "1.0", \ARGV) {
+        addTestCase("the guard reports Qore code and waits", \testReports());
+        addTestCase("the guard is scoped to the probe", \testScope());
+        addTestCase("the guard aborts the process when nothing is probing", \testAbort());
+        addTestCase("the test clock", \testClock());
+        set_return_value(main());
+    }
+
+    private bool haveGuard() {
+        return qore_test_fast_route_guard("none") != -1;
+    }
+
+    testReports() {
+        if (!haveGuard()) {
+            testSkip("the library was built without the debug-build guard");
+        }
+        assertEq(0, qore_test_fast_route_guard("none"), "nothing to report");
+
+        int ran = 0;
+        int reports = qore_test_fast_route_guard("code", sub () { ++ran; });
+        assertEq(1, ran, "the code ran: the probe counts the report and does not stop it");
+        assertTrue(reports >= 1, "Qore code inside a fast route is reported");
+
+        assertTrue(qore_test_fast_route_guard("wait") >= 1, "a blocking wait inside a fast route is reported");
+
+        assertThrows("FAST-ROUTE-GUARD-TEST-ERROR", sub () { qore_test_fast_route_guard("bogus"); });
+    }
+
+    testScope() {
+        if (!haveGuard()) {
+            testSkip("the library was built without the debug-build guard");
+        }
+        # the scope and the probe end with the probe, also when the action throws: later actions are not reported
+        assertThrows("PROBE-TEST", sub () {
+            qore_test_fast_route_guard("code", sub () { throw "PROBE-TEST"; });
+        });
+        assertEq(0, qore_test_fast_route_guard("none"), "the scope ended with the probe that threw");
+
+        # another thread is not in the scope of this one
+        Counter c(1);
+        int other;
+        background sub () {
+            on_exit c.dec();
+            other = qore_test_fast_route_guard("none");
+        }();
+        c.waitForZero();
+        assertEq(0, other);
+    }
+
+    testAbort() {
+        if (!haveGuard()) {
+            testSkip("the library was built without the debug-build guard");
+        }
+        # a child process runs the action in a scope that nothing probes: the guard prints the place and aborts; the
+        # shell reports the exit status
+        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (qore_exe =~ /\// && !absolute_path(qore_exe)) {
+            qore_exe = getcwd() + "/" + qore_exe;
+        }
+        foreach string kind in ("code", "wait") {
+            string cmd = sprintf("'%s' -e 'qore_test_fast_route_guard(\"abort-%s\", sub () {});' 2>&1; echo \"exit=$?\"",
+                replace(qore_exe, "'", "'\\''"), kind);
+            string out = backquote(cmd);
+            assertRegex("FATAL: .* was reached from inside an HTTP fast route", out, kind + ": the message");
+            *list<string> m = (out =~ x/exit=(\d+)/);
+            assertTrue(exists m, kind + ": the exit status is reported");
+            assertNeq("0", m[0], kind + ": the process ended abnormally");
+        }
+    }
+
+    testClock() {
+        FastCell cell(1, 1s);
+        FastResponseSlot slot(1s);
+        slot.set({"code": 200, "body": "x", "content_type": "text/plain"});
+        assertFalse(cell.isStale());
+        assertFalse(slot.isStale());
+        qore_test_advance_fast_clock(500);
+        assertFalse(cell.isStale(), "younger than the maximum age");
+        assertFalse(slot.isStale());
+        qore_test_advance_fast_clock(600);
+        assertTrue(cell.isStale(), "older than the maximum age");
+        assertTrue(slot.isStale());
+        assertEq(1, cell.get(), "staleness does not change the value");
+        cell.touch();
+        slot.set({"code": 200, "body": "y", "content_type": "text/plain"});
+        assertFalse(cell.isStale());
+        assertFalse(slot.isStale());
+        assertThrows("FASTCELL-ERROR", sub () { qore_test_advance_fast_clock(-1); });
+    }
+}

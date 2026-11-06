@@ -508,12 +508,15 @@ if (accepted) {
 
         @since %Qore 3.0
     */
-    DLLLOCAL int checkIdleDataForAsyncPoll(ExceptionSink* xsink);
+    DLLLOCAL int checkIdleDataForAsyncPoll(ExceptionSink* xsink, bool buffered_is_data = false);
 
     //! Internal async-poll helper for idle-data probes when the socket lock is already held.
     /** This is the lock-held variant of @ref checkIdleDataForAsyncPoll().
 
         @param xsink exception sink; set on SSL error
+        @param buffered_is_data if true, bytes that the socket has already read from the descriptor count as data
+        (a server whose client sent its next request before the response to the previous one, pipelining); a client
+        does not set it, as for it such bytes are not a new message
 
         @return > 0  application-layer data is available
         @return   0  no application data; any TLS post-handshake record was drained
@@ -521,7 +524,7 @@ if (accepted) {
 
         @since %Qore 3.0
     */
-    DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink);
+    DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data = false);
 
     //! Error-reporting variant of @ref setNoDelay() for poll operation code.
     /** @ref setNoDelay() is already safe on async I/O execution paths -- libqore selects the

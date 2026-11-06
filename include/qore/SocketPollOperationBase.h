@@ -135,6 +135,21 @@ public:
         return false;
     }
 
+    //! Called by the async I/O controller after each continuePoll(): returns true once if the operation's timeout is to start again
+    /** The operation timeout of a submitted operation counts from its first poll and covers the work that the operation
+        was submitted for.  An operation that serves more than one request of a connection without completing - an
+        HTTP/1.1 keep-alive operation that answers a fast route itself - makes progress that the timeout must not cut
+        off: it returns true after each request it served, so that an active connection is not closed by a timeout that
+        was meant for one request.
+
+        @return true if the timeout starts again (the controller clears the request by calling this)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual bool renewsTimeout() {
+        return false;
+    }
+
     //! Returns the output of the operation (default: nothing)
     DLLEXPORT virtual QoreValue getOutput() const {
         return QoreValue();

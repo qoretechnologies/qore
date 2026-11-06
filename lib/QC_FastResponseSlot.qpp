@@ -1,0 +1,192 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  QC_FastResponseSlot.qpp
+
+  Qore Programming Language
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_FastResponseSlot.h"
+
+//! A response that the HTTP server's fast routes serve and that Qore code replaces
+/** A FastResponseSlot holds one complete response (status, headers and body), serialized when it is set, which a
+    @ref Qore::HttpFastRoutes "fast route" serves on the async I/O thread.  Qore code in any thread replaces the
+    response as a whole with @ref set(); the I/O thread takes a reference to the current one for each request, so
+    neither side waits for more than the exchange of a pointer.  Use it for a body that changes, such as a cached
+    metrics snapshot or a status document.
+
+    A slot can have a maximum age.  When the response has not been set for that long, or was never set, the route
+    does not answer: the request takes the normal path, where the handler decides.  That matters for readiness and
+    health: if the code that publishes the state has stopped, the route must not keep answering from a stale value.
+
+    A slot is used as the \c response or \c otherwise of a route, or as the \c response of a rule, in place of a
+    response hash.  Routes share ownership of the slot, so a route never refers to a slot that has been destroyed.
+
+    @par Example:
+    @code{.py}
+FastResponseSlot metrics(30s);
+hs.addFastRoute("/metrics", {"public": True, "response": metrics});
+
+# later, from any thread, at least every 30 seconds
+metrics.set({"code": 200, "body": render_metrics(), "content_type": "text/plain"});
+    @endcode
+
+    @see
+    - @ref Qore::FastCell "FastCell"
+    - @ref Qore::HttpFastRoutes "HttpFastRoutes"
+
+    @since %Qore 3.0
+ */
+qclass FastResponseSlot [arg=QoreFastResponseSlot* frs; ns=Qore];
+
+//! Creates an empty slot
+/** @param max_age the maximum age of the response before it is stale; a @ref timeout_type "timeout" value (integers
+    are milliseconds); 0 (the default) means the response never becomes stale
+
+    @par Example:
+    @code{.py}
+FastResponseSlot metrics(30s);
+    @endcode
+
+    @throw FASTRESPONSESLOT-ERROR the maximum age is negative
+ */
+FastResponseSlot::constructor(timeout max_age = 0) [flags=NAMED_ARGS] {
+    if (max_age < 0) {
+        xsink->raiseException("FASTRESPONSESLOT-ERROR", "the maximum age cannot be negative (" QLLD " ms)",
+            (int64)max_age);
+        return;
+    }
+    self->setPrivate(CID_FASTRESPONSESLOT, new QoreFastResponseSlot((int64)max_age * 1000));
+}
+
+//! Destroys the slot
+/** Routes that use the slot keep it (and its last response) alive.
+ */
+FastResponseSlot::destructor() {
+    frs->deref();
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw FASTRESPONSESLOT-COPY-ERROR objects of this class cannot be copied
+ */
+FastResponseSlot::copy() {
+    xsink->raiseException("FASTRESPONSESLOT-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Replaces the response
+/** The response is validated and serialized by this call, and is current after it.
+
+    @param response the response: a hash with \c code (default \c 200; see @ref Qore::HttpFastRoutes::addRoute() for
+    the codes), \c body (a string, which is sent as UTF-8, or binary data), \c content_type and \c hdr; at most 64 KiB
+
+    @par Example:
+    @code{.py}
+metrics.set({"code": 200, "body": text, "content_type": "text/plain"});
+    @endcode
+
+    @throw HTTP-FAST-ROUTE-ERROR the response is not valid; the previous response is kept
+ */
+nothing FastResponseSlot::set(hash<auto> response) [flags=NAMED_ARGS] {
+    FastRouteResponseParts parts;
+    if (!fast_route_parse_parts("response", QoreValue(const_cast<QoreHashNode*>(response)), parts, xsink)) {
+        return QoreValue();
+    }
+    frs->publish(std::move(parts), xsink);
+}
+
+//! Removes the response, so that requests take the normal path until the next @ref set()
+/** @par Example:
+    @code{.py}
+metrics.clear();
+    @endcode
+ */
+nothing FastResponseSlot::clear() {
+    frs->clear();
+}
+
+//! Sets the headers that every response of the slot has, and the rule for a response without a body
+/** This is what @ref HttpServer::HttpServer::addFastRoute() "HttpServer::addFastRoute()" calls for a slot, so that its
+    responses have the headers of the responses that the server sends (the \c Server header and the configured
+    response headers), and so that a \c 200 response without a body is a \c 204 response, as the server sends for a
+    handler.  A header that a response sets itself is not replaced.  The current response is built again with them.
+
+    @param headers the headers; the values are strings
+
+    @throw HTTP-FAST-ROUTE-ERROR a header is not valid
+ */
+nothing FastResponseSlot::setDefaults(hash<auto> headers) [flags=NAMED_ARGS] {
+    std::vector<std::pair<std::string, std::string>> base;
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        QoreValue v = hi.get();
+        if (v.getType() != NT_STRING) {
+            fast_route_error(xsink, "header \"%s\" must be a string, got type '%s'", hi.getKey(),
+                v.getFullTypeName());
+            return QoreValue();
+        }
+        TempEncodingHelper t(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        base.emplace_back(hi.getKey(), std::string(t->c_str(), t->size()));
+    }
+    frs->setDefaults(std::move(base), xsink);
+}
+
+//! Returns the time since the response was set
+/** @return the age of the response in milliseconds, or -1 if there is no response
+
+    @par Example:
+    @code{.py}
+int age_ms = metrics.getAge();
+    @endcode
+ */
+int FastResponseSlot::getAge() [flags=RET_VALUE_ONLY] {
+    int64 age = frs->s->getAgeUs();
+    return age < 0 ? -1 : age / 1000;
+}
+
+//! Returns the maximum age of the response
+/** @return the maximum age in milliseconds; 0 if the response never becomes stale
+ */
+int FastResponseSlot::getMaxAge() [flags=RET_VALUE_ONLY] {
+    return frs->s->getMaxAgeUs() / 1000;
+}
+
+//! Returns @ref True if a route would not answer from the slot
+/** @return @ref True if there is no response, or the slot has a maximum age and the response is older than that
+
+    @par Example:
+    @code{.py}
+if (metrics.isStale()) {
+    metrics.set(response);
+}
+    @endcode
+ */
+bool FastResponseSlot::isStale() [flags=RET_VALUE_ONLY] {
+    return !frs->s->get();
+}

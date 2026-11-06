@@ -3255,10 +3255,10 @@ static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
     return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, err, xsink);
 }
 
-void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o) {
+void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o, bool host_lookup) {
     ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> info(qore_socket_object_exec_address_info(&sock,
-        QoreSocketObjectAddressInfoPollOperation::Action::Peer, true, "setAccept",
+        QoreSocketObjectAddressInfoPollOperation::Action::Peer, host_lookup, "setAccept",
         "SOCKET-GETPEERINFO-ERROR", &xsink), &xsink);
     if (!xsink && info) {
         qore_socket_private::setAccept(o, **info);
@@ -4648,6 +4648,9 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
     dst->async_io_route_key = getIoIdentityHash();
+    // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
+    // reaches the connections that are already open
+    dst->setFastContext(src->getOrCreateFastContext());
 }
 
 QoreSocketObject::QoreSocketObject() : priv(new my_socket_priv) {
@@ -5473,17 +5476,23 @@ int QoreSocketObject::checkIdleData(ExceptionSink* xsink) {
     return qore_socket_object_exec_check_idle_data(this, xsink);
 }
 
-int QoreSocketObject::checkIdleDataForAsyncPoll(ExceptionSink* xsink) {
+int QoreSocketObject::checkIdleDataForAsyncPoll(ExceptionSink* xsink, bool buffered_is_data) {
     AutoLocker al(priv->m);
-    return checkIdleDataForAsyncPollLocked(xsink);
+    return checkIdleDataForAsyncPollLocked(xsink, buffered_is_data);
 }
 
-int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
+int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data) {
     assert(priv->m.trylock());
 
     qore_socket_private* p = qore_socket_private::get(*priv->socket);
     if (!p->isOpen()) {
         return -1;
+    }
+    // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
+    // that sent its next request before the response to the previous one (pipelining) has it here; for a server only
+    // (an HTTP client may have bytes there that it does not use, such as a body that a server sent to a HEAD request)
+    if (buffered_is_data && p->buflen > 0) {
+        return 1;
     }
     if (p->ssl) {
         // TLS connection: use SSL_peek to drain TLS post-handshake records

@@ -1,0 +1,497 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  QC_HttpFastRoutes.qpp
+
+  Qore Programming Language
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_HttpFastRoutes.h"
+#include "qore/intern/QC_FastCell.h"
+#include "qore/intern/QC_FastResponseSlot.h"
+
+#include <cstring>
+
+/** @cond INTERNAL */
+
+void fast_route_error(ExceptionSink* xsink, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    QoreStringNode* desc = new QoreStringNode;
+    desc->vsprintf(fmt, args);
+    va_end(args);
+    xsink->raiseException("HTTP-FAST-ROUTE-ERROR", desc);
+}
+
+// returns the string value of a hash member; false (with an exception) if it is not a string
+static bool fast_route_get_string(const char* what, QoreValue v, std::string& out, ExceptionSink* xsink,
+        bool utf8 = true) {
+    if (v.getType() != NT_STRING) {
+        fast_route_error(xsink, "%s must be a string, got type '%s'", what, v.getFullTypeName());
+        return false;
+    }
+    QoreStringValueHelper str(v);
+    if (utf8) {
+        TempEncodingHelper t(*str, QCS_UTF8, xsink);
+        if (*xsink) {
+            return false;
+        }
+        out.assign(t->c_str(), t->size());
+    } else {
+        out.assign(str->c_str(), str->size());
+    }
+    return true;
+}
+
+// parses a response hash: code, body, content_type and hdr
+bool fast_route_parse_parts(const char* what, QoreValue val, FastRouteResponseParts& parts, ExceptionSink* xsink) {
+    if (val.getType() != NT_HASH) {
+        fast_route_error(xsink, "%s must be a hash, got type '%s'", what, val.getFullTypeName());
+        return false;
+    }
+    const QoreHashNode* h = val.get<const QoreHashNode>();
+
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue v = hi.get();
+        if (!strcmp(key, "code")) {
+            if (v.getType() != NT_INT) {
+                fast_route_error(xsink, "%s: \"code\" must be an integer, got type '%s'", what,
+                    v.getFullTypeName());
+                return false;
+            }
+            parts.code = v.getAsBigInt();
+        } else if (!strcmp(key, "body")) {
+            if (v.getType() == NT_BINARY) {
+                const BinaryNode* b = v.get<const BinaryNode>();
+                parts.body.assign(reinterpret_cast<const char*>(b->getPtr()), b->size());
+            } else if (!v.isNothing()) {
+                parts.string_body = true;
+                std::string what_body = std::string(what) + ": \"body\"";
+                if (!fast_route_get_string(what_body.c_str(), v, parts.body, xsink)) {
+                    return false;
+                }
+            }
+        } else if (!strcmp(key, "content_type")) {
+            std::string what_ct = std::string(what) + ": \"content_type\"";
+            if (!fast_route_get_string(what_ct.c_str(), v, parts.content_type, xsink, false)) {
+                return false;
+            }
+        } else if (!strcmp(key, "hdr")) {
+            if (v.getType() != NT_HASH) {
+                fast_route_error(xsink, "%s: \"hdr\" must be a hash, got type '%s'", what, v.getFullTypeName());
+                return false;
+            }
+            ConstHashIterator hdr_i(v.get<const QoreHashNode>());
+            while (hdr_i.next()) {
+                std::string value;
+                std::string what_hdr = std::string(what) + ": header \"" + hdr_i.getKey() + "\"";
+                if (!fast_route_get_string(what_hdr.c_str(), hdr_i.get(), value, xsink, false)) {
+                    return false;
+                }
+                parts.headers.emplace_back(hdr_i.getKey(), std::move(value));
+            }
+        } else {
+            fast_route_error(xsink, "%s: unknown key \"%s\" (the keys are \"code\", \"body\", \"content_type\" and "
+                "\"hdr\")", what, key);
+            return false;
+        }
+    }
+    return true;
+}
+
+// builds the response from its parts; the base headers are added unless the parts have a header of the same name, and
+// a 200 response without a body is a 204 response if normalize is true (as for the response of a handler)
+std::shared_ptr<const HttpFastResponse> fast_route_build_response(const char* what, FastRouteResponseParts parts,
+        const std::vector<std::pair<std::string, std::string>>* base, bool normalize, ExceptionSink* xsink) {
+    if (normalize && parts.code == 200 && parts.body.empty()) {
+        parts.code = 204;
+        parts.string_body = false;
+    }
+    if (!parts.content_type.empty()) {
+        for (const auto& hdr : parts.headers) {
+            if (!strcasecmp(hdr.first.c_str(), "content-type")) {
+                fast_route_error(xsink, "%s: the content type is given twice (\"content_type\" and the header)", what);
+                return nullptr;
+            }
+        }
+        // as the normal path does for a string body, the character encoding is given
+        if (parts.string_body && parts.content_type.find("charset") == std::string::npos) {
+            parts.content_type += ";charset=utf-8";
+        }
+        parts.headers.emplace_back("Content-Type", std::move(parts.content_type));
+    }
+    if (base) {
+        for (const auto& b : *base) {
+            bool found = false;
+            for (const auto& hdr : parts.headers) {
+                if (!strcasecmp(hdr.first.c_str(), b.first.c_str())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                parts.headers.push_back(b);
+            }
+        }
+    }
+
+    std::string err;
+    std::shared_ptr<const HttpFastResponse> rv = HttpFastResponse::create(static_cast<int>(parts.code), parts.headers,
+        parts.body, err);
+    if (!rv) {
+        fast_route_error(xsink, "%s: %s", what, err.c_str());
+    }
+    return rv;
+}
+
+static std::shared_ptr<const HttpFastResponse> fast_route_parse_response(const char* what, QoreValue val,
+        ExceptionSink* xsink) {
+    FastRouteResponseParts parts;
+    if (!fast_route_parse_parts(what, val, parts, xsink)) {
+        return nullptr;
+    }
+    return fast_route_build_response(what, std::move(parts), nullptr, false, xsink);
+}
+
+// a response, or a FastResponseSlot that holds the response
+static HttpFastResponseSource fast_route_parse_source(const char* what, QoreValue val, ExceptionSink* xsink) {
+    if (val.getType() == NT_OBJECT) {
+        if (!val.get<const QoreObject>()->getClass(CID_FASTRESPONSESLOT)) {
+            fast_route_error(xsink, "%s must be a hash or a FastResponseSlot, got an object of class '%s'", what,
+                val.get<const QoreObject>()->getClassName());
+            return nullptr;
+        }
+        ReferenceHolder<QoreFastResponseSlot> fs(static_cast<QoreFastResponseSlot*>(
+            const_cast<QoreObject*>(val.get<const QoreObject>())->getReferencedPrivateData(CID_FASTRESPONSESLOT,
+                xsink)), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!fs) {
+            fast_route_error(xsink, "%s must be a hash or a FastResponseSlot, got an object of class '%s'", what,
+                val.get<const QoreObject>()->getClassName());
+            return nullptr;
+        }
+        // the route shares ownership of the slot: it outlives the Qore object
+        return fs->s;
+    }
+    return HttpFastResponseSource(fast_route_parse_response(what, val, xsink));
+}
+
+// parses a comparison operator
+static bool fast_route_parse_op(const std::string& op, HttpFastOp& rv) {
+    static const std::pair<const char*, HttpFastOp> ops[] = {
+        {"==", HttpFastOp::Eq}, {"!=", HttpFastOp::Ne}, {"<", HttpFastOp::Lt}, {"<=", HttpFastOp::Le},
+        {">", HttpFastOp::Gt}, {">=", HttpFastOp::Ge},
+    };
+    for (const auto& o : ops) {
+        if (op == o.first) {
+            rv = o.second;
+            return true;
+        }
+    }
+    return false;
+}
+
+// parses a route description: public, rules, otherwise or response
+static std::shared_ptr<const HttpFastRouteSpec> fast_route_parse_spec(const QoreHashNode* info,
+        ExceptionSink* xsink) {
+    std::vector<HttpFastRule> rules;
+    HttpFastResponseSource otherwise;
+    bool is_public = false;
+    bool has_response = false;
+
+    ConstHashIterator hi(info);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue v = hi.get();
+        if (!strcmp(key, "public")) {
+            is_public = v.getType() == NT_BOOLEAN && v.getAsBool();
+        } else if (!strcmp(key, "response") || !strcmp(key, "otherwise")) {
+            if (has_response) {
+                fast_route_error(xsink, "give either \"response\" or \"otherwise\", not both");
+                return nullptr;
+            }
+            has_response = true;
+            otherwise = fast_route_parse_source(key, v, xsink);
+            if (!otherwise) {
+                return nullptr;
+            }
+        } else if (!strcmp(key, "rules")) {
+            if (v.getType() != NT_LIST) {
+                fast_route_error(xsink, "\"rules\" must be a list, got type '%s'", v.getFullTypeName());
+                return nullptr;
+            }
+            const QoreListNode* l = v.get<const QoreListNode>();
+            if (l->size() > HttpFastRouteSpec::MaxRules) {
+                fast_route_error(xsink, "a route has at most %d rules, got " QLLD, (int)HttpFastRouteSpec::MaxRules,
+                    (int64)l->size());
+                return nullptr;
+            }
+            for (size_t i = 0; i < l->size(); ++i) {
+                std::string what = "rule " + std::to_string(i);
+                QoreValue rv = l->retrieveEntry(i);
+                if (rv.getType() != NT_HASH) {
+                    fast_route_error(xsink, "%s must be a hash, got type '%s'", what.c_str(), rv.getFullTypeName());
+                    return nullptr;
+                }
+                HttpFastRule rule;
+                bool have_cell = false, have_op = false, have_value = false;
+                ConstHashIterator ri(rv.get<const QoreHashNode>());
+                while (ri.next()) {
+                    const char* rkey = ri.getKey();
+                    QoreValue rval = ri.get();
+                    if (!strcmp(rkey, "cell")) {
+                        if (rval.getType() != NT_OBJECT) {
+                            fast_route_error(xsink, "%s: \"cell\" must be a FastCell, got type '%s'", what.c_str(),
+                                rval.getFullTypeName());
+                            return nullptr;
+                        }
+                        if (!rval.get<const QoreObject>()->getClass(CID_FASTCELL)) {
+                            fast_route_error(xsink, "%s: \"cell\" must be a FastCell, got an object of class '%s'",
+                                what.c_str(), rval.get<const QoreObject>()->getClassName());
+                            return nullptr;
+                        }
+                        ReferenceHolder<QoreFastCell> fc(static_cast<QoreFastCell*>(
+                            const_cast<QoreObject*>(rval.get<const QoreObject>())->getReferencedPrivateData(
+                                CID_FASTCELL, xsink)), xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        if (!fc) {
+                            fast_route_error(xsink, "%s: \"cell\" must be a FastCell", what.c_str());
+                            return nullptr;
+                        }
+                        // the route shares ownership of the cell: it outlives the Qore object
+                        rule.cell = fc->c;
+                        have_cell = true;
+                    } else if (!strcmp(rkey, "op")) {
+                        std::string op;
+                        std::string what_op = what + ": \"op\"";
+                        if (!fast_route_get_string(what_op.c_str(), rval, op, xsink, false)) {
+                            return nullptr;
+                        }
+                        if (!fast_route_parse_op(op, rule.op)) {
+                            fast_route_error(xsink, "%s: unknown operator '%s' (the operators are ==, !=, <, <=, >, "
+                                ">=)", what.c_str(), op.c_str());
+                            return nullptr;
+                        }
+                        have_op = true;
+                    } else if (!strcmp(rkey, "value")) {
+                        if (rval.getType() != NT_INT && rval.getType() != NT_BOOLEAN) {
+                            fast_route_error(xsink, "%s: \"value\" must be an integer or a boolean, got type '%s'",
+                                what.c_str(), rval.getFullTypeName());
+                            return nullptr;
+                        }
+                        rule.operand = rval.getAsBigInt();
+                        have_value = true;
+                    } else if (!strcmp(rkey, "response")) {
+                        rule.response = fast_route_parse_source((what + ": \"response\"").c_str(), rval, xsink);
+                        if (!rule.response) {
+                            return nullptr;
+                        }
+                    } else {
+                        fast_route_error(xsink, "%s: unknown key \"%s\" (the keys are \"cell\", \"op\", \"value\" and "
+                            "\"response\")", what.c_str(), rkey);
+                        return nullptr;
+                    }
+                }
+                if (!have_cell || !have_op || !have_value || !rule.response) {
+                    fast_route_error(xsink, "%s needs \"cell\", \"op\", \"value\" and \"response\"", what.c_str());
+                    return nullptr;
+                }
+                rules.push_back(std::move(rule));
+            }
+        } else {
+            fast_route_error(xsink, "unknown key \"%s\" (the keys are \"public\", \"rules\", \"otherwise\" and "
+                "\"response\")", key);
+            return nullptr;
+        }
+    }
+
+    if (!is_public) {
+        fast_route_error(xsink, "a fast route is answered without the handler chain, and so without authentication: "
+            "set \"public\" to True");
+        return nullptr;
+    }
+
+    std::string err;
+    std::shared_ptr<const HttpFastRouteSpec> spec = HttpFastRouteSpec::create(std::move(rules), std::move(otherwise),
+        err);
+    if (!spec) {
+        fast_route_error(xsink, "%s", err.c_str());
+    }
+    return spec;
+}
+
+/** @endcond */
+
+//! The HTTP fast routes of a listener
+/** Fast routes are answered on the async I/O thread, with no hand-off to a worker thread and no Qore code, for the
+    requests that qualify; every other request takes the normal path.  See the design note
+    \c design/http-server-fast-routes.md and the @ref HttpServer::HttpServer::addFastRoute() "HttpServer" methods that
+    use this class.
+
+    A route table is attached to a listening socket with @ref Qore::Socket::setHttpFastRoutes() "Socket::setHttpFastRoutes()";
+    the connections accepted from that socket share it, so a change reaches the connections that are already open.
+
+    A route answers a @c GET request for its exact path (the query string is not part of the path) that has no body,
+    no @c Expect or @c Upgrade header, is HTTP/1.1 (with a keep-alive connection, or with @c Connection: close, in
+    which case the response has @c Connection: close and the connection is closed after it), and has no further
+    request already received.  Anything else takes the normal path.  The first request of a connection is covered as
+    well as the later ones.  A request over HTTP/2 or HTTP/3 is answered when its headers have been received, with
+    the same rules (a request with a body, or with a @c Connection header, takes the normal path).  The routes of a
+    listening socket are also those of the sessions of a QUIC listener when the routes are attached to its UDP socket,
+    which @ref HttpServer::HttpServer::addFastRoute() "HttpServer::addFastRoute()" does.
+
+    @par Example:
+    @code{.py}
+HttpFastRoutes routes();
+routes.addRoute("/ping", {"public": True, "response": {"code": 200, "body": "pong", "content_type": "text/plain"}});
+listener_socket.setHttpFastRoutes(routes);
+    @endcode
+
+    @see @ref Qore::FastCell "FastCell"
+
+    @since %Qore 3.0
+ */
+qclass HttpFastRoutes [arg=QoreHttpFastRoutes* hr; ns=Qore; dom=NETWORK];
+
+//! Creates an empty set of routes
+/** @par Example:
+    @code{.py}
+HttpFastRoutes routes();
+    @endcode
+ */
+HttpFastRoutes::constructor() {
+    self->setPrivate(CID_HTTPFASTROUTES, new QoreHttpFastRoutes);
+}
+
+//! Destroys the routes
+/** The listeners that the routes are attached to keep them.
+ */
+HttpFastRoutes::destructor() {
+    hr->deref();
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTPFASTROUTES-COPY-ERROR objects of this class cannot be copied
+ */
+HttpFastRoutes::copy() {
+    xsink->raiseException("HTTPFASTROUTES-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Adds or replaces the route for a path
+/** @param path the exact path of the route; it starts with \c "/" and has no query string
+    @param info a hash describing the route:
+    - \c public: must be @ref True; the route is answered without the handler chain, and so without authentication
+    - \c response: the response, if the route has no rules; a hash, or a @ref Qore::FastResponseSlot "FastResponseSlot"
+      that holds a response which Qore code replaces
+    - \c rules: a list of at most 8 rules, in order; the first that holds selects its response; each rule is a hash
+      with \c cell (a @ref Qore::FastCell "FastCell"), \c op (one of \c "==", \c "!=", \c "<", \c "<=", \c ">",
+      \c ">="), \c value (an integer or a boolean) and \c response (a hash or a slot)
+    - \c otherwise: the response (a hash or a slot) when no rule holds; without it, the request takes the normal path
+
+    A response is a hash with \c code (default \c 200; one of 200, 201, 202, 204, 301, 302, 303, 307, 308, 400, 401,
+    403, 404, 405, 500, 502, 503, 504), \c body (a string, which is sent as UTF-8, or binary data), \c content_type
+    and \c hdr (a hash of header names to string values).  The server's own headers are added by
+    \c HttpServer::addFastRoute(); the framing headers and \c Date and \c Connection are set by the server and must
+    not be given.  A response is at most 64 KiB.
+
+    @par Example:
+    @code{.py}
+routes.addRoute("/ready", {
+    "public": True,
+    "rules": ({"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "ok",
+        "content_type": "text/plain"}},),
+    "otherwise": {"code": 503, "body": "not ready", "content_type": "text/plain"},
+});
+    @endcode
+
+    @throw HTTP-FAST-ROUTE-ERROR the route is not valid
+ */
+nothing HttpFastRoutes::addRoute(string path, hash<auto> info) [flags=NAMED_ARGS] {
+    std::shared_ptr<const HttpFastRouteSpec> spec = fast_route_parse_spec(info, xsink);
+    if (!spec) {
+        return QoreValue();
+    }
+    std::string err;
+    if (!hr->r->add(path->c_str(), std::move(spec), err)) {
+        fast_route_error(xsink, "route '%s': %s", path->c_str(), err.c_str());
+    }
+}
+
+//! Removes the route for a path
+/** @param path the path of the route
+
+    @return @ref True if there was a route for the path
+
+    @par Example:
+    @code{.py}
+routes.removeRoute("/ready");
+    @endcode
+ */
+bool HttpFastRoutes::removeRoute(string path) [flags=NAMED_ARGS] {
+    return hr->r->remove(path->c_str());
+}
+
+//! Returns the number of routes
+/** @return the number of routes
+ */
+int HttpFastRoutes::size() [flags=RET_VALUE_ONLY] {
+    return hr->r->size();
+}
+
+//! Returns the number of requests that each route has answered, and why the other requests took the normal path
+/** @return a hash with the keys \c routes (a hash of the path to the number of requests answered) and \c fallbacks
+    (a hash of the reason to the number of requests that took the normal path for it: \c no_route, \c not_http_1_1,
+    \c body, \c expect, \c upgrade, \c connection, \c pipelined, \c stale and \c no_rule).  Requests are only counted
+    as fallbacks while the routes are not empty.
+
+    @par Example:
+    @code{.py}
+printf("%N\n", routes.getInfo());
+    @endcode
+ */
+hash<auto> HttpFastRoutes::getInfo() [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> routes(new QoreHashNode(autoTypeInfo), xsink);
+    for (const auto& [path, hits] : hr->r->getRouteHits()) {
+        routes->setKeyValue(path.c_str(), static_cast<int64>(hits), xsink);
+    }
+    rv->setKeyValue("routes", routes.release(), xsink);
+    ReferenceHolder<QoreHashNode> fallbacks(new QoreHashNode(autoTypeInfo), xsink);
+    for (unsigned i = 0; i < static_cast<unsigned>(HttpFastFallback::Count); ++i) {
+        HttpFastFallback reason = static_cast<HttpFastFallback>(i);
+        fallbacks->setKeyValue(HttpFastRoutes::getFallbackName(reason), static_cast<int64>(hr->r->getFallbacks(reason)),
+            xsink);
+    }
+    rv->setKeyValue("fallbacks", fallbacks.release(), xsink);
+    return rv.release();
+}

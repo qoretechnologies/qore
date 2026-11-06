@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ResolveNumericTest
+
+#! Tests the lookup of a numeric address, which is answered without a c-ares channel
+/** An IPv4 or IPv6 address literal with a numeric port (or none) needs no lookup; the answer must be the one that
+    c-ares gives: a single address of the literal's family with the requested socket type and protocol.  Everything
+    else (a service name, a zone id, the shortened forms of an IPv4 address, a port out of range) is still left to
+    c-ares.
+*/
+class ResolveNumericTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ResolveNumericTest", "1.0", \ARGV) {
+        addTestCase("IPv4 literal", \testIPv4());
+        addTestCase("IPv6 literal", \testIPv6());
+        addTestCase("IPv4-mapped IPv6 literal", \testMapped());
+        addTestCase("no service", \testNoService());
+        addTestCase("the requested family does not filter a literal", \testFamilyHint());
+        addTestCase("socket type and protocol are passed through", \testSocketType());
+        addTestCase("flags that change the answer", \testFlags());
+        addTestCase("literals that are not strict addresses", \testNotLiterals());
+        addTestCase("repeated lookups", \testRepeated());
+        set_return_value(main());
+    }
+
+    testIPv4() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("127.0.0.1", "8080");
+        assertEq(1, l.size(), "one address");
+        assertEq("127.0.0.1", l[0].address);
+        assertEq(AF_INET, l[0].family);
+        assertEq(8080, l[0].port);
+        assertEq(SOCK_STREAM, l[0].socktype);
+        assertEq(0, l[0].protocol);
+        assertEq(16, l[0].addrlen);
+    }
+
+    testIPv6() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("::1", "80");
+        assertEq(1, l.size());
+        assertEq("::1", l[0].address);
+        assertEq(AF_INET6, l[0].family);
+        assertEq(80, l[0].port);
+        assertEq(28, l[0].addrlen);
+
+        l = Socket::resolveAddrInfo("2001:db8::7", "65535");
+        assertEq("2001:db8::7", l[0].address);
+        assertEq(65535, l[0].port);
+    }
+
+    testMapped() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("::ffff:1.2.3.4", "80");
+        assertEq(1, l.size());
+        assertEq(AF_INET6, l[0].family);
+        assertEq("::ffff:1.2.3.4", l[0].address);
+    }
+
+    testNoService() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("192.0.2.7");
+        assertEq(1, l.size());
+        assertEq("192.0.2.7", l[0].address);
+        assertEq(0, l[0].port ?? 0);
+
+        l = Socket::resolveAddrInfo("192.0.2.7", "0");
+        assertEq(0, l[0].port);
+    }
+
+    testFamilyHint() {
+        # as c-ares does, an IPv4 address is also given for an IPv6 hint, but an IPv6 address is not given for an
+        # IPv4 hint
+        list<hash<auto>> l = Socket::resolveAddrInfo("127.0.0.1", "80", AF_INET6);
+        assertEq(1, l.size());
+        assertEq(AF_INET, l[0].family);
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(), ("::1", "80", AF_INET));
+        l = Socket::resolveAddrInfo("127.0.0.1", "80", AF_INET);
+        assertEq(AF_INET, l[0].family);
+        l = Socket::resolveAddrInfo("::1", "80", AF_INET6);
+        assertEq(AF_INET6, l[0].family);
+    }
+
+    testSocketType() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("127.0.0.1", "53", AF_UNSPEC, 0, SOCK_DGRAM);
+        assertEq(SOCK_DGRAM, l[0].socktype);
+        l = Socket::resolveAddrInfo("127.0.0.1", "53", AF_UNSPEC, 0, 0);
+        assertEq(0, l[0].socktype);
+        l = Socket::resolveAddrInfo("127.0.0.1", "53", AF_UNSPEC, 0, SOCK_STREAM, IPPROTO_TCP);
+        assertEq(IPPROTO_TCP, l[0].protocol);
+    }
+
+    testFlags() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("127.0.0.1", "80", AF_UNSPEC, AI_NUMERICHOST | AI_NUMERICSERV);
+        assertEq("127.0.0.1", l[0].address);
+        assertEq(80, l[0].port);
+        l = Socket::resolveAddrInfo("127.0.0.1", "80", AF_UNSPEC, AI_NUMERICHOST);
+        assertEq("127.0.0.1", l[0].address);
+        # a wildcard address is still given for a missing host
+        l = Socket::resolveAddrInfo(NOTHING, "0", AF_INET, AI_PASSIVE | AI_NUMERICSERV);
+        assertEq("0.0.0.0", l[0].address);
+    }
+
+    testNotLiterals() {
+        # a zone id, a port out of range, a shortened IPv4 address and a name are not answered as literals
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(),
+            ("fe80::1%lo", "80", AF_UNSPEC, AI_NUMERICHOST));
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(), ("127.0.0.1", "70000"));
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(),
+            ("127.1", "80", AF_UNSPEC, AI_NUMERICHOST));
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(),
+            ("localhost", "80", AF_UNSPEC, AI_NUMERICHOST));
+        # c-ares takes only a name of digits and dots with three dots for an IPv4 address
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(),
+            ("1.2.3", "80", AF_UNSPEC, AI_NUMERICHOST));
+        # a name still resolves
+        list<hash<auto>> l = Socket::resolveAddrInfo("localhost", "80");
+        assertGt(0, l.size());
+    }
+
+    testRepeated() {
+        list<hash<auto>> first = Socket::resolveAddrInfo("127.0.0.1", "8080");
+        for (int i = 0; i < 200; ++i) {
+            assertEq(first, Socket::resolveAddrInfo("127.0.0.1", "8080"));
+        }
+    }
+}

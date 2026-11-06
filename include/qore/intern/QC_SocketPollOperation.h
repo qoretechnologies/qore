@@ -1035,7 +1035,17 @@ public:
 
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override;
 
+    //! True once after a request was answered by a fast route: the operation did not complete, so the controller's
+    //! timeout, which covers one request, starts again
+    DLLLOCAL virtual bool renewsTimeout() override {
+        bool rv = timeout_renewal;
+        timeout_renewal = false;
+        return rv;
+    }
+
 private:
+    bool timeout_renewal = false;
+
     enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
     Phase phase = Phase::Sending;
 
@@ -1046,9 +1056,52 @@ private:
 
     // Idle phase: timeout deadline in milliseconds from epoch
     int64 idle_timeout_ms;
+    // the idle timeout in milliseconds, for the deadline of the next request after one answered by a fast route
+    int64 idle_ttl_ms = 0;
+
+    // the response of a fast route that is being sent; see serveFastRoute()
+    std::shared_ptr<const std::string> fast_wire;
 
     // Header reading phase: parsed HTTP headers output
     mutable ReferenceHolder<QoreHashNode> header_output;
+
+    //! Answers the request with a fast route of the socket, if one qualifies (see design/http-server-fast-routes.md)
+    /** Called with the socket lock held, on the async I/O thread, when a request header has been read; it only reads
+        the parsed header, and the response is sent by this operation's own send phase, so the operation does not
+        complete and no Qore code or other thread is involved.
+
+        @param hdr the parsed request header
+        @param info set to the poll info to return when the request was answered
+        @param xsink exception sink
+
+        @return 0 if the request was not answered, 1 if it was (return \a info), -1 if an error occurred
+    */
+    DLLLOCAL int serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info, ExceptionSink* xsink);
+
+    //! Answers the request with a fast route of the socket from the raw header bytes, before any hash is built
+    /** The strict parser of the core (HttpFastRequestParser) reads the bytes; a request that it rejects is left to
+        the normal parser (and then to serveFastRoute()).  If it accepts the request and no route answers it,
+        \c fast_decided is set, so that the request is not matched again after the normal parse.
+
+        @param data the bytes of the request header, through the empty line
+        @param size the number of bytes
+        @param info set to the poll info to return when the request was answered
+        @param xsink exception sink
+
+        @return 0 if the request was not answered, 1 if it was (return \a info), -1 if an error occurred
+    */
+    DLLLOCAL int serveFastRaw(const char* data, size_t size, QoreHashNode*& info, ExceptionSink* xsink);
+
+    //! Starts sending the response of a fast route with this operation's send phase
+    /** @return 1 (return \a info) or -1 if an error occurred */
+    DLLLOCAL int startFastSend(std::shared_ptr<const std::string> wire, bool close_after, QoreHashNode*& info,
+            ExceptionSink* xsink);
+
+    // true when the raw parser accepted the request and no route answered it
+    bool fast_decided = false;
+
+    // true while the response of a fast route to a request with Connection: close is sent: the operation then ends
+    bool fast_close = false;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;

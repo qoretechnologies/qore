@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class HttpFastRoutesIsolationTest
+
+#! Checks the isolation rule of the HTTP fast route code, which runs on the async I/O threads
+/** include/qore/intern/HttpFastRoutes.h, lib/HttpFastRoutes.cpp and the request parser (HttpFastRequest.h/.cpp) are
+    executed on the async I/O threads, where no Qore code may run and nothing may wait for another thread.  They must
+    not use the Qore interpreter (no Qore value, object, program or exception sink types), must include only the standard library and the visibility macros, and
+    must not call anything that blocks or does I/O.  The glue that turns a Qore request into a plain request view, and
+    the Qore classes that register routes, are in other files.  The check works on the sources with the comments and
+    string literals removed.  A test case proves that the checks can fail.  See design/http-server-fast-routes.md
+    ("Enforcement").
+*/
+class HttpFastRoutesIsolationTest inherits QUnit::Test {
+    public {
+        #! the files that the rule applies to, relative to the repository root
+        const Files = (
+            "include/qore/intern/HttpFastRoutes.h",
+            "lib/HttpFastRoutes.cpp",
+            "include/qore/intern/HttpFastRequest.h",
+            "lib/HttpFastRequest.cpp",
+        );
+
+        #! the headers that these files may include besides the standard library
+        const AllowedQoreIncludes = (
+            "qore/common.h",
+            "qore/intern/HttpFastRoutes.h",
+            "qore/intern/HttpFastRequest.h",
+        );
+
+        #! types and keywords of the Qore interpreter, of threads and of I/O that these files must not name
+        const ForbiddenNames = (
+            "QoreValue", "QoreHashNode", "QoreListNode", "QoreStringNode", "QoreString", "QoreObject",
+            "QoreProgram", "QoreNode", "AbstractQoreNode", "ExceptionSink", "xsink", "ReferenceHolder",
+            "SimpleRefHolder", "QoreThreadLock", "QoreCondition", "AutoLocker",
+            "std::thread", "std::condition_variable", "std::future", "std::promise", "std::async",
+            "std::this_thread", "std::cout", "std::cerr", "std::ifstream", "std::ofstream",
+            "throw", "try", "catch",
+        );
+
+        #! functions that block, do I/O or leave the process, which these files must not call
+        const ForbiddenCalls = (
+            "sleep", "usleep", "nanosleep", "poll", "epoll_wait", "select", "recv", "recvfrom", "send", "sendto",
+            "read", "write", "open", "fopen", "close", "connect", "accept", "system", "popen", "fork", "execv",
+            "execve", "execl", "pthread_create", "pthread_join", "pthread_cond_wait", "pthread_mutex_lock", "getenv",
+            "setenv", "printf", "fprintf", "puts", "fwrite", "fread",
+        );
+    }
+
+    constructor() : QUnit::Test("HttpFastRoutesIsolation", "1.0", \ARGV) {
+        addTestCase("the checker finds what it checks for", \testChecker());
+        addTestCase("includes", \testIncludes());
+        addTestCase("forbidden names and calls", \testForbidden());
+        set_return_value(main());
+    }
+
+    #! removes the comments of C++ source, and the string and character literals if requested
+    static string stripSource(string src, bool strip_literals = True) {
+        # RE_Ungreedy inverts the greediness of the quantifiers: ".*" is the lazy match here
+        src = regex_subst(src, "/\\*.*\\*/", "", RE_Global | RE_DotAll | RE_Ungreedy);
+        src = regex_subst(src, "//[^\n]*", "", RE_Global);
+        if (strip_literals) {
+            src = regex_subst(src, "\"(?:[^\"\\\\\n]|\\\\.)*\"", "\"\"", RE_Global);
+            src = regex_subst(src, "'(?:[^'\\\\\n]|\\\\.)*'", "''", RE_Global);
+        }
+        return src;
+    }
+
+    #! returns the headers that C++ source includes
+    static list<string> findIncludes(string src) {
+        list<string> rv = ();
+        # the include paths are string literals: the literals are kept
+        foreach string line in (stripSource(src, False).split("\n")) {
+            *list<string> m = regex_extract(line, "^\\s*#\\s*include\\s*[<\"]([^>\"]+)[>\"]");
+            if (m) {
+                rv += m[0];
+            }
+        }
+        return rv;
+    }
+
+    #! returns the headers of a list that the isolation rule does not allow
+    static list<string> disallowedIncludes(list<string> includes) {
+        list<string> rv = ();
+        foreach string inc in (includes) {
+            # the standard library headers have no directory
+            if (inc =~ /\// && !inlist(inc, AllowedQoreIncludes)) {
+                rv += inc;
+            }
+        }
+        return rv;
+    }
+
+    #! returns the forbidden names and calls that C++ source uses
+    static list<string> findForbidden(string src) {
+        list<string> rv = ();
+        string code = stripSource(src);
+        # "qore_" stands for the family of Qore library functions and types that start with it
+        if (regex(code, "\\bqore_\\w*")) {
+            rv += "qore_*";
+        }
+        foreach string name in (ForbiddenNames) {
+            if (regex(code, "\\b" + name + "\\b")) {
+                rv += name;
+            }
+        }
+        foreach string name in (ForbiddenCalls) {
+            # a call of the global function: not a member (after "." or ">"), not a qualified name of something else
+            if (regex(code, "(?<![\\w.>:])" + name + "\\s*\\(") || regex(code, "(?<!\\w)::" + name + "\\s*\\(")) {
+                rv += name + "()";
+            }
+        }
+        return rv;
+    }
+
+    private string getSource(string file) {
+        File f();
+        f.open(normalize_dir(get_script_dir() + "/../../../../" + file));
+        return f.read(-1);
+    }
+
+    #! proves that the checks can fail: without this, a broken pattern would let every check pass
+    testChecker() {
+        string bad = "#include <qore/Qore.h>\n#include \"qore/intern/HttpFastRoutes.h\"\n#include <string>\n"
+            "// QoreValue in a comment is not code\n"
+            "/* ExceptionSink in a block comment either */\n"
+            "const char* s = \"throw and send( in a literal\";\n"
+            "void f(QoreHashNode* h) { ::sleep(1); usleep(5); r.read(1); p->send(2); x::select(3); }\n"
+            "void g() { try { } catch (...) { } }\n"
+            "void h() { char* e = getenv(\"X\"); fprintf(stderr, \"x\"); }\n";
+        assertEq(("qore/Qore.h", "qore/intern/HttpFastRoutes.h", "string"), findIncludes(bad));
+        assertEq(("qore/Qore.h",), disallowedIncludes(findIncludes(bad)));
+        list<string> found = findForbidden(bad);
+        foreach string expected in ("QoreHashNode", "try", "catch", "sleep()", "usleep()", "getenv()", "fprintf()") {
+            assertTrue(inlist(expected, found), sprintf("%y is found in %y", expected, found));
+        }
+        # comments, literals, members and qualified names are not calls or uses
+        foreach string not_expected in ("QoreValue", "ExceptionSink", "throw", "send()", "read()", "select()") {
+            assertFalse(inlist(not_expected, found), sprintf("%y is not found in %y", not_expected, found));
+        }
+        string good = "#include <string>\n#include <qore/common.h>\n// QoreValue\n"
+            "struct A;\n"
+            "int A::select(int x) const { return x; }\nint g(A* a, A& b) { return a->select(1) + a->read() + b.send(); }\n"
+            "int h() { char b[8]; snprintf(b, sizeof b, \"%d\", 1); return b[0]; }\n";
+        assertEq((), findForbidden(good));
+        assertEq((), disallowedIncludes(findIncludes(good)));
+    }
+
+    testIncludes() {
+        foreach string file in (Files) {
+            list<string> includes = findIncludes(getSource(file));
+            assertGt(0, includes.size(), file + " has includes");
+            foreach string inc in (disallowedIncludes(includes)) {
+                assertTrue(False, sprintf("%s includes %y, which the isolation rule does not allow", file, inc));
+            }
+        }
+    }
+
+    testForbidden() {
+        foreach string file in (Files) {
+            list<string> found = findForbidden(getSource(file));
+            assertEq((), found, sprintf("%s uses what the isolation rule does not allow", file));
+        }
+    }
+}

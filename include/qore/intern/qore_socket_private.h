@@ -125,6 +125,7 @@ static constexpr int SOCK_POLLTIMER = (1 << 3);
 
 struct qore_socket_private;
 class QoreFuture;
+#include "qore/intern/HttpFastRoutes.h"
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
@@ -655,6 +656,14 @@ public:
 
 private:
     DLLLOCAL int start(ExceptionSink* xsink);
+    //! Answers a numeric address without creating a c-ares channel; returns false if c-ares must resolve the host
+    /** An IPv4 or IPv6 address literal with a numeric port (or none) needs no lookup, and creating a channel reads
+        the system's resolver configuration files.  The answer is the one c-ares gives: a single address of the
+        literal's family with the requested socket type and protocol.
+
+        @return true if the lookup is done
+    */
+    DLLLOCAL bool startNumeric();
     //! Destroys the channel and starts the lookup again on a new one after c-ares lost its query
     DLLLOCAL int restart(ExceptionSink* xsink);
     DLLLOCAL void process(ExceptionSink* xsink);
@@ -1702,6 +1711,53 @@ struct qore_socket_private : public QoreReferenceCounter {
         @since %Qore 3.0
     */
     std::string async_io_route_key;
+
+    //! The HTTP fast context of the socket: its routes and the extra response headers of the listener
+    /** See design/http-server-fast-routes.md.  A listening socket gets its context when its routes or extra headers are
+        set (Socket::setHttpFastRoutes(), Socket::setHttpFastExtraHeaders()) or when a socket is accepted from it, and
+        the sockets accepted from it (and the QUIC sessions of a UDP listener) share it, so a change reaches the
+        connections that are already open.
+
+        @return the context or nullptr if the socket has none
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContext() const {
+        std::lock_guard<std::mutex> lg(fast_routes_lock);
+        return fast_ctx;
+    }
+
+    //! Returns the context, creating an empty one if there is none
+    DLLLOCAL std::shared_ptr<HttpFastContext> getOrCreateFastContext() {
+        std::lock_guard<std::mutex> lg(fast_routes_lock);
+        if (!fast_ctx) {
+            fast_ctx = std::make_shared<HttpFastContext>();
+        }
+        return fast_ctx;
+    }
+
+    //! Makes this socket use the given context (the socket accepted from a listener shares the listener's)
+    DLLLOCAL void setFastContext(std::shared_ptr<HttpFastContext> ctx) {
+        std::lock_guard<std::mutex> lg(fast_routes_lock);
+        fast_ctx = std::move(ctx);
+    }
+
+    //! Returns the routes of the socket, or nullptr
+    DLLLOCAL std::shared_ptr<HttpFastRoutes> getFastRoutes() const {
+        std::shared_ptr<HttpFastContext> ctx = getFastContext();
+        return ctx ? ctx->get().routes : nullptr;
+    }
+
+    //! Sets the routes of the socket
+    DLLLOCAL void setFastRoutes(std::shared_ptr<HttpFastRoutes> routes) {
+        getOrCreateFastContext()->setRoutes(std::move(routes));
+    }
+
+private:
+    mutable std::mutex fast_routes_lock;
+    std::shared_ptr<HttpFastContext> fast_ctx;
+
+public:
 
     //! Directional ownership for controller-backed raw socket I/O sections.
     /** Bare QoreSocket instances do not have the QoreSocketObject mutex and

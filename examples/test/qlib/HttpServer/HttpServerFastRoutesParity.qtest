@@ -1,0 +1,328 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpServerFastRoutesParityTest
+
+#! the response definitions that both the handler (the normal path) and a fast route answer with
+class ParityCases {
+    public {
+        const Cases = {
+            "text": {"code": 200, "body": "hello", "content_type": "text/plain"},
+            "json": {"code": 200, "body": "{\"a\":1,\"b\":[true,null]}", "content_type": "application/json"},
+            "html": {"code": 200, "body": "<html><body><p>hi</p></body></html>", "content_type": "text/html"},
+            "empty": {"code": 200, "body": ""},
+            "empty_with_type": {"code": 200, "body": "", "content_type": "text/plain"},
+            "utf8": {"code": 200, "body": "placeholder", "content_type": "text/plain"},
+            "charset": {"code": 200, "body": "ascii only", "content_type": "text/plain;charset=iso-8859-1"},
+            "binary": {"code": 200, "body": <0001fffe800d0a0d0a41>, "content_type": "application/octet-stream"},
+            "large": {"code": 200, "body": "0123456789abcdef", "content_type": "text/plain"},
+            "created": {"code": 201, "body": "{}", "content_type": "application/json",
+                "hdr": {"Location": "/things/7"}},
+            "accepted": {"code": 202, "body": "queued", "content_type": "text/plain"},
+            "nocontent": {"code": 204},
+            "moved": {"code": 301, "hdr": {"Location": "/elsewhere"}},
+            "found": {"code": 302, "body": "see elsewhere", "content_type": "text/plain",
+                "hdr": {"Location": "/elsewhere?a=1&b=2"}},
+            "seeother": {"code": 303, "hdr": {"Location": "/done"}},
+            "temp": {"code": 307, "hdr": {"Location": "/t"}},
+            "perm": {"code": 308, "hdr": {"Location": "/p"}},
+            "badrequest": {"code": 400, "body": "bad", "content_type": "text/plain"},
+            "unauthorized": {"code": 401, "body": "login", "content_type": "text/plain",
+                "hdr": {"WWW-Authenticate": "Basic realm=\"x\""}},
+            "forbidden": {"code": 403, "body": "no", "content_type": "text/plain"},
+            "notfound": {"code": 404, "body": "missing", "content_type": "text/plain"},
+            "notallowed": {"code": 405, "body": "no", "content_type": "text/plain", "hdr": {"Allow": "GET"}},
+            "error": {"code": 500, "body": "oops", "content_type": "text/plain"},
+            "badgateway": {"code": 502, "body": "bg", "content_type": "text/plain"},
+            "unavailable": {"code": 503, "body": "later", "content_type": "text/plain", "hdr": {"Retry-After": "5"}},
+            "timeout": {"code": 504, "body": "slow", "content_type": "text/plain"},
+            "custom_headers": {"code": 200, "body": "x", "content_type": "text/plain",
+                "hdr": {"X-Custom-One": "1", "x-lower-case": "2", "X-UPPER": "3", "X-Mixed-Case-Header": "4"}},
+            "cache_headers": {"code": 200, "body": "x", "content_type": "text/plain",
+                "hdr": {"Cache-Control": "no-store, max-age=0", "ETag": "\"abc\"",
+                    "Access-Control-Allow-Origin": "*", "Vary": "Accept-Encoding"}},
+            "override_server": {"code": 200, "body": "x", "content_type": "text/plain",
+                "hdr": {"Server": "my-server/9", "X-Powered-By": "something else"}},
+            "override_instance": {"code": 200, "body": "x", "content_type": "text/plain",
+                "hdr": {"x-instance": "overridden"}},
+        };
+    }
+
+    #! returns the definition of a case, with the large body filled in
+    static hash<auto> get(string name) {
+        hash<auto> rv = Cases{name};
+        if (name == "large") {
+            rv.body = strmul(rv.body, 3500);
+        } else if (name == "utf8") {
+            # "h<e acute>llo w<o diaeresis>rld <check mark> <two Japanese characters>", from UTF-8 bytes
+            rv.body = <68c3a96c6c6f2077c3b6726c6420e29c9320e697a5e69cac>.toString("UTF-8");
+        }
+        return rv;
+    }
+}
+
+#! the handler: answers /n/<case> with the case's definition
+class ParityHandler inherits AbstractHttpRequestHandler {
+    public {
+        static Counter calls = new Counter();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        ParityHandler::calls.inc();
+        string path = cx.raw_path;
+        if (path !~ /^\/n\//) {
+            return <HttpResponseInfo>{"code": 200, "body": "warm-up", "hdr": {"Content-Type": "text/plain"}};
+        }
+        hash<auto> c = ParityCases::get(substr(path, 3));
+        hash<auto> h = c.hdr ?? {};
+        if (c.content_type) {
+            h = {"Content-Type": c.content_type} + h;
+        }
+        return <HttpResponseInfo>{"code": c.code, "body": c.body, "hdr": h};
+    }
+}
+
+#! Compares the responses of the normal path and of the fast routes
+/** For each response shape, a client sends a request to a path that the handler answers and to a path that a fast
+    route answers, on the same keep-alive connection, and the two raw responses are compared: the status line, every
+    header (name, case of the name and value, apart from the date), the framing and the body bytes.  The headers can be
+    in a different order.  The connection must stay usable after each response, which shows that no stray bytes were
+    sent.
+*/
+class HttpServerFastRoutesParityTest inherits QUnit::Test {
+    public {
+        const Timeout = 30s;
+    }
+
+    private {
+        HttpServer hs;
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServerFastRoutesParityTest", "1.0", \ARGV) {
+        addTestCase("the shapes of response", \testShapes());
+        addTestCase("the responses of rules and cells", \testRulesAndCells());
+        addTestCase("the date", \testDate());
+        addTestCase("the connection after a fast response", \testConnection());
+        addTestCase("a HEAD request", \testHead());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the server's configured headers are added to the responses of the handler and of the fast routes
+        hs = new HttpServer(<HttpServerOptionInfo>{"hdr": {"X-Instance": "parity-test", "X-Powered-By": "Parity/1"}});
+        hs.setDefaultHandler("handler", new ParityHandler());
+        port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        foreach hash<auto> c in (ParityCases::Cases.pairIterator()) {
+            hash<auto> def = ParityCases::get(c.key);
+            hs.addFastRoute("/f/" + c.key, {"public": True, "response": def});
+        }
+    }
+
+    globalTearDown() {
+        hs.stop();
+        delete hs;
+    }
+
+    private Socket connect() {
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        # the first request of a connection takes the normal path
+        hash<auto> r = rawRequest(c, "GET", "/warm-up");
+        assertEq("warm-up", r.body.toString());
+        return c;
+    }
+
+    #! sends a request and returns the raw response: the status line, the headers in order (name, value) and the body
+    private hash<auto> rawRequest(Socket c, string method, string path) {
+        c.send(sprintf("%s %s HTTP/1.1\r\nHost: x\r\n\r\n", method, path));
+        string head = c.readHTTPHeaderString(Timeout);
+        list<string> lines = head.split("\r\n");
+        string status_line = lines[0];
+        list<hash<auto>> headers = ();
+        int len = 0;
+        foreach string raw_line in (lines[1..]) {
+            # the end of the header block can leave a line end on the last line
+            string line = trim(raw_line, "\r\n");
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            assertTrue(i > 0, "a header line: " + line);
+            string name = substr(line, 0, i);
+            string value = substr(line, i + 2);
+            headers += {"name": name, "value": value};
+            if (name.lwr() == "content-length") {
+                len = value.toInt();
+            }
+        }
+        binary body = len && method != "HEAD" ? c.recvBinary(len, Timeout) : binary();
+        return {"status": status_line, "headers": headers, "body": body, "length": len};
+    }
+
+    #! returns the differences between two responses; the date is not compared, and the order of the headers is not
+    private list<string> compare(hash<auto> a, hash<auto> b, bool head = False) {
+        list<string> diffs = ();
+        if (a.status != b.status) {
+            diffs += sprintf("status line: %y != %y", a.status, b.status);
+        }
+        list<string> ah = sort(map $1.name + ": " + $1.value, a.headers, $1.name.lwr() != "date");
+        list<string> bh = sort(map $1.name + ": " + $1.value, b.headers, $1.name.lwr() != "date");
+        if (ah != bh) {
+            diffs += sprintf("headers: only in the first: %y; only in the second: %y", (map $1, ah, !inlist($1, bh)), (map $1, bh, !inlist($1, ah)));
+        }
+        # the same set of names without regard to case, in case the values were equal but a name were missing
+        if (sort(map $1.name.lwr(), a.headers) != sort(map $1.name.lwr(), b.headers)) {
+            diffs += "header names (without regard to case) differ";
+        }
+        if (a.body != b.body) {
+            diffs += sprintf("body: %d bytes != %d bytes", a.body.size(), b.body.size());
+        }
+        if (a.length != b.length) {
+            diffs += sprintf("Content-Length: %d != %d", a.length, b.length);
+        }
+        foreach hash<auto> r in (a, b) {
+            # the response to a HEAD request has the Content-Length of the GET response and no body
+            if (!head && r.body.size() != r.length) {
+                diffs += sprintf("a response has Content-Length %d and a body of %d bytes", r.length,
+                    r.body.size());
+            }
+        }
+        return diffs;
+    }
+
+    #! parses an HTTP date: "Thu, 05 Nov 2026 10:14:48 GMT"
+    private date parseHttpDate(string str) {
+        list<string> months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec");
+        *list<string> m = regex_extract(str, "^\\w{3}, (\\d\\d) (\\w{3}) (\\d{4}) (\\d\\d):(\\d\\d):(\\d\\d) GMT$");
+        assertEq(6, m.size(), "an HTTP date: " + str);
+        int month = 0;
+        foreach string name in (months) {
+            ++month;
+            if (name == m[1]) {
+                break;
+            }
+        }
+        return date(sprintf("%s-%02d-%sT%s:%s:%sZ", m[2], month, m[0], m[3], m[4], m[5]));
+    }
+
+    testShapes() {
+        Socket c = connect();
+        int checked = 0;
+        foreach hash<auto> cs in (ParityCases::Cases.pairIterator()) {
+            int calls = ParityHandler::calls.getCount();
+            hash<auto> normal = rawRequest(c, "GET", "/n/" + cs.key);
+            assertEq(calls + 1, ParityHandler::calls.getCount(), cs.key + ": the normal path calls the handler");
+            calls = ParityHandler::calls.getCount();
+            hash<auto> fast = rawRequest(c, "GET", "/f/" + cs.key);
+            assertEq(calls, ParityHandler::calls.getCount(), cs.key + ": the route does not call the handler");
+            assertEq((), compare(normal, fast), cs.key + ": the responses are identical");
+            ++checked;
+        }
+        assertEq(ParityCases::Cases.size(), checked);
+        # the connection is intact after all of them
+        assertEq("warm-up", rawRequest(c, "GET", "/warm-up").body.toString());
+    }
+
+    testRulesAndCells() {
+        FastCell state(1);
+        hash<auto> up = ParityCases::get("json");
+        hash<auto> down = ParityCases::get("unavailable");
+        hs.addFastRoute("/f/state", {
+            "public": True,
+            "rules": (
+                {"cell": state, "op": "==", "value": 1, "response": up},
+                {"cell": state, "op": "==", "value": 0, "response": down},
+            ),
+        });
+        on_exit hs.removeFastRoute("/f/state");
+        Socket c = connect();
+        hash<auto> normal_up = rawRequest(c, "GET", "/n/json");
+        hash<auto> normal_down = rawRequest(c, "GET", "/n/unavailable");
+        assertEq((), compare(normal_up, rawRequest(c, "GET", "/f/state")), "state 1");
+        state.set(0);
+        assertEq((), compare(normal_down, rawRequest(c, "GET", "/f/state")), "state 0");
+        state.set(1);
+        assertEq((), compare(normal_up, rawRequest(c, "GET", "/f/state")), "state 1 again");
+    }
+
+    testDate() {
+        Socket c = connect();
+        hash<auto> normal = rawRequest(c, "GET", "/n/text");
+        hash<auto> fast = rawRequest(c, "GET", "/f/text");
+        # an HTTP date: "Thu, 05 Nov 2026 10:14:48 GMT"
+        string re = "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \\d\\d (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \\d{4} "
+            "\\d\\d:\\d\\d:\\d\\d GMT$";
+        list<string> dates = ();
+        foreach hash<auto> r in (normal, fast) {
+            list<hash<auto>> d = (select r.headers, $1.name.lwr() == "date");
+            assertEq(1, d.size(), "exactly one Date header");
+            assertTrue(regex(d[0].value, re), "an HTTP date: " + d[0].value);
+            dates += d[0].value;
+        }
+        # the two dates are of the same moment, within a few seconds
+        date nd = parseHttpDate(dates[0]);
+        date fd = parseHttpDate(dates[1]);
+        assertTrue(abs(nd - fd) <= 5s, sprintf("the dates %y and %y", dates[0], dates[1]));
+    }
+
+    testConnection() {
+        Socket c = connect();
+        # alternate normal and fast responses many times on one connection: any stray byte or wrong length would
+        # break the parsing of a later response
+        for (int i = 0; i < 40; ++i) {
+            string name = (ParityCases::Cases.keys())[i % ParityCases::Cases.size()];
+            hash<auto> n = rawRequest(c, "GET", "/n/" + name);
+            hash<auto> f = rawRequest(c, "GET", "/f/" + name);
+            hash<auto> f2 = rawRequest(c, "GET", "/f/" + name);
+            assertEq((), compare(n, f), name);
+            assertEq((), compare(n, f2), name + " (again)");
+        }
+    }
+
+    testHead() {
+        # a route answers HEAD from the pre-serialized response without the body.  The handler path answers it with
+        # the headers of the GET response too, but it may leave out the Content-Length when it does not know the
+        # length without producing the body (RFC 9110 section 9.3.2): the route always has it, and it is the length
+        # of the GET response
+        Socket c = connect();
+        foreach string name in (ParityCases::Cases.keys()) {
+            hash<auto> n = rawRequest(c, "HEAD", "/n/" + name);
+            hash<auto> f = rawRequest(c, "HEAD", "/f/" + name);
+            hash<auto> g = rawRequest(c, "GET", "/f/" + name);
+            assertEq(0, n.body.size(), name);
+            assertEq(0, f.body.size(), name);
+            assertEq(g.status, f.status, name);
+            # the length is that of the GET response (a 204 response has none)
+            assertEq(g.body.size(), f.length, name);
+            hash<auto> fl = f;
+            if (g.status =~ / 204 /) {
+                assertTrue(!(select f.headers, $1.name.lwr() == "content-length"), name + " (204: no Content-Length)");
+                if (n.status != f.status) {
+                    # a handler that answers HEAD with a 200 response and no body keeps its status; only a GET
+                    # response without a body is changed to 204, as is the response of a route
+                    continue;
+                }
+            }
+            if (!(select n.headers, $1.name.lwr() == "content-length")) {
+                fl.headers = (select f.headers, $1.name.lwr() != "content-length");
+                fl.length = n.length;
+            } else if (g.status =~ / 204 /) {
+                fl.length = n.length;
+            }
+            assertEq((), compare(n, fl, True), name);
+        }
+        # the connection is usable
+        assertEq("hello", rawRequest(c, "GET", "/f/text").body.toString());
+    }
+}

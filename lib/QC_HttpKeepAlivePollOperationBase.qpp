@@ -164,7 +164,7 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
     // Check for data, EOF, or fatal errors via the central async-safe idle
     // probe. This handles TLS connections with SSL_peek(), so TLS
     // post-handshake records do not look like application data forever.
-    int idle_rc = sock_obj->checkIdleDataForAsyncPoll(xsink);
+    int idle_rc = sock_obj->checkIdleDataForAsyncPoll(xsink, true);
     if (*xsink || idle_rc < 0) {
         op_state = State::CLOSED;
         sock_obj->closeIo(xsink);
