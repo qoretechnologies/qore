@@ -320,8 +320,7 @@ log("started listener on %s", lh.desc);
     - fixed the response to a \c HEAD request (RFC 9110 section 9.3.2): it has the headers of the response to a
       \c GET request, including the character encoding of the \c Content-Type and the \c Content-Encoding, no message
       body, and a \c Content-Length only if it is the length of the \c GET response's message body (it was always
-      \c 0); a \c 200 response without a body is a \c 204 response to a \c HEAD request too, and an error response
-      to a \c HEAD request has no message body
+      \c 0), and an error response to a \c HEAD request has no message body
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
     - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
       \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
@@ -2720,7 +2719,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         that a \c GET response sends: an in-memory body of binary data, or of text in ASCII sent in an encoding that
         has ASCII as its subset, which is not compressed; otherwise none is sent, which is allowed.
 
-        A \c 200 response without a message body is a \c 204 response, as it is to a \c GET request.
+        The status code is the handler's: a handler that answers a \c HEAD request with a \c 200 response and no message
+        body (the usual way to answer one) keeps its \c 200 status; only a \c GET response without a body is changed to
+        \c 204.
 
         @param rv the response, with the message body that a \c GET request would get; its headers are set
         @param cx the connection context
@@ -2728,16 +2729,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     */
     private static prepareHeadResponse(reference<hash<auto>> rv, hash<auto> cx, Socket s) {
         string encoding = cx."response-encoding" ?? s.getEncoding().lwr();
-        bool is_sse = (rv.hdr."Content-Type" ?? "").lwr().startsWith(MimeTypeSse);
-        if (rv."code" == 200 && !rv.streaming && !is_sse && !rv.hasKey("chunked_body")
-                && !(rv.body instanceof InputStream) && !rv.send_callback) {
-            int body_tc = rv.body.typeCode();
-            if (body_tc == NT_NOTHING || body_tc == NT_NULL
-                    || ((body_tc == NT_STRING || body_tc == NT_BINARY) && rv.body.size() == 0)) {
-                rv."code" = 204;
-                return;
-            }
-        }
         if (!rv.hdr."Content-Type") {
             if (*string default_content_type = getDefaultContentType(rv, encoding)) {
                 rv.hdr."Content-Type" = default_content_type;

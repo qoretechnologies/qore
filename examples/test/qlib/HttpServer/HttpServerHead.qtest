@@ -156,9 +156,10 @@ class HttpServerHeadTest inherits QUnit::Test {
 
     testStatus() {
         Socket c = connect();
-        # a 200 response without a body is a 204 response, to GET and to HEAD
+        # a 200 response without a body is a 204 response to GET; a handler that answers HEAD with a 200 response and
+        # no body keeps its status
         assertEq(204, request(c, "GET", "/empty").code);
-        assertEq(204, request(c, "HEAD", "/empty").code);
+        assertEq(200, request(c, "HEAD", "/empty").code);
         assertEq(304, request(c, "HEAD", "/not-modified").code);
         assertEq("\"x\"", request(c, "HEAD", "/not-modified").hdr.etag);
         # an error: no message body, and a length only if it is the GET response's
@@ -180,7 +181,7 @@ class HttpServerHeadTest inherits QUnit::Test {
             hash<auto> get = request(c, "GET", "/ascii");
             assertEq("hello world", get.body.toString(), "request " + i);
             assertEq(404, request(c, "HEAD", "/missing").code);
-            assertEq(204, request(c, "HEAD", "/empty").code);
+            assertEq(200, request(c, "HEAD", "/empty").code);
         }
     }
 }
