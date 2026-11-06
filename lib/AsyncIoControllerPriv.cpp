@@ -6934,6 +6934,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     std::vector<Command> abandoned_cmds;
     std::vector<AsyncIoDeferredRelease> exit_timer_refs;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
+    // sockets that waited for a barrier and the completions waiting for them: closed and signaled after the lock is
+    // released, as closing a socket can run its destructor and other code that must not run under the controller lock
+    std::vector<IoThreadContext::PendingSocketCancel::PendingClose> exit_closes;
+    std::vector<AsyncOpCompletion*> exit_completions;
     std::map<std::pair<uint64_t, int>, std::shared_ptr<void>> exit_extra_holds;
     bool restart_after_exit = false;
     {
@@ -7028,12 +7032,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         for (auto& [sock_hash, pending] : t.pending_socket_cancels) {
             // a socket that waited for the barrier is closed all the same: its waiter expects it closed
             for (auto& pc : pending.closes) {
-                pc.sock->closeIo(xsink);
-                pc.sock->deref(xsink);
+                exit_closes.push_back(pc);
             }
             for (AsyncOpCompletion* completion : pending.completions) {
-                completion->completeOne();
-                completion->deref();
+                exit_completions.push_back(completion);
             }
         }
         t.pending_socket_cancels.clear();
@@ -7156,6 +7158,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     }
     for (auto& refs : exit_timer_refs) {
         releaseOffIoThread(refs, xsink);
+    }
+    // the closes come first: the completions are what a waiter for the closed sockets wakes on
+    for (auto& pc : exit_closes) {
+        pc.sock->closeIo(xsink);
+        pc.sock->deref(xsink);
+    }
+    for (AsyncOpCompletion* completion : exit_completions) {
+        completion->completeOne();
+        completion->deref();
     }
     exit_holds.clear();
     exit_extra_holds.clear();

@@ -11,6 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#define MAX_THREADS 256
+
 static int port;
 static long nreq;
 static volatile long total_done = 0;
@@ -62,16 +64,30 @@ static void* run(void* arg) {
 }
 
 int main(int argc, char** argv) {
+    if (argc != 4) {
+        fprintf(stderr, "usage: loadgen <port> <threads 1-%d> <requests per thread>\n", MAX_THREADS);
+        return 2;
+    }
     port = atoi(argv[1]);
     int threads = atoi(argv[2]);
     nreq = atol(argv[3]);
-    pthread_t t[256];
+    if (port < 1 || port > 65535 || threads < 1 || threads > MAX_THREADS || nreq < 1) {
+        fprintf(stderr, "loadgen: invalid argument (port 1-65535, threads 1-%d, requests >= 1)\n", MAX_THREADS);
+        return 2;
+    }
+    pthread_t t[MAX_THREADS];
     struct timespec s, e;
     clock_gettime(CLOCK_MONOTONIC, &s);
+    int started = 0;
     for (int i = 0; i < threads; ++i) {
-        pthread_create(&t[i], NULL, run, NULL);
+        if (pthread_create(&t[i], NULL, run, NULL)) {
+            fprintf(stderr, "loadgen: cannot create thread %d\n", i);
+            ++errors;
+            break;
+        }
+        ++started;
     }
-    for (int i = 0; i < threads; ++i) {
+    for (int i = 0; i < started; ++i) {
         pthread_join(t[i], NULL);
     }
     clock_gettime(CLOCK_MONOTONIC, &e);

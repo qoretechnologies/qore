@@ -342,6 +342,13 @@ public:
 
     DLLLOCAL bool isConfigAction() const;
 
+    //! Returns true if the action can run on any thread while the controller works on the socket
+    /** These actions are one system call (setsockopt()/getsockopt()/getsockname()) or a store to an atomic, so they
+        need no serialization with the operations of the controller; the SSL actions reconfigure the live SSL object
+        and must be serialized with them.
+    */
+    DLLLOCAL bool isThreadSafeConfigAction() const;
+
 private:
     DLLLOCAL QoreHashNode* continuePollIntern(ExceptionSink* xsink);
     DLLLOCAL static Action getAction(ConfigAction config_action);

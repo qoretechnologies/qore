@@ -1465,6 +1465,21 @@ public:
             || action == Action::SetHttp2MaxRequestBodySize;
     }
 
+
+    //! Returns true if the action can run on any thread while the controller works on the socket
+    /** These actions are one system call (setsockopt()/getsockopt()/getsockname()) or a store to an atomic, so they
+        need no serialization with the operations of the controller; the SSL actions reconfigure the live SSL object
+        and must be serialized with them.
+    */
+    DLLLOCAL bool isThreadSafeConfigAction() const {
+        return isConfigAction()
+            && action != Action::SetSslVerifyMode
+            && action != Action::GetSslVerifyMode
+            && action != Action::SetAcceptAllCertificates
+            && action != Action::GetAcceptAllCertificates
+            && action != Action::CaptureRemoteCertificates;
+    }
+
 private:
     DLLLOCAL QoreHashNode* continueBindInet(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
@@ -4290,7 +4305,8 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
         return -1;
     }
 
-    bool config_action = poller->isConfigAction();
+    bool config_action = poller->isConfigAction()
+        && (poller->isThreadSafeConfigAction() || SocketSyncPoll::onIoExecutionPath());
 
     // Config actions never block: each completes in a single continuePoll() call -- one
     // setsockopt()/getsockopt() or private-data update, all under the socket's mutex, which is the lock every
@@ -16136,6 +16152,15 @@ bool SocketSetupPollOperation::isConfigAction() const {
         || action == Action::GetAcceptAllCertificates
         || action == Action::CaptureRemoteCertificates
         || action == Action::SetHttp2MaxRequestBodySize;
+}
+
+bool SocketSetupPollOperation::isThreadSafeConfigAction() const {
+    return isConfigAction()
+        && action != Action::SetSslVerifyMode
+        && action != Action::GetSslVerifyMode
+        && action != Action::SetAcceptAllCertificates
+        && action != Action::GetAcceptAllCertificates
+        && action != Action::CaptureRemoteCertificates;
 }
 
 void SocketSetupPollOperation::init(ExceptionSink* xsink, bool defer_init) {

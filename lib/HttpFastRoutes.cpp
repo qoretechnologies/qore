@@ -38,6 +38,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <unordered_map>
 
 namespace {
 
@@ -381,52 +382,65 @@ std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(
 namespace {
 // The serialized responses that a thread has built.  Each thread that serves fast routes keeps its own, so a request
 // takes no lock and never waits for another thread that builds the serialized response for a new second: the threads
-// build their own copy, once per second, a variant and a response.  An entry is found by the id of the response (never
-// reused), the variant and the second; the entries of responses that are gone stay until they are replaced, so a
-// thread holds at most MaxWireCacheEntries serialized responses.
-constexpr size_t MaxWireCacheEntries = 16;
+// build their own copy, once per second, a variant and a response.  A serialized response holds the Date header, so it
+// is valid only within its second: the cache is emptied when the second changes, which also releases the entries of
+// responses that are gone, and it holds at most MaxWireCacheEntries responses of MaxWireCacheBytes bytes together; a
+// response that does not fit is built for each request, as correct as a cached one.
+constexpr size_t MaxWireCacheEntries = 1024;
+constexpr size_t MaxWireCacheBytes = 4 * 1024 * 1024;
+
+struct WireCacheKey {
+    uint64_t response_id;
+    bool close;
+    bool head;
+    const HttpFastExtraHeaders* extra;   // by identity; the entry holds the object, so the address is not reused
+
+    bool operator==(const WireCacheKey& o) const {
+        return response_id == o.response_id && close == o.close && head == o.head && extra == o.extra;
+    }
+};
+
+struct WireCacheKeyHash {
+    size_t operator()(const WireCacheKey& k) const {
+        size_t h = std::hash<uint64_t>()(k.response_id);
+        h = h * 31 + (k.close ? 1 : 0) + (k.head ? 2 : 0);
+        return h * 31 + std::hash<const void*>()(k.extra);
+    }
+};
 
 struct WireCacheEntry {
-    uint64_t response_id = 0;
-    bool close = false;
-    bool head = false;
-    int64_t second = -1;
     std::shared_ptr<const HttpFastExtraHeaders> extra;
     std::shared_ptr<const std::string> wire;
 };
 
 struct WireCache {
-    std::array<WireCacheEntry, MaxWireCacheEntries> entries;
-    size_t next = 0;
+    int64_t second = -1;
+    size_t bytes = 0;
+    std::unordered_map<WireCacheKey, WireCacheEntry, WireCacheKeyHash> entries;
 };
 }
 
 std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close,
         const std::shared_ptr<const HttpFastExtraHeaders>& extra, bool head) const {
     static thread_local WireCache cache;
+    if (cache.second != epoch_s) {
+        cache.entries.clear();
+        cache.bytes = 0;
+        cache.second = epoch_s;
+    }
+
     // the variant is found by identity of the extra headers (a listener has one set of them)
-    WireCacheEntry* entry = nullptr;
-    for (WireCacheEntry& e : cache.entries) {
-        if (e.response_id == id && e.close == close && e.head == head && e.extra == extra) {
-            if (e.second == epoch_s) {
-                return e.wire;
-            }
-            entry = &e;
-            break;
-        }
+    WireCacheKey key{id, close, head, extra.get()};
+    auto it = cache.entries.find(key);
+    if (it != cache.entries.end()) {
+        return it->second.wire;
     }
 
     std::shared_ptr<const std::string> wire = buildWire(epoch_s, close, extra, head);
-    if (!entry) {
-        // more variants than are cached: the oldest entry is replaced
-        entry = &cache.entries[cache.next++ % MaxWireCacheEntries];
-        entry->response_id = id;
-        entry->close = close;
-        entry->head = head;
-        entry->extra = extra;
+    if (cache.entries.size() < MaxWireCacheEntries && cache.bytes + wire->size() <= MaxWireCacheBytes) {
+        cache.bytes += wire->size();
+        cache.entries.emplace(key, WireCacheEntry{extra, wire});
     }
-    entry->second = epoch_s;
-    entry->wire = wire;
     return wire;
 }
 

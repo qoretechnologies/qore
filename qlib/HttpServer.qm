@@ -5597,7 +5597,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "listener": listener,
             "after_send": after_send,
         };
-        # the response is logged by the code that sends it, as above
+        # the response is logged by the code that sends it, as above; an event stream and a protocol upgrade are sent by
+        # sendReply() itself, which does not log them
+        if (rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse) {
+            listener.logResponse(cx, rv);
+        }
     }
     #! @endcond
 }

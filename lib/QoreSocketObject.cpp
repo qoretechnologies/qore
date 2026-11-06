@@ -3115,7 +3115,10 @@ static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOpe
         return -1;
     }
 
-    bool config_action = poller->isConfigAction();
+    // the SSL actions reconfigure the live SSL object, so a thread that is not on an I/O execution path (where the
+    // socket is not being driven by the controller) leaves them to the controller
+    bool config_action = poller->isConfigAction()
+        && (poller->isThreadSafeConfigAction() || SocketSyncPoll::onIoExecutionPath());
 
     // Config actions never block: each completes in a single continuePoll() call -- one
     // setsockopt()/getsockopt() or private-data update, all under the socket's mutex, which is the lock every

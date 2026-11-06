@@ -82,6 +82,17 @@ class HealthHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! The ordinary handler of /ready: the answer when the fast route does not answer
+/** A fast route whose cell is stale does not answer and the request takes the normal path.  Without a handler for the
+    path, the default handler would answer 200, so a readiness check would report "ready" exactly when the code that
+    keeps the cell current has stopped; this handler reports not ready instead.
+*/
+class NotReadyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 503, "body": "not ready", "hdr": {"Content-Type": MimeTypeText}};
+    }
+}
+
 class FastRoutesExample {
     private {
         const Opts = {
@@ -133,6 +144,8 @@ class FastRoutesExample {
         # the response is whatever the slot holds, and changes whenever updateStatus() sets it
         hs.addFastRoute("/status", {"public": True, "response": status});
 
+        # the fallback of /ready: used when the fast route does not answer (the cell is stale)
+        hs.setHandler("not-ready", "/ready", NOTHING, new NotReadyHandler());
         hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         hs.setDefaultHandler("hello", new HelloHandler());
 
@@ -234,6 +247,13 @@ class FastRoutesExample {
         if (HelloHandler::calls.getCount() != 1) {
             problems += sprintf("the handler was called %d times, not once", HelloHandler::calls.getCount());
         }
+
+        # without the fast route (or when its cell is stale) the request takes the normal path: the fallback handler
+        # answers not ready, not the default handler's 200
+        if (!hs.removeFastRoute("/ready")) {
+            problems += "the /ready route was not removed";
+        }
+        check("/ready", 503, "not ready");
 
         # the heartbeat ends when the program is told to exit, as the signal handler does
         startHeartbeat();

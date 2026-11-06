@@ -1449,7 +1449,7 @@ Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
         return it->second.get();
     }
     auto info = std::make_unique<Http2StreamInfo>(stream_id);
-    info->max_body_size = max_request_body_size;
+    info->max_body_size = max_request_body_size.load(std::memory_order_relaxed);
     Http2StreamInfo* ptr = info.get();
     streams[stream_id] = std::move(info);
     return ptr;

@@ -266,7 +266,7 @@ not part of a route's response: the listener's socket holds it as extra response
 set by `HttpServer` when the listener's `Alt-Svc` value is set or changes), they are shared with the connections
 accepted from the listener (and with the sessions of a QUIC listener), and a route's serialized response is cached
 for each set of extra headers (`HttpFastResponse::getWire()`, keyed by the identity of the immutable
-`HttpFastExtraHeaders` object, at most 16 serialized responses per thread).  A request reads the routes and the
+`HttpFastExtraHeaders` object, valid for one second, so a thread empties its cache when the second changes; at most 1024 responses and 4 MiB per thread).  A request reads the routes and the
 extra headers without a lock (`HttpFastContext::get()`), so the header costs one pointer comparison per request.  A header that
 a route has itself (any case) replaces the listener's.  The parity tests compare the header over HTTP/1.1 with TLS and
 over HTTP/2.

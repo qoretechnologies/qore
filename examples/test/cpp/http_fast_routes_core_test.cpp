@@ -345,6 +345,33 @@ int main() {
                 CHECK(ww->find("X-Set: " + std::to_string(i) + "\r\n") != std::string::npos);
             }
         }
+        // responses that do not fit the cache (4 MiB per thread) are built for each request, and are the same
+        {
+            std::vector<std::shared_ptr<const HttpFastResponse>> bigs;
+            for (int i = 0; i < 80; ++i) {
+                auto r = resp(200, std::string(60 * 1024, 'b'));
+                CHECK(r != nullptr);
+                bigs.push_back(r);
+            }
+            std::vector<std::shared_ptr<const std::string>> first;
+            for (auto& r : bigs) {
+                first.push_back(r->getWire(1730000003, false, nullptr));
+            }
+            size_t cached = 0;
+            for (size_t i = 0; i < bigs.size(); ++i) {
+                auto again = bigs[i]->getWire(1730000003, false, nullptr);
+                CHECK(*again == *first[i]);
+                cached += again == first[i] ? 1 : 0;
+            }
+            CHECK(cached > 0 && cached < bigs.size());
+        }
+        // the cache is emptied when the second changes: the response of the earlier second is not served
+        {
+            auto e1 = plain->getWire(1730000010, false, nullptr);
+            auto e2w = plain->getWire(1730000011, false, nullptr);
+            CHECK(e1 != e2w && e1->find("Date: Sun, 27 Oct 2024 03:33:30 GMT") != std::string::npos);
+            CHECK(e2w->find("Date: Sun, 27 Oct 2024 03:33:31 GMT") != std::string::npos);
+        }
         // a header that the route's response has is not replaced
         auto own = HttpFastResponse::create(200, {{"Content-Type", "text/plain"}, {"alt-svc", "clear"}}, "y", e2);
         auto wo = own->getWire(1730000000, false, alt);
