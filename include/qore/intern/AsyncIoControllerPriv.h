@@ -916,6 +916,7 @@ private:
         Cancel,
         CancelSocket,        //!< Cancel all operations associated with a socket hash
         CloseSocket,         //!< Close an I/O object on an I/O thread
+        CancelAndCloseSocket,  //!< Cancel all operations of a socket on its I/O thread, then close it there
         CancelOwner,
         CancelByProgram,     //!< Cancel all operations belonging to a QoreProgram
         Quit,
@@ -1601,8 +1602,16 @@ private:
             barriers by socket hash.
          */
         struct PendingSocketCancel {
+            //! A socket to close when the barrier completes (see IoCommand::CancelAndCloseSocket)
+            struct PendingClose {
+                std::string sock_hash;
+                AbstractPollableIoObjectBase* sock;  //!< referenced; released when closed
+            };
+
             int pending_count = 0;
             std::vector<AsyncOpCompletion*> completions;
+            //! sockets to close, in order, once the last in-flight worker continuePoll() has returned
+            std::vector<PendingClose> closes;
         };
         std::unordered_map<std::string, PendingSocketCancel> pending_socket_cancels;
 
@@ -1915,6 +1924,26 @@ private:
         @param sock_hash the socket's I/O identity hash
         @param xsink for exception handling
     */
+    //! Cancels the operations of a socket and closes it with one command to the I/O thread of the socket
+    /** The cancel and the close used to be two commands with a wait for each.  The I/O thread cancels the operations
+        of the socket and, if no worker continuePoll() of them is still running, closes it at once; otherwise it
+        closes the socket when the last of them has returned, as the separate close command did after the cancel
+        barrier.  Not used from an I/O thread, which never waits for another one.
+
+        @param sock the socket
+        @param sock_hash the socket's I/O identity hash
+        @param thread_idx the index of the I/O thread of the socket
+        @param xsink exception sink
+        @param rc set to the result of close() when the function handled the close
+        @param cancelled if not null, set to the number of operations that were cancelled (those of the
+        socket that were not already running a worker continuePoll() are counted when the command is processed, the
+        others when their cancel barrier is set; see cancelSocketInContext())
+        @return true if the close was handled; false if the caller has to cancel and close in two steps (the
+        controller is shutting down)
+    */
+    DLLLOCAL bool cancelAndCloseOnThread(AbstractPollableIoObjectBase* sock, const std::string& sock_hash,
+        int thread_idx, ExceptionSink* xsink, int& rc, int* cancelled = nullptr);
+
     DLLLOCAL int closeSocketOnController(AbstractPollableIoObjectBase* sock,
         const std::string& sock_hash, ExceptionSink* xsink);
 
