@@ -111,6 +111,8 @@ module HttpServer {
         without calling Qore code|every handler, and so authentication, logging and request preprocessing|a few \
         microseconds of server CPU per request
 
+    The example program <tt>examples/fast-routes.qr</tt> serves one request each of the three ways.
+
     Use the first for everything that needs the request, the context or authentication, that reads a request body, that
     streams, or that can block.  Use the second for a handler that only builds a response in memory from the request
     headers, never blocks and never waits (a health or readiness check, a static response, a redirect): a handler
@@ -3138,7 +3140,11 @@ ready.set(1);
 
         @throw HTTP-FAST-ROUTE-ERROR the route is not valid
 
-        @see @ref Qore::FastCell "FastCell"
+        @see
+        - @ref Qore::FastCell "FastCell"
+        - @ref Qore::FastResponseSlot "FastResponseSlot"
+        - examples/fast-routes.qr: a program that serves a readiness check, a status document and a health check, as
+          fast routes, as an inline handler and with an ordinary handler
 
         @since HttpServer 1.7
     */
@@ -3147,9 +3153,19 @@ ready.set(1);
     }
 
     #! Removes a fast route
-    /** @param path the path of the route
+    /** Requests for the path take the normal path (the handler) from then on.
+
+        @param path the path of the route
 
         @return @ref True if there was a route for the path
+
+        @par Example:
+        @code{.py}
+# stop answering /ready from the fast path while the application restarts its checks
+if (hs.removeFastRoute("/ready")) {
+    printf("the route was removed\n");
+}
+        @endcode
 
         @since HttpServer 1.7
     */
@@ -3159,7 +3175,18 @@ ready.set(1);
     }
 
     #! Returns the number of requests that each fast route answered, and why the other requests took the normal path
-    /** @return a hash with the keys \c routes and \c fallbacks; see @ref Qore::HttpFastRoutes::getInfo()
+    /** The counters show how many requests bypass the handler chain (and so its logging and authentication), and why a
+        request that was expected to be answered by a route was not: for example \c stale when the cell or the slot of
+        a route had not been updated for longer than its maximum age.
+
+        @return a hash with the keys \c routes and \c fallbacks; see @ref Qore::HttpFastRoutes::getInfo()
+
+        @par Example:
+        @code{.py}
+hash<auto> info = hs.getFastRouteInfo();
+printf("/ready answered %d requests; %d took the normal path because a cell was stale\n",
+    info.routes."/ready" ?? 0, info.fallbacks.stale);
+        @endcode
 
         @since HttpServer 1.7
     */

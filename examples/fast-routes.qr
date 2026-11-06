@@ -1,0 +1,253 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    fast-routes.qr: example of the fast handler building blocks of the HttpServer module
+
+    A service with a readiness check, a status document and a health check, served three ways, from the cheapest to
+    the most general (see "Choosing How a Request Is Dispatched" in the HttpServer module documentation):
+
+    - fast routes (HttpServer::addFastRoute()): answered on the async I/O thread, without a hand-off to another thread and
+      without calling Qore code.  A FastCell (a number that any thread sets) selects the answer of /ready, and a
+      FastResponseSlot (a complete response that any thread replaces) holds the document of /status.  /ping is a fixed
+      response
+    - an inline handler (/health): Qore code that runs on the thread that read the request headers, in place of a
+      handler thread; for a handler that only builds a response from the request headers and never blocks
+    - an ordinary handler (everything else): the full path, with the request context, authentication and logging
+
+    A fast route is answered without authentication and logging, so use it only for what may be public.  The cell has
+    a maximum age: if the code that keeps it current stops, the route no longer answers and the request takes the normal
+    path, so that a readiness check does not report a stale "ready".
+
+    usage: fast-routes.qr [--port=<port>]    serve on the port (default 8080) until a signal arrives
+           fast-routes.qr --selftest         serve on a free port, request every route once, check the answers, and exit
+*/
+
+%modern
+%requires HttpServer
+%requires Mime
+%requires json
+
+%exec-class FastRoutesExample
+
+#! The ordinary handler: counts the requests that reach it
+class HelloHandler inherits AbstractHttpRequestHandler {
+    public {
+        static Counter calls();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        HelloHandler::calls.inc();
+        return <HttpResponseInfo>{"code": 200, "body": "hello", "hdr": {"Content-Type": MimeTypeText}};
+    }
+}
+
+#! An inline handler: it answers on the thread that read the request headers
+/** It must be quick and must never block, as a handler that waits stalls the thread for every other connection.  It
+    gets only the peer information in its context, no request body (a request with a body takes the normal path) and
+    must return the message body as a string or binary value.  It is not asked to authenticate, so it must not need to.
+*/
+class HealthHandler inherits AbstractHttpRequestHandler {
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": make_json({"status": "up"}), "hdr": {"Content-Type": MimeTypeJson}};
+    }
+
+    # a handler that opts in to inline requests is also called by the normal path for the requests that do not qualify
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return handleInlineRequest(cx, hdr, body);
+    }
+}
+
+class FastRoutesExample {
+    private {
+        const Opts = {
+            "port": "p,port=i",
+            "selftest": "selftest",
+            "help": "h,help",
+        };
+
+        HttpServer hs();
+
+        #! 1 when the service is ready; stale after 15 seconds without a heartbeat
+        FastCell ready(0, 15s);
+
+        #! the status document; stale after 15 seconds without an update
+        FastResponseSlot status(15s);
+
+        #! reaches zero when the program is to exit
+        Counter stop(1);
+
+        #! reaches zero when the heartbeat thread has ended
+        Counter heartbeat_done();
+
+        int port;
+    }
+
+    constructor() {
+        GetOpt g(Opts);
+        hash<auto> o = g.parse3(\ARGV);
+        if (o.help) {
+            usage();
+            exit(0);
+        }
+
+        # the status document is published before the route that serves it is added
+        updateStatus();
+
+        # a fixed response
+        hs.addFastRoute("/ping", {"public": True, "response": {"code": 200, "body": "pong", "content_type": MimeTypeText}});
+
+        # the answer follows the cell: rules are compared in order, and "otherwise" is used when none holds
+        hs.addFastRoute("/ready", {
+            "public": True,
+            "rules": (
+                {"cell": ready, "op": "==", "value": 1, "response": {"code": 200, "body": "ready", "content_type": MimeTypeText}},
+            ),
+            "otherwise": {"code": 503, "body": "not ready", "content_type": MimeTypeText},
+        });
+
+        # the response is whatever the slot holds, and changes whenever updateStatus() sets it
+        hs.addFastRoute("/status", {"public": True, "response": status});
+
+        hs.setHandler("health", "/health", NOTHING, new HealthHandler());
+        hs.setDefaultHandler("hello", new HelloHandler());
+
+        # the self-test listens on a free port of the loopback interface
+        port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": o.selftest ? "127.0.0.1" : "0.0.0.0",
+            "service": o.selftest ? 0 : (o.port ?? 8080),
+        }).port;
+        hs.waitForAsyncIo();
+        if (o.selftest) {
+            exit(selfTest());
+        }
+        printf("listening on port %d: /ping /ready /status (fast routes), /health (inline), anything else (handler)\n", port);
+
+        # the service is ready now; the heartbeat keeps the cell and the status document current
+        ready.set(1);
+        updateStatus();
+        startHeartbeat();
+
+        set_signal_handler(SIGINT, \signalHandler());
+        set_signal_handler(SIGTERM, \signalHandler());
+        stop.waitForZero();
+        hs.stop();
+        printf("%N\n", hs.getFastRouteInfo());
+    }
+
+    private startHeartbeat() {
+        heartbeat_done.inc();
+        background heartbeat();
+    }
+
+    #! Keeps the cell and the status document current while the service is healthy
+    /** A real service would check its own health first and stop calling touch() when it is not healthy; the route
+        then stops answering after the maximum age of the cell.
+    */
+    private heartbeat() {
+        on_exit heartbeat_done.dec();
+        # the wait ends at once when the program exits; otherwise it times out and the loop goes on
+        while (stop.waitForZero(5s)) {
+            ready.touch();
+            updateStatus();
+        }
+    }
+
+    #! Publishes the status document: any thread can do this at any time
+    private updateStatus() {
+        status.set({
+            "code": 200,
+            "body": make_json({"ready": ready.getBool(), "time": format_date("YYYY-MM-DD HH:mm:SS", now_utc())}),
+            "content_type": MimeTypeJson,
+        });
+    }
+
+    private signalHandler(int sig) {
+        if (stop.getCount()) {
+            stop.dec();
+        }
+    }
+
+    private usage() {
+        printf("usage: %s [--port=<port>] | --selftest\n", get_script_name());
+    }
+
+    #! Requests every route of the server that listens, checks the answers and the heartbeat; returns the exit code
+    private int selfTest() {
+        HTTPClient c({"url": "http://127.0.0.1:" + port, "error_passthru": True});
+        on_exit c.disconnect();
+
+        list<string> problems = ();
+        code<nothing(string, int, string)> check = sub (string path, int code, string body) {
+            hash<auto> r = c.send("", "GET", path, NOTHING, True);
+            if (r.status_code != code || r.body != body) {
+                problems += sprintf("GET %s: expected %d %y, got %d %y", path, code, body, r.status_code, r.body);
+            }
+        };
+
+        check("/ping", 200, "pong");
+        check("/ready", 503, "not ready");
+        ready.set(1);
+        check("/ready", 200, "ready");
+        ready.set(0);
+        check("/ready", 503, "not ready");
+        check("/health", 200, make_json({"status": "up"}));
+        check("/hello", 200, "hello");
+
+        # the document of the slot changes when it is set
+        ready.set(1);
+        updateStatus();
+        hash<auto> r = c.send("", "GET", "/status", NOTHING, True);
+        if (r.status_code != 200 || !parse_json(r.body).ready) {
+            problems += sprintf("GET /status: unexpected answer %d %y", r.status_code, r.body);
+        }
+
+        # the routes answered their requests, and the handler was called only for the one that is not a route
+        hash<auto> info = hs.getFastRouteInfo();
+        if (info.routes."/ping" != 1 || info.routes."/ready" != 3 || info.routes."/status" != 1) {
+            problems += sprintf("unexpected route counters: %y", info.routes);
+        }
+        if (HelloHandler::calls.getCount() != 1) {
+            problems += sprintf("the handler was called %d times, not once", HelloHandler::calls.getCount());
+        }
+
+        # the heartbeat ends when the program is told to exit, as the signal handler does
+        startHeartbeat();
+        signalHandler(SIGTERM);
+        if (heartbeat_done.waitForZero(30s)) {
+            problems += "the heartbeat did not end";
+        }
+
+        hs.stop();
+        if (problems) {
+            printf("FAIL: fast routes example:\n  %s\n", problems.join("\n  "));
+            return 1;
+        }
+        printf("PASS: fast routes example: the fast routes, the inline handler and the handler answered as documented\n");
+        return 0;
+    }
+}
