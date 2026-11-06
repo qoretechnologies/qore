@@ -3393,9 +3393,31 @@ void AsyncIoControllerPriv::completePendingSocketCancel(IoThreadContext& t,
     }
 }
 
+std::vector<int> AsyncIoControllerPriv::getSocketThreadIndexes(AbstractPollableIoObjectBase* sock,
+        const std::string& sock_hash) {
+    std::vector<int> rv;
+    {
+        AutoLocker al(sock_route_lock);
+        auto it = sock_to_thread.find(sock_hash);
+        if (it != sock_to_thread.end()) {
+            rv.push_back(it->second);
+        }
+    }
+    int route_idx = getThreadIndex(getRouteKey(sock));
+    if (rv.empty() || rv[0] != route_idx) {
+        rv.push_back(route_idx);
+    }
+    return rv;
+}
+
 int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, const std::vector<int>* targets) {
     int count = 0;
+
+    // true if the I/O thread with the given index is asked: all of them without targets
+    auto is_target = [targets](size_t idx) {
+        return !targets || std::find(targets->begin(), targets->end(), static_cast<int>(idx)) != targets->end();
+    };
 
     if (on_async_io_thread && !inside_continue_poll_batch) {
         // The calling I/O thread's own operations are canceled directly; other I/O threads get a CancelSocket
@@ -3405,14 +3427,14 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
         // be derived from the socket hash: a wrapper around a socket routes with the key of the socket it wraps.
         int my_idx = ownIoThreadIndex();
         AsyncOpCompletion* completion = nullptr;
-        if (my_idx >= 0) {
+        if (my_idx >= 0 && is_target(static_cast<size_t>(my_idx))) {
             count += cancelSocketInContext(*io_threads[my_idx], sock_hash, completion, xsink);
         }
 
         AutoLocker al(m);
         if (anyThreadRunning()) {
             for (size_t i = 0; i < io_threads.size(); ++i) {
-                if (static_cast<int>(i) == my_idx || !readsCommands(*io_threads[i])) {
+                if (static_cast<int>(i) == my_idx || !is_target(i) || !readsCommands(*io_threads[i])) {
                     continue;
                 }
                 IoThreadContext& tp = *io_threads[i];
@@ -3438,8 +3460,9 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
         {
             AutoLocker al(m);
             if (anyThreadRunning()) {
-                for (auto& tp : io_threads) {
-                    if (!readsCommands(*tp)) {
+                for (size_t i = 0; i < io_threads.size(); ++i) {
+                    auto& tp = io_threads[i];
+                    if (!is_target(i) || !readsCommands(*tp)) {
                         continue;
                     }
                     Command cmd;
@@ -3463,9 +3486,9 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
     {
         AutoLocker al(m);
         if (anyThreadRunning()) {
-            for (auto& tp : io_threads) {
-                if (readsCommands(*tp)) {
-                    live_targets.push_back(tp.get());
+            for (size_t i = 0; i < io_threads.size(); ++i) {
+                if (is_target(i) && readsCommands(*io_threads[i])) {
+                    live_targets.push_back(io_threads[i].get());
                 }
             }
             if (!live_targets.empty()) {
@@ -3503,7 +3526,9 @@ bool AsyncIoControllerPriv::cancel(AbstractPollableIoObjectBase* sock, Exception
     if (checkForked("cancel", xsink)) {
         return false;
     }
-    return cancelBySocketHash(getSocketHash(sock), xsink) > 0;
+    std::string sock_hash = getSocketHash(sock);
+    std::vector<int> targets = getSocketThreadIndexes(sock, sock_hash);
+    return cancelBySocketHash(sock_hash, xsink, &targets) > 0;
 }
 
 bool AsyncIoControllerPriv::cancelAndClose(AbstractPollableIoObjectBase* sock,
@@ -3512,7 +3537,8 @@ bool AsyncIoControllerPriv::cancelAndClose(AbstractPollableIoObjectBase* sock,
         return false;
     }
     std::string sock_hash = getSocketHash(sock);
-    int count = cancelBySocketHash(sock_hash, xsink);
+    std::vector<int> targets = getSocketThreadIndexes(sock, sock_hash);
+    int count = cancelBySocketHash(sock_hash, xsink, &targets);
     if (*xsink) {
         return count > 0;
     }
@@ -3525,7 +3551,8 @@ int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSi
         return -1;
     }
     std::string sock_hash = getSocketHash(sock);
-    cancelBySocketHash(sock_hash, xsink);
+    std::vector<int> targets = getSocketThreadIndexes(sock, sock_hash);
+    cancelBySocketHash(sock_hash, xsink, &targets);
     if (*xsink) {
         return -1;
     }
@@ -3544,7 +3571,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
 
     auto close_direct = [&]() -> int {
         sock->closeIo(xsink);
-        wakeSocketAfterClose(sock_hash);
+        wakeSocketAfterClose(sock_hash, sock);
         return *xsink ? -1 : 0;
     };
 
@@ -4401,21 +4428,32 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     }
 }
 
-void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash) {
+void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash, AbstractPollableIoObjectBase* sock) {
+    // all operations on one socket run on the thread it is registered on or the one its route key selects (see
+    // getSocketThreadIndexes()), so no other I/O thread can retain a waiter on the removed descriptor
+    std::vector<int> targets;
+    if (sock) {
+        targets = getSocketThreadIndexes(sock, sock_hash);
+    }
+
     // Cancellation and descriptor close are separate controller commands. An
     // operation submitted between them can already be waiting in epoll/kqueue
     // when close removes its fd. The kernel does not report that removal as
     // readiness, so explicitly schedule the closed socket once more. Existing
     // generation validation then delivers SOCKET-CLOSED to the waiting caller.
-    // Broadcast because the thread of the socket's operations cannot be derived
-    // from its hash (see getRouteKey()); no I/O thread may retain a waiter on
-    // the removed descriptor.
+    // Only the threads that can run operations of the socket are woken (all of
+    // them without the socket); no I/O thread may retain a waiter on the
+    // removed descriptor.
     AutoLocker al(m);
     if (shutting_down) {
         return; // teardown already completes all outstanding operations
     }
     int tid = q_gettid();
-    for (auto& tp : io_threads) {
+    for (size_t i = 0; i < io_threads.size(); ++i) {
+        auto& tp = io_threads[i];
+        if (sock && std::find(targets.begin(), targets.end(), static_cast<int>(i)) == targets.end()) {
+            continue;
+        }
         if (!tp->running.load(std::memory_order_acquire)) {
             continue;
         }
@@ -7254,7 +7292,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 case IoCommand::CloseSocket: {
                     if (cmd.close_sock) {
                         cmd.close_sock->closeIo(xsink);
-                        wakeSocketAfterClose(cmd.sock_hash);
+                        wakeSocketAfterClose(cmd.sock_hash, cmd.close_sock);
                         cmd.close_sock->deref(xsink);
                         cmd.close_sock = nullptr;
                     }
