@@ -206,11 +206,26 @@ class SocketSyncIoTest inherits QUnit::Test {
         assertEq("SOCKET-CLOSED", ex.err, "the peer's close is reported as in the controller");
     }
 
-    private int numFds() {
-        return elements (new Dir()).list("/proc/self/fd");
+    #! Returns the directory that lists the open descriptors of this process, if the platform has one
+    /** Linux has /proc/self/fd; macOS and the BSDs have /dev/fd
+    */
+    private static *string getFdDir() {
+        foreach string dir in ("/proc/self/fd", "/dev/fd") {
+            if (is_dir(dir)) {
+                return dir;
+            }
+        }
+    }
+
+    private int numFds(string dir) {
+        return elements (new Dir()).list(dir);
     }
 
     testNoDescriptorLeak() {
+        *string fd_dir = getFdDir();
+        if (!fd_dir) {
+            testSkip("the platform has no directory that lists the open descriptors of a process");
+        }
         Socket s = listener();
         int port = s.getPort();
         # one round to settle lazily created descriptors
@@ -221,7 +236,7 @@ class SocketSyncIoTest inherits QUnit::Test {
             c.send("x");
             a.recv(1, Timeout);
         }
-        int before = numFds();
+        int before = numFds(fd_dir);
         for (int i = 0; i < 100; ++i) {
             Socket c();
             c.connect("127.0.0.1:" + port);
@@ -231,6 +246,6 @@ class SocketSyncIoTest inherits QUnit::Test {
             a.close();
             c.close();
         }
-        assertEq(before, numFds(), "no descriptor is left open by the calls");
+        assertEq(before, numFds(fd_dir), "no descriptor is left open by the calls");
     }
 }

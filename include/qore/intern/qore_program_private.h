@@ -1312,8 +1312,9 @@ public:
 
     //! dereferences the object and each handler; releasing the handlers can run destructors
     DLLLOCAL void deref(ExceptionSink* xsink) {
-        // the handlers are read before the count is decremented, as another thread can delete the object after that;
-        // this caller's reference to each is released after the object's
+        // the handlers are read into locals before the count is decremented, because another thread can delete the
+        // object as soon as the count reaches zero; the references this object holds on the handlers are released
+        // only after that, so reading the members afterwards would use a deleted object
         ResolvedCallReferenceNode* e = on_enter;
         ResolvedCallReferenceNode* x = on_exit;
         if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
