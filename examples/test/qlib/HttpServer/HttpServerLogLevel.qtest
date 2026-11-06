@@ -96,8 +96,8 @@ class HttpServerLogLevelTest inherits QUnit::Test {
             "each carries the prefix: " + messages.join("\n"));
         # the messages that the server logs for the request itself
         assertEq(2, count(messages, ": GET /x HTTP/1\\.1"), "the request lines: " + messages.join("\n"));
-        assertTrue(count(messages, "HTTP/1\\.1 200 OK handler: \"handler\"") >= 2,
-            "the response lines: " + messages.join("\n"));
+        assertEq(2, count(messages, "HTTP/1\\.1 200 OK handler: \"handler\""),
+            "one response line per request: " + messages.join("\n"));
     }
 
     testDisabled() {

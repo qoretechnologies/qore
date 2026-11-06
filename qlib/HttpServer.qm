@@ -5496,7 +5496,8 @@ ready.set(1);
                 "listener": listener,
                 "after_send": after_send,
             };
-            listener.logResponse(cx, rv);
+            # the response is logged by the code that sends it (translateToRequestResult(), sendResponseSync(),
+            # sendMultiplexedResponse(), sendMultiplexedStreamingResponseInline()); logging it here logged it twice
             return;
         }
 
@@ -5569,7 +5570,7 @@ ready.set(1);
             "listener": listener,
             "after_send": after_send,
         };
-        listener.logResponse(cx, rv);
+        # the response is logged by the code that sends it, as above
     }
     #! @endcond
 }
