@@ -1428,6 +1428,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - fixed a deadlock when a user module failed to load while another thread used a binary module, such as the jni
+      module, whose program cleanup code calls the module manager: the failed module is now destroyed without the
+      module manager's lock, which every thread loading a module afterwards also waited for
     - a reference cycle through the thread initialization code of a Program (@ref Qore::Program::setThreadInit() and
       @ref Qore::set_thread_init()), such as code that refers to the Program object, was never collected, so the
       Program and the values the code refers to were leaked; such a cycle is now collected like any other
