@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# The preferences of an Accept-Encoding header value are computed once per distinct value and cached
+# (HttpServer::getContentEncodingPreferences()).  The cache must not change what a request gets: the same header always
+# selects the same encoding, whatever the cache holds, and a client cannot make it grow without bound.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires json
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerEncodingPreferencesTest
+
+class BodyHandler inherits AbstractHttpRequestHandler {
+    private {
+        string body;
+    }
+
+    constructor(string body) {
+        self.body = body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        return <HttpResponseInfo>{"code": 200, "body": self.body, "hdr": {"Content-Type": MimeTypeJson}};
+    }
+}
+
+class HttpServerEncodingPreferencesTest inherits QUnit::Test {
+    public {
+        #! Accept-Encoding header values (NOTHING: no header) and the encoding that each selects
+        const Cases = (
+            (NOTHING, NOTHING),
+            ("gzip", "gzip"),
+            ("br, gzip", "br"),
+            ("gzip;q=0.5, deflate;q=0.9", "deflate"),
+            ("gzip, br;q=0", "gzip"),
+            ("deflate, gzip;q=0.1", "deflate"),
+            ("x-unknown", NOTHING),
+            ("zstd;q=0, br;q=0, gzip;q=0, deflate, bzip2", "deflate"),
+        );
+
+        #! more distinct values than the cache holds
+        const Distinct = 150;
+    }
+
+    private {
+        #! a JSON body larger than the compression threshold
+        string body;
+
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("HttpServerEncodingPreferencesTest", "1.0", \ARGV) {
+        list<auto> l = ();
+        for (int i = 0; i < 400; ++i) {
+            l += {"name": "app-" + i, "desc": "record action provider connection message " + i};
+        }
+        body = make_json(l);
+
+        Logger logger("encoding-preferences-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server.setHandler("body", "/body", NOTHING, new BodyHandler(body));
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        addTestCase("the same header selects the same encoding every time", \testRepeated());
+        addTestCase("more distinct headers than the cache holds", \testOverflow());
+        addTestCase("a header too long to be cached", \testLongHeader());
+        addTestCase("concurrent requests with different headers", \testConcurrent());
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete server;
+    }
+
+    #! returns the Content-Encoding of the response to a GET request that sends the given Accept-Encoding header value
+    private *string getEncoding(*string accept_encoding) {
+        Socket s();
+        s.connect("127.0.0.1:" + port, 10s);
+        on_exit s.close();
+        string req = "GET /body HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n";
+        if (exists accept_encoding) {
+            req += "Accept-Encoding: " + accept_encoding + "\r\n";
+        }
+        s.send(req + "\r\n");
+        hash<auto> hdr = s.readHTTPHeader(10s);
+        if (hdr.status_code != 200) {
+            throw "BAD-STATUS", sprintf("status %d for Accept-Encoding %y", hdr.status_code, accept_encoding);
+        }
+        s.recvBinary(int(hdr."content-length"), 10s);
+        return hdr."content-encoding";
+    }
+
+    #! checks every case once; returns the cases that selected a wrong encoding
+    private list<auto> checkCases() {
+        list<auto> bad = ();
+        foreach list<auto> c in (Cases) {
+            *string actual = getEncoding(c[0]);
+            if (actual != c[1]) {
+                bad += {"header": c[0], "expected": c[1], "actual": actual};
+            }
+        }
+        return bad;
+    }
+
+    testRepeated() {
+        # the first round fills the cache, the later ones are served from it
+        for (int round = 0; round < 3; ++round) {
+            assertEq((), checkCases(), sprintf("round %d", round));
+        }
+    }
+
+    testOverflow() {
+        # every one of these is a new value; the cache is emptied when it is full, and the answers stay right
+        for (int i = 0; i < Distinct; ++i) {
+            assertEq("bzip2", getEncoding(sprintf("x-unique-%d, bzip2", i)), sprintf("distinct header %d", i));
+        }
+        # the values that were cached before are computed again
+        assertEq((), checkCases(), "after the cache was emptied");
+        assertEq((), checkCases(), "from the refilled cache");
+    }
+
+    testLongHeader() {
+        string header = "x-" + strmul("a", 600) + ", gzip";
+        for (int i = 0; i < 3; ++i) {
+            assertEq("gzip", getEncoding(header), sprintf("long header, request %d", i));
+        }
+    }
+
+    testConcurrent() {
+        Queue results();
+        Counter done();
+        for (int t = 0; t < 8; ++t) {
+            done.inc();
+            background sub() {
+                on_exit done.dec();
+                try {
+                    for (int i = 0; i < 25; ++i) {
+                        list<auto> c = Cases[(i + t) % Cases.size()];
+                        # alternate between values every thread uses and values unique to the request
+                        if (i % 2) {
+                            string header = sprintf("x-%d-%d, br", t, i);
+                            results.push(("expected": "br", "actual": getEncoding(header), "header": header));
+                        } else {
+                            results.push(("expected": c[1], "actual": getEncoding(c[0]), "header": c[0]));
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(("expected": "no exception", "actual": get_exception_string(ex)));
+                }
+            }();
+        }
+        done.waitForZero();
+
+        int count = 0;
+        while (results.size()) {
+            hash<auto> r = results.get();
+            assertEq(r.expected, r.actual, sprintf("header %y", r.header));
+            ++count;
+        }
+        assertEq(8 * 25, count);
+    }
+}
