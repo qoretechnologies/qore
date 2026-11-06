@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <unistd.h>
@@ -29,6 +30,8 @@ static void require(bool valid, const std::string& message) {
 // the module loads run on this thread, as do the cleanup callbacks of the Programs they destroy
 static thread_local bool probing = false;
 static thread_local unsigned probed_cleanups = 0;
+// module manager calls made by the callback that failed; the callback is called by libqore, so it cannot throw
+static thread_local unsigned failed_calls = 0;
 
 static void cleanup(QoreProgram* pgm) {
     if (!probing) {
@@ -37,9 +40,14 @@ static void cleanup(QoreProgram* pgm) {
     ++probed_cleanups;
     ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> modules(MM.getModuleHash(), &xsink);
-    // the Program being destroyed still exists, so the module manager can also be asked about user modules
-    MM.findUserModuleProgram("ModuleCleanupUnlockedNotLoaded");
-    (void)pgm;
+    if (xsink || !modules) {
+        ++failed_calls;
+    }
+    xsink.clear();
+    // the module manager can also be asked about user modules; the module that failed is not one of them
+    if (MM.findUserModuleProgram("ModuleCleanupUnlockedNotLoaded") || !pgm) {
+        ++failed_calls;
+    }
 }
 
 class CleanupRegistration {
@@ -57,6 +65,7 @@ public:
     ProbeHelper() {
         probing = true;
         probed_cleanups = 0;
+        failed_calls = 0;
     }
     ~ProbeHelper() {
         probing = false;
@@ -66,16 +75,16 @@ public:
 class TempDir {
 public:
     TempDir() {
-        const char* tmp = getenv("TMPDIR");
-        path = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-module-cleanup-XXXXXX";
+        path = (std::filesystem::temp_directory_path() / "qore-module-cleanup-XXXXXX").string();
         if (!mkdtemp(&path[0])) {
             throw std::runtime_error("cannot create a temporary directory");
         }
     }
     ~TempDir() {
-        std::string cmd = "rm -rf '" + path + "'";
-        if (system(cmd.c_str())) {
-            std::fprintf(stderr, "cannot remove %s\n", path.c_str());
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+        if (ec) {
+            std::fprintf(stderr, "cannot remove %s: %s\n", path.c_str(), ec.message().c_str());
         }
     }
 
@@ -95,8 +104,9 @@ public:
 
     std::string mkdir(const std::string& name) const {
         std::string dir = path + "/" + name;
-        if (::mkdir(dir.c_str(), 0700)) {
-            throw std::runtime_error("cannot create " + dir);
+        std::error_code ec;
+        if (!std::filesystem::create_directory(dir, ec)) {
+            throw std::runtime_error("cannot create " + dir + ": " + ec.message());
         }
         return dir;
     }
@@ -129,6 +139,7 @@ static void failingLoad(const char* what, const std::string& module, const char*
         ModuleManager::runTimeLoadModule(&xsink, module.c_str(), *pgm);
         require(static_cast<bool>(xsink), std::string(what) + ": the module loaded");
         require(probed_cleanups > 0, std::string(what) + ": the module's Program was not destroyed");
+        require(!failed_calls, "the module manager failed in a cleanup callback");
     }
     xsink.clear();
     require(!ModuleManager::findUserModuleProgram(name), std::string(what) + ": the failed module is registered");
@@ -162,6 +173,7 @@ static void userModuleFromSource() {
             &xsink);
         require(static_cast<bool>(xsink), "a user module from source that does not parse loaded");
         require(probed_cleanups > 0, "the Program of a user module from source was not destroyed");
+        require(!failed_calls, "the module manager failed in a cleanup callback");
     }
     xsink.clear();
 }
@@ -178,6 +190,7 @@ static void parseRequires(const TempDir& dir) {
         pgm->parse(src.c_str(), "module-cleanup-requires", &xsink);
         require(static_cast<bool>(xsink), "a required module that does not parse loaded");
         require(probed_cleanups > 0, "the Program of a required module was not destroyed");
+        require(!failed_calls, "the module manager failed in a cleanup callback");
     }
     xsink.clear();
 }
