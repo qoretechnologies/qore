@@ -19,6 +19,7 @@ default:
     - name: mongo:6.0
       alias: mongodb
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -46,6 +47,28 @@ variables:
 
 # Every download of the build takes its source from cmake/third-party-sources.cmake, and the mirror has every archive
 # listed there with its pinned SHA-256
+# A develop commit whose tree already passed CI (a merged pull request that was up to date with develop) is not tested
+# again: tree-already-tested.sh finds the pipeline that passed the tree, and every job sources tree-tested-skip.sh
+# first, which then ends the job with success.  Without such a pipeline, or when the pipelines cannot be read, the
+# whole pipeline runs.
+tree-already-tested:
+  stage: .pre
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  variables:
+    GIT_DEPTH: "3"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  script:
+    - sh test/docker_test/tree-already-tested.sh
+  artifacts:
+    reports:
+      dotenv: tree-tested.env
+
 check-third-party-sources:
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
@@ -55,6 +78,7 @@ check-third-party-sources:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - cmake -DQORE_THIRD_PARTY_MIRROR="${QORE_THIRD_PARTY_MIRROR}" -P cmake/QoreCheckThirdPartySources.cmake
 
 # The release notes of each module begin with "- initial release" only and have no bullets before the first release
@@ -69,6 +93,7 @@ check-module-release-notes:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - python3 examples/test/cmake/test_module_release_notes.py
     - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-release-notes.py
     - python3 examples/test/cmake/test_release_notes.py
@@ -87,6 +112,7 @@ check-fast-routes-core-sanitizers:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/cpp/run-sanitizers.sh
 
 # Build stage - compile once per platform, save build/ as artifact
@@ -99,6 +125,7 @@ build-ubuntu-amd64:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build.sh
   artifacts:
     paths:
@@ -114,6 +141,7 @@ build-ubuntu-arm64:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build.sh
   artifacts:
     paths:
@@ -129,6 +157,7 @@ build-alpine-amd64:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build.sh
   artifacts:
     paths:
@@ -144,6 +173,7 @@ build-alpine-arm64:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build.sh
   artifacts:
     paths:
@@ -159,6 +189,7 @@ build-perf:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/build-perf.sh
   artifacts:
     paths:
@@ -172,7 +203,7 @@ test-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64]
+  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -203,7 +234,7 @@ test-ubuntu-arm64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-arm64]
+  needs: [build-ubuntu-arm64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
     - k8s
@@ -234,7 +265,7 @@ test-alpine-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-alpine-amd64]
+  needs: [build-alpine-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
     - k8s
@@ -265,7 +296,7 @@ test-alpine-arm64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-alpine-arm64]
+  needs: [build-alpine-arm64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
     - k8s
@@ -296,7 +327,7 @@ test-ast-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64]
+  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -310,6 +341,7 @@ test-ast-ubuntu-amd64:
     QORE_TEST_DIRS: 'qore/classes qore/closures qore/enums qore/functions qore/misc qore/namespaces qore/operators qore/stack qore/statements qore/strings qore/values qore/vars'
     TEST_TIMEOUT: "600"
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -338,7 +370,7 @@ test-ir-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64]
+  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -348,6 +380,7 @@ test-ir-ubuntu-amd64:
     QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
     TEST_TIMEOUT: "600"
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -376,7 +409,7 @@ test-jit-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64]
+  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -386,6 +419,7 @@ test-jit-ubuntu-amd64:
     QORE_TEST_OPTS: '-penable-debug --exec-mode=jit'
     TEST_TIMEOUT: "600"
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -414,7 +448,7 @@ test-tiered-ubuntu-amd64:
   stage: test
   parallel: 2
   timeout: 105 minutes
-  needs: [build-ubuntu-amd64]
+  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -424,6 +458,7 @@ test-tiered-ubuntu-amd64:
     QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
     TEST_TIMEOUT: "600"
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -451,7 +486,7 @@ test-tiered-ubuntu-amd64:
 test-macos:
   stage: test
   timeout: 150 minutes
-  needs: []
+  needs: [{job: tree-already-tested, optional: true}]
   tags:
     - macos
   services: []
@@ -459,6 +494,7 @@ test-macos:
     QORE_TEST_OPTS: '-penable-debug'
     QORE_EXCLUDE_PERF_TESTS: "1"
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -485,7 +521,7 @@ test-macos:
 test-perf:
   stage: test
   timeout: 105 minutes
-  needs: [build-perf]
+  needs: [build-perf, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -495,6 +531,7 @@ test-perf:
     QORE_PERF_TESTS_ONLY: "1"
     QORE_EXCLUDE_PERF_TESTS: ""
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -525,7 +562,7 @@ test-perf:
 test-cmake-ubuntu-amd64:
   stage: test
   timeout: 30 minutes
-  needs: [build-ubuntu-amd64]
+  needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
     - k8s
@@ -533,12 +570,13 @@ test-cmake-ubuntu-amd64:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/test-cmake.sh
 
 test-cmake-alpine-amd64:
   stage: test
   timeout: 30 minutes
-  needs: [build-alpine-amd64]
+  needs: [build-alpine-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
     - k8s
@@ -546,4 +584,5 @@ test-cmake-alpine-amd64:
   services: []
   before_script: []
   script:
+    - . test/docker_test/tree-tested-skip.sh
     - test/docker_test/test-cmake.sh
