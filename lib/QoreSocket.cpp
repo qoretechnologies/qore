@@ -4293,15 +4293,16 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
     bool config_action = poller->isConfigAction();
 
     // Config actions never block: each completes in a single continuePoll() call -- one
-    // setsockopt()/getsockopt() or private-data update -- and never waits for socket
-    // readiness, which is why they skip the async I/O guard taken below.  Driving one
-    // inline therefore does exactly what the controller would do minus the cross-thread
-    // hop, so the sync config APIs stay usable from async I/O execution paths instead of
-    // tripping assertNotOnIoThread() in qore_socket_exec_poll_operation().
+    // setsockopt()/getsockopt() or private-data update, all under the socket's mutex, which is the lock every
+    // operation of the controller on this socket takes too -- and never waits for socket readiness, which is why
+    // they skip the async I/O guard taken below.  Driving one inline therefore does exactly what the controller
+    // would do minus the cross-thread hop (two thread switches), on any thread: that also keeps the sync config
+    // APIs usable from async I/O execution paths instead of tripping assertNotOnIoThread() in
+    // qore_socket_exec_poll_operation().
     //
     // Mirrors qore_socket_object_exec_setup(); libqore owns socket safety, so no caller
     // has to know which thread it is running on.
-    if (config_action && SocketSyncPoll::onIoExecutionPath()) {
+    if (config_action) {
         // config actions always return nullptr from continuePoll(); hold it anyway
         ReferenceHolder<QoreHashNode> unused(poller->continuePoll(xsink), xsink);
         if (*xsink) {

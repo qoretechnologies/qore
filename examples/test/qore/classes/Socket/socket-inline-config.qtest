@@ -1,0 +1,356 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketInlineConfigTest
+
+#! Tests the Socket calls that the calling thread runs itself, and the close that cancels and closes in one step
+/** A call that only reads or sets an option of the socket (setNoDelay(), getPeerInfo() without a host lookup, ...)
+    does not go to the async I/O controller's thread: it runs under the socket's mutex in the calling thread.  A close
+    of a socket is one command to the I/O thread of the socket that cancels its operations and closes it.  The
+    results, the exceptions and the wake-up of the calls that wait on the socket must be those of a blocking socket,
+    with other threads using the socket at the same time.
+*/
+class SocketInlineConfigTest inherits QUnit::Test {
+    public {
+        #! the time allowed for a call that the test expects to end at once
+        const Timeout = 60s;
+    }
+
+    constructor() : QUnit::Test("SocketInlineConfigTest", "1.0", \ARGV) {
+        addTestCase("options are set and read back", \testOptions());
+        addTestCase("address information of connected and listening sockets", \testAddressInfo());
+        addTestCase("address information with a host lookup", \testAddressInfoLookup());
+        addTestCase("options of a closed socket", \testClosedSocket());
+        addTestCase("options while another thread waits in recv", \testOptionsWhileWaiting());
+        addTestCase("options from several threads during traffic", \testConcurrentOptions());
+        addTestCase("a close ends a recv and a send that wait", \testCloseEndsWaiters());
+        addTestCase("a close ends a waiting accept", \testCloseEndsAccept());
+        addTestCase("concurrent closes of one socket", \testConcurrentClose());
+        addTestCase("many sockets opened, used and closed", \testManySockets());
+        set_return_value(main());
+    }
+
+    private Socket listener() {
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+        return s;
+    }
+
+    #! returns a connected pair: the client and the accepted socket
+    private list<Socket> pair(Socket l) {
+        Socket c();
+        c.connect("127.0.0.1:" + l.getPort());
+        return (c, l.accept(Timeout));
+    }
+
+    testOptions() {
+        Socket l = listener();
+        (Socket c, Socket a) = pair(l);
+
+        c.setNoDelay(True);
+        assertTrue(c.getNoDelay(), "TCP_NODELAY set");
+        c.setNoDelay(False);
+        assertFalse(c.getNoDelay(), "TCP_NODELAY cleared");
+        a.setNoDelay(True);
+        assertTrue(a.getNoDelay(), "TCP_NODELAY set on the accepted socket");
+
+        c.setSendTimeout(1500ms);
+        c.setRecvTimeout(2500ms);
+        assertEq(1500, c.getSendTimeout(), "send timeout");
+        assertEq(2500, c.getRecvTimeout(), "receive timeout");
+
+        # the options do not disturb the traffic
+        c.send("ping");
+        assertEq("ping", a.recv(4, Timeout));
+        a.send("pong");
+        assertEq("pong", c.recv(4, Timeout));
+    }
+
+    testAddressInfo() {
+        Socket l = listener();
+        int port = l.getPort();
+        assertTrue(port > 0, "the listener's port");
+        (Socket c, Socket a) = pair(l);
+
+        hash<auto> peer = c.getPeerInfo(False);
+        assertEq("127.0.0.1", peer.address, "the client's peer is the listener's address");
+        assertEq(port, peer.port, "the client's peer port is the listener's port");
+        assertEq("127.0.0.1", c.getSocketInfo(False).address);
+
+        hash<auto> accepted_peer = a.getPeerInfo(False);
+        assertEq("127.0.0.1", accepted_peer.address);
+        assertEq(c.getSocketInfo(False).port, accepted_peer.port, "the accepted socket's peer is the client");
+        assertEq(port, a.getSocketInfo(False).port, "the accepted socket is on the listener's port");
+
+        # the information about a connection that the accept reported is the one the calls above read
+        assertEq("127.0.0.1", a.getSocketInfo(False).address);
+    }
+
+    testAddressInfoLookup() {
+        Socket l = listener();
+        (Socket c, Socket a) = pair(l);
+        # a lookup still runs on the controller, and the result agrees with the one without a lookup
+        hash<auto> with_lookup = c.getPeerInfo(True);
+        hash<auto> without = c.getPeerInfo(False);
+        assertEq(without.address, with_lookup.address);
+        assertEq(without.port, with_lookup.port);
+        assertTrue(exists with_lookup.hostname || exists with_lookup.address, "the lookup result has an address");
+    }
+
+    testClosedSocket() {
+        Socket l = listener();
+        (Socket c, Socket a) = pair(l);
+        c.close();
+        assertFalse(c.isOpen());
+
+        # the calls that read address information raise SOCKET-NOT-OPEN; the ones that set or read an option report
+        # the closed socket with -1, as they did when the controller's I/O thread ran them
+        foreach code<auto()> f in (
+            sub () { c.getPeerInfo(False); },
+            sub () { c.getSocketInfo(False); },
+        ) {
+            string err;
+            try {
+                f();
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertEq("SOCKET-NOT-OPEN", err, "address information of a closed socket");
+        }
+        assertEq(-1, c.setSendTimeout(1s));
+        assertEq(-1, c.setRecvTimeout(1s));
+        assertEq(-1, c.setNoDelay(True));
+        assertEq(-1, c.getSendTimeout());
+        assertEq(-1, c.getPort());
+        assertFalse(c.getNoDelay());
+        # closing again is not an error
+        c.close();
+        a.close();
+    }
+
+    testOptionsWhileWaiting() {
+        Socket l = listener();
+        (Socket c, Socket a) = pair(l);
+
+        Counter started(1);
+        Queue result();
+        background sub () {
+            started.dec();
+            try {
+                result.push(a.recv(5, Timeout));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        started.waitForZero();
+
+        # the thread waits in recv() (or is about to): the options are read and set at once, and the recv gets the data
+        for (int i = 0; i < 50; ++i) {
+            a.setNoDelay(i % 2 == 0);
+            assertEq(i % 2 == 0, a.getNoDelay());
+            assertEq("127.0.0.1", a.getPeerInfo(False).address);
+        }
+        c.send("hello");
+        assertEq("hello", result.get(Timeout));
+    }
+
+    testConcurrentOptions() {
+        Socket l = listener();
+        (Socket c, Socket a) = pair(l);
+
+        Counter done();
+        Queue errors();
+        # an echo partner keeps the socket busy while other threads read and set options
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            try {
+                for (int i = 0; i < 300; ++i) {
+                    c.send("x");
+                    if (c.recv(1, Timeout) != "x") {
+                        errors.push("echo mismatch");
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(ex);
+            }
+        }();
+        done.inc();
+        background sub () {
+            on_exit done.dec();
+            try {
+                for (int i = 0; i < 300; ++i) {
+                    a.send(a.recv(1, Timeout));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(ex);
+            }
+        }();
+        for (int t = 0; t < 4; ++t) {
+            done.inc();
+            background sub () {
+                on_exit done.dec();
+                try {
+                    for (int i = 0; i < 200; ++i) {
+                        c.setNoDelay(True);
+                        if (!c.getNoDelay()) {
+                            errors.push("TCP_NODELAY not set");
+                        }
+                        c.setSendTimeout(30s);
+                        a.getPeerInfo(False);
+                        a.getSocketInfo(False);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(ex);
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(0, errors.size(), "no error with options changed during traffic");
+    }
+
+    testCloseEndsWaiters() {
+        for (int i = 0; i < 25; ++i) {
+            Socket l = listener();
+            # two connections: on one a thread waits in recv(), on the other a thread waits in send(); nothing is sent
+            # to the first and nothing is read from the second, so only the close can end the calls
+            (Socket recv_c, Socket recv_a) = pair(l);
+            (Socket send_c, Socket send_a) = pair(l);
+
+            Counter started(2);
+            Counter done(2);
+            Queue results();
+            background sub () {
+                on_exit done.dec();
+                started.dec();
+                try {
+                    results.push(("recv", recv_c.recv(1, Timeout)));
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(("recv", ex));
+                }
+            }();
+            # a send of more than the socket buffers hold waits for a reader that is not there
+            background sub () {
+                on_exit done.dec();
+                started.dec();
+                try {
+                    results.push(("send", send_a.send(binary(strmul("x", 32 * 1024 * 1024)))));
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push(("send", ex));
+                }
+            }();
+            started.waitForZero();
+
+            # close the sockets the calls wait on (or are about to start on): the close must end every call, so that none
+            # waits for its timeout; as with a close of a socket that a recv() waits on in socket-sync-io, a call ends
+            # with an exception or, when it was cancelled while it waited, returns
+            date start = now_us();
+            recv_c.close();
+            send_a.close();
+            assertEq(0, done.waitForZero(Timeout), "the calls end after the close");
+            assertTrue(now_us() - start < Timeout / 2, "the calls end because of the close, not by their timeout");
+            assertEq(2, results.size());
+            while (results.size()) {
+                list<auto> r = results.get();
+                if (r[1] instanceof hash<ExceptionInfo>) {
+                    assertNeq("SOCKET-TIMEOUT", r[1].err, sprintf("the %s did not time out", r[0]));
+                }
+            }
+            send_c.close();
+            recv_a.close();
+            l.close();
+        }
+    }
+
+    testCloseEndsAccept() {
+        for (int i = 0; i < 25; ++i) {
+            Socket l = listener();
+            Counter started(1);
+            Queue result();
+            background sub () {
+                started.dec();
+                try {
+                    l.accept(Timeout);
+                    result.push("accepted");
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(ex);
+                }
+            }();
+            started.waitForZero();
+            l.close();
+            assertTrue(result.get(Timeout) instanceof hash<ExceptionInfo>, "the accept ended with an exception");
+        }
+    }
+
+    testConcurrentClose() {
+        for (int i = 0; i < 25; ++i) {
+            Socket l = listener();
+            (Socket c, Socket a) = pair(l);
+            a.send("x");
+            assertEq("x", c.recv(1, Timeout));
+
+            Counter done();
+            Queue errors();
+            for (int t = 0; t < 4; ++t) {
+                done.inc();
+                background sub () {
+                    on_exit done.dec();
+                    try {
+                        c.close();
+                    } catch (hash<ExceptionInfo> ex) {
+                        errors.push(ex);
+                    }
+                }();
+            }
+            done.waitForZero();
+            assertEq(0, errors.size(), "closing a socket more than once is not an error");
+            assertFalse(c.isOpen());
+        }
+    }
+
+    private static *string getFdDir() {
+        foreach string dir in ("/proc/self/fd", "/dev/fd") {
+            if (is_dir(dir)) {
+                return dir;
+            }
+        }
+    }
+
+    testManySockets() {
+        *string fd_dir = getFdDir();
+        Socket l = listener();
+        # one round to settle descriptors that are created lazily
+        {
+            (Socket c, Socket a) = pair(l);
+            c.send("x");
+            a.recv(1, Timeout);
+        }
+        int before = fd_dir ? elements (new Dir()).list(fd_dir) : 0;
+
+        for (int i = 0; i < 200; ++i) {
+            (Socket c, Socket a) = pair(l);
+            c.setNoDelay(True);
+            a.setNoDelay(True);
+            assertEq("127.0.0.1", a.getPeerInfo(False).address);
+            c.send("ping");
+            assertEq("ping", a.recv(4, Timeout));
+            a.send("pong");
+            assertEq("pong", c.recv(4, Timeout));
+            c.close();
+            a.close();
+        }
+
+        if (fd_dir) {
+            assertEq(before, elements (new Dir()).list(fd_dir), "no descriptor is left open");
+        } else {
+            testSkip("the platform has no directory that lists the open descriptors of a process");
+        }
+    }
+}

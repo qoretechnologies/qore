@@ -155,7 +155,8 @@ qiurSfIBhXYMDdqWsl9GD+c=
 
     constructor() : Test("SocketControllerRoundTripsTest", "1.0") {
         addTestCase("the TLS cipher is read once per TLS state", \cipherCacheTest());
-        addTestCase("setting a body size limit to its value needs no round trip", \limitSetterTest());
+        addTestCase("setting a body size limit needs no round trip", \limitSetterTest());
+        addTestCase("options and address information need no round trip", \inlineCallsTest());
         addTestCase("an HTTP/2 request needs no round trip for the cipher and limits", \http2RequestTest());
         addTestCase("a changed body size limit applies to the next request", \limitChangeTest());
         set_return_value(main());
@@ -260,7 +261,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         assertNothing(client.getSSLCipherVersion(), "a closed socket has no cipher version");
     }
 
-    #! Setting a body size limit to its current value changes nothing and needs no round trip
+    #! Setting a body size limit needs no round trip: it is set in the calling thread, under the socket's mutex
     limitSetterTest() {
         list<Socket> pair = getSocketPair();
         Socket client = pair[0];
@@ -272,7 +273,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         int start = counter.get(LimitMethods);
         client.setMaxChunkedBodySize(1000);
         client.setHttp2MaxRequestBodySize(1000);
-        assertEq(2, counter.get(LimitMethods) - start, "a new value is set on the socket's thread");
+        assertEq(0, counter.get(LimitMethods) - start, "a new value is set in the calling thread");
         assertEq(1000, client.getMaxChunkedBodySize());
         assertEq(1000, client.getHttp2MaxRequestBodySize());
 
@@ -288,9 +289,40 @@ qiurSfIBhXYMDdqWsl9GD+c=
         start = counter.get(LimitMethods);
         client.setMaxChunkedBodySize(2000);
         client.setHttp2MaxRequestBodySize(0);
-        assertEq(2, counter.get(LimitMethods) - start, "a changed value is set on the socket's thread");
+        assertEq(0, counter.get(LimitMethods) - start, "a changed value is set in the calling thread");
         assertEq(2000, client.getMaxChunkedBodySize());
         assertEq(0, client.getHttp2MaxRequestBodySize());
+    }
+
+    #! The calls that only read or set an option, and the address information without a host lookup, run in the calling thread
+    /** They are one setsockopt(), getsockopt(), getpeername() or getsockname() call, or a private-data update, under the
+        socket's mutex; none of them is submitted to the controller.  A host lookup still is.
+    */
+    inlineCallsTest() {
+        list<Socket> pair = getSocketPair();
+        Socket client = pair[0];
+        on_exit {
+            client.close();
+            pair[1].close();
+        }
+
+        hash<string, int> start = counter.getAll();
+        client.setNoDelay(True);
+        assertTrue(client.getNoDelay());
+        client.setSendTimeout(2s);
+        client.setRecvTimeout(3s);
+        assertEq(2000, client.getSendTimeout());
+        assertEq(3000, client.getRecvTimeout());
+        assertEq(client.getPeerInfo(False).port, client.getPort(), "the port of a connected socket is its peer's");
+        assertEq("127.0.0.1", client.getPeerInfo(False).address);
+        assertEq("127.0.0.1", client.getSocketInfo(False).address);
+        assertEq("127.0.0.1", pair[1].getPeerInfo(False).address);
+        assertEq(start, counter.getAll(), "none of the calls is submitted to the controller");
+
+        # a lookup waits for the resolver and runs on the controller
+        hash<auto> info = client.getPeerInfo(True);
+        assertEq("127.0.0.1", info.address);
+        assertNeq(start, counter.getAll(), "a host lookup is submitted to the controller");
     }
 
     #! An HTTPS server sets the limits and logs the cipher of every HTTP/2 request without per-request round trips
