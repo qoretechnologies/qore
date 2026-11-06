@@ -1465,8 +1465,6 @@ Program::copy() {
  */
 Program::destructor() {
     printd(5, "Program::destructor() pgm: %p pgmid: " QLLD " self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object no longer reports the Program's code to the garbage collector
-    qore_program_private::clearScanHolder(*p);
     p->waitForTerminationAndDeref(xsink);
 }
 
@@ -2989,8 +2987,6 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object gives the Program up: it no longer reports the Program's code to the garbage collector
-    qore_program_private::clearScanHolder(*p);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif
@@ -3046,8 +3042,6 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object gives the Program up: it no longer reports the Program's code to the garbage collector
-    qore_program_private::clearScanHolder(*p);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif
@@ -3102,8 +3096,6 @@ Program::loadApplyToPrivateUserModule(
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object gives the Program up: it no longer reports the Program's code to the garbage collector
-    qore_program_private::clearScanHolder(*p);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif
@@ -3155,8 +3147,6 @@ Program::loadApplyToPrivateUserModule(
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object gives the Program up: it no longer reports the Program's code to the garbage collector
-    qore_program_private::clearScanHolder(*p);
 #ifdef DEBUG
     QoreProgram* pgm = (QoreProgram*)
 #endif

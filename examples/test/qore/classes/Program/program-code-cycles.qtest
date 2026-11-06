@@ -138,6 +138,14 @@ sub make_eval_program_cycle() {
     e.setThreadEntryHandler(NOTHING, sub (auto v) { e.getGlobalVariable("eval_marker"); });
 }
 
+#! a Program subclass whose constructor fails after the Program has been created and has code set
+class FailingProgram inherits Program {
+    constructor(Marker m) : Program(PO_NEW_STYLE) {
+        setThreadInit(sub () { m.getName(); });
+        throw "CONSTRUCTOR-ERROR";
+    }
+}
+
 #! Tests for issue #5590: cycles through the code a Program holds are collected
 class ProgramCodeCyclesTest inherits QUnit::Test {
     constructor() : QUnit::Test("ProgramCodeCyclesTest", "1.0", \ARGV) {
@@ -147,6 +155,8 @@ class ProgramCodeCyclesTest inherits QUnit::Test {
         addTestCase("set_thread_init()", \testSetThreadInitCycle());
         addTestCase("object owning its Program", \testServiceCycle());
         addTestCase("Program created by ProgramControl", \testEvalProgramCycle());
+        addTestCase("Program handed to a module load", \testHandedOver());
+        addTestCase("Program subclass constructor failure", \testConstructorFailure());
         addTestCase("cycle held from outside", \testHeldFromOutside());
         addTestCase("thread running the handlers", \testThreadInsideHandlers());
         addTestCase("handlers replaced", \testReplaced());
@@ -210,6 +220,28 @@ class ProgramCodeCyclesTest inherits QUnit::Test {
         takeDestroyed();
         make_eval_program_cycle();
         assertEq(("pgm base", "pgm eval"), takeDestroyed());
+    }
+
+    #! a Program taken from its object by a call stops being reported by the object, which is deleted
+    testHandedOver() {
+        takeDestroyed();
+        {
+            Program p = make_program("handed");
+            Marker m("code handed");
+            p.setThreadEntryHandler(auto sub () { return m.getName(); });
+            p.setThreadInit(sub () { m.getName(); });
+            # the call owns the Program in any case; the module does not exist
+            assertThrows("LOAD-MODULE-ERROR", \load_user_module_with_program(),
+                ("program-code-cycles-no-such-module", p));
+        }
+        assertEq(("code handed", "pgm handed"), takeDestroyed());
+    }
+
+    #! the object of a Program subclass whose constructor fails releases the Program without its destructor
+    testConstructorFailure() {
+        takeDestroyed();
+        assertThrows("CONSTRUCTOR-ERROR", sub () { new FailingProgram(new Marker("code failed")); });
+        assertEq(("code failed",), takeDestroyed());
     }
 
     #! nothing in a cycle is destroyed while something outside it refers to it

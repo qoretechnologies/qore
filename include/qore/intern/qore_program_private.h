@@ -2955,8 +2955,9 @@ public:
     DLLLOCAL void setScanHolder(QoreObject& obj);
 
     //! the Program object no longer holds the Program: its user code is no longer reported to the garbage collector
-    /** Called before the object releases the Program, when it is destroyed or gives the Program up.  Does nothing if
-        the Program has no scan holder.
+    /** Called by qore_object_private_data_released() before the object releases the Program or hands it out, on
+        every path (the destructor, a call that takes the Program from its object, a failed constructor).  Does
+        nothing if the Program has no scan holder.
     */
     DLLLOCAL void clearScanHolder();
 

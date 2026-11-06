@@ -148,9 +148,14 @@ those members to the scanner, so the cycle is found and collected when nothing o
 
 - **The reporting object.** `qore_program_private::scan_holder` is the Program object that holds the Program as its
   private data, set by the `Program` constructors and `ProgramControl::createEvalProgram()`
-  (`qore_program_private::setScanHolder()`) and cleared (`clearScanHolder()`) by the destructor and by the methods
-  that hand the Program to a user module (`loadApplyToUserModule()` and the others), before the object releases it.
-  It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
+  (`qore_program_private::setScanHolder()`). It is cleared (`clearScanHolder()`) wherever the object releases the
+  Program or hands it out: every such path goes through `KeyList` (`derefAll()`, `getAndClearPtr()`,
+  `getAndRemovePtr()`), which calls `qore_object_private_data_released()` for the entry first. That covers the
+  destructor, the methods that hand the Program to a user module (`loadApplyToUserModule()` and the others), the
+  `!Program` parameters that take it from its object (`load_user_module_with_program()`,
+  `Program::loadUserModuleWithProgram()`, and the C++ API `QoreObject::getAndClearPrivateData()`), and an object
+  whose constructor failed, which releases its private data without a destructor. `qore_program_private::del()`
+  asserts that the holder is gone. It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
   reported once. A Program without a Program object (the main Program, one created in C++) reports nothing: no
   object of the cycle could hold it.
 - **Scanning.** `qore_object_private::scanMembers()` probes `CID_PROGRAM` and calls
@@ -171,9 +176,11 @@ those members to the scanner, so the cycle is found and collected when nothing o
 
 `examples/test/qore/classes/Program/program-code-cycles.qtest` builds each cycle - handlers, thread initialization
 code set with `setThreadInit()` and with `set_thread_init()`, a handler referring to its own Program, an object that
-owns its Program - releases the last outside reference, and checks through destructors that the Programs and the
-values the code refers to are destroyed; it also checks that a cycle held from outside or by a thread running the
-handlers is kept until that reference goes. It is clean under valgrind.
+owns its Program, a Program created by `ProgramControl::createEvalProgram()` - releases the last outside reference,
+and checks through destructors that the Programs and the values the code refers to are destroyed; it also checks
+that a cycle held from outside or by a thread running the handlers is kept until that reference goes, and that a
+Program taken from its object by a call, or released by an object whose constructor failed, is released. It is clean
+under valgrind.
 
 ## Sandboxing
 

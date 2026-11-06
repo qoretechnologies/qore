@@ -1309,6 +1309,13 @@ void qore_program_private::clearScanHolder() {
     o->tDeref();
 }
 
+void qore_object_private_data_released(qore_classid_t key, AbstractPrivateData* pd) {
+    // the object that held the Program no longer reports its code: the Program can be released or owned by others
+    if (key == CID_PROGRAM) {
+        qore_program_private::clearScanHolder(*static_cast<QoreProgram*>(pd));
+    }
+}
+
 bool qore_program_private::scanMembers(RObject& obj, RSetHelper& rsh) {
     // the lock is only tried: a scan must not block (see design/dgc.md, "A container that a scan finds locked")
     if (tlock.trylock()) {
