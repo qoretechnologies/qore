@@ -1,0 +1,46 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires HttpServer
+%requires Logger
+
+# HttpServer with a trivial handler on a fixed port; GET /quit ends it and reports the process CPU time
+
+const Port = 38765;
+
+class QuickHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter quit();
+    }
+
+    constructor() {
+        quit.inc();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "quit") {
+            quit.dec();
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+
+    waitForQuit() {
+        quit.waitForZero();
+    }
+}
+
+Logger logger("bench", LoggerLevel::getLevelError());
+HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+QuickHandler handler();
+server.setHandler("handler", "", NOTHING, handler);
+server.setDefaultHandler("handler", handler);
+server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": Port});
+server.waitForAsyncIo();
+printf("ready\n");
+stdout.sync();
+handler.waitForQuit();
+# fields 14 and 15 of /proc/self/stat are utime and stime in clock ticks
+list<string> f = (split(" ", (File::readTextFile("/proc/self/stat") =~ x/\) (.*)$/)[0]));
+printf("server_cpu_ticks user=%s sys=%s\n", f[11], f[12]);
+server.stop();

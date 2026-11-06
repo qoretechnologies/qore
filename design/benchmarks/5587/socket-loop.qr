@@ -1,0 +1,42 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# single-threaded Socket accept/recv/send/close loop; prints microseconds per request
+const N = 1500;
+
+Socket l();
+if (l.bind("127.0.0.1:0", True)) {
+    throw "BIND-ERROR", "bind failed";
+}
+l.listen();
+int port = l.getPort();
+
+# warm up
+for (int i = 0; i < 100; ++i) {
+    Socket c();
+    c.connect("127.0.0.1:" + port);
+    Socket s = l.accept();
+    c.send("ping");
+    s.recv(4);
+    s.send("pong");
+    c.recv(4);
+    c.close();
+    s.close();
+}
+
+date start = now_us();
+for (int i = 0; i < N; ++i) {
+    Socket c();
+    c.connect("127.0.0.1:" + port);
+    Socket s = l.accept();
+    c.send("ping");
+    s.recv(4);
+    s.send("pong");
+    c.recv(4);
+    c.close();
+    s.close();
+}
+int us = (now_us() - start).durationMicroseconds();
+printf("%d\n", us / N);
+l.close();
