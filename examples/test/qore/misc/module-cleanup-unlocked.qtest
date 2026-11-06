@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class ModuleCleanupUnlockedTest
+
+class ModuleCleanupUnlockedTest inherits QUnit::Test {
+    constructor() : Test("Failed module cleanup without the module manager mutex", "1.0") {
+        addTestCase("program cleanup callbacks of failed user modules", \nativeCleanup());
+        set_return_value(main());
+    }
+
+    private nativeCleanup() {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_MODULE_CLEANUP_UNLOCKED_TEST ?? dirname(qore) + "/qore-module-cleanup-unlocked-test";
+        if (!is_file(native)) {
+            testSkip("the native module cleanup test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS:"), output);
+    }
+}

@@ -578,6 +578,7 @@ class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
     friend class ChildAttachHelper;
+    template <typename T> friend class UnlockedModuleProgramRelease;
 
 public:
     DLLLOCAL QoreModuleManager() {
@@ -1281,6 +1282,38 @@ private:
     // not implemented
     ChildAttachHelper(const ChildAttachHelper&) = delete;
     ChildAttachHelper& operator=(const ChildAttachHelper&) = delete;
+};
+
+//! Destroys what a holder of an unregistered user module or of its Program owns without the module manager mutex
+/** Destroying a module's Program runs the program cleanup callbacks registered by binary modules (see
+    qore_register_program_cleanup_callback()), which can take locks of their own that are also held while calling the
+    module manager: the jni module holds its module namespace cache lock while it calls ModuleManager::getModuleHash(),
+    and its cleanup callback takes that lock.  Destroying a module that failed to load with the mutex held made a
+    lock-order inversion that deadlocked both threads and, behind them, every thread that loaded a module.
+
+    The current thread must hold the mutex when this object is destroyed, as it does in the module loaders, which
+    loadModuleIntern() calls with the mutex held (it waits on module_load_cond with it).  The loaders already release
+    the mutex while a module is parsed and initialized (see ModuleLoadMapHelper), so their callers do not rely on it
+    being held for the whole load.  Declare it after the holder, so that it is destroyed first.
+*/
+template <typename T>
+class UnlockedModuleProgramRelease {
+public:
+    DLLLOCAL UnlockedModuleProgramRelease(T& holder) : holder(holder) {
+    }
+
+    DLLLOCAL ~UnlockedModuleProgramRelease() {
+        if (holder) {
+            AutoUnlocker au(QMM.mutex);
+            holder = nullptr;
+        }
+    }
+
+private:
+    T& holder;
+
+    UnlockedModuleProgramRelease(const UnlockedModuleProgramRelease&) = delete;
+    UnlockedModuleProgramRelease& operator=(const UnlockedModuleProgramRelease&) = delete;
 };
 
 class ModuleLoadMapHelper {

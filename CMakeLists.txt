@@ -2752,6 +2752,13 @@ add_executable(qore-declaration-owner-test examples/test/qore/misc/declaration_o
 target_include_directories(qore-declaration-owner-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-declaration-owner-test PRIVATE libqore)
+# the module cleanup test uses POSIX APIs (mkdtemp(), alarm())
+if (UNIX)
+    add_executable(qore-module-cleanup-unlocked-test examples/test/qore/misc/module_cleanup_unlocked.cpp)
+    target_include_directories(qore-module-cleanup-unlocked-test PRIVATE
+        ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(qore-module-cleanup-unlocked-test PRIVATE libqore)
+endif()
 add_executable(qore-hash-key-cancel-test examples/test/qore/misc/hash_key_cancel.cpp)
 target_include_directories(qore-hash-key-cancel-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)

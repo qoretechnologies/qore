@@ -14,7 +14,7 @@ if [ -n "${QORE_TREE_TESTED_IN:-}" ]; then
     echo "nothing to do"
     if [ -n "${GITHUB_ACCESS_TOKEN:-}" ]; then
         set +x
-        curl -s "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        curl -s --max-time 30 "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
             -X POST --oauth2-bearer "${GITHUB_ACCESS_TOKEN}" -H "Content-Type: application/json" \
             -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"tree tested in pipeline ${QORE_TREE_TESTED_IN}\", \"target_url\": \"${tested_url}\"}" \
             > /dev/null || true

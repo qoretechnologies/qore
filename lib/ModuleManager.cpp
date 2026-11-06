@@ -2131,6 +2131,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     assert(!version || (version && op != MOD_OP_NONE));
 
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
+    // a module Program that is not handed on is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
 
     // temporary string buffer
     QoreString tmp_buf;
@@ -2821,6 +2823,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         const char* path, const char* feature, QoreProgram* pgm, bool reexport, QoreProgram* mpgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
+    // a module Program that is not handed on is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
     assert(feature);
     printd(5, "QoreModuleManager::loadSeparatedModule() path: %s, feature: %s, pgm: %p, reexport: %d, mpgm: %p, "
         "path_pgm: %p, load_opt: %d warning_mask: %d\n", path, feature, pgm, reexport, mpgm, path_pgm,
@@ -2894,6 +2898,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     std::unique_ptr<QoreUserModule> userModule(new QoreUserModule(pholder.release(), td, modulePath.c_str(), feature,
         load_opt, warning_mask, path));
+    // a module that fails to load is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<std::unique_ptr<QoreUserModule>> userModule_release(userModule);
     userModule->addParseOptionMask(load_mask);
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
@@ -3775,6 +3781,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         const char* path, const char* feature, QoreProgram* tpgm, bool reexport, QoreProgram* mpgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
+    // a module Program that is not handed on is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
     assert(feature);
     printd(5, "QoreModuleManager::loadUserModuleFromPath() path: '%s' feature: '%s' tpgm: %p ('%s') path_pgm: %p "
         "('%s')\n", path, feature, tpgm, tpgm && tpgm->parseGetScriptDir() ? tpgm->parseGetScriptDir() : "n/a",
@@ -3845,6 +3853,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // note: the module will contain a normalized path which will be used for parsing
     std::unique_ptr<QoreUserModule> mi(new QoreUserModule(pholder.release(), td, path, feature, load_opt,
         warning_mask));
+    // a module that fails to load is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<std::unique_ptr<QoreUserModule>> mi_release(mi);
     mi->addParseOptionMask(load_mask);
 
     td = mi->getFileName();
@@ -3883,6 +3893,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         const char* path, const char* feature, QoreProgram* tpgm, const char* src, bool reexport, QoreProgram* mpgm,
         int warning_mask) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
+    // a module Program that is not handed on is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
     assert(feature);
     //printd(5, "QoreModuleManager::loadUserModuleFromSource() path: %s feature: %s tpgm: %p\n", path, feature, tpgm);
 
@@ -3938,6 +3950,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
 
     std::unique_ptr<QoreUserModule> mi(new QoreUserModule(pholder.release(), nullptr, path, feature, QMLO_NONE));
+    // a module that fails to load is destroyed without the module manager mutex
+    UnlockedModuleProgramRelease<std::unique_ptr<QoreUserModule>> mi_release(mi);
     mi->addParseOptionMask(load_mask);
 
     ModuleReExportHelper mrh(mi.get(), reexport);
