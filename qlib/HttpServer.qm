@@ -95,6 +95,31 @@ module HttpServer {
     - <a href="https://docs.qore.org/modules/xml/current/SoapHandler/html/index.html#soaphandlerintro">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
+    @section httpserver_dispatch Choosing How a Request Is Dispatched
+
+    A request reaches a handler in one of three ways, from the most general to the cheapest:
+
+    |!Way|!What it does|!What it skips|!Cost of a trivial response
+    |a handler's \c handleRequest()|runs on a handler pool thread with the full request context, authentication, logging, \
+        request body handling and streaming|nothing|the baseline (about 7.8 million user-space instructions of server CPU \
+        per request on a Linux x86_64 release build)
+    |an inline handler (@ref HttpServer::AbstractHttpRequestHandler::canHandleInline() "canHandleInline()" returns \
+        @ref True "True")|runs on the async callback dispatcher worker, in the thread that read the request headers|the \
+        hand-off to the handler pool, the request context, authentication and logging|about a quarter of the baseline \
+        (about 1.9 million instructions)
+    |a fast route (@ref HttpServer::HttpServer::addFastRoute() "addFastRoute()")|is answered on the async I/O thread \
+        without calling Qore code|every handler, and so authentication, logging and request preprocessing|a few \
+        microseconds of server CPU per request
+
+    Use the first for everything that needs the request, the context or authentication, that reads a request body, that
+    streams, or that can block.  Use the second for a handler that only builds a response in memory from the request
+    headers, never blocks and never waits (a health or readiness check, a static response, a redirect): a handler
+    that waits stalls the callback dispatcher worker for every other connection while it waits.  An inline handler
+    gets only the connection's peer information in its context, receives no request body (a request with a body takes
+    the normal path), and must return its message body as a string or binary value.  Use the third for a path whose
+    answer depends on nothing but a few values that the program updates (see
+    @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()").
+
     @section httpserver_after_send Running Code After the Response Has Been Sent
 
     A handler returns its response; the server sends it afterwards.  To run code once the response has been sent,

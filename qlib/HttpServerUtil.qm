@@ -3875,6 +3875,12 @@ public class AbstractHttpRequestHandler {
         static responses). WARNING: long-running handlers will stall the
         async callback dispatcher worker handling completed HTTP requests.
 
+        A request answered inline needs about a quarter of the CPU of one that goes to the handler pool (measured
+        with a trivial response: about 1.9 million user-space instructions of server CPU per request instead of
+        about 7.8 million, on a Linux x86_64 release build), because there is no hand-off to a handler pool thread
+        and no request context, authentication or logging.  See @ref httpserver_dispatch for when to use it and
+        for the cheaper fast routes.
+
         @param cx connection context with peer info
         @param hdr parsed HTTP headers
         @return True to handle on the callback dispatcher worker, False (default) to use thread pool
