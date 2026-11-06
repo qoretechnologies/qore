@@ -28,6 +28,7 @@ class SocketInlineConfigTest inherits QUnit::Test {
         addTestCase("address information with a host lookup", \testAddressInfoLookup());
         addTestCase("options of a closed socket", \testClosedSocket());
         addTestCase("options while another thread waits in recv", \testOptionsWhileWaiting());
+        addTestCase("SSL options while another thread waits in recv", \testSslOptionsWhileWaiting());
         addTestCase("options from several threads during traffic", \testConcurrentOptions());
         addTestCase("a close ends a recv and a send that wait", \testCloseEndsWaiters());
         addTestCase("a close ends a waiting accept", \testCloseEndsAccept());
@@ -156,6 +157,35 @@ class SocketInlineConfigTest inherits QUnit::Test {
             a.setNoDelay(i % 2 == 0);
             assertEq(i % 2 == 0, a.getNoDelay());
             assertEq("127.0.0.1", a.getPeerInfo(False).address);
+        }
+        c.send("hello");
+        assertEq("hello", result.get(Timeout));
+    }
+
+    testSslOptionsWhileWaiting() {
+        Socket l = listener();
+        (Socket c, Socket a) = pair(l);
+
+        Counter started(1);
+        Queue result();
+        background sub () {
+            started.dec();
+            try {
+                result.push(a.recv(5, Timeout));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        started.waitForZero();
+
+        # the SSL options are reconfigured by the controller, not run inline, and are not refused or lost because
+        # another thread waits in recv(): the values are read back
+        for (int i = 0; i < 20; ++i) {
+            int mode = i % 2 == 0 ? SSL_VERIFY_PEER : SSL_VERIFY_NONE;
+            a.setSslVerifyMode(mode);
+            assertEq(mode, a.getSslVerifyMode());
+            a.acceptAllCertificates(i % 2 == 0);
+            assertEq(i % 2 == 0, a.getAcceptAllCertificates());
         }
         c.send("hello");
         assertEq("hello", result.get(Timeout));

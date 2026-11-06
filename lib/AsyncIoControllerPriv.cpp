@@ -7164,9 +7164,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         pc.sock->closeIo(xsink);
         pc.sock->deref(xsink);
     }
-    for (AsyncOpCompletion* completion : exit_completions) {
-        completion->completeOne();
-        completion->deref();
+    // completeOne() needs m: its waiter reads the completion state under m, so a signal without m can be missed
+    if (!exit_completions.empty()) {
+        AutoLocker al(m);
+        for (AsyncOpCompletion* completion : exit_completions) {
+            completion->completeOne();
+            completion->deref();
+        }
     }
     exit_holds.clear();
     exit_extra_holds.clear();

@@ -4305,8 +4305,10 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
         return -1;
     }
 
-    bool config_action = poller->isConfigAction()
-        && (poller->isThreadSafeConfigAction() || SocketSyncPoll::onIoExecutionPath());
+    bool config_action = poller->isConfigAction();
+    // the SSL actions reconfigure the live SSL object: a thread that is not on an I/O execution path leaves them to
+    // the controller (they still skip the ownership guard below, as every config action does)
+    bool inline_config = config_action && (poller->isThreadSafeConfigAction() || SocketSyncPoll::onIoExecutionPath());
 
     // Config actions never block: each completes in a single continuePoll() call -- one
     // setsockopt()/getsockopt() or private-data update, all under the socket's mutex, which is the lock every
@@ -4318,7 +4320,7 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
     //
     // Mirrors qore_socket_object_exec_setup(); libqore owns socket safety, so no caller
     // has to know which thread it is running on.
-    if (config_action) {
+    if (inline_config) {
         // config actions always return nullptr from continuePoll(); hold it anyway
         ReferenceHolder<QoreHashNode> unused(poller->continuePoll(xsink), xsink);
         if (*xsink) {
