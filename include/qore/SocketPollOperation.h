@@ -339,6 +339,9 @@ public:
         buffered request has been transmitted, so it can start reading the response while the body is still
         going out.
 
+        After a failure the count is the number of bytes written before the failure, so a caller can tell that the
+        request header block reached the peer, which may already have answered it before it reset the connection.
+
         @return the number of payload bytes written to the socket so far; 0 before the operation has written
         anything, and the full payload size once it has reached its goal
 
@@ -354,6 +357,8 @@ private:
     bool initialized = false;
     bool controller_deferred_init = false;
     int controller_deferred_tid = -1;
+    //! bytes written before the operation failed; see getBytesSent()
+    size_t failed_bytes_sent = 0;
 
     DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
     DLLEXPORT int initLocked(ExceptionSink* xsink);

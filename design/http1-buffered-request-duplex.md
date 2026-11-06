@@ -67,6 +67,29 @@ of the write error that answer caused.
 The poll interests of both directions are merged into the returned poll info, so the controller
 wakes the operation for either one.
 
+## When the first write fails
+
+The handover above needs a *partial* write.  A peer that answers from the request headers alone and closes at
+once (an early `413`, say) can reset the connection while the client is still inside its first write of the
+buffered request, before the socket has ever reported that it would block.  The next write of the body then fails
+with `EPIPE` or `ECONNRESET`, and that happens before any handover.
+
+`handleSending()` therefore treats a failed send of a buffered request as "the peer may have answered" once the
+header block has reached the wire (`SocketSendPollOperation::getBytesSent()` keeps the count of bytes written
+before a failure, and it is at least `request_header_len`).  `recoverResponseAfterSendFailure()` abandons the
+request the way `abandonBufferedSendAndDeliver()` does and reads the response: if one has arrived it is delivered
+and the connection is closed; if not, the error reported is the original send error (`send_failure_pending`), not
+the receive error that follows it.  A send that fails before the headers are out is reported as it was.
+
+How early the peer's close arrives depends on how fast the peer's own socket close completes, which is why a
+change to the cost of `Socket` close (see `async-socket-io.md`) moves this race.  `repeatedEarlyFaultTest` in
+`HttpClientBufferedDuplex.qtest` covers it.
+
+Only a response that is on the wire before the peer's reset can be delivered: a peer that closes with request data
+unread resets the connection, and the reset discards whatever the peer has not yet transmitted.  A client that is
+not reading while it writes advertises a receive window of about 64 KiB, so a fault response larger than that can
+be cut short whatever the client does; the early-fault tests therefore use a 2 KiB body, like a real `413`.
+
 ## When the response finishes first
 
 A buffered request declared a `Content-Length`; stopping short of it leaves the peer holding a
