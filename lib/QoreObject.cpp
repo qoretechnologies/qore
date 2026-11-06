@@ -622,6 +622,13 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
                 &xsink)) {
             return true;
         }
+        {
+            // issue #5590: a Program's thread initialization code and thread entry and exit handlers
+            ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(getScanPrivateData(CID_PROGRAM)), &xsink);
+            if (*pgm && qore_program_private::get(**pgm)->scanMembers(*this, rsh)) {
+                return true;
+            }
+        }
         // the private data registered with QoreObject::addPrivateDataScan(); see AbstractScannablePrivateData
         if (scanRegisteredPrivateData(rsh, xsink)) {
             return true;

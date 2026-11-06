@@ -1,0 +1,310 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramCodeCyclesTest
+
+#! the names of the Markers destroyed, in the order of their destruction
+class Events {
+    public {
+        static Queue destroyed();
+    }
+}
+
+#! records its destruction; held by the code or by the global variables of the Programs in the cycles tested
+class Marker {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    string getName() {
+        return name;
+    }
+
+    destructor() {
+        Events::destroyed.push(name);
+    }
+}
+
+#! an object of an embedding application that owns its Program and refers to itself in the Program's handlers
+class Service {
+    private {
+        Program pgm;
+        Marker marker;
+        *string ctx;
+    }
+
+    constructor(string name) {
+        marker = new Marker(name);
+        pgm = make_program(name);
+        # the closures refer to the object that holds the Program: Service -> Program -> handlers -> Service; a
+        # closure does not hold the object of the method that creates it, so the object is held in a variable
+        Service me = self;
+        pgm.setThreadEntryHandler(auto sub () { me.ctx = name; return name; }, sub (auto v) { me.ctx = NOTHING; });
+    }
+
+    #! runs code of the Program
+    int run() {
+        return pgm.callFunction("get_runs");
+    }
+}
+
+#! the code of the child Programs
+const Child = "%modern
+our *object marker;
+our int runs = 0;
+
+int sub get_runs() {
+    return ++runs;
+}
+
+# starts a thread in the Program that waits for a value on the given Queue
+int sub start_waiter(Queue inq, Queue started) {
+    return background sub () {
+        started.push(True);
+        inq.get();
+    }();
+}
+
+# sets the thread initialization code of this Program with set_thread_init()
+sub set_init(code c) {
+    set_thread_init(c);
+}
+";
+
+#! returns a child Program whose global variable holds a Marker, so that the Marker is destroyed with the Program
+Program sub make_program(string name) {
+    Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+    pgm.parse(Child, name);
+    pgm.run();
+    pgm.setGlobalVarValue("marker", new Marker("pgm " + name));
+    return pgm;
+}
+
+#! Programs a and b whose thread entry and exit handlers refer to the other Program; returns a if requested
+*Program sub make_handler_cycle(bool keep_a = False) {
+    Program a = make_program("a");
+    Program b = make_program("b");
+    Marker ma("code a");
+    Marker mb("code b");
+    a.setThreadEntryHandler(auto sub () { ma.getName(); return b.getGlobalVariable("runs"); },
+        sub (auto v) { ma.getName(); b.getGlobalVariable("runs"); });
+    b.setThreadEntryHandler(auto sub () { mb.getName(); return a.getGlobalVariable("runs"); },
+        sub (auto v) { mb.getName(); a.getGlobalVariable("runs"); });
+    if (keep_a) {
+        return a;
+    }
+}
+
+#! Programs a and b whose thread initialization code refers to the other Program
+sub make_thread_init_cycle() {
+    Program a = make_program("a");
+    Program b = make_program("b");
+    a.setThreadInit(sub () { b.getGlobalVariable("runs"); });
+    b.setThreadInit(sub () { a.getGlobalVariable("runs"); });
+}
+
+#! Program a whose handlers refer to itself: only the exit handler
+sub make_self_cycle() {
+    Program a = make_program("a");
+    a.setThreadEntryHandler(NOTHING, sub (auto v) { a.getGlobalVariable("runs"); });
+}
+
+#! Programs a and b; the code of a sets its thread initialization code with set_thread_init(), referring to b
+sub make_set_thread_init_cycle() {
+    Program a = make_program("a");
+    Program b = make_program("b");
+    b.setThreadInit(sub () { a.getGlobalVariable("runs"); });
+    a.callFunction("set_init", sub () { b.getGlobalVariable("runs"); });
+}
+
+#! a Program created by ProgramControl::createEvalProgram() whose exit handler refers to itself
+sub make_eval_program_cycle() {
+    Program base = make_program("base");
+    Program e = base.getProgram().createEvalProgram(PO_NEW_STYLE);
+    e.parse("our *object eval_marker;", "eval");
+    e.setGlobalVarValue("eval_marker", new Marker("pgm eval"));
+    e.setThreadEntryHandler(NOTHING, sub (auto v) { e.getGlobalVariable("eval_marker"); });
+}
+
+#! Tests for issue #5590: cycles through the code a Program holds are collected
+class ProgramCodeCyclesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ProgramCodeCyclesTest", "1.0", \ARGV) {
+        addTestCase("entry and exit handlers", \testHandlerCycle());
+        addTestCase("thread initialization code", \testThreadInitCycle());
+        addTestCase("handler referring to its own Program", \testSelfCycle());
+        addTestCase("set_thread_init()", \testSetThreadInitCycle());
+        addTestCase("object owning its Program", \testServiceCycle());
+        addTestCase("Program created by ProgramControl", \testEvalProgramCycle());
+        addTestCase("cycle held from outside", \testHeldFromOutside());
+        addTestCase("thread running the handlers", \testThreadInsideHandlers());
+        addTestCase("handlers replaced", \testReplaced());
+        addTestCase("handlers cleared", \testCleared());
+        addTestCase("function references", \testFunctionReferences());
+        addTestCase("Programs created repeatedly", \testRepeated());
+        set_return_value(main());
+    }
+
+    #! returns the names of the Markers destroyed since the last call, sorted
+    private list<string> takeDestroyed() {
+        list<string> rv = ();
+        while (Events::destroyed.size()) {
+            rv += Events::destroyed.get();
+        }
+        return sort(rv);
+    }
+
+    #! both Programs and the values their handlers refer to are destroyed when the last outside reference goes
+    testHandlerCycle() {
+        takeDestroyed();
+        make_handler_cycle();
+        assertEq(("code a", "code b", "pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! the same for thread initialization code
+    testThreadInitCycle() {
+        takeDestroyed();
+        make_thread_init_cycle();
+        assertEq(("pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! a cycle of one Program through its own exit handler
+    testSelfCycle() {
+        takeDestroyed();
+        make_self_cycle();
+        assertEq(("pgm a",), takeDestroyed());
+    }
+
+    #! thread initialization code set by the Program's own code
+    testSetThreadInitCycle() {
+        takeDestroyed();
+        make_set_thread_init_cycle();
+        assertEq(("pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! an object that owns its Program and that the Program's handlers refer to
+    testServiceCycle() {
+        takeDestroyed();
+        {
+            Service s("s");
+            # the handlers run and refer to the object
+            assertEq(1, s.run());
+            assertEq(2, s.run());
+        }
+        assertEq(("pgm s", "s"), takeDestroyed());
+    }
+
+    #! a Program created by ProgramControl::createEvalProgram() reports its code as well
+    testEvalProgramCycle() {
+        takeDestroyed();
+        make_eval_program_cycle();
+        assertEq(("pgm base", "pgm eval"), takeDestroyed());
+    }
+
+    #! nothing in a cycle is destroyed while something outside it refers to it
+    testHeldFromOutside() {
+        takeDestroyed();
+        Program a = make_handler_cycle(True);
+        assertEq((), takeDestroyed());
+        # the handlers still work, and so does the Program they refer to
+        assertEq(1, a.callFunction("get_runs"));
+        assertEq((), takeDestroyed());
+        remove a;
+        assertEq(("code a", "code b", "pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! a thread that ran an entry handler holds the handlers: the cycle is collected when it has run the exit handler
+    testThreadInsideHandlers() {
+        takeDestroyed();
+        Queue inq();
+        Queue started();
+        int tid;
+        {
+            Program a = make_program("a");
+            Program b = make_program("b");
+            Marker ma("code a");
+            a.setThreadEntryHandler(auto sub () { ma.getName(); return b.getGlobalVariable("runs"); },
+                sub (auto v) { ma.getName(); b.getGlobalVariable("runs"); });
+            b.setThreadEntryHandler(auto sub () { return a.getGlobalVariable("runs"); });
+            # the thread started in a runs a's entry handler and holds the handlers until it ends
+            tid = a.callFunction("start_waiter", inq, started);
+            started.get();
+        }
+        # a and b are only referred to by the cycle and the handlers that the thread holds
+        assertEq((), takeDestroyed());
+        inq.push(True);
+        thread_join(tid);
+        assertEq(("code a", "pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! handlers replaced with handlers that refer to nothing: there is no cycle left
+    testReplaced() {
+        takeDestroyed();
+        {
+            Program a = make_program("a");
+            Program b = make_program("b");
+            a.setThreadEntryHandler(auto sub () { return b.getGlobalVariable("runs"); });
+            b.setThreadEntryHandler(auto sub () { return a.getGlobalVariable("runs"); });
+            assertTrue(a.setThreadEntryHandler(auto sub () { return 1; }));
+            # a's handlers no longer refer to b, and still run
+            assertEq(1, a.callFunction("get_runs"));
+            assertEq(1, b.callFunction("get_runs"));
+        }
+        assertEq(("pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! handlers and thread initialization code cleared before the Programs are released
+    testCleared() {
+        takeDestroyed();
+        {
+            Program a = make_program("a");
+            Program b = make_program("b");
+            a.setThreadEntryHandler(auto sub () { return b.getGlobalVariable("runs"); });
+            b.setThreadInit(sub () { a.getGlobalVariable("runs"); });
+            assertTrue(a.setThreadEntryHandler());
+            assertTrue(b.setThreadInit());
+        }
+        assertEq(("pgm a", "pgm b"), takeDestroyed());
+    }
+
+    #! function references refer to no values: Programs with them are destroyed as before
+    testFunctionReferences() {
+        takeDestroyed();
+        {
+            Program a = make_program("a");
+            a.setThreadEntryHandler(\takeNothing(), \takeValue());
+            a.setThreadInit(\takeNothing());
+            assertEq(1, a.callFunction("get_runs"));
+        }
+        assertEq(("pgm a",), takeDestroyed());
+    }
+
+    #! cycles made one after the other are each collected
+    testRepeated() {
+        takeDestroyed();
+        for (int i = 0; i < 20; ++i) {
+            make_handler_cycle();
+            make_thread_init_cycle();
+        }
+        list<string> d = takeDestroyed();
+        assertEq(20 * 6, d.size());
+        assertEq(40, (select d, $1 == "pgm a").size());
+    }
+
+    static auto takeNothing() {
+    }
+
+    static takeValue(auto v) {
+    }
+}

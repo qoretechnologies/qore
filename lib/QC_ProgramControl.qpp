@@ -204,7 +204,10 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     if (creator) {
         qore_program_private::addCreator(*pgm, *creator);
     }
-    return new QoreObject(QC_PROGRAM, getProgram(), pgm);
+    QoreObject* rv = new QoreObject(QC_PROGRAM, getProgram(), pgm);
+    // the object reports the Program's code to the garbage collector (issue #5590)
+    qore_program_private::setScanHolder(*pgm, *rv);
+    return rv;
 }
 
 //! Returns the current binary-or'ed parse option mask for the Program object

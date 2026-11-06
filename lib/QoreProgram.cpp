@@ -38,6 +38,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreClassList.h"
@@ -1234,17 +1235,120 @@ void qore_program_private::doThreadInit(ExceptionSink* xsink) {
     }
 }
 
+// returns true if the code may need a scan: a value the Program reports to the garbage collector
+static bool program_code_needs_scan(const ResolvedCallReferenceNode* code) {
+    return code && needs_scan(code);
+}
+
+// returns true if the handlers hold a value that needs a scan
+static bool program_handlers_need_scan(const QoreThreadEntryHandlers* h) {
+    return h && (program_code_needs_scan(h->on_enter) || program_code_needs_scan(h->on_exit));
+}
+
+bool qore_program_private::scanValuesNeedScanIntern() const {
+    return program_code_needs_scan(thr_init)
+        || program_handlers_need_scan(thread_entry_handlers.load(std::memory_order_relaxed));
+}
+
+void qore_program_private::scanValuesChangedIntern(bool removed,
+        std::initializer_list<const ResolvedCallReferenceNode*> stored) {
+    assert(scan_holder);
+    // a value given up loses the reference that the object's recursive set may count as internal; the mark is made
+    // before the value can be released, which is done after tlock (see RObject::edgesRemoved())
+    if (removed && scan_registered) {
+        scan_holder->edgesRemoved();
+    }
+    // the object scans its private data only while the Program holds a value that needs a scan
+    bool need = scanValuesNeedScanIntern();
+    if (need != scan_registered) {
+        scan_registered = need;
+        if (need) {
+            scan_holder->incScanPrivateData();
+        } else {
+            scan_holder->decScanPrivateData();
+        }
+    }
+    // no scan follows the new edges: the recursive sets they change must not trust their counts until one has; the
+    // values are marked under tlock, while the Program still references them (see qore_dgc_value_stored())
+    for (const ResolvedCallReferenceNode* code : stored) {
+        if (program_code_needs_scan(code)) {
+            qore_dgc_value_stored(*scan_holder, QoreValue(const_cast<ResolvedCallReferenceNode*>(code)));
+        }
+    }
+}
+
+void qore_program_private::setScanHolder(QoreObject& obj) {
+    qore_object_private* o = qore_object_private::get(obj);
+    AutoLocker al(tlock);
+    assert(!scan_holder);
+    assert(!scan_registered);
+    o->tRef();
+    scan_holder = o;
+    // code set before the object held the Program
+    QoreThreadEntryHandlers* h = thread_entry_handlers.load(std::memory_order_relaxed);
+    scanValuesChangedIntern(false, {thr_init, h ? h->on_enter : nullptr, h ? h->on_exit : nullptr});
+}
+
+void qore_program_private::clearScanHolder() {
+    qore_object_private* o;
+    {
+        AutoLocker al(tlock);
+        if (!scan_holder) {
+            return;
+        }
+        o = scan_holder;
+        if (scan_registered) {
+            // the object no longer reports values that its recursive set may count as internal
+            o->edgesRemoved();
+            o->decScanPrivateData();
+            scan_registered = false;
+        }
+        scan_holder = nullptr;
+    }
+    // the weak reference is released without the lock, as it can free the object's memory
+    o->tDeref();
+}
+
+bool qore_program_private::scanMembers(RObject& obj, RSetHelper& rsh) {
+    // the lock is only tried: a scan must not block (see design/dgc.md, "A container that a scan finds locked")
+    if (tlock.trylock()) {
+        rsh.containerContended(obj);
+        return false;
+    }
+    AutoLocker al(tlock, true);
+
+    // the values are reported only by the object that the Program counts as their holder, so that each is reported
+    // once, and only while it counts them, so that every value it gives up marks the object
+    if (!scan_registered || static_cast<RObject*>(scan_holder) != &obj) {
+        return false;
+    }
+
+    if (thr_init && obj.scanCheck(rsh, thr_init)) {
+        return true;
+    }
+    QoreThreadEntryHandlers* h = thread_entry_handlers.load(std::memory_order_relaxed);
+    if (h) {
+        if (h->on_enter && obj.scanCheck(rsh, h->on_enter)) {
+            return true;
+        }
+        if (h->on_exit && obj.scanCheck(rsh, h->on_exit)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // returns true if there was already a thread init closure set, false if not
 bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_init, ExceptionSink* xsink) {
-    // check
+    // the old code is released after the lock, as releasing it can run destructors
     ReferenceHolder<ResolvedCallReferenceNode> old(xsink);
     {
         AutoLocker al(tlock);
         old = thr_init;
-        thr_init = n_thr_init ? n_thr_init->refRefSelf() : 0;
-
-        //printd(5, "qore_program_private::setThreadInit() this: %p thr_init: %p %d '%s'\n", this, thr_init,
-        //    get_node_type(thr_init), get_type_name(thr_init));
+        thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
+        if (scan_holder) {
+            scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
+        }
     }
     return (bool)old;
 }
@@ -1256,6 +1360,10 @@ bool qore_program_private::setThreadEntryHandler(const ResolvedCallReferenceNode
     {
         AutoLocker al(tlock);
         old = thread_entry_handlers.exchange(nh, std::memory_order_relaxed);
+        if (scan_holder) {
+            scanValuesChangedIntern(program_handlers_need_scan(old),
+                {nh ? nh->on_enter : nullptr, nh ? nh->on_exit : nullptr});
+        }
     }
     // threads that ran the old entry handler hold their own reference until they have run the paired exit handler;
     // releasing the handlers can run destructors, so it is done without the lock
@@ -1642,17 +1750,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         clearNamespaceData(xsink);
 
         // clear thread init code reference if any
-        {
-            ReferenceHolder<ResolvedCallReferenceNode> old(xsink);
-
-            {
-                AutoLocker al(tlock);
-
-                // clear thread init code reference
-                old = thr_init;
-                thr_init = 0;
-            }
-        }
+        setThreadInit(nullptr, xsink);
 
         // clear the thread entry and exit handlers: they ran for the destructors run above, which are the last code
         // that runs in the Program on behalf of other threads' data
@@ -2596,8 +2694,11 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     extmap.clear();
 
-    if (thr_init)
+    // the Program object released the Program after it had stopped reporting its code (clearScanHolder())
+    assert(!scan_holder);
+    if (thr_init) {
         thr_init->deref(xsink);
+    }
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
     setThreadEntryHandler(nullptr, nullptr, xsink);
