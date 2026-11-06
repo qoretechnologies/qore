@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# The messages that the server logs for every request are built only if the logger logs them; a logger at a level that
+# is disabled for a message must not see it, and one at a level that is enabled must see it, unchanged.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerLogLevelTest
+
+#! a logger appender that keeps the messages that it is given
+class CaptureAppender inherits LoggerAppenderWithLayout {
+    private {
+        Mutex lck();
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            messages += params;
+        }
+    }
+
+    #! returns and clears the messages logged so far
+    list<string> take() {
+        AutoLock al(lck);
+        list<string> rv = messages;
+        messages = ();
+        return rv;
+    }
+}
+
+class QuickHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "ok", "hdr": {"Content-Type": MimeTypeText}};
+    }
+}
+
+class HttpServerLogLevelTest inherits QUnit::Test {
+    constructor() : Test("HttpServerLogLevelTest", "1.0", \ARGV) {
+        addTestCase("messages at an enabled level are logged", \testEnabled());
+        addTestCase("messages at a disabled level are not logged", \testDisabled());
+        addTestCase("debug messages of the I/O controller", \testDebug());
+        set_return_value(main());
+    }
+
+    #! runs a server whose logger has the given level, serves two requests, and returns the messages that it logged
+    private list<string> run(LoggerLevel level) {
+        Logger logger("log-level-test", level);
+        CaptureAppender appender();
+        logger.addAppender(appender);
+
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        QuickHandler handler();
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        for (int i = 0; i < 2; ++i) {
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            on_exit s.close();
+            s.send("GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+            hash<auto> hdr = s.readHTTPHeader(10s);
+            assertEq(200, hdr.status_code, "the request is answered whatever the log level");
+            assertEq("ok", s.recv(int(hdr."content-length"), 10s));
+        }
+        server.stop();
+        delete server;
+        return appender.take();
+    }
+
+    private static int count(list<string> messages, string pattern) {
+        return elements (select messages, regex($1, pattern));
+    }
+
+    testEnabled() {
+        list<string> messages = run(LoggerLevel::getLevelInfo());
+        # the listener's message about the response of each request, with the prefix of the server, the name and the
+        # address of the listener
+        assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
+        assertEq(2, count(messages, "^HttpServer: \"listener-[0-9]+\" \\(ipv4\\(127\\.0\\.0\\.1\\):[0-9]+\\): sendReply: "),
+            "each carries the prefix: " + messages.join("\n"));
+        # the messages that the server logs for the request itself
+        assertEq(2, count(messages, ": GET /x HTTP/1\\.1"), "the request lines: " + messages.join("\n"));
+        assertTrue(count(messages, "HTTP/1\\.1 200 OK handler: \"handler\"") >= 2,
+            "the response lines: " + messages.join("\n"));
+    }
+
+    testDisabled() {
+        list<string> messages = run(LoggerLevel::getLevelError());
+        assertEq(0, count(messages, "sendReply:"), "no INFO message is logged at the ERROR level");
+        assertEq(0, elements messages, "nothing is logged at the ERROR level: " + messages.join("\n"));
+    }
+
+    testDebug() {
+        list<string> info = run(LoggerLevel::getLevelInfo());
+        list<string> debug = run(LoggerLevel::getLevelDebug());
+        assertEq(0, count(info, "Header complete"), "the I/O controller's debug messages are not logged at INFO");
+        assertTrue(count(debug, "Header complete") > 0, "they are logged at DEBUG: " + debug.join("\n"));
+    }
+}
