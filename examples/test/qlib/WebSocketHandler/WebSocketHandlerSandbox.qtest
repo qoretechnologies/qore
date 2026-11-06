@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A WebSocketHandler can be constructed in a program whose sandbox denies the filesystem, such as a sandboxed
+    service (qore#5588): its private member that identifies the thread-local data was made with get_random_string(),
+    which read /dev/urandom.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class WebSocketHandlerSandboxTest
+
+public class WebSocketHandlerSandboxTest inherits QUnit::Test {
+    constructor() : QUnit::Test("WebSocketHandlerSandboxTest", "1.0", \ARGV) {
+        addTestCase("a handler is constructed in a program without filesystem access", \testConstruct());
+        addTestCase("a handler is constructed in an unrestricted program", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! returns a program with a WebSocketHandler subclass; the module path of this program applies to the modules
+    private Program makeProgram(bool sandboxed) {
+        Program p(PO_NEW_STYLE);
+        if (sandboxed) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(False);
+            p.setSandboxManager(sm);
+        }
+        p.parse("
+%requires HttpServer
+%requires WebSocketHandler
+
+class SandboxWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+    }
+
+    gotMessage(binary msg) {
+    }
+}
+
+class SandboxWsHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new SandboxWsConnection(self);
+    }
+}
+
+bool sub construct() {
+    SandboxWsHandler handler();
+    return handler instanceof WebSocketHandler;
+}
+
+sub open_urandom() {
+    ReadOnlyFile f(\"/dev/urandom\");
+}
+", "websocket-handler-sandbox");
+        return p;
+    }
+
+    testConstruct() {
+        Program p = makeProgram(True);
+        # the sandbox denies the file that get_random_string() used to read
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), "open_urandom");
+        assertTrue(p.callFunction("construct"), "the handler is constructed in the sandboxed program");
+    }
+
+    testUnrestricted() {
+        Program p = makeProgram(False);
+        assertTrue(p.callFunction("construct"), "the handler is constructed in an unrestricted program");
+    }
+}

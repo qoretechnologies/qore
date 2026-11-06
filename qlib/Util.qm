@@ -108,6 +108,11 @@ module Util {
 
 
     @section util_3_0 Util 3.0
+    - @ref Util::get_random_string() "get_random_string()" makes the characters from
+      @ref Qore::get_random_bytes() instead of reading \c /dev/urandom, so it no longer raises
+      \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, such as a sandboxed
+      service; the alphabet and the \a level argument are unchanged, and every character of a level has the same
+      probability
     - @ref Util::get_exception_string() "get_exception_string()" shows a
       @ref Qore::RuntimeDiagnosticInfo "RuntimeDiagnosticInfo" exception argument as a hint with its suggestions
     - added get_http_endpoint_url() for fixed HTTP endpoints with a fallback path, preserving queries and
@@ -1670,6 +1675,9 @@ string pass = get_random_string();
 
     @return a random string of the given length containing only printable ASCII characters according to the \a level argument
 
+    @note The characters are made from @ref Qore::get_random_bytes() and no file is read, so the function can be used
+    by a program that is not allowed to access the filesystem, such as a sandboxed service.
+
     @see @ref Qore::get_random_bytes()
 */
 public string sub get_random_string(softint len = 15, int level = 3) {
@@ -1681,26 +1689,21 @@ public string sub get_random_string(softint len = 15, int level = 3) {
     }
     --level;
     level = (26, 52, 62, 88)[level];  # 15(77), 7(84), 4
-    # do not seed the random number generator and use rand() as this requires PO_PROCESS_CONTROL permissions
-    if (PlatformOS == "Windows") {
-        # on windows, just use clock_getmicros() to generate a pseudo-random number
-        int start = (clock_getmicros() * 7621 + 1);
-        for (int i = 0; i < len; ++i) {
-            int v = start;
-            if (i)
-                v += rand();
-            v = v.abs() % level;
-            str += (v < 26 ? chr(v + ord("A")) :
-                        (v < 52 ? chr(v - 26 + ord("a")) :
-                        (v < 62 ? chr(v - 4) :
-                        (v < 77 ? chr(v - 29) :
-                        (v < 84 ? chr(v - 19) :
-                            chr(v + 39))))));
-        }
-    } else {
-        ReadOnlyFile f("/dev/urandom");
-        for (int i = 0; i < len; ++i) {
-            int v = f.readi2().abs() % level;
+    # the characters are made from the output of get_random_bytes(), the generator of the crypto library, which needs
+    # neither a file (/dev/urandom is refused to a program without filesystem access, such as a sandboxed service) nor
+    # PO_PROCESS_CONTROL (rand() needs it).  A byte at or above the limit is discarded, so that each of the "level"
+    # characters has the same probability.
+    int limit = 256 - (256 % level);
+    while (str.size() < len) {
+        int need = len - str.size();
+        # enough bytes for the characters still needed in nearly all cases (at most 256/limit of the bytes are discarded)
+        binary b = get_random_bytes(need * 2 + 8);
+        for (int i = 0; i < b.size() && str.size() < len; ++i) {
+            int v = b[i];
+            if (v >= limit) {
+                continue;
+            }
+            v %= level;
             str += (v < 26 ? chr(v + ord("A")) :
                         (v < 52 ? chr(v - 26 + ord("a")) :
                         (v < 62 ? chr(v - 4) :
