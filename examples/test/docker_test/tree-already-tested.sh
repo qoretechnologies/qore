@@ -23,6 +23,11 @@ out=tree-tested.env
 # a dotenv report needs one variable even when the tree must be tested
 echo "QORE_TREE_TESTED_CHECKED=1" > "$out"
 
+if [ -z "${CI_API_V4_URL:-}" ] || [ -z "${CI_PROJECT_ID:-}" ]; then
+    echo "the GitLab API is not known (CI_API_V4_URL, CI_PROJECT_ID): running the full pipeline"
+    exit 0
+fi
+
 tree=$(git rev-parse 'HEAD^{tree}') || { echo "cannot read the commit's tree: running the full pipeline"; exit 0; }
 candidates=$(git rev-parse HEAD)
 for parent in $(git rev-list --parents -n 1 HEAD | cut -d' ' -f2-); do

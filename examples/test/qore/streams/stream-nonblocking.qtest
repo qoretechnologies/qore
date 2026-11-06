@@ -128,13 +128,15 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         assertTrue(elapsed_us < 1000000,
             sprintf("FileInputStream positive timeout returned too late after %d us", elapsed_us));
 
+        # the read waits without a time limit (the limit is tested above): with the stream's 75 ms limit, the result
+        # depended on the writer thread being scheduled in time, which a loaded CI runner did not do
         Counter writer_done(1);
         background sub() {
             usleep(25ms);
             writer.write("x");
             writer_done.dec();
         }();
-        assertEq(binary("x"), fis.read(1),
+        assertEq(binary("x"), fis.readWithTimeout(1, -1),
             "FileInputStream returns data arriving after initial EAGAIN");
 
         writer_done.waitForZero();
