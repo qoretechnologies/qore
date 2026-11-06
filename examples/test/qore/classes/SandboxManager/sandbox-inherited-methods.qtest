@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxInheritedMethodsTest
+
+#! the port of the local listener that the trusted code connects to
+our int Port;
+
+#! connects to the local listener and returns True; registered as a system-policy capability during trusted startup
+bool sub connect_port() {
+    Socket s();
+    s.connect("127.0.0.1:" + Port, 5s);
+    bool rv = s.isOpen();
+    s.close();
+    return rv;
+}
+
+#! calls a method of an object; registered as a system-policy capability during trusted startup
+sub call_connect(object o) {
+    o.connect();
+}
+
+#! returns whether a sandbox governs the caller; imported into the sandboxed Programs
+bool sub trusted_is_governed() {
+    return SandboxManager::isGoverned();
+}
+
+#! returns the governing sandbox configurations; imported into the sandboxed Programs
+list<hash<SandboxConfigInfo>> sub trusted_get_policies() {
+    return SandboxManager::getGoverningPolicies();
+}
+
+#! a framework base class that sandboxed code subclasses (issue #5591)
+class TrustedBase {
+    public {
+        #! the capability registered during trusted startup
+        static code connector;
+        #! the capability that calls a method of its argument
+        static code caller;
+    }
+
+    #! uses the network directly
+    bool connect() {
+        return connect_port();
+    }
+
+    #! uses the network inside a policy barrier
+    connectBarrier() {
+        SandboxManager::callWithSystemPolicy(\connect_port());
+    }
+
+    #! uses the network through a capability
+    bool connectCapability() {
+        return TrustedBase::connector();
+    }
+
+    #! returns whether a sandbox governs the method's code
+    bool isGoverned() {
+        return SandboxManager::isGoverned();
+    }
+
+    #! returns the governing sandbox configurations
+    list<hash<SandboxConfigInfo>> getPolicies() {
+        return SandboxManager::getGoverningPolicies();
+    }
+}
+
+#! Tests for issue #5591: methods inherited by sandboxed subclasses, SandboxManager::isGoverned() and
+#! SandboxManager::getGoverningPolicies()
+class SandboxInheritedMethodsTest inherits QUnit::Test {
+    private {
+        Socket listener();
+        SandboxManager mgr();
+        SandboxManager mgr2();
+        Program p;
+    }
+
+    constructor() : QUnit::Test("sandbox inherited methods", "1.0") {
+        # trusted startup: the listener and the capabilities, before any sandboxed code runs
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        Port = listener.getSocketInfo().port;
+        TrustedBase::connector = SandboxManager::createSystemPolicyCall(\connect_port());
+        TrustedBase::caller = SandboxManager::createSystemPolicyCall(\call_connect());
+
+        mgr.setNetworkDefaultPolicy(True);
+        mgr.blockPrivateNetworks();
+        mgr.setMaxThreads(10);
+        mgr2.setNetworkDefaultPolicy(True);
+        mgr2.blockLocalhost();
+        mgr2.setMaxThreads(20);
+        p = makeProgram(mgr);
+
+        addTestCase("inherited method uses the network directly", \testDirect());
+        addTestCase("policy barriers", \testBarrier());
+        addTestCase("capabilities", \testCapability());
+        addTestCase("isGoverned()", \testIsGoverned());
+        addTestCase("isGoverned() in a thread started by sandboxed code", \testIsGovernedThread());
+        addTestCase("getGoverningPolicies()", \testGetGoverningPolicies());
+        addTestCase("restricted to PO_NO_UNCONTROLLED_APIS", \testRestricted());
+        on_exit listener.close();
+        set_return_value(main());
+    }
+
+    #! returns a sandboxed Program with a subclass of the trusted class
+    private Program makeProgram(SandboxManager m) {
+        Program pgm(PO_NEW_STYLE);
+        pgm.setSandboxManager(m);
+        pgm.importClass("TrustedBase");
+        pgm.importFunction("trusted_is_governed");
+        pgm.importFunction("trusted_get_policies");
+        pgm.parse("class Sub inherits TrustedBase {}
+object sub make() { return new Sub(); }
+bool sub is_governed() { return trusted_is_governed(); }
+list<hash<SandboxConfigInfo>> sub get_policies() { return trusted_get_policies(); }
+bool sub object_is_governed(object o) { return o.isGoverned(); }
+list<hash<SandboxConfigInfo>> sub object_policies(object o) { return o.getPolicies(); }
+int sub start_thread(Queue q) { return background q.push(trusted_is_governed()); }", "sandboxed");
+        return pgm;
+    }
+
+    #! an object that sandboxed code creates carries its sandbox, also for the methods inherited from TrustedBase
+    testDirect() {
+        object o = p.callFunction("make");
+        assertThrows("NETWORK-ACCESS-DENIED", \o.connect());
+        # the trusted class's own object is not governed
+        TrustedBase t();
+        assertTrue(t.connect());
+    }
+
+    #! a policy barrier does not mask the object's provenance, inside the method or around its call
+    testBarrier() {
+        object o = p.callFunction("make");
+        assertThrows("NETWORK-ACCESS-DENIED", \o.connectBarrier());
+        assertThrows("NETWORK-ACCESS-DENIED", \SandboxManager::callWithSystemPolicy(), (sub () { o.connect(); },));
+    }
+
+    #! a capability registered during trusted startup performs its fixed operation under the system policy
+    testCapability() {
+        object o = p.callFunction("make");
+        assertTrue(o.connectCapability());
+        # a capability that calls a method of the object: the method runs with the object's provenance
+        assertThrows("NETWORK-ACCESS-DENIED", TrustedBase::caller, (o,));
+    }
+
+    testIsGoverned() {
+        # trusted code with no sandbox on its stack
+        assertFalse(SandboxManager::isGoverned());
+        assertFalse(trusted_is_governed());
+        # called by sandboxed code
+        assertTrue(p.callFunction("is_governed"));
+        # a method inherited from the trusted class of an object that sandboxed code created, called by trusted code
+        object o = p.callFunction("make");
+        assertTrue(o.isGoverned());
+        # the trusted class's own object
+        TrustedBase t();
+        assertFalse(t.isGoverned());
+        # a policy barrier masks the caller's sandbox, not the object's provenance
+        assertFalse(SandboxManager::callWithSystemPolicy(\trusted_is_governed()));
+        assertTrue(SandboxManager::callWithSystemPolicy(bool sub () { return o.isGoverned(); }));
+        # a capability masks provenance for its fixed operation
+        code cap = SandboxManager::createSystemPolicyCall(\trusted_is_governed());
+        assertFalse(cap());
+    }
+
+    #! a thread that sandboxed code starts inherits its sandbox
+    testIsGovernedThread() {
+        Queue q();
+        int tid = p.callFunction("start_thread", q);
+        assertTrue(q.get());
+        thread_join(tid);
+    }
+
+    testGetGoverningPolicies() {
+        assertEq((), SandboxManager::getGoverningPolicies());
+        list<hash<SandboxConfigInfo>> l = p.callFunction("get_policies");
+        assertEq(1, l.size());
+        assertEq(mgr.getConfiguration(), l[0]);
+        # the hashes are copies
+        l[0].max_threads = 1000;
+        assertEq(10, mgr.getMaxThreads());
+
+        # the method of an object created in one sandbox, called by code in another: both govern the access
+        Program p2 = makeProgram(mgr2);
+        object o = p.callFunction("make");
+        l = p2.callFunction("object_policies", o);
+        assertEq(2, l.size());
+        assertEq((10, 20), sort(map $1.max_threads, l));
+        assertTrue(p2.callFunction("object_is_governed", o));
+    }
+
+    #! code restricted with PO_NO_UNCONTROLLED_APIS cannot call the methods
+    testRestricted() {
+        Program r(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        assertThrows("PARSE-EXCEPTION", "SandboxManager::isGoverned", \r.parse(),
+            ("bool sub t() { return SandboxManager::isGoverned(); }", "restricted"));
+        Program r2(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        assertThrows("PARSE-EXCEPTION", "SandboxManager::getGoverningPolicies", \r2.parse(),
+            ("auto sub t() { return SandboxManager::getGoverningPolicies(); }", "restricted"));
+    }
+}
