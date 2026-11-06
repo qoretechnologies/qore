@@ -2228,6 +2228,27 @@ public:
     DLLLOCAL int checkFinal() const;
     DLLLOCAL int checkConstOverrides() const;
 
+    //! returns true if the method has a final variant
+    DLLLOCAL bool hasFinal() const {
+        return has_final;
+    }
+
+    //! checks that a class's resolution of the method's name reaches the final variants of a parent class's method
+    /** This function is the one that the class's lookup of the name starts with: the class's own method if it has
+        one, otherwise the first method of that name found depth-first in its parent classes; its inheritance list
+        is the order in which a call's variant is selected, and an earlier variant wins a tie.  Raises a parse
+        exception if \a final_func is not in that order, or if a variant of a method before it accepts arguments
+        that a final variant of \a final_func accepts (issue #5591).
+
+        @param cls the class being initialized
+        @param final_func the parent class's method with final variants
+        @param local true if this function is the class's own method, whose variants checkFinal() checks
+
+        @return 0 for OK, -1 if a parse exception was raised
+    */
+    DLLLOCAL int checkFinalResolution(const qore_class_private& cls, const MethodFunctionBase& final_func,
+            bool local) const;
+
     // virtual copy constructor
     DLLLOCAL virtual MethodFunctionBase* copy(const QoreClass* n_qc) const = 0;
 };

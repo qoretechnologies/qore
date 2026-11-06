@@ -43,6 +43,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <climits>
 #include <memory>
 #include <set>
 #include <vector>
@@ -5332,6 +5333,11 @@ int qore_class_private::parseInit() {
         }
     }
 
+    // issue #5591: a final method of a parent class must be reached through the whole hierarchy
+    if (parseCheckFinalHierarchy() && !err) {
+        err = -1;
+    }
+
     if (parseInitConstants() && !err) {
         err = -1;
     }
@@ -5522,7 +5528,88 @@ QoreString build_base_class_list(const std::set<std::string>& bases) {
     return desc;
 }
 
+// collects the methods of the parent classes that have final variants, with their names
+void collect_final_methods(const qore_class_private& qc, bool is_static,
+        std::vector<std::pair<std::string, const MethodFunctionBase*>>& finals,
+        std::unordered_set<qore_classid_t>& visited) {
+    if (!qc.scl) {
+        return;
+    }
+    for (auto& i : *qc.scl) {
+        if (!i->sclass) {
+            continue;
+        }
+        const qore_class_private& pc = *qore_class_private::get(*i->sclass);
+        if (!visited.insert(pc.classID).second) {
+            continue;
+        }
+        const hm_method_t& map = is_static ? pc.shm : pc.hm;
+        for (const auto& mi : map) {
+            if (is_special_method_name(mi.second->getName())) {
+                continue;
+            }
+            const MethodFunctionBase* f = qore_method_private::get(*mi.second)->getFunction();
+            if (f->hasFinal()) {
+                finals.emplace_back(mi.first, f);
+            }
+        }
+        collect_final_methods(pc, is_static, finals, visited);
+    }
+}
+
+// returns the first method of the given name found depth-first in the parent classes, as calls are resolved
+const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc, const std::string& name,
+        bool is_static) {
+    if (!qc.scl) {
+        return nullptr;
+    }
+    for (auto& i : *qc.scl) {
+        if (!i->sclass) {
+            continue;
+        }
+        const qore_class_private& pc = *qore_class_private::get(*i->sclass);
+        const hm_method_t& map = is_static ? pc.shm : pc.hm;
+        hm_method_t::const_iterator mi = map.find(name);
+        if (mi != map.end()) {
+            return qore_method_private::get(*mi->second)->getFunction();
+        }
+        const MethodFunctionBase* f = find_first_parent_method(pc, name, is_static);
+        if (f) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
+
+int qore_class_private::parseCheckFinalHierarchy() const {
+    if (!scl) {
+        return 0;
+    }
+    for (bool is_static : {false, true}) {
+        std::vector<std::pair<std::string, const MethodFunctionBase*>> finals;
+        std::unordered_set<qore_classid_t> visited;
+        collect_final_methods(*this, is_static, finals, visited);
+        const hm_method_t& map = is_static ? shm : hm;
+        for (const auto& i : finals) {
+            hm_method_t::const_iterator mi = map.find(i.first);
+            const MethodFunctionBase* start;
+            bool local = mi != map.end();
+            if (local) {
+                start = qore_method_private::get(*mi->second)->getFunction();
+            } else {
+                start = find_first_parent_method(*this, i.first, is_static);
+            }
+            // the parent class with the final method is a parent class, so a method of the name is always found
+            assert(start);
+            if (start->checkFinalResolution(*this, *i.second, local)) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
 
 void qore_class_private::parseWarnAmbiguousOverloads() {
     if (sys || !scl || !parse_check_parse_option(PO_REQUIRE_TYPES) || parse_check_parse_option(PO_IN_MODULE)) {
@@ -6200,6 +6287,61 @@ void MethodFunctionBase::parseRollback() {
     QoreFunction::parseRollback();
 }
 
+// returns true if a parameter type can accept a value that another parameter type accepts
+static bool final_param_types_intersect(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    // an untyped parameter or one whose type is a type parameter can accept anything
+    if (!QoreTypeInfo::hasType(a) || !QoreTypeInfo::hasType(b) || qore_type_contains_type_parameter(a)
+        || qore_type_contains_type_parameter(b)) {
+        return true;
+    }
+    return QoreTypeInfo::parseAccepts(a, b) != QTI_NOT_EQUAL || QoreTypeInfo::parseAccepts(b, a) != QTI_NOT_EQUAL;
+}
+
+// returns true if the parameter at the given position can be omitted
+static bool final_param_optional(const AbstractFunctionSignature* sig, unsigned i) {
+    if (sig->hasDefaultArg(i)) {
+        return true;
+    }
+    const QoreTypeInfo* t = sig->getParamTypeInfo(i);
+    return !QoreTypeInfo::hasType(t) || QoreTypeInfo::parseAccepts(t, nothingTypeInfo) != QTI_NOT_EQUAL;
+}
+
+// returns the minimum number of arguments that a signature accepts
+static unsigned final_min_args(const AbstractFunctionSignature* sig) {
+    unsigned n = sig->numParams();
+    while (n && final_param_optional(sig, n - 1)) {
+        --n;
+    }
+    return n;
+}
+
+//! Returns true if a call with arguments that the final variant accepts could select the other variant
+/** True if both accept the same number of arguments for some call and the parameter types at each position before
+    that number can accept a common value; the arguments after it are omitted, which both accept.  Overload
+    resolution can then select the other variant for such a call: a variant that comes first in the inheritance list
+    wins a tie, and a broader type (\c data for \c string, \c softint for \c int, \c auto) can score as well as
+    the final variant's (issue #5591).
+*/
+static bool final_variant_may_be_bypassed(const AbstractFunctionSignature* other, const AbstractFunctionSignature* fsig) {
+    unsigned omin = final_min_args(other);
+    unsigned fmin = final_min_args(fsig);
+    unsigned omax = other->hasVarargs() ? UINT_MAX : other->numParams();
+    unsigned fmax = fsig->hasVarargs() ? UINT_MAX : fsig->numParams();
+    unsigned c = QORE_MAX(omin, fmin);
+    if (c > QORE_MIN(omax, fmax)) {
+        return false;
+    }
+    for (unsigned i = 0; i < c; ++i) {
+        // a position beyond a signature's parameters is an extra argument that its varargs accept
+        const QoreTypeInfo* ot = i < other->numParams() ? other->getParamTypeInfo(i) : nullptr;
+        const QoreTypeInfo* ft = i < fsig->numParams() ? fsig->getParamTypeInfo(i) : nullptr;
+        if (!final_param_types_intersect(ot, ft)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 int MethodFunctionBase::checkFinalVariant(const MethodFunctionBase* m, const MethodVariantBase* v) const {
     if (!v->isFinal()) {
         return 0;
@@ -6209,6 +6351,31 @@ int MethodFunctionBase::checkFinalVariant(const MethodFunctionBase* m, const Met
     const AbstractFunctionSignature* vs = nullptr;
     int rc = parseCompareResolvedSignature(vlist, sig, vs);
     if (rc == QTI_NOT_EQUAL) {
+        // issue #5591: a variant of the child class's method with another signature must not accept arguments that
+        // the final variant accepts, as overload resolution can select it for them; a private:internal variant is
+        // not inherited, so calls of the child class cannot select it
+        if (v->getAccess() == Internal) {
+            return 0;
+        }
+        const char* stat = isStatic() ? "static " : "";
+        for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+            MethodVariantBase* cv = const_cast<MethodVariantBase*>(METHVB_const(*i));
+            if (cv->isAbstract() || cv->getAccess() == Internal) {
+                continue;
+            }
+            cv->parseResolveUserSignature();
+            const AbstractFunctionSignature* csig = cv->getSignature();
+            if (!final_variant_may_be_bypassed(csig, sig)) {
+                continue;
+            }
+            const UserSignature* usig = dynamic_cast<const UserSignature*>(csig);
+            const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
+            parse_error(*loc, "child class method %s%s::%s(%s) cannot overload parent class method final "
+                "%s%s::%s(%s): it accepts arguments that the final method accepts, so a call could select it instead",
+                stat, qc->getName(), getName(), csig->getSignatureText(), stat, m->qc->getName(), getName(),
+                sig->getSignatureText());
+            return -1;
+        }
         return 0;
     }
 
@@ -6238,6 +6405,60 @@ int MethodFunctionBase::checkFinal() const {
             for (vlist_t::const_iterator i = m->vlist.begin(), e = m->vlist.end(); i != e; ++i) {
                 if (checkFinalVariant(m, METHVB_const(*i)))
                     return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, const MethodFunctionBase& final_func,
+        bool local) const {
+    // the position of the final method in the order in which the class's calls select a variant
+    size_t pos = 0;
+    for (; pos < ilist.size(); ++pos) {
+        if (ilist[pos].func == &final_func) {
+            break;
+        }
+    }
+    const char* stat = isStatic() ? "static " : "";
+    const QoreProgramLocation* loc = cls.loc ? cls.loc : &loc_builtin;
+
+    for (vlist_t::const_iterator fi = final_func.vlist.begin(), fe = final_func.vlist.end(); fi != fe; ++fi) {
+        MethodVariantBase* fv = const_cast<MethodVariantBase*>(METHVB_const(*fi));
+        if (!fv->isFinal() || fv->getAccess() == Internal) {
+            continue;
+        }
+        fv->parseResolveUserSignature();
+        const AbstractFunctionSignature* fsig = fv->getSignature();
+
+        if (pos == ilist.size()) {
+            parse_error(*loc, "class '%s' does not reach parent class method final %s%s::%s(%s): calls of '%s' in "
+                "this class are resolved in %s::%s(), which a parent class listed before '%s' declares or inherits",
+                cls.name.c_str(), stat, final_func.qc->getName(), getName(), fsig->getSignatureText(), getName(),
+                qc->getName(), getName(), final_func.qc->getName());
+            return -1;
+        }
+
+        // the variants of the methods before the final method win a tie with it; the class's own variants are
+        // checked by checkFinal()
+        for (size_t i = local ? 1 : 0; i < pos; ++i) {
+            const MethodFunctionBase* g = METHFB_const(ilist[i].func);
+            for (vlist_t::const_iterator gi = g->vlist.begin(), ge = g->vlist.end(); gi != ge; ++gi) {
+                MethodVariantBase* gv = const_cast<MethodVariantBase*>(METHVB_const(*gi));
+                if (gv->isAbstract() || gv->getAccess() == Internal) {
+                    continue;
+                }
+                gv->parseResolveUserSignature();
+                const AbstractFunctionSignature* gsig = gv->getSignature();
+                if (!final_variant_may_be_bypassed(gsig, fsig)) {
+                    continue;
+                }
+                parse_error(*loc, "class '%s' does not reach parent class method final %s%s::%s(%s): method "
+                    "%s%s::%s(%s), which a parent class listed before '%s' declares or inherits, accepts arguments "
+                    "that the final method accepts and is selected before it", cls.name.c_str(), stat,
+                    final_func.qc->getName(), getName(), fsig->getSignatureText(), stat, g->qc->getName(), getName(),
+                    gsig->getSignatureText(), final_func.qc->getName());
+                return -1;
             }
         }
     }

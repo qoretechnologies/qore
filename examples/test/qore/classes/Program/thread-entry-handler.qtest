@@ -387,11 +387,8 @@ code sub make_exit() {
             sub (auto v) { log("exit A"); b.callFunction("get_ctx"); });
         b.setThreadEntryHandler(auto sub () { log("enter B"); a.callFunction("get_ctx"); },
             sub (auto v) { log("exit B"); a.callFunction("get_ctx"); });
-        # the handlers of each Program refer to the other Program: the cycle is broken when the test ends
-        on_exit {
-            assertTrue(a.setThreadEntryHandler());
-            assertTrue(b.setThreadEntryHandler());
-        }
+        # the handlers of each Program refer to the other Program: the garbage collector collects the cycle when the
+        # test ends (issue #5590)
         takeEvents();
         a.callFunction("get_ctx");
         assertEq(("enter A", "exit A"), takeEvents());

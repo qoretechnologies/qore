@@ -509,6 +509,23 @@ private:
     */
     size_t request_header_len = 0;
 
+    //! True while the response is read after the send of a buffered request failed
+    /** The request header block had reached the wire when the write failed, so the peer may have answered it
+        (a fault such as 413, say) before it stopped reading and reset the connection.  The response, if there is
+        one, is delivered as it is when the request body is abandoned in the same way; when there is none, the
+        error that setError() reports is the send error saved in @ref send_failure_err and @ref send_failure_desc,
+        not the receive error that follows it.  I/O thread only.
+
+        @since %Qore 3.0
+    */
+    bool send_failure_pending = false;
+
+    //! The error code of the failed send; see @ref send_failure_pending
+    std::string send_failure_err;
+
+    //! The error description of the failed send; see @ref send_failure_pending
+    std::string send_failure_desc;
+
     //! Number of "100 Continue" responses received for the request in flight
     /** Bounds the work a peer can make the client do - and the recursion depth
         in handleRecvHeader() - by streaming interim responses without ever
@@ -735,6 +752,21 @@ private:
         @since %Qore 3.0
     */
     DLLLOCAL QoreHashNode* awaitBufferedSend(ExceptionSink* xsink);
+
+    //! Reads the response after the send of a buffered request failed once its header block had been written
+    /** The peer may have answered the request before it read the body and then closed or reset the connection,
+        which is what made the write fail; the answer is delivered instead of the write error.  When there is no
+        answer, the error reported is the send error (see @ref send_failure_pending).  The request is abandoned
+        the way abandonBufferedSendAndDeliver() abandons one, so the connection is closed afterwards.
+
+        @param err the error code of the failed send
+        @param desc the error description of the failed send
+        @param xsink exception sink
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* recoverResponseAfterSendFailure(const std::string& err, const std::string& desc,
+        ExceptionSink* xsink);
 
     //! Resumes the dispatch of the response that @ref ReqState::AWAIT_SEND deferred
     DLLLOCAL QoreHashNode* completeDeferredResponse(ExceptionSink* xsink);

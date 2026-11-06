@@ -767,6 +767,10 @@ hash<NetworkSecurityConfigInfo> SandboxManager::getNetworkConfiguration() {
     @note Object and callback provenance remains enforced through this barrier. A reference created while
     serving a sandboxed caller retains that caller's policy. Trusted infrastructure needing access beyond that
     provenance must register a fixed operation with createSystemPolicyCall() during trusted initialization.
+    @note This includes a method that a sandboxed Program's subclass inherits from a trusted class: an object that
+    the sandboxed Program creates carries its sandbox, so all of its methods run under it, also when trusted code
+    with no sandbox on its stack calls them, and a barrier established inside or around such a method does not
+    help; the method calls a capability from createSystemPolicyCall() instead, as shown there
 
     @param call the code to call with the barrier established
     @param call_args optional arguments to @p call
@@ -832,6 +836,16 @@ static code SandboxManager::bindCall(code call) [flags=RET_VALUE_ONLY] {
     @note The arguments of a call to the returned capability are evaluated by the caller, under the caller's own
     sandbox, before the capability runs; the caller's local variables, including those captured by its closures,
     can be passed to it
+    @note This is the mechanism for a method that a sandboxed Program's subclass inherits from a trusted class. An
+    object that a sandboxed Program creates carries its sandbox (its provenance), so every method of the object runs
+    under it, including one inherited from a trusted class and called by trusted code with no sandbox on its stack:
+
+    |!How the inherited method uses a system resource|!Result
+    |directly|denied
+    |inside callWithSystemPolicy()|denied: a policy barrier does not mask provenance
+    |by calling a capability returned by this method, registered during trusted startup|allowed
+    |by calling a capability that calls a method of the sandbox-created object|denied: the method runs with the object's provenance
+
     @par Example:
     @code{.py}
 # During trusted startup; the callback uses a fixed, system-owned credential path.
@@ -839,8 +853,111 @@ code authenticate = SandboxManager::createSystemPolicyCall(\authenticate_provide
 # Later, while serving a sandboxed caller:
 authenticate();
     @endcode
+
+    @par Example:
+    @code{.py}
+# a framework base class that sandboxed code subclasses: its method uses the network through a capability
+our code Connector;
+sub connect_port(int port) { Socket s(); s.connect("127.0.0.1:" + port, 5s); }
+class Base {
+    connect(int port) { Connector(port); }
+}
+# during trusted startup, before any sandboxed code runs
+Connector = SandboxManager::createSystemPolicyCall(\connect_port());
+    @endcode
+    @see design/module-sandboxing-audit-guide.md
     @since %Qore 3.0
 */
 static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
     return qore_bind_sandbox_call(call, true, xsink);
+}
+
+//! Returns @ref True if a sandbox governs the filesystem and network access of the current thread's code
+/** Resolves the sandbox exactly as the filesystem and network checks do: the Programs on the call stack, the
+    provenance of the objects and callbacks whose code runs, the sandbox inherited by a thread started for sandboxed
+    code, policy barriers (callWithSystemPolicy()) and system-policy capabilities (createSystemPolicyCall()).  Trusted
+    code that decides on behalf of its caller - whether an API may be used, which tenant's resources a name refers to
+    - can therefore fail closed when its caller is sandboxed, without keeping that state itself, also on paths where
+    its own bookkeeping is not set up, such as a callback that it runs outside its normal request handling.
+
+    @return @ref True if a sandbox governs the current thread's filesystem and network access, @ref False if not
+
+    @par Example:
+    @code{.py}
+# a trusted service API: administrative operations are not available to sandboxed callers
+hash<auto> sub admin_reset(string name) {
+    if (SandboxManager::isGoverned()) {
+        throw "ACCESS-DENIED", sprintf("%y: administrative operations cannot be called from sandboxed code", name);
+    }
+    return do_reset(name);
+}
+    @endcode
+
+    @note
+    - inside a policy barrier or a system-policy capability, the caller's sandbox does not govern the access, so
+      this method returns @ref False there unless a sandbox governs the code entered inside it, as the filesystem
+      and network checks do; use it in the code that acts on behalf of the caller, not in the code run under the
+      system policy
+    - code of an object that a sandboxed Program created is governed by that Program's sandbox, also when it
+      implements a method inherited from a trusted class (see design/module-sandboxing-audit-guide.md)
+    - restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", like the other methods that
+      expose or mask sandbox policy
+
+    @see getGoverningPolicies()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isGoverned() [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
+    QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+    return static_cast<bool>(policy);
+}
+
+//! Returns the configuration of each sandbox that governs the filesystem and network access of the current thread's code
+/** The sandboxes are resolved as with isGoverned().  When more than one governs the access - the sandbox of the
+    Programs on the call stack and that of an object or callback created by sandboxed code, for example - an access
+    is allowed only if every one of them allows it, and each is returned.
+
+    @return the configuration of each governing sandbox, in no particular order; an empty list if no sandbox governs
+    the access.  The hashes are copies: changing them changes no sandbox
+
+    @par Example:
+    @code{.py}
+# a trusted service API logs the limits that apply to its caller
+list<hash<SandboxConfigInfo>> policies = SandboxManager::getGoverningPolicies();
+foreach hash<SandboxConfigInfo> policy in (policies) {
+    log(LL_INFO, "caller sandbox: max threads: %d, network default policy: %s", policy.max_threads,
+        policy.network.default_policy);
+}
+    @endcode
+
+    @note restricted to @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", like isGoverned()
+
+    @see isGoverned()
+
+    @since %Qore 3.0
+*/
+static list<hash<SandboxConfigInfo>> SandboxManager::getGoverningPolicies() [dom=UNCONTROLLED_API; flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclSandboxConfigInfo->getTypeInfo()), xsink);
+    QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+    if (!policy) {
+        return rv.release();
+    }
+    // a combination of managers has no policy of its own: each member's is returned
+    const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(policy.get());
+    std::vector<QoreSandboxManager*> single;
+    if (!members) {
+        single.push_back(policy.get());
+        members = &single;
+    }
+    for (QoreSandboxManager* sm : *members) {
+        ReferenceHolder<QoreHashNode> h(sm->getConfiguration(xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        rv->push(h.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
 }

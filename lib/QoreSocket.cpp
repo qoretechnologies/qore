@@ -14799,8 +14799,9 @@ size_t SocketSendPollOperation::getBytesSent() const {
         return size;
     }
     if (!poll_state) {
-        // either the operation has not been initialized yet or it failed; in both cases nothing was written
-        return 0;
+        // either the operation has not been initialized yet (nothing was written) or it has finished: the bytes
+        // written before a failure are kept
+        return failed_bytes_sent;
     }
     assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
     return static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
@@ -16528,6 +16529,10 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
     //printd(5, "SocketConnectPollOperation::continuePoll() state: %s rc: %d (exp: %d)\n", getStateImpl(), rc,
     //    (int)*xsink);
     if (*xsink || !rc) {
+        if (*xsink) {
+            assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
+            failed_bytes_sent = static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
+        }
         // release the AbstractPollState value
         poll_state.reset();
         sock->priv->clearNonBlock(NB_SEND);

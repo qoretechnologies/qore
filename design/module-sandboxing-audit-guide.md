@@ -189,12 +189,94 @@ capability enters that registration Program, masks pre-existing filesystem/netwo
 preserves interruption and thread accounting. A tenant callback invoked inside it reactivates its own provenance.
 The callback must validate its arguments and avoid granting arbitrary file, network, or callback execution access.
 
+##### Methods that a sandboxed subclass inherits from a trusted class
+
+An object that sandboxed code creates carries the creating Program's sandbox as its provenance, also when its class
+is a sandboxed subclass of a trusted class and the method called is one the subclass inherits from the trusted
+class. Every method of such an object runs under the sandbox, whoever calls it: trusted code with no sandbox on its
+stack that calls `o.connect()` is denied as sandboxed code would be. A framework base class whose "charge", "log" or
+"connect" method uses a system resource therefore fails as soon as a tenant subclasses it.
+
+```qore
+%new-style
+class Base {
+    connect(int port) { Socket s(); s.connect("127.0.0.1:" + port, 5s); }
+}
+Program p(PO_NEW_STYLE);
+SandboxManager mgr();
+mgr.setNetworkDefaultPolicy(True);
+mgr.blockPrivateNetworks();
+p.setSandboxManager(mgr);
+p.importClass("Base");
+p.parse("class Sub inherits Base {} object sub make() { return new Sub(); }", "child");
+object o = p.callFunction("make");
+o.connect(9);   # NETWORK-ACCESS-DENIED, called from the unsandboxed parent Program
+```
+
+Which mechanism applies:
+
+| How the trusted code uses the system resource | Result |
+|---|---|
+| directly in the inherited method | denied: the object's provenance applies |
+| `SandboxManager::callWithSystemPolicy()` around the operation, in the inherited method | denied: a policy barrier masks the policy inherited from callers, not provenance |
+| `SandboxManager::callWithSystemPolicy()` around the call of the method, in trusted code | denied: the method still runs with the object's provenance |
+| a capability from `SandboxManager::createSystemPolicyCall()`, registered during trusted startup, that performs the operation itself, called by the inherited method | allowed: the capability masks provenance for its fixed operation |
+| such a capability that calls a method of the sandbox-created object | denied: the method reactivates the object's provenance |
+
+The trusted class therefore moves the operation that needs the system policy into a function registered as a
+capability during trusted startup, and its method calls the capability:
+
+```qore
+our code Connector;
+sub connect_port(int port) { Socket s(); s.connect("127.0.0.1:" + port, 5s); }
+class Base {
+    connect(int port) { Connector(port); }
+}
+# during trusted startup, before any sandboxed code runs
+Connector = SandboxManager::createSystemPolicyCall(\connect_port());
+```
+
+The capability is a fixed operation that validates its arguments; whoever holds it, including the tenant subclass,
+can call it. Trusted code that must decide on behalf of its caller whether a sandbox governs it uses
+`SandboxManager::isGoverned()` (see "Asking whether a sandbox governs the caller" below).
+`examples/test/qore/classes/SandboxManager/sandbox-inherited-methods.qtest` checks each row of the table.
+
 Creation does not track later tenant configuration of a pre-existing object. Registration must retain the
 interface-Program wrapper or use `SandboxManager::bindCall()` in the interface context. Do not retag a shared object.
 Native callback callers use `ResolvedCallReferenceNode::invoke()`; a native subclass called directly applies
 `QoreSandboxProvenanceHelper`, including during cleanup that can execute Qore code. Ordinary foreign-runtime I/O
 without Qore policy checks remains outside this mechanism. See `design/sandbox-provenance.md` and the
 `sandbox-provenance.qtest` regression suite for composition, revocation, capabilities, hooks and asynchronous work.
+
+#### Asking whether a sandbox governs the caller
+
+Trusted code that decides on behalf of its caller - whether an API may be used, which tenant's resources a name
+refers to - must not rely on state it keeps itself (thread-local data set up when a request starts, for example):
+any path where that state is not set up, such as a callback the framework runs outside its normal request
+handling, silently loses the restriction. `SandboxManager::isGoverned()` resolves the sandbox exactly as the
+filesystem and network checks do (`QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`): the Programs on
+the call stack, object and callback provenance, the sandbox a thread inherits from the code that started it, policy
+barriers and system-policy capabilities. Trusted code can therefore fail closed whenever its caller is sandboxed:
+
+```qore
+hash<auto> sub admin_reset(string name) {
+    if (SandboxManager::isGoverned()) {
+        throw "ACCESS-DENIED", sprintf("%y: not available to sandboxed code", name);
+    }
+    return do_reset(name);
+}
+```
+
+`SandboxManager::getGoverningPolicies()` returns the configuration (`SandboxConfigInfo`) of each sandbox that governs
+the access, as copies; more than one governs when, for example, sandboxed code calls a method of an object that
+another sandbox created, and an access is then allowed only if each allows it. A combination of managers
+(`QoreSandboxComposition`) has no policy of its own, so its members are returned.
+
+Both are restricted to `PO_NO_UNCONTROLLED_APIS`, like the other APIs that expose or mask policy. Inside a policy
+barrier or a capability, the caller's sandbox no longer governs the access, so `isGoverned()` returns `False` there
+unless a sandbox governs the code entered inside it: ask in the code that acts on behalf of the caller, before
+entering the barrier. `examples/test/qore/classes/SandboxManager/sandbox-inherited-methods.qtest` covers each
+resolution path.
 
 ### Key Principle: Sandbox Manager May Be Absent
 

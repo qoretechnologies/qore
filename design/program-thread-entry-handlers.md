@@ -135,10 +135,52 @@ releasing closures can run destructors.
   `clearNamespaceData()`, next to the thread initialization code, and again in `del()`.
 - A handler belonging to a Program that has been deleted fails as any call into it does (`PROGRAM-ERROR`); the entry
   fails and the child's code does not run.
-- The Program holds strong references to its handlers, held in C++ where the deterministic garbage collector does not
-  see them (as for the thread initialization code). Handlers that refer to the Program object, directly or through
-  other objects or Programs, form a cycle that keeps the Program alive until the handlers are cleared; the method
-  documentation says so, and the cross-calling handlers test clears them.
+- The Program holds strong references to its handlers and to its thread initialization code in C++ members, and its
+  Program object reports them to the garbage collector as Pattern B private data (`design/dgc.md`), so a cycle
+  through them is collected like any other (issue #5590); see "Garbage collection" below.
+
+## Garbage collection
+
+A handler or thread initialization closure that refers to the Program object, directly or through other objects or
+Programs (two Programs whose handlers call each other's Program, or an application object that owns its Program and
+that its handlers refer to), forms a reference cycle through C++ members of the Program. The Program object reports
+those members to the scanner, so the cycle is found and collected when nothing outside it refers to it:
+
+- **The reporting object.** `qore_program_private::scan_holder` is the Program object that holds the Program as its
+  private data, set by the `Program` constructors and `ProgramControl::createEvalProgram()`
+  (`qore_program_private::setScanHolder()`). It is cleared (`clearScanHolder()`) wherever the object releases the
+  Program or hands it out: every such path goes through `KeyList` (`derefAll()`, `getAndClearPtr()`,
+  `getAndRemovePtr()`), which calls `qore_object_private_data_released()` for the entry first. That covers the
+  destructor, the methods that hand the Program to a user module (`loadApplyToUserModule()` and the others), the
+  `!Program` parameters that take it from its object (`load_user_module_with_program()`,
+  `Program::loadUserModuleWithProgram()`, and the C++ API `QoreObject::getAndClearPrivateData()`), and an object
+  whose constructor failed, which releases its private data without a destructor. `qore_program_private::del()`
+  asserts that the holder is gone. It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
+  reported once. A Program without a Program object (the main Program, one created in C++) reports nothing: no
+  object of the cycle could hold it.
+- **Scanning.** `qore_object_private::scanMembers()` probes `CID_PROGRAM` and calls
+  `qore_program_private::scanMembers()`, which tries `tlock` (a held lock makes the scan due again,
+  `RSetHelper::containerContended()`) and reports `thr_init`, `on_enter` and `on_exit`. The object counts in
+  `scan_private_data` (`scan_registered`) only while one of them needs a scan, so a Program with no code, or with
+  function references only, costs scans nothing.
+- **Changes.** `setThreadInit()` and `setThreadEntryHandler()`, under `tlock`, mark the object with
+  `RObject::edgesRemoved()` when they give up a value that needs a scan (it is released after the lock), and mark
+  each value stored with `qore_dgc_value_stored()` (`scanValuesChangedIntern()`), as a Queue does.
+- **Threads running the handlers.** A thread that ran the entry handler holds a reference to the
+  `QoreThreadEntryHandlers` until it has run the exit handler. Each reference to that object holds a reference to
+  each handler as well (`QoreThreadEntryHandlers::ref()`), so the thread's hold is a reference from outside the
+  cycle: `RSet::canDelete()` keeps the cycle and watches the closure, and the thread's release when it leaves the
+  Program rechecks it. The cycle is then collected on that thread, while it still runs in the Program: the
+  Program object is deleted at once and the Program is kept until the thread has left it (`Program::destructor()`). The thread initialization code is referenced by the thread while it runs
+  (`doThreadInit()`), which has the same effect.
+
+`examples/test/qore/classes/Program/program-code-cycles.qtest` builds each cycle - handlers, thread initialization
+code set with `setThreadInit()` and with `set_thread_init()`, a handler referring to its own Program, an object that
+owns its Program, a Program created by `ProgramControl::createEvalProgram()` - releases the last outside reference,
+and checks through destructors that the Programs and the values the code refers to are destroyed; it also checks
+that a cycle held from outside or by a thread running the handlers is kept until that reference goes, and that a
+Program taken from its object by a call, or released by an object whose constructor failed, is released. It is clean
+under valgrind.
 
 ## Sandboxing
 
@@ -198,3 +240,5 @@ logger bridge gave a sink that went out of scope first, which is fixed (the sink
   of a thread started for sandboxed code run under the inherited sandbox.
 - `examples/test/ir/ThreadEntryHandlerModes.qtest`: a driver and a fixture module run in AST, IR, JIT and tiered mode
   with native compilation checked, and with the module and the driver compiled by `qcc`.
+- `examples/test/qore/classes/Program/program-code-cycles.qtest`: cycles through the handlers and the thread
+  initialization code are collected (issue #5590); see "Garbage collection".

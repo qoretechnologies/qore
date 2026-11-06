@@ -91,6 +91,13 @@ typedef std::pair<AbstractPrivateData*, bool> private_pair_t;
 // mapping from qore class ID to the object data
 typedef std::map<qore_classid_t, private_pair_t> keymap_t;
 
+//! called when an object releases private data or hands it out, before it can be dereferenced
+/** A Program reports its user code to the garbage collector through the object that holds it; the object stops
+    reporting it here, on every path that releases the Program (issue #5590; see
+    qore_program_private::clearScanHolder()).
+*/
+DLLLOCAL void qore_object_private_data_released(qore_classid_t key, AbstractPrivateData* pd);
+
 // for objects with multiple classes, private data has to be keyed
 class KeyList {
 private:
@@ -121,9 +128,12 @@ public:
     }
 
     DLLLOCAL void derefAll(ExceptionSink* xsink) const {
-        for (keymap_t::const_iterator i = keymap.begin(), e = keymap.end(); i != e; ++i)
-            if (!i->second.second)
+        for (keymap_t::const_iterator i = keymap.begin(), e = keymap.end(); i != e; ++i) {
+            if (!i->second.second && i->second.first) {
+                qore_object_private_data_released(i->first, i->second.first);
                 i->second.first->deref(xsink);
+            }
+        }
     }
 
     DLLLOCAL AbstractPrivateData* getAndClearPtr(qore_classid_t key) {
@@ -136,6 +146,9 @@ public:
         //printd(5, "KeyList::getAndClearPtr first: %p\n", i->second.first);
         // we must clear the private data when this function is called or a crash will result
         AbstractPrivateData* rv = i->second.first;
+        if (rv) {
+            qore_object_private_data_released(key, rv);
+        }
         keymap.erase(i);
         // also erase virtual mappings that alias the same private data, so that
         // tryGetReferencedPrivateData() via a parent class ID cannot find a
@@ -159,6 +172,9 @@ public:
         }
         AbstractPrivateData* rv = i->second.first;
         //printd(5, "KeyList::getAndRemovePtr first: %p\n", i->second.first);
+        if (rv) {
+            qore_object_private_data_released(key, rv);
+        }
         i->second.first = 0;
         // also clear virtual mappings that alias the same private data, so that
         // tryGetReferencedPrivateData() via a parent class ID cannot find a

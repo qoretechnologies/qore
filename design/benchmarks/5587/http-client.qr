@@ -1,0 +1,27 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# usage: hs-client.qr <keepalive 0|1> <requests>; prints microseconds per request, then asks the server to quit
+const Port = 38765;
+bool keepalive = ARGV[0] == "1";
+int n = ARGV[1].toInt();
+
+HTTPClient c({"url": "http://127.0.0.1:" + Port});
+for (int i = 0; i < 50; ++i) {
+    c.get("/");
+    if (!keepalive) {
+        c.disconnect();
+    }
+}
+date start = now_us();
+for (int i = 0; i < n; ++i) {
+    c.get("/");
+    if (!keepalive) {
+        c.disconnect();
+    }
+}
+int us = (now_us() - start).durationMicroseconds();
+printf("client_us_per_req=%d\n", us / n);
+c.get("/quit");
+c.disconnect();

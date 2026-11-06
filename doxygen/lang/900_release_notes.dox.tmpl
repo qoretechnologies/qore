@@ -86,6 +86,11 @@
     lookup delayed every accept, and \c source (the peer's IP address) is set as before.  Socket::getPeerInfo()
     still resolves the hostname on request.
 
+    @par Final Methods Hold for the Whole Class Hierarchy
+    A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
+    arguments or with a parent class listed before the final method's class that declares or inherits its name;
+    both are now parse errors.
+
     @par Module Code Runs with the Restrictions of Its Caller
     A method of a user-module class, a closure created in module code and the module code they call run with the
     restrictions of their caller as well as their own, and a module function looks up names at run time in its
@@ -1423,6 +1428,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a reference cycle through the thread initialization code of a Program (@ref Qore::Program::setThreadInit() and
+      @ref Qore::set_thread_init()), such as code that refers to the Program object, was never collected, so the
+      Program and the values the code refers to were leaked; such a cycle is now collected like any other
     - the C++ API function \c BinaryNode::writeTo() did not extend the size of the value when it wrote past its end,
       so the data written there was not part of the value; it now does, and fills a gap with zero bytes
     - an argument for a parameter declared as \c reference<T> whose target could not be resolved, as with

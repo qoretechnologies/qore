@@ -1127,6 +1127,21 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Protects @ref controller_loggers and the global async I/O controller's logger as servers set and restore it
         static Mutex controller_logger_lck();
+
+        #! The results of getContentEncodingPreferences() by \c Accept-Encoding header value
+        /** A client sends the same header on every request, so the result is computed once per distinct value; see
+            @ref MaxCachedEncodingPreferences
+        */
+        static hash<string, hash<string, float>> encoding_preferences_cache();
+
+        #! Protects @ref encoding_preferences_cache
+        static Mutex encoding_preferences_lck();
+
+        #! The maximum number of header values in @ref encoding_preferences_cache and the longest value cached
+        /** The header is chosen by the client, so the cache is emptied when it is full and long values are not cached
+        */
+        const MaxCachedEncodingPreferences = 64;
+        const MaxCachedEncodingHeaderLength = 256;
     }
     #! @endcond
 
@@ -2966,7 +2981,35 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     #! Returns supported encodings in decreasing quality order, by ContentEncodingPreference on ties
+    /** The result depends only on the header value and every request of a client carries the same one, so it is
+        computed once per distinct value (see @ref encoding_preferences_cache)
+    */
     private static hash<string, float> getContentEncodingPreferences(*string header) {
+        string key = header ?? "";
+        if (key.size() > MaxCachedEncodingHeaderLength) {
+            return computeContentEncodingPreferences(header);
+        }
+        {
+            encoding_preferences_lck.lock();
+            on_exit encoding_preferences_lck.unlock();
+            if (encoding_preferences_cache.hasKey(key)) {
+                return encoding_preferences_cache{key};
+            }
+        }
+        hash<string, float> rv = computeContentEncodingPreferences(header);
+        {
+            encoding_preferences_lck.lock();
+            on_exit encoding_preferences_lck.unlock();
+            if (encoding_preferences_cache.size() >= MaxCachedEncodingPreferences) {
+                encoding_preferences_cache = {};
+            }
+            encoding_preferences_cache{key} = rv;
+        }
+        return rv;
+    }
+
+    #! Computes the result of getContentEncodingPreferences() for a header value
+    private static hash<string, float> computeContentEncodingPreferences(*string header) {
         hash<string, float> weights;
         foreach string item in ((header ?? "").split(",")) {
             list<string> parts = item.lwr().split(";");

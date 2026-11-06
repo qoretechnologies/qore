@@ -3646,6 +3646,13 @@ public:
 
     DLLLOCAL int parseInit();
     DLLLOCAL void parseWarnAmbiguousOverloads();
+
+    //! raises a parse exception if the class's resolution of a parent class's final method does not reach it
+    /** See MethodFunctionBase::checkFinalResolution() (issue #5591).
+
+        @return 0 for OK, -1 if a parse exception was raised
+    */
+    DLLLOCAL int parseCheckFinalHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();

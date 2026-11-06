@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FinalMethodsParserTest
+
+#! a trusted class whose final methods a sandboxed Program's subclasses must not replace
+class TrustedBase {
+    final string charge(object a, *data body) {
+        return "final";
+    }
+
+    final string log(string msg) {
+        return "final";
+    }
+}
+
+#! Tests for issue #5591: final methods hold for the whole class hierarchy
+class FinalMethodsParserTest inherits QUnit::Test {
+    public {
+        #! a parent class with final methods, and classes that declare or inherit its method names
+        const Hierarchy = "
+class Root {
+    string m() { return \"root\"; }
+}
+class Base inherits Root {
+    final string m() { return \"final\"; }
+    final string h(string s) { return \"final\"; }
+    final string k(object a, *data body) { return \"final\"; }
+    static final string s(int i) { return \"final\"; }
+}
+class Other inherits Root {
+    string m() { return \"other\"; }
+}
+class Plain inherits Root {
+}
+class Derived inherits Base {
+}
+";
+    }
+
+    constructor() : QUnit::Test("final methods parser test", "1.0") {
+        addTestCase("parent class listed before the final method's class", \testMultipleInheritance());
+        addTestCase("overloads accepting the final method's arguments", \testOverloads());
+        addTestCase("static methods", \testStatic());
+        addTestCase("accepted hierarchies select the final method", \testAccepted());
+        addTestCase("sandboxed subclasses of a trusted class", \testSandboxedSubclass());
+        set_return_value(main());
+    }
+
+    #! asserts that the class code is rejected with a parse exception matching the regular expression
+    private assertRejected(string code, string regex, string label) {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", regex, \p.parse(), (Hierarchy + code, label), label);
+    }
+
+    #! parses the code, which must be accepted, and returns the Program
+    private Program parseAccepted(string code, string label) {
+        Program p(PO_NEW_STYLE);
+        p.parse(Hierarchy + code, label);
+        return p;
+    }
+
+    testMultipleInheritance() {
+        # a parent class listed before Base declares the method
+        assertRejected("class T inherits Other, Base {}",
+            "class 'T' does not reach parent class method final Base::m\\(\\): calls of 'm' in this class are "
+            "resolved in Other::m\\(\\)", "sibling declares");
+        # a parent class listed before Base inherits the method
+        assertRejected("class T inherits Plain, Base {}",
+            "class 'T' does not reach parent class method final Base::m\\(\\): calls of 'm' in this class are "
+            "resolved in Root::m\\(\\)", "sibling inherits");
+        # the same through a subclass of Base
+        assertRejected("class T inherits Plain, Derived {}",
+            "does not reach parent class method final Base::m\\(\\)", "sibling before subclass");
+        # with a method of its own, the class's calls still select the method of the parent class listed first
+        assertRejected("class T inherits Other, Base { string m(int i) { return \"int\"; } }",
+            "class 'T' does not reach parent class method final Base::m\\(\\): method Other::m\\(\\)",
+            "own method");
+        # a grandchild inherits the problem of a parent class that is accepted only because it overrides nothing
+        assertRejected("class T inherits Other, Derived {}",
+            "does not reach parent class method final Base::m\\(\\)", "grandchild");
+    }
+
+    testOverloads() {
+        # the identical signature: the existing rule
+        assertRejected("class C inherits Base { string h(string s) { return \"c\"; } }",
+            "child class method C::h\\(string s\\) cannot override parent class method final Base::h\\(string s\\)",
+            "identical");
+        # narrower parameter type (the case in the issue)
+        assertRejected("class C inherits Base { string k(object a, *binary body) { return \"c\"; } }",
+            "child class method C::k\\(object a, \\*binary body\\) cannot overload parent class method final "
+            "Base::k\\(object a, \\*data body\\)", "narrower");
+        # broader parameter types score as well as the final variant's, and the child's variant wins the tie
+        map assertRejected("class C inherits Base { string h(" + $1 + " v) { return \"c\"; } }",
+            "child class method C::h\\(.* v\\) cannot overload parent class method final Base::h\\(string s\\)",
+            "broader " + $1), ("data", "auto", "softint", "*string", "softstring");
+        # an untyped parameter
+        assertRejected("class C inherits Base { string h(v) { return \"c\"; } }",
+            "cannot overload parent class method final Base::h", "untyped");
+        # an optional extra parameter: a call with the final method's arguments omits it
+        assertRejected("class C inherits Base { string h(string s, *int x) { return \"c\"; } }",
+            "cannot overload parent class method final Base::h", "optional extra parameter");
+        assertRejected("class C inherits Base { string h(string s, int x = 1) { return \"c\"; } }",
+            "cannot overload parent class method final Base::h", "default extra parameter");
+        # varargs
+        assertRejected("class C inherits Base { string h(...) { return \"c\"; } }",
+            "cannot overload parent class method final Base::h", "varargs");
+        # fewer parameters, the final method's being optional
+        assertRejected("class C inherits Base { string k(object a) { return \"c\"; } }",
+            "cannot overload parent class method final Base::k", "fewer parameters");
+        # a grandchild
+        assertRejected("class C inherits Derived { string h(*string s) { return \"c\"; } }",
+            "child class method C::h\\(\\*string s\\) cannot overload parent class method final Base::h",
+            "grandchild");
+    }
+
+    testStatic() {
+        assertRejected("class C inherits Base { static string s(softint i) { return \"c\"; } }",
+            "child class method static C::s\\(softint i\\) cannot overload parent class method final static "
+            "Base::s\\(int i\\)", "static overload");
+        Program p = parseAccepted("class C inherits Base { static string s(string v) { return \"c\"; } }
+string sub test(auto v) { return C::s(v); }", "static disjoint");
+        p.run();
+        assertEq("c", p.callFunction("test", "x"));
+        assertEq("final", p.callFunction("test", 1));
+    }
+
+    testAccepted() {
+        Program p = parseAccepted("
+# Base before the other parent class
+class T1 inherits Base, Other {}
+class T2 inherits Derived, Plain {}
+# overloads that accept none of the final variants' arguments
+class C inherits Base {
+    string h(int i) { return \"int\"; }
+    string h(string a, string b) { return \"two\"; }
+    string k(int i) { return \"int\"; }
+}
+class G inherits C {
+    string h(binary b) { return \"binary\"; }
+}
+# a final private:internal method is not inherited
+class I {
+    private:internal final string q() { return \"i\"; }
+    string callQ() { return q(); }
+}
+class J inherits I {
+    string q(*int x) { return \"j\"; }
+}
+list<string> sub test() {
+    auto t1 = new T1();
+    auto t2 = new T2();
+    auto c = new C();
+    auto g = new G();
+    auto j = new J();
+    return (t1.m(), t2.m(), c.h(\"x\"), c.h(1), c.h(\"a\", \"b\"), c.k(c, <00>), c.k(1), g.h(\"x\"), g.h(<00>),
+        g.m(), j.q(), j.callQ());
+}", "accepted");
+        p.run();
+        assertEq(("final", "final", "final", "int", "two", "final", "int", "final", "binary", "final", "j", "i"),
+            p.callFunction("test"));
+    }
+
+    #! a sandboxed Program cannot replace a final method of a trusted class it subclasses
+    testSandboxedSubclass() {
+        SandboxManager mgr();
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(mgr);
+        p.importClass("TrustedBase");
+        assertThrows("PARSE-EXCEPTION", "child class method Sub::charge\\(object a, \\*binary body\\) cannot "
+            "overload parent class method final TrustedBase::charge", \p.parse(),
+            ("class Sub inherits TrustedBase { string charge(object a, *binary body) { return \"sub\"; } }", "sub"));
+
+        # a disjoint overload is accepted, and the trusted method is still called for its arguments
+        Program p2(PO_NEW_STYLE);
+        p2.setSandboxManager(mgr);
+        p2.importClass("TrustedBase");
+        p2.parse("class Sub inherits TrustedBase { string log(int code) { return \"sub\"; } }
+object sub make() { return new Sub(); }", "sub2");
+        object o = p2.callFunction("make");
+        assertEq("final", o.log("x"));
+        assertEq("sub", o.log(1));
+        assertEq("final", o.charge(o, <00>));
+    }
+}

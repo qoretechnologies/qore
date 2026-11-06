@@ -1410,6 +1410,8 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     program_set_independent_creator(*pgm, independent);
 
     self->setPrivate(CID_PROGRAM, pgm);
+    // the object reports the Program's code to the garbage collector (issue #5590)
+    qore_program_private::setScanHolder(*pgm, *self);
     printd(5, "Program::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", pgm, (int64)pgm->getProgramId(), self);
 }
 
@@ -1436,6 +1438,8 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
     program_set_independent_creator(*pgm, independent);
 
     self->setPrivate(CID_PROGRAM, pgm);
+    // the object reports the Program's code to the garbage collector (issue #5590)
+    qore_program_private::setScanHolder(*pgm, *self);
     printd(5, "Program::constructor() pgm: %p, pgmid: " QLLD ", self: %p\n", pgm, (int64)pgm->getProgramId(), self);
 }
 
@@ -3275,6 +3279,12 @@ pgm.setThreadInit(sub () { var = 123; });
     - the code runs only on a thread's first entry into the Program; to set a context every time a thread enters the
       Program, for threads that run the code of more than one Program, use
       @ref Qore::Program::setThreadEntryHandler() "setThreadEntryHandler()"
+    - the garbage collector sees the Program's reference to the code: code that refers to this Program object,
+      directly or through other objects or Programs, forms a reference cycle that is collected like any other once
+      nothing outside it refers to it
+
+    @since %Qore 3.0 a reference cycle through the thread initialization code is collected; before, it kept the
+    Program and the values the code refers to alive until the code was cleared
 
     @see
     - @ref Qore::set_thread_init()
@@ -3361,9 +3371,11 @@ pgm.setThreadEntryHandler(
     @note
     - the handlers are not run by this method for the current thread
     - the Program keeps strong references to the handlers until they are replaced or cleared, or the Program is
-      destroyed; handlers that refer to this Program object, directly or through other objects or Programs (for
-      example the handlers of two Programs that call each other's Program), form a reference cycle that keeps the
-      Program alive, so clear the handlers with @ref nothing to release it
+      destroyed; the garbage collector sees these references, so handlers that refer to this Program object,
+      directly or through other objects or Programs (for example the handlers of two Programs that call each
+      other's Program), form a reference cycle that is collected like any other once nothing outside it refers to
+      it; a thread that has run the entry handler holds the handlers until it has run the exit handler, which
+      keeps such a cycle until then
 
     @see @ref Qore::Program::setThreadInit() "setThreadInit()"
 

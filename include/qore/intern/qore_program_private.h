@@ -70,6 +70,11 @@ class QoreSandboxManager;
 #include <utility>
 #include <vector>
 #include <set>
+#include <initializer_list>
+
+class qore_object_private;
+class RObject;
+class RSetHelper;
 
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
@@ -927,6 +932,16 @@ public:
     */
     std::atomic<QoreThreadEntryHandlers*> thread_entry_handlers{nullptr};
 
+    //! the Program object that reports thr_init and the thread entry and exit handlers to the garbage collector
+    /** Held with a weak reference and changed only under tlock; nullptr for a Program without a Program object, and
+        once the object has been destroyed or has given up the Program.  See design/dgc.md Pattern B and
+        design/program-thread-entry-handlers.md.
+    */
+    qore_object_private* scan_holder = nullptr;
+
+    //! true if the object in scan_holder counts the Program in its private data scans; changed only under tlock
+    bool scan_registered = false;
+
     // return value for use with %exec-class
     QoreValue exec_class_rv{};
 
@@ -1261,6 +1276,11 @@ class QoreBreakpoint;
 /** Immutable once created; replacing a Program's handlers creates a new object.  A thread that runs the entry handler
     holds a reference until it has run the paired exit handler, so a replacement takes effect for later entries only.
     See design/program-thread-entry-handlers.md.
+
+    Every reference to this object holds a reference to each handler as well.  The Program reports the handlers to
+    the garbage collector as values of its object (see qore_program_private::scanMembers()), which counts one
+    reference to each as internal; the reference of a thread that runs them is then seen as a reference from outside
+    the cycle, so a cycle through the handlers is not collected while a thread uses them.
 */
 class QoreThreadEntryHandlers {
 public:
@@ -1279,20 +1299,32 @@ public:
     DLLLOCAL QoreThreadEntryHandlers(const QoreThreadEntryHandlers&) = delete;
     DLLLOCAL QoreThreadEntryHandlers& operator=(const QoreThreadEntryHandlers&) = delete;
 
+    //! references the object and each handler
     DLLLOCAL void ref() {
+        if (on_enter) {
+            on_enter->ref();
+        }
+        if (on_exit) {
+            on_exit->ref();
+        }
         refs.fetch_add(1, std::memory_order_relaxed);
     }
 
-    //! dereferences the object; the last reference releases the handlers, which can run destructors
+    //! dereferences the object and each handler; releasing the handlers can run destructors
     DLLLOCAL void deref(ExceptionSink* xsink) {
+        // the handlers are read into locals before the count is decremented, because another thread can delete the
+        // object as soon as the count reaches zero; the references this object holds on the handlers are released
+        // only after that, so reading the members afterwards would use a deleted object
+        ResolvedCallReferenceNode* e = on_enter;
+        ResolvedCallReferenceNode* x = on_exit;
         if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-            if (on_enter) {
-                on_enter->deref(xsink);
-            }
-            if (on_exit) {
-                on_exit->deref(xsink);
-            }
             delete this;
+        }
+        if (e) {
+            e->deref(xsink);
+        }
+        if (x) {
+            x->deref(xsink);
         }
     }
 
@@ -2918,6 +2950,35 @@ public:
     DLLLOCAL bool setThreadEntryHandler(const ResolvedCallReferenceNode* on_enter,
             const ResolvedCallReferenceNode* on_exit, ExceptionSink* xsink);
 
+    //! sets the Program object that reports the Program's user code to the garbage collector
+    /** Called once the object holds the Program as its private data.  See scan_holder.
+    */
+    DLLLOCAL void setScanHolder(QoreObject& obj);
+
+    //! the Program object no longer holds the Program: its user code is no longer reported to the garbage collector
+    /** Called by qore_object_private_data_released() before the object releases the Program or hands it out, on
+        every path (the destructor, a call that takes the Program from its object, a failed constructor).  Does
+        nothing if the Program has no scan holder.
+    */
+    DLLLOCAL void clearScanHolder();
+
+    //! reports the thread initialization code and the thread entry and exit handlers to a scan
+    /** Called by the scan of the Program object in scan_holder (qore_object_private::scanMembers()).  Only tries
+        tlock: a scan that finds it held makes the scan due again (RSetHelper::containerContended()).
+
+        @return true if the scan must be restarted (see RObject::scanCheck())
+    */
+    DLLLOCAL bool scanMembers(RObject& obj, RSetHelper& rsh);
+
+    //! returns true if thr_init or a thread entry or exit handler needs a scan; tlock must be held
+    DLLLOCAL bool scanValuesNeedScanIntern() const;
+
+    //! updates the garbage collector's view of the Program's code after it has changed; tlock must be held
+    /** @param removed true if a value that needed a scan was given up
+        @param stored the values stored, each still referenced by the Program
+    */
+    DLLLOCAL void scanValuesChangedIntern(bool removed, std::initializer_list<const ResolvedCallReferenceNode*> stored);
+
     //! returns true if the Program has thread entry and exit handlers
     DLLLOCAL bool hasThreadEntryHandlers() const {
         return thread_entry_handlers.load(std::memory_order_relaxed);
@@ -3398,6 +3459,14 @@ public:
     DLLLOCAL static bool setThreadInit(QoreProgram& pgm, const ResolvedCallReferenceNode* n_thr_init,
             ExceptionSink* xsink) {
         return pgm.priv->setThreadInit(n_thr_init, xsink);
+    }
+
+    DLLLOCAL static void setScanHolder(QoreProgram& pgm, QoreObject& obj) {
+        pgm.priv->setScanHolder(obj);
+    }
+
+    DLLLOCAL static void clearScanHolder(QoreProgram& pgm) {
+        pgm.priv->clearScanHolder();
     }
 
     DLLLOCAL static bool setThreadEntryHandler(QoreProgram& pgm, const ResolvedCallReferenceNode* on_enter,

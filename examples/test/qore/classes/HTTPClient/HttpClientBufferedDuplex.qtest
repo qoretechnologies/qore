@@ -358,6 +358,14 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
 
         #! A response small enough to fit in the socket buffers, for the cases that need an early answer
         const SmallResponseSize = 64 * 1024;
+
+        #! The body of an early fault response (a 413 and the like)
+        /** Small enough to be on the wire in full before the peer's close: a peer that closes with request data
+            unread resets the connection, and a reset discards what the peer has not yet transmitted.  A client
+            that is not reading while it writes advertises a receive window of about 64 KiB, so a larger body
+            can be cut short by the reset however the client behaves.
+        */
+        const FaultResponseSize = 2 * 1024;
     }
 
     private {
@@ -384,6 +392,8 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
             \responseBeforeUploadCompletesTest());
         addTestCase("an early fault from a peer that stops reading is delivered",
             \earlyFaultStopsUploadTest());
+        addTestCase("an early fault is delivered whenever the peer closes during the first write of the upload",
+            \repeatedEarlyFaultTest());
         addTestCase("100 Continue responses during the upload are discarded",
             \interimResponsesDuringUploadTest());
         addTestCase("peer EOF during the upload is reported and recovered from", \peerEofDuringUploadTest());
@@ -506,7 +516,7 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
             <PeerPlan>{
                 "status": 413,
                 "framing": "length",
-                "body_size": SmallResponseSize,
+                "body_size": FaultResponseSize,
                 "drain": False,
                 "close_after": True,
             },
@@ -520,7 +530,7 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
         hash<auto> response = hc.send(upload, "POST", "/toobig",
             {"Content-Type": "application/octet-stream"}, True);
         assertEq(413, response.status_code, "the peer's fault is delivered rather than the write error it caused");
-        assertEq(SmallResponseSize, response.body.size(), "the fault response body is delivered");
+        assertEq(FaultResponseSize, response.body.size(), "the fault response body is delivered");
 
         hash<PeerObserved> row = peer.getObserved();
         assertEq("/toobig", row.path, "the peer served the rejected request");
@@ -534,6 +544,37 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
 
         hash<PeerObserved> second_row = peer.getObserved();
         assertEq("/after-fault", second_row.path, "the recovery request reaches the peer");
+    }
+
+    #! The peer's fault is delivered however early the peer closes
+    /** The peer answers 413 as soon as it has read the request headers and closes at once, resetting the
+        connection because the body is unread.  How far the client has got with the upload when that happens
+        depends on how quickly the peer's close completes: it can arrive while the client is still in its first
+        write of the request, before the socket has ever reported that it would block.  The write error that
+        causes must not hide the answer.  Repeated, as each run is a race between the two sides.
+    */
+    repeatedEarlyFaultTest() {
+        for (int i = 0; i < 12; ++i) {
+            BufferedDuplexPeer peer((
+                <PeerPlan>{
+                    "status": 413,
+                    "framing": "length",
+                    "body_size": FaultResponseSize,
+                    "drain": False,
+                    "close_after": True,
+                },
+            ));
+            on_exit peer.stopAndCheck();
+
+            HTTPClient hc = client(peer);
+            on_exit hc.disconnect();
+
+            hash<auto> response = hc.send(upload, "POST", "/toobig",
+                {"Content-Type": "application/octet-stream"}, True);
+            assertEq(413, response.status_code, sprintf("the peer's fault is delivered (run %d)", i));
+            assertEq(FaultResponseSize, response.body.size(),
+                sprintf("the fault response body is delivered (run %d)", i));
+        }
     }
 
     #! "100 Continue" responses arriving mid-upload are discarded and the final response is delivered

@@ -1124,8 +1124,10 @@ with those counts can stand for the life of the process; see "Knowing that a set
 after the value is in the container and while the value is still referenced: `Queue::push()` calls it under the
 queue's lock, since another thread can take the value as soon as the lock is released. **Giving a value up - releasing
 it or handing it out to the caller - must call `RObject::edgesRemoved()` on the holder under the container's lock**;
-see "Values handed out by a container" below. `TreeMapData::put()`, `qore_queue_private::push()` / `insert()` and
-`Http2ClientPollOperationBase::registerStreamQueue()` are the current callers.
+see "Values handed out by a container" below. `TreeMapData::put()`, `qore_queue_private::push()` / `insert()`,
+`Http2ClientPollOperationBase::registerStreamQueue()` and `qore_program_private::scanValuesChangedIntern()` (a
+Program's thread initialization code and thread entry and exit handlers, reported by its Program object; see
+`program-thread-entry-handlers.md`) are the current callers.
 
 **Look the private data up with `getScanPrivateData()`, never with a raising lookup such as `getReferencedPrivateData(key, xsink)`.** Most scanned objects do not have the data being probed for, so a raising lookup creates and discards an exception for nearly every object. Creating an exception captures the call stack, and call stack capture calls external language stack location helpers: the Python helper acquires the GIL. The scan holds r-sections at that point, so a thread that holds the GIL and waits for one of those objects (for example a Python thread whose Qore thread initialization dereferences an object) deadlocks with the scan. Nothing in a scan may raise an exception or call into user or foreign-language code.
 
