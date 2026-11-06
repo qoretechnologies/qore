@@ -1891,22 +1891,7 @@ private:
         ExceptionSink* xsink);
 
     //! Cancel all operations associated with a socket hash
-    /** @param sock_hash the socket's I/O identity hash
-        @param xsink exception sink
-        @param targets the indexes of the I/O threads that can run operations of the socket; with nullptr, every
-        I/O thread is asked (the socket's thread cannot be derived from the hash alone: a wrapper around a socket
-        routes with the key of the socket it wraps; see getRouteKey())
-    */
-    DLLLOCAL int cancelBySocketHash(const std::string& sock_hash, ExceptionSink* xsink,
-        const std::vector<int>* targets = nullptr);
-
-    //! Returns the indexes of the I/O threads that can run operations of a socket
-    /** These are the thread that the socket's operations are registered on, if any, and the thread that its route
-        key selects (see getRouteKey()): all operations on one socket run on one of them.  A cancel or close of the
-        socket then needs only these threads, not every I/O thread.
-    */
-    DLLLOCAL std::vector<int> getSocketThreadIndexes(AbstractPollableIoObjectBase* sock,
-        const std::string& sock_hash);
+    DLLLOCAL int cancelBySocketHash(const std::string& sock_hash, ExceptionSink* xsink);
 
     //! Submit a controller-side close command after socket operations are canceled
     /** The socket is closed on the I/O thread of its operations (see @ref getRouteKey()).
@@ -1922,11 +1907,7 @@ private:
     /** Called without m held, after closeIo(). The current I/O context is updated
         directly; other live contexts receive a WakeSocket command.
     */
-    /** @param sock_hash the socket's I/O identity hash
-        @param sock the closed socket: only the I/O threads that can run operations of the socket are woken (see
-        getSocketThreadIndexes()); with nullptr, every I/O thread is
-    */
-    DLLLOCAL void wakeSocketAfterClose(const std::string& sock_hash, AbstractPollableIoObjectBase* sock = nullptr);
+    DLLLOCAL void wakeSocketAfterClose(const std::string& sock_hash);
 
     //! True if a PollInfo belongs to the socket hash currently being targeted
     DLLLOCAL static bool pollInfoMatchesSocketHash(const PollInfo& pinfo,

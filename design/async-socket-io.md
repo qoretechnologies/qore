@@ -413,14 +413,6 @@ thread than the other operations on its socket.
   thread count cannot change while an I/O thread runs.
 - **Wakes** (`wakeSocket()`) go to the thread recorded in `sock_to_thread` for the socket hash, or without a
   record to the thread the hash routes to.
-- **Cancels and closes of a socket** (`cancel()`, `cancelAndClose()`, `close()`, and the wake after the close,
-  `wakeSocketAfterClose()`) ask only the threads that can run the socket's operations
-  (`AsyncIoControllerPriv::getSocketThreadIndexes()`: the thread recorded in `sock_to_thread` and the thread of the
-  socket's route key), not every I/O thread.  They asked all of them, and `close()` waited for all of them, so each
-  close of a socket woke every I/O thread and its cost grew with the number of I/O threads: a single-threaded
-  `Socket` accept/recv/send/close loop spent most of its CPU in the I/O threads, none of which had work for the
-  socket (measured: about 40% less CPU per request on a Linux x86_64 release build with 8 I/O threads).
-  `cancelBySocketHash()` without targets still asks every thread, for a caller that has only the hash.
 
 ### Timeout Heap
 
