@@ -71,8 +71,9 @@ are fast (see Phases).
 
 ### The route table
 
-An immutable snapshot, replaced as a whole when routes change (copy-on-write; readers take a reference with one atomic
-operation and never block).  Each entry:
+An immutable snapshot, replaced as a whole when routes change (copy-on-write, published with `HttpFastPublished`, see
+[Publishing state without a lock](#publishing-state-without-a-lock): the I/O thread takes a reference to the current
+table without a lock and never waits for a thread that changes the routes).  Each entry:
 
 |!Field|!Meaning
 |`method`|`GET`, and `HEAD`, which is answered with the headers of the `GET` response and no body (see the risks below)
@@ -155,11 +156,48 @@ cells are read one after the other and are not atomic together.
 
 Cells are the right block for a fixed set of answers selected by state.  A `slot` is for a body that itself changes.
 
+### Publishing state without a lock
+
+The I/O thread reads four kinds of state that other threads replace as a whole: the context of the listener's socket
+(its routes and extra headers), the route table, the response of a slot, and the serialized response of a route for a
+second.  None of these reads takes a lock or waits for a thread.  A shared pointer cannot be read lock-free while it is
+replaced (`std::atomic<std::shared_ptr>` is not guaranteed lock-free, and in libstdc++ it spins on a bit of the
+pointer), and a reader that copies a pointer to a value that a writer frees at the same moment has a use-after-free, so
+the first three use `HttpFastPublished<T>` (`include/qore/intern/HttpFastPublished.h`, standard library only), which
+publishes an immutable value with hazard pointers:
+
+- a **reader** (`get()`) announces the holder of the value it is about to copy in the hazard slot of its thread,
+  checks that the holder is still the current one (and retries if a writer replaced it in between, so the read is
+  lock-free, not wait-free), copies the shared pointer, and clears the slot.  No lock, no allocation, a handful of
+  atomic operations.  A thread takes its slot at its first read (a bounded number of compare-and-swap operations) and
+  gives it back when it ends
+- a **writer** (`set()`, `update()`, any thread that is not an I/O thread) takes a mutex that only writers take, makes the
+  new holder current with one atomic exchange, and frees the old holders that no slot announces; one that is announced
+  is freed by a later write.  `update()` is a read-modify-write that no other write can interleave with.  The new value
+  (a copy of a route table, say) is built while only other writers wait, and a replaced value is destroyed by the
+  writer's thread, unless a reader's reference is the last one
+- **more than 1024 reading threads** at the same time (`HttpFastHazards::MaxSlots`, more than the I/O threads and the
+  call dispatcher's 512 workers together) do not get a slot: they read with the writers' mutex, so a read is always
+  correct, but only the first 1024 threads read without a lock.  Only the I/O
+  threads read on the request path; the other readers (`HttpFastRoutes::size()`, `getRouteHits()`,
+  `HttpFastSlot::getAgeUs()`, `Socket::hasHttpFastRoutes()`) use the `...Locked()` variants so that they take no slot
+- the serialized responses are not published: each thread that serves a response keeps its own copy for the current
+  second in a small thread-local cache (16 entries, found by the id of the response, the variant and the second), so
+  a thread never waits for another thread that builds the copy for a new second.  The threads that serve a route each
+  build a copy once per second and variant; a cache entry of a response that is gone stays until it is replaced
+- `HttpFastCell` is a single lock-free atomic and needs none of this
+
+`HttpFastPublished` is tested natively (`examples/test/qore/misc/http_fast_published.cpp`, run by `HttpFastPublished.qtest`;
+buildable with a thread or an address sanitizer): readers check that every value is whole and that the values of one
+writer never go backwards while three writers replace it, memory stays bounded, more threads than slots read correct
+values, and a thread's slot goes back when it ends.  With the hazard check removed the test fails with a
+heap-use-after-free, so it can detect a broken reclamation.  `HttpServerFastRoutes.qtest` adds four connections against
+unpaused writers that replace, remove and add routes and set cells and slots.
+
 ### Slots: state without hand-offs
 
-A `FastResponseSlot` (core class `HttpFastSlot`) holds one serialized response behind a shared pointer that a mutex
-guards for the copy or the exchange of the pointer only; building and destroying a response happen outside the lock, so
-neither side waits for more than that (`std::atomic<std::shared_ptr>` is not guaranteed lock-free).  Qore code (on any
+A `FastResponseSlot` (core class `HttpFastSlot`) holds one serialized response, published with `HttpFastPublished`
+together with the time it was set; building and destroying a response happen on the thread that calls `set()`.  Qore code (on any
 thread) calls `slot.set(hash)`, which validates, serializes and swaps it in; an invalid response throws and the previous
 one is kept.  The I/O thread takes a reference to the current buffer for the duration of the send.  A route's rule or
 `response`/`otherwise` is a response source: a fixed response or a slot.  `HttpServer::addFastRoute()` gives the slot
@@ -189,7 +227,7 @@ Rules in prose are not enough; the design relies on mechanisms that fail a build
 |Interpreter-free core|the code that runs on the I/O thread (`HttpFastRoutes.h`, `HttpFastRoutes.cpp`) cannot use a Qore value, object, program or exception sink, because it includes only the standard library and `qore/common.h` and takes a plain `HttpFastRequestView`|implemented
 |Isolation test|`examples/test/qore/misc/HttpFastRoutesIsolation.qtest` fails if either file includes another Qore header, names an interpreter type, or calls a blocking, I/O or process function (`sleep`, `poll`, `read`, `send`, `getenv`, `printf`, thread and condition-variable primitives, `throw`/`try`/`catch`); a test case feeds the checker bad code to prove it can fail|implemented
 |Lock-free state|the cell is a lock-free atomic (`static_assert`); a stale cell is never read; the value is read with no lock|implemented
-|Leaf locks only|the route table lookup takes one mutex only to copy a shared pointer, and a response's per-second cache takes one while it builds a string of at most 64 KiB once a second; neither is held across a call, and no other lock is taken while holding one|implemented; the isolation test bans the Qore lock types and the blocking thread primitives
+|No lock on the I/O thread|the context of the listener's socket, the route table and the response of a slot are read without a lock (`HttpFastPublished`, hazard pointers); the serialized responses are cached per thread; a writer takes a mutex that no reader with a hazard slot takes, and builds a new table outside the I/O threads' way|implemented; the isolation test applies to `HttpFastPublished.h` too and bans the Qore lock types and the blocking thread primitives; before this, five short mutexes were taken for every request (the socket's context pointer, the context, the route table, a slot, and the per-response cache, which also built a string under its lock once a second)
 |Registration-time validation|the response size cap, header and path syntax, the rule limit, the status codes allowed; an invalid route cannot be registered|implemented
 |Sanitized core tests|the core runs under AddressSanitizer, UBSan and ThreadSanitizer with a thread that changes cells and the route table while another matches|`test/cpp/run-sanitizers.sh` (CI job `check-fast-routes-core-sanitizers`)
 |Glue limited to reading|the only Qore-aware code on the path is the glue in the header-reading operations that builds an `HttpFastRequestView` from the parsed header hash; it only reads values and cannot throw into user code|implemented (`SocketSendAndReadHeaderPollOperation::serveFastRoute()`)
@@ -228,8 +266,8 @@ not part of a route's response: the listener's socket holds it as extra response
 set by `HttpServer` when the listener's `Alt-Svc` value is set or changes), they are shared with the connections
 accepted from the listener (and with the sessions of a QUIC listener), and a route's serialized response is cached
 for each set of extra headers (`HttpFastResponse::getWire()`, keyed by the identity of the immutable
-`HttpFastExtraHeaders` object, at most 8 variants per response).  A request reads the routes and the extra headers
-with one short lock (`HttpFastContext::get()`), so the header costs one pointer comparison per request.  A header that
+`HttpFastExtraHeaders` object, at most 16 serialized responses per thread).  A request reads the routes and the
+extra headers without a lock (`HttpFastContext::get()`), so the header costs one pointer comparison per request.  A header that
 a route has itself (any case) replaces the listener's.  The parity tests compare the header over HTTP/1.1 with TLS and
 over HTTP/2.
 

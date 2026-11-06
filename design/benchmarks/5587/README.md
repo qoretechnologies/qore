@@ -107,3 +107,26 @@ request context, authentication or logging, and does not block) is four times ch
 dispatched normally; a route registered with `addFastRoute()` is cheaper still (about 8 us of server CPU per request,
 `design/http-server-fast-routes.md`).
 
+## Locks on the fast-route path
+
+Before the change the I/O thread took five short mutexes for every fast-route request (the socket's context pointer, the
+context, the route table, a slot, and the per-response cache of the serialized response, which also built a string under
+its lock once a second), and a change of the routes copied the whole table under the lock the I/O threads take.  Now the
+state is published with hazard pointers (`HttpFastPublished`) and the serialized responses are cached per thread, so the
+I/O thread takes no lock (`design/http-server-fast-routes.md`, "Publishing state without a lock").
+
+Method: `HTTP_BENCH_FAST=1 design/benchmarks/5587/run-http.sh ...` serves `GET /` from a fast route; `loadgen.c` (build with
+`gcc -O2 -pthread -o loadgen loadgen.c`; `loadgen <port> <threads> <requests per thread>`) sends keep-alive requests from
+many threads, far more load than the Qore client can.  The same `qore` executable ran with the `libqore` from before the
+change and with the new one (the executable has a `RUNPATH`, so `LD_LIBRARY_PATH` selects the library).  The futex waits
+of the server process are counted with `strace -f -e trace=futex` over the requests (the traced run is slower).
+
+|!Measure|!Before|!After
+|futex waits per 64,000 requests, 4 and 8 I/O threads (three runs each, interleaved)|749 to 1130 (mean about 900)|302 to 405 (mean about 350)
+|requests per second, 16 load threads, no tracing (three runs each; the host was loaded, so about 15% noise)|4 I/O threads: 396,000; 8: 612,000|4 I/O threads: 414,000; 8: 573,000
+|user-space instructions of the server per request|about 14,060|about 14,020
+
+The remaining waits are not from this path (the accept of the 16 connections and other threads).  The throughput did not
+change within the noise, as the old mutexes were short and uncontended; the change makes the guarantee that an I/O thread
+does not wait for a thread that changes the routes, and removes the table copy under the I/O threads' lock.
+

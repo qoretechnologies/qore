@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class HttpFastPublishedTest
+
+#! Runs the native test of HttpFastPublished, the lock-free publication of the state of the HTTP fast routes
+/** The async I/O threads read the routes, the listener's context and the responses of a fast route without a lock
+    or a wait; the code that changes them runs on other threads.  The native test (qore-http-fast-published-test, next
+    to the qore binary) checks that readers get consistent values while writers replace them, that replaced values
+    are freed, that more reading threads than hazard slots still read correct values, and that a thread gives its
+    slot back when it ends.  It has no dependency on libqore, so it can be built with a thread or address sanitizer
+    (see the comment in http_fast_published.cpp).
+*/
+class HttpFastPublishedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpFastPublishedTest", "1.0", \ARGV) {
+        addTestCase("native test of HttpFastPublished", \testNative());
+        set_return_value(main());
+    }
+
+    testNative() {
+        # the executable is next to the qore binary that runs the test
+        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string native = ENV.QORE_HTTP_FAST_PUBLISHED_TEST ?? dirname(qore_exe) + "/qore-http-fast-published-test";
+        if (!is_file(native)) {
+            testSkip("the native test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS: "), output);
+    }
+}

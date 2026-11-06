@@ -1722,30 +1722,36 @@ struct qore_socket_private : public QoreReferenceCounter {
 
         @since %Qore 3.0
     */
-    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContext() const {
-        std::lock_guard<std::mutex> lg(fast_routes_lock);
-        return fast_ctx;
+    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContext() const noexcept {
+        return fast_ctx.get();
+    }
+
+    //! Returns the context with the mutex of the writers, for a thread that is not an I/O thread
+    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContextLocked() const {
+        return fast_ctx.getLocked();
     }
 
     //! Returns the context, creating an empty one if there is none
     DLLLOCAL std::shared_ptr<HttpFastContext> getOrCreateFastContext() {
-        std::lock_guard<std::mutex> lg(fast_routes_lock);
-        if (!fast_ctx) {
-            fast_ctx = std::make_shared<HttpFastContext>();
+        std::shared_ptr<HttpFastContext> ctx = fast_ctx.getLocked();
+        if (ctx) {
+            return ctx;
         }
-        return fast_ctx;
+        fast_ctx.update([](const std::shared_ptr<HttpFastContext>& cur) {
+            return cur ? cur : std::make_shared<HttpFastContext>();
+        });
+        return fast_ctx.getLocked();
     }
 
     //! Makes this socket use the given context (the socket accepted from a listener shares the listener's)
     DLLLOCAL void setFastContext(std::shared_ptr<HttpFastContext> ctx) {
-        std::lock_guard<std::mutex> lg(fast_routes_lock);
-        fast_ctx = std::move(ctx);
+        fast_ctx.set(std::move(ctx));
     }
 
-    //! Returns the routes of the socket, or nullptr
+    //! Returns the routes of the socket, or nullptr (for a thread that is not an I/O thread)
     DLLLOCAL std::shared_ptr<HttpFastRoutes> getFastRoutes() const {
-        std::shared_ptr<HttpFastContext> ctx = getFastContext();
-        return ctx ? ctx->get().routes : nullptr;
+        std::shared_ptr<HttpFastContext> ctx = getFastContextLocked();
+        return ctx ? ctx->getLocked().routes : nullptr;
     }
 
     //! Sets the routes of the socket
@@ -1754,8 +1760,8 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
 private:
-    mutable std::mutex fast_routes_lock;
-    std::shared_ptr<HttpFastContext> fast_ctx;
+    //! the context is published as a whole: the I/O threads read it without a lock
+    HttpFastPublished<HttpFastContext> fast_ctx;
 
 public:
 

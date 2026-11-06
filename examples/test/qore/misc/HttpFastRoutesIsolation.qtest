@@ -24,6 +24,7 @@ class HttpFastRoutesIsolationTest inherits QUnit::Test {
         #! the files that the rule applies to, relative to the repository root
         const Files = (
             "include/qore/intern/HttpFastRoutes.h",
+            "include/qore/intern/HttpFastPublished.h",
             "lib/HttpFastRoutes.cpp",
             "include/qore/intern/HttpFastRequest.h",
             "lib/HttpFastRequest.cpp",
@@ -33,6 +34,7 @@ class HttpFastRoutesIsolationTest inherits QUnit::Test {
         const AllowedQoreIncludes = (
             "qore/common.h",
             "qore/intern/HttpFastRoutes.h",
+            "qore/intern/HttpFastPublished.h",
             "qore/intern/HttpFastRequest.h",
         );
 

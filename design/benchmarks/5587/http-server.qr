@@ -46,6 +46,10 @@ server.setHandler("handler", "", NOTHING, handler);
 server.setDefaultHandler("handler", handler);
 server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": Port});
 server.waitForAsyncIo();
+# with HTTP_BENCH_FAST=1 "GET /" is a fast route: the async I/O thread answers it without calling Qore code
+if (ENV.HTTP_BENCH_FAST == "1") {
+    server.addFastRoute("/", {"public": True, "response": {"code": 200, "body": "ok", "content_type": "text/plain"}});
+}
 printf("ready\n");
 stdout.sync();
 handler.waitForQuit();

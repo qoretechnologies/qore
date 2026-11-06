@@ -2770,6 +2770,11 @@ target_link_libraries(qore-utf8-validation-test PRIVATE libqore ${ICONV_LIBRARY}
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+# the lock-free publication of the state of the HTTP fast routes (HttpFastPublished) uses only the C++ standard
+# library, so the test needs no libqore
+add_executable(qore-http-fast-published-test examples/test/qore/misc/http_fast_published.cpp)
+target_include_directories(qore-http-fast-published-test PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-http-fast-published-test PRIVATE Threads::Threads)
 add_executable(qore-asn1-time-test EXCLUDE_FROM_ALL
     examples/test/qore/classes/SSLCertificate/asn1_time.cpp)
 target_include_directories(qore-asn1-time-test PRIVATE

@@ -64,6 +64,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         addTestCase("a listener added later has the routes", \testLateListener());
         addTestCase("Socket::setHttpFastRoutes()", \testSocketRoutes());
         addTestCase("routes and cells change while a client sends requests", \testConcurrentChanges());
+        addTestCase("many connections while routes, slots and cells change without pause", \testHeavyChurn());
         addTestCase("over TLS", \testTls());
         addTestCase("counters", \testCounters());
         set_return_value(main());
@@ -751,6 +752,130 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         done.waitForZero(Timeout);
         assertEq(0, errors.size(), "no torn or unexpected response: " + (errors.size() ? errors.get() : ""));
         assertEq(400, fast);
+    }
+
+    #! Several connections send requests while other threads replace, remove and add routes and set cells and slots
+    /** The I/O threads read the routes, the context of the listener, the responses of the slots and their serialized
+        responses without a lock while the writers replace them (HttpFastPublished).  Every response must be whole and
+        one that a writer published; the requests for the route that is removed and added are answered by the route or
+        by the handler, and the handler is called exactly for those.
+
+        The writers make several changes for every request that a client is about to send, at the moment that it sends
+        it, so that the changes race the processing of the requests; each waits for the clients' tokens, so that it
+        cannot starve the server threads (under valgrind, or on a loaded machine, threads that spin would).
+    */
+    testHeavyChurn() {
+        int Clients = 4;
+        int Requests = 400;
+
+        FastCell ready(1);
+        hash<auto> hc = {
+            "public": True,
+            "rules": (
+                {"cell": ready, "op": "==", "value": 1, "response": textResponse(200, "ready")},
+                {"cell": ready, "op": "==", "value": 0, "response": textResponse(503, "starting")},
+            ),
+        };
+        hs.addFastRoute("/hc", hc);
+        on_exit hs.removeFastRoute("/hc");
+        FastResponseSlot slot();
+        slot.set({"code": 200, "body": "slot-0", "content_type": "text/plain"});
+        hs.addFastRoute("/hcs", {"public": True, "response": slot});
+        on_exit hs.removeFastRoute("/hcs");
+        hash<auto> hcg = {"public": True, "response": textResponse(200, "here")};
+        hs.addFastRoute("/hcg", hcg);
+        on_exit hs.removeFastRoute("/hcg");
+
+        Queue errors();
+        # a client puts a token in each queue before each group of requests; a negative token ends the writer
+        Queue cell_tokens();
+        Queue route_tokens();
+        Counter writers_done();
+        # one writer sets the cell and the slot
+        writers_done.inc();
+        background sub () {
+            on_exit writers_done.dec();
+            try {
+                int i = 0;
+                while (cell_tokens.get() >= 0) {
+                    for (int k = 0; k < 10; ++k, ++i) {
+                        ready.set(i & 1);
+                        slot.set({"code": 200 + (i & 1), "body": "slot-" + string(i & 1),
+                            "content_type": "text/plain"});
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(get_exception_string(ex));
+            }
+        }();
+        # another replaces a route, and removes and adds another
+        writers_done.inc();
+        background sub () {
+            on_exit writers_done.dec();
+            try {
+                while (route_tokens.get() >= 0) {
+                    for (int k = 0; k < 5; ++k) {
+                        hs.addFastRoute("/hc", hc);
+                        hs.removeFastRoute("/hcg");
+                        hs.addFastRoute("/hcg", hcg);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(get_exception_string(ex));
+            }
+        }();
+
+        int start_calls = FastRouteTestHandler::calls.getCount();
+        Counter clients_done();
+        Queue by_handler();
+        for (int n = 0; n < Clients; ++n) {
+            clients_done.inc();
+            background sub () {
+                on_exit clients_done.dec();
+                try {
+                    Socket c = connect();
+                    # the first request of the connection is not for a route: the handler answers it
+                    hash<auto> r = request(c, "GET", "/warm-up");
+                    if (r.body != "handler") {
+                        errors.push(sprintf("unexpected warm-up response %y", r));
+                    }
+                    int handler = 0;
+                    for (int i = 0; i < Requests; ++i) {
+                        cell_tokens.push(0);
+                        route_tokens.push(0);
+                        r = request(c, "GET", "/hc");
+                        if (!((r.code == 200 && r.body == "ready") || (r.code == 503 && r.body == "starting"))) {
+                            errors.push(sprintf("unexpected /hc response %y", r));
+                        }
+                        r = request(c, "GET", "/hcs");
+                        if (!((r.code == 200 && r.body == "slot-0") || (r.code == 201 && r.body == "slot-1"))) {
+                            errors.push(sprintf("unexpected /hcs response %y", r));
+                        }
+                        r = request(c, "GET", "/hcg");
+                        if (r.code == 200 && r.body == "handler") {
+                            ++handler;
+                        } else if (!(r.code == 200 && r.body == "here")) {
+                            errors.push(sprintf("unexpected /hcg response %y", r));
+                        }
+                    }
+                    by_handler.push(handler);
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(get_exception_string(ex));
+                }
+            }();
+        }
+        clients_done.waitForZero();
+        cell_tokens.push(-1);
+        route_tokens.push(-1);
+        writers_done.waitForZero();
+
+        assertEq(0, errors.size(), "no torn or unexpected response: " + (errors.size() ? errors.get() : ""));
+        int answered_by_handler = Clients;
+        while (by_handler.size()) {
+            answered_by_handler += by_handler.get();
+        }
+        assertEq(answered_by_handler, FastRouteTestHandler::calls.getCount() - start_calls,
+            "the handler is called for the warm-up requests and for the requests for the route that was absent");
     }
 
     testTls() {
