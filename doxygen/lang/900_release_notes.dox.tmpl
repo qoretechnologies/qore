@@ -1840,6 +1840,10 @@
       epoch were negative (ex: <tt>1969-12-31T20:15:25-10:00</tt>)
     - the ISO week of the last days of a year with 53 ISO weeks that starts on a Thursday was reported as week 1 of
       the next year (ex: 2004-12-31 is <tt>2004-W53-5</tt>)
+    - @ref Util::get_random_string() "get_random_string()" read \c /dev/urandom, so it raised
+      \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, and a
+      @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" could not be constructed in a sandboxed service; it
+      now uses @ref Qore::get_random_bytes()
 
     @section qore_2_2_1 Qore 2.2.1
 

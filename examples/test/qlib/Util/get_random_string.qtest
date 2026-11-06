@@ -15,6 +15,8 @@ public class GetRandomStringTest inherits QUnit::Test {
         addTestCase("Length tests", \test_length());
         addTestCase("Level tests", \test_levels());
         addTestCase("Randomness tests", \test_randomness());
+        addTestCase("Alphabet tests", \test_alphabet());
+        addTestCase("Sandbox tests", \test_sandbox());
         set_return_value(main());
     }
 
@@ -64,6 +66,66 @@ public class GetRandomStringTest inherits QUnit::Test {
 
         string shigh = get_random_string(100, 10);
         assertTrue(shigh =~ /^[\x20-\x7E]+$/);
+    }
+
+    #! the characters of each level are exactly those of its alphabet, and every one of them is produced
+    test_alphabet() {
+        string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        string lower = "abcdefghijklmnopqrstuvwxyz";
+        string digits = "0123456789";
+        # the symbols of level 4: the printable ASCII characters from "!" to "/", ":" to "@" and "{" to "~"
+        string symbols;
+        for (int c = 33; c <= 47; ++c) {
+            symbols += chr(c);
+        }
+        for (int c = 58; c <= 64; ++c) {
+            symbols += chr(c);
+        }
+        for (int c = 123; c <= 126; ++c) {
+            symbols += chr(c);
+        }
+        list<string> alphabets = (upper, upper + lower, upper + lower + digits, upper + lower + digits + symbols);
+        for (int level = 1; level <= 4; ++level) {
+            string alphabet = alphabets[level - 1];
+            string s = get_random_string(alphabet.size() * 300, level);
+            hash<string, int> seen;
+            for (int i = 0; i < s.size(); ++i) {
+                string c = s[i];
+                assertTrue(alphabet.find(c) >= 0, sprintf("level %d: %y is not in the alphabet", level, c));
+                ++seen{c};
+            }
+            # 300 characters of each expected: a missing character would mean a biased or truncated range
+            assertEq(alphabet.size(), seen.size(), sprintf("level %d: every character of the alphabet is produced",
+                level));
+            foreach string c in (keys seen) {
+                assertTrue(seen{c} > 150 && seen{c} < 450,
+                    sprintf("level %d: %y occurred %d times, 300 expected", level, c, seen{c}));
+            }
+        }
+    }
+
+    #! the function reads no file: it works for a program whose sandbox denies the filesystem (qore#5588)
+    test_sandbox() {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        p.parse("%requires Util\nstring sub rnd(int len, int level) { return get_random_string(len, level); }\n"
+            "string sub rnd_default() { return get_random_string(); }\n"
+            "sub open_urandom() { ReadOnlyFile f(\"/dev/urandom\"); }", "get-random-string-sandbox");
+
+        # the sandbox denies the file that the old implementation read
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), "open_urandom");
+        string s = p.callFunction("rnd_default");
+        assertEq(15, s.size());
+        assertTrue(s =~ /^[A-Za-z0-9]+$/);
+        for (int level = 1; level <= 4; ++level) {
+            string r = p.callFunction("rnd", 40, level);
+            assertEq(40, r.size(), "level " + level);
+            assertTrue(r =~ /^[\x21-\x7E]+$/, "level " + level);
+        }
+        assertTrue(p.callFunction("rnd", 20, 3) != p.callFunction("rnd", 20, 3), "two calls differ");
+        assertEq(0, p.callFunction("rnd", 0, 3).size());
     }
 
     test_randomness() {
