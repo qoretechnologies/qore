@@ -29,6 +29,10 @@ class ExecModeHarnessTest inherits QUnit::Test {
         string function;
         #! functions called by name, one of them running a loop
         string loop;
+        #! a %modern program with a function that is not %modern, which tiered execution runs on the AST tier
+        string old_style;
+        #! closures, which are lowered to IR when first called, not when their Program is committed
+        string closures;
         #! a script with a parse error
         string parse_error;
         #! a script that prints on stdout and stderr and exits with status 3
@@ -60,6 +64,13 @@ class ExecModeHarnessTest inherits QUnit::Test {
         loop = write("loop.q", "%modern\nint sub hot(int n) {\n    int t = 0;\n    for (int i = 0; i < n; ++i) {\n"
             "        t += i;\n    }\n    return t;\n}\nint sub f(int n) {\n    return hot(n);\n}\n"
             "for (int i = 0; i < 3; ++i) {\n    printf(\"%d\\n\", f(5000));\n}\n");
+        closures = write("closures.q", "%modern\ncode<int(int)> c = int sub (int i) {\n    return i + 1;\n};\n"
+            "int sub f(int i) {\n    code<int(int)> d = int sub (int j) {\n        return j * 2;\n    };\n"
+            "    return d(i);\n}\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += c(i) + f(i);\n}\n"
+            "printf(\"%d\\n\", t);\n");
+        # a %modern program with a function that is not %modern, as when old-style code is loaded into it
+        old_style = write("old-style.q", "%modern\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += f(i);\n}\n"
+            "printf(\"%d\\n\", t);\n%push-parse-options\n%old-style\nint sub f(int $i) {\n    return $i + 1;\n}\n");
         parse_error = write("parse-error.q", "%modern\nint x = ;\n");
         output = write("output.q", "%modern\nprintf(\"out\\n\");\nstderr.print(\"err\\n\");\nexit(3);\n");
         loader_warning = write("loader-warning.q", sprintf("%%modern\nprintf(\"out\\n\");\nstderr.print(%y);\n"
@@ -168,6 +179,40 @@ class ExecModeHarnessTest inherits QUnit::Test {
             "--exec-mode=tiered %s", env, qore_bin, loop)));
         assertEq("6\n", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin,
             function)));
+
+        # a closure runs on the IR tier from its first call, which lowers it: the call that promotes a function to the IR
+        # tier runs on it
+        r = ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin, closures), True,
+            ExecModeHarness::IRTierEnv);
+        assertEq("12\n", r.out);
+        assertEq((), (select r.trace, ExecModeHarness::is_ast_trace_line($1)), r.trace.join("\n"));
+        assertEq("12\n", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin,
+            closures)));
+
+        # negative: code that runs on the AST interpreter in an IR tier run fails it; the trace is not output
+        r = ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin, old_style), True,
+            ExecModeHarness::IRTierEnv);
+        assertEq("6\n", r.out);
+        assertTrue((select r.trace, ExecModeHarness::is_ast_trace_line($1)).size() > 0, r.trace.join("\n"));
+        assertThrows("EXEC-MODE-IR-ERROR", "the IR tier run ran code on the AST interpreter",
+            \ExecModeHarness::check_ir_tier(), (r,));
+        assertThrows("EXEC-MODE-IR-ERROR", \ExecModeHarness::run_ir_tier(), (sprintf("%s %s -b --exec-mode=tiered "
+            "%s", env, qore_bin, old_style),));
+        assertTrue(ExecModeHarness::is_ast_trace_line("[ir-ast-tier] f"));
+        assertTrue(ExecModeHarness::is_ast_trace_line("[ir-fallback] lowering: x"));
+        assertTrue(ExecModeHarness::is_trace_line("[ir-fallback] lowering: x"));
+        assertFalse(ExecModeHarness::is_ast_trace_line("[BG-JIT] compiled 'f@1_0' and promoted to JIT tier"));
+        foreach string line in (("[ir-ast-tier] f", "[ir-fallback] lowering: unsupported")) {
+            hash<ExecModeHarness::ModeRunResult> sr = <ExecModeHarness::ModeRunResult>{
+                "mode": "tiered",
+                "out": "",
+                "stdout": "",
+                "stderr": "",
+                "trace": (line,),
+                "rc": 0,
+            };
+            assertThrows("EXEC-MODE-IR-ERROR", \ExecModeHarness::check_ir_tier(), (sr,), line);
+        }
 
         # negative: the IR tier is a tier of tiered execution
         foreach string mode in (("ast", "ir", "jit")) {

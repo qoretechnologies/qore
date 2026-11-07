@@ -49,10 +49,19 @@ copy hooks in all four execution modes.
 
 ## Tiered Execution
 
-Tiered mode starts functions on AST and promotes by call count:
+Tiered mode lowers `%modern` functions to IR when their Program is committed, so
+they start on the IR tier; a function that is not lowered then (a closure, for
+example) starts on AST. Functions are promoted by call count:
 
-- AST -> IR after `--jit-ir-threshold` calls.
+- AST -> IR after `--jit-ir-threshold` calls; the call that promotes the function
+  runs on the IR tier itself (`UserVariantBase::evalTiered()`), so with a threshold
+  of 1 every call runs on the IR tier.
 - IR -> JIT after `--jit-jit-threshold` calls.
+
+With `QORE_IR_TRACE_AST_TIER` set, every call that tiered execution runs on the
+AST tier is reported on stderr, and `QORE_IR_TRACE_FALLBACK` reports every fall
+back from IR to AST; `ExecModeHarness::run_ir_tier()` fails a test run that shows
+either, so a test of the IR tier cannot pass on the AST interpreter.
 
 Native compilation always runs asynchronously on a background thread; promotion
 is non-blocking, so a function keeps executing through the IR interpreter until

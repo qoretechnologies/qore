@@ -51,9 +51,11 @@ module ExecModeHarness {
       tiered runs therefore run nearly all code as native code, as JIT runs do, and top-level code, which runs once,
       is not compiled with tiered execution
     - run_ir_tier() runs a command with <tt>--exec-mode=tiered</tt> and a JIT threshold that no call or loop reaches
-      (IRTierEnv), so that every function that can be lowered to IR runs on the IR tier in every call; nothing may be
-      compiled to native code; a test that runs its script in every execution mode runs it this way as well, since
-      the tiered run of ExecModes hardly runs the IR tier
+      (IRTierEnv), so that every function runs on the IR tier in every call, and proves it: nothing may be compiled
+      to native code, no code may fall back from the IR tier to the AST interpreter (\c QORE_IR_TRACE_FALLBACK), and
+      no call may run on the AST tier (\c QORE_IR_TRACE_AST_TIER), as a function that cannot be lowered to IR would;
+      a test that runs its script in every execution mode runs it this way as well, since the tiered run of ExecModes
+      hardly runs the IR tier
     - \c QORE_JIT_TIMING traces every native compilation on stderr, and the trace is checked: native code must have
       been compiled with <tt>--exec-mode=jit</tt> and <tt>--exec-mode=tiered</tt> (NativeCheck::JitAndTiered, the
       default), and nothing may be compiled with <tt>--exec-mode=ast</tt> or <tt>--exec-mode=ir</tt>; a run whose
@@ -80,10 +82,11 @@ public const TraceEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_TH
 
 #! the environment that keeps tiered execution on the IR tier, traced: see run_ir_tier()
 /** Functions are lowered to IR at once, and the JIT threshold, which is also the loop iteration count that requests
-    the compilation of a function running a loop (on-stack replacement), is never reached
+    the compilation of a function running a loop (on-stack replacement), is never reached; every fall back from the
+    IR tier to the AST interpreter and every call run on the AST tier is traced
 */
 public const IRTierEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1000000000 "
-    "QORE_JIT_TIMING=1";
+    "QORE_JIT_TIMING=1 QORE_IR_TRACE_FALLBACK=1 QORE_IR_TRACE_AST_TIER=1";
 
 #! the name of the IR tier run in test output: tiered execution with IRTierEnv
 public const IRTierName = "tiered-ir";
@@ -145,9 +148,18 @@ public hashdecl ModeRunResult {
     int rc;
 }
 
-#! returns True if the line is a line of the native compilation trace
+#! returns True if the line is a line of the native compilation trace, or of the IR tier trace (see IRTierEnv)
 public bool sub is_trace_line(string line) {
-    return line =~ /^\[(BG-)?JIT\] /;
+    return line =~ /^\[(BG-)?JIT\] /
+        || is_ast_trace_line(line);
+}
+
+#! returns True if the line reports code that ran on the AST interpreter in an IR tier run (see IRTierEnv)
+/** <tt>[ir-fallback] <i>reason</i></tt>: code fell back from the IR tier (\c QORE_IR_TRACE_FALLBACK);
+    <tt>[ir-ast-tier] <i>name</i></tt>: a call ran on the AST tier (\c QORE_IR_TRACE_AST_TIER)
+*/
+public bool sub is_ast_trace_line(string line) {
+    return line =~ /^\[ir-(fallback|ast-tier)\] /;
 }
 
 #! returns True if the line is a warning of the module loader that a module is loaded from its source
@@ -250,11 +262,12 @@ public sub check_native(hash<ModeRunResult> r, *NativeCheck check) {
     }
 }
 
-#! checks that a run of run_ir_tier() compiled no code to native code
+#! checks that a run of run_ir_tier() ran its code on the IR tier: nothing was compiled to native code or ran on the AST interpreter
 /** @param r the result of the run
 
     @throw EXEC-MODE-HARNESS-ERROR the command that was run did not give <tt>--exec-mode=tiered</tt>
     @throw EXEC-MODE-NATIVE-ERROR code was compiled to native code
+    @throw EXEC-MODE-IR-ERROR code fell back from the IR tier to the AST interpreter, or a call ran on the AST tier
 */
 public sub check_ir_tier(hash<ModeRunResult> r) {
     if (r.mode != "tiered") {
@@ -266,11 +279,16 @@ public sub check_ir_tier(hash<ModeRunResult> r) {
         throw "EXEC-MODE-NATIVE-ERROR", sprintf("the IR tier run compiled code to native code:\n%s",
             native.join("\n"));
     }
+    list<string> ast = select r.trace, is_ast_trace_line($1);
+    if (ast) {
+        throw "EXEC-MODE-IR-ERROR", sprintf("the IR tier run ran code on the AST interpreter:\n%s",
+            ast.join("\n"));
+    }
 }
 
-#! runs a command with tiered execution on the IR tier, checks that no code was compiled, and returns its output
-/** The command runs with IRTierEnv: functions run on the IR tier in every call (a function that cannot be lowered to
-    IR runs on the AST tier)
+#! runs a command with tiered execution on the IR tier, checks that its code ran on the IR tier, and returns its output
+/** The command runs with IRTierEnv: functions run on the IR tier in every call; a function that cannot be lowered to
+    IR would run on the AST tier, which the trace shows, so the run fails (see check_ir_tier())
 
     @param command the shell command; it runs qore with <tt>--exec-mode=tiered</tt> and must not redirect stderr,
     which holds the trace
@@ -278,7 +296,7 @@ public sub check_ir_tier(hash<ModeRunResult> r) {
     @return the output on stdout followed by the output on stderr that is not part of the trace
 
     @throw EXEC-MODE-HARNESS-ERROR the command has no <tt>--exec-mode=tiered</tt> option
-    @throw EXEC-MODE-NATIVE-ERROR see check_ir_tier()
+    @throw EXEC-MODE-NATIVE-ERROR, EXEC-MODE-IR-ERROR see check_ir_tier()
 */
 public string sub run_ir_tier(string command) {
     hash<ModeRunResult> r = run_command(command, NOTHING, IRTierEnv);
