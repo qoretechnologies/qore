@@ -8562,7 +8562,15 @@ next_instruction:
                             // a local holding a reference reads as the referenced lvalue: the slot holds the
                             // reference itself (see below), which is read every time, as the AST interpreter reads
                             // it; the slot of an IR-only local, such as a parameter, is the variable itself
-                            out = cached_val.getInternalNode()->eval(xsink);
+                            // the lvalue is read as a read of the variable reads it, which does not create a missing
+                            // hash key or list element (see qore_local_reference_eval())
+                            bool ref_needs_deref = true;
+                            out = qore_local_reference_eval(
+                                *reinterpret_cast<const ReferenceNode*>(cached_val.getInternalNode()),
+                                ref_needs_deref, xsink);
+                            if (!ref_needs_deref && out.needsRef()) {
+                                out = out.refSelf();
+                            }
                             if (xsink && *xsink) {
                                 out.discard(xsink);
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);

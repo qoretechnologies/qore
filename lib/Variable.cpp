@@ -3900,6 +3900,32 @@ void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const Q
     refTypeInfo = resolvedRefTypeInfo;
 }
 
+// documented in LocalVar.h
+QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
+    LocalRefHelper<LocalVarValue> helper(nullptr, const_cast<ReferenceNode&>(ref), xsink);
+    if (!helper) {
+        return QoreValue();
+    }
+
+    lvalue_ref* lr = lvalue_ref::get(&ref);
+    ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreValue rv = erh.takeValue(needs_deref);
+    if (rv.needsEval()) {
+        bool ref_needs_deref = needs_deref;
+        bool eval_needs_deref = true;
+        QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+        if (ref_needs_deref) {
+            rv.discard(xsink);
+        }
+        needs_deref = eval_needs_deref;
+        return *xsink ? QoreValue() : resolved;
+    }
+    return rv;
+}
+
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* refTypeInfo) const {
     //printd(5, "LocalVarValue::getLValue() this: %p type: '%s' %d assigned: %d ti: '%s' rti: '%s' (%p)\n", this,
