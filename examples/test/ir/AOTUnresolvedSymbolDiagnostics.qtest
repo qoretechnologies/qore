@@ -9,10 +9,13 @@
 #   AOT slot map registration failed for '...processEvent(hash<Qore::Ncurses::InputEvent>)':
 #   unsupported AOT slot metadata; source fallback is disabled
 # which suggested that a binary-module hashdecl in a signature could not be handled.  The real cause was an installed
-# binary module older than the one the module was compiled against.
+# binary module older than the one the module was compiled against: it lacked the enum member
+# Qore::Ncurses::InputType::Paste that the method body uses, and the error did not name it.
 #
 # - binary-module types in signatures (hashdecl parameter and return types, *hash<X>, list<hash<X>>, class
 #   parameters, closures taking the hashdecl) behave in every execution mode as in the AST;
+# - a compiled module whose provider lacks an enum member, an enum, a class or a hashdecl it was compiled against
+#   names the missing symbol when it is rejected;
 # - a cast to a class that the provider no longer declares raises an error in every mode instead of passing the
 #   value through unchecked.
 
@@ -35,6 +38,8 @@ class AOTUnresolvedSymbolDiagnosticsTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("AOTUnresolvedSymbolDiagnosticsTest", "1.0", \ARGV) {
         addTestCase("binary-module types in signatures behave as in the AST", \binaryModuleTypes());
+        addTestCase("a missing enum member or enum is named", \missingEnum());
+        addTestCase("a missing class or hashdecl is named", \missingClassOrHashdecl());
         addTestCase("a cast to a missing class raises an error", \castToMissingClass());
         set_return_value(main());
     }
@@ -91,16 +96,20 @@ class AOTUnresolvedSymbolDiagnosticsTest inherits QUnit::Test {
         return dir;
     }
 
-    #! writes the provider module: the version the consumer is compiled against and an older one without NewBox
+    #! writes the provider module: the version the consumer is compiled against and an older one without some symbols
     private writeProviders(string dir) {
         string header = "%modern\nmodule Prov { version = \"1.0\"; desc = \"provider\"; author = \"Qore\"; "
             "license = \"MIT\"; }\n";
         writeText(dir + "/provider-new/Prov.qm", header + "public namespace Prov {
+    public enum Kind { A = 0, B = 1 }
+    public enum NewKind { X = 0 }
+    public hashdecl NewEvent { int y = 2; }
     public class Box { int get() { return 1; } }
     public class NewBox { int get() { return 2; } }
 }
 ");
         writeText(dir + "/provider-old/Prov.qm", header + "public namespace Prov {
+    public enum Kind { A = 0 }
     public class Box { int get() { return 1; } }
 }
 ");
@@ -163,6 +172,77 @@ printf(\"%s %s\\n\", YamlTypes::summary(l), l[0].fullType());
             hash<auto> res = runQore(dir, modulePath(dir + "/compiled"), ("--exec-mode=" + mode, probe));
             assertEq(0, res.status, mode + ": " + res.output);
             assertEq(ref.output, res.output, mode);
+        }
+    }
+
+    missingEnum() {
+        string dir = makeDirs("aot-missing-enum-");
+        on_exit remove_tree(dir);
+        writeProviders(dir);
+        compileModule(dir, "EnumCons", "%requires Prov
+public namespace EnumCons {
+    public int sub member(int v) { return v == Prov::Kind::B ? 1 : 0; }
+    public int sub enumType(int v) { return v == Prov::NewKind::X ? 1 : 0; }
+}
+", modulePath(dir + "/provider-new"));
+
+        # against the provider it was compiled against, the module works in every mode
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-new"), ("--exec-mode=" + mode,
+                "-ne", "%requires EnumCons\nprintf(\"%d %d\\n\", EnumCons::member(1), EnumCons::enumType(0));"));
+            assertEq(0, res.status, mode + ": " + res.output);
+            assertEq("1 1\n", res.output, mode);
+        }
+
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"), ("--exec-mode=" + mode,
+                "-ne", "%requires EnumCons\nprintf(\"%d\\n\", EnumCons::member(1));"));
+            assertNeq(0, res.status, mode + ": " + res.output);
+            assertTrue(res.output =~ /enum member 'Prov::Kind::B' could not be resolved/,
+                mode + ": the error names the missing enum member: " + res.output);
+            assertTrue(res.output =~ /older than the one compiled against/, mode + ": " + res.output);
+            assertTrue(res.output =~ /modules loaded here: .*Prov/, mode + ": " + res.output);
+
+            res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"), ("--exec-mode=" + mode,
+                "-ne", "%requires EnumCons\nprintf(\"%d\\n\", EnumCons::enumType(0));"));
+            assertNeq(0, res.status, mode + ": " + res.output);
+            assertTrue(res.output =~ /enum 'Prov::NewKind' could not be resolved/,
+                mode + ": the error names the missing enum: " + res.output);
+        }
+    }
+
+    missingClassOrHashdecl() {
+        string dir = makeDirs("aot-missing-class-");
+        on_exit remove_tree(dir);
+        writeProviders(dir);
+        compileModule(dir, "ClassCons", "%requires Prov
+public namespace ClassCons {
+    public int sub scoped() { Prov::NewBox b(); return b.get(); }
+    public int sub newObject() { object o = new Prov::NewBox(); return o.get(); }
+    public int sub newHash() { hash<auto> h = new hash<Prov::NewEvent>(); return h.y; }
+}
+", modulePath(dir + "/provider-new"));
+
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-new"), ("--exec-mode=" + mode,
+                "-ne", "%requires ClassCons\nprintf(\"%d %d %d\\n\", ClassCons::scoped(), ClassCons::newObject(), "
+                "ClassCons::newHash());"));
+            assertEq(0, res.status, mode + ": " + res.output);
+            assertEq("2 2 2\n", res.output, mode);
+        }
+
+        foreach string mode in (Modes) {
+            foreach string func in ("scoped", "newObject") {
+                hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
+                    ("--exec-mode=" + mode, "-ne", "%requires ClassCons\nprintf(\"%d\\n\", ClassCons::" + func + "());"));
+                assertNeq(0, res.status, mode + " " + func + ": " + res.output);
+                assertTrue(res.output =~ /Prov::NewBox/, mode + " " + func + ": the error names the class: "
+                    + res.output);
+            }
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
+                ("--exec-mode=" + mode, "-ne", "%requires ClassCons\nprintf(\"%d\\n\", ClassCons::newHash());"));
+            assertNeq(0, res.status, mode + ": " + res.output);
+            assertTrue(res.output =~ /Prov::NewEvent/, mode + ": the error names the hashdecl: " + res.output);
         }
     }
 

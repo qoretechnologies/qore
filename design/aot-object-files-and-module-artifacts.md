@@ -549,6 +549,26 @@ reexport conflicts. This correction does not require recompiling existing qmods.
 Failed reexports propagate their error before the consumer namespace is merged;
 they must not be cleared and presented as a successful partial module import.
 
+### A Provider Older Than the One Compiled Against
+
+The preflight checks that each provider is present, not that it is the build the
+qmod was compiled against: a provider's version string does not change with every
+declaration it adds. A qmod loaded with an older provider (for example an
+installed binary module that predates the module source the qmod was built from)
+therefore loads, and each function that references a symbol the provider lacks
+is rejected when its slot map is registered. Every slot kind that references a
+symbol by name records the symbol in the rejection (`describeUnresolvedAOTSymbol()`
+in `lib/QoreAOTRuntime.cpp`: the symbol, the advice that a provider is missing or
+older than the one compiled against, and the modules loaded in the Program), and a
+slot kind that records nothing is described by its serialized references, so a
+rejection never reports a bare "unsupported AOT slot metadata". A cast whose
+target class or hashdecl no longer exists resolves to an AOT deferred placeholder,
+which accepts any object or hash; a cast that runs (`qore_rt_cast_by_type_path`)
+raises `IR-CAST-ERROR` for a placeholder instead of passing the value through
+unchecked. `AOTUnresolvedSymbolDiagnostics.qtest` covers both, and that
+binary-module hashdecls and classes in signatures (parameters, return types,
+`*hash<X>`, `list<hash<X>>`) load and run as in the AST.
+
 ## Optional Modules Unavailable at Compile Time
 
 A `%try-module` directive is resolved when the module is compiled: when the module

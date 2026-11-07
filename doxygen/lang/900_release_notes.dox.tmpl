@@ -1428,6 +1428,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - an AOT-compiled module loaded with a module older than the one it was compiled against, which lacks an enum or
+      an enum member that the module uses, failed with only "unsupported AOT slot metadata"; the error now names the
+      missing symbol and the modules loaded
     - a cast in an AOT-compiled module to a class that is not declared where the module is loaded, as when it is
       loaded with a module older than the one it was compiled against, let the value through unchecked; it now raises
       an \c IR-CAST-ERROR naming the type

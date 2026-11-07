@@ -1266,6 +1266,34 @@ static void setAOTExprSlotResolveError(int slot, const char* kind_name, const st
     aot_slot_resolve_error = std::move(msg);
 }
 
+//! Attributes an expression slot's resolution failure to the slot, naming the symbol it references
+/** Slot resolution records the unresolved symbol (see describeUnresolvedAOTSymbol()) for the kinds that reference
+    one; this moves that detail under the slot's ordinal and kind.  A kind that records no detail is described by its
+    serialized references, so a rejected function never reports a bare "unsupported AOT slot metadata" for a symbol
+    that a module older than the one compiled against does not provide.
+
+    @param slot the expression slot ordinal
+    @param kind_name the slot's expression kind name
+    @param ref1 the slot's first serialized reference, if any
+    @param ref2 the slot's second serialized reference, if any */
+static void recordUnresolvedAOTExprSlot(int slot, const char* kind_name, const char* ref1, const char* ref2) {
+    std::string detail;
+    detail.swap(aot_slot_resolve_error);
+    if (detail.empty()) {
+        detail = "the expression could not be resolved";
+        if (ref1 && *ref1) {
+            detail += " from reference '";
+            detail += ref1;
+            if (ref2 && *ref2) {
+                detail += "', '";
+                detail += ref2;
+            }
+            detail += "'";
+        }
+    }
+    setAOTExprSlotResolveError(slot, kind_name, detail);
+}
+
 //! Renders a serialized static-call target as \c Class::method() for diagnostics
 static std::string describeAOTStaticCallTarget(const char* class_path, const char* method_name) {
     std::string desc = class_path && *class_path ? class_path : "<unknown class>";
@@ -1607,6 +1635,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 std::string class_desc = describeAOTClassRef(ref1);
                 printd(0, "AOT v2: cannot resolve class '%s' for scoped new object\n",
                     class_desc.c_str());
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("class", class_desc.c_str(), pgm);
                 return 0;
             }
             std::string variant_err;
@@ -1739,6 +1768,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             QoreValue rv = qore_aot_resolve_constant_path_value(pgm, ref1, true, true, &resolved);
             if (!resolved) {
                 printd(0, "AOT v2: cannot resolve constant '%s'\n", ref1);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("constant", ref1, pgm);
                 return 0;
             }
             return toBitsNB(rv);
@@ -1761,6 +1791,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
             if (!hd) {
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("hashdecl", ref1, pgm);
                 return 0;
             }
             // Create a NewHashDeclNode with no args (args handled by native code)
@@ -1781,11 +1812,16 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const QoreEnumDecl* ed = pgm->findEnum(ref1, pns);
             if (!ed) {
                 printd(0, "AOT v2: cannot resolve enum '%s' for const enum\n", ref1);
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("enum", ref1, pgm);
                 return 0;
             }
             const QoreEnumMember* member = ed->findMember(ref2);
             if (!member) {
                 printd(0, "AOT v2: cannot find enum member '%s::%s'\n", ref1, ref2);
+                std::string member_path = ref1;
+                member_path += "::";
+                member_path += ref2;
+                aot_slot_resolve_error = describeUnresolvedAOTSymbol("enum member", member_path.c_str(), pgm);
                 return 0;
             }
             QoreValue enum_val = QoreValue::makeEnum(member);
@@ -4407,6 +4443,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 printd(0, "AOT v2: cannot resolve cast slot kind %d type '%s'\n",
                     static_cast<int>(kind), ref1 ? ref1 : "(null)");
+                // only the first failure is reported; before it, a recorded detail is stale
+                if (!has_unsupported) {
+                    aot_slot_resolve_error.clear();
+                    setAOTExprSlotResolveError(i, expr_kind_name, describeUnresolvedAOTSymbol("cast type", ref1, pgm));
+                }
                 has_unsupported = true;
                 continue;
             }
@@ -6016,6 +6057,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
         }
 
+        // while no slot has failed, a recorded detail is stale (a slot that resolved after recording one, or a slot
+        // that resolves to 0 legitimately); only the first failure is reported, so only it is attributed below
+        const bool first_failure = !has_unsupported;
+        if (first_failure) {
+            aot_slot_resolve_error.clear();
+        }
         uint64_t bits = resolveExprSlot(kind, ref1, ref2, pgm,
             uvb ? uvb->getUserSignature() : nullptr);
         if (bits) {
@@ -6035,6 +6082,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 msg += "; if this reference came from qcc --stub, the runtime host must inject the external "
                     "constant before loading the AOT binary";
                 setBuildError(msg);
+            }
+            if (first_failure) {
+                recordUnresolvedAOTExprSlot(i, expr_kind_name, ref1, ref2);
             }
             has_unsupported = true;
         }
