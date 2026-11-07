@@ -358,7 +358,8 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
             rv{h.proto} = h.result;
         }
         if (err) {
-            throw err.err, err.desc, err.arg;
+            # the argument is the exception raised by the thread, with its call stack
+            throw err.err, err.desc, err;
         }
         return rv;
     }
@@ -382,9 +383,12 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     }
 
     #! Returns the return value of a recorded call, or raises the exception it raised
+    /** The exception has the error and description of the recorded one; as it is raised again on another thread,
+        its argument is the recorded exception, with its call stack, and the recorded argument in its \c arg key
+    */
     static auto replay(hash<auto> outcome) {
         if (outcome.ex) {
-            throw outcome.ex.err, outcome.ex.desc, outcome.ex.arg;
+            throw outcome.ex.err, outcome.ex.desc, outcome.ex;
         }
         return outcome.rv;
     }
