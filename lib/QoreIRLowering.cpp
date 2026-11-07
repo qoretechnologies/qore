@@ -1456,6 +1456,11 @@ bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
     if (!isLocalNonClosureVar(left_var) || !isLocalNonClosureVar(right_var)) {
         return false;
     }
+    // a local holding a reference reads as the referenced lvalue, which can change without a store to the local,
+    // while the instruction caches the value it reads in the local's slot
+    if (QoreTypeInfo::isReference(left_var->getTypeInfo()) || QoreTypeInfo::isReference(right_var->getTypeInfo())) {
+        return false;
+    }
     builder.createBranchIfLtLocalInt(left_var->ref.id, right_var->ref.id,
         true_target, false_target, lt->loc);
     return true;

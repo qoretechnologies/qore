@@ -1437,6 +1437,10 @@
     - a reference to an undeclared member of a class with a public member declaration raised two parse exceptions
       when types are required (as with @ref modern "%modern"): the illegal access and the missing type information;
       only the illegal access is now reported
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a loop condition comparing \c int locals
+      one of which is a \c reference<int> local or parameter (ex: <tt>while (i < n)</tt>) kept using the first value
+      of the reference when its target changed in the loop; it now reads the reference each time, as with the AST
+      interpreter
     - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter, a
       local variable holding a reference (ex: <tt>reference r = \x;</tt> or a \c reference<T> parameter) kept
       reading as the first value read after the referenced lvalue changed without an assignment to the variable (ex:

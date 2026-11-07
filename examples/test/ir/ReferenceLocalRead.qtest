@@ -21,10 +21,15 @@
     \c r read as \c 2, and a loop summing \c r while changing \c x summed the first value.  LoadLocal no longer caches
     the value of a local that holds a reference, as it does not cache the target of a weak reference.
 
-    The script reads \c reference and \c reference<int> locals referring to locals, hash and list elements after changing the target
-    directly, by increment, through the reference, in a callee, in a closure and in a loop, and reads a reference
-    parameter; each function is called three times through a call reference and by name, in every execution mode and
-    on the IR tier of tiered execution (see ExecModeOutputTest).
+    In every compiled mode, a loop condition comparing an \c int local with a \c reference<int> local (or two such
+    locals) kept using the first value of the reference when its target changed in the loop: the lowering gave it
+    the fused instruction BranchIfLtLocalInt, which caches its operands; such a comparison is no longer fused.
+
+    The script reads \c reference and \c reference<int> locals referring to locals, hash and list elements after
+    the target changed directly, by increment, through the reference, in a callee, in a closure and in a loop, reads
+    a reference parameter, and uses reference locals and parameters as loop bounds whose target changes in the
+    loop; each function is called three times through a call reference and by name, in every execution mode and on
+    the IR tier of tiered execution (see ExecModeOutputTest).
 */
 class ReferenceLocalReadTest inherits ExecModeOutputTest {
     public {
@@ -38,6 +43,10 @@ string sub typed() { int x = 2; reference<int> rr = \x; int a = rr; x = 10; int 
 string sub element() { hash<auto> h = {"a": 1}; reference rr = \h.a; auto a = rr; h.a = 3; auto b = rr; return sprintf("%y %y", a, b); }
 string sub increment() { int x = 2; reference rr = \x; int a = rr; ++x; x += 5; int b = rr; return sprintf("%y %y", a, b); }
 string sub list_elem() { list<int> l = (1, 2); reference rr = \l[1]; int a = rr; l[1] = 7; push l, 3; int b = rr; return sprintf("%y %y %y", a, b, l); }
+# a reference local as an operand of a loop condition comparing int locals
+string sub loop_bound() { int x = 1; reference<int> n = \x; int i = 0; int c = 0; while (i < n) { ++i; ++c; if (c == 1) { x = 3; } if (c > 5) { break; } } return sprintf("%y %y", i, c); }
+string sub param_bound(reference<int> n) { int i = 0; int c = 0; while (i < n) { ++i; ++c; if (c == 1) { n = 3; } if (c > 5) { break; } } return sprintf("%y %y", i, c); }
+string sub param_bound_call() { int x = 1; return param_bound(\x); }
 sub set(reference<int> r, int v) { r = v; }
 string sub callee() { int x = 2; reference rr = \x; int a = rr; set(\x, 9); int b = rr; return sprintf("%y %y", a, b); }
 string sub loop() { int x = 0; reference rr = \x; int s = 0; for (int i = 0; i < 3; ++i) { x = i * 10; s += rr; } return sprintf("%y", s); }
@@ -48,7 +57,7 @@ string sub closure() { int x = 2; reference rr = \x; code c = sub () { x = 20; }
 hash<string, code> tests = {
     "read_after_store": \read_after_store(), "write_through": \write_through(), "typed": \typed(),
     "element": \element(), "increment": \increment(), "list_elem": \list_elem(), "callee": \callee(),
-    "loop": \loop(), "param_call": \param_call(), "closure": \closure(),
+    "loop": \loop(), "param_call": \param_call(), "closure": \closure(), "loop_bound": \loop_bound(), "param_bound": \param_bound_call(),
 };
 for (int i = 0; i < 3; ++i) {
     foreach hash<auto> t in (tests.pairIterator()) {
@@ -56,7 +65,7 @@ for (int i = 0; i < 3; ++i) {
     }
 }
 for (int i = 0; i < 3; ++i) {
-    printf("%d direct: %s | %s | %s\n", i, read_after_store(), element(), loop());
+    printf("%d direct: %s | %s | %s | %s\n", i, read_after_store(), element(), loop(), loop_bound());
 }
 ';
 
@@ -72,6 +81,8 @@ for (int i = 0; i < 3; ++i) {
             "0 loop: 30",
             "0 param_call: 1 4 4",
             "0 closure: 2 20",
+            "0 loop_bound: 3 3",
+            "0 param_bound: 3 3",
             "1 read_after_store: 2 10",
             "1 write_through: 2 5",
             "1 typed: 2 10",
@@ -82,6 +93,8 @@ for (int i = 0; i < 3; ++i) {
             "1 loop: 30",
             "1 param_call: 1 4 4",
             "1 closure: 2 20",
+            "1 loop_bound: 3 3",
+            "1 param_bound: 3 3",
             "2 read_after_store: 2 10",
             "2 write_through: 2 5",
             "2 typed: 2 10",
@@ -92,9 +105,11 @@ for (int i = 0; i < 3; ++i) {
             "2 loop: 30",
             "2 param_call: 1 4 4",
             "2 closure: 2 20",
-            "0 direct: 2 10 | 1 3 | 30",
-            "1 direct: 2 10 | 1 3 | 30",
-            "2 direct: 2 10 | 1 3 | 30",
+            "2 loop_bound: 3 3",
+            "2 param_bound: 3 3",
+            "0 direct: 2 10 | 1 3 | 30 | 3 3",
+            "1 direct: 2 10 | 1 3 | 30 | 3 3",
+            "2 direct: 2 10 | 1 3 | 30 | 3 3",
         );
     }
 
