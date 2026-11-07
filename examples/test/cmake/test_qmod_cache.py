@@ -164,6 +164,74 @@ class IncludeTest(unittest.TestCase):
             qc.check_includes_listed(str(mod), [str(mod), str(part)])
 
 
+class CacheStoreTest(unittest.TestCase):
+    """Cache.store(): collisions, replaced objects, and the entries kept under a base key"""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        self.root = Path(d.name)
+        self.cache = qc.Cache(str(self.root / "cache"))
+
+    def files(self, content):
+        rv = {}
+        for suffix in qc.STORED_SUFFIXES:
+            p = self.root / ("src" + suffix)
+            p.write_bytes(content + suffix.encode())
+            rv[suffix] = str(p)
+        return rv
+
+    def entry(self, key, files, signing_key=None):
+        e = {"key": key, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
+        if signing_key:
+            e["signature"] = qc.entry_signature(e, signing_key)
+        return e
+
+    def test_collision(self):
+        f1 = self.files(b"one")
+        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f1), f1)
+        # the same files again: fine
+        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f1), f1)
+        f2 = self.files(b"two")
+        with self.assertRaises(qc.KeyCollision):
+            self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f2), f2)
+
+    def test_invalid_object_is_replaced(self):
+        f1 = self.files(b"one")
+        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f1), f1)
+        # damaged: replaced by the new files
+        (Path(self.cache.object_dir("k" * 64)) / "qmod").write_bytes(b"damaged")
+        f2 = self.files(b"two")
+        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f2), f2)
+        self.assertEqual(b"two", (Path(self.cache.object_dir("k" * 64)) / "qmod").read_bytes())
+        # unsigned for a cache whose entries are signed: replaced
+        f3 = self.files(b"three")
+        self.cache.store("b" * 64, "k" * 64, self.entry("k" * 64, f3, "key"), f3, "key")
+        self.assertEqual(b"three", (Path(self.cache.object_dir("k" * 64)) / "qmod").read_bytes())
+
+    def test_least_recently_used_entries_of_a_base_go(self):
+        base = "b" * 64
+        keys = ["%064d" % i for i in range(qc.MAX_ENTRIES_PER_BASE + 1)]
+        now = time.time()
+        for i, key in enumerate(keys[:-1]):
+            f = self.files(key.encode())
+            self.cache.store(base, key, self.entry(key, f), f)
+            # stored long ago, in order
+            when = now - 10000 + i
+            os.utime(self.cache.lock_path(key), (when, when))
+            os.utime(os.path.join(self.cache.entries, base, key + ".json"), (when, when))
+        # the first one stored was used recently (a hit)
+        fd = self.cache.open_lock(keys[0])
+        self.cache.mark_used(fd)
+        os.close(fd)
+        self.assertEqual(keys[0], self.cache.candidates(base)[0][1]["key"])
+        f = self.files(keys[-1].encode())
+        self.cache.store(base, keys[-1], self.entry(keys[-1], f), f)
+        left = sorted(e["key"] for _, e in self.cache.candidates(base))
+        # the least recently used one went, not the oldest stored one
+        self.assertEqual(sorted(keys[:1] + keys[2:]), left)
+
+
 class AuditSampleTest(unittest.TestCase):
     def test_sample(self):
         keys = ["%064x" % i for i in range(2000)]
@@ -336,6 +404,23 @@ class ContextTest(unittest.TestCase):
         (self.src / "lib" / ".#QoreLib.cpp").write_text("editor lock\n")
         self.assertEqual(k, self.digest())
 
+    def test_parser_generators_and_llvm_library(self):
+        tools = self.build / "tools"
+        tools.mkdir()
+        bison = tools / "bison"
+        bison.write_text("#!/bin/sh\necho 'bison (GNU Bison) 3.8.2'\n")
+        bison.chmod(0o755)
+        llvm = self.build / "llvm" / "lib"
+        (llvm / "cmake" / "llvm").mkdir(parents=True)
+        (llvm / "libLLVM.so.21.1").write_text("llvm 1\n")
+        cache = self.build / "CMakeCache.txt"
+        cache.write_text(cache.read_text() + "BISON_EXECUTABLE:FILEPATH=%s\nLLVM_DIR:PATH=%s\n"
+                         % (bison, llvm / "cmake" / "llvm"))
+        k = self.digest()
+        self.assertTrue(self.check_changes(bison, "#!/bin/sh\necho 'bison (GNU Bison) 3.8.3'\n"))
+        self.assertTrue(self.check_changes(llvm / "libLLVM.so.21.1", "llvm 2\n"))
+        self.assertEqual(k, self.digest())
+
     def test_no_identity(self):
         (self.build / "identity.txt").write_text("none\n")
         with self.assertRaises(qc.CacheError):
@@ -362,7 +447,7 @@ def sources(p):
     return sorted(p.glob("*.q[mc]")) if p.is_dir() else [p]
 def module_path(name):
     for d in [Path(x) for x in os.environ.get("QORE_MODULE_DIR", "").split(":") if x] + [qlib]:
-        for p in (d / (name + ".qm"), d / name):
+        for p in (d / (name + ".qm"), d / name, d / (name + "-api-1.0.qmod")):
             if p.exists():
                 return p
     return None
@@ -388,7 +473,7 @@ for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
         required.append(name)
 all_deps = own + includes + deps
 lines = ["# qore AOT module source fingerprints 1"]
-for p in all_deps:
+for p in all_deps + ([Path((here / "extra-dep.txt").read_text().strip())] if (here / "extra-dep.txt").exists() else []):
     st = p.stat()
     lines.append("%d %d %016x %s" % (st.st_size, st.st_mtime_ns, 0, p))
 def s(v):
@@ -396,13 +481,15 @@ def s(v):
     return struct.pack("<I", len(b)) + b
 payload = s(out.stem) + struct.pack("<I", len(required)) + b"".join(s(r) for r in required) \
     + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
-digest = hashlib.sha256((text + "".join(p.read_text() for p in deps)).encode()).hexdigest()
+digest = hashlib.sha256(text.encode() + b"".join(p.read_bytes() for p in deps)).hexdigest()
 noise = str(time.time()) if (here / "nondeterministic.txt").exists() else ""
 tmp = out.with_name(out.name + ".tmp")
 tmp.write_bytes(b"FAKEQMOD " + (here / "identity.txt").read_text().strip().encode() + b" " + digest.encode()
                 + noise.encode() + b"\n" + b"QAMI" + struct.pack("<II", 1, len(payload)) + payload)
 tmp.replace(out)
-depfile.write_text("%s: \\\n    %s\n" % (out, " \\\n    ".join(str(p) for p in all_deps)))
+# a depfile with another dependency than the module was compiled from (extra-dep.txt names it)
+listed = all_deps + ([Path((here / "extra-dep.txt").read_text().strip())] if (here / "extra-dep.txt").exists() else [])
+depfile.write_text("%s: \\\n    %s\n" % (out, " \\\n    ".join(str(p) for p in listed)))
 Path(str(out) + ".d.fingerprints").write_text("\n".join(lines) + "\n")
 # a source that is written after qcc read it
 if (here / "slow.txt").exists():
@@ -435,7 +522,9 @@ class CacheBuildTest(unittest.TestCase):
         (q / "Mid.qm").write_text("%requires Base\nmodule Mid {}\n")
         (q / "Top" / "Top.qm").write_text("%requires Mid\nmodule Top {}\n")
         (q / "Top" / "Part.qc").write_text("class Part {}\n")
-        (q / "Other.qm").write_text("%try-module Opt\nmodule Other {}\n")
+        (q / "Other.qm").write_text("%try-module Opt\n%requires binmod\nmodule Other {}\n")
+        # a binary module that Other requires
+        (self.extra_dir / "binmod-api-1.0.qmod").write_bytes(b"\x7fELF binary module 1\n")
         (self.source / "qcc.py").write_text(FAKE_QCC)
         (self.source / "identity.txt").write_text("1" * 64 + "\n")
         qcc = self.source / "qcc"
@@ -471,12 +560,14 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         log = self.source / "compiles.log"
         return log.read_text().splitlines() if log.exists() else []
 
-    def build_all(self, fresh=True, env=None, expect_rc=0):
+    def build_all(self, fresh=True, env=None, expect_rc=0, cache=None, read_dirs=None, target=None):
         """Builds every module (in a new build tree with @p fresh) and returns the modules qcc compiled"""
         if fresh:
             shutil.rmtree(self.build, ignore_errors=True)
             res = subprocess.run([CMAKE, "-G", "Unix Makefiles", "-S", str(self.source), "-B", str(self.build),
-                                  "-DQORE_QMOD_CACHE_DIR=%s" % self.cache, "-DPython3_EXECUTABLE=%s" % sys.executable],
+                                  "-DQORE_QMOD_CACHE_DIR=%s" % (cache or self.cache),
+                                  "-DQORE_QMOD_CACHE_READ_DIRS=%s" % ";".join(str(d) for d in read_dirs or []),
+                                  "-DPython3_EXECUTABLE=%s" % sys.executable],
                                  capture_output=True, text=True, timeout=120)
             self.assertEqual(0, res.returncode, res.stdout + res.stderr)
         before = len(self.compiles())
@@ -484,8 +575,8 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         for name in [n for n in full_env if n.startswith("QORE_QMOD_CACHE_")]:
             del full_env[name]
         full_env.update(env or {})
-        res = subprocess.run([CMAKE, "--build", str(self.build)], capture_output=True, text=True, timeout=300,
-                             env=full_env)
+        res = subprocess.run([CMAKE, "--build", str(self.build)] + (["--target", target] if target else []),
+                             capture_output=True, text=True, timeout=300, env=full_env)
         self.output = res.stdout + res.stderr
         if expect_rc is None:
             self.assertNotEqual(0, res.returncode, self.output)
@@ -675,6 +766,8 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         (self.source / "nondeterministic.txt").write_text("1")
         self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "1"}, expect_rc=None)
         self.assertIn("AUDIT FAILED", self.output)
+        (self.source / "nondeterministic.txt").unlink()
+        self.build_all()
         # a sample of none audits nothing
         self.assertEqual([], self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "0"}))
 
@@ -690,16 +783,202 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         mid.write_text(mid.read_text() + "# changed\n")
         self.build_all()
         self.assertEqual(6, len(self.entries()))
-        res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--keep-build",
-                              str(self.build)], capture_output=True, text=True, timeout=60)
+        # generous limits remove nothing: another job's entries stay
+        res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--max-age-days",
+                              "7", "--max-size", "1000"], capture_output=True, text=True, timeout=60)
         self.assertEqual(0, res.returncode, res.stderr)
-        self.assertEqual(4, len(self.entries()))
-        self.assertEqual(4, len([p for p in (self.cache / qc.SCHEMA / "objects").iterdir() if p.is_dir()]))
+        self.assertEqual(6, len(self.entries()))
+        self.assertEqual(6, len([p for p in (self.cache / qc.SCHEMA / "objects").iterdir() if p.is_dir()]))
         self.assertEqual([], self.build_all())
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--max-size", "0"],
                              capture_output=True, text=True, timeout=60)
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertEqual(0, len(self.entries()))
+
+    def tamper(self, name, change):
+        """Changes the stored files of a module's entry with @p change(object dir) and makes the entry's file digests
+        match them again, as someone who can write the cache could"""
+        key = self.keys()[name]
+        cache = qc.Cache(str(self.cache))
+        obj = Path(cache.object_dir(key))
+        change(obj)
+        entry_path = [e for e in self.entries() if e.stem == key][0]
+        entry = json.loads(entry_path.read_text())
+        for suffix in qc.STORED_SUFFIXES:
+            entry["files"][suffix or "qmod"] = qc.sha256_file(str(obj / ("qmod" + suffix)))
+        return entry_path, entry
+
+    def test_changed_binary_module_dependency(self):
+        self.build_all()
+        self.assertEqual([], self.build_all())
+        (self.extra_dir / "binmod-api-1.0.qmod").write_bytes(b"\x7fELF binary module 2\n")
+        self.assertEqual(["Other"], self.build_all())
+        self.assertIn("binmod-api-1.0.qmod' has changed", self.output)
+
+    def test_hit_needs_the_build_identity(self):
+        self.build_all()
+        def change(obj):
+            q = obj / "qmod"
+            q.write_bytes(q.read_bytes().replace(b"1" * 64, b"5" * 64))
+        entry_path, entry = self.tamper("Mid", change)
+        entry_path.write_text(json.dumps(entry))
+        self.assertEqual(["Mid"], self.build_all())
+        self.assertIn("lacks the AOT runtime identity", self.output)
+
+    def test_hit_needs_the_depfile_target(self):
+        self.build_all()
+        def change(obj):
+            d = obj / "qmod.d"
+            text = d.read_text()
+            d.write_text("/elsewhere/Mid.qmod" + text[text.index(":"):])
+        entry_path, entry = self.tamper("Mid", change)
+        entry_path.write_text(json.dumps(entry))
+        self.assertEqual(["Mid"], self.build_all())
+        self.assertIn("stored dependency file names '/elsewhere/Mid.qmod'", self.output)
+
+    def test_hit_needs_the_entry_key(self):
+        self.build_all()
+        key = self.keys()["Top"]
+        entry_path = [e for e in self.entries() if e.stem == key][0]
+        entry = json.loads(entry_path.read_text())
+        # an entry that leaves out a dependency still matches the build tree, but is not the entry of its key
+        entry["deps"] = [d for d in entry["deps"] if d["kind"] != "module"]
+        entry_path.write_text(json.dumps(entry))
+        self.assertEqual(["Top"], self.build_all())
+        self.assertIn("entry key mismatch", self.output)
+
+    def test_audit_compares_dependencies(self):
+        self.build_all()
+        # qcc writes the same module, but finds another dependency
+        (self.source / "extra-dep.txt").write_text(str(self.source / "qlib" / "Other.qm"))
+        self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "1"}, expect_rc=None)
+        self.assertIn("has other dependencies than the cache entry", self.output)
+
+    def test_restored_files_are_checked(self):
+        self.build_all()
+        self.assertEqual(["Base", "Mid", "Other", "Top"],
+                         self.build_all(env={"QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE": "1"}))
+        self.assertIn("differs from the cache", self.output)
+        self.assertEqual({"Base": "miss", "Mid": "miss", "Top": "miss", "Other": "miss"}, self.origins())
+
+    def test_module_changed_in_the_build_tree_is_not_a_dependency_key(self):
+        """A module's key in the build tree's index is used only while its qmod is the one the cache supplied"""
+        self.build_all()
+        self.assertEqual([], self.build_all())
+        # Mid's qmod changes behind the cache's back; Top is compiled again, and not stored
+        mid = self.qmod("Mid")
+        mid.write_bytes(mid.read_bytes() + b"changed")
+        for p in self.qmod("Top").parent.glob("Top.qmod*"):
+            p.unlink()
+        self.assertEqual(["Top"], self.build_all(fresh=False, target="Top-qmod"))
+        with open(str(self.qmod("Top")) + qc.SIDECAR_SUFFIX) as f:
+            self.assertEqual("uncacheable", json.load(f)["origin"])
+
+    def test_failed_audit_quarantines_the_cache(self):
+        self.build_all()
+        (self.source / "nondeterministic.txt").write_text("1")
+        self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "1"}, expect_rc=None)
+        self.assertIn("AUDIT FAILED", self.output)
+        self.assertIn("quarantined the cache", self.output)
+        # the next build reuses nothing of the cache whose key missed an input
+        (self.source / "nondeterministic.txt").unlink()
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        # a prune removes the quarantined cache once no job can be reading it
+        for q in self.cache.glob(qc.SCHEMA + ".quarantine.*"):
+            os.utime(str(q), (time.time() - 2 * qc.ORPHAN_AGE,) * 2)
+        out = self.prune("--max-size", "1000")
+        self.assertIn("1 quarantined caches", out)
+        self.assertFalse(list(self.cache.glob(qc.SCHEMA + ".quarantine.*")))
+
+    def test_module_path_directive_is_not_stored(self):
+        base = self.source / "qlib" / "Base.qm"
+        base.write_text("%prepend-module-path $HOME/mods\nmodule Base {}\n")
+        self.build_all()
+        self.assertEqual({"Base": "uncacheable", "Mid": "uncacheable", "Top": "uncacheable", "Other": "miss"},
+                         self.origins())
+        self.assertIn("changes the module path", self.output)
+
+    def test_signed_entries(self):
+        key1 = {"QORE_QMOD_CACHE_SIGNING_KEY": "secret-1"}
+        self.build_all(env=key1)
+        self.assertEqual([], self.build_all(env=key1))
+        # an entry changed by someone without the key: its module is compiled again
+        def change(obj):
+            q = obj / "qmod"
+            q.write_bytes(q.read_bytes().replace(b"FAKEQMOD", b"EVILQMOD"))
+        entry_path, entry = self.tamper("Mid", change)
+        entry_path.write_text(json.dumps(entry))
+        self.assertEqual(["Mid"], self.build_all(env=key1))
+        self.assertIn("entry not signed with the signing key", self.output)
+        self.assertNotIn(b"EVILQMOD", self.qmod("Mid").read_bytes())
+        # another key, or none: entries written with another key are not used
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env={"QORE_QMOD_CACHE_SIGNING_KEY": "x"}))
+        res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
+                              str(self.source / "qcc")], capture_output=True, text=True, timeout=60,
+                             env=dict(os.environ, QORE_QMOD_CACHE_SIGNING_KEY="secret-1"))
+        # the guard checks the signatures of the entries the cache supplied (none here: every module was compiled)
+        self.assertEqual(0, res.returncode, res.stderr)
+
+    def test_read_cache_of_a_trusted_level(self):
+        protected = self.root / "protected"
+        unprotected = self.root / "unprotected"
+        self.build_all(cache=protected)
+        before = sorted((str(p), p.stat().st_mtime_ns) for p in protected.rglob("*"))
+        # a job of an unprotected ref reads the protected cache, writes its own, and never writes the protected one
+        self.assertEqual([], self.build_all(cache=unprotected, read_dirs=[protected]))
+        self.assertEqual({"Base": "hit", "Mid": "hit", "Top": "hit", "Other": "hit"}, self.origins())
+        mid = self.source / "qlib" / "Mid.qm"
+        mid.write_text(mid.read_text() + "# changed\n")
+        self.assertEqual(["Mid", "Top"], self.build_all(cache=unprotected, read_dirs=[protected]))
+        self.assertEqual(before, sorted((str(p), p.stat().st_mtime_ns) for p in protected.rglob("*")))
+        self.assertEqual(2, len(list((unprotected / qc.SCHEMA / "entries").glob("*/*.json"))))
+        # and a damaged entry of the protected cache is not removed by such a job
+        key = json.loads(Path(str(self.qmod("Base")) + qc.SIDECAR_SUFFIX).read_text())["key"]
+        (Path(qc.Cache(str(protected)).object_dir(key)) / "qmod").write_bytes(b"damaged")
+        self.assertEqual(["Base"], self.build_all(cache=unprotected, read_dirs=[protected]))
+        self.assertTrue(os.path.isdir(qc.Cache(str(protected)).object_dir(key)))
+
+    def test_prune_leaves_work_in_progress(self):
+        """Prune never touches a store in progress: a young temporary directory, an object whose entry is not
+        written yet, or one that a job holds"""
+        import fcntl
+        self.build_all()
+        cache = qc.Cache(str(self.cache))
+        objects = Path(cache.objects)
+        young_tmp = objects / ".tmp.young"
+        young_tmp.mkdir()
+        old_tmp = objects / ".tmp.old"
+        old_tmp.mkdir()
+        os.utime(str(old_tmp), (time.time() - 2 * qc.ORPHAN_AGE,) * 2)
+        young_obj = objects / ("a" * 64)
+        young_obj.mkdir()
+        held_obj = objects / ("b" * 64)
+        held_obj.mkdir()
+        os.utime(str(held_obj), (time.time() - 2 * qc.ORPHAN_AGE,) * 2)
+        fd = os.open(cache.lock_path("b" * 64), os.O_RDWR | os.O_CREAT)
+        os.utime(cache.lock_path("b" * 64), (time.time() - 2 * qc.ORPHAN_AGE,) * 2)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH)
+            self.prune("--max-size", "1000")
+            self.assertTrue(young_tmp.is_dir())
+            self.assertFalse(old_tmp.exists())
+            self.assertTrue(young_obj.is_dir())
+            self.assertTrue(held_obj.is_dir())
+        finally:
+            os.close(fd)
+        self.prune("--max-size", "1000")
+        self.assertFalse(held_obj.exists())
+        # the entries of the build are all still there
+        self.assertEqual(4, len(self.entries()))
+
+    def test_another_jobs_prune_keeps_this_jobs_entries(self):
+        self.build_all()
+        other = self.root / "build-other"
+        res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--build-dir",
+                              str(other), "--max-age-days", "7", "--max-size", "1000"], capture_output=True,
+                             text=True, timeout=60)
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertEqual([], self.build_all())
 
     def prune(self, *args):
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache)] + list(args),
@@ -858,46 +1137,96 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
 
 
 class CiScriptTest(unittest.TestCase):
-    """test/docker_test/qmod-cache.sh: the cache directory of a job, and a build without the cache"""
+    """test/docker_test/qmod-cache.sh: the cache directories of a job by trust level, and a build without the cache"""
 
     SCRIPT = ROOT / "examples" / "test" / "docker_test" / "qmod-cache.sh"
 
-    def run_sh(self, cmd, **env):
-        full = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE", "CI_"))}
-        full.update(env)
-        res = subprocess.run(["sh", "-c", '. "%s"; %s' % (self.SCRIPT, cmd)], capture_output=True, text=True,
-                             env=full, timeout=60)
-        return res
-
-    def test_job_dir(self):
+    def setUp(self):
         d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-ci-")
         self.addCleanup(d.cleanup)
-        root = Path(d.name)
-        # not set, or not mounted: no argument, and a message why
-        res = self.run_sh("qore_qmod_cache_cmake_args")
-        self.assertEqual("", res.stdout)
-        self.assertIn("QORE_QMOD_CACHE_DIR is not set", res.stderr)
-        res = self.run_sh("qore_qmod_cache_cmake_args", QORE_QMOD_CACHE_DIR=str(root / "missing"))
-        self.assertEqual("", res.stdout)
-        self.assertIn("is not mounted", res.stderr)
-        # mounted: the directory of the job's name
-        mount = root / "mount"
-        mount.mkdir()
-        res = self.run_sh("qore_qmod_cache_cmake_args", QORE_QMOD_CACHE_DIR=str(mount), CI_JOB_NAME="build-x 1")
-        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s/build-x_1\n" % mount, res.stdout)
-        self.assertTrue((mount / "build-x_1").is_dir())
-        # a mount path with spaces: through a link in the project directory
-        spaced = root / "My Shared Files"
-        spaced.mkdir()
-        project = root / "project"
-        project.mkdir()
-        res = self.run_sh("qore_qmod_cache_cmake_args", QORE_QMOD_CACHE_DIR=str(spaced), CI_JOB_NAME="test-macos",
-                          CI_PROJECT_DIR=str(project))
-        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s/.qmod-cache\n" % project, res.stdout)
-        self.assertEqual(str(spaced / "test-macos"), os.readlink(str(project / ".qmod-cache")))
+        self.root = Path(d.name)
+
+    def setup(self, **env):
+        """Runs qore_qmod_cache_setup and returns its variables"""
+        full = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE", "CI_"))}
+        full.update(env)
+        res = subprocess.run(["sh", "-c", '. "%s"; qore_qmod_cache_setup; echo "ARG=$QMOD_CACHE_ARG"; '
+                              'echo "READ=$QMOD_CACHE_READ_ARG"; echo "PRUNE=$QMOD_CACHE_PRUNE_DIR"; '
+                              'echo "RO=${QORE_QMOD_CACHE_READONLY:-}"; echo "KEY=${QORE_QMOD_CACHE_SIGNING_KEY:-}"'
+                              % self.SCRIPT], capture_output=True, text=True, env=full, timeout=60)
+        self.assertEqual(0, res.returncode, res.stderr)
+        rv = {"out": res.stdout}
+        for line in res.stdout.splitlines():
+            k, sep, v = line.partition("=")
+            if sep and k in ("ARG", "READ", "PRUNE", "RO", "KEY"):
+                rv[k] = v
+        return rv
+
+    def test_without_cache(self):
+        r = self.setup()
+        self.assertEqual("", r["ARG"])
+        self.assertIn("QORE_QMOD_CACHE_DIR is not set", r["out"])
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root / "missing"))
+        self.assertEqual("", r["ARG"])
+        self.assertIn("is not mounted", r["out"])
+        # a mount without the directory of the job's trust level
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="b")
+        self.assertEqual("", r["ARG"])
         # finishing without the cache does nothing
-        res = self.run_sh('qore_qmod_cache_finish /nowhere /nowhere && echo done')
+        res = subprocess.run(["sh", "-c", '. "%s"; qore_qmod_cache_finish /nowhere /nowhere && echo done'
+                              % self.SCRIPT], capture_output=True, text=True, timeout=60)
         self.assertEqual("done\n", res.stdout)
+
+    def test_protected_ref(self):
+        (self.root / "protected").mkdir()
+        (self.root / "unprotected").mkdir()
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="build x",
+                       CI_COMMIT_REF_SLUG="develop", QORE_QMOD_CACHE_SIGNING_KEY="k")
+        own = self.root / "protected" / "build_x"
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % own, r["ARG"])
+        self.assertEqual("", r["READ"])
+        self.assertEqual(str(own), r["PRUNE"])
+        self.assertEqual("", r["RO"])
+        self.assertEqual("k", r["KEY"])
+        # a runner that mounts the protected cache read-only: read only, never pruned
+        os.chmod(str(self.root / "protected"), 0o555)
+        try:
+            if os.access(str(self.root / "protected"), os.W_OK):
+                self.skipTest("running as root")
+            r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="build x")
+            self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % own, r["ARG"])
+            self.assertEqual("1", r["RO"])
+            self.assertEqual("", r["PRUNE"])
+        finally:
+            os.chmod(str(self.root / "protected"), 0o755)
+
+    def test_unprotected_ref(self):
+        (self.root / "protected" / "build-x").mkdir(parents=True)
+        (self.root / "unprotected").mkdir()
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_COMMIT_REF_PROTECTED="false", CI_JOB_NAME="build-x",
+                       CI_COMMIT_REF_SLUG="feature-y", QORE_QMOD_CACHE_SIGNING_KEY="leaked")
+        own = self.root / "unprotected" / "feature-y" / "build-x"
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % own, r["ARG"])
+        self.assertEqual("-DQORE_QMOD_CACHE_READ_DIRS=%s" % (self.root / "protected" / "build-x"), r["READ"])
+        self.assertEqual(str(own), r["PRUNE"])
+        # the signing key is the protected level's only
+        self.assertEqual("", r["KEY"])
+        # without its own directory, the protected cache is read only
+        shutil.rmtree(str(self.root / "unprotected"))
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(self.root), CI_JOB_NAME="build-x", CI_COMMIT_REF_SLUG="feature-y")
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s" % (self.root / "protected" / "build-x"), r["ARG"])
+        self.assertEqual("1", r["RO"])
+        self.assertEqual("", r["PRUNE"])
+
+    def test_mount_path_with_spaces(self):
+        mount = self.root / "My Shared Files"
+        (mount / "protected").mkdir(parents=True)
+        project = self.root / "project"
+        project.mkdir()
+        r = self.setup(QORE_QMOD_CACHE_DIR=str(mount), CI_COMMIT_REF_PROTECTED="true", CI_JOB_NAME="test-macos",
+                       CI_PROJECT_DIR=str(project))
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s/.qmod-cache" % project, r["ARG"])
+        self.assertEqual(str(mount / "protected" / "test-macos"), os.readlink(str(project / ".qmod-cache")))
 
 
 def find_build_dir():
@@ -1024,6 +1353,14 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual(hit, self.build_all())
         # byte for byte what qcc wrote
         self.assertEqual(cold, self.qmods())
+        # nothing in a module depends on the commit of the Qore that compiled it (a commit that changes nothing qcc
+        # compiles with must give the same module)
+        res = subprocess.run([str(self.qore_build / "qcc"), "--dump-info",
+                              str(self.build / "qlib-qmod" / "CacheBase.qmod")], capture_output=True, text=True,
+                             timeout=120, env=dict(os.environ, LD_LIBRARY_PATH=str(self.qore_build),
+                                                   DYLD_LIBRARY_PATH=str(self.qore_build)))
+        self.assertIn("aot-runtime-identity", res.stdout, res.stderr)
+        self.assertNotIn("git-hash", res.stdout)
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build)],
                              capture_output=True, text=True, timeout=60)
         self.assertEqual(0, res.returncode, res.stderr)

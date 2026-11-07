@@ -2704,7 +2704,8 @@ ENDFUNCTION (QORE_USER_MODULE_RESOURCE_DIRS)
 # Sets up the qmod build cache (design/qmod-build-cache.md) when QORE_QMOD_CACHE_DIR is set: the
 # qore-qmod-cache-context target, which writes the build context before any qmod, and QORE_QMOD_CACHE_LAUNCHER, which
 # QORE_USER_MODULE_AOT_RULES() puts before the qcc command of each module so that the module is looked up in the cache
-# in QORE_QMOD_CACHE_DIR before qcc compiles it, and stored there after a compile.  The arguments are the module
+# in QORE_QMOD_CACHE_DIR (and then in the caches of QORE_QMOD_CACHE_READ_DIRS, which are never written to) before qcc
+# compiles it, and stored in QORE_QMOD_CACHE_DIR after a compile.  The arguments are the module
 # loader's standard module directories.  Uses QCC_FORMAT_STAMP, QORE_AOT_PROBE_STAMP (if defined),
 # QORE_QM_METADATA_ENV and qcc (the target, or QORE_QCC_EXECUTABLE); QORE_QMOD_CACHE_TOOL names the cache tool
 # (default: tools/qore-qmod-cache.py of the source tree).  Without QORE_QMOD_CACHE_DIR it does nothing.
@@ -2738,6 +2739,10 @@ MACRO (QORE_QMOD_CACHE_SETUP)
         endforeach()
         set(QORE_QMOD_CACHE_LAUNCHER ${Python3_EXECUTABLE} -I ${QORE_QMOD_CACHE_TOOL} exec
             --cache-dir=${QORE_QMOD_CACHE_DIR} --context=${QORE_QMOD_CACHE_CONTEXT} --build-dir=${CMAKE_BINARY_DIR})
+        # caches of a more trusted level, read after QORE_QMOD_CACHE_DIR and never written to
+        foreach(_qore_qmod_cache_dir ${QORE_QMOD_CACHE_READ_DIRS})
+            list(APPEND QORE_QMOD_CACHE_LAUNCHER --read-cache-dir=${_qore_qmod_cache_dir})
+        endforeach()
         foreach(_qore_qmod_cache_dir ${ARGN})
             list(APPEND QORE_QMOD_CACHE_LAUNCHER --default-module-dir=${_qore_qmod_cache_dir})
         endforeach()

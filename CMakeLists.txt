@@ -3642,6 +3642,8 @@ unset(_qore_exe)
 # loader's standard module directories are where an optional module that was unavailable could appear.  Empty (the
 # default): no cache, and the qmod rules are unchanged.
 set(QORE_QMOD_CACHE_DIR "" CACHE PATH "Directory of the qmod build cache (empty: no cache)")
+set(QORE_QMOD_CACHE_READ_DIRS "" CACHE STRING
+    "Directories of qmod build caches of a more trusted level, read after QORE_QMOD_CACHE_DIR and never written to")
 if (QORE_BUILD_AOT_MODULES)
     QORE_QMOD_CACHE_SETUP(${MODULE_VER_DIR} ${USER_MODULE_VER_DIR} ${MODULE_DIR} ${USER_MODULE_DIR})
 endif()

@@ -42,6 +42,7 @@ and its **result key** (the base key, the dependency records and the optional mo
 |Build context|The Qore options of the CMake cache, the build type, the C and C++ compilers, `LLVM_DIR` and the macOS deployment target, SDK and architectures|`context`
 |Build context|The probe of optional external modules (`qore-aot-probe.stamp`) and the AOT link configuration (`aot-link.conf`)|`context`
 |Build context|The link driver qcc runs (`cxx` of `aot-link.conf`) and its version, the linker and its version, the macOS SDK version, the operating system (`ID`, `VERSION_ID`, macOS version), the C library (glibc or musl and its version), the system and machine|`context`
+|Build context|The versions of bison and flex, which generate libqore's parser and scanner; the content of the LLVM library and of every shared library libqore and qcc are linked with (their patch versions are not in `/etc/os-release`); `/etc/localtime` (the time zone of parse-time dates when `TZ` is not set)|`context`
 |Build context|The content of `tools/qore-qmod-cache.py` and the cache schema|`context`
 |Base key|The qcc command line (absolute paths of the source and output, optimization level, prefix maps), its working directory|`exec`
 |Base key|Every environment variable named `QORE_*` or `QCC_*` except those in `ENV_EXCLUDED_NAMES`/`ENV_EXCLUDED_PREFIXES`, and `CC`, `CXX`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `MACOSX_DEPLOYMENT_TARGET`, `SDKROOT`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `DYLD_*`|`exec`
@@ -99,6 +100,18 @@ the files the entry names are unchanged.  The module loader does not check this 
 each module named in the module's metadata record, the files in the module path that are candidates for it, and a
 hit needs the same list.
 
+### Why absolute paths
+
+The key has the absolute paths of the sources, the build tree and the module path, and is not made relative to the
+source and build roots: a qmod records the absolute paths of its sources (statement locations, its depfile and
+fingerprints), so a module compiled in another checkout would carry the wrong ones, and the loader would not use its
+depfile (whose target must be the module).  CI keeps the checkout path stable instead (see "CI").
+
+### Module path directives
+
+A module whose sources have `%prepend-module-path` or `%append-module-path` (with or without environment variables)
+is not stored: the modules those directives make qcc find are not in the candidate-file records.
+
 ### Why the failed optional modules
 
 The loader refuses an AOT module compiled when a module it requested with `%try-module` was unavailable, once that
@@ -113,7 +126,9 @@ which can only make more modules misses.
 
 ### What is not an input
 
-- The git revision: no qmod or binary module records it (`git-revision.h` is left out of the generated headers).
+- The git revision (`git-revision.h` is left out of the generated headers): since qcc no longer records it in an
+  artifact's build information (`examples/test/ir/AOTArtifactReproducible.qtest`), nothing in a qmod depends on it.
+  Before that, a hit supplied a qmod naming an older commit, and the audit failed after every commit.
 - The build directory of the cache, the cache settings (`QORE_QMOD_CACHE_*`), and the test variables of CI
   (`QORE_TEST_OPTS` and others, `QORE_DB_CONNSTR*`, which may hold credentials): neither qcc nor libqore reads them,
   which `test_qmod_cache.py` checks against every `"QORE_..."` literal in `lib/`, `include/` and `qcc-main.cpp`.
@@ -159,6 +174,18 @@ After the build, `qore-qmod-cache.py verify --build-dir build --qcc build/qcc --
 - a module the cache supplied is no longer the module it supplied, its depfile names another module or lists other
   dependencies, a dependency changed after the module was supplied, or its unavailable optional modules differ.
 
+### Key holes: a failed audit or a key collision
+
+A failed audit, or a store that finds another module than qcc wrote for the same key (another job stored the key
+first), means that the key misses an input, so no entry of that cache can be trusted.  The job fails, so that someone
+finds the input, and the cache the job writes to is quarantined first: its directory is renamed out of the way at
+once, so that no later job reuses an entry of it (the next build is cold), and a prune deletes it an hour later, when
+no job can still be reading it.  Removing only the entry that was audited would leave the others that the same hole
+let in.  A cache of another trust level that the job only reads is left to its own jobs, whose audits find the same.
+
+An object that no valid entry backs (damaged, forged, or left by an interrupted store) is replaced when its key is
+stored again; that is no collision.
+
 ### The audit
 
 `QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]` makes `exec` compile a sample of the hits again (a rate from 0 to 1, chosen
@@ -175,6 +202,24 @@ way no hit can be trusted, so the build fails.  CI audits a small sample in ever
 an entry with a temporary file renamed over it, so concurrent builds (`make -j`, several jobs sharing a host
 directory) never see a partial entry; the first object stored for a key wins.  At most 8 entries are kept under one
 base key.
+
+### Trust levels
+
+Whoever can write to a cache directory can make a build use a module that qcc never wrote, and the module's digests
+in the entry only prove that it was not changed after the entry was written.  So the CI cache has a directory per
+trust level, and the runner configuration enforces who writes to which:
+
+- `protected/<job name>`: written only by the jobs of protected refs (`CI_COMMIT_REF_PROTECTED=true`).  They sign each
+  entry with `QORE_QMOD_CACHE_SIGNING_KEY` (HMAC-SHA256 of the entry, which has the digests of its files), a protected
+  CI variable, so jobs of other refs never have it, and use only entries signed with it; the guard checks the
+  signatures of the entries it supplied.  A runner that runs the jobs of unprotected refs mounts `protected/`
+  read-only.
+- `unprotected/<ref slug>/<job name>`: written by the jobs of one unprotected ref, which read the protected cache of
+  their job name too (`exec --read-cache-dir`), but never write to it (no last-use mark, no removal of a damaged
+  entry), and never get the signing key.  A ref cannot poison another ref's cache, nor develop's.
+
+A job of a protected ref on a runner that mounts `protected/` read-only uses it read-only
+(`QORE_QMOD_CACHE_READONLY=1`).
 
 ### Concurrent jobs and pruning
 
@@ -195,9 +240,10 @@ Without working locks (a file system that does not propagate them), a removal ca
 the cost is a compile, never a wrong module.
 
 `prune` removes, in this order: orphans older than an hour (an object without an entry, an entry without an object,
-an interrupted store or removal; a younger one can be a store in progress), the entries not used for
-`--max-age-days`, with `--keep-build <build>` the entries that no module of that build tree came from or was stored
-as, and then the least recently used entries while the cache is larger than `--max-size` MiB.  It prints one line:
+an interrupted store or removal; a younger one can be a store in progress, and an object a job holds is skipped),
+quarantined caches older than an hour, the entries not used for `--max-age-days`, and then the least recently used
+entries while the cache is larger than `--max-size` MiB.  It never removes entries because one build did not use
+them: the directory is shared.  At most 8 entries are kept under one base key, the most recently used ones.  It prints one line:
 the hits and misses of `--build-dir`, and the size of the cache before and after pruning, with what it removed and the
 entries it skipped because a job was reading them.
 
@@ -210,14 +256,18 @@ which `verify`, `stats` and `prune` read.
 |`QORE_QMOD_CACHE_DISABLE=1`|compile every module and store nothing
 |`QORE_QMOD_CACHE_READONLY=1`|look modules up, store nothing
 |`QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]`|audit a sample of the hits (see above)
+|`QORE_QMOD_CACHE_SIGNING_KEY=<key>`|sign the entries stored, and use only entries signed with the key (see "Trust levels")
+|`QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1`|for the tests only: a restored module is damaged after the copy
 
 ## CI
 
 The cache of the CI jobs is a directory of the host that the runner mounts into every job: a directory of professor
 mounted into the macOS VM, and a directory of each Kubernetes node mounted into the build pods.  The runner names it
-in `QORE_QMOD_CACHE_DIR`; `test/docker_test/qmod-cache.sh` uses the directory of the job's name in it, which the jobs
-of that name share (on a node, the jobs of other names and platforms have their own), and builds without the cache
-when the variable is not set or the directory is not mounted or cannot be written.  After every build it runs the
+in `QORE_QMOD_CACHE_DIR`; `test/docker_test/qmod-cache.sh` uses the directory of the job's trust level and name in it
+(see "Trust levels"), which the jobs of that level and name share, and builds without the cache when the variable is
+not set or the directory of the job's level is not mounted.  The key has absolute paths, so the checkout path of a
+job must not change between jobs (`GIT_CLONE_PATH`, which the runner must allow, for a runner whose default path has a
+concurrency number in it).  After every build it runs the
 guard and prunes the job's cache directory (`QORE_QMOD_CACHE_MAX_AGE_DAYS`, default 7, and `QORE_QMOD_CACHE_MAX_SIZE_MB`,
 default 3072, set in `.gitlab-ci.yml`), and prints the statistics line.
 

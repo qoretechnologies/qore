@@ -44,12 +44,16 @@ Environment (read by "exec"; never part of a key):
 - QORE_QMOD_CACHE_DISABLE=1: compile every module and store nothing
 - QORE_QMOD_CACHE_READONLY=1: look modules up but store nothing
 - QORE_QMOD_CACHE_AUDIT=<rate>[:<seed>]: on a hit, also compile a sample of the modules (a rate from 0 to 1 of
-  them, chosen by their key and the seed) and fail the build unless qcc writes the same module byte for byte
+  them, chosen by their key and the seed) and fail the build unless qcc writes the same module byte for byte; a
+  failure quarantines the cache the job writes to
+- QORE_QMOD_CACHE_SIGNING_KEY=<key>: sign the entries stored (HMAC-SHA256), and use only entries signed with the key
+- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1: for the tests only, a restored module is damaged after the copy
 """
 
 import argparse
 import fcntl
 import hashlib
+import hmac
 import json
 import os
 import platform
@@ -120,6 +124,10 @@ INCLUDE_DIRECTIVE = re.compile(rb"^[ \t]*%include\b[ \t]*([^\r\n]*)", re.M)
 
 class CacheError(Exception):
     """An inconsistency that makes a module a miss, or makes "verify" fail"""
+
+
+class KeyCollision(Exception):
+    """qcc wrote other files than the cache has for the same key: the key misses an input"""
 
 
 def log(msg):
@@ -512,6 +520,74 @@ def cmake_cache_options(path):
     return rv
 
 
+def cmake_cache_value(path, name):
+    """Returns the value of a CMake cache entry, or None"""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                m = re.match(r"^([A-Za-z0-9_]+):[A-Z]+=(.*)$", line.rstrip("\n"))
+                if m and m.group(1) == name:
+                    return m.group(2)
+    except OSError:
+        pass
+    return None
+
+
+def tool_versions(cmake_cache):
+    """The first line of --version of the parser generators that generate libqore's parser and scanner"""
+    rv = {}
+    for name, var in (("bison", "BISON_EXECUTABLE"), ("flex", "FLEX_EXECUTABLE")):
+        exe = cmake_cache_value(cmake_cache, var) or shutil.which(name)
+        rv[name] = first_lines(run_capture([exe, "--version"]), 1) if exe else "none"
+    return rv
+
+
+def shared_library_digests(build_dir):
+    """The content of every shared library that libqore and qcc are linked with (the LLVM library and the system
+    libraries, whose patch versions /etc/os-release does not name), by their real paths"""
+    rv = {}
+    targets = [os.path.join(build_dir, "qcc")]
+    for n in sorted(os.listdir(build_dir)) if os.path.isdir(build_dir) else []:
+        if n.startswith("libqore.") and not os.path.islink(os.path.join(build_dir, n)):
+            targets.append(os.path.join(build_dir, n))
+    for t in targets:
+        if not os.path.isfile(t):
+            continue
+        if sys.platform == "darwin":
+            out = run_capture(["otool", "-L", t])
+            libs = [line.strip().split(" (", 1)[0] for line in out.splitlines()[1:] if line.startswith("\t")]
+        else:
+            out = run_capture(["ldd", t])
+            libs = []
+            for line in out.splitlines():
+                m = re.search(r"=>\s*(/\S+)", line) or re.match(r"\s*(/\S+)", line)
+                if m:
+                    libs.append(m.group(1))
+        for lib in libs:
+            if lib.startswith("@"):
+                # @rpath/libqore is the build's own library, whose sources are in the context; @rpath/libLLVM is
+                # found through LLVM_DIR below
+                continue
+            real = os.path.realpath(lib)
+            if real not in rv:
+                # a library of the dyld shared cache has no file: its path and the OS version stand for it
+                rv[real] = file_record(real) if os.path.isfile(real) else "NO-FILE"
+    # the LLVM library that qcc generates code with: LLVM_PACKAGE_VERSION names only its x.y.z
+    llvm_dir = cmake_cache_value(os.path.join(build_dir, "CMakeCache.txt"), "LLVM_DIR")
+    if llvm_dir:
+        libdir = os.path.dirname(os.path.dirname(os.path.normpath(llvm_dir)))
+        try:
+            names = sorted(os.listdir(libdir))
+        except OSError:
+            names = []
+        for n in names:
+            if n.startswith("libLLVM") and (".so" in n or n.endswith(".dylib")):
+                real = os.path.realpath(os.path.join(libdir, n))
+                if real not in rv and os.path.isfile(real):
+                    rv[real] = file_record(real)
+    return rv
+
+
 def qcc_identity(version_output):
     m = re.search(r"^AOT runtime identity: ([0-9a-f]{64})\s*$", version_output, re.M)
     return m.group(1) if m else None
@@ -560,6 +636,10 @@ def compute_context(source_dir, build_dir, qcc, inputs, env=None):
             "libc": libc_info(),
         },
         "link": link_driver_info(os.path.join(build_dir, "aot-link.conf")),
+        "tools": tool_versions(os.path.join(build_dir, "CMakeCache.txt")),
+        "libraries": shared_library_digests(build_dir),
+        # the local time zone of parse-time date values, when TZ (which is in the key) is not set
+        "localtime": [os.path.realpath("/etc/localtime"), file_record(os.path.realpath("/etc/localtime"))],
     }
     return {"schema": SCHEMA, "digest": digest_items(items), "identity": identity, "items": items}
 
@@ -644,13 +724,6 @@ def write_index(build_dir, source_root, qmod, key):
     atomic_write(index_path(build_dir, source_root), json.dumps(rec, sort_keys=True).encode("utf-8"))
 
 
-def remove_index(build_dir, source_root):
-    try:
-        os.unlink(index_path(build_dir, source_root))
-    except OSError:
-        pass
-
-
 def lookup_module_key(build_dir, dep_path, own_root):
     """Returns (source root, key) of the in-tree module that a dependency source belongs to, or None
 
@@ -690,6 +763,37 @@ def own_source_files(source_root):
     for dirpath, _, names in os.walk(source_root):
         rv += [os.path.join(dirpath, n) for n in sorted(names) if n.endswith((".qm", ".qc", ".ql", ".q"))]
     return rv
+
+
+#: directives that change the module path while a module is parsed: the modules they make qcc find are not in the
+#: candidate-file records, so a module using one is not stored
+MODULE_PATH_DIRECTIVE = re.compile(rb"^[ \t]*%(prepend|append)-module-path\b", re.M)
+
+
+def check_no_module_path_directives(source_root):
+    """Raises CacheError for a module whose sources change the module path (%prepend-module-path,
+    %append-module-path, with or without environment variables in them)"""
+    for path in own_source_files(source_root):
+        with open(path, "rb") as f:
+            if MODULE_PATH_DIRECTIVE.search(f.read()):
+                raise CacheError("source '%s' changes the module path, which the key does not cover" % path)
+
+
+def entry_signature(entry, key):
+    """The HMAC-SHA256 of an entry (everything but its signature) with the signing key; it binds the entry, whose
+    file digests are part of it, to the jobs that hold the key"""
+    data = json.dumps({k: v for k, v in entry.items() if k != "signature"}, sort_keys=True, separators=(",", ":"))
+    return hmac.new(key.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def check_signature(entry, key):
+    """Returns None if the entry is signed with the key (or no key is set), else the reason"""
+    if not key:
+        return None
+    sig = entry.get("signature")
+    if not isinstance(sig, str) or not hmac.compare_digest(sig, entry_signature(entry, key)):
+        return "entry not signed with the signing key"
+    return None
 
 
 def check_includes_listed(source_root, deps):
@@ -821,8 +925,28 @@ class Cache:
         self.objects = os.path.join(self.root, "objects")
         self.trash = os.path.join(self.root, "trash")
 
+    def last_use(self, entry_path, key):
+        """The last use of an entry: its last hit (the mtime of its lock file) or when it was stored"""
+        used = 0
+        for p in (entry_path, self.lock_path(key)):
+            try:
+                used = max(used, os.stat(p).st_mtime)
+            except OSError:
+                pass
+        return used
+
+    def quarantine(self):
+        """Takes every entry out of use at once (an audit found a module that qcc does not write again): the cache
+        directory is renamed out of the way, so no job reuses an entry of it; a later prune deletes it"""
+        dst = "%s.quarantine.%d.%d" % (self.root, os.getpid(), int(time.time()))
+        try:
+            os.rename(self.root, dst)
+            return dst
+        except OSError:
+            return None
+
     def candidates(self, base):
-        """Returns the entries stored under a base key, most recently stored first"""
+        """Returns the entries stored under a base key, most recently used first"""
         d = os.path.join(self.entries, base)
         try:
             names = [n for n in os.listdir(d) if n.endswith(".json")]
@@ -834,7 +958,7 @@ class Cache:
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     entry = json.load(f)
-                rv.append((os.stat(p).st_mtime, p, entry))
+                rv.append((self.last_use(p, n[:-5]), p, entry))
             except (OSError, ValueError):
                 continue
         rv.sort(key=lambda e: e[0], reverse=True)
@@ -906,15 +1030,39 @@ class Cache:
                     pass
         return True
 
-    def store(self, base, key, entry, files):
-        """Stores the files of a compiled module; another build that stores the same key first wins"""
+    def valid_object(self, base, key, signing_key=None):
+        """True if the object of a key is backed by a valid entry: one that exists, is signed with the signing key
+        (when one is set) and has the digests of the object's files"""
+        try:
+            with open(os.path.join(self.entries, base, key + ".json"), "r", encoding="utf-8") as f:
+                entry = json.load(f)
+            if entry.get("key") != key or check_signature(entry, signing_key):
+                return False
+            obj = self.object_dir(key)
+            return all(sha256_file(os.path.join(obj, "qmod" + suffix)) == entry["files"][suffix or "qmod"]
+                       for suffix in STORED_SUFFIXES)
+        except (OSError, ValueError, KeyError):
+            return False
+
+    def store(self, base, key, entry, files, signing_key=None):
+        """Stores the files of a compiled module
+
+        An object that no valid entry backs (a damaged or forged one, an interrupted store) is replaced.  When a valid
+        entry exists already (another job stored the key first), the files must be the same: KeyCollision is raised
+        otherwise, as the key then misses an input.
+        """
+        obj = self.object_dir(key)
+        entry_path = os.path.join(self.entries, base, key + ".json")
+        if os.path.isdir(obj) and not self.valid_object(base, key, signing_key):
+            if not self.remove(entry_path, key):
+                raise OSError("the invalid entry %s is being read by another job" % key)
         fd = self.open_lock(key)
         if fd is None:
             raise OSError("cannot create the lock file of entry %s" % key)
         try:
             # shared: a store does not conflict with a reader, but an entry being stored is not pruned
             fcntl.flock(fd, fcntl.LOCK_SH)
-            obj = self.object_dir(key)
+            created = False
             if not os.path.isdir(obj):
                 tmp = tempfile.mkdtemp(prefix=".tmp.", dir=self.objects)
                 try:
@@ -922,19 +1070,26 @@ class Cache:
                         shutil.copyfile(src, os.path.join(tmp, "qmod" + suffix))
                     try:
                         os.rename(tmp, obj)
+                        created = True
                     except OSError:
+                        # another job stored it meanwhile
                         if not os.path.isdir(obj):
                             raise
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
-            d = os.path.join(self.entries, base)
-            os.makedirs(d, exist_ok=True)
-            atomic_write(os.path.join(d, key + ".json"),
-                         (json.dumps(entry, sort_keys=True, indent=1) + "\n").encode())
+            if not created:
+                # the same key must give the same files: anything else means that the key misses an input
+                for suffix in files:
+                    stored = os.path.join(obj, "qmod" + suffix)
+                    if sha256_file(stored) != entry["files"][suffix or "qmod"]:
+                        raise KeyCollision("the cache has another module for key %s (file 'qmod%s'): qcc wrote "
+                                           "different files for the same inputs" % (key, suffix))
+            os.makedirs(os.path.dirname(entry_path), exist_ok=True)
+            atomic_write(entry_path, (json.dumps(entry, sort_keys=True, indent=1) + "\n").encode())
             self.mark_used(fd)
         finally:
             os.close(fd)
-        # keep the most recently stored entries of the base key
+        # keep the most recently used entries of the base key
         cands = self.candidates(base)
         for p, e in cands[MAX_ENTRIES_PER_BASE:]:
             self.remove(p, e.get("key", ""))
@@ -998,6 +1153,9 @@ class Module:
         self.default_dirs = args.default_module_dir
         # a cache that this job does not write: no store, no last-use mark, no removal
         self.readonly = env.get("QORE_QMOD_CACHE_READONLY") in ("1", "true", "yes")
+        # the key with which the entries this job writes are signed, and the entries it reads must be; set only in
+        # the jobs of the trust level of the cache (see design/qmod-build-cache.md "Trust")
+        self.signing_key = env.get("QORE_QMOD_CACHE_SIGNING_KEY") or None
         self.base = base_key(self.context["digest"], self.argv, self.cwd, env, self.source_root, self.extra)
 
     def files(self):
@@ -1015,8 +1173,14 @@ class Module:
     def search_dirs(self):
         return module_search_dirs(self.env, self.default_dirs)
 
-    def try_hit(self, cache):
-        """Restores the first entry whose dependencies still hold; returns (entry, reason for the last miss)"""
+    def try_hit(self, cache, readonly=None):
+        """Restores the first entry whose dependencies still hold; returns (entry, reason for the last miss)
+
+        @param readonly True for a cache this job does not write to (a cache of another trust level): no last-use
+        mark, no removal of a damaged entry; None for this job's setting
+        """
+        if readonly is None:
+            readonly = self.readonly
         cands = cache.candidates(self.base)
         if not cands:
             return None, "no entry"
@@ -1026,6 +1190,9 @@ class Module:
             if entry.get("schema") != SCHEMA or entry.get("base_key") != self.base or not key:
                 reason = "invalid entry"
                 continue
+            reason = check_signature(entry, self.signing_key)
+            if reason:
+                continue
             reason = check_dependencies(self.build_dir, self.source_root, entry["deps"]) \
                 or check_optional(entry["optional"], self.search_dirs()) \
                 or check_resolution(entry["resolution"], self.search_dirs())
@@ -1033,12 +1200,12 @@ class Module:
                 continue
             if result_key(self.base, entry["deps"], entry["optional"], entry["resolution"]) != key:
                 reason = "entry key mismatch"
-                if not self.readonly:
+                if not readonly:
                     cache.remove(path, key)
                 continue
             obj = cache.object_dir(key)
             # held while the entry is read, so that no job prunes it meanwhile
-            fd = cache.open_lock(key, create=not self.readonly)
+            fd = cache.open_lock(key, create=not readonly)
             damaged = None
             try:
                 if fd is not None:
@@ -1066,17 +1233,21 @@ class Module:
                 for suffix in (".d", ".d.fingerprints", ""):
                     atomic_copy(os.path.join(obj, "qmod" + suffix), self.out + suffix,
                                 None if suffix else int(entry["mode"]) & 0o777)
+                    if suffix == "" and self.env.get("QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE"):
+                        # for the tests: a copy that went wrong
+                        with open(self.out, "ab") as f:
+                            f.write(b"x")
                 for suffix, digest in (("", entry["files"]["qmod"]), (".d", entry["files"][".d"])):
                     if sha256_file(self.out + suffix) != digest:
                         raise CacheError("restored file '%s' differs from the cache" % (self.out + suffix))
-                if not self.readonly:
+                if not readonly:
                     cache.mark_used(fd)
                 return entry, None
             finally:
                 if fd is not None:
                     os.close(fd)
                 # a damaged entry is removed once it is no longer read
-                if damaged and not self.readonly:
+                if damaged and not readonly:
                     cache.remove(path, key)
         return None, reason
 
@@ -1107,6 +1278,7 @@ class Module:
             if st.st_size != size or st.st_mtime_ns != mtime_ns:
                 raise CacheError("source '%s' changed while the module was compiled" % path)
         check_includes_listed(self.source_root, deps)
+        check_no_module_path_directives(self.source_root)
         records = classify_dependencies(self.build_dir, self.source_root, deps)
         required, optional_specs = read_module_info(self.out, self.name)
         # the compile may have written files in the module path since a lookup listed it
@@ -1135,6 +1307,8 @@ class Module:
             },
             "created": time.time(),
         }
+        if self.signing_key:
+            entry["signature"] = entry_signature(entry, self.signing_key)
         return key, entry
 
     def audit(self, entry):
@@ -1184,12 +1358,21 @@ def cmd_exec(args):
         log("%s: not cached: %s" % (args.name, e))
         return subprocess.run(args.qcc_argv, env=env).returncode
     cache = Cache(args.cache_dir)
+    # the caches this job reads but never writes: those of a more trusted level
+    read_caches = [Cache(d) for d in args.read_cache_dir]
     reason = "cache disabled"
     if not disabled:
-        try:
-            entry, reason = mod.try_hit(cache)
-        except (OSError, ValueError, KeyError, CacheError) as e:
-            entry, reason = None, "lookup failed: %s" % e
+        entry = None
+        for c, ro in [(cache, None)] + [(c, True) for c in read_caches]:
+            try:
+                entry, r = mod.try_hit(c, ro)
+            except (OSError, ValueError, KeyError, CacheError) as e:
+                entry, r = None, "lookup failed: %s" % e
+            if entry:
+                hit_cache, hit_readonly = c, ro or readonly
+                break
+            if c is cache:
+                reason = r
         if entry:
             try:
                 if audit_selected(entry["key"], env.get("QORE_QMOD_CACHE_AUDIT", "")):
@@ -1198,13 +1381,12 @@ def cmd_exec(args):
                 else:
                     log("hit %s" % mod.name)
             except CacheError as e:
-                log("AUDIT FAILED: %s" % e)
-                return 1
+                return fail_key_hole(mod, hit_cache, hit_readonly, "AUDIT FAILED: %s" % e)
             mod.sidecar("hit", entry["key"], entry)
             write_index(mod.build_dir, mod.source_root, mod.out, entry["key"])
             return 0
-    # a miss: the module's earlier key no longer describes what is in the build tree
-    remove_index(mod.build_dir, mod.source_root)
+    # a miss: the index still names the module's earlier key, but with the size, modification time and inode of the
+    # earlier qmod, which the compile replaces (qcc renames a new file into place), so no dependent uses that key
     rc = mod.run_qcc()
     if rc:
         return rc
@@ -1220,14 +1402,33 @@ def cmd_exec(args):
     stored = ""
     if not disabled and not readonly:
         try:
-            cache.store(mod.base, key, entry, mod.files())
+            cache.store(mod.base, key, entry, mod.files(), mod.signing_key)
             stored = "; stored"
+        except KeyCollision as e:
+            return fail_key_hole(mod, cache, False, "KEY COLLISION: %s" % e)
         except OSError as e:
             stored = "; not stored: %s" % e
     log("miss %s (%s)%s" % (mod.name, reason, stored))
     mod.sidecar("miss", key, entry)
     write_index(mod.build_dir, mod.source_root, mod.out, key)
     return 0
+
+
+def fail_key_hole(mod, cache, readonly, msg):
+    """An audit or a store found that qcc does not write the module a cache has for its key: the key misses an
+    input, so no entry of that cache can be trusted.  The job fails, so that someone finds the input; a cache this job
+    writes to is quarantined first, so that no later job reuses its entries (a cache of another trust level is left to
+    its own jobs, whose audits find the same)."""
+    log(msg)
+    if not readonly:
+        moved = cache.quarantine()
+        log("quarantined the cache %s%s: every module will be compiled again" % (
+            cache.root, " to %s" % moved if moved else " (failed)"))
+    try:
+        mod.sidecar("failed", None)
+    except OSError:
+        pass
+    return 1
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1295,6 +1496,9 @@ def cmd_verify(args):
             if rec["origin"] != "hit":
                 continue
             entry = rec["entry"]
+            reason = check_signature(entry, os.environ.get("QORE_QMOD_CACHE_SIGNING_KEY") or None)
+            if reason:
+                raise CacheError(reason)
             if sha256_file(qmod) != entry["files"]["qmod"]:
                 raise CacheError("it is not the module the cache supplied")
             target, deps = read_depfile(qmod + ".d")
@@ -1477,19 +1681,16 @@ def remove_orphans(cache, now):
 
 def cmd_prune(args):
     """Prunes the cache and prints one line with the hits and misses of a build and the size of the cache before and
-    after: entries not used for --max-age-days are removed, then, with --keep-build, those that no module of the build
-    tree came from or was stored as, then the least recently used ones while the cache is larger than --max-size MiB;
-    an entry that a job is reading is never removed"""
+    after: orphans older than ORPHAN_AGE and quarantined caches are removed, then the entries not used for
+    --max-age-days, then the least recently used ones while the cache is larger than --max-size MiB; an entry that a
+    job is reading, and a store or a removal in progress, are never touched"""
     cache = Cache(args.cache_dir)
     now = time.time()
     counts = {}
-    keep_keys = None
     if args.build_dir:
         counts, _ = build_counts_and_keys(args.build_dir)
-    if args.keep_build:
-        _, keep_keys = build_counts_and_keys(args.keep_build)
     before = dir_size(cache.root)
-    stats = {"age": 0, "build": 0, "size": 0, "orphans": 0, "in use": 0}
+    stats = {"age": 0, "size": 0, "orphans": 0, "quarantined caches": 0, "in use": 0}
     note = ""
     os.makedirs(cache.root, exist_ok=True)
     lock_fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT, 0o666)
@@ -1500,6 +1701,13 @@ def cmd_prune(args):
             note = "; another job is pruning the cache"
         if not note:
             stats["orphans"] = remove_orphans(cache, now)
+            # caches quarantined by a failed audit, once no job can still be reading them
+            parent = os.path.dirname(cache.root)
+            for n in os.listdir(parent):
+                p = os.path.join(parent, n)
+                if n.startswith(SCHEMA + ".quarantine.") and now - os.stat(p).st_mtime > ORPHAN_AGE:
+                    shutil.rmtree(p, ignore_errors=True)
+                    stats["quarantined caches"] += 1
             entries = cache_entries(cache)
             keep = []
             # the entries that a job is reading, which are left for a later prune
@@ -1508,8 +1716,6 @@ def cmd_prune(args):
                 used, p, key, _ = e
                 if args.max_age_days is not None and now - used > args.max_age_days * 86400:
                     reason = "age"
-                elif keep_keys is not None and key not in keep_keys:
-                    reason = "build"
                 else:
                     keep.append(e)
                     continue
@@ -1565,6 +1771,8 @@ def main(argv=None):
     e.add_argument("--name", required=True)
     e.add_argument("--source-root", required=True)
     e.add_argument("--source", action="append", default=[])
+    e.add_argument("--read-cache-dir", action="append", default=[],
+                   help="a cache that is read after --cache-dir and never written to (of a more trusted level)")
     e.add_argument("--default-module-dir", action="append", default=[],
                    help="a directory that the module loader searches after QORE_MODULE_DIR")
     e.add_argument("qcc_argv", nargs=argparse.REMAINDER)
@@ -1578,7 +1786,6 @@ def main(argv=None):
     r = sub.add_parser("prune", help="remove old cache entries")
     r.add_argument("--cache-dir", required=True)
     r.add_argument("--max-age-days", type=float, help="remove the entries not used for this many days")
-    r.add_argument("--keep-build", help="keep only the entries that the modules of this build tree came from")
     r.add_argument("--max-size", type=float, help="remove the least recently used entries above this many MiB")
     r.add_argument("--build-dir", help="the build tree whose hits and misses are printed")
     r.add_argument("--job", help="the name of the job, for the statistics line")
