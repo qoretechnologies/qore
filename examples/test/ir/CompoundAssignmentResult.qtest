@@ -21,9 +21,17 @@
     for an lvalue with no value, so <tt>(v += <HD>{}).fullType()</tt> gave \c "hash<HD>" for an \c any or \c auto!
     variable.  The result is now read from the variable when it is used.
 
+    The other compound operators return the value they compute, except -=, which returns the lvalue's value as +=
+    does, and *= and /=, which return it when the lvalue or the operand holds a number: compiled code gave the
+    computed number for *= and /= on a \c softint local or thread_local variable with a number operand (ex:
+    \c 17.5 while the variable holds \c 17).
+
     The script applies += to \c any and \c auto! locals, globals, thread_local variables, members and static
-    variables, with no value and with \c NULL, and prints the results and the values; it calls each function three
-    times, in every execution mode and on the IR tier of tiered execution (see ExecModeOutputTest).
+    variables, with no value and with \c NULL, and -=, *= and /= to \c softint and \c *softint locals and
+    \c softint globals, thread_local variables, members and static variables with \c number, \c float and \c int
+    operands, and prints the results and the values; it calls each function three times, in every execution mode and
+    on the IR tier of tiered execution (see ExecModeOutputTest).  CompoundAssignmentMatrix.qtest checks every
+    operator on every kind of lvalue.
 */
 class CompoundAssignmentResultTest inherits ExecModeOutputTest {
     public {
@@ -34,10 +42,14 @@ any ga;
 auto! gb;
 thread_local any ta;
 thread_local auto! tb;
+softint gsi;
+thread_local softint tsi;
 class C {
     public {
         any ma;
         auto! mb;
+        softint msi;
+        static softint ssi;
         static any sa;
         static auto! sb;
     }
@@ -68,10 +80,43 @@ string sub others(auto o) {
         t(c.mb += o), t(C::sa += o), t(C::sb += o));
 }
 
+string sub t2(auto ignored, auto v) { return sprintf("%s:%y", v.type(), v); }
+
+# -= gives the value the variable holds, and so do *= and /= when the
+# operand is a number; with a float or int operand, *= and /= give the value they compute
+string sub softints(auto o) {
+    softint l;
+    *softint ol;
+    C c();
+    string r = o.type();
+    r += sprintf(" local-=:%s", t2(l = 7, l -= o));
+    r += sprintf(" *local-=:%s", t2(ol = 7, ol -= o));
+    r += sprintf(" global-=:%s", t2(gsi = 7, gsi -= o));
+    r += sprintf(" tl-=:%s", t2(tsi = 7, tsi -= o));
+    r += sprintf(" member-=:%s", t2(c.msi = 7, c.msi -= o));
+    r += sprintf(" static-=:%s", t2(C::ssi = 7, C::ssi -= o));
+    r += sprintf(" local*=:%s", t2(l = 7, l *= o));
+    r += sprintf(" *local*=:%s", t2(ol = 7, ol *= o));
+    r += sprintf(" global*=:%s", t2(gsi = 7, gsi *= o));
+    r += sprintf(" tl*=:%s", t2(tsi = 7, tsi *= o));
+    r += sprintf(" member*=:%s", t2(c.msi = 7, c.msi *= o));
+    r += sprintf(" static*=:%s", t2(C::ssi = 7, C::ssi *= o));
+    r += sprintf(" local/=:%s", t2(l = 7, l /= o));
+    r += sprintf(" *local/=:%s", t2(ol = 7, ol /= o));
+    r += sprintf(" global/=:%s", t2(gsi = 7, gsi /= o));
+    r += sprintf(" tl/=:%s", t2(tsi = 7, tsi /= o));
+    r += sprintf(" member/=:%s", t2(c.msi = 7, c.msi /= o));
+    r += sprintf(" static/=:%s", t2(C::ssi = 7, C::ssi /= o));
+    return r;
+}
+
 list<auto> ops = (<HD>{}, cast<list<int>>((1, 2)));
 for (int i = 0; i < 3; ++i) {
     foreach auto o in (ops) {
         printf("%d %s: %s | %s\n", i, o.fullType(), locals(o), others(o));
+    }
+    foreach auto o in ((2.5n, 2.5, 2)) {
+        printf("%d%s\n", i, softints(o));
     }
 }
 ';
@@ -80,14 +125,23 @@ for (int i = 0; i < 3; ++i) {
         const Expected = (
             "0 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
             "0 list<int>: list list list list / list list | list list list list list list list list",
+            "0number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "0float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:float:17.5 *local*=:float:17.5 global*=:float:17.5 tl*=:float:17.5 member*=:float:17.5 static*=:float:17.5 local/=:float:2.8 *local/=:float:2.8 global/=:float:2.8 tl/=:float:2.8 member/=:float:2.8 static/=:float:2.8",
+            "0integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
             "1 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
             "1 list<int>: list list list list / list list | list list list list list list list list",
+            "1number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "1float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:float:17.5 *local*=:float:17.5 global*=:float:17.5 tl*=:float:17.5 member*=:float:17.5 static*=:float:17.5 local/=:float:2.8 *local/=:float:2.8 global/=:float:2.8 tl/=:float:2.8 member/=:float:2.8 static/=:float:2.8",
+            "1integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
             "2 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
             "2 list<int>: list list list list / list list | list list list list list list list list",
+            "2number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "2float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:float:17.5 *local*=:float:17.5 global*=:float:17.5 tl*=:float:17.5 member*=:float:17.5 static*=:float:17.5 local/=:float:2.8 *local/=:float:2.8 global/=:float:2.8 tl/=:float:2.8 member/=:float:2.8 static/=:float:2.8",
+            "2integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
         );
     }
 
     constructor() : ExecModeOutputTest("CompoundAssignmentResult", Script, (map $1 + "\n", Expected).join(""),
-            "gives the value the variable holds as the result of += and -=") {
+            "gives the AST interpreter's result of +=, -=, *= and /=") {
     }
 }

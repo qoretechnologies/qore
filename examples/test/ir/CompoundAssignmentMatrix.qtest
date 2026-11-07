@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CompoundAssignmentMatrixTest
+
+#! Regression test: every compound assignment operator gives the AST interpreter's result and value
+/** The script applies each of the ten compound assignment operators (<tt>+= -= *= /= %= &= |= ^= <<= >>=</tt>) to
+    lvalues of each kind (local, global and thread_local variables, members, hash and list elements and references)
+    and of each type (\c int, \c softint, \c float, \c number, \c auto, \c *softint), with typed operands
+    (\c int, \c float, \c number, \c string) and
+    \c auto operands holding a number, a float and no value, and prints the result of the operator and the value of
+    the lvalue afterwards, with their types, or the error raised.  A combination whose code does not parse without a
+    warning (ex: a \c float operand of *= on an \c int lvalue) is left out; the \c auto operands cover it at runtime.
+
+    The expected output is the AST interpreter's, computed when the test runs (it has some 1600 lines); the pinned
+    lines check the AST interpreter's results that the compiled modes got wrong: *= and /= on a \c softint or
+    \c *softint local or thread_local variable with a number operand gave the computed number (ex: \c 17.5) instead of
+    the value the variable holds (\c 17), and +=, the controls, gave the value the variable holds.  The script runs in
+    every execution mode, on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class CompoundAssignmentMatrixTest inherits ExecModeOutputTest {
+    public {
+        #! the operators
+        const Ops = ("+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=");
+
+        #! the lvalue types and initial values
+        const Types = (
+            ("int", "7"),
+            ("softint", "7"),
+            ("float", "7.0"),
+            ("number", "7n"),
+            ("auto", "7"),
+            ("*softint", "7"),
+        );
+
+        #! the operand types and values
+        const Operands = (
+            ("int", "2"),
+            ("float", "2.5"),
+            ("number", "2.5n"),
+            ("string", "\"3\""),
+            ("auto", "2.5n"),
+            ("auto", "2.5"),
+            ("auto", "NOTHING"),
+        );
+
+        #! the lvalue kinds
+        /** local and thread_local variables are changed by loading, computing and storing, the other kinds through
+            their lvalue path, like static class variables and closure-bound locals, which are left out to keep the
+            native compilation of the script short
+        */
+        const Kinds = ("local", "global", "tl", "member", "hash", "list", "ref");
+
+        #! results of the AST interpreter that the output must hold
+        const Pinned = (
+            "local softint auto:2.5n *=: integer:17 integer:17",
+            "local softint auto:2.5n /=: integer:2 integer:2",
+            "local *softint auto:2.5n *=: integer:17 integer:17",
+            "local *softint auto:2.5n /=: integer:2 integer:2",
+            "tl softint auto:2.5n *=: integer:17 integer:17",
+            "tl softint auto:2.5n /=: integer:2 integer:2",
+            "tl *softint auto:2.5n *=: integer:17 integer:17",
+            "ref softint auto:2.5n *=: integer:17 integer:17",
+            "global softint auto:2.5n *=: integer:17 integer:17",
+            "local softint auto:2.5n +=: integer:9 integer:9",
+            "local softint auto:2.5 *=: float:17.5 integer:17",
+            "local auto auto:2.5n *=: number:17.5 number:17.5",
+            "local auto auto:2.5 /=: float:2.8 float:2.8",
+            "local int int:2 <<=: integer:28 integer:28",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CompoundAssignmentMatrix", CompoundAssignmentMatrixTest::script(),
+            ExecModeOutputTest::ast_output("CompoundAssignmentMatrix", CompoundAssignmentMatrixTest::script()),
+            "gives the result and value of every compound assignment that the AST interpreter gives", Pinned) {
+    }
+
+    #! returns the script, generated once
+    static string script() {
+        if (!Holder::script) {
+            Holder::script = CompoundAssignmentMatrixTest::generate();
+        }
+        return Holder::script;
+    }
+
+    #! returns the declarations of the script
+    private static string prelude() {
+        list<string> l = ("%modern", "string sub fmt(auto v) { return sprintf(\"%s:%y\", v.type(), v); }",
+            "sub out(string label, auto r, auto v) { printf(\"%s: %s %s\\n\", label, fmt(r), fmt(v)); }",
+            "sub err(string label, string err) { printf(\"%s: %s\\n\", label, err); }");
+        list<string> members = ();
+        foreach list<string> t in (Types) {
+            string id = CompoundAssignmentMatrixTest::id(t[0]);
+            l += sprintf("our %s g_%s;", t[0], id);
+            l += sprintf("thread_local %s t_%s;", t[0], id);
+            members += sprintf("    %s m_%s;", t[0], id);
+            members += sprintf("    static %s s_%s;", t[0], id);
+        }
+        l += "class C { public {";
+        l += members;
+        l += "} }";
+        return l.join("\n") + "\n";
+    }
+
+    #! returns an identifier for a type
+    private static string id(string type) {
+        return replace(type, "*", "on_");
+    }
+
+    #! returns the lvalue expression and its declarations for a kind and a type
+    private static list<string> lvalue(string kind, string type, string init) {
+        string id = CompoundAssignmentMatrixTest::id(type);
+        switch (kind) {
+            case "local": return ("v", sprintf("%s v;", type));
+            case "global": return ("g_" + id, "");
+            case "tl": return ("t_" + id, "");
+            case "member": return ("c.m_" + id, "C c();");
+            case "static": return ("C::s_" + id, "");
+            case "hash": return ("h.k", sprintf("hash<string, %s> h();", type));
+            case "list": return ("l[0]", sprintf("list<%s> l = cast<list<%s>>((%s,));", type, type, init));
+            case "closure": return ("v", sprintf("%s v; code cl = sub () { v = v; };", type));
+            case "ref": return ("r", sprintf("%s v; reference<%s> r = \\v;", type, type));
+        }
+        throw "MATRIX-ERROR", kind;
+    }
+
+    #! generates the script: one function for each lvalue kind and type, holding the combinations that parse
+    private static string generate() {
+        string prelude = CompoundAssignmentMatrixTest::prelude();
+        list<string> funcs = ();
+        list<string> calls = ();
+        int dropped = 0;
+        foreach string kind in (Kinds) {
+            foreach list<string> t in (Types) {
+                list<string> lv = CompoundAssignmentMatrixTest::lvalue(kind, t[0], t[1]);
+                list<string> blocks = ();
+                foreach list<string> o in (Operands) {
+                    string label = sprintf("%s %s %s:%s", kind, t[0], o[0], replace(o[1], "\"", "'"));
+                    string decl = sprintf("    %s o = %s;", o[0], o[1]);
+                    list<string> lines = ();
+                    foreach string op in (Ops) {
+                        # the arguments are evaluated in order: the lvalue is read after the operator changed it
+                        string line = sprintf("        try { %s = %s; out(\"%s %s\", %s %s o, %s); } "
+                            "catch (hash<ExceptionInfo> ex) { err(\"%s %s\", ex.err); }", lv[0], t[1], label, op,
+                            lv[0], op, lv[0], label, op);
+                        if (CompoundAssignmentMatrixTest::parses(prelude, lv[1], decl, line)) {
+                            lines += line;
+                        } else {
+                            ++dropped;
+                        }
+                    }
+                    if (lines) {
+                        blocks += sprintf("    {\n    %s\n%s\n    }", decl, lines.join("\n"));
+                    }
+                }
+                if (blocks) {
+                    string name = sprintf("f_%s_%s", kind, CompoundAssignmentMatrixTest::id(t[0]));
+                    funcs += sprintf("sub %s() {\n    %s\n%s\n}", name, lv[1], blocks.join("\n"));
+                    calls += name + "();";
+                }
+            }
+        }
+        # most combinations of typed operands that do not parse are refused by the parser's type checks, so a
+        # matrix with few dropped combinations or none left would show a broken generator
+        if (!dropped || !calls) {
+            throw "MATRIX-ERROR", sprintf("dropped %d combinations, kept %d functions", dropped, calls.size());
+        }
+        return prelude + funcs.join("\n") + "\n" + calls.join("\n") + "\n";
+    }
+
+    #! returns True if a combination parses without a warning
+    private static bool parses(string prelude, string lvdecl, string decl, string line) {
+        Program p();
+        try {
+            *hash<auto> warnings = p.parse(sprintf("%ssub f() {\n    %s\n    {\n    %s\n%s\n    }\n}\n", prelude,
+                lvdecl, decl, line), "matrix", WARN_DEFAULT);
+            return !warnings;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+}
+
+#! holds the generated script
+class Holder {
+    public {
+        static *string script;
+    }
+}

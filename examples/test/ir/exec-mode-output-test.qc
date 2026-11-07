@@ -29,10 +29,20 @@ class ExecModeOutputTest inherits QUnit::Test {
         string qore_bin;
         string libqore_dir;
         string qcc_bin;
+        #! lines that the expected output must hold
+        list<string> pinned;
     }
 
     #! creates the test; \a desc describes what every mode and the executable must give
-    constructor(string name, string script, string expected, string desc) : QUnit::Test(name, "1.0", \ARGV) {
+    /** @param name the name of the test
+        @param script the script
+        @param expected the expected output, the AST interpreter's; see ast_output() for a test that computes it
+        @param desc what every mode and the executable must give
+        @param pinned lines that the expected output must hold, for an expected output computed by running the AST
+        interpreter, so that a wrong result of the AST interpreter itself fails the test
+    */
+    constructor(string name, string script, string expected, string desc, *list<string> pinned)
+            : QUnit::Test(name, "1.0", \ARGV) {
         self.script = script;
         self.expected = expected;
         prefix = name.lwr();
@@ -44,6 +54,10 @@ class ExecModeOutputTest inherits QUnit::Test {
             qcc_bin = "qcc";
         }
 
+        self.pinned = pinned ?? ();
+        if (self.pinned) {
+            addTestCase("the AST interpreter's output holds the pinned results", \testPinned());
+        }
         addTestCase("every execution mode " + desc, \testModes());
         addTestCase("compiled executable " + desc, \testAot());
 
@@ -58,6 +72,26 @@ class ExecModeOutputTest inherits QUnit::Test {
         f.write(script);
         f.close();
         return path;
+    }
+
+    #! returns the output of the AST interpreter for a script, for a test whose expected output is too large to give
+    static string ast_output(string name, string script) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        TmpDir tmp("qore-" + name.lwr() + "-ast-");
+        string path = tmp.path + DirSep + name.lwr() + ".qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(script);
+        f.close();
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=ast %s", libqore_dir, libqore_dir, qore_bin, path));
+    }
+
+    testPinned() {
+        hash<string, bool> lines = map {$1: True}, expected.split("\n");
+        list<string> missing = select pinned, !lines{$1};
+        assertEq((), missing);
     }
 
     testModes() {

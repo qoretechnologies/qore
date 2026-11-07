@@ -190,8 +190,13 @@ public:
     /** The result is the value the variable holds after the store, as in the AST interpreter, whose += and -=
         operators return the lvalue's value: the variable's declared type can convert the computed value when it is
         stored (ex: an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash), so the variable is read
-        again when the result is used.  The other compound operators of the AST interpreter return the value they
-        compute, and so do their lowerings.
+        again when the result is used.
+
+        The other compound operators of the AST interpreter return the value they compute, with one exception: *=
+        and /= return the lvalue's value when the lvalue or the operand holds a number.  Their lowerings return the
+        value they compute, and a variable for which the two can differ (one whose type accepts a number only by
+        converting it, such as \c softint) is changed through its lvalue path instead, which runs the AST
+        interpreter's operator (see lowerMultiplyEquals() and lowerDivideEquals()).
 
         @param needs_rv true if the result of the operator is used
         @param var the variable

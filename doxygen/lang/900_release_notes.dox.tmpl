@@ -1437,6 +1437,11 @@
     - a reference to an undeclared member of a class with a public member declaration raised two parse exceptions
       when types are required (as with @ref modern "%modern"): the illegal access and the missing type information;
       only the illegal access is now reported
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c *= and \c /= on a \c softint or
+      \c *softint local or \c thread_local variable with an operand holding a number gave the number computed
+      instead of the value the variable holds (ex: <tt>softint v = 7; auto n = 2.5n;</tt> then <tt>(v *= n)</tt>
+      gave \c 17.5 while \c v holds \c 17); the result is now the value the variable holds, as with the AST
+      interpreter
     - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter,
       <tt>i += v</tt> on an \c int or \c softint local \c i changed the value of a local \c v to an integer (ex: a
       \c string local holding \c "3" then held \c 3, and an \c int local with no value held \c 0), and so did a
