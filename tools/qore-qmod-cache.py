@@ -380,26 +380,38 @@ def module_search_dirs(env, default_dirs):
     return seen
 
 
-def module_candidates(name, dirs):
-    """Returns every file in the module path that the loader could load for module @p name, with its content
+_listdir_cache = {}
+
+
+def cached_listdir(path):
+    if path not in _listdir_cache:
+        try:
+            _listdir_cache[path] = sorted(os.listdir(path))
+        except OSError:
+            _listdir_cache[path] = None
+    return _listdir_cache[path]
+
+
+def module_candidates(name, dirs, content=True):
+    """Returns every file in the module path that the loader could load for module @p name, in search order, with its
+    content (or, without @p content, the file it resolves to)
 
     The forms are those of QoreModuleManager::getModuleCandidateFiles() and of user modules: in each directory and in
     a directory of the module's name, the binary module files <name>-api-<x>.<y>.qmod, <name>.qmod and the user module
-    source <name>.qm, and a module directory <name>/ with its main source.
+    source <name>.qm.
     """
     rv = []
     for d in dirs:
         for base in (d, os.path.join(d, name)):
-            try:
-                names = os.listdir(base)
-            except OSError:
+            names = cached_listdir(base)
+            if not names:
                 continue
-            for entry in sorted(names):
+            for entry in names:
                 if (entry == name + ".qmod" or entry == name + ".qm"
                         or (entry.startswith(name + "-api-") and entry.endswith(".qmod"))):
                     path = os.path.join(base, entry)
                     if os.path.isfile(path):
-                        rv.append([path, sha256_file(path)])
+                        rv.append([path, sha256_file(path) if content else os.path.realpath(path)])
     return rv
 
 
@@ -603,9 +615,10 @@ def base_key(context_digest, argv, cwd, env, source_root, extra_sources):
     ])
 
 
-def result_key(base, deps, optional):
-    """The key of a compiled module: its base key and the dependencies and failed optional modules found by qcc"""
-    return digest_items([["base", base], ["deps", deps], ["optional", optional]])
+def result_key(base, deps, optional, resolution):
+    """The key of a compiled module: its base key, the dependencies and failed optional modules found by qcc, and the
+    candidate files of the modules it requires"""
+    return digest_items([["base", base], ["deps", deps], ["optional", optional], ["resolution", resolution]])
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -724,6 +737,24 @@ def check_optional(records, dirs):
     for rec in records:
         if module_candidates(rec["name"], dirs) != rec["candidates"]:
             return "optional module '%s' has another candidate file now" % rec["spec"]
+    return None
+
+
+def resolution_records(names, dirs):
+    """The candidate files in the module path of each module a module requires (its metadata's dependencies), by
+    path: a file that appears for one of them, as one in a directory searched earlier, would make qcc load another
+    module (the content of the files it loaded is in the dependency records)"""
+    rv = []
+    for spec in names:
+        name = module_spec_name(spec)
+        rv.append({"name": name, "candidates": module_candidates(name, dirs, content=False)})
+    return rv
+
+
+def check_resolution(records, dirs):
+    for rec in records:
+        if module_candidates(rec["name"], dirs, content=False) != rec["candidates"]:
+            return "module '%s' has other candidate files now" % rec["name"]
     return None
 
 
@@ -882,10 +913,11 @@ class Module:
                 reason = "invalid entry"
                 continue
             reason = check_dependencies(self.build_dir, self.source_root, entry["deps"]) \
-                or check_optional(entry["optional"], self.search_dirs())
+                or check_optional(entry["optional"], self.search_dirs()) \
+                or check_resolution(entry["resolution"], self.search_dirs())
             if reason:
                 continue
-            if result_key(self.base, entry["deps"], entry["optional"]) != key:
+            if result_key(self.base, entry["deps"], entry["optional"], entry["resolution"]) != key:
                 reason = "entry key mismatch"
                 cache.remove(path, key)
                 continue
@@ -929,6 +961,9 @@ class Module:
         if os.path.abspath(target) != self.out:
             raise CacheError("the dependency file names '%s'" % target)
         fingerprints = read_fingerprints(self.out + ".d.fingerprints")
+        for dep in deps:
+            if dep not in fingerprints:
+                raise CacheError("qcc recorded no fingerprint for dependency '%s'" % dep)
         # each source must still be as qcc recorded it: a source written during the compile is no stable input
         for path, (size, mtime_ns, _) in fingerprints.items():
             try:
@@ -938,13 +973,16 @@ class Module:
             if st.st_size != size or st.st_mtime_ns != mtime_ns:
                 raise CacheError("source '%s' changed while the module was compiled" % path)
         records = classify_dependencies(self.build_dir, self.source_root, deps)
-        _, optional_specs = read_module_info(self.out, self.name)
+        required, optional_specs = read_module_info(self.out, self.name)
+        # the compile may have written files in the module path since a lookup listed it
+        _listdir_cache.clear()
         dirs = self.search_dirs()
         optional = []
         for spec in optional_specs:
             name = module_spec_name(spec)
             optional.append({"spec": spec, "name": name, "candidates": module_candidates(name, dirs)})
-        key = result_key(self.base, records, optional)
+        resolution = resolution_records(required, dirs)
+        key = result_key(self.base, records, optional, resolution)
         entry = {
             "schema": SCHEMA,
             "name": self.name,
@@ -952,6 +990,7 @@ class Module:
             "key": key,
             "deps": records,
             "optional": optional,
+            "resolution": resolution,
             "env_names": [n for n, _ in key_environment(self.env)],
             "mode": os.stat(self.out).st_mode & 0o777,
             "files": {
@@ -1131,9 +1170,11 @@ def cmd_verify(args):
             for d in entry["deps"]:
                 if sha256_file(os.path.realpath(d["path"])) != d["sha256"]:
                     raise CacheError("dependency '%s' has changed since the module was supplied" % d["path"])
-            _, optional = read_module_info(qmod, rec["name"])
+            required, optional = read_module_info(qmod, rec["name"])
             if optional != [o["spec"] for o in entry["optional"]]:
                 raise CacheError("its unavailable optional modules differ from the cache entry")
+            if [module_spec_name(r) for r in required] != [r["name"] for r in entry["resolution"]]:
+                raise CacheError("the modules it requires differ from the cache entry")
         except (OSError, ValueError, KeyError, CacheError) as e:
             failures.append("%s: %s" % (qmod, e))
     # a qmod of the build that the cache did not see is checked for the identity too

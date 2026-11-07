@@ -27,6 +27,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -135,6 +136,9 @@ class ModuleInfoTest(unittest.TestCase):
         (b / "Opt" / "Opt.qm").write_text("x")
         (a / "Opt-api-2.0.qmod").write_text("y")
         (a / "Optional.qm").write_text("z")
+        # a process lists each directory once
+        self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b)]))
+        qc._listdir_cache.clear()
         names = [os.path.relpath(p, self.dir) for p, _ in qc.module_candidates("Opt", [str(a), str(b)])]
         self.assertEqual(["a/Opt-api-2.0.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
 
@@ -215,19 +219,23 @@ class KeyTest(unittest.TestCase):
         deps = [{"path": "/s/M.qm", "kind": "own", "sha256": "a"},
                 {"path": "/s/U.qm", "kind": "module", "sha256": "b", "module_root": "/s/U.qm", "module_key": "k"}]
         opt = [{"spec": "xml", "name": "xml", "candidates": []}]
-        k = qc.result_key("base", deps, opt)
-        self.assertEqual(k, qc.result_key("base", json.loads(json.dumps(deps)), opt))
-        self.assertNotEqual(k, qc.result_key("other", deps, opt))
+        res = [{"name": "U", "candidates": [["/s/U.qm", "/s/U.qm"]]}]
+        k = qc.result_key("base", deps, opt, res)
+        self.assertEqual(k, qc.result_key("base", json.loads(json.dumps(deps)), opt, res))
+        self.assertNotEqual(k, qc.result_key("other", deps, opt, res))
         changed = json.loads(json.dumps(deps))
         changed[1]["module_key"] = "k2"
-        self.assertNotEqual(k, qc.result_key("base", changed, opt))
+        self.assertNotEqual(k, qc.result_key("base", changed, opt, res))
         changed = json.loads(json.dumps(deps))
         changed[0]["sha256"] = "c"
-        self.assertNotEqual(k, qc.result_key("base", changed, opt))
-        self.assertNotEqual(k, qc.result_key("base", deps[:1], opt))
-        self.assertNotEqual(k, qc.result_key("base", deps, []))
+        self.assertNotEqual(k, qc.result_key("base", changed, opt, res))
+        self.assertNotEqual(k, qc.result_key("base", deps[:1], opt, res))
+        self.assertNotEqual(k, qc.result_key("base", deps, [], res))
         self.assertNotEqual(k, qc.result_key("base", deps, [{"spec": "xml", "name": "xml",
-                                                             "candidates": [["/m/xml-api-2.0.qmod", "d"]]}]))
+                                                             "candidates": [["/m/xml-api-2.0.qmod", "d"]]}], res))
+        self.assertNotEqual(k, qc.result_key("base", deps, opt, []))
+        self.assertNotEqual(k, qc.result_key("base", deps, opt, [{"name": "U", "candidates": [
+            ["/e/U.qm", "/e/U.qm"], ["/s/U.qm", "/s/U.qm"]]}]))
 
 
 FAKE_QCC_VERSION = r'''import sys
@@ -332,14 +340,14 @@ qlib = here / "qlib"
 def sources(p):
     return sorted(p.glob("*.q[mc]")) if p.is_dir() else [p]
 def module_path(name):
-    for d in [qlib] + [Path(x) for x in os.environ.get("QORE_MODULE_DIR", "").split(":") if x]:
+    for d in [Path(x) for x in os.environ.get("QORE_MODULE_DIR", "").split(":") if x] + [qlib]:
         for p in (d / (name + ".qm"), d / name):
             if p.exists():
                 return p
     return None
 own = sources(src)
 text = "".join(p.read_text() for p in own)
-deps, optional = [], []
+deps, optional, required = [], [], []
 for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
     p = module_path(name)
     if p is None:
@@ -348,6 +356,7 @@ for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
         optional.append(name)
     else:
         deps += sources(p)
+        required.append(name)
 all_deps = own + deps
 lines = ["# qore AOT module source fingerprints 1"]
 for p in all_deps:
@@ -356,7 +365,8 @@ for p in all_deps:
 def s(v):
     b = v.encode()
     return struct.pack("<I", len(b)) + b
-payload = s(out.stem) + struct.pack("<I", 0) + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
+payload = s(out.stem) + struct.pack("<I", len(required)) + b"".join(s(r) for r in required) \
+    + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
 digest = hashlib.sha256((text + "".join(p.read_text() for p in deps)).encode()).hexdigest()
 noise = str(time.time()) if (here / "nondeterministic.txt").exists() else ""
 tmp = out.with_name(out.name + ".tmp")
@@ -551,6 +561,18 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         (self.extra_dir / "Opt.qm").unlink()
         self.assertEqual([], self.build_all())
 
+    def test_module_shadowed_in_module_path(self):
+        """A module that appears earlier in the module path would be loaded instead: the modules requiring it are
+        compiled again"""
+        self.build_all()
+        self.assertEqual([], self.build_all())
+        (self.extra_dir / "Base.qm").write_text("module Base { # another one\n}\n")
+        self.assertEqual(["Mid", "Top"], self.build_all())
+        self.assertEqual({"Base": "hit", "Mid": "uncacheable", "Top": "uncacheable", "Other": "hit"},
+                         self.origins())
+        (self.extra_dir / "Base.qm").unlink()
+        self.assertEqual([], self.build_all())
+
     def test_source_changed_during_compile_is_not_stored(self):
         (self.source / "slow.txt").write_text("1")
         self.build_all()
@@ -659,7 +681,7 @@ public namespace CacheBase {
     public class Value {
         public { int v = 1; }
     }
-    public int base_value() { return 1; }
+    public int sub base_value() { return 1; }
 }
 ''')
         (q / "CacheMid.qm").write_text('''%modern
@@ -671,7 +693,7 @@ module CacheMid {
     url = "https://qore.org";
 }
 public namespace CacheMid {
-    public int mid_value() { return CacheBase::base_value() + 1; }
+    public int sub mid_value() { return CacheBase::base_value() + 1; }
 }
 ''')
         (q / "CacheOther.qm").write_text('''%modern
@@ -682,7 +704,7 @@ module CacheOther {
     url = "https://qore.org";
 }
 public namespace CacheOther {
-    public string other_value() { return "other"; }
+    public string sub other_value() { return "other"; }
 }
 ''')
         b = self.qore_build
@@ -753,7 +775,12 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build)],
                              capture_output=True, text=True, timeout=60)
         self.assertEqual(0, res.returncode, res.stderr)
-        # the module loader uses the supplied modules: they are not out of date with their sources
+        # the module loader uses the supplied modules: they are not out of date with their sources, also when the
+        # sources have other modification times than when the modules were compiled (as after a checkout), so that
+        # the loader compares their content with the fingerprints the cache supplied
+        later = time.time() + 10
+        for p in (self.source / "qlib").glob("*.qm"):
+            os.utime(str(p), (later, later))
         res = self.load("CacheMid", "CacheMid::mid_value()")
         self.assertEqual(0, res.returncode, res.stdout + res.stderr)
         self.assertEqual("2", res.stdout.strip())

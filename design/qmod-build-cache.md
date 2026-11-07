@@ -48,6 +48,7 @@ and its **result key** (the base key, the dependency records and the optional mo
 |Base key|The module's own sources: every file of a module directory (but the qmods linked into it), or the `.qm` file, and the sources the build lists for it|`exec`
 |Entry|Every file the module's depfile lists, by content: the module's own sources, the sources of the modules it requires, the binary modules it loads, include files|`exec`
 |Entry|For each source of another in-tree module, that module's key, which covers its own dependencies: the key is transitive (a Merkle construction)|`exec`
+|Entry|For each module it requires (the dependencies in its metadata record), the files in the module path that the loader could load for it, by path: a module that appears in a directory searched earlier would be loaded instead|`exec`
 |Entry|For each `%try-module` request that failed when the module was compiled (read from the module's metadata section), every candidate file for that module in `QORE_MODULE_DIR` and the loader's standard module directories, with its content|`exec`
 
 ### Why the whole of libqore, not just the AOT runtime identity
@@ -78,6 +79,15 @@ itself, and uses the key only while the qmod is the one recorded (size, modifica
 A dependency the key cannot cover makes the module uncacheable: a missing file, a Qore module source (`.qm`, `.qc`)
 of a module that was not built through the cache in this build tree (a module from outside the tree), and an AOT
 module that is not one of the tree's.  A binary (C++) module is covered by its content.
+
+### Why the candidate files of the required modules
+
+The depfile names the files qcc loaded, not why it found them: a module file that appears in a directory searched
+before the one qcc loaded a module from (a module installed in an earlier directory of `QORE_MODULE_DIR`, a binary
+module built in the tree where an installed one was found before) would be loaded instead by a new compile, while
+the files the entry names are unchanged.  The module loader does not check this either.  So the entry records, for
+each module named in the module's metadata record, the files in the module path that are candidates for it, and a
+hit needs the same list.
 
 ### Why the failed optional modules
 
@@ -111,7 +121,8 @@ Before a cached module is used:
 1. every dependency of the entry must still have its recorded SHA-256 digest (stricter than the loader, which
    compares the size and the XXH64 hash of each source when its modification time differs), and each in-tree module
    dependency its recorded key;
-2. every failed optional module must have the recorded candidates;
+2. every failed optional module must have the recorded candidates, and every module it requires the recorded
+   candidate files;
 3. the result key must be the digest of the entry;
 4. each stored file must have the SHA-256 digest the entry records (a damaged entry is removed);
 5. the stored module must contain the AOT runtime identity of the build;
@@ -124,7 +135,8 @@ compared with the entry's digests after the copy.  Anything unexpected makes the
 
 A module is stored only when qcc wrote the module, the depfile and the fingerprints, the module contains the
 build's identity, the depfile names the module, every source still has the size and modification time qcc recorded
-in its fingerprint (a source written during the compile is no stable input), every dependency can be covered (see
+in its fingerprint and every dependency has one (a source written during the compile, or one qcc could not hash, is
+no stable input), every dependency can be covered (see
 above), and the metadata record can be read.
 
 ### The CI guard: `verify`
@@ -181,4 +193,14 @@ protected branches (Settings, CI/CD, General pipelines).
 
 ## Measurements
 
-See the commit that introduced the cache for the measured cold and warm build times and the cache size.
+professor (macOS 26, arm64, 24 cores), release build, `make -j8`, 392 qmods, other builds running in parallel:
+
+|!Build|!Time|!Notes
+|Without the cache|127 s|every module compiled
+|Cold (empty cache)|128 s|every module compiled and stored: the cache costs about 1%
+|Warm (new build tree, all hits)|34-72 s|depending on the host's load; a no-op `make` of the same tree takes 16 s, a hit about 0.1 s
+|Warm with `QORE_QMOD_CACHE_AUDIT=1`|134 s|every hit compiled again: all 392 byte for byte the same
+|`Mime.qm` changed|162 s|344 modules compiled: exactly Mime and the modules that require it, directly or not
+|`QoreRepl.qc` changed|69 s|1 module compiled
+
+The cache of one build is 324 MiB (126 MiB with `gzip -1`).
