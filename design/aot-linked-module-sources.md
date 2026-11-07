@@ -88,6 +88,8 @@ mapped), each one must be the module it was compiled against:
 - or it is an AOT module of a build tree whose own sources (the file of the module's main source, or the files of its
   module directory, as its own depfile lists them) are listed there.
 
+An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
+what it was compiled from is not known, and the loader does not check such a module's own sources either.
 Otherwise the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot be loaded, loads the source
 module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  A builtin module, a file the sandbox does not let the
 loader read and a module loaded into a Program without filesystem access are not checked.  An incremental build

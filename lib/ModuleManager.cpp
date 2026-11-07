@@ -991,7 +991,7 @@ static bool qore_build_aot_module_is_stale(const char* qmod_path, const std::str
     @param compiled_against the real paths of the files that the depfile of the AOT module lists
     @param allowed returns false for a file that the filesystem policy of a sandbox does not allow to be read
 */
-static bool qore_aot_dependency_is_compiled_one(const std::string& name, const std::string& file,
+static bool qore_aot_dependency_is_compiled_one(const std::string& name, const std::string& file, bool is_aot,
         const std::set<std::string>& compiled_against,
         const std::map<std::string, QoreAOTModuleSourceFingerprint>& fingerprints,
         const std::function<bool(const std::string&)>& allowed) {
@@ -1040,7 +1040,10 @@ static bool qore_aot_dependency_is_compiled_one(const std::string& name, const s
     }
     std::vector<std::string> deps;
     if (!qore_aot_read_module_depfile(file, deps)) {
-        return false;
+        // an AOT module without its depfile (an installed module, or one compiled by hand without --depfile) is not
+        // checked, as the loader does not check such a module's own sources either: what it was compiled from is not
+        // known; a native binary module is a different module than the file listed
+        return is_aot;
     }
     // the module's main source names its own sources: the file, or the directory of a module directory
     std::string main_name = name + ".qm";
@@ -1128,7 +1131,9 @@ int QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const
         if (!allowed(file)) {
             continue;
         }
-        if (!qore_aot_dependency_is_compiled_one(dependencies[i], file, compiled_against, fingerprints, allowed)) {
+        bool is_aot = !m->isUser() && m->isBuiltin() && static_cast<QoreBuiltinModule*>(m)->isAot();
+        if (!qore_aot_dependency_is_compiled_one(dependencies[i], file, is_aot, compiled_against, fingerprints,
+                allowed)) {
             xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' for feature "
                 "'%s' is out of date: it was compiled against other files of module '%s' than '%s', which is "
                 "loaded for it now; rebuild the AOT module", path, feature, dependencies[i].c_str(),

@@ -191,6 +191,16 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         out = runRequires(copy_dir + ":" + module_path, tmp.path, "User", "User::value()");
         assertEq("dep User.qmod", out, out);
 
+        # an AOT module of Dep compiled by hand without a depfile, in a directory that is searched first: what it was
+        # compiled from is not known, so it is not checked, as the loader does not check such a module's sources
+        string hand_dir = tmp.path + "/hand";
+        mkdir(hand_dir);
+        out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s/Dep.qmod %s/Dep.qm", env, src_dir, qcc_bin, hand_dir,
+            src_dir));
+        assertTrue(is_file(hand_dir + "/Dep.qmod"), out);
+        out = runRequires(hand_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("dep User.qmod", out, out);
+
         # another Dep in a directory that is searched first: User is out of date, and its source is loaded
         writeModule(shadow_dir, "Dep", "", "public namespace Dep { public string sub value() { return \"other\"; } "
             "}");
