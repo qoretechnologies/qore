@@ -129,13 +129,13 @@ public class IndexedDataProviderInfoTest inherits QUnit::Test {
         AbstractDataProviderType limit = restored.search_options.limit.type[0];
         assertEq("int", limit.getName());
         assertEq(5, limit.acceptsValue(5));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { limit.acceptsValue("x"); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { limit.acceptsValue("x"); });
         assertEq(("string", "int"), (map $1.getName(), restored.search_options.key.type));
 
         # a restored hash type has the described fields
         AbstractDataProviderType record = restored.pipeline_processor_options.record.type[0];
         assertEq({"id": 1}, record.acceptsValue({"id": 1}));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { record.acceptsValue({"id": "x"}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { record.acceptsValue({"id": "x"}); });
 
         hash<DataProviderExpressionInfo> eq = restored.expressions."==";
         assertEq("hash<DataProviderExpressionInfo>", eq.fullType());

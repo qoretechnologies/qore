@@ -422,7 +422,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
             provider.doRequest({"filters": <RestSchemaRawValue>{"value": NOTHING}});
         });
         assertThrows("INVALID-REQUEST", sub () { provider.doRequest({"name": "Invoices"}); });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { provider.doRequest({"name": "Invoices", "filters": False}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { provider.doRequest({"name": "Invoices", "filters": False}); });
     }
 
     parameterlessTest() {
@@ -849,7 +849,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         provider.doRequest({"model": "image", "image": "image.png", "limit": 5});
         assertEq({"model": "image", "image": "image.png", "limit": 5}, parse_json(client.last().body));
         int count = client.requests.size();
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { provider.doRequest({"model": "image"}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { provider.doRequest({"model": "image"}); });
         assertEq(count, client.requests.size(), "incomplete variant rejected before I/O");
 
         # Unwrapping an envelope must collect the alternatives at the landing object.

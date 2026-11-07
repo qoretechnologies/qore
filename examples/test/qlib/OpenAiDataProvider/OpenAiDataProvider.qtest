@@ -428,7 +428,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (invalid_type_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (invalid_type_req,));
 
         hash<auto> invalid_detail = {
             "type": "input_image",
@@ -446,7 +446,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (invalid_detail_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (invalid_detail_req,));
 
         hash<auto> missing_image_ref = {
             "type": "input_image",
@@ -462,7 +462,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_image_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (missing_image_req,));
 
         hash<auto> missing_audio_format = {
             "type": "input_audio",
@@ -479,7 +479,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_audio_format_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (missing_audio_format_req,));
 
         hash<auto> missing_audio_data = {
             "type": "input_audio",
@@ -496,7 +496,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_audio_data_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (missing_audio_data_req,));
 
         hash<auto> missing_file_data = {
             "type": "input_file",
@@ -512,7 +512,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_file_data_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (missing_file_data_req,));
 
         hash<auto!> missing_schema_req = {
             "model": "gpt-4o-mini",
@@ -533,7 +533,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
                 },
             },
         };
-        assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), (missing_schema_req,));
+        assertThrows("TYPE-VALUE-ERROR", \prov.doRequest(), (missing_schema_req,));
     }
 
     responseInputEdgeCasesTest() {
@@ -1612,7 +1612,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("user", item.role);
 
         # call_id is mandatory
-        assertThrows("RUNTIME-TYPE-ERROR", "call_id", \prov.doRequest(), ({
+        assertThrows("TYPE-VALUE-ERROR", "call_id", \prov.doRequest(), ({
             "input": ({"function_call_output": {"output": "x"}},),
         },));
     }
@@ -1776,7 +1776,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "model": "whisper-1",
         },));
         # the file content is mandatory
-        assertThrows("RUNTIME-TYPE-ERROR", "content", \prov.doRequest(), ({
+        assertThrows("TYPE-VALUE-ERROR", "content", \prov.doRequest(), ({
             "file": {
                 "name": "greeting.mp3",
             },

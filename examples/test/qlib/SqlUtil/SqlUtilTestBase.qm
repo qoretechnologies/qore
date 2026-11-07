@@ -694,7 +694,7 @@ public class SqlTestBase inherits QUnit::Test {
                 assertEq(2, q.firstValue().lsize());
             }
 
-            assertThrows("RUNTIME-TYPE-ERROR", \dp.searchSingleRecord(), {"id": <00>});
+            assertThrows("TYPE-VALUE-ERROR", \dp.searchSingleRecord(), {"id": <00>});
 
             # get first string column
             string fname;

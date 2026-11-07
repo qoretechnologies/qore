@@ -149,7 +149,7 @@ class DocumentAiWireTest inherits QUnit::Test {
             });
         }
         # the schema requires at least one character, which the option's type enforces
-        assertThrows("RUNTIME-TYPE-ERROR", "\"processor_id\".*requires at least 1 character; got 0", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "\"processor_id\".*requires at least 1 character; got 0", sub () {
             action("get-processor").doRequest({"processor_id": ""});
         });
         assertEq(count, handler.calls.size(), "invalid identities fail before transport");

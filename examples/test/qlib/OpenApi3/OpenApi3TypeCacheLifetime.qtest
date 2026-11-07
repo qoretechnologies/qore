@@ -193,7 +193,7 @@ class OpenApi3TypeCacheLifetimeTest inherits QUnit::Test {
             "customer": "cus_1"}), "an identifier is accepted");
         assertEq("cus_1", subscription.acceptsValue({"id": "sub_1", "customer": {"id": "cus_1", "name": "Ann"}})
             .customer.id, "an expanded object is accepted");
-        assertThrows("RUNTIME-TYPE-ERROR", \subscription.acceptsValue(), {"id": "sub_1", "customer": {"name": "Ann"}},
+        assertThrows("TYPE-VALUE-ERROR", \subscription.acceptsValue(), {"id": "sub_1", "customer": {"name": "Ann"}},
             "an object that the schema of no alternative accepts is rejected");
 
         weak.subscription := subscription;
@@ -234,7 +234,7 @@ class OpenApi3TypeCacheLifetimeTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex0) {
                 ex = ex0;
             }
-            assertEq("RUNTIME-TYPE-ERROR", ex.err, "the build fails");
+            assertEq("TYPE-VALUE-ERROR", ex.err, "the build fails");
             weak.doc := doc;
             weak.customer := customer;
             weak.bad := doc.components.schemas.BadNode;

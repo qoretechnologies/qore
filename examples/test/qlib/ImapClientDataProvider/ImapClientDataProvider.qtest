@@ -553,7 +553,7 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         assertTrue(sent."STORE 101 FLAGS (\\Seen)", "replace mode sent FLAGS");
 
         # the typed request layer rejects an invalid mode before the provider runs
-        assertThrows("RUNTIME-TYPE-ERROR", "does not accept value",
+        assertThrows("TYPE-VALUE-ERROR", "does not accept value",
             sub () { child.doRequest({"uids": (101,), "flags": ("\\Seen",), "mode": "bogus"}); },
             NOTHING, "unknown mode rejected by request-type validation");
         assertNothing(server.getServerError(), "no server errors");

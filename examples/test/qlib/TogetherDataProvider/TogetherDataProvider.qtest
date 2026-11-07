@@ -369,7 +369,7 @@ public class TogetherDataProviderTest inherits QUnit::Test {
             assertEq(response, root.getChildProvider("delete-file").doRequest({"id": "file-test"}));
         }
         foreach auto deleted in ("yes", "", 1, {}, ()) {
-            assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            assertThrows("TYPE-VALUE-ERROR", sub () {
                 type.acceptsValue({"id": "file-test", "deleted": deleted});
             });
         }

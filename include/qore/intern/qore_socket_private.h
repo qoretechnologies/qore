@@ -2078,16 +2078,6 @@ public:
         }
     }
 
-#ifdef DARWIN
-    //! Write end of a notification pipe used by Socket::poll() on macOS
-    /** When a socket FD is closed during a kqueue poll, macOS silently removes
-        the kqueue filter without delivering an event. Writing to this pipe wakes
-        up the kevent() call so it can detect the closed socket.
-        -1 when no poll is active.
-    */
-    std::atomic<int> poll_notify_fd{-1};
-#endif
-
     DLLLOCAL qore_socket_private(int n_sock = QORE_INVALID_SOCKET, int n_sfamily = AF_UNSPEC,
             int n_stype = SOCK_STREAM, int n_prot = 0, const QoreEncoding* n_enc = QCS_DEFAULT) :
             sock(n_sock), sfamily(n_sfamily), port(-1), stype(n_stype), sprot(n_prot), enc(n_enc) {
@@ -2582,19 +2572,6 @@ public:
                 ++connection_id;
 
                 rc = close_and_reset_locked();
-
-#ifdef DARWIN
-                // Signal any active kqueue poll that this socket was closed;
-                // on macOS, closing a monitored FD silently removes its kqueue
-                // filter without delivering an event.
-                // Use exchange to atomically claim and clear the fd, ensuring
-                // only one thread writes to the pipe for this socket.
-                int nfd = poll_notify_fd.exchange(-1, std::memory_order_acq_rel);
-                if (nfd >= 0) {
-                    char c = 1;
-                    while (::write(nfd, &c, 1) == -1 && errno == EINTR) {}
-                }
-#endif
             }
         }
 

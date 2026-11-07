@@ -310,7 +310,7 @@ public class FileDataType inherits AbstractDataProviderType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         return staticAcceptsValue(self, value);
@@ -322,13 +322,16 @@ public class FileDataType inherits AbstractDataProviderType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     static auto staticAcceptsValue(AbstractDataProviderType type, auto value) {
         if (value.typeCode() != NT_HASH) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y expects a hash on input; got type %y instead",
+            throw "TYPE-VALUE-ERROR", sprintf("Data provider type %y expects a hash on input; got type %y instead",
                 type.getName(), value.fullType());
         }
+        # the value can be a hash with a narrowed value type, as for a literal with only binary content, but the keys
+        # below are assigned values of other types
+        value = {} + value;
         # process raw data on input
         if (value.hasKey("content")) {
             int t = value.content.typeCode();
@@ -336,7 +339,7 @@ public class FileDataType inherits AbstractDataProviderType {
                 value.content = make_base64_string(value.content);
             } else {
                 if (t != NT_STRING) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %y input \"content\" field has type %y; "
+                    throw "TYPE-VALUE-ERROR", sprintf("Data provider type %y input \"content\" field has type %y; "
                         "expecting \"string\"", type.getName(), value.content.fullType());
                 }
                 (*string mime_type, *string base64) = (value.content =~ x/^data:([^;]+);base64,(.*)$/);
@@ -374,12 +377,13 @@ public class FileDataType inherits AbstractDataProviderType {
             try {
                 value{key} = field.acceptsValue(val);
             } catch (hash<ExceptionInfo> ex) {
-                rethrow "RUNTIME-TYPE-ERROR", sprintf("Error in type %y field %y: %s: %s", type.getName(), key,
+                rethrow AbstractDataProviderType::getValueErrorCode(ex.err),
+                    sprintf("Error in type %y field %y: %s: %s", type.getName(), key,
                     ex.err, ex.desc);
             }
         }
         if (value_copy) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("Data provider type %s input has unknown fields: %y", type.getName(),
+            throw "TYPE-VALUE-ERROR", sprintf("Data provider type %s input has unknown fields: %y", type.getName(),
                 keys value_copy);
         }
         if ((!value.mime_type.val() || value.mime_type == "auto") && value.name.val()) {

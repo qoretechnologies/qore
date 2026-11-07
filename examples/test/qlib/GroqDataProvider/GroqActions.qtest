@@ -240,7 +240,7 @@ class GroqActionsTest inherits QUnit::Test {
         assertEq(response, response_type.acceptsValue(response));
         hash<auto> adapter = {"id": "ft-1", "created_at": 1700000000.125};
         assertEq(adapter, GroqFineTuningDataType.acceptsValue(adapter));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             response_type.acceptsValue(response + {"status": "invalid"});
         });
     }

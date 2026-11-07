@@ -498,7 +498,7 @@ public class CohereDataProviderTest inherits QUnit::Test {
                 error = ex;
             }
             assertTrue(exists error, test.action);
-            assertRegex("^(INVALID-REQUEST|RUNTIME-TYPE-ERROR|MISSING-VALUE-ERROR|REST-SCHEMA-ACTION-ERROR|"
+            assertRegex("^(INVALID-REQUEST|TYPE-VALUE-ERROR|MISSING-VALUE-ERROR|REST-SCHEMA-ACTION-ERROR|"
                 "SCHEMA-VALIDATION-ERROR)$", error.err, test.action);
         }
         assertEq(0, fake.requests, "invalid inputs must be rejected before network I/O");

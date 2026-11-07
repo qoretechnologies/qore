@@ -222,7 +222,7 @@ public class AssemblyAiDataProviderTest inherits QUnit::Test {
             assertTrue(rejected, sprintf("invalid audio_url: %y", bad));
             assertEq(before, FakeAssemblyAiClient::Log.calls.size());
         }
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             root.getChildProvider("create-chat-completion").doRequest({"model": "fixture", "stream": True});
         });
     }
