@@ -146,6 +146,14 @@ class LifecycleWsClient inherits WebSocketClient {
         bool hold_opened = False;
         #! released by the test to let a held connect notification go on
         Counter release_opened(1);
+        #! gets the ID of each connection reported open
+        Queue opened_cids();
+        #! hold the connecting thread before it reports its connection open
+        bool hold_before_open = False;
+        #! released by the test to let the connecting thread report its connection open
+        Counter release_before_open(1);
+        #! gets the TID of the thread that reported each connection open
+        Queue opened_tids();
 
         #! the delay between reconnect attempts
         timeout reconnect_delay = 1;
@@ -248,7 +256,21 @@ class LifecycleWsClient inherits WebSocketClient {
     #! releases every hold, so no thread is left waiting
     releaseAll() {
         map $1.getCount() ? $1.dec() : NOTHING, (release_closed, release_claim, gate_handshake, release_reconnect,
-            release_reconnect_step, release_handshake, release_opened) + release_task;
+            release_reconnect_step, release_handshake, release_opened, release_before_open) + release_task;
+    }
+
+    private runInitialDrain(WscConnection c) {
+        if (hold_before_open) {
+            hold_before_open = False;
+            events.push("before-open");
+            release_before_open.waitForZero(HandoffTimeout);
+        }
+        WebSocketClient::runInitialDrain(c);
+    }
+
+    #! returns the connection ID of the current connection
+    int getCidForTest() {
+        return getConnectionId();
     }
 
     private waitCloseHandshake(hash<WscAsyncIoResources> res) {
@@ -265,7 +287,9 @@ class LifecycleWsClient inherits WebSocketClient {
         }
     }
 
-    private connectionOpened() {
+    private connectionOpened(int cid) {
+        opened_cids.push(cid);
+        opened_tids.push(gettid());
         if (hold_opened) {
             hold_opened = False;
             # local references: the object may be destroyed while this thread waits
@@ -537,7 +561,12 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             addTestCase(proto + ": delivery task of a closed connection starting late", \lateDeliveryTaskTest(), proto);
             addTestCase(proto + ": delivery task of a closed connection ending during a callback",
                 \lateDeliveryTaskThreadTest(), proto);
-            addTestCase(proto + ": message callback before the close", \messageBeforeCloseTest(), proto);
+            addTestCase(proto + ": callback disconnects and waits for the close", \callbackDisconnectWaitsForCloseTest(),
+                proto);
+            addTestCase(proto + ": data before the connecting thread reports open", \dataBeforeOpenTest(), proto);
+            addTestCase(proto + ": open report while data is pending", \openWhileDataPendingTest(), proto);
+            addTestCase(proto + ": connect observer waits for a reply", \connectedObserverWaitsForReplyTest(), proto);
+            addTestCase(proto + ": connection ID on every event", \eventConnectionIdTest(), proto);
             addTestCase(proto + ": connect event before the close event", \connectedBeforeClosedTest(), proto);
             addTestCase(proto + ": disconnect from a raw callback during a close handshake",
                 \rawCallbackDuringHandshakeTest(), proto);
@@ -671,15 +700,13 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         ctx.wsc.send("bye");
         assertEq(0, ctx.wsc.closed_held.waitForZero(LifecycleWsClient::HandoffTimeout), "the delivery task holds the "
             "closed message");
-        # disconnect() takes the connection; the delivery task is delivering the connection's "closed" message, so it
-        # reports the close once that has returned
+        # disconnect() takes the connection and reports it closed at once, while the delivery task holds its message
         ctx.wsc.disconnect();
-        assertEq(0, ctx.closed.getCount(), "the close is reported after the message being delivered");
+        assertEq(1, ctx.closed.getCount(), "disconnect() reports the connection closed");
         assertFalse(ctx.wsc.isOpen(), "the first connection is closed");
 
         ctx.wsc.connect();
         ctx.wsc.release_closed.dec();
-        assertEq(1, ctx.closes.get(LifecycleWsClient::HandoffTimeout));
         ctx.wsc.watchDone();
         assertEq("done", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
         assertTrue(ctx.wsc.isOpen(), "the second connection is still open");
@@ -1374,46 +1401,112 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         checkCurrentConnection(ctx, 1);
     }
 
-    #! A message being delivered when another thread closes the connection: the close is reported after the
-    #! message's callback has returned
-    messageBeforeCloseTest(string proto) {
+    #! A message callback that calls disconnect() and then waits for the close: the close is reported by the
+    #! disconnecting thread at once, while the message callback runs
+    callbackDisconnectWaitsForCloseTest(string proto) {
         LifecycleCtx ctx = makeCtx(proto);
         connectChecked(ctx, proto);
-        Counter in_callback(1);
-        Counter release_callback(1);
-        Queue order();
+        Queue result();
         ctx.on_msg = sub (data msg) {
-            if (msg == "ECHO:slow") {
-                in_callback.dec();
-                release_callback.waitForZero(LifecycleWsClient::HandoffTimeout);
-                order.push("message");
+            if (msg == "ECHO:quit") {
+                ctx.wsc.disconnect();
+                # the close was reported before disconnect() returned
+                try {
+                    result.push(ctx.closes.get(5s));
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(ex.err);
+                }
             }
         };
-        ctx.on_closed = sub (int n) {
-            order.push("closed");
-        };
-        on_exit if (release_callback.getCount()) {
-            release_callback.dec();
-        }
-        ctx.wsc.send("slow");
-        assertEq(0, in_callback.waitForZero(LifecycleWsClient::HandoffTimeout), "the message callback runs");
-        ctx.wsc.disconnect();
-        assertFalse(ctx.wsc.isOpen(), "the connection is closed");
-        assertEq(0, ctx.closed.getCount(), "the close is not reported while the message callback runs");
-        release_callback.dec();
-        assertEq("message", order.get(LifecycleWsClient::HandoffTimeout));
-        assertEq("closed", order.get(LifecycleWsClient::HandoffTimeout));
-        assertEq(1, ctx.closes.get(LifecycleWsClient::HandoffTimeout));
+        ctx.wsc.send("quit");
+        assertEq(1, result.get(LifecycleWsClient::HandoffTimeout), "the callback gets the close it waits for");
+        assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
         ctx.on_msg = NOTHING;
-        ctx.on_closed = NOTHING;
         ctx.msgs.clear();
         ctx.wsc.connect();
         checkCurrentConnection(ctx, 1);
     }
 
-    #! EVENT_WS_CONNECTED is raised before the connection's EVENT_WS_CLOSED, also when the server closes the
-    #! connection before the connect returned
-    connectedBeforeClosedTest(string proto) {
+    #! A message that arrives before the connecting thread reports the connection open: the delivery task reports it
+    #! open first, and the connecting thread does not report it again
+    dataBeforeOpenTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto);
+        ctx.wsc.hold_before_open = True;
+        ctx.wsc.inBackground("connected", sub () { ctx.wsc.connect({"hdr": {"X-Greet": "1"}}); });
+        assertEq("before-open", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        # the greeting is delivered while the connecting thread is held; the delivery task reports the connection
+        # open first
+        assertEq("HELLO", ctx.msgs.get(LifecycleWsClient::HandoffTimeout));
+        int cid = ctx.wsc.opened_cids.get(0ms);
+        assertTrue(ctx.wsc.opened_tids.get(0ms) != 0, "the connection was reported open by the delivery task");
+        ctx.wsc.release_before_open.dec();
+        assertEq("connected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(0, ctx.wsc.opened_cids.size(), "the connecting thread did not report it open again");
+        assertEq(cid, ctx.wsc.getCidForTest(), "the reported connection ID is the connection's");
+        ctx.msgs.clear();
+        checkCurrentConnection(ctx, 0);
+    }
+
+    #! The connecting thread reports the connection open while a message of the connection is pending: the delivery
+    #! task does not wait for the open report to finish
+    openWhileDataPendingTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto);
+        # the delivery task of the greeting is held when it starts, so the connecting thread reports the connection
+        # open first, and is held in that report
+        ctx.wsc.holdDeliveryTasks(1);
+        ctx.wsc.hold_opened = True;
+        ctx.wsc.inBackground("connected", sub () { ctx.wsc.connect({"hdr": {"X-Greet": "1"}}); });
+        getEvents(ctx.wsc, ("task-held-0", "opened-held"));
+        # the open report has started on the connecting thread; the greeting is delivered meanwhile, without waiting
+        ctx.wsc.release_task[0].dec();
+        assertEq("task-ended-0", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("HELLO", ctx.msgs.get(0ms));
+        assertEq(1, ctx.wsc.opened_cids.size(), "the connection is reported open once");
+        ctx.wsc.release_opened.dec();
+        assertEq("connected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(1, ctx.wsc.opened_cids.size(), "the connection is still reported open once");
+        ctx.msgs.clear();
+        checkCurrentConnection(ctx, 0);
+    }
+
+    #! An EVENT_WS_CONNECTED observer that sends a message and waits for the reply gets it
+    connectedObserverWaitsForReplyTest(string proto) {
+        hash<auto> opts = getOrderOpts(proto);
+        OrderWsClient wsc(opts);
+        on_exit delete wsc;
+        ReplyObserver observer(wsc);
+        wsc.registerObserver(observer);
+        # connects
+        wsc.observersReady();
+        assertEq("ECHO:in-connected", observer.reply.get(LifecycleWsClient::HandoffTimeout),
+            "the observer gets the reply it waits for");
+    }
+
+    #! Every event of WebSocketClientWithSerialization carries the ID of its connection
+    eventConnectionIdTest(string proto) {
+        hash<auto> opts = getOrderOpts(proto);
+        OrderWsClient wsc(opts);
+        on_exit delete wsc;
+        OrderObserver observer();
+        wsc.registerObserver(observer);
+        # connects
+        wsc.observersReady();
+        hash<auto> ev = observer.full.get(LifecycleWsClient::HandoffTimeout);
+        assertEq(EVENT_WS_CONNECTED, ev.id);
+        int cid = wsc.getConnectionId();
+        assertEq(cid, ev.data.cid, "the connect event carries the connection ID");
+        wsc.send("one");
+        ev = observer.full.get(LifecycleWsClient::HandoffTimeout);
+        assertEq(EVENT_WS_DATA, ev.id);
+        assertEq(cid, ev.data.cid, "the data event carries the connection ID");
+        wsc.disconnect();
+        ev = observer.full.get(LifecycleWsClient::HandoffTimeout);
+        assertEq(EVENT_WS_CLOSED, ev.id);
+        assertEq(cid, ev.data.cid, "the close event carries the connection ID");
+    }
+
+    #! returns client options for a WebSocketClientWithSerialization test client
+    private hash<auto> getOrderOpts(string proto) {
         if (!ports{proto}) {
             testSkip(sprintf("%s listener not available", proto));
         }
@@ -1428,21 +1521,30 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 "ssl_verify_cert": False,
             };
         }
+        return opts;
+    }
+
+    #! The connect report is started before the close report, which does not wait for it to finish
+    connectedBeforeClosedTest(string proto) {
+        hash<auto> opts = getOrderOpts(proto);
         OrderWsClient wsc(opts);
         on_exit {
-            if (wsc.claimed.getCount()) {
-                wsc.claimed.dec();
+            if (wsc.closed_seen.getCount()) {
+                wsc.closed_seen.dec();
             }
             delete wsc;
         }
         OrderObserver observer();
+        observer.client = wsc;
         wsc.registerObserver(observer);
+        wsc.hold_open = True;
+        wsc.order = observer.events;
+        # connects; the server closes the connection while the connecting thread runs the connect report, which
+        # waits until the close was reported
         wsc.observersReady();
-        # the server closes the connection before it is reported open; the connect notification waits until the
-        # connection was taken
-        wsc.connect();
-        assertEq(EVENT_WS_CONNECTED, observer.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("opened-start", observer.events.get(LifecycleWsClient::HandoffTimeout));
         assertEq(EVENT_WS_CLOSED, observer.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(EVENT_WS_CONNECTED, observer.events.get(LifecycleWsClient::HandoffTimeout));
     }
 
     #! A disconnect() that times out waiting for an action changes nothing: automatic reconnects stay enabled
@@ -1541,9 +1643,15 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         ctx.wsc.inBackground("disconnected", sub () { ctx.wsc.disconnect(); });
         assertEq("handshake-wait", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
         go.dec();
-        # the callback's disconnect does not wait for the action; the handshake then completes
-        assertEq("raw-disconnected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
-        assertEq("disconnected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        # the callback's disconnect does not wait for the action; the handshake then completes: over HTTP/2 and
+        # HTTP/3 only this thread processes the server's close frame, so the callback's disconnect returns first; over
+        # HTTP/1.1 the handshake does not need it, so the order is not defined
+        if (proto == "h1") {
+            getEvents(ctx.wsc, ("raw-disconnected", "disconnected"));
+        } else {
+            assertEq("raw-disconnected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+            assertEq("disconnected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        }
         assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
     }
 
@@ -1635,28 +1743,36 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     }
 }
 
-#! A client with serialization whose connect notification waits until the connection was taken by the delivery task
+#! A client with serialization whose connect report waits until the connection was reported closed
 class OrderWsClient inherits WebSocketClientWithSerialization {
     public {
-        #! released when a connection was taken
-        Counter claimed(1);
+        #! released when the connection was reported closed
+        Counter closed_seen(1);
+        #! hold the connect report until the close was reported
+        bool hold_open = False;
+        #! gets "opened-start" when the connect report starts
+        *Queue order;
     }
 
     constructor(hash<auto> opts) : WebSocketClientWithSerialization(opts) {
     }
 
-    private releaseAsyncIo(hash<WscAsyncIoResources> res) {
-        if (claimed.getCount()) {
-            claimed.dec();
+    private closingConnection() {
+        WebSocketClientWithSerialization::closingConnection();
+        if (closed_seen.getCount()) {
+            closed_seen.dec();
         }
-        WebSocketClient::releaseAsyncIo(res);
     }
 
-    private connectionOpened() {
-        # the server closes the connection; the delivery task takes it before the connection is reported open
-        send("bye");
-        claimed.waitForZero(LifecycleWsClient::HandoffTimeout);
-        WebSocketClientWithSerialization::connectionOpened();
+    private connectionOpened(int cid) {
+        if (hold_open) {
+            hold_open = False;
+            order.push("opened-start");
+            # the server closes the connection; the close is reported without waiting for this report
+            send("bye");
+            closed_seen.waitForZero(LifecycleWsClient::HandoffTimeout);
+        }
+        WebSocketClientWithSerialization::connectionOpened(cid);
     }
 }
 
@@ -1664,9 +1780,40 @@ class OrderWsClient inherits WebSocketClientWithSerialization {
 class OrderObserver inherits DataProvider::Observer {
     public {
         Queue events();
+        Queue full();
+        *OrderWsClient client;
     }
 
     update(string event_id, hash<auto> data_) {
         events.push(event_id);
+        full.push({"id": event_id, "data": data_});
+    }
+}
+
+#! Sends a message when the connection is reported open and waits for the reply
+class ReplyObserver inherits DataProvider::Observer {
+    public {
+        Queue reply();
+        WebSocketClientWithSerialization client;
+        Queue data();
+    }
+
+    constructor(WebSocketClientWithSerialization client) {
+        self.client = client;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == EVENT_WS_DATA) {
+            data.push(data_.data);
+            return;
+        }
+        if (event_id == EVENT_WS_CONNECTED) {
+            client.send("in-connected");
+            try {
+                reply.push(data.get(5s));
+            } catch (hash<ExceptionInfo> ex) {
+                reply.push(ex.err);
+            }
+        }
     }
 }

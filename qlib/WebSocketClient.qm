@@ -245,13 +245,26 @@ ws.send("Hello from HTTP/3!");
     @ref WebSocketClient::WebSocketClient::connect() "connect()" made on another thread, or from a callback, opens a
     new connection while the closed one is still being reported; a
     @ref WebSocketClient::WebSocketClient::connect() "connect()" that replaces an open connection reports it closed
-    after the new connection is open, before it returns.  Each connection is reported closed exactly once, and after
-    its other callbacks: a message callback of the connection that is still running, or the connect notification of
-    @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"
-    (@ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED"); when one of them is running, the close is
-    reported by its thread once it returns, so a
-    @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()", for example one made in a message callback,
-    can return before the connection is reported closed.
+    after the new connection is open, before it returns.  Each connection is reported closed exactly once, by the
+    thread that takes it, without waiting for any other callback: also while a message callback of the connection
+    still runs on its delivery task, so a callback can call
+    @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" and then wait for the close event.
+
+    Each connection is reported open exactly once
+    (@ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" for
+    @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"), and that report is
+    started before any of the connection's other events: the first thread that needs it makes it - the connecting
+    thread, the delivery task before the connection's first message, or the thread reporting the connection closed -
+    and the others go on without waiting for it to finish.  So a message or the close of a connection can be reported
+    while the callbacks of its open report still run on another thread, and an
+    @ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" observer can send a message and wait for the reply.
+
+    The events of @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" carry the
+    ID of their connection as \c cid (see
+    @ref WebSocketClient::WebSocketClient::getConnectionId() "getConnectionId()"); in callbacks,
+    @ref WebSocketClient::WebSocketClient::getEventConnectionId() "getEventConnectionId()" and
+    @ref WebSocketClient::WebSocketClient::getClosingConnectionId() "getClosingConnectionId()" return it, so the
+    close of an older connection reported after a newer one was opened can be told apart.
 
     An automatic reconnect started for a connection that ended is not made, and makes no further attempt, once a
     connection was opened after that connection ended, for example by an explicit
@@ -308,9 +321,15 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       the new \c WEBSOCKET-ACTION-TIMEOUT error; these calls never wait for the end of a connection that the client
       processes on its own, nor for a callback, so a connection's closing callback can run after a new connection is
       open (see @ref websocketclient_lifecycle)
-    - a connection is reported closed after its other callbacks, and
-      @ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" is raised before the connection's data and close
-      events; before, a message being delivered, or the connect event, could be reported after the close
+    - each connection is reported open once, by the first thread that needs it, started before any of its other
+      events, without any thread waiting for it: @ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" is
+      raised before the connection's other events, and for connections made with
+      @ref WebSocketClient::WebSocketClient::startPollConnect() "startPollConnect()" too; before, it was raised after
+      connect() returned, so a connection's data or close event could come first
+    - the events of @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" carry
+      the connection ID as \c cid; added
+      @ref WebSocketClient::WebSocketClient::getEventConnectionId() "getEventConnectionId()" and
+      @ref WebSocketClient::WebSocketClient::getClosingConnectionId() "getClosingConnectionId()"
     - the frames an HTTP/2 or HTTP/3 connection receives with its handshake are delivered without the client's lock;
       before, a raw frame callback calling a method of the client could deadlock with the connecting thread
     - a callback running on the thread that processes a connection's frames (e.g. the raw frame callback) that calls
@@ -597,17 +616,15 @@ public class WscConnection {
         #! Incremented by each completion callback of the operation; protected by the client's delivery mutex
         int delivery_pending = 0;
 
-        #! The number of notifications of the connection in progress: its connect notification and message callbacks;
-        #! protected by the client's delivery mutex
-        int notifying = 0;
+        #! The connection ID (see @ref WebSocketClient::WebSocketClient::getConnectionId() "getConnectionId()")
+        int cid = -1;
 
-        #! True until the connection is reported open; its messages are delivered afterwards; protected by the
+        #! True once the connection's open notification (connectionOpened()) was claimed by a thread; protected by the
         #! client's delivery mutex
-        bool connect_pending = False;
-
-        #! The resources of the connection, when it was taken while a notification was in progress; it is reported
-        #! closed when the last one ends; protected by the client's delivery mutex
-        *hash<WscAsyncIoResources> pending_close;
+        /** The first thread that needs it raises it: the connecting thread, the delivery task before the connection's
+            first message, or the thread reporting the connection closed; the others go on without waiting.
+        */
+        bool connected_issued = False;
 
         #! True if frames received before the connection's async I/O started are to be delivered; protected by the
         #! client's delivery mutex
@@ -1038,7 +1055,15 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
             @since WebSocketClient 2.5
         */
-        hash<string, list<string>> closing_causes();
+        hash<string, list<hash<auto>>> closing_info();
+
+        #! The IDs of the connections whose events each thread reports, by TID, as a stack; protected by
+        #! @ref delivery_mutex
+        /** See getEventConnectionId().
+
+            @since WebSocketClient 2.5
+        */
+        hash<string, list<int>> event_cids();
 
         #! True if a close frame has been sent in async mode (prevents duplicate sends)
         /** @since WebSocketClient 2.4
@@ -1244,9 +1269,9 @@ WebSocketClient ws(\event(), {
             AutoLock al(delivery_mutex);
             # in the closing callback of a connection, its own close cause, also when another connection was started
             # meanwhile
-            *list<string> causes = closing_causes{gettid()};
-            if (causes) {
-                return causes.last();
+            *list<hash<auto>> l = closing_info{gettid()};
+            if (l) {
+                return l.last().cause;
             }
         }
         return async_close_cause;
@@ -1584,8 +1609,9 @@ ws.connect();
             updateTid(-1);
             logDebug("WS async I/O started (no delivery thread, async connect)");
         }
-        # deliver the frames received during the handshake without the lock
+        # deliver the frames received during the handshake without the lock, and report the connection open
         runInitialDrain(c);
+        ensureConnected(c);
     }
 
     #! returns @ref True "True" if the connection is currently open and active, @ref False "False" if not
@@ -1927,9 +1953,6 @@ ws.connect();
             }
             h = connectUnlocked(opts.hdr, \info, reconnecting);
             c = publishConnectionUnlocked();
-            # the connection is reported open (connectionOpened()) before any of its messages or its close
-            c.connect_pending = True;
-            c.notifying = 1;
             on_error {
                 releaseUnstartedConnectionUnlocked(c);
             }
@@ -1947,30 +1970,112 @@ ws.connect();
         }
 
         # outside of the action and without the lock: report the replaced connections closed, deliver the frames
-        # received during the handshake, and report the new connection open; the connect notification ends on every
-        # exit, so the connection's messages and close are always delivered
-        on_exit endConnectNotification(c);
+        # received during the handshake, and report the new connection open, unless the delivery task or the thread
+        # that took the connection already did
         {
             list<hash<WscAsyncIoResources>> l = replaced;
             replaced = ();
             releaseAndNotifyClosed(l);
         }
         runInitialDrain(c);
-        try {
-            connectionOpened();
-        } catch (hash<ExceptionInfo> ex) {
-            logError("Exception in the connection callback: %s", get_exception_string(ex));
-        }
+        ensureConnected(c);
         return h;
     }
 
-    #! Called when a connection made with @ref connect() (or an automatic reconnect) is open
-    /** Runs outside of any action and without the client's lock, on the connecting thread, before any message or
-        the close of the connection is reported; the base class does nothing.
+    #! Called when a connection is reported open, with the connection's ID
+    /** Runs without the client's lock and outside of any action, once per connection, started before any of the
+        connection's messages or its close is reported (see ensureConnected()); the base class does nothing.
+
+        @param cid the connection ID
 
         @since WebSocketClient 2.5
     */
-    private connectionOpened() {
+    private connectionOpened(int cid) {
+    }
+
+    #! Reports a connection open unless that was done already; called without \c m held
+    /** The first thread that needs it claims the report under the delivery lock and makes it: the connecting thread,
+        the delivery task before the connection's first message, or the thread that reports the connection closed.
+        The others go on without waiting, so the report is started, not necessarily finished, before any other event
+        of the connection.
+
+        @param c the connection
+
+        @since WebSocketClient 2.5
+    */
+    private ensureConnected(WscConnection c) {
+        {
+            AutoLock al(delivery_mutex);
+            if (c.connected_issued) {
+                return;
+            }
+            c.connected_issued = True;
+        }
+        pushEventConnectionId(c.cid);
+        on_exit popEventConnectionId();
+        try {
+            connectionOpened(c.cid);
+        } catch (hash<ExceptionInfo> ex) {
+            logError("Exception in the connection callback: %s", get_exception_string(ex));
+        }
+    }
+
+    #! Returns the ID of the connection whose event the calling thread reports, or the current connection's ID
+    /** In a callback for a message, the open notification or the close of a connection, the ID of that connection,
+        which may differ from @ref getConnectionId() when a newer connection was opened meanwhile.
+
+        @return the connection ID; -1 if none
+
+        @since WebSocketClient 2.5
+    */
+    int getEventConnectionId() {
+        {
+            AutoLock al(delivery_mutex);
+            *list<int> l = event_cids{gettid()};
+            if (l) {
+                return l.last();
+            }
+        }
+        return cid;
+    }
+
+    #! Returns the ID of the connection being reported closed in a closing callback
+    /** Called in the closing callback (closingConnection() or @ref EVENT_WS_CLOSED), the ID of the connection being
+        reported closed, which may be older than the current connection: a connection can be reported closed after a
+        newer one was opened.  Outside of a closing callback, the current connection's ID.
+
+        @return the connection ID; -1 if none
+
+        @since WebSocketClient 2.5
+    */
+    int getClosingConnectionId() {
+        {
+            AutoLock al(delivery_mutex);
+            *list<hash<auto>> l = closing_info{gettid()};
+            if (l) {
+                return l.last().cid;
+            }
+        }
+        return cid;
+    }
+
+    #! Pushes the ID of the connection whose event the calling thread reports
+    private pushEventConnectionId(int id) {
+        AutoLock al(delivery_mutex);
+        push event_cids{gettid()}, id;
+    }
+
+    #! Pops the ID pushed with pushEventConnectionId()
+    private popEventConnectionId() {
+        if (!self) {
+            return;
+        }
+        AutoLock al(delivery_mutex);
+        string t = gettid().toString();
+        pop event_cids{t};
+        if (!event_cids{t}) {
+            remove event_cids{t};
+        }
     }
 
     #! Delivers the frames that an HTTP/2 or HTTP/3 connection received before its async I/O started; called without \c m held
@@ -1999,51 +2104,6 @@ ws.connect();
             }
         }
         scheduleDelivery(c);
-    }
-
-    #! Ends the connect notification of a connection; called without \c m held
-    /** Starts the delivery of the messages received meanwhile and reports the connection closed if it was taken
-        meanwhile.
-
-        @param c the connection
-
-        @since WebSocketClient 2.5
-    */
-    private endConnectNotification(WscConnection c) {
-        bool start;
-        {
-            AutoLock al(delivery_mutex);
-            c.connect_pending = False;
-            if (!c.claimed && c.delivery_pending && !c.delivery_active) {
-                c.delivery_active = True;
-                start = True;
-            }
-        }
-        if (start) {
-            submitDeliveryTask(c);
-        }
-        endNotification(c);
-    }
-
-    #! Ends a notification of a connection (its connect notification or a message callback); called without \c m held
-    /** When the connection was taken meanwhile by another thread, its close was left to the last notification of the
-        connection to end, which reports it here; see notifyClosed().
-
-        @param c the connection
-
-        @since WebSocketClient 2.5
-    */
-    private endNotification(WscConnection c) {
-        *hash<WscAsyncIoResources> res;
-        {
-            AutoLock al(delivery_mutex);
-            if (!--c.notifying) {
-                res = remove c.pending_close;
-            }
-        }
-        if (res) {
-            notifyClosed(res);
-        }
     }
 
     #! Called by an explicit @ref disconnect() once it holds its action, before the connection is closed
@@ -2124,7 +2184,7 @@ ws.connect();
         # new connection
         foreach hash<WscAsyncIoResources> res in (taken) {
             releaseClaimedConnection(res);
-            if (!notifyClosed(res, destroy)) {
+            if (!notifyClosed(res)) {
                 break;
             }
         }
@@ -2730,6 +2790,8 @@ ws.setEventQueue();
         }
         remove closing_op;
         WscConnection c(++conn_seq);
+        # the connection ID assigned by its handshake (finishConnect())
+        c.cid = cid;
         conn = c;
         # a reconnect waiting between attempts checks at once that it is superseded
         sleep_cond.broadcast();
@@ -2785,40 +2847,34 @@ ws.setEventQueue();
     }
 
     #! Reports a connection taken with claimConnectionUnlocked() closed; called without \c m held
-    /** Calls closingConnection(); getAsyncCloseCause() returns the connection's close cause in it, even when a new
-        connection was started meanwhile.  Exceptions are logged.
-
-        A connection is reported closed after its other notifications (its connect notification and the message
-        callbacks of its delivery task): when one of them is in progress, the close is reported by the thread running
-        it, once it ends, and this method returns without reporting it.
+    /** Calls closingConnection(), on the calling thread, without waiting for any other callback;
+        getAsyncCloseCause() and getClosingConnectionId() return the connection's close cause and ID in it, even when
+        a new connection was started meanwhile.  The connection is reported open first if no thread did it yet (see
+        ensureConnected()).  Exceptions are logged.
 
         @param res the resources of the connection
-        @param destroying @ref True when called by the destructor
 
         @return @ref False if the object was destroyed in the callback
 
         @since WebSocketClient 2.5
     */
-    private bool notifyClosed(hash<WscAsyncIoResources> res, *bool destroying) {
+    private bool notifyClosed(hash<WscAsyncIoResources> res) {
+        # a connection is reported open before its close; when no thread did it yet, this thread does it
+        if (res.conn) {
+            ensureConnected(res.conn);
+        }
         string t = gettid().toString();
         {
             AutoLock al(delivery_mutex);
-            # a connection is reported closed after its other notifications: when one of them is in progress, the
-            # last one to end reports the close (see endNotification()), so this thread never waits for a callback;
-            # the destructor reports it at once, as the object may be gone when they end
-            if (!destroying && res.conn && res.conn.notifying) {
-                res.conn.pending_close = res;
-                return True;
-            }
             # a stack: a closing callback can report another connection closed on the same thread
-            push closing_causes{t}, res.close_cause ?? "";
+            push closing_info{t}, {"cause": res.close_cause ?? "", "cid": res.conn ? res.conn.cid : -1};
         }
         on_exit {
             if (self) {
                 AutoLock al(delivery_mutex);
-                pop closing_causes{t};
-                if (!closing_causes{t}) {
-                    remove closing_causes{t};
+                pop closing_info{t};
+                if (!closing_info{t}) {
+                    remove closing_info{t};
                 }
             }
         }
@@ -3404,8 +3460,7 @@ ws.setEventQueue();
                 return;
             }
             ++c.delivery_pending;
-            # messages are delivered after the connection was reported open; see endConnectNotification()
-            if (c.delivery_active || c.connect_pending) {
+            if (c.delivery_active) {
                 return;
             }
             c.delivery_active = True;
@@ -3537,25 +3592,24 @@ ws.setEventQueue();
                 if (!self) {
                     return;
                 }
-                # a message is delivered as a notification of the connection: if another thread takes the connection
-                # meanwhile, the close is reported after the message's callback has returned (see notifyClosed())
                 {
                     AutoLock al(delivery_mutex);
                     if (c.claimed) {
                         c.delivery_active = False;
                         return;
                     }
-                    ++c.notifying;
                 }
+                *hash<auto> msg = c.op ? c.op.getReceivedMessage() : NOTHING;
+                if (!msg) {
+                    break;
+                }
+                # the connection is reported open before its first message; when no thread did it yet, this task
+                # does it, without waiting for any other thread
+                ensureConnected(c);
                 int disp = WSEDC_CONTINUE;
                 {
-                    on_exit if (self) {
-                        endNotification(c);
-                    }
-                    *hash<auto> msg = c.op ? c.op.getReceivedMessage() : NOTHING;
-                    if (!msg) {
-                        break;
-                    }
+                    pushEventConnectionId(c.cid);
+                    on_exit popEventConnectionId();
                     try {
                         disp = processAsyncMessage(msg);
                     } catch (hash<ExceptionInfo> ex) {
@@ -4735,17 +4789,18 @@ class MyObserver inherits Observer {
         return serialization;
     }
 
-    #! Raises @ref EVENT_WS_CONNECTED when a connection is open
-    /** Called by @ref WebSocketClient::WebSocketClient::connectIntern() "connectIntern()" outside of any action and
-        without the client's lock, before any message or the close of the connection is reported, so
-        @ref EVENT_WS_CONNECTED always comes before the connection's @ref EVENT_WS_DATA and @ref EVENT_WS_CLOSED
-        events.
+    #! Raises @ref EVENT_WS_CONNECTED when a connection is reported open
+    /** Called once per connection, without the client's lock and outside of any action, by the first thread that
+        needs it (see ensureConnected()), so
+        @ref EVENT_WS_CONNECTED is started before any of the connection's other events.
+
+        @param cid the connection ID, also given in the event as \c cid
 
         @since WebSocketClient 2.5 raised from this hook; before, it was raised after connectIntern() returned
     */
-    private connectionOpened() {
+    private connectionOpened(int cid) {
         logDebug("Connected; raising connect event: %y", observer_map);
-        notifyObservers(EVENT_WS_CONNECTED, getConnectionEventInfo());
+        notifyObservers(EVENT_WS_CONNECTED, getConnectionEventInfo() + {"cid": cid});
     }
 
     #! Returns event info for the connection event
@@ -4797,6 +4852,7 @@ class MyObserver inherits Observer {
             notifyObservers(EVENT_WS_ERROR, {
                 "buf": buf,
                 "data": ex,
+                "cid": getEventConnectionId(),
             });
             auto buf_summary = LoggerUtil::getArgSummary(buf);
             # Emit to stderr only as a last resort — when no observer is subscribed to
@@ -4816,7 +4872,7 @@ class MyObserver inherits Observer {
     #! Handles deserialized event data
     private int handleEventData(auto msgdata) {
         validateIncomingMessage(\msgdata);
-        notifyObservers(EVENT_WS_DATA, {"data": msgdata});
+        notifyObservers(EVENT_WS_DATA, {"data": msgdata, "cid": getEventConnectionId()});
         return WSEDC_CONTINUE;
     }
 
@@ -4829,6 +4885,7 @@ class MyObserver inherits Observer {
                 notifyObservers(EVENT_WS_ERROR, {
                     "buf": buf,
                     "data": ex,
+                    "cid": getEventConnectionId(),
                 });
                 # Emit to stderr only as a last resort — when no observer handles EVENT_WS_ERROR
                 # and the logger may have no appender
@@ -4850,13 +4907,13 @@ class MyObserver inherits Observer {
     private handlePing(hash<auto> h) {
         WebSocketClient::handlePing(h);
         if (raise_ping_events) {
-            notifyObservers(EVENT_WS_PING, {"data": h.msg});
+            notifyObservers(EVENT_WS_PING, {"data": h.msg, "cid": getEventConnectionId()});
         }
     }
 
     #! Got a pong message
     private receivedPong(*data msg) {
-        notifyObservers(EVENT_WS_PONG, {"data": msg});
+        notifyObservers(EVENT_WS_PONG, {"data": msg, "cid": getEventConnectionId()});
     }
 
     #! Called when the connection is closed
@@ -4865,6 +4922,7 @@ class MyObserver inherits Observer {
         # observers when the async poll op captured one before shutdown;
         # otherwise the event hash is empty as before.
         hash<auto> info = {};
+        info.cid = getClosingConnectionId();
         string cause = getAsyncCloseCause();
         if (cause.val()) {
             info.reason = cause;

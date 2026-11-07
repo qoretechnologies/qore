@@ -83,7 +83,10 @@ module DiscordWebSocketClient {
     - an explicit @ref DiscordWebSocketClient::DiscordWebSocketClient::disconnect() "disconnect()" stops the
       heartbeat and the watchdogs once it is its turn; one that times out waiting for another connect, disconnect or
       reconnect leaves them running with the connection
-    - @ref WebSocketClient::EVENT_WS_CONNECTED is raised for each connection, before its data and close events
+    - @ref WebSocketClient::EVENT_WS_CONNECTED is raised for each connection, started before its data and close
+      events
+    - the close of a connection reported after a newer connection was opened no longer stops the heartbeat and the
+      watchdogs of the newer connection
     - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
       @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
       accepts an optional discovery URL and raises \c DISCORD-ERROR if the response gives no gateway URL
@@ -555,16 +558,33 @@ hash<auto> h = ws.getInfo();
     }
 
     #! Called when the WebSocket connection is closing
-    /** Stops the heartbeat thread when the connection is closed.
+    /** Stops the heartbeat thread when the connection is closed.  A connection can be reported closed after a newer
+        connection was opened: the heartbeat and the watchdogs then belong to the newer connection and are left
+        running.
         @since DiscordWebSocketClient 1.2
     */
     private closingConnection() {
+        if (!closesCurrentConnection()) {
+            logDebug("connection %d closed after connection %d was opened; heartbeat left running",
+                getClosingConnectionId(), getConnectionId());
+            return;
+        }
         # the connection is closing: cancel watchdogs so a pending timer cannot
         # fire a spurious reconnect during teardown (the normal reconnect path
         # handles a close-before-HELLO/RESUMED and will re-arm as needed)
         cancelHelloWatchdog();
         cancelResumeWatchdog();
         stopHeartbeatThread();
+    }
+
+    #! Returns @ref True if the connection reported closed is the client's last connection
+    /** @return @ref False if a newer connection was opened (or is being opened) meanwhile
+
+        @since DiscordWebSocketClient 1.2
+    */
+    private bool closesCurrentConnection() {
+        int current = getConnectionId();
+        return current < 0 || getClosingConnectionId() == current;
     }
 
     #! Handles deserialized event data

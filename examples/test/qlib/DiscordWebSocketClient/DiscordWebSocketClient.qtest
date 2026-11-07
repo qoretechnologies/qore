@@ -27,6 +27,12 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
 
         #! flipped by the stubbed startHeartbeatThreadIntern() so tests can assert it would have started
         bool started_heartbeat_thread = False;
+
+        #! the number of stopHeartbeatThread() calls
+        int stop_heartbeat_calls = 0;
+
+        #! the connection ID returned by getClosingConnectionId(), when set
+        *int closing_cid;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -35,6 +41,28 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     #! capture outbound payloads instead of writing to a (nonexistent) connection
     sendData(auto value) {
         sent += value;
+    }
+
+    #! sets the ID of the client's current connection
+    setConnectionIdForTest(int id) {
+        cid = id;
+    }
+
+    #! reports a connection closed as the closing callback does
+    testClosingConnection(int closed_cid) {
+        closing_cid = closed_cid;
+        on_exit remove closing_cid;
+        closingConnection();
+    }
+
+    int getClosingConnectionId() {
+        return closing_cid ?? DiscordWebSocketClient::getClosingConnectionId();
+    }
+
+    #! records heartbeat stops
+    private stopHeartbeatThread() {
+        ++stop_heartbeat_calls;
+        DiscordWebSocketClient::stopHeartbeatThread();
     }
 
     #! exposes the private gateway event handler for testing
@@ -131,12 +159,30 @@ public class Main inherits QUnit::Test {
         addTestCase("hello identify/resume decision tests", \helloIdentifyResumeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("gateway discovery tests", \gatewayDiscoveryTests());
+        addTestCase("close of an older connection", \olderConnectionCloseTests());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }
 
     checkModule() {
+    }
+
+    #! the close of a connection reported after a newer connection was opened leaves the newer connection's
+    #! heartbeat running; the close of the current connection stops it
+    olderConnectionCloseTests() {
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+        # connection 7 is open; connection 6 is reported closed
+        c.setConnectionIdForTest(7);
+        c.testClosingConnection(6);
+        assertEq(0, c.stop_heartbeat_calls, "the newer connection's heartbeat is left running");
+        # the current connection is reported closed
+        c.testClosingConnection(7);
+        assertEq(1, c.stop_heartbeat_calls, "the heartbeat is stopped with its connection");
+        # no connection is open (the closed one was taken)
+        c.setConnectionIdForTest(-1);
+        c.testClosingConnection(7);
+        assertEq(2, c.stop_heartbeat_calls, "the heartbeat is stopped when no connection is open");
     }
 
     discordTests() {
