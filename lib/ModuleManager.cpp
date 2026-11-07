@@ -1102,12 +1102,8 @@ int QoreModuleManager::checkAOTModuleDependencyFiles(ExceptionSink& xsink, const
     if (!qore_aot_read_module_depfile(target, deps)) {
         return 0;
     }
-    std::set<std::string> compiled_against;
-    for (const std::string& dep : deps) {
-        char* r = realpath(dep.c_str(), nullptr);
-        compiled_against.insert(r ? r : dep);
-        free(r);
-    }
+    // qcc writes the real paths of the files (see write_depfile() in qcc-main.cpp), so they are compared as they are
+    std::set<std::string> compiled_against(deps.begin(), deps.end());
     // the content of each file when the module was compiled, by which a copy of one is recognized
     std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
     if (allowed(target + ".d" QORE_AOT_MODULE_FINGERPRINT_SUFFIX)) {
