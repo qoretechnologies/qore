@@ -262,15 +262,38 @@ read the variable again for every access. Every engine must give the same guaran
   `isDynamicKeyHashSubscript()`, `isConstIndexListSubscript()`), which load a container,
   change it and store it back, only apply to plain locals.
 - The IR interpreter caches no value of such a variable: `LoadGlobal` and `LoadClosure`
-  read the variable every time, and `StoreGlobal` and `StoreClosure` only write it. Only
-  thread-local variables are cached (other threads cannot change them; calls invalidate
-  the cache). Before this, a thread's loop incrementing a global worked on its own cached
-  copy and overwrote the other threads' increments, and a loop polling a captured variable
-  never saw another thread's write.
+  read the variable every time, and `StoreGlobal` and `StoreClosure` only write it. Before
+  this, a thread's loop incrementing a global worked on its own cached copy and overwrote
+  the other threads' increments, and a loop polling a captured variable never saw another
+  thread's write. Thread-local variables are not cached either (`LoadThreadLocal` reads
+  the variable, `StoreThreadLocal` only writes it): the lvalue paths change a variable in
+  place (`t.a = 1`, `t[0] += 1`, `push t, x`) without going through `StoreThreadLocal`, so
+  a cached copy went stale (`examples/test/ir/ThreadLocalLValuePath.qtest`).
 
 `examples/test/qore/threads/shared-var-updates` checks each of these operations from
 several threads at once, and a loop seeing another thread's write, in every execution
 mode and in a program compiled with `qcc`.
+
+## Compound Assignment Results
+
+A local or thread-local variable that only its own thread can change is changed by
+loading it, computing the new value and storing it. The store applies the variable's
+type, which can convert the value (an `any` or `auto!` variable stores a `hash<HD>` as a
+plain `hash`, a `softint` variable stores 17.5 as 17), so the result of the operator must
+be what the AST operator returns:
+
+- `+=` and `-=` return the value the lvalue holds afterwards: when the result is used, the
+  variable is read again after the store (`QoreIRLowering::compoundAssignmentResult()`).
+- `*=` and `/=` return the value they compute, except when the lvalue or the operand holds
+  a number, where they return the value the lvalue holds. Whether the operand is a number
+  is known only at runtime, and with a float operand the AST operator returns the computed
+  float, so reading the variable back is not right in every case: a variable whose type
+  accepts a number only by converting it (`softint`) is changed through its lvalue path
+  whenever the operand can be a number (`qore_ir_multiplicative_assign_needs_lvalue()`).
+- The other operators return the value they compute.
+
+`examples/test/ir/CompoundAssignmentMatrix.qtest` checks every operator on every kind of
+lvalue, with typed and `auto` lvalues and operands, against the AST interpreter's output.
 
 ## IR Analysis And Optimization
 
@@ -483,6 +506,15 @@ int updates (`AddAssignLocalInt`, `IncrementLocalInt`) follow `StoreLocal`:
 - The IR interpreter releases the slot-cache value it overwrites, uses the
   transferring assignment helpers so the variable consumes the new value, and
   registers the result slot for cleanup.
+- An operand that a fused instruction only reads (the source of `AddAssignLocalInt`,
+  both operands of `BranchIfLtLocalInt`) keeps its value: its slot may only cache the
+  value the variable holds (as `LoadLocal` caches it), never the int it is read as, or an
+  `int` local with no value would read as 0 afterwards; the slot of an IR-only local that
+  the cold path marks instantiated is the variable itself
+  (`examples/test/ir/FusedIntOperandValue.qtest`). `AddAssignLocalInt` takes only `int`
+  sources, and neither instruction takes a reference-typed local, which reads as the
+  referenced lvalue; `LoadLocal` does not cache the value of a local holding a reference
+  (`examples/test/ir/ReferenceLocalRead.qtest`).
 
 Code that only inspects an lvalue must not read it through `getValue()`, which
 creates a new heap node for a large int stored natively;
