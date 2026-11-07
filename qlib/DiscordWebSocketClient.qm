@@ -83,10 +83,16 @@ module DiscordWebSocketClient {
     - an explicit @ref DiscordWebSocketClient::DiscordWebSocketClient::disconnect() "disconnect()" stops the
       heartbeat and the watchdogs once it is its turn; one that times out waiting for another connect, disconnect or
       reconnect leaves them running with the connection
-    - @ref WebSocketClient::EVENT_WS_CONNECTED is raised for each connection, started before its data and close
-      events
-    - the close of a connection reported after a newer connection was opened no longer stops the heartbeat and the
-      watchdogs of the newer connection
+    - @ref WebSocketClient::EVENT_WS_CONNECTED is raised for each connection; its report is started before the
+      connection's data and close events are reported
+    - the heartbeat, the HELLO watchdog and the RESUME watchdog belong to one connection: the close of a connection,
+      also one reported after a newer connection was opened, stops only its own; a HELLO of a newer connection
+      restarts the heartbeat with a fresh acknowledgement state; a HELLO of a connection that is no longer the
+      client's is ignored
+    - the HELLO watchdog is armed when a connection becomes the client's, so its timeout no longer includes the wait
+      for another connect or the close of the replaced connection, and a connect that waits for another one or fails
+      no longer cancels the watchdog of the connection the client has; it is also armed for connections made with
+      @ref WebSocketClient::WebSocketClient::startPollConnect() "startPollConnect()"
     - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
       @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
       accepts an optional discovery URL and raises \c DISCORD-ERROR if the response gives no gateway URL
@@ -272,6 +278,42 @@ public const CloseDescMap = {
     DCC_DISALLOWED_INTENT: "Disallowed intent(s)",
 };
 
+#! The heartbeat of one gateway connection
+/** Each heartbeat thread has its own record, so only a stopper of that thread clears its state, and a heartbeat
+    started for a newer connection is never touched by the stop of an older one.  Its members are protected by the
+    client's heartbeat lock, except \c running.
+
+    @since DiscordWebSocketClient 1.2
+*/
+public class DiscordHeartbeat {
+    public {
+        #! A unique number identifying the record in the client
+        int seq;
+
+        #! The ID of the connection whose HELLO started the heartbeat
+        int cid;
+
+        #! The heartbeat interval in ms
+        int interval;
+
+        #! The TID of the heartbeat thread, once started
+        int tid;
+
+        #! Set when the thread must stop
+        bool stop = False;
+
+        #! The number of running heartbeat threads of the record (0 or 1); the stoppers wait until it is 0
+        Counter running();
+    }
+
+    #! Creates the record
+    constructor(int seq, int cid, int interval) {
+        self.seq = seq;
+        self.cid = cid;
+        self.interval = interval;
+    }
+}
+
 #! The Discord WebSocket client class
 public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
     public {
@@ -387,25 +429,21 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! Resume gateway URL
         string resume_gateway_url;
 
-        #! Heartbeat thread WaitGroup
-        WaitGroup heartbeat_cnt();
-
-        #! Heartbeat thread ID
-        int hb_tid;
-
-        #! The ID of the connection whose HELLO started the heartbeat thread; protected by @ref heartbeat_lock
+        #! The heartbeat of the client's connection, if any; protected by @ref heartbeat_lock
         /** @since DiscordWebSocketClient 1.2
         */
-        int hb_cid = -1;
+        *DiscordHeartbeat hb;
+
+        #! The sequence number of the last heartbeat record; protected by @ref heartbeat_lock
+        /** @since DiscordWebSocketClient 1.2
+        */
+        int hb_seq = 0;
 
         #! Heartbeat mutex
         Mutex heartbeat_lock();
 
         #! Heartbeat condition
         Condition heartbeat_cond();
-
-        #! Heartbeat thread stop flag
-        bool hb_stop;
 
         #! Set to @ref True when the gateway acknowledges a heartbeat
         /** Used to detect a zombied connection: if the gateway does not acknowledge a heartbeat
@@ -419,6 +457,13 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
 
         #! HELLO watchdog: active async I/O controller timer id (0 = none)
         int hello_watchdog_timer = 0;
+
+        #! HELLO watchdog: the ID of the connection the timer was armed for (-1 = any)
+        /** Protected by @ref hello_watchdog_lock.
+
+            @since DiscordWebSocketClient 1.2
+        */
+        int hello_watchdog_cid = -1;
 
         #! HELLO watchdog: set once the gateway HELLO is seen for the current connection
         /** Also set on teardown so a racing timer fire becomes a no-op.  Protected
@@ -434,6 +479,13 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
 
         #! RESUME watchdog: active async I/O controller timer id (0 = none)
         int resume_watchdog_timer = 0;
+
+        #! RESUME watchdog: the ID of the connection the timer was armed for (-1 = any)
+        /** Protected by @ref resume_watchdog_lock.
+
+            @since DiscordWebSocketClient 1.2
+        */
+        int resume_watchdog_cid = -1;
 
         #! RESUME watchdog: set once a DOP_DISPATCH or DOP_INVALID_SESSION arrives after sendResume()
         /** Also set on teardown so a racing timer fire becomes a no-op.  Protected
@@ -547,11 +599,17 @@ hash<auto> h = ws.getInfo();
         return {
             "api": api,
             "cid": cid,
-            "heartbeat_tid": hb_tid,
+            "heartbeat_tid": getHeartbeatTid(),
             "session_id": session_id,
             "last_sequence": last_sequence,
             "resume_gateway_url": resume_gateway_url,
         };
+    }
+
+    #! Returns the TID of the heartbeat thread, if any
+    private *int getHeartbeatTid() {
+        AutoLock al(heartbeat_lock);
+        return hb ? hb.tid : NOTHING;
     }
 
     #! Processes options for the DiscordWebSocketClient constructor
@@ -569,36 +627,17 @@ hash<auto> h = ws.getInfo();
         @since DiscordWebSocketClient 1.2
     */
     private closingConnection() {
-        bool current = closesCurrentConnection();
-        if (current) {
-            # the connection is closing: cancel watchdogs so a pending timer cannot
-            # fire a spurious reconnect during teardown (the normal reconnect path
-            # handles a close-before-HELLO/RESUMED and will re-arm as needed)
-            cancelHelloWatchdog();
-            cancelResumeWatchdog();
+        # only the closed connection's watchdogs and heartbeat are stopped: a newer connection, which may be opened
+        # while this close is reported, keeps its own (each is checked against the connection ID under its lock)
+        int closed = getClosingConnectionId();
+        # the connection is closing: cancel its watchdogs so a pending timer cannot fire a spurious reconnect during
+        # teardown (the normal reconnect path handles a close-before-HELLO/RESUMED and will re-arm as needed)
+        cancelHelloWatchdog(closed);
+        cancelResumeWatchdog(closed);
+        if (!stopHeartbeatThread(closed)) {
+            logDebug("connection %d closed; the heartbeat of connection %d is left running", closed,
+                getCurrentConnectionId());
         }
-        # the heartbeat is stopped with the connection it belongs to
-        bool own_heartbeat;
-        {
-            AutoLock al(heartbeat_lock);
-            own_heartbeat = getClosingConnectionId() == hb_cid;
-        }
-        if (current || own_heartbeat) {
-            stopHeartbeatThread();
-        } else {
-            logDebug("connection %d closed after connection %d was opened; its heartbeat is left running",
-                getClosingConnectionId(), getCurrentConnectionId());
-        }
-    }
-
-    #! Returns @ref True if the connection reported closed is the client's last connection
-    /** @return @ref False if the client has a newer connection
-
-        @since DiscordWebSocketClient 1.2
-    */
-    private bool closesCurrentConnection() {
-        int current = getCurrentConnectionId();
-        return current < 0 || getClosingConnectionId() == current;
     }
 
     #! Handles deserialized event data
@@ -625,7 +664,7 @@ hash<auto> h = ws.getInfo();
                 # any DISPATCH event (RESUMED, READY, or a real data event) is proof
                 # the gateway accepted the previous RESUME / IDENTIFY and is talking
                 # to us — disarm the RESUME watchdog
-                cancelResumeWatchdog();
+                cancelResumeWatchdog(getEventConnectionId());
                 if (msgdata.t == "READY") {
                     handleReadyMessage(msgdata.d);
                 } else {
@@ -654,7 +693,7 @@ hash<auto> h = ws.getInfo();
                 # the gateway has rejected the session; clear session state so the
                 # next reconnect path uses sendIdentify() rather than retrying
                 # sendResume() forever with an invalidated session
-                cancelResumeWatchdog();
+                cancelResumeWatchdog(getEventConnectionId());
                 clearSessionState();
                 rc = WSEDC_BREAK;
                 break;
@@ -674,7 +713,12 @@ hash<auto> h = ws.getInfo();
 
     #! Handle a Heartbeat ACK
     private handleHeartbeatAck() {
+        int ecid = getEventConnectionId();
         AutoLock al(heartbeat_lock);
+        # the ACK of an older connection does not acknowledge the heartbeat of a newer one
+        if (hb && hb.cid >= 0 && ecid >= 0 && hb.cid != ecid) {
+            return;
+        }
         heartbeat_ack = True;
     }
 
@@ -720,28 +764,66 @@ hash<auto> h = ws.getInfo();
 %endif
     }
 
-    #! Arms the HELLO watchdog after every (re)connect
-    /** Single choke point: WebSocketClient::connect() and every reconnect path
-        (reestablishConnection()/doReconnect()) dispatch through connectIntern(),
-        so arming here covers initial connect and all reconnects.  The gateway
-        must send @ref DOP_HELLO promptly; handleHello() disarms the watchdog.
-        If HELLO never arrives (stalled async receive after a reconnect — the
-        connection stays "Connected" with no heartbeat thread and thus no zombie
-        detection), the watchdog forces a reconnect instead of dying silently.
+    #! Arms the HELLO watchdog for every connection when it becomes the client's
+    /** Single choke point: every connect, reconnect and poll connect publishes its connection here, in its action
+        with the client's lock held, before the connection can deliver anything, so a HELLO handled in the connect's
+        callbacks disarms this connection's watchdog.  The gateway must send @ref DOP_HELLO promptly; handleHello()
+        disarms the watchdog.  If HELLO never arrives (stalled async receive after a reconnect — the connection stays
+        "Connected" with no heartbeat thread and thus no zombie detection), the watchdog forces a reconnect instead of
+        dying silently.  A connect that waits for another one, or fails, never arms or cancels the watchdog of the
+        connection the client has.
+
+        @since DiscordWebSocketClient 1.2
     */
+    private WscConnection publishConnectionUnlocked() {
+        WscConnection c = WebSocketClientWithSerialization::publishConnectionUnlocked();
+        armHelloWatchdog(c.cid);
+        return c;
+    }
+
+    #! Cancels the watchdog of a connection that a failed connect published and released
     private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
-        # armed before the connection can deliver anything: connectIntern() runs callbacks before it returns, and
-        # the connection's HELLO can be handled in them, which must disarm the watchdog, not be undone by it
-        armHelloWatchdog();
-        on_error cancelHelloWatchdog();
+        on_error cancelStaleHelloWatchdog();
         return WebSocketClient::connectIntern(opts, \info, reconnect);
     }
 
-    #! Arms (or re-arms) the HELLO watchdog timer for the current connection
-    private armHelloWatchdog() {
+    #! Cancels the HELLO watchdog if it was armed for a connection that is no longer the client's
+    /** @since DiscordWebSocketClient 1.2
+    */
+    private cancelStaleHelloWatchdog() {
+        int current = getCurrentConnectionId();
+        bool stale;
+        {
+            AutoLock al(hello_watchdog_lock);
+            stale = hello_watchdog_timer && hello_watchdog_cid >= 0 && hello_watchdog_cid != current;
+            if (stale) {
+                cancelHelloWatchdogTimerUnlocked();
+            }
+        }
+    }
+
+    #! Cancels the HELLO watchdog's timer; must be called with @ref hello_watchdog_lock held
+    private cancelHelloWatchdogTimerUnlocked() {
+        if (hello_watchdog_timer) {
+            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+            try {
+                controller.cancelTimer(hello_watchdog_timer);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            hello_watchdog_timer = 0;
+        }
+    }
+
+    #! Arms (or re-arms) the HELLO watchdog timer
+    /** @param cid the ID of the connection that must receive HELLO; -1 for the client's connection, whichever it is
+
+        @since DiscordWebSocketClient 1.2 the \a cid parameter
+    */
+    private armHelloWatchdog(int cid = -1) {
         AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
         AutoLock al(hello_watchdog_lock);
         hello_received = False;
+        hello_watchdog_cid = cid;
         if (hello_watchdog_timer) {
             try {
                 controller.cancelTimer(hello_watchdog_timer);
@@ -758,18 +840,18 @@ hash<auto> h = ws.getInfo();
         so any timer already in flight becomes a no-op, and resets the consecutive
         miss counter (a delivered HELLO means the receive path is healthy).
     */
-    private cancelHelloWatchdog() {
+    /** @param cid if given and not negative, the watchdog is canceled only if it was armed for this connection
+
+        @since DiscordWebSocketClient 1.2 the \a cid parameter
+    */
+    private cancelHelloWatchdog(*int cid) {
         AutoLock al(hello_watchdog_lock);
+        if (exists cid && cid >= 0 && hello_watchdog_cid >= 0 && hello_watchdog_cid != cid) {
+            return;
+        }
         hello_received = True;
         hello_miss_count = 0;
-        if (hello_watchdog_timer) {
-            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-            try {
-                controller.cancelTimer(hello_watchdog_timer);
-            } catch (hash<ExceptionInfo> ex) {
-            }
-            hello_watchdog_timer = 0;
-        }
+        cancelHelloWatchdogTimerUnlocked();
     }
 
     #! HELLO watchdog timer callback: forces a reconnect if no gateway HELLO arrived
@@ -785,6 +867,11 @@ hash<auto> h = ws.getInfo();
             AutoLock al(hello_watchdog_lock);
             # disarmed in the race window (HELLO arrived / connection closing)
             if (hello_received || !hello_watchdog_timer) {
+                return;
+            }
+            # armed for a connection that is no longer the client's: nothing to recover
+            if (hello_watchdog_cid >= 0 && hello_watchdog_cid != getCurrentConnectionId()) {
+                hello_watchdog_timer = 0;
                 return;
             }
             hello_watchdog_timer = 0;
@@ -816,10 +903,15 @@ hash<auto> h = ws.getInfo();
         leaves the connection "healthy" (heartbeats flow) but with no event
         delivery — see resumeWatchdogFired() for the recovery path.
     */
-    private armResumeWatchdog() {
+    /** @param cid the ID of the connection that sent the RESUME; -1 for the client's connection, whichever it is
+
+        @since DiscordWebSocketClient 1.2 the \a cid parameter
+    */
+    private armResumeWatchdog(int cid = -1) {
         AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
         AutoLock al(resume_watchdog_lock);
         resume_completed = False;
+        resume_watchdog_cid = cid;
         if (resume_watchdog_timer) {
             try {
                 controller.cancelTimer(resume_watchdog_timer);
@@ -837,8 +929,15 @@ hash<auto> h = ws.getInfo();
         miss counter (a confirmed RESUMED/DISPATCH or a clean INVALID_SESSION both
         prove the gateway is responding).
     */
-    private cancelResumeWatchdog() {
+    /** @param cid if given and not negative, the watchdog is canceled only if it was armed for this connection
+
+        @since DiscordWebSocketClient 1.2 the \a cid parameter
+    */
+    private cancelResumeWatchdog(*int cid) {
         AutoLock al(resume_watchdog_lock);
+        if (exists cid && cid >= 0 && resume_watchdog_cid >= 0 && resume_watchdog_cid != cid) {
+            return;
+        }
         resume_completed = True;
         resume_miss_count = 0;
         if (resume_watchdog_timer) {
@@ -868,6 +967,11 @@ hash<auto> h = ws.getInfo();
             AutoLock al(resume_watchdog_lock);
             # disarmed in the race window (RESUMED/INVALID_SESSION arrived, or teardown)
             if (resume_completed || !resume_watchdog_timer) {
+                return;
+            }
+            # armed for a connection that is no longer the client's: nothing to recover
+            if (resume_watchdog_cid >= 0 && resume_watchdog_cid != getCurrentConnectionId()) {
+                resume_watchdog_timer = 0;
                 return;
             }
             resume_watchdog_timer = 0;
@@ -965,36 +1069,44 @@ hash<auto> h = ws.getInfo();
     private handleHello(hash<auto> d) {
         # the gateway responded with HELLO: the async receive path is alive for
         # this connection — disarm the HELLO watchdog (see helloWatchdogFired())
-        cancelHelloWatchdog();
+        int ecid = getEventConnectionId();
+        cancelHelloWatchdog(ecid);
         *int hbi = d.heartbeat_interval;
         if (!hbi) {
             throw "DISCORD-ERROR", sprintf("Missing heartbeat interval in Hello msg: %y", d);
         }
+        # a HELLO of a connection that is no longer the client's starts nothing
+        if (ecid != getCurrentConnectionId()) {
+            logDebug("HELLO of connection %d ignored: the client's connection is %d", ecid, getCurrentConnectionId());
+            return;
+        }
         # the heartbeat belongs to its connection: a heartbeat still running for an older connection (e.g. one
-        # replaced by an explicit connect(), whose close can be reported after this HELLO) is restarted, so its
+        # replaced by an explicit connect(), whose close can be reported after this HELLO) is stopped first, so its
         # acknowledgement state does not carry over
-        int ecid = getEventConnectionId();
-        bool restart;
+        *int old_cid;
         {
             AutoLock al(heartbeat_lock);
-            restart = hb_tid && hb_cid != ecid;
-        }
-        if (restart) {
-            stopHeartbeatThread();
-        }
-        {
-            AutoLock al(heartbeat_lock);
-            bool interval_changed = (hbi != heartbeat_interval);
-            if (interval_changed) {
-                heartbeat_interval = hbi;
+            if (hb && hb.cid != ecid) {
+                old_cid = hb.cid;
             }
-            # the heartbeat thread will not be running on a new connection
-            if (!hb_tid) {
-                hb_cid = ecid;
-                startHeartbeatThreadIntern();
-            } else if (interval_changed) {
+        }
+        if (exists old_cid) {
+            stopHeartbeatThread(old_cid);
+        }
+        {
+            AutoLock al(heartbeat_lock);
+            heartbeat_interval = hbi;
+            if (!hb) {
+                # the heartbeat thread is not running on a new connection; checked again under the lock: only the
+                # client's connection gets a heartbeat
+                if (ecid == getCurrentConnectionId()) {
+                    hb = new DiscordHeartbeat(++hb_seq, ecid, hbi);
+                    startHeartbeatThreadIntern();
+                }
+            } else if (hb.cid == ecid && hb.interval != hbi) {
                 # in case we get a HELLO message while the connection is still up (should not happen)
-                heartbeat_cond.signal();
+                hb.interval = hbi;
+                heartbeat_cond.broadcast();
             }
         }
         if (session_id && last_sequence) {
@@ -1004,7 +1116,7 @@ hash<auto> h = ws.getInfo();
             # drop (which Discord does in the wild without an op-9) is caught by
             # the timer and falls back to a fresh IDENTIFY (see
             # resumeWatchdogFired())
-            armResumeWatchdog();
+            armResumeWatchdog(ecid);
         } else {
             sendIdentify();
         }
@@ -1039,60 +1151,93 @@ hash<auto> h = ws.getInfo();
         });
     }
 
-    #! Starts the heartbeat thread
+    #! Starts the heartbeat thread of the heartbeat record in @ref hb
     /** Must be called with the heartbeat mutex locked
     */
     private startHeartbeatThreadIntern() {
-        if (hb_tid) {
-            throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", hb_tid);
+        DiscordHeartbeat h = hb;
+        if (h.tid) {
+            throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", h.tid);
         }
-        # a fresh connection starts with no heartbeat in flight
+        # a fresh connection starts with no heartbeat in flight; no other heartbeat thread runs: a record is set only
+        # after the previous one's thread ended
         heartbeat_ack = True;
-        heartbeat_cnt.add();
+        h.running.inc();
         on_error {
-            remove hb_tid;
-            heartbeat_cnt.done();
+            h.running.dec();
+            remove hb;
         }
 %ifdef PO_NO_THREAD_CONTROL
-        hb_tid = start_thread(\heartbeatThread());
+        h.tid = start_thread(\heartbeatThread());
 %else
-        hb_tid = start_thread ? start_thread(\heartbeatThread()) : background heartbeatThread();
+        h.tid = start_thread ? start_thread(\heartbeatThread()) : background heartbeatThread();
 %endif
     }
 
-    private stopHeartbeatThread() {
-        if (hb_tid == gettid()) {
-            throw "DISCORD-ERROR", sprintf("cannot call this method from the heartbeat thread (TID %d)", hb_tid);
-        }
+    #! Stops a heartbeat thread and waits until it ended
+    /** Only the stoppers of a given heartbeat thread clear its record, and only if it is still the client's, so a
+        heartbeat started meanwhile for a newer connection is never touched.
 
+        @param cid if given and not negative, the heartbeat is stopped only if it belongs to this connection or to a
+        connection that is no longer the client's
+
+        @return @ref True if a heartbeat was stopped
+
+        @since DiscordWebSocketClient 1.2 the \a cid parameter and the return value
+    */
+    private bool stopHeartbeatThread(*int cid) {
+        DiscordHeartbeat h;
         {
             AutoLock al(heartbeat_lock);
-            if (!hb_tid) {
-                return;
+            if (!hb) {
+                return False;
             }
-            hb_stop = True;
-            heartbeat_cond.signal();
+            if (exists cid && cid >= 0 && hb.cid != cid && hb.cid == getCurrentConnectionId()) {
+                return False;
+            }
+            if (hb.tid == gettid()) {
+                throw "DISCORD-ERROR", sprintf("cannot call this method from the heartbeat thread (TID %d)", hb.tid);
+            }
+            h = hb;
+            h.stop = True;
+            heartbeat_cond.broadcast();
         }
 
-        heartbeat_cnt.wait();
+        waitHeartbeatEnded(h);
         AutoLock al(heartbeat_lock);
-        remove hb_tid;
-        remove hb_stop;
-        remove heartbeat_interval;
+        # another stopper of the same thread may have cleared it, and a new heartbeat may have been started since
+        if (hb && hb.seq == h.seq) {
+            remove hb;
+        }
+        return True;
+    }
+
+    #! Waits until the thread of the given heartbeat record ended; called without @ref heartbeat_lock held
+    /** @since DiscordWebSocketClient 1.2
+    */
+    private waitHeartbeatEnded(DiscordHeartbeat h) {
+        h.running.waitForZero();
     }
 
     private heartbeatThread() {
-        # in case we went out of scope while running
-        on_exit if (self) {
-            heartbeat_cnt.done();
+        # the record set before this thread was started; it stays set until this thread ends
+        *DiscordHeartbeat h;
+        {
+            AutoLock al(heartbeat_lock);
+            h = hb;
         }
+        if (!h) {
+            return;
+        }
+        # in case we went out of scope while running
+        on_exit h.running.dec();
 
         bool running;
-        while (!hb_stop) {
+        while (!h.stop) {
             int sleep;
             {
                 AutoLock al(heartbeat_lock);
-                sleep = heartbeat_interval;
+                sleep = h.interval;
                 # calculate the first sleep with the heartbeat interval * jitter
                 if (!running) {
                     sleep = (float("0." + rand()) * sleep).toInt();
@@ -1100,7 +1245,7 @@ hash<auto> h = ws.getInfo();
                 }
                 # use a predicate loop to handle spurious wakeups and interval changes
                 date target = now_us() + milliseconds(sleep);
-                while (!hb_stop) {
+                while (!h.stop) {
                     date remaining = target - now_us();
                     if (remaining <= 0s) {
                         break;
@@ -1108,7 +1253,7 @@ hash<auto> h = ws.getInfo();
                     heartbeat_cond.wait(heartbeat_lock, remaining);
                 }
             }
-            if (hb_stop) {
+            if (h.stop) {
                 break;
             }
             # if the gateway did not acknowledge the previous heartbeat before this one is due,
@@ -1117,7 +1262,7 @@ hash<auto> h = ws.getInfo();
             if (heartbeatZombieCheck()) {
                 logWarn("the gateway did not acknowledge the previous heartbeat within the "
                     "heartbeat interval (%d ms); the connection is zombied, forcing a reconnect",
-                    heartbeat_interval);
+                    h.interval);
                 triggerZombieReconnect();
                 break;
             }

@@ -28,7 +28,7 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         #! flipped by the stubbed startHeartbeatThreadIntern() so tests can assert it would have started
         bool started_heartbeat_thread = False;
 
-        #! the number of stopHeartbeatThread() calls
+        #! the number of heartbeats stopped by stopHeartbeatThread()
         int stop_heartbeat_calls = 0;
 
         #! the connection ID returned by getClosingConnectionId(), when set
@@ -36,6 +36,9 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
 
         #! the connection ID returned by getCurrentConnectionId()
         int current_cid = -1;
+
+        #! the connection ID returned by getEventConnectionId(), when set (otherwise the current one)
+        *int event_cid;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -55,6 +58,23 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         return current_cid;
     }
 
+    #! outside callbacks, events are those of the current connection
+    int getEventConnectionId() {
+        return event_cid ?? current_cid;
+    }
+
+    #! sets a heartbeat record of the given connection, without a thread
+    setHeartbeatForTest(int id) {
+        AutoLock al(heartbeat_lock);
+        hb = new DiscordHeartbeat(++hb_seq, id, 41250);
+    }
+
+    #! returns the connection ID of the heartbeat record, or -1
+    int getHeartbeatCidForTest() {
+        AutoLock al(heartbeat_lock);
+        return hb ? hb.cid : -1;
+    }
+
     #! reports a connection closed as the closing callback does
     testClosingConnection(int closed_cid) {
         closing_cid = closed_cid;
@@ -67,9 +87,12 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     }
 
     #! records heartbeat stops
-    private stopHeartbeatThread() {
-        ++stop_heartbeat_calls;
-        DiscordWebSocketClient::stopHeartbeatThread();
+    private bool stopHeartbeatThread(*int cid) {
+        bool rv = DiscordWebSocketClient::stopHeartbeatThread(cid);
+        if (rv) {
+            ++stop_heartbeat_calls;
+        }
+        return rv;
     }
 
     #! exposes the private gateway event handler for testing
@@ -115,10 +138,9 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         public flag records that the start would have happened
     */
     private startHeartbeatThreadIntern() {
+        # the heartbeat record set by handleHello() stays, so a subsequent handleHello() does not start another
+        # "thread"; no thread runs, so a stop does not wait
         started_heartbeat_thread = True;
-        # mimic hb_tid being set so a subsequent handleHello() does not try to
-        # start another "thread" — matches the real method's effect on state
-        hb_tid = -1;
     }
 
     #! production armResumeWatchdog() uses AsyncSocketIo::getGlobalAsyncIoController()
@@ -179,17 +201,44 @@ public class Main inherits QUnit::Test {
     #! heartbeat running; the close of the current connection stops it
     olderConnectionCloseTests() {
         TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
-        # connection 7 is open; connection 6 is reported closed
+        # connection 7 is open with its heartbeat; connection 6 is reported closed
         c.setConnectionIdForTest(7);
+        c.setHeartbeatForTest(7);
         c.testClosingConnection(6);
         assertEq(0, c.stop_heartbeat_calls, "the newer connection's heartbeat is left running");
+        assertEq(7, c.getHeartbeatCidForTest());
         # the current connection is reported closed
         c.testClosingConnection(7);
         assertEq(1, c.stop_heartbeat_calls, "the heartbeat is stopped with its connection");
+        assertEq(-1, c.getHeartbeatCidForTest());
         # no connection is open (the closed one was taken)
         c.setConnectionIdForTest(-1);
+        c.setHeartbeatForTest(7);
         c.testClosingConnection(7);
-        assertEq(2, c.stop_heartbeat_calls, "the heartbeat is stopped when no connection is open");
+        assertEq(2, c.stop_heartbeat_calls, "the heartbeat is stopped when its connection closes");
+        # connection 8 is open, but the heartbeat left is that of connection 6, which is gone: the close of
+        # connection 5 stops it
+        c.setConnectionIdForTest(8);
+        c.setHeartbeatForTest(6);
+        c.testClosingConnection(5);
+        assertEq(3, c.stop_heartbeat_calls, "a heartbeat of a connection that is no longer the client's is stopped");
+        # connection 8's heartbeat is not stopped by the close of connection 5
+        c.setHeartbeatForTest(8);
+        c.testClosingConnection(5);
+        assertEq(3, c.stop_heartbeat_calls, "the heartbeat of the client's connection is left running");
+        # a HELLO of a connection that is not the client's starts nothing and sends nothing
+        c.testClosingConnection(8);
+        assertEq(-1, c.getHeartbeatCidForTest());
+        c.event_cid = 9;
+        c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+        assertEq(-1, c.getHeartbeatCidForTest(), "no heartbeat for the HELLO of another connection");
+        assertFalse(c.started_heartbeat_thread);
+        assertEq(0, c.sent.size(), "no IDENTIFY for the HELLO of another connection");
+        # the HELLO of the client's connection starts its heartbeat
+        c.event_cid = 8;
+        c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+        assertEq(8, c.getHeartbeatCidForTest());
+        assertTrue(c.started_heartbeat_thread);
     }
 
     discordTests() {
