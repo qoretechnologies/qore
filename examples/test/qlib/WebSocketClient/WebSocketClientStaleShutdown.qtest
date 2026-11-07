@@ -311,6 +311,13 @@ class LifecycleWsClient inherits WebSocketClient {
         WebSocketClient::runInitialDrain(c);
     }
 
+    private waitLibraryThreads() {
+        # a local reference: the queue is read after the object is gone
+        Queue q = events;
+        q.push("waiting-threads");
+        WebSocketClient::waitLibraryThreads();
+    }
+
     #! returns the TID of the thread holding the action, or 0
     int getActionTidForTest() {
         AutoLock al(m);
@@ -696,6 +703,18 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("Discord: a heartbeat whose zombie reconnect is not made is cleared",
             \discordZombieHandoffFailsTest());
         addTestCase("Discord: EVENT_WS_CLOSED and the data provider's connection events", \discordClosedEventTest());
+        addTestCase("Discord: a gateway data provider going out of scope is destroyed and stops observing",
+            \discordProviderScopeTest());
+        addTestCase("Discord: a deleted gateway data provider stops observing", \discordProviderDeleteTest());
+        addTestCase("Discord: two gateway data providers on one client", \discordTwoProvidersTest());
+        addTestCase("Discord: the destructor waits for a forced reconnect", \discordDestructorWaitsReconnectTest());
+        addTestCase("Discord: the last reference released on the heartbeat thread",
+            \discordLastRefOnHeartbeatThreadTest());
+        addTestCase("Discord: dropping the last reference to a connected client destroys it",
+            \discordDropConnectedClientTest());
+        addTestCase("Discord: EVENT_WS_CLOSED is raised when a closing step fails", \discordClosedOnStepErrorTest());
+        addTestCase("Discord: a failed handoff on the heartbeat thread does not wait for itself",
+            \discordHandoffOnHeartbeatThreadTest());
         foreach string proto in ("h2", "h3") {
             addTestCase(proto + ": raw callback during the initial drain", \rawCallbackInitialDrainTest(), proto);
             addTestCase(proto + ": raw callback exception during the initial drain",
@@ -1524,12 +1543,15 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         int destructor_tid = handshake_tids.get(LifecycleWsClient::HandoffTimeout);
         int opener_tid = opened_tids.get(LifecycleWsClient::HandoffTimeout);
         assertTrue(opener_tid != destructor_tid, "the reconnect thread reports the connection open");
-        # the destructor reports the connection closed while the open report runs, without waiting for it
+        # the destructor reports the connection closed while the open report runs, without waiting for it; then it
+        # waits for the reconnect thread
         release_destructor.dec();
-        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+        assertEq("waiting-threads", events.get(LifecycleWsClient::HandoffTimeout));
         assertEq(2, ctx.closed.getCount(), "both connections are reported closed once");
+        assertEq(0, deleted.size(), "the destructor waits for the reconnect thread");
         release_opened.dec();
         assertEq("reconnect-done", events.get(LifecycleWsClient::HandoffTimeout));
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
         assertEq(2, ctx.closed.getCount(), "no connection is reported closed twice");
     }
 
@@ -1564,14 +1586,17 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         release.dec();
         # the reconnect thread published its connection and is held before it reports it open
         assertEq("before-open", events.get(LifecycleWsClient::HandoffTimeout));
-        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+        # the destructor takes the connection, reports it open and closed, then waits for the reconnect thread
+        assertEq("waiting-threads", events.get(LifecycleWsClient::HandoffTimeout));
         int destructor_tid = handshake_tids.get(LifecycleWsClient::HandoffTimeout);
         assertEq(destructor_tid, opened_tids.get(LifecycleWsClient::HandoffTimeout),
             "the destructor reports the connection open");
         assertEq(1, opened_cids.size(), "once");
         assertEq(2, ctx.closed.getCount(), "both connections are reported closed once");
+        assertEq(0, deleted.size(), "the destructor waits for the reconnect thread");
         release_before_open.dec();
         assertEq("reconnect-done", events.get(LifecycleWsClient::HandoffTimeout));
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
         assertEq(0, opened_tids.size(), "the reconnect thread does not report it open again");
         assertEq(2, ctx.closed.getCount(), "no connection is reported closed twice");
     }
@@ -2528,6 +2553,177 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq((info.connection_event, info.disconnection_event), prov_ids,
             "the provider raises its connection and disconnection events");
     }
+
+    #! A gateway data provider created from a client the caller keeps is destroyed when it goes out of scope: it
+    #! disconnects the client and is no longer its observer
+    discordProviderScopeTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.connect();
+        int before = d.observerCountForTest();
+        Queue q();
+        {
+            TestGatewayProvider p(d, q);
+            assertEq(before + 1, d.observerCountForTest(), "the provider observes the client");
+        }
+        assertEq(1, q.size(), "the provider was destroyed at the end of its scope");
+        assertFalse(d.isOpen(), "its destructor disconnected the client");
+        assertEq(before, d.observerCountForTest(), "it no longer observes the client");
+    }
+
+    #! A deleted gateway data provider is no longer an observer of the client, so later events do not reach it
+    discordProviderDeleteTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        int before = d.observerCountForTest();
+        Queue q();
+        TestGatewayProvider p(d, q);
+        delete p;
+        assertEq(1, q.size());
+        assertEq(before, d.observerCountForTest(), "the deleted provider no longer observes the client");
+        # events after the delete reach only the remaining observers
+        EventRecorder rec();
+        d.registerObserver(rec);
+        d.connect();
+        assertEq(EVENT_WS_CONNECTED, rec.q.get(LifecycleWsClient::HandoffTimeout).id);
+        d.disconnect();
+        assertEq(EVENT_WS_CLOSED, rec.q.get(LifecycleWsClient::HandoffTimeout).id);
+    }
+
+    #! Two gateway data providers on one client both get its events and both stop observing it
+    discordTwoProvidersTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        int before = d.observerCountForTest();
+        Queue q();
+        TestGatewayProvider p1(d, q);
+        TestGatewayProvider p2(d, q);
+        assertEq(before + 2, d.observerCountForTest());
+        EventRecorder r1();
+        EventRecorder r2();
+        p1.registerObserver(r1);
+        p2.registerObserver(r2);
+        p1.observersReady();
+        p2.observersReady();
+        if (!d.isOpen()) {
+            d.connect();
+        }
+        assertEq(EVENT_WS_CONNECTED, r1.q.get(LifecycleWsClient::HandoffTimeout).id);
+        assertEq(EVENT_WS_CONNECTED, r2.q.get(LifecycleWsClient::HandoffTimeout).id);
+        delete p1;
+        assertEq(before + 1, d.observerCountForTest());
+        delete p2;
+        assertEq(before, d.observerCountForTest());
+        assertEq(2, q.size());
+    }
+
+    #! The destructor waits for a forced reconnect that waits for the action, so the reconnect does not run on a
+    #! destroyed client
+    discordDestructorWaitsReconnectTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        Queue events = d.events;
+        Counter release_action = d.release_action;
+        on_exit if (release_action.getCount()) {
+            release_action.dec();
+        }
+        d.connect();
+        int cid = d.getCurrentConnectionId();
+        d.holdActionInBackground();
+        assertEq("action-held", events.get(LifecycleWsClient::HandoffTimeout));
+        d.report_action_wait = True;
+        d.triggerZombieForTest(cid);
+        assertEq("action-wait", events.get(LifecycleWsClient::HandoffTimeout));
+        d.report_action_wait = False;
+        Queue deleted();
+        background sub () {
+            delete d;
+            deleted.push(True);
+        }();
+        assertEq("waiting-threads", events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(0, deleted.size(), "the destructor waits for the forced reconnect");
+        release_action.dec();
+        assertEq("reconnect:False", events.get(LifecycleWsClient::HandoffTimeout), "the reconnect ends");
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "then the client is destroyed");
+    }
+
+    #! When the heartbeat thread releases the last reference to the client, the destructor runs on it and completes
+    discordLastRefOnHeartbeatThreadTest() {
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        Queue events = d.events;
+        Queue lifecycle = d.lifecycle;
+        Queue hb_tids = d.hb_tids;
+        Counter release_hb = d.release_hb;
+        on_exit if (release_hb.getCount()) {
+            release_hb.dec();
+        }
+        d.block_hb = True;
+        d.connect({"hdr": {"X-Discord": "1", "X-Hbi": "100"}});
+        assertEq("hb-started:" + d.getCurrentConnectionId(), events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("hb-blocked", events.get(LifecycleWsClient::HandoffTimeout));
+        int hb_tid = hb_tids.get(LifecycleWsClient::HandoffTimeout);
+        # the heartbeat thread, held in its beat, now holds the only reference
+        remove d;
+        assertEq(0, lifecycle.size(), "not destroyed while the heartbeat thread beats");
+        release_hb.dec();
+        assertEq("destroyed:" + hb_tid, lifecycle.get(LifecycleWsClient::HandoffTimeout),
+            "destroyed on the heartbeat thread");
+        assertEq("waiting-threads", lifecycle.get(LifecycleWsClient::HandoffTimeout),
+            "the destructor went on to the base class");
+    }
+
+    #! Dropping the last reference to a connected client whose heartbeat runs destroys it at once
+    discordDropConnectedClientTest() {
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        Queue events = d.events;
+        Queue lifecycle = d.lifecycle;
+        d.connect({"hdr": {"X-Discord": "1"}});
+        assertEq("hb-started:" + d.getCurrentConnectionId(), events.get(LifecycleWsClient::HandoffTimeout));
+        remove d;
+        # destroyed by the last thread that releases a reference: this one, or a delivery task still finishing the
+        # HELLO; the heartbeat thread holds none while it waits
+        string ev = lifecycle.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(ev =~ /^destroyed:/, sprintf("the client is destroyed: %y", ev));
+    }
+
+    #! EVENT_WS_CLOSED is raised also when a step of the Discord closing callback fails
+    discordClosedOnStepErrorTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        EventRecorder rec();
+        d.registerObserver(rec);
+        d.connect();
+        assertEq(EVENT_WS_CONNECTED, rec.q.get(LifecycleWsClient::HandoffTimeout).id);
+        d.fail_cancel_resume = True;
+        d.disconnect();
+        assertEq(EVENT_WS_CLOSED, rec.q.get(LifecycleWsClient::HandoffTimeout).id);
+    }
+
+    #! heartbeatHandoffFailed() called on the heartbeat thread does not wait for that thread
+    discordHandoffOnHeartbeatThreadTest() {
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.handoff_in_beat = True;
+        d.connect({"hdr": {"X-Discord": "1", "X-Hbi": "100"}});
+        assertEq("hb-started:" + d.getCurrentConnectionId(), d.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("handoff-failed", d.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("handoff-returned", d.events.get(LifecycleWsClient::HandoffTimeout));
+        d.disconnect();
+    }
 }
 
 #! A client with serialization whose connect report waits until the connection was reported closed
@@ -2696,6 +2892,21 @@ class HbDiscord inherits DiscordWebSocketClient {
         bool force_zombie = False;
         #! forced reconnects are not made
         bool fail_reconnect = False;
+        #! gets "destroyed:<tid>" from the destructor and "waiting-threads" from the base destructor
+        Queue lifecycle();
+        #! gets the TID of the heartbeat thread held in sendData()
+        Queue hb_tids();
+        #! call heartbeatHandoffFailed() for the running heartbeat on the heartbeat thread in its next beat
+        bool handoff_in_beat = False;
+    }
+
+    destructor() {
+        lifecycle.push("destroyed:" + gettid());
+    }
+
+    private waitLibraryThreads() {
+        lifecycle.push("waiting-threads");
+        DiscordWebSocketClient::waitLibraryThreads();
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -2706,8 +2917,19 @@ class HbDiscord inherits DiscordWebSocketClient {
     }
 
     sendData(auto v) {
+        if (handoff_in_beat && v.typeCode() == NT_HASH && v.op == 1) {
+            handoff_in_beat = False;
+            *DiscordHeartbeat h;
+            {
+                AutoLock al(heartbeat_lock);
+                h = hb;
+            }
+            heartbeatHandoffFailed(h);
+            events.push("handoff-returned");
+        }
         if (block_hb && v.typeCode() == NT_HASH && v.op == 1) {
             block_hb = False;
+            hb_tids.push(gettid());
             events.push("hb-blocked");
             release_hb.waitForZero(LifecycleWsClient::HandoffTimeout);
         }
@@ -2787,6 +3009,8 @@ class WdDiscord inherits DiscordWebSocketClient {
         Queue zombies();
         #! forced reconnects are only recorded, not made
         bool record_zombies_only = False;
+        #! fail the next cancelResumeWatchdog() call
+        bool fail_cancel_resume = False;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -2915,6 +3139,23 @@ class WdDiscord inherits DiscordWebSocketClient {
         }
     }
 
+    private waitLibraryThreads() {
+        events.push("waiting-threads");
+        DiscordWebSocketClient::waitLibraryThreads();
+    }
+
+    private cancelResumeWatchdog(*int cid) {
+        if (fail_cancel_resume) {
+            fail_cancel_resume = False;
+            throw "TEST-ERROR", "a closing step fails";
+        }
+        DiscordWebSocketClient::cancelResumeWatchdog(cid);
+    }
+
+    int observerCountForTest() {
+        return observer_map.size();
+    }
+
     triggerZombieForTest(int cid) {
         DiscordWebSocketClient::triggerZombieReconnect(cid);
     }
@@ -2944,5 +3185,20 @@ class EventRecorder inherits DataProvider::Observer {
 
     update(string event_id, hash<auto> data_) {
         q.push({"id": event_id, "data": data_});
+    }
+}
+
+#! A gateway data provider that reports its destruction
+class TestGatewayProvider inherits DiscordGatewayDataProvider {
+    private {
+        Queue q;
+    }
+
+    constructor(DiscordWebSocketClient ws, Queue q) : DiscordGatewayDataProvider(ws) {
+        self.q = q;
+    }
+
+    destructor() {
+        q.push("provider-destroyed");
     }
 }
