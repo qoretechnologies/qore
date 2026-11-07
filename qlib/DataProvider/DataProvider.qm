@@ -2551,6 +2551,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       document, so vector indexes avoid semantic dilution as translations are added
     - action option generation returns an empty hash for operations without input fields
     - added HTTP/3 debug tracking, context-sensitive action filtering, and the \c amqp factory registration
+    - added @ref DataProvider::DataProviderActionCatalog::getAppNamesNoInit() "DataProviderActionCatalog::getAppNamesNoInit()",
+      which returns the names of all registered applications, including those pending initialization, without
+      initializing any
 
     @section dataprovider_v3_2_2 DataProvider v3.2.2
     - fixed setting the mandatory flag for hashes with dynamic fields
