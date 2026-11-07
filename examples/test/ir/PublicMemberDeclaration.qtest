@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class PublicMemberDeclarationTest
+
+#! Regression test: a public member declaration with members and static variables makes undeclared members invalid
+/** A class with a public member declaration refuses undeclared members (\c INVALID-MEMBER), and so does a class that
+    inherits one.  The parser recorded the declaration only when its member list or its static variable list was
+    empty, so a declaration with both members and static variables, as <tt>public { auto m; static auto sm; }</tt>,
+    was not recorded: the AST interpreter and the IR and JIT tiers accepted undeclared members of the class and of its
+    subclasses, while compiled code, which records each public member, refused them.
+
+    The script merges a hash with an undeclared key into objects of classes with each kind of declaration and assigns
+    an undeclared member; each function is called three times, so that every tier runs it (see ExecModeOutputTest).
+*/
+class PublicMemberDeclarationTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+
+# public member declarations with members and static variables in the same declaration
+class K1 {
+    public {
+        auto m;
+        static auto sm;
+    }
+}
+
+# only members
+class K2 {
+    public {
+        auto m;
+    }
+}
+
+# members and static variables in separate declarations
+class K4 {
+    public {
+        auto m;
+    }
+    public {
+        static auto sm;
+    }
+}
+
+# a subclass of a class whose public declaration has members and static variables
+class K6 inherits K1 {
+}
+
+# no member declaration: undeclared members can be added
+class K8 {
+}
+
+string sub tryMerge(object k) {
+    try {
+        k += {"a": 1};
+        return sprintf("merged %y", k.a);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub tryAssign(object k) {
+    try {
+        k.b = 2;
+        return sprintf("assigned %y", k.b);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub declared(object k) {
+    k += {"m": 3};
+    return sprintf("%y", k.m);
+}
+
+for (int i = 0; i < 3; ++i) {
+    list<string> r = ();
+    foreach string c in ("K1", "K2", "K4", "K6", "K8") {
+        object k = create_object(c);
+        r += sprintf("%s: %s, %s", c, tryMerge(k), tryAssign(k));
+    }
+    printf("%d %s | K1 %s\n", i, r.join("; "), declared(new K1()));
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; K8: merged 1, assigned 2 | K1 3",
+            "1 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; K8: merged 1, assigned 2 | K1 3",
+            "2 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; K8: merged 1, assigned 2 | K1 3",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("PublicMemberDeclaration", Script, (map $1 + "\n", Expected).join(""),
+            "refuses undeclared members of a class with a public member declaration") {
+    }
+}

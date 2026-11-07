@@ -2546,7 +2546,9 @@ public:
         return !ahm.empty();
     }
 
-    DLLLOCAL void parseSetEmptyPublicMemberDeclaration() {
+    //! records a public member declaration in the class: the class then declares its members (see
+    //! hasPublicMembersInHierarchy())
+    DLLLOCAL void parseSetPublicMemberDeclaration() {
         pending_has_public_memdecl = true;
         if (!has_new_user_changes) {
             has_new_user_changes = true;

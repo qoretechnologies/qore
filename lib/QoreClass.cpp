@@ -7541,9 +7541,11 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
 }
 
 void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
-    if (empty() && access == Public) {
-        qore_class_private::get(*qc)->parseSetEmptyPublicMemberDeclaration();
-        return;
+    // a public member declaration, whatever it declares (or if it declares nothing), means that the class declares
+    // its members, so that an undeclared member is refused (INVALID-MEMBER); this does not depend on which of the
+    // member and static variable lists of the declaration are empty
+    if (access == Public) {
+        qore_class_private::get(*qc)->parseSetPublicMemberDeclaration();
     }
     for (auto& i : member_list) {
         qore_class_private::parseAddMember(*qc, i.first, access, i.second);
@@ -7567,9 +7569,9 @@ void QoreVarMap::parseCommitRuntimeInit(ExceptionSink* xsink) {
 }
 
 void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
-    if (empty() && access == Public) {
-        qore_class_private::get(*qc)->parseSetEmptyPublicMemberDeclaration();
-        return;
+    // see QoreMemberMap::moveAllTo()
+    if (access == Public) {
+        qore_class_private::get(*qc)->parseSetPublicMemberDeclaration();
     }
     for (auto& i : member_list) {
         qore_class_private::parseAddStaticVar(qc, i.first, access, i.second);
