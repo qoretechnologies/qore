@@ -737,12 +737,14 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             string key = string(raw.contentBlockDelta.contentBlockIndex);
             hash<auto!> block = state.bedrock_reasoning{key} ?? {};
             if (exists delta.redactedContent) {
-                # encrypted reasoning can arrive in several deltas, each base64 on the wire: the decoded bytes are
-                # joined here, and encoded once when the block stops, as the response form has them
-                binary bytes = block.redacted_bytes ?? binary();
-                bytes += delta.redactedContent.typeCode() == NT_BINARY
-                    ? delta.redactedContent : parse_base64_string(delta.redactedContent);
-                block.redacted_bytes = bytes;
+                # encrypted reasoning can arrive in several deltas, each base64 on the wire: each delta's bytes are
+                # written to the block's stream as they arrive, and encoded once when the block stops, as the
+                # response form has them
+                if (!block.redacted_bytes) {
+                    block.redacted_bytes = new BinaryOutputStream();
+                }
+                cast<BinaryOutputStream>(block.redacted_bytes).write(delta.redactedContent.typeCode() == NT_BINARY
+                    ? delta.redactedContent : parse_base64_string(delta.redactedContent));
             } else {
                 hash<auto!> text = block.reasoningText ?? {};
                 if (exists delta.text) {
@@ -758,7 +760,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (exists raw.contentBlockStop.contentBlockIndex) {
             *hash<auto> block = remove state.bedrock_reasoning{string(raw.contentBlockStop.contentBlockIndex)};
             if (exists block.redacted_bytes) {
-                block.redactedContent = make_base64_string(remove block.redacted_bytes);
+                block.redactedContent = make_base64_string(cast<BinaryOutputStream>(remove block.redacted_bytes)
+                    .getData());
             }
             if (*hash<auto> reasoning = BedrockLlmProvider::fromConverseReasoning(block)) {
                 if (state.reasoning_blocks.typeCode() != NT_LIST) {
