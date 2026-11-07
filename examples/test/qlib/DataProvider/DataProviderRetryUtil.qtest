@@ -32,6 +32,40 @@
 
 %exec-class DataProviderRetryUtilTest
 
+#! A readable provider that records whether retries were suppressed when its first record was searched
+class RetryRecordingProvider inherits AbstractDataProvider {
+    public {
+        #! retriesSuppressed() for each search, in order
+        list<bool> suppressed = ();
+    }
+
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "RetryRecordingProvider",
+            "supports_read": True,
+        };
+    }
+
+    string getName() {
+        return "retry-recording";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *hash<auto> searchFirstRecordImpl(hash<auto> where_cond, *hash<auto> search_options) {
+        suppressed += DataProviderRetryUtil::retriesSuppressed();
+        return {"id": 1};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+        };
+    }
+}
+
 public class DataProviderRetryUtilTest inherits QUnit::Test {
     private {
         #! A name that is never resolved (RFC 6761 section 6.4)
@@ -50,6 +84,7 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         addTestCase("retriable transport errors", \retriableTransportErrors());
         addTestCase("retry suppression", \retrySuppression());
         addTestCase("transport retry delay", \transportRetryDelay());
+        addTestCase("example record", \exampleRecord());
         set_return_value(main());
     }
 
@@ -199,6 +234,15 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         # a negative unit is refused and the unit is kept
         assertThrows("TRANSPORT-RETRY-DELAY-ERROR", \DataProviderRetryUtil::setTransportRetryDelayUnit(), -1ms);
         assertEq(0s, DataProviderRetryUtil::getTransportRetryDelayUnit());
+    }
+
+    exampleRecord() {
+        RetryRecordingProvider prov();
+        # the example record is searched without retries
+        assertEq({"id": 1}, prov.getExampleRecordData());
+        # a search for records is retried
+        assertEq({"id": 1}, prov.searchFirstRecord({}));
+        assertEq((True, False), prov.suppressed);
     }
 
     #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call

@@ -166,6 +166,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("url option tests", \urlOptionTests());
         addTestCase("connection url tests", \connectionUrlTests());
         addTestCase("transport retry tests", \transportRetryTests());
+        addTestCase("example data request tests", \exampleDataRequestTests());
         addTestCase("name resolution tests", \nameResolutionTests());
 
         # Integration tests (require Tableau credentials)
@@ -885,6 +886,29 @@ public class TableauDataProviderTest inherits QUnit::Test {
             assertTrue(TableauDataProvider::RetrySet{ex.err}, ex.err);
             assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
         }
+        assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
+    }
+
+    #! Example data is requested once, and the fake data is returned when the request fails
+    exampleDataRequestTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        CountingTableauRestClientIo rest = getRefusingClient();
+        TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});
+        foreach string event in ("watch-projects", "watch-datasources") {
+            rest.requests = 0;
+            auto example = provider.getChildProviderPath("events/" + event).getExampleEventData(event);
+            assertTrue(example.name.val(), event);
+            assertEq(1, rest.requests, event);
+        }
+
+        # retries are suppressed only while the example data is requested
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+        rest.requests = 0;
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \provider.getChildProviderEx("projects").searchRecords());
         assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
     }
 

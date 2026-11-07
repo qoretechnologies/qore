@@ -8868,7 +8868,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             # its example.  (Returning the missing record here violated the
             # return type outside this try block, so the fallback was never
             # reached and simulating a write to an empty table failed.)
-            *hash<auto> first = searchFirstRecord({});
+            # the example record is requested once, without retries (see DataProviderRetryUtil::runWithoutRetries())
+            *hash<auto> first = DataProviderRetryUtil::runWithoutRetries(*hash<auto> sub () {
+                return searchFirstRecord({});
+            });
             if (first) {
                 return first;
             }
