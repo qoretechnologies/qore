@@ -704,7 +704,13 @@ int QoreEventLoop::kernelModify(int fd, int events, void* udata, struct stat& st
             }
             return 0;
         }
-        xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(MOD) failed for fd %d", fd);
+        int err = errno;
+        // epoll refuses a descriptor that it cannot wait for before it looks up the registration: the number belongs
+        // to a regular file now, which is always ready (see always_ready_count)
+        if (err == EPERM && !fstat(fd, &st) && S_ISREG(st.st_mode)) {
+            return 1;
+        }
+        xsink->raiseErrnoException("EVENT-LOOP-ERROR", err, "epoll_ctl(MOD) failed for fd %d", fd);
         return -1;
     }
     return 0;
