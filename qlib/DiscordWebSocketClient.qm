@@ -1328,7 +1328,9 @@ hash<auto> h = ws.getInfo();
     */
     private static waitHeartbeatEndedOrDetached(DiscordHeartbeat h) {
         AutoLock al(h.lock);
-        while (!h.ended && !h.detached) {
+        # a record whose thread was never started (or whose start failed) has no thread to wait for: running is
+        # incremented before the thread starts and decremented after it set ended
+        while (!h.ended && !h.detached && h.running.getCount()) {
             h.cond.wait(h.lock);
         }
     }
