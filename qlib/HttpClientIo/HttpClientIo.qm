@@ -53,9 +53,11 @@ module HttpClientIo {
     Features:
     - <b>Protocol auto-selection</b>: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
       preferring HTTP/3 when available, and falling back to HTTP/1.1 for endpoints that
-      complete the TLS handshake but refuse HTTP/2 via ALPN; the fallback is cached per host and re-probed
-      periodically.  The race ends early only when a protocol connects, so a server that receives only HTTP/3 is
-      reached whatever its head start; a denial of the @ref sandboxing "sandbox" or a refused server certificate
+      complete the TLS handshake but refuse HTTP/2 via ALPN: HTTP/1.1 is started as soon as HTTP/2 is refused and
+      raced against HTTP/3, so a network that drops UDP datagrams silently does not delay it; the fallback is
+      cached per host and re-probed periodically.  The race ends early only when a protocol connects, so a server
+      that receives only HTTP/3 is reached whatever its head start; a denial of the @ref sandboxing "sandbox" or a
+      refused server certificate
       ends the race with that error (see
       @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError() "HttpClientConnectionManager::isTerminalConnectionError()").  Alt-Svc advertisements supply the UDP port for
       later races.  Poll-operation callers race without blocking with

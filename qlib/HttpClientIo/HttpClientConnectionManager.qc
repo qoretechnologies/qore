@@ -26,7 +26,8 @@
 public namespace HttpClientIo {
 
 #! Internal: async happy-eyeballs race state (module-private; not a public API)
-/** Holds the in-flight H3/H2 candidates and phase for a single brand-new pool
+/** Holds the in-flight H3/H2 (and, after an ALPN refusal of HTTP/2, H1)
+    candidates and phase for a single brand-new pool
     key while a non-blocking caller (e.g. the connection-monitor ping op) drives
     the race re-entrantly through @ref HttpClientConnectionManager::advanceAsyncHE().
 
@@ -41,6 +42,9 @@ class AsyncRace {
 
         #! The HTTP/2 (TCP/TLS) candidate (created when the race enters "race")
         *Http2ClientConnection h2conn;
+
+        #! The HTTP/1.1 (TCP/TLS) candidate, started as soon as the server refused HTTP/2 via ALPN
+        *Http1ClientConnection h1conn;
 
         #! Controller stagger-timer id (NOTHING once fired/cancelled)
         *int stagger_timer_id;
@@ -79,7 +83,8 @@ class AsyncRace {
 /** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
     - <b>Protocol auto-selection</b>: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
-      preferring HTTP/3 when available
+      preferring HTTP/3 when available; when the server refuses HTTP/2 via ALPN, HTTP/1.1 is started at once and
+      raced against HTTP/3
     - <b>Connection pooling</b>: Reuse connections across requests
     - <b>Load balancing</b>: Distribute streams across connections
     - <b>Automatic connection creation</b>: Create new connections as needed
@@ -154,12 +159,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Interval before re-probing HTTP/3 + HTTP/2 for hosts that fell back to HTTP/1.1
         /** A cached \c "h1" records that the server refused HTTP/2 via ALPN
-            <i>and</i> that HTTP/3 also failed (see @ref heTryH1Fallback()).  That
-            is a property of the remote endpoint, not of the request, so it is
+            <i>and</i> that HTTP/3 did not win the race against HTTP/1.1, which is
+            started as soon as HTTP/2 is refused (see @ref heStartH1Leg()).  The
+            refusal is a property of the remote endpoint, not of the request, so it is
             cached — but it must not be permanent: a server that later enables
             ALPN (or an HTTP/3 path that later becomes reachable) has to be
             discovered again, so the happy-eyeballs race is re-run after this
-            interval.
+            interval, as it is for a cached \c "h2" after @ref H3_REPROBE_INTERVAL.
         */
         const H1_REPROBE_INTERVAL = 5m;
 
@@ -291,8 +297,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         /** \c "h3" is set only by a ready, winning H3 candidate;
             \c "h2" after an H3 fallback or a winning H2 candidate; \c "h1" only
             when the endpoint gave a definitive negative for HTTP/2 over TLS
-            (@ref isDefinitiveH2AlpnRefusal()) <i>and</i> HTTP/3 had already
-            settled as failed — see @ref heTryH1Fallback().
+            (@ref isDefinitiveH2AlpnRefusal()): by the I/O thread when the HTTP/2
+            connection is refused, and by a winning H1 candidate, which the race
+            starts at that refusal (see @ref heStartH1Leg()); a winning H3 candidate
+            replaces it.
         */
         hash<string, string> protocol_cache;
 
@@ -2097,9 +2105,9 @@ printf("%d connection(s) migrated\n", migrated);
         HTTP/1.1 unless HTTP/2 is explicitly requested.
         The protocol cache persists negotiation results to avoid repeated probes.
 
-        HTTP/1.1 is never raced for HTTPS: it is only selected here from a
-        cached @c "h1", which the race itself records after losing both legs to
-        an endpoint that refuses HTTP/2 via ALPN (see @ref heTryH1Fallback()).
+        HTTP/1.1 is selected here for HTTPS only from a cached @c "h1": the race
+        starts it only when the endpoint refuses HTTP/2 via ALPN (see
+        @ref heStartH1Leg()), and records @c "h1" when it wins.
         That entry expires after @ref H1_REPROBE_INTERVAL so the race is re-run
         rather than pinning the host to HTTP/1.1 permanently.
 
@@ -2617,8 +2625,8 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Internal: happy-eyeballs winner selection (H3-preferred), pure / no side effects
     /** Returns the connection that has reached a usable READY state, preferring
-        HTTP/3 over HTTP/2 (the happy-eyeballs preference order).  Returns
-        @ref NOTHING if neither connection is ready yet.
+        HTTP/3 over HTTP/2 over HTTP/1.1 (the happy-eyeballs preference order).  Returns
+        @ref NOTHING if no candidate is ready yet.
 
         @note Pure: reads only the authoritative C++ connection state
         (@c AbstractHttpPollConnection::isReady()).  It performs no logging,
@@ -2628,51 +2636,79 @@ printf("%d connection(s) migrated\n", migrated);
 
         @param h3conn the HTTP/3 candidate
         @param h2conn the HTTP/2 candidate (\c NOTHING during the H3-only stagger)
+        @param h1conn the HTTP/1.1 candidate (\c NOTHING unless HTTP/2 was refused via ALPN; see
+        @ref heStartH1Leg())
 
         @return the ready connection (H3 preferred), or NOTHING if undecided
     */
     private *HttpClientConnection hePickReady(Http3ClientConnection h3conn,
-            *Http2ClientConnection h2conn) {
+            *Http2ClientConnection h2conn, *Http1ClientConnection h1conn) {
         if (h3conn.isReady()) {
             return h3conn;
         }
         if (h2conn && h2conn.isReady()) {
             return h2conn;
         }
+        if (h1conn && h1conn.isReady()) {
+            return h1conn;
+        }
         return NOTHING;
     }
 
-    #! Internal: commits a happy-eyeballs winner — close loser, cache protocol, log
+    #! Internal: commits a happy-eyeballs winner — close losers, cache protocol, log
     /** Mirrors the synchronous race's commit points (former inline blocks at the
-        H3-within-stagger / H3-won / H2-won decision sites).  The loser (the
-        non-winning candidate, when it exists) is closed first so it is never
+        H3-within-stagger / H3-won / H2-won decision sites).  The losers (every
+        other candidate that exists) are closed first so they are never
         pool-inserted, then the winning protocol is cached under @c pool_lock.
 
-        @param winner the connection that won the race (H3 or H2)
+        An HTTP/1.1 winner is cached as @c "h1" also when the HTTP/3 candidate was
+        still connecting: HTTP/1.1 is started only after the endpoint refused
+        HTTP/2 via ALPN, and HTTP/3 lost the race to it as it loses to HTTP/2 when
+        @c "h2" is cached; both are re-raced after their re-probe intervals
+        (@ref H1_REPROBE_INTERVAL, @ref H3_REPROBE_INTERVAL).
+
+        @param winner the connection that won the race (H3, H2 or H1)
         @param h3conn the HTTP/3 candidate from the race
         @param h2conn the HTTP/2 candidate (\c NOTHING during the H3-only stagger)
+        @param h1conn the HTTP/1.1 candidate (\c NOTHING unless HTTP/2 was refused via ALPN)
         @param key the host:port pool key
 
         @note Shared by the synchronous race and the async race coordinator so
         the winner/cache/close semantics are byte-identical between paths.
     */
     private heCommitWinner(HttpClientConnection winner, Http3ClientConnection h3conn,
-            *Http2ClientConnection h2conn, string key) {
+            *Http2ClientConnection h2conn, *Http1ClientConnection h1conn, string key) {
         string proto = winner.getProtocol();
-        log(LoggerLevel::DEBUG, "happy eyeballs: %s won for %s", proto, key);
-        # Close the loser (if any) before the winner is pool-inserted.  H3 is the
-        # only candidate during the stagger phase, so there is no loser to close
-        # when h2conn is absent.
-        if (proto == "h3") {
-            if (h2conn) {
-                try { h2conn.close(); } catch () {}
-            }
+        if (proto == "h1") {
+            log(LoggerLevel::DEBUG, "happy eyeballs: h1 won for %s after HTTP/2 was refused via ALPN (HTTP/3 %s)",
+                key, heSettled(h3conn) ? "failed" : "still connecting");
         } else {
-            try { h3conn.close(); } catch () {}
+            log(LoggerLevel::DEBUG, "happy eyeballs: %s won for %s", proto, key);
+        }
+        # Close the losers before the winner is pool-inserted.  H3 is the only
+        # candidate during the stagger phase, so there is no loser to close then.
+        foreach *HttpClientConnection conn in ((h3conn, h2conn, h1conn)) {
+            if (conn && conn !== winner) {
+                try { conn.close(); } catch () {}
+            }
         }
         {
             AutoWriteLock al(pool_lock);
             cacheProtocol(key, proto);
+        }
+    }
+
+    #! Internal: closes the given candidates of a happy-eyeballs race, ignoring errors
+    /** @param h3conn the HTTP/3 candidate, if any
+        @param h2conn the HTTP/2 candidate, if any
+        @param h1conn the HTTP/1.1 candidate, if any
+    */
+    private static heCloseLegs(*Http3ClientConnection h3conn, *Http2ClientConnection h2conn,
+            *Http1ClientConnection h1conn) {
+        foreach *HttpClientConnection conn in ((h3conn, h2conn, h1conn)) {
+            if (conn) {
+                try { conn.close(); } catch () {}
+            }
         }
     }
 
@@ -2712,71 +2748,59 @@ printf("%d connection(s) migrated\n", migrated);
         return h2_err.err == "HTTP2-ALPN-ERROR";
     }
 
-    #! Internal: last-resort HTTP/1.1 fallback once both happy-eyeballs legs have lost
-    /** Called only from the race's terminal error path, i.e. after H3 has
-        failed to become ready.  If the H2 leg additionally reported a
-        definitive ALPN refusal (@ref isDefinitiveH2AlpnRefusal()), the endpoint
-        supports neither HTTP/3 nor HTTP/2 and the only remaining protocol is
-        HTTP/1.1 — so both losing candidates are closed and a fresh H1
-        connection is returned instead of throwing.
+    #! Internal: True if the HTTP/2 candidate of a race ended with a definitive refusal of HTTP/2 via ALPN
+    /** Then the endpoint speaks HTTP/1.1 over TLS, which the race starts at once (see @ref heStartH1Leg()).
 
-        Some HTTPS servers (Salesforce's OAuth2 token endpoint, for example)
-        complete the TLS handshake but never negotiate ALPN; without this path
-        they are unreachable in @c "auto" mode no matter how many times the
-        request is retried.
+        @param h2conn the HTTP/2 candidate
 
-        The @c "h1" result is only <i>cached</i> when the H3 candidate has
-        actually settled: an H3 leg still in @c Connecting state (a QUIC
-        handshake that never completed within the race window) has not told us
-        anything about the endpoint's HTTP/3 support, so this request falls back
-        while the next one races H3 again.
-
-        @param h3conn the H3 candidate (closed here when the fallback applies)
-        @param h2conn the H2 candidate (closed here when the fallback applies)
-        @param url_info parsed URL info for the H1 connection
-        @param key the host:port pool key
-
-        @return the new H1 connection, or @ref NOTHING when the fallback does
-        not apply (the caller then throws its normal connect error)
+        @return @ref True if the candidate is no longer connecting and its error is a definitive ALPN refusal (see
+        @ref isDefinitiveH2AlpnRefusal())
     */
-    private *HttpClientConnection heTryH1Fallback(Http3ClientConnection h3conn,
-            *Http2ClientConnection h2conn, hash<auto> url_info, string key) {
-        if (!h2conn) {
-            return;
-        }
-        *hash<auto> h2_err = h2conn.getPollOperation().getError();
-        if (!isDefinitiveH2AlpnRefusal(h2_err)) {
-            return;
-        }
-
-        # H3 has lost the race; only a settled H3 candidate proves the endpoint
-        # has no usable HTTP/3 path and makes the "h1" result cacheable
-        bool h3_settled = h3conn.getConnectionState() == HttpClientConnectionState::Closed
-            || exists h3conn.getPollOperation().getError();
-
-        log(LoggerLevel::DEBUG, "happy eyeballs: %s refused HTTP/2 via ALPN and HTTP/3 %s; "
-            "falling back to HTTP/1.1%s", key, h3_settled ? "failed" : "did not connect in time",
-            h3_settled ? "" : " for this request only");
-
-        try { h3conn.close(); } catch () {}
-        try { h2conn.close(); } catch () {}
-
-        if (h3_settled) {
-            AutoWriteLock al(pool_lock);
-            cacheProtocol(key, "h1");
-        }
-
-        return createConnection(url_info, key, "h1");
+    private static bool heH2RefusedViaAlpn(Http2ClientConnection h2conn) {
+        return heSettled(h2conn) && isDefinitiveH2AlpnRefusal(h2conn.getPollOperation().getError());
     }
 
-    #! Internal: builds the happy-eyeballs connect-error description from both legs' errors
+    #! Internal: starts the HTTP/1.1 candidate of a happy-eyeballs race once the endpoint refused HTTP/2 via ALPN
+    /** Some HTTPS servers complete the TLS handshake but select HTTP/1.1 or no protocol at all with ALPN (some
+        Amazon S3 endpoints and Salesforce's OAuth2 token endpoint, for example), so HTTP/1.1 is the only protocol
+        they speak over TCP.
+        The race starts it as soon as the HTTP/2 candidate reports that refusal (see @ref heH2RefusedViaAlpn()),
+        without waiting for the HTTP/3 candidate, whose handshake may only end with its connect timeout when the
+        network drops UDP datagrams silently, and races it against HTTP/3: the first candidate that connects wins
+        (RFC 8305 section 5: the next attempt is started as soon as the previous one fails).
+
+        The connection is submitted to the I/O controller here, as the other candidates are; the caller registers
+        its readiness notifier.
+
+        @param url_info parsed URL info of the target
+        @param key the host:port pool key
+
+        @return the new HTTP/1.1 candidate, connecting
+    */
+    private Http1ClientConnection heStartH1Leg(hash<auto> url_info, string key) {
+        log(LoggerLevel::DEBUG, "happy eyeballs: %s refused HTTP/2 via ALPN; starting HTTP/1.1 alongside HTTP/3",
+            key);
+        Http1ClientConnection h1conn = cast<Http1ClientConnection>(createConnection(url_info, key, "h1"));
+        try {
+            h1conn.setControllerRef(controller);
+            h1conn.setManagerContext(self, key);
+            submitConnectionToController(key, h1conn);
+        } catch (hash<ExceptionInfo> ex) {
+            try { h1conn.close(); } catch () {}
+            rethrow;
+        }
+        return h1conn;
+    }
+
+    #! Internal: builds the happy-eyeballs connect-error description from the errors of the race's legs
     /** Pure formatter (no I/O, no side effects) so the message construction can
         be unit-tested directly and shared by every happy-eyeballs terminal-error
         site.
 
-        Happy eyeballs races H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel; when the
-        terminal error path is reached both legs have failed to become ready, so
-        the message must report BOTH underlying reasons.  Reporting only one — the
+        Happy eyeballs races H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel, and H1
+        (TCP/TLS) once the server refused HTTP/2 via ALPN; when the
+        terminal error path is reached no leg has become ready, so
+        the message must report every underlying reason.  Reporting only one — the
         historical @code h2_err.desc ?? h3_err.desc @endcode — made a
         total-endpoint outage look like a QUIC-specific problem whenever the H2
         leg's error hash carried no @c desc: the message fell through to the
@@ -2786,22 +2810,28 @@ printf("%d connection(s) migrated\n", migrated);
         Each present leg contributes a labelled reason (its @c desc, falling back
         to its @c err, then to a placeholder).  A leg whose error is
         @ref NOTHING — e.g. a still-pending candidate when the race's wait bound
-        expired — is omitted rather than reported as a spurious failure.
+        expired, or an H1 leg that was never started — is omitted rather than
+        reported as a spurious failure.
 
         @param h3_err the H3/QUIC poll-op error (may be @ref NOTHING)
         @param h2_err the H2/TCP poll-op error (may be @ref NOTHING)
         @param key the \c host:port pool key
+        @param h1_err the H1/TCP poll-op error (may be @ref NOTHING)
 
         @return a user-friendly @code could not connect to <key>[: <reasons>] @endcode
         string, where \c reasons is the "; "-joined set of present, labelled legs
     */
-    static string heBuildConnectErrorDesc(*hash<auto> h3_err, *hash<auto> h2_err, string key) {
+    static string heBuildConnectErrorDesc(*hash<auto> h3_err, *hash<auto> h2_err, string key,
+            *hash<auto> h1_err) {
         list<string> reasons = ();
         if (h3_err) {
             reasons += sprintf("H3/QUIC: %s", h3_err.desc ?? h3_err.err ?? "no error reported");
         }
         if (h2_err) {
             reasons += sprintf("H2/TCP: %s", h2_err.desc ?? h2_err.err ?? "no error reported");
+        }
+        if (h1_err) {
+            reasons += sprintf("H1/TCP: %s", h1_err.desc ?? h1_err.err ?? "no error reported");
         }
         string desc = sprintf("could not connect to %s", key);
         if (reasons) {
@@ -2810,97 +2840,106 @@ printf("%d connection(s) migrated\n", migrated);
         return desc;
     }
 
-    #! Internal: builds and throws the happy-eyeballs connect error, closing both conns
+    #! Internal: builds and throws the happy-eyeballs connect error, closing every candidate
     /** Exact behavior of the synchronous race's terminal error path: collect the
-        underlying H3/H2 poll-op errors, close both connections, and throw a
-        user-friendly error.  It is reached when neither candidate connected:
+        underlying poll-op errors of the candidates, close them, and throw a
+        user-friendly error.  It is reached when no candidate connected:
         the race does not end on one candidate's failure but waits for the other
-        one's own outcome, so the most specific error of both is reported.  If the
-        H2 (TCP) attempt reported \c SOCKET-CONNECT-ERROR, the underlying error is
+        ones' own outcomes, so the most specific error of all is reported.  If the
+        TCP attempt (H1 if it was started, else H2) reported \c SOCKET-CONNECT-ERROR, the underlying error is
         propagated (it is deliberately NOT in @ref isConnectionError(), so the
         request retry loop does not retry it); otherwise
         \c HTTPCLIENT-CONNECT-ERROR is thrown.
 
         The description reports every failed leg (not just one), so a message can
         no longer surface the H3/QUIC handshake timeout while silently hiding that
-        the H2/TCP attempt also failed.
+        the TCP attempts also failed.
 
         A denial of the @ref sandboxing "sandbox" or a refused server certificate is
         reported as it is, as for a connection that is not raced (see
-        @ref HttpClientConnection::waitForReady()), whatever the other protocol's
-        failure, so that it is neither retried nor hidden: a denial if either protocol
-        was denied, else a certificate refusal; the HTTP/2 connection's error if both
-        were.
+        @ref HttpClientConnection::waitForReady()), whatever the other protocols'
+        failures, so that it is neither retried nor hidden: a denial if any protocol
+        was denied, else a certificate refusal; the error of a TCP connection (HTTP/1.1, then HTTP/2) if more than
+        one protocol was refused.
 
         @param h3conn the HTTP/3 candidate (closed here)
         @param h2conn the HTTP/2 candidate (closed here)
+        @param h1conn the HTTP/1.1 candidate, if HTTP/2 was refused via ALPN (closed here)
         @param key the host:port pool key
 
         @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection; the argument is the connection's
         error
         @throw FILESYSTEM-ACCESS-DENIED the sandbox denied the file of a protocol's UNIX domain socket
-        @throw SOCKET-SSL-ERROR a protocol refused the server certificate; the error of the HTTP/2 connection if both
-        refused it; the argument is the connection's error, with \c ssl_verify_error in its \c arg key
-        @throw SOCKET-CONNECT-ERROR HTTP/2's TCP connection was refused and HTTP/3 did not connect either
-        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected; the argument has the \c err and \c desc of the
-        HTTP/2 connection's error, or of the HTTP/3 connection's if the HTTP/2 connection reported none, as for a
-        connection that is not raced
+        @throw SOCKET-SSL-ERROR a protocol refused the server certificate; the error of a TCP connection if more than
+        one refused it; the argument is the connection's error, with \c ssl_verify_error in its \c arg key
+        @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/1.1 or HTTP/2 was refused and no other protocol
+        connected either
+        @throw HTTPCLIENT-CONNECT-ERROR no protocol connected; the argument has the \c err and \c desc of the
+        error of the HTTP/1.1 connection, else of the HTTP/2 connection, else of the HTTP/3 connection: the first one
+        that reported an error, as for a connection that is not raced
     */
     private heThrowConnectError(Http3ClientConnection h3conn, Http2ClientConnection h2conn,
-            string key) {
+            *Http1ClientConnection h1conn, string key) {
         *hash<auto> h3_err = h3conn.getPollOperation().getError();
         *hash<auto> h2_err = h2conn.getPollOperation().getError();
-        try { h3conn.close(); } catch () {}
-        try { h2conn.close(); } catch () {}
+        *hash<auto> h1_err = h1conn ? h1conn.getPollOperation().getError() : NOTHING;
+        heCloseLegs(h3conn, h2conn, h1conn);
 
-        # a sandbox denial or a refused certificate is never retried and never hidden behind the other protocol's
+        # a sandbox denial or a refused certificate is never retried and never hidden behind another protocol's
         # failure
-        foreach *hash<auto> err in ((h2_err, h3_err)) {
+        foreach *hash<auto> err in ((h1_err, h2_err, h3_err)) {
             if (http_is_sandbox_denial(err)) {
                 throw err.err, err.desc, err;
             }
         }
-        foreach *hash<auto> err in ((h2_err, h3_err)) {
+        foreach *hash<auto> err in ((h1_err, h2_err, h3_err)) {
             if (http_is_certificate_refusal(err)) {
                 throw err.err, err.desc, err;
             }
         }
 
-        # Build a user-friendly error message reporting BOTH legs' underlying
-        # failure reasons (see heBuildConnectErrorDesc()).  Reporting only one
+        # Build a user-friendly error message reporting every leg's underlying
+        # failure reason (see heBuildConnectErrorDesc()).  Reporting only one
         # (the historical "h2_err.desc ?? h3_err.desc") made a total-endpoint
         # outage look like a QUIC-specific problem whenever the H2 (TCP) leg's
         # error carried no "desc" — the message then showed only the H3/QUIC
         # handshake-timeout text even though TCP had been tried and had also
-        # failed.  Surfacing both makes it clear the happy-eyeballs race
-        # attempted (and lost) both protocols.
-        string desc = heBuildConnectErrorDesc(h3_err, h2_err, key);
+        # failed.  Surfacing all of them makes it clear the happy-eyeballs race
+        # attempted (and lost) every protocol.
+        string desc = heBuildConnectErrorDesc(h3_err, h2_err, key, h1_err);
 
-        # If the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR, the port is
+        # If a TCP attempt reported SOCKET-CONNECT-ERROR, the port is
         # refused at the kernel level (ECONNREFUSED or similar), and HTTP/3 has
         # failed as well — retrying via the outer isConnectionError loop would
-        # just repeat both.  Propagate the underlying SOCKET-CONNECT-ERROR, which
-        # is NOT in isConnectionError(), so the retry loop does not retry it.
-        if (h2_err.err == "SOCKET-CONNECT-ERROR") {
-            throw h2_err.err, desc;
+        # just repeat them.  Propagate the underlying SOCKET-CONNECT-ERROR, which
+        # is NOT in isConnectionError(), so the retry loop does not retry it.  An
+        # H1 leg is only started after HTTP/2's TCP connection and TLS handshake
+        # succeeded, so at most one of the two reports it.
+        foreach *hash<auto> err in ((h1_err, h2_err)) {
+            if (err.err == "SOCKET-CONNECT-ERROR") {
+                throw err.err, desc;
+            }
         }
 
-        throw "HTTPCLIENT-CONNECT-ERROR", desc, h2_err ?? h3_err;
+        throw "HTTPCLIENT-CONNECT-ERROR", desc, h1_err ?? h2_err ?? h3_err;
     }
 
     #! Internal: happy eyeballs parallel H3 + H2 connection race
     /** Tries H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel. H3 starts first;
         if it doesn't connect within the stagger delay, H2 starts alongside.
-        The first connection to become ready wins; the loser is cancelled.  The
+        If the server refuses HTTP/2 via ALPN, H1 (TCP/TLS) is started at once and
+        races against H3 (see @ref heStartH1Leg()).
+        The first connection to become ready wins; the losers are cancelled.  The
         race ends early only on a success: when one candidate fails, the other
-        one's own outcome, bounded by its own connect timeout, is awaited, so a
+        ones' own outcomes, bounded by their own connect timeouts, are awaited, so a
         server that receives one protocol only is reached, and the most specific
-        error of both is reported when neither connects (see
-        @ref heThrowConnectError()).
+        error of all is reported when none connects (see
+        @ref heThrowConnectError()).  Every candidate that does not win is closed,
+        also when the race ends with an exception.
 
         @param url_info parsed URL info
         @param key the host:port pool key
-        @return the winning connection (H3 or H2)
+        @return the winning connection (H3, H2 or H1)
 
     */
     private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key) {
@@ -2923,6 +2962,8 @@ printf("%d connection(s) migrated\n", migrated);
             submitConnectionToController(key, h3conn);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "happy eyeballs: H3 creation failed (%s: %s), using H2", key, ex.err, ex.desc);
+            # a connection that was created but could not be submitted is not left open
+            heCloseLegs(h3conn);
             # H3 not available — just return H2
             {
                 AutoWriteLock al(pool_lock);
@@ -2931,14 +2972,22 @@ printf("%d connection(s) migrated\n", migrated);
             return createConnection(url_info, key, "h2");
         }
 
+        # The other candidates, once started; every candidate that does not win is closed, also when an exception
+        # ends the race (the winner is returned, and heThrowConnectError() closes them all before it throws)
+        *Http2ClientConnection h2conn;
+        *Http1ClientConnection h1conn;
+        on_error {
+            heCloseLegs(h3conn, h2conn, h1conn);
+        }
+
         # Wait for H3 with stagger timeout using poll on the connection's notifier
         EventNotifier h3_notifier();
         bool h3_queued = h3conn.registerReadyNotifier(notifier: h3_notifier);
         if (!h3_queued) {
             # Already decided (ready or failed)
-            *HttpClientConnection w = hePickReady(h3conn, NOTHING);
+            *HttpClientConnection w = hePickReady(h3conn);
             if (w) {
-                heCommitWinner(w, h3conn, NOTHING, key);
+                heCommitWinner(w, h3conn, NOTHING, NOTHING, key);
                 return w;
             }
             # H3 failed immediately — fall through to start H2
@@ -2958,16 +3007,16 @@ printf("%d connection(s) migrated\n", migrated);
             controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs,
                 opts.connect_timeout + AsyncQueueSafetyGraceMs);
             h3_notifier.acknowledge();
-            *HttpClientConnection w = hePickReady(h3conn, NOTHING);
+            *HttpClientConnection w = hePickReady(h3conn);
             if (w) {
-                heCommitWinner(w, h3conn, NOTHING, key);
+                heCommitWinner(w, h3conn, NOTHING, NOTHING, key);
                 return w;
             }
         }
 
         # H3 didn't connect yet — start H2 in parallel
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
-        Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
+        h2conn = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             getConnectionProxyInfo(url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path);
         applyTcpUserTimeout(h2conn);
@@ -2975,24 +3024,35 @@ printf("%d connection(s) migrated\n", migrated);
         h2conn.setManagerContext(self, key);
         submitConnectionToController(key, h2conn);
 
-        # Race: register the notifier on both candidates; it is signaled when either of them settles
+        # Race: register the notifier on every candidate; it is signaled when any of them settles
         EventNotifier race_notifier();
         h3conn.registerReadyNotifier(notifier: race_notifier);
         h2conn.registerReadyNotifier(notifier: race_notifier);
 
-        # The race ends early only on a success.  When one candidate fails, the other one's own outcome is awaited:
+        # The race ends early only on a success.  When one candidate fails, the other ones' own outcomes are awaited:
         # a server can receive one protocol only (HTTP/3 only, with nothing accepting TCP connections, for example),
-        # and a certificate refusal or a sandbox denial of the other candidate must not be hidden behind a plain
+        # and a certificate refusal or a sandbox denial of another candidate must not be hidden behind a plain
         # connection error (see heThrowConnectError()).  Each candidate is bounded by its own connect timeout; the
         # wait is bounded too, in case an outcome is not signaled.
         date deadline = now_us() + milliseconds(opts.connect_timeout + AsyncQueueSafetyGraceMs);
         while (True) {
-            *HttpClientConnection w = hePickReady(h3conn, h2conn);
+            *HttpClientConnection w = hePickReady(h3conn, h2conn, h1conn);
             if (w) {
-                heCommitWinner(w, h3conn, h2conn, key);
+                heCommitWinner(w, h3conn, h2conn, h1conn, key);
                 return w;
             }
-            if (heSettled(h3conn) && heSettled(h2conn)) {
+            # The server refused HTTP/2 via ALPN, so it speaks HTTP/1.1 over TCP: HTTP/1.1 is started at once and
+            # raced against HTTP/3, instead of waiting for HTTP/3's outcome first, which takes its connect timeout
+            # when the network drops UDP datagrams silently
+            if (!h1conn && heH2RefusedViaAlpn(h2conn)) {
+                h1conn = heStartH1Leg(url_info, key);
+                h1conn.registerReadyNotifier(notifier: race_notifier);
+                # the new candidate is bounded by its own connect timeout
+                deadline = now_us() + milliseconds(opts.connect_timeout + AsyncQueueSafetyGraceMs);
+                # its state is read before the next wait, so an outcome it reached already is not missed
+                continue;
+            }
+            if (heSettled(h3conn) && heSettled(h2conn) && (!h1conn || heSettled(h1conn))) {
                 break;
             }
             int remaining = (deadline - now_us()).durationMilliseconds();
@@ -3008,15 +3068,8 @@ printf("%d connection(s) migrated\n", migrated);
             race_notifier.acknowledge();
         }
 
-        # Neither H3 nor H2 connected.  If H2's failure was a definitive ALPN
-        # refusal the endpoint speaks neither, so HTTP/1.1 is the correct — and
-        # only — remaining choice; otherwise collect error details, clean up
-        # both, and throw.
-        *HttpClientConnection h1 = heTryH1Fallback(h3conn, h2conn, url_info, key);
-        if (h1) {
-            return h1;
-        }
-        heThrowConnectError(h3conn, h2conn, key);
+        # No candidate connected: collect error details, clean up all of them, and throw
+        heThrowConnectError(h3conn, h2conn, h1conn, key);
     }
 
     #! Acquires a connection for the given URL without ever blocking the caller
@@ -3027,7 +3080,9 @@ printf("%d connection(s) migrated\n", migrated);
         race entirely and used a single H2 connection), this restores a real
         H3/H2 happy-eyeballs race for brand-new keys while keeping every step
         non-blocking and immediately cancelable via
-        @ref abandonAsyncHEForUrl().
+        @ref abandonAsyncHEForUrl().  As in the synchronous race, HTTP/1.1 is
+        started as soon as the server refuses HTTP/2 via ALPN and raced against
+        HTTP/3 (see @ref heStartH1Leg()).
 
         Re-entrant: the caller polls the returned @ref Qore::EventNotifier under
         its own cancelable controller submission and, on each wake, calls this
@@ -3044,11 +3099,11 @@ printf("%d connection(s) migrated\n", migrated);
 
         @throw HTTPCLIENT-URL-ERROR the URL is invalid
         @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
-        @throw SOCKET-CONNECT-ERROR HTTP/2's TCP connection was refused and HTTP/3
-        did not connect either (identical to the synchronous race)
+        @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/2 or HTTP/1.1 was refused and no other protocol
+        connected either (identical to the synchronous race)
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
         @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection (see @ref heThrowConnectError())
-        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
+        @throw HTTPCLIENT-CONNECT-ERROR no protocol connected
 
         @note Winner / error / cache semantics are identical to the synchronous
         race (both paths share @ref hePickReady() / @ref heCommitWinner() /
@@ -3157,8 +3212,8 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Internal: tears down any in-flight async happy-eyeballs race for a key
-    /** Idempotent.  Cancels race timers, closes both in-flight
-        candidates (neither is pool-inserted until the race resolves), and
+    /** Idempotent.  Cancels race timers, closes every in-flight
+        candidate (none is pool-inserted until the race resolves), and
         drops the race state.
     */
     abandonAsyncHEByKey(string key) {
@@ -3169,10 +3224,7 @@ printf("%d connection(s) migrated\n", migrated);
         AsyncRace race = async_races{key};
         log(LoggerLevel::DEBUG, "happy eyeballs (async): abandoning race for %s", key);
         heAbandonTimers(race);
-        try { race.h3conn.close(); } catch () {}
-        if (race.h2conn) {
-            try { race.h2conn.close(); } catch () {}
-        }
+        heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
         removeAsyncRaceLocked(key);
     }
 
@@ -3239,6 +3291,8 @@ printf("%d connection(s) migrated\n", migrated);
             log(LoggerLevel::DEBUG,
                 "happy eyeballs (async): H3 creation failed (%s: %s), using H2",
                 key, ex.err, ex.desc);
+            # a connection that was created but could not be submitted is not left open
+            heCloseLegs(h3conn);
             {
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h2");
@@ -3294,9 +3348,10 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Internal: advances an in-flight async happy-eyeballs race one step
     /** Re-entrant and authoritative: re-reads connection state on every call
-        (the notifier is only a wakeup).  Resolves the winner, ends the race
-        when neither candidate is connecting any more, transitions stagger->race,
-        or returns a fresh per-call notifier to poll.
+        (the notifier is only a wakeup).  Resolves the winner, starts HTTP/1.1
+        as soon as HTTP/2 is refused via ALPN, ends the race when no candidate
+        is connecting any more, transitions stagger->race, or returns a fresh
+        per-call notifier to poll.
         @note Caller holds async_race_lock.
     */
     private *EventNotifier advanceAsyncHE(string key,
@@ -3313,7 +3368,7 @@ printf("%d connection(s) migrated\n", migrated);
                 int h3_state = race.h3conn.getConnectionState();
                 if (h3_state == HttpClientConnectionState::Ready) {
                     heAbandonTimers(race);
-                    heCommitWinner(race.h3conn, race.h3conn, NOTHING, key);
+                    heCommitWinner(race.h3conn, race.h3conn, NOTHING, NOTHING, key);
                     finishAsyncRace(key, race.h3conn);
                     conn_out = race.h3conn;
                     return;
@@ -3321,7 +3376,7 @@ printf("%d connection(s) migrated\n", migrated);
                 if (h3_state != HttpClientConnectionState::Connecting || race.stagger_fired) {
                     # H3 head start over (settled-closed or stagger elapsed) —
                     # start H2 alongside and enter the race phase
-                    startRaceH2(race);
+                    heStartAsyncLeg(race, "h2");
                     heAbandonTimers(race);
                     race.phase = "race";
                     # fall through to race handling below
@@ -3341,28 +3396,45 @@ printf("%d connection(s) migrated\n", migrated);
 
             # phase == "race"
             Http2ClientConnection h2 = race.h2conn;
+            *Http1ClientConnection h1 = race.h1conn;
             int h3_state = race.h3conn.getConnectionState();
             int h2_state = h2.getConnectionState();
-            if (h3_state == HttpClientConnectionState::Ready
-                    || h2_state == HttpClientConnectionState::Ready) {
-                HttpClientConnection w = h2;
-                if (h3_state == HttpClientConnectionState::Ready) {
-                    w = race.h3conn;
-                }
-                heCommitWinner(w, race.h3conn, h2, key);
+            *int h1_state = h1 ? h1.getConnectionState() : NOTHING;
+            # the winner in the order of preference: H3, H2, H1
+            *HttpClientConnection w;
+            if (h3_state == HttpClientConnectionState::Ready) {
+                w = race.h3conn;
+            } else if (h2_state == HttpClientConnectionState::Ready) {
+                w = h2;
+            } else if (h1 && h1_state == HttpClientConnectionState::Ready) {
+                w = h1;
+            }
+            if (w) {
+                heCommitWinner(w, race.h3conn, h2, h1, key);
                 finishAsyncRace(key, w);
                 conn_out = w;
                 return;
             }
-            # the race ends early only on a success: a failed candidate waits for the other one's own outcome (see
+            # the server refused HTTP/2 via ALPN: HTTP/1.1 is started at once and raced against HTTP/3 (see
+            # createConnectionHappyEyeballs())
+            if (!h1 && heH2RefusedViaAlpn(h2)) {
+                heStartAsyncLeg(race, "h1");
+                # its state is read before a notifier is minted, so an outcome it reached already is not missed
+                continue;
+            }
+            # the race ends early only on a success: a failed candidate waits for the other ones' own outcomes (see
             # createConnectionHappyEyeballs())
             if (h3_state != HttpClientConnectionState::Connecting
-                    && h2_state != HttpClientConnectionState::Connecting) {
-                conn_out = heAsyncTerminal(race, key);
+                    && h2_state != HttpClientConnectionState::Connecting
+                    && (!h1 || h1_state != HttpClientConnectionState::Connecting)) {
+                heAsyncTerminal(race, key);
+                # not reached: heAsyncTerminal() always throws
+                @assert(False);
+                conn_out = NOTHING;
                 return;
             }
             conn_out = race.h3conn;
-            *EventNotifier n = mintRaceNotifier(race, h3_state, h2_state);
+            *EventNotifier n = mintRaceNotifier(race, h3_state, h2_state, h1_state);
             if (n) {
                 armAsyncRaceRecheckTimer(race);
                 return n;
@@ -3374,49 +3446,52 @@ printf("%d connection(s) migrated\n", migrated);
         }
     }
 
-    #! Internal: async race terminal path — HTTP/1.1 fallback if applicable, else throw
-    /** The async counterpart of the synchronous race's terminal site: both
-        candidates have lost, so either the endpoint refused HTTP/2 via ALPN
-        (and HTTP/1.1 is the only protocol left — see @ref heTryH1Fallback())
-        or the connection attempt genuinely failed and the error is thrown.
+    #! Internal: async race terminal path — no candidate connected, so the race's error is thrown
+    /** The async counterpart of the synchronous race's terminal site: every
+        candidate has lost (including an HTTP/1.1 candidate started after an ALPN
+        refusal of HTTP/2), so the race state is dropped and the error is thrown.
 
         @param race the in-flight race state
         @param key the host:port pool key
 
-        @return the pooled H1 fallback connection (never @ref NOTHING; the
-        no-fallback path throws)
-
-        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
-        @throw SOCKET-CONNECT-ERROR HTTP/2's TCP connection was refused and HTTP/3 did not connect either
+        @throw HTTPCLIENT-CONNECT-ERROR no protocol connected
+        @throw SOCKET-CONNECT-ERROR the TCP connection of HTTP/2 or HTTP/1.1 was refused and no other protocol
+        connected either
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
         @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection (see @ref heThrowConnectError())
 
         @note Caller holds async_race_lock.
     */
-    private *HttpClientConnection heAsyncTerminal(AsyncRace race, string key) {
-        Http3ClientConnection h3 = race.h3conn;
-        Http2ClientConnection h2 = race.h2conn;
-        *HttpClientConnection h1;
+    private heAsyncTerminal(AsyncRace race, string key) {
+        # Drop race state first — heThrowConnectError closes every candidate and throws
+        removeAsyncRaceLocked(key);
+        heThrowConnectError(race.h3conn, race.h2conn, race.h1conn, key);
+    }
+
+    #! Internal: starts another candidate of an async race; if it cannot be started, the race ends with the error
+    /** Unlike the synchronous race, whose candidates are local to the call, the async race owns its state, so a
+        candidate that cannot be created or submitted ends the race here: every candidate already started is closed
+        and the race state is dropped (which clears the per-key creating gate), and the error is rethrown.
+
+        @param race the in-flight race state
+        @param protocol the protocol of the candidate: \c "h2" (@ref startRaceH2()) or \c "h1"
+        (@ref startRaceH1())
+
+        @note Caller holds async_race_lock.
+    */
+    private heStartAsyncLeg(AsyncRace race, string protocol) {
+        @assert(protocol == "h2" || protocol == "h1");
         try {
-            h1 = heTryH1Fallback(h3, h2, race.url_info, key);
+            if (protocol == "h2") {
+                startRaceH2(race);
+            } else {
+                startRaceH1(race);
+            }
         } catch (hash<ExceptionInfo> ex) {
-            # The H1 connection could not be created (both candidates are
-            # already closed by heTryH1Fallback()).  Unlike the synchronous
-            # race — where getConnection()'s on_exit block clears the per-key
-            # creating gate — the async race owns that state itself, so it must
-            # be dropped here or the key stays permanently "in creation".
-            removeAsyncRaceLocked(key);
+            heCloseLegs(race.h3conn, race.h2conn, race.h1conn);
+            removeAsyncRaceLocked(race.key);
             rethrow;
         }
-        if (h1) {
-            finishAsyncRace(key, h1);
-            return h1;
-        }
-        # Drop race state first — heThrowConnectError closes both and throws
-        removeAsyncRaceLocked(key);
-        heThrowConnectError(h3, h2, key);
-        # not reached
-        @assert(False);
     }
 
     #! Internal: creates + submits the H2 candidate when the race phase begins
@@ -3428,11 +3503,18 @@ printf("%d connection(s) migrated\n", migrated);
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             getConnectionProxyInfo(race.url_info), opts.client_cert, opts.client_pk, opts.ssl_ca_file,
             opts.ssl_ca_path);
+        # the race owns the candidate as soon as it exists, so that it is closed if it cannot be submitted
+        race.h2conn = h2conn;
         applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, race.key);
         submitConnectionToController(race.key, h2conn);
-        race.h2conn = h2conn;
+    }
+
+    #! Internal: creates + submits the H1 candidate when the server refused HTTP/2 via ALPN (see @ref heStartH1Leg())
+    /** @note Caller holds async_race_lock. */
+    private startRaceH1(AsyncRace race) {
+        race.h1conn = heStartH1Leg(race.url_info, race.key);
     }
 
     #! Internal: mints a fresh per-call notifier during the H3-only stagger
@@ -3462,14 +3544,25 @@ printf("%d connection(s) migrated\n", migrated);
         pattern).  It is registered on every still-CONNECTING candidate;
         if a candidate changes state between the caller's authoritative checks
         and registration, returns no notifier so @ref advanceAsyncHE() handles
-        that state immediately.  @note Caller holds async_race_lock.
+        that state immediately.
+
+        @param race the in-flight race state
+        @param h3_state the state of the H3 candidate read by the caller
+        @param h2_state the state of the H2 candidate read by the caller
+        @param h1_state the state of the H1 candidate read by the caller; @ref NOTHING if it was not started
+
+        @note Caller holds async_race_lock.
     */
-    private *EventNotifier mintRaceNotifier(AsyncRace race, int h3_state, int h2_state) {
+    private *EventNotifier mintRaceNotifier(AsyncRace race, int h3_state, int h2_state, *int h1_state) {
         EventNotifier n();
         bool queued = False;
         Http2ClientConnection h2 = race.h2conn;
+        *Http1ClientConnection h1 = race.h1conn;
+        # the caller read the states of the same candidates
+        @assert(exists h1 == exists h1_state);
 
-        if (race.h3conn.getConnectionState() != h3_state || h2.getConnectionState() != h2_state) {
+        if (race.h3conn.getConnectionState() != h3_state || h2.getConnectionState() != h2_state
+                || (h1 && h1.getConnectionState() != h1_state)) {
             return;
         }
 
@@ -3481,6 +3574,12 @@ printf("%d connection(s) migrated\n", migrated);
         }
         if (h2_state == HttpClientConnectionState::Connecting) {
             if (!h2.registerReadyNotifier(n)) {
+                return;
+            }
+            queued = True;
+        }
+        if (h1 && h1_state == HttpClientConnectionState::Connecting) {
+            if (!h1.registerReadyNotifier(n)) {
                 return;
             }
             queued = True;
@@ -3599,10 +3698,10 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Returns @ref True if the given connection is a leg of an unresolved happy-eyeballs race
-    /** A happy-eyeballs race connects over HTTP/3 and HTTP/2 in parallel and keeps whichever settles
-        first.  While the race is unresolved either candidate may close without that saying anything about
-        the endpoint: an HTTP/3 leg failing against a host that simply does not serve HTTP/3 is the
-        expected outcome, and the race goes on to win over HTTP/2.
+    /** A happy-eyeballs race connects over HTTP/3 and HTTP/2 in parallel, and over HTTP/1.1 once the server
+        refused HTTP/2 via ALPN, and keeps whichever connects first.  While the race is unresolved any candidate
+        may close without that saying anything about the endpoint: an HTTP/3 leg failing against a host that
+        simply does not serve HTTP/3 is the expected outcome, and the race goes on to win over HTTP/2.
 
         A caller that tracks connect failures — the connection-monitor ping operation, for one — must not
         count such a leg as a failed connection attempt, or an \c "auto" connection to any host without
@@ -3611,7 +3710,7 @@ printf("%d connection(s) migrated\n", migrated);
 
         @param candidate the connection to test, if any
 
-        @return @ref True if a race is still in flight and \a candidate is one of its two candidates
+        @return @ref True if a race is still in flight and \a candidate is one of its candidates
 
         @since HttpClientIo 1.0
     */
@@ -3621,7 +3720,8 @@ printf("%d connection(s) migrated\n", migrated);
         }
         AutoLock al(async_race_lock);
         foreach AsyncRace race in (async_races.iterator()) {
-            if (race.h3conn === candidate || (race.h2conn && race.h2conn === candidate)) {
+            if (race.h3conn === candidate || (race.h2conn && race.h2conn === candidate)
+                    || (race.h1conn && race.h1conn === candidate)) {
                 return True;
             }
         }
@@ -4270,7 +4370,8 @@ printf("%d connection(s) migrated\n", migrated);
                 # (a cached "h2" after an H3 fallback, or an H2 connection made
                 # through a proxy), so H3 has already been tried and lost;
                 # HTTP/1.1 is the only protocol left.  The happy-eyeballs race
-                # handles the same case itself via heTryH1Fallback().
+                # handles the same case itself by starting HTTP/1.1 at once (see
+                # heStartH1Leg()).
                 #
                 # Not applied when a protocol was explicitly configured: an
                 # explicit "h2" must fail loudly rather than silently downgrade.

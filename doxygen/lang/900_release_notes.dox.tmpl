@@ -1434,6 +1434,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref httpclientiointro "HttpClientIo" now tries HTTP/1.1 as soon as an HTTPS server refuses HTTP/2, racing it
+      against HTTP/3; when the network dropped UDP datagrams silently, a request to such a server waited for the
+      whole connect timeout of HTTP/3 before HTTP/1.1 was tried
     - a regular file is now reported ready for reading and writing at once by
       @ref Qore::Socket::poll() "Socket::poll()" and by the @ref Qore::AsyncIoController "async I/O controller", as
       \c poll(2) reports it; on Linux a wait for a regular file lasted until its timeout, so for example a non-blocking
