@@ -1082,6 +1082,143 @@ private:
     std::vector<QoreValue> slots;
 };
 
+//! A set of local variables that allocates no memory once its capacity covers the locals it holds
+/** The interpreter records the locals it instantiates on the runtime stack and the ones it uninstantiated in a loop
+    body; a declaration in a loop inserts and erases its local in every iteration.  A node-based std::unordered_set
+    allocates and frees a node for each, so this is an open-addressing hash set over a power-of-two table with linear
+    probing and tombstones: an erase marks the entry, and the table is rebuilt in place only when it fills up.  The
+    table belongs to a pooled call frame (IRCallFrame), whose clear() keeps the capacity, so a loop that declares a
+    local runs without malloc.
+*/
+class IRLocalVarSet {
+public:
+    //! inserts a local; returns true if it was not in the set
+    DLLLOCAL bool insert(const LocalVar* var) {
+        assert(var);
+        if ((used + 1) * 4 > table.size() * 3) {
+            grow();
+        }
+        size_t mask = table.size() - 1;
+        size_t i = hash(var) & mask;
+        const LocalVar** tomb = nullptr;
+        while (true) {
+            const LocalVar* e = table[i];
+            if (e == var) {
+                return false;
+            }
+            if (!e) {
+                break;
+            }
+            if (e == tombstone() && !tomb) {
+                tomb = &table[i];
+            }
+            i = (i + 1) & mask;
+        }
+        if (tomb) {
+            *tomb = var;
+        } else {
+            table[i] = var;
+            ++used;
+        }
+        ++count_;
+        return true;
+    }
+
+    //! erases a local; returns 1 if it was in the set, 0 otherwise
+    DLLLOCAL size_t erase(const LocalVar* var) {
+        const LocalVar** e = find(var);
+        if (!e) {
+            return 0;
+        }
+        *e = tombstone();
+        --count_;
+        return 1;
+    }
+
+    DLLLOCAL size_t count(const LocalVar* var) const {
+        return const_cast<IRLocalVarSet*>(this)->find(var) ? 1 : 0;
+    }
+
+    DLLLOCAL bool empty() const {
+        return !count_;
+    }
+
+    //! removes every local and keeps the table
+    DLLLOCAL void clear() {
+        if (used) {
+            std::fill(table.begin(), table.end(), nullptr);
+        }
+        used = 0;
+        count_ = 0;
+    }
+
+    //! calls \a f for each local in the set
+    template <typename F>
+    DLLLOCAL void forEach(F&& f) const {
+        if (!count_) {
+            return;
+        }
+        for (const LocalVar* e : table) {
+            if (e && e != tombstone()) {
+                f(e);
+            }
+        }
+    }
+
+private:
+    //! the table: nullptr for a free entry, tombstone() for an erased one
+    std::vector<const LocalVar*> table;
+    //! the entries that are not free (locals and tombstones)
+    size_t used = 0;
+    //! the locals in the set
+    size_t count_ = 0;
+
+    DLLLOCAL static const LocalVar* tombstone() {
+        return reinterpret_cast<const LocalVar*>(static_cast<uintptr_t>(1));
+    }
+
+    DLLLOCAL static size_t hash(const LocalVar* var) {
+        uintptr_t v = reinterpret_cast<uintptr_t>(var);
+        return static_cast<size_t>((v >> 4) ^ (v >> 13));
+    }
+
+    DLLLOCAL const LocalVar** find(const LocalVar* var) {
+        if (!count_) {
+            return nullptr;
+        }
+        size_t mask = table.size() - 1;
+        size_t i = hash(var) & mask;
+        while (true) {
+            const LocalVar* e = table[i];
+            if (e == var) {
+                return &table[i];
+            }
+            if (!e) {
+                return nullptr;
+            }
+            i = (i + 1) & mask;
+        }
+    }
+
+    //! rebuilds the table without tombstones, doubling it if more than half of it holds locals
+    DLLLOCAL void grow() {
+        size_t size = table.empty() ? 16 : table.size();
+        if ((count_ + 1) * 2 > size) {
+            size *= 2;
+        }
+        std::vector<const LocalVar*> old;
+        old.swap(table);
+        table.assign(size, nullptr);
+        used = 0;
+        count_ = 0;
+        for (const LocalVar* e : old) {
+            if (e && e != tombstone()) {
+                insert(e);
+            }
+        }
+    }
+};
+
 // recycling all per-call data structures across function calls.
 // After warm-up (first visit to each recursion depth), subsequent calls at
 // that depth reuse the same vectors/sets with retained capacity → zero malloc.
@@ -1096,9 +1233,10 @@ struct IRCallFrame {
     uint32_t borrowed_temp_active = 0;
     IRLocalSlotCache locals_slot_cache;
     std::vector<LocalVarValue*> locals_lvar_cache;
-    std::unordered_set<const LocalVar*> instantiated_locals;
+    // allocation-free sets: a declaration in a loop inserts and erases its local in every iteration
+    IRLocalVarSet instantiated_locals;
     std::vector<const LocalVar*> instantiated_locals_ordered;
-    std::unordered_set<const LocalVar*> locally_uninstantiated;
+    IRLocalVarSet locally_uninstantiated;
     std::vector<uint8_t> locals_ir_only;
     std::vector<bool> locals_instantiated;
     std::vector<uint32_t> local_init_slots;
@@ -1123,7 +1261,8 @@ struct IRCallFrame {
     // Tracks which value slot IDs are associated with local variables (via StoreLocal).
     // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
     // results from variable-held values — only temporaries are cleared at block exit.
-    std::unordered_set<uint32_t> local_owned_slots;
+    // indexed by value slot id; a set allocated a node for each slot in every call
+    std::vector<uint8_t> local_owned_slots;
 
     // Reset all fields for reuse.  clear() retains capacity, so no heap
     // allocation after the first call at each recursion depth.
@@ -1199,7 +1338,7 @@ struct IRCallFrame {
         ephemeral_weak_ref_slots.clear();
         active_iterators.clear();
         on_block_exit_handlers.clear();
-        local_owned_slots.clear();
+        local_owned_slots.assign(reserve_size, 0);
     }
 };
 
@@ -1535,11 +1674,11 @@ static bool qore_ir_type_may_hold_reference(const QoreTypeInfo* ti) {
     return !QoreTypeInfo::hasType(ti) || QoreTypeInfo::isReference(ti);
 }
 
-static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals,
+static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
         std::vector<const LocalVar*>& locals_ordered,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
-        std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr) {
+        IRLocalVarSet* locally_uninstantiated = nullptr) {
     if (!var) {
         return;
     }
@@ -1552,7 +1691,7 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
             && !function_own_locals->count(reinterpret_cast<const void*>(var))) {
         return;
     }
-    if (locals.insert(var).second) {
+    if (locals.insert(var)) {
         locals_ordered.push_back(var);
         // Pre-instantiated variables (params, argvid, selfid, ast_visible_body_locals)
         // are already on the thread-local stack from evalTiered.  We skip re-instantiation
@@ -1820,13 +1959,13 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
 
 
 static void updateLocalVarFromLvalue(
-        std::unordered_set<const LocalVar*>& instantiated_locals,
+        IRLocalVarSet& instantiated_locals,
         std::vector<const LocalVar*>& instantiated_locals_ordered,
         const QoreValue& lvalue,
         const QoreValue& value, ExceptionSink* xsink,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
-        std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr,
+        IRLocalVarSet* locally_uninstantiated = nullptr,
         const std::unordered_map<const LocalVar*, uint32_t>* local_var_slots = nullptr,
         std::vector<QoreValue>* locals_slot_cache_ptr = nullptr) {
     if (!lvalue.hasNode()) {
@@ -2129,6 +2268,15 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_reference_slots = std::move(reference_slots);
+    // the locals owned by the function, which ensureLocalInstantiated() tells from the variables of an enclosing
+    // scope: the pre-instantiated locals and every body local
+    {
+        std::unordered_set<const void*> own_locals(func.pre_instantiated_locals);
+        for (LocalVar* lv : func.all_body_locals) {
+            own_locals.insert(reinterpret_cast<const void*>(lv));
+        }
+        func.interpreter_function_own_locals = std::move(own_locals);
+    }
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
     func.interpreter_cross_block_slots = std::move(cross_block_slots);
     // the slots of native scalars own their value (see IRCleanupSlots)
@@ -5872,6 +6020,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& local_load_slots = frame.local_load_slots;
     auto& load_slot_registered = frame.load_slot_registered;
     auto& local_owned_slots = frame.local_owned_slots;
+    // records whether a value slot is held by a local variable (see IRCallFrame::local_owned_slots)
+    auto markLocalOwnedSlot = [&local_owned_slots](uint32_t id, bool owned) {
+        if (id >= local_owned_slots.size()) {
+            if (!owned) {
+                return;
+            }
+            local_owned_slots.resize(id + 1, 0);
+        }
+        local_owned_slots[id] = owned ? 1 : 0;
+    };
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
@@ -6277,11 +6435,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // evalTiered pushes exactly one CVV per ast_visible_body_locals var and pops exactly
         // one on cleanup — we must leave one CVV on the cvstack at execute() exit.
         if (pre_instantiated && !locally_uninstantiated.empty()) {
-            for (const LocalVar* lv : locally_uninstantiated) {
+            locally_uninstantiated.forEach([&](const LocalVar* lv) {
                 if (pre_instantiated->count(lv) && lv->closureUse()) {
                     const_cast<LocalVar*>(lv)->instantiate(QoreParseOptions());
                 }
-            }
+            });
             // Clear to prevent double-instantiation if cleanupLocalCaches is called again.
             locally_uninstantiated.clear();
         }
@@ -6460,11 +6618,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // function params referenced from handler bodies).  Body locals are always
     // function-owned even when a deserialized/cached IR producer did not include
     // them in pre_instantiated_locals.
-    std::unordered_set<const void*> function_own_locals_storage(func.pre_instantiated_locals);
-    for (LocalVar* lv : func.all_body_locals) {
-        function_own_locals_storage.insert(reinterpret_cast<const void*>(lv));
-    }
-    const std::unordered_set<const void*>* function_own_locals = &function_own_locals_storage;
+    // Computed once with the function's analysis (see buildInterpreterAnalysis()): a copy per call allocated a
+    // node for each local in every call
+    const std::unordered_set<const void*>* function_own_locals = &func.interpreter_function_own_locals;
 
     auto markParentLValueDirty = [&](const QoreIRLValueInstruction* lval_inst,
             const VarRefNode* lval_vrn) {
@@ -6506,9 +6662,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // reading `step.name.c_str()` in navigatePath can see a stomped string
     // from another thread still patching.
     // Returns 0 for OK, -1 if an exception was raised converting a dynamic hash key to the default encoding.
-    auto patchLVPathLocal = [&](const QoreIRLValuePathInstruction* path_inst, std::vector<LVPathStep>& path_copy)
-            -> int {
-        path_copy = path_inst->path;
+    auto patchLVPathLocal = [&](const QoreIRLValuePathInstruction* path_inst, IRLVPath& path) -> int {
+        // a path with no dynamic step is read as it is: copying it allocated the vector and its strings in every
+        // execution (a member assignment, self.q = q, takes this path)
+        if (!qore_lv_path_has_dynamic_steps(path_inst->path)) {
+            path.setShared(path_inst->path);
+            return 0;
+        }
+        std::vector<LVPathStep>& path_copy = path.makeCopy(path_inst->path);
         for (auto& step : path_copy) {
             if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
                 QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
@@ -8755,7 +8916,7 @@ load_local_done:
                 }
                 // Mark as local-owned for DGC container scan
                 if (!weak_ref_load && local_inst->result.id >= 0) {
-                    local_owned_slots.insert(local_inst->result.id);
+                    markLocalOwnedSlot(local_inst->result.id, true);
                 }
                 if (result_slot_owned && out.needsRef()) {
                     cleanup.push_back(local_inst->result.id);
@@ -10899,7 +11060,7 @@ load_local_done:
 
                 // Track this slot as local-owned for DGC container scan
                 if (operand.id >= 0) {
-                    local_owned_slots.insert(operand.id);
+                    markLocalOwnedSlot(operand.id, true);
                 }
 
                 if (store_mode != AssignmentMode::Normal) {
@@ -10973,7 +11134,7 @@ load_local_done:
                     assignLocalVarValueTransfer(local_inst->local, val, xsink);
                     removeCleanupEntry(cleanup, operand.id);
                     values[operand.id] = QoreValue();
-                    local_owned_slots.erase(operand.id);
+                    markLocalOwnedSlot(operand.id, false);
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
@@ -11407,7 +11568,7 @@ load_local_done:
                                         // Remove this variable's owned slots
                                         if (local_inst->slot_id != UINT32_MAX
                                                 && local_inst->slot_id < local_init_slots.size()) {
-                                            local_owned_slots.erase(local_init_slots[local_inst->slot_id]);
+                                            markLocalOwnedSlot(local_init_slots[local_inst->slot_id], false);
                                         }
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
                                             if (!values[vi].hasNode()) {
@@ -11417,7 +11578,7 @@ load_local_done:
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi], "keep");
                                                 continue;
                                             }
-                                            if (local_owned_slots.count(vi)) {
+                                            if (vi < local_owned_slots.size() && local_owned_slots[vi]) {
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi],
                                                     "keep-local-owned");
                                                 continue;
@@ -13490,7 +13651,7 @@ load_local_done:
 
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy;
+                IRLVPath path_copy;
                 if (patchLVPathLocal(path_inst, path_copy)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -13588,7 +13749,7 @@ load_local_done:
                 }
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy;
+                IRLVPath path_copy;
                 if (patchLVPathLocal(path_inst, path_copy)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -13666,7 +13827,7 @@ load_local_done:
                 // HttpServerUtil::http_set_reply_headers stomped slice_values
                 // between threads, corrupting the string pointers and SEGV'ing in
                 // QoreStringValueHelper::setup on the first (dangling) key_val.
-                std::vector<LVPathStep> path_copy;
+                IRLVPath path_copy;
                 if (patchLVPathLocal(path_inst, path_copy)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -14193,7 +14354,7 @@ load_local_done:
                 }
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy;
+                IRLVPath path_copy;
                 if (patchLVPathLocal(path_inst, path_copy)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -14355,7 +14516,7 @@ load_local_done:
                 }
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
-                std::vector<LVPathStep> path_copy;
+                IRLVPath path_copy;
                 if (patchLVPathLocal(path_inst, path_copy)) {
                     if (inst->exception_target) {
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);

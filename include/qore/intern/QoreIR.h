@@ -1773,6 +1773,65 @@ struct LVPathStep {
     const QoreCastOperatorNode* cast_node = nullptr;
 };
 
+//! Returns true if a step of an lvalue path depends on an operand (a dynamic hash key or list index, a slice)
+inline bool qore_lv_path_has_dynamic_steps(const std::vector<LVPathStep>& path) {
+    for (const LVPathStep& step : path) {
+        if ((step.operand_idx != UINT32_MAX
+                && (step.kind == LVPathStepKind::HashKey || step.kind == LVPathStepKind::ListIndex))
+                || step.kind == LVPathStepKind::HashKeySlice
+                || step.kind == LVPathStepKind::ListIndexSlice
+                || step.kind == LVPathStepKind::ListRangeSlice) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! The steps of an lvalue path for one execution of an LValuePath instruction
+/** The instruction is shared by concurrent executions of the function, so the steps that depend on operands
+    (dynamic hash keys and list indexes, slices) are resolved in a private copy; a path with none is read in place.
+*/
+class IRLVPath {
+public:
+    //! reads the instruction's path in place
+    void setShared(const std::vector<LVPathStep>& path) {
+        steps = path.data();
+        num = path.size();
+    }
+
+    //! makes a private copy of the path, which the caller resolves
+    std::vector<LVPathStep>& makeCopy(const std::vector<LVPathStep>& path) {
+        copy = path;
+        steps = copy.data();
+        num = copy.size();
+        return copy;
+    }
+
+    const LVPathStep* data() const {
+        return steps;
+    }
+
+    size_t size() const {
+        return num;
+    }
+
+    const LVPathStep& operator[](size_t i) const {
+        assert(i < num);
+        return steps[i];
+    }
+
+    const LVPathStep& back() const {
+        assert(num);
+        return steps[num - 1];
+    }
+
+private:
+    std::vector<LVPathStep> copy;
+    const LVPathStep* steps = nullptr;
+    size_t num = 0;
+};
+
+
 //! Sub-operation type for LValuePathCompound
 enum class LVCompoundOp : uint8_t {
     AddAssign = 0, SubAssign, MulAssign, DivAssign, ModAssign,
@@ -3721,6 +3780,9 @@ public:
     //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
     //! through
     mutable std::vector<uint8_t> interpreter_reference_slots;
+    //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
+    //! interpreter tells from the variables of an enclosing scope
+    mutable std::unordered_set<const void*> interpreter_function_own_locals;
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
     //! Slots whose definition and uses are not all in the same basic block.
     /** The interpreter's scope-exit cleanup decides whether a value slot is

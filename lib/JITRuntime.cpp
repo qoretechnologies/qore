@@ -13246,10 +13246,15 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
 // Note: slice_values stores BORROWED QoreValues aliasing the dyn_vals array;
 // the caller must not use path_copy beyond the lifetime of dyn_vals.
 // Returns 0 for OK, -1 if an exception was raised converting a dynamic hash key to the default encoding.
-static int patchLVPath(std::vector<LVPathStep>& path_copy,
+static int patchLVPath(IRLVPath& path,
         const QoreIRLValuePathInstruction* inst,
         const uint64_t* dyn_vals, ExceptionSink* xsink) {
-    path_copy = inst->path;
+    // a path with no dynamic step is read in place (see IRLVPath)
+    if (!qore_lv_path_has_dynamic_steps(inst->path)) {
+        path.setShared(inst->path);
+        return 0;
+    }
+    std::vector<LVPathStep>& path_copy = path.makeCopy(inst->path);
     int dyn_idx = 0;
     for (auto& step : path_copy) {
         if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
@@ -13286,7 +13291,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -13363,7 +13368,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathIns
     if (*xsink) {
         return toBits(QoreValue());
     }
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -13566,7 +13571,7 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
 //! Applies a compound assignment to an lvalue path; the value's reference is held by \a rhs_holder
 static uint64_t qore_rt_lv_path_compound_impl(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         ValueHolder& rhs_holder, ExceptionSink* xsink) {
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -14171,7 +14176,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -14633,7 +14638,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
 */
 static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         ValueHolder& rhs_holder, ExceptionSink* xsink) {
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }
@@ -14761,7 +14766,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     }
     // the instruction and its path are shared by every thread running this code, so the dynamic keys and indexes
     // of this call are resolved in a private copy of the path, as for the other lvalue path operations
-    std::vector<LVPathStep> path_copy;
+    IRLVPath path_copy;
     if (patchLVPath(path_copy, inst, dyn_vals, xsink)) {
         return toBits(QoreValue());
     }

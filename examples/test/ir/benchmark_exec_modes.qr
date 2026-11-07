@@ -610,8 +610,90 @@ int sub run(int iterations, float seed, string label) {
 printf(\"%%d\\n\", run(%d, 2.5, \"abcd\"));
 ", iterations / 10);
 
+    # ==========================================================================
+    # Object values: compiled modes must be at least as fast as the AST interpreter
+    # ==========================================================================
+    # an object assigned to a typed block local in a loop (declared, assigned and released every iteration)
+    string object_local_code = sprintf("%%modern
+int sub run(int iterations, Queue q0) {
+    int n = 0;
+    for (int i = 0; i < iterations; ++i) {
+        Queue q = q0;
+        ++n;
+    }
+    return n;
+}
+printf(\"%%d\\n\", run(%d, new Queue()));
+", iterations / 4);
+
+    # an object read from a list by index into a typed block local
+    string object_list_index_code = sprintf("%%modern
+int sub run(int iterations, list<Queue> queues) {
+    int n = 0;
+    for (int i = 0; i < iterations; ++i) {
+        Queue q = queues[i %% 2];
+        ++n;
+    }
+    return n;
+}
+printf(\"%%d\\n\", run(%d, (new Queue(), new Queue())));
+", iterations / 4);
+
+    # new objects whose constructor assigns a member (self.q = q)
+    string new_object_member_code = sprintf("%%modern
+class Holder {
+    public { *Queue q; }
+    constructor(*Queue q) { self.q = q; }
+}
+int sub run(int iterations, Queue q) {
+    int n = 0;
+    for (int i = 0; i < iterations; ++i) {
+        Holder h(q);
+        ++n;
+    }
+    return n;
+}
+printf(\"%%d\\n\", run(%d, new Queue()));
+", iterations / 10);
+
+    # a builtin method call on an object
+    string builtin_method_code = sprintf("%%modern
+int sub run(int iterations, Queue q) {
+    int n = 0;
+    for (int i = 0; i < iterations; ++i) {
+        n += q.size();
+    }
+    return n;
+}
+printf(\"%%d\\n\", run(%d, new Queue()));
+", iterations / 4);
+
+    # objects in a recursive graph handed to a queue and released (the dgc-handed-out-values pattern)
+    string queue_cycle_code = sprintf("%%modern
+class QueueValue {
+    public { *Queue q; }
+    constructor(*Queue q) { self.q = q; }
+}
+int sub run(int iterations, Queue q) {
+    int n = 0;
+    for (int i = 0; i < iterations; ++i) {
+        q.push(new QueueValue(q));
+        q.clear();
+        ++n;
+    }
+    return n;
+}
+Queue q();
+printf(\"%%d\\n\", run(%d, q));
+", iterations / 20);
+
     hash<string, string> tests = {
         "loop": loop_code,
+        "object_local": object_local_code,
+        "object_list_index": object_list_index_code,
+        "new_object_member": new_object_member_code,
+        "builtin_method": builtin_method_code,
+        "queue_cycle": queue_cycle_code,
         "fibonacci": fib_code,
         "self_method": self_method_code,
         "self_getter": self_getter_code,
