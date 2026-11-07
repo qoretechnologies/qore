@@ -349,6 +349,8 @@ log("started listener on %s", lh.desc);
       body, and a \c Content-Length only if it is the length of the \c GET response's message body (it was always
       \c 0), and an error response to a \c HEAD request has no message body
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
+    - the time allowed for an I/O operation of a connection, which was always 30 seconds, can be set with the new
+      \c io_operation_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"
     - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
       \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
       client that is still sending data the server did not read, such as the rest of a request body answered with
@@ -808,6 +810,19 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.7
     */
     timeout lingering_close_timeout = 5s;
+
+    #! The time allowed for an I/O operation of a connection
+    /** This is the time allowed to read a request header once a request has started to arrive, to read the first
+        request of a new connection, and to send a response.  An idle keep-alive connection is waited for the idle
+        time (\c ttl) plus this time, which covers reading the header of the next request: a connection that sends
+        nothing for longer is closed.  A connection whose requests are answered by fast routes renews its timeout
+        with each request.
+
+        Must be greater than zero.
+
+        @since HttpServer 1.7
+    */
+    timeout io_operation_timeout = 30s;
 
     #! Resolves the host name of each client address, available to handlers in the request context
     /** When @ref True "True", the reverse DNS lookup of the address of each accepted connection is started when the
@@ -3412,6 +3427,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (idle_threads < 1) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("idle_threads (%d) must be greater than zero", idle_threads);
         }
+        if (opts.io_operation_timeout <= 0) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("io_operation_timeout (%d ms) must be greater than zero",
+                opts.io_operation_timeout);
+        }
         threadPool = new ThreadPool(-1, idle_threads);
         # Apply sentinel-based defaults for members whose "real" default is a
         # RuntimeConstantRefNode or expression too complex for the AOT writer
@@ -3450,6 +3469,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
+            "io_operation_timeout": opts.io_operation_timeout,
         });
         asyncIo.start();
     }
