@@ -38,10 +38,11 @@
     In a library-debug build the QUIC timers run on the debug-only QUIC test
     clock (dbg_quic_advance_clock()): instead of waiting for the idle timeout,
     the tests advance the clock of the connections of this process past it,
-    and a live peer is kept alive across the idle windows by advancing the
-    clock one keep-alive interval at a time and waiting for both ends to
-    receive a packet (dbg_quic_wait_packets_received()).  The QUIC timers then
-    decide the outcome exactly as with the real clock, without waiting for it.
+    and a live peer is kept alive across the idle windows while the clock
+    advances in small steps, each processed before the next.  The QUIC timers
+    then decide the outcome as with the real clock, without waiting for it;
+    the packets that the connections received are counted
+    (dbg_quic_packets_received()).
     In other builds the tests wait for the real clock.
 */
 
@@ -218,6 +219,14 @@ class HttpServerQuicDeadPeerTest inherits Test {
 
         #! Idle window a live peer must survive — three full idle timeouts
         const LivePeerWait = 30s;
+
+        #! The step of the QUIC test clock while a live peer is kept alive
+        /** Each step is processed before the next (dbg_quic_advance_clock() processes the packets received first),
+            so the connections see the time pass in small steps, as with the real clock: a large step would give an
+            RTT sample as large as itself to an acknowledgement sent after it, which would raise the loss detection,
+            keep-alive and idle timers by as much
+        */
+        const ClockStepMs = 500;
 
         #! WebSocket heartbeat interval used by these tests
         /** The WebSocketHandler's own heartbeat (WebSocketStreamProcessor's
@@ -484,16 +493,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         # idle close here would tear down a healthy connection, which is the
         # regression risk of this fix.
         if (virtual_clock) {
-            # one keep-alive interval at a time: each step makes both ends send their keep-alive PING, and the next
-            # step starts only once both ends have received a packet, so the connection is never idle for longer
-            # than one step, which is less than the idle timeout
-            int step = IdleTimeoutMs / 2 + 1000;
-            for (int elapsed = 0; elapsed <= LivePeerWait.durationMilliseconds(); elapsed += step) {
-                hash<auto> rx = call_function("dbg_quic_packets_received");
-                call_function("dbg_quic_advance_clock", step);
-                assertTrue(call_function("dbg_quic_wait_packets_received", rx.client + 1, rx.server + 1, 30s),
-                    sprintf("both ends received a packet after %d ms of idle time", elapsed + step));
-            }
+            # the clock advances in small steps across the idle windows: the keep-alive PINGs of both ends, and their
+            # acknowledgements, hold the session open
+            hash<auto> rx = call_function("dbg_quic_packets_received");
+            advanceClockInSteps(LivePeerWait.durationMilliseconds());
+            hash<auto> rx_after = call_function("dbg_quic_packets_received");
+            # a PING every half idle timeout at least: more than one per end over three idle timeouts
+            assertGt(rx.client + 1, rx_after.client, "the client received keep-alive packets");
+            assertGt(rx.server + 1, rx_after.server, "the server received keep-alive packets");
             assertEq(0, ws_handler.closed_signal.size(), "live peer's WebSocket handler was not reaped");
         } else {
             bool timed_out = False;
@@ -598,7 +605,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "the slow handler actually ran");
     }
 
-    #! Advances the QUIC test clock past the idle timeout once the killed client has exited, if the QUIC timers run on it
+    #! Advances the QUIC test clock past the idle timeout once the killed client has exited (with the QUIC test clock)
     /** Three idle timeouts: a dead peer is detected at about idle + idle/2 (see IdleTimeoutMs).  The client process
         has exited first, so that every packet it sent is already in the server's socket buffer, where the advance
         processes it on the current clock; a packet processed after the advance would give the server an RTT sample as
@@ -611,10 +618,16 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
     }
 
+    #! Advances the QUIC test clock by @p ms milliseconds in steps of ClockStepMs
+    private advanceClockInSteps(int ms) {
+        for (int elapsed = 0; elapsed < ms; elapsed += ClockStepMs) {
+            call_function("dbg_quic_advance_clock", ClockStepMs);
+        }
+    }
+
     #! Makes the request of testH3SlowSilentResponseNotIdleClosed() while the QUIC test clock advances by delay_secs
-    /** The request runs in a thread; once the handler has the request, the clock advances one keep-alive interval at a
-        time, and the next step starts only once the server has received the client's PING and the client the
-        server's answer to it; then the handler is released.
+    /** The request runs in a thread; once the handler has the request, the clock advances by delay_secs in small
+        steps, and then the handler is released.
 
         @return the response; an error of the request is raised
     */
@@ -626,13 +639,11 @@ l50Xb2GWQesIt9k5jF5IOw==
             release.dec();
         }
         assertEq("started", handler.request_started.get(30s), "the slow handler received the request");
-        int step = IdleTimeoutMs / 2 + 1000;
-        for (int elapsed = 0; elapsed < delay_secs * 1000; elapsed += step) {
-            hash<auto> rx = call_function("dbg_quic_packets_received");
-            call_function("dbg_quic_advance_clock", step);
-            assertTrue(call_function("dbg_quic_wait_packets_received", rx.client + 1, rx.server + 1, 30s),
-                sprintf("both ends received a packet after %d ms of silence", elapsed + step));
-        }
+        hash<auto> rx = call_function("dbg_quic_packets_received");
+        advanceClockInSteps(delay_secs * 1000);
+        # the server sends no keep-alive of its own: the client's PINGs reached it
+        assertGt(rx.server + 1, call_function("dbg_quic_packets_received").server,
+            "the server received the client's keep-alive packets");
         # put the start signal back for the assertion of the test case
         handler.request_started.push("started");
         release.dec();

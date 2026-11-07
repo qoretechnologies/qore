@@ -2079,7 +2079,9 @@ public:
 /** QuicSession::timestamp() adds the total of the advances, so the timers of the connections (idle timeout, keep-alive,
     loss detection) run as if that much time had passed; the clock only goes forward, as ngtcp2 requires.  The packets
     already received are processed on the current clock first (the operations of every socket of the async I/O
-    controller are woken, and the I/O threads are waited for), so that none is taken as received after the advance;
+    controller are woken, and the I/O threads are waited for, until a pass processes no packet, as the packets sent
+    while processing are received by other connections of the process), so that none is taken as received after the
+    advance;
     then the clock is advanced and the operations are woken again, so that they handle the timers that are due on the
     new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets()).  A test must make sure that no peer still sends
     packets that it does not want processed after the advance (a killed peer has exited, for example).
@@ -2091,11 +2093,6 @@ DLLLOCAL int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink);
 //! Debug-only: the number of QUIC packets that client and server connections of the process have processed
 DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
 
-//! Debug-only: waits until client and server connections of the process have processed at least the given numbers of
-//! QUIC packets
-/** @return true if the numbers were reached, false if the wait timed out (@p timeout_ms < 0: no timeout)
-*/
-DLLLOCAL bool qore_quic_test_wait_packets_received(int64_t client, int64_t server, int64_t timeout_ms);
 #endif
 
 #endif // _QORE_INTERN_QUICSESSION_H

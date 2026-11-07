@@ -55,8 +55,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
-#include <chrono>
-#include <condition_variable>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -350,19 +348,15 @@ std::string QuicSession::getCipherVersion() const {
 //! The total advance of the QUIC test clock in nanoseconds; see qore_quic_test_advance_clock()
 static std::atomic<int64_t> quic_test_clock_offset_ns{0};
 
-//! The QUIC packets processed by client and server connections; see qore_quic_test_wait_packets_received()
+//! The QUIC packets processed by client and server connections; see qore_quic_test_packets_received()
 static std::mutex quic_test_rx_m;
-static std::condition_variable quic_test_rx_cv;
 static int64_t quic_test_rx_client = 0;
 static int64_t quic_test_rx_server = 0;
 
 //! Counts a packet processed by a connection
 static void quic_test_count_rx(bool is_server) {
-    {
-        std::lock_guard<std::mutex> g(quic_test_rx_m);
-        ++(is_server ? quic_test_rx_server : quic_test_rx_client);
-    }
-    quic_test_rx_cv.notify_all();
+    std::lock_guard<std::mutex> g(quic_test_rx_m);
+    ++(is_server ? quic_test_rx_server : quic_test_rx_client);
 }
 
 int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
@@ -384,9 +378,20 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
     // would be taken as received now, and an acknowledgement in it would give an RTT sample as large as the advance,
     // which raises the loss detection timers (and the idle timeout, at least 3 PTOs) by as much; the operations of
     // the sockets are woken, and the wait ends when the I/O threads have run them
-    ctrl->dbgWakeAllSockets();
-    if (!ctrl->waitForProcessing(30000, xsink) && *xsink) {
-        return -1;
+    // the packets that the processing sends to other connections of the process are received in turn, so this is
+    // repeated until a pass processes no packet
+    for (int pass = 0; pass < 100; ++pass) {
+        int64_t client_before, server_before;
+        qore_quic_test_packets_received(client_before, server_before);
+        ctrl->dbgWakeAllSockets();
+        if (!ctrl->waitForProcessing(30000, xsink) && *xsink) {
+            return -1;
+        }
+        int64_t client_after, server_after;
+        qore_quic_test_packets_received(client_after, server_after);
+        if (client_after == client_before && server_after == server_before) {
+            break;
+        }
     }
     int64_t total = quic_test_clock_offset_ns.fetch_add(ms * 1000000LL, std::memory_order_acq_rel)
         + ms * 1000000LL;
@@ -401,17 +406,6 @@ void qore_quic_test_packets_received(int64_t& client, int64_t& server) {
     server = quic_test_rx_server;
 }
 
-bool qore_quic_test_wait_packets_received(int64_t client, int64_t server, int64_t timeout_ms) {
-    std::unique_lock<std::mutex> g(quic_test_rx_m);
-    auto reached = [client, server]() {
-        return quic_test_rx_client >= client && quic_test_rx_server >= server;
-    };
-    if (timeout_ms < 0) {
-        quic_test_rx_cv.wait(g, reached);
-        return true;
-    }
-    return quic_test_rx_cv.wait_for(g, std::chrono::milliseconds(timeout_ms), reached);
-}
 #endif
 
 ngtcp2_tstamp QuicSession::timestamp() {
