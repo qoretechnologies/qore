@@ -1114,10 +1114,10 @@ struct IRCallFrame {
 
     // Per-call containers pooled here to avoid per-call heap allocation.
     // After warm-up, clear() retains bucket arrays / capacity.
-    // Values of thread-local variables read or written in this call; only this thread can change them, and
-    // calls invalidate the cache.  Global and closure-bound variables are not cached: other threads can change
-    // them at any time (see design/closure-bound-locals.md)
-    std::unordered_map<const void*, QoreValue> threadlocals;
+    // Global, thread-local and closure-bound variables have no copy in the frame: they are read from the variable
+    // every time.  Other threads can change a global or closure-bound variable at any time (see
+    // design/closure-bound-locals.md), and a thread-local variable is changed in place by every lvalue path
+    // (ex: tl.a = 1, tl[0] += 1), so a copy would go stale
     std::unordered_set<FunctionalOperatorInterface*> active_iterators;
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
     // Tracks which value slot IDs are associated with local variables (via StoreLocal).
@@ -1148,10 +1148,6 @@ struct IRCallFrame {
             val.discard(xsink);
             val = QoreValue();
         }
-        for (auto& entry : threadlocals) {
-            entry.second.discard(xsink);
-        }
-        threadlocals.clear();
     }
 
     void reset(size_t reserve_size, size_t local_slot_count) {
@@ -1201,10 +1197,6 @@ struct IRCallFrame {
         instantiated_locals_ordered.clear();
         locally_uninstantiated.clear();
         ephemeral_weak_ref_slots.clear();
-        for (auto& entry : threadlocals) {
-            entry.second.discard(nullptr);
-        }
-        threadlocals.clear();
         active_iterators.clear();
         on_block_exit_handlers.clear();
         local_owned_slots.clear();
@@ -1535,34 +1527,6 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
         }
     }
     cleanup.clear();
-}
-
-static void cleanupStoredValues(std::unordered_map<const void*, QoreValue>& values, ExceptionSink* xsink) {
-    for (auto& entry : values) {
-        entry.second.discard(xsink);
-    }
-    values.clear();
-}
-
-static void storeValue(std::unordered_map<const void*, QoreValue>& values, const void* key, const QoreValue& value,
-        ExceptionSink* xsink) {
-    auto it = values.find(key);
-    if (it != values.end()) {
-        it->second.discard(xsink);
-    }
-    QoreValue stored = value.needsRef() ? value.refSelf() : value;
-    values[key] = stored;
-}
-
-//! Removes the cached value of a variable, if any
-static void eraseStoredValue(std::unordered_map<const void*, QoreValue>& values, const void* key,
-        ExceptionSink* xsink) {
-    auto it = values.find(key);
-    if (it != values.end()) {
-        QoreValue old = it->second;
-        values.erase(it);
-        old.discard(xsink);
-    }
 }
 
 static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals,
@@ -6230,7 +6194,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     }
 
     // Use pooled containers from the frame (already cleared in reset())
-    auto& threadlocals = frame.threadlocals;
     auto& active_iterators = frame.active_iterators;
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
@@ -6317,7 +6280,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 on_block_exit_handlers.resize(scope_start);
                 // Invalidate caches after handler execution (both AST and compiled handlers
                 // can modify any variable type on the thread-local variable stack)
-                cleanupStoredValues(threadlocals, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
                     if (preserveParentSlotForWriteback(i)) {
                         continue;
@@ -6330,7 +6292,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    // Helper to clear all variable caches (slot cache, globals, threadlocals, closures)
+    // Helper to clear the local variable caches
     // after AST function/method calls. The calls may have modified any of these variable types,
     // so all caches must be invalidated to force re-read from the runtime stack on next access.
     // Also re-instantiates pre-instantiated closure vars that were popped mid-execution
@@ -6362,7 +6324,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             locals_slot_cache.storage(i) = QoreValue();
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
-        cleanupStoredValues(threadlocals, xsink);
     };
 
     // Lightweight cache invalidation for after external calls (function/method calls).
@@ -6374,10 +6335,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // exist only in the slot cache and cannot be reached by callees.
     auto invalidateExternalCaches = [&]() {
         // Fast path: if no external values were cached, nothing to invalidate
-        if (threadlocals.empty() && !has_non_ir_only_locals) {
+        if (!has_non_ir_only_locals) {
             return;
         }
-        cleanupStoredValues(threadlocals, xsink);
         // Invalidate non-IR-only local slots: callees can modify these through TLS
         if (has_non_ir_only_locals) {
             for (size_t i = 0; i < locals_ir_only.size(); ++i) {
@@ -8420,7 +8380,7 @@ next_instruction:
                             }
                         }
                         on_block_exit_handlers.resize(scope_start);
-                        // Handler execution can modify globals, threadlocals, closures, and
+                        // Handler execution can modify closures and
                         // non-IR-only locals through TLS.  IR-only locals are unreachable
                         // by handlers and stay valid in the slot cache.
                         invalidateExternalCaches();
@@ -11565,7 +11525,7 @@ load_local_done:
                     }
                 }
                 // Drop the initial ownership ref from weak node creation;
-                // storeValue() and assignClosureVarValue() each took their own ref
+                // assignClosureVarValue() took its own ref
                 if (converted) {
                     val.discard(xsink);
                 }
@@ -11656,15 +11616,9 @@ load_local_done:
             }
             case QoreIROpcode::LoadThreadLocal: {
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
-                QoreValue out;
-                auto it = threadlocals.find(var_inst->var);
-                if (it != threadlocals.end() && it->second.getType() != NT_REFERENCE) {
-                    QoreValue val = it->second;
-                    out = val.needsRef() ? val.refSelf() : val;
-                } else {
-                    // Read from the actual thread-local variable when not in the local cache
-                    out = var_inst->var->eval();
-                }
+                // the value is read from the variable every time, as the AST interpreter reads it: a copy kept in the
+                // frame would go stale when an lvalue path changes the variable in place (ex: tl.a = 1)
+                QoreValue out = var_inst->var->eval();
                 setValueSlot(values, var_inst->result.id, out, xsink);
                 if (out.needsRef()) {
                     cleanup.push_back(var_inst->result.id);
@@ -11700,26 +11654,19 @@ load_local_done:
                     }
                 }
 
-                // Write-through: update the actual thread-local variable.  The frame caches the value the variable
-                // then holds, not the value given: the variable's type can convert it (ex: a softint variable stores
-                // "5" as 5, an any variable stores a hash<HD> as a plain hash; see assignGlobalVarValueStored()), and
-                // LoadThreadLocal reads the cache instead of the variable.  A rejected assignment leaves the variable
-                // unchanged, and the cache keeps no value for it, so that it is read from the variable.
+                // the value is only stored in the variable, which LoadThreadLocal reads; the result of the assignment
+                // is the value the variable holds, which the variable's type can have converted (ex: a softint
+                // variable stores "5" as 5, an any variable stores a hash<HD> as a plain hash; see
+                // assignGlobalVarValueStored())
                 ValueHolder stored(assignGlobalVarValueStored(var_inst->var, val, xsink), xsink);
-                if (xsink && *xsink) {
-                    eraseStoredValue(threadlocals, var_inst->var, xsink);
-                } else {
-                    storeValue(threadlocals, var_inst->var, *stored, xsink);
-                    if (var_inst->result.isValid()) {
-                        QoreValue res = stored.release();
-                        setValueSlot(values, var_inst->result.id, res, xsink);
-                        if (res.needsRef()) {
-                            cleanup.push_back(var_inst->result.id);
-                        }
+                if (var_inst->result.isValid() && !(xsink && *xsink)) {
+                    QoreValue res = stored.release();
+                    setValueSlot(values, var_inst->result.id, res, xsink);
+                    if (res.needsRef()) {
+                        cleanup.push_back(var_inst->result.id);
                     }
                 }
-                // Drop the initial ownership ref from weak node creation; storeValue() and
-                // assignGlobalVarValueStored() each took their own ref
+                // Drop the initial ownership ref from weak node creation; assignGlobalVarValueStored() took its own
                 if (converted) {
                     val.discard(xsink);
                 }
@@ -12679,8 +12626,8 @@ load_local_done:
                     }
                     // Always remove executed handlers (or all handlers if inline_lowered=true)
                     on_block_exit_handlers.resize(scope_start);
-                    // Handler execution (both AST and compiled IR) can modify globals,
-                    // threadlocals, closures, and non-IR-only locals through the TLS
+                    // Handler execution (both AST and compiled IR) can modify closures
+                    // and non-IR-only locals through the TLS
                     // variable stack.  IR-only locals exist only in the slot cache and
                     // are unreachable by handlers, so they stay valid.
                     if (!scope_inst->inline_lowered) {
