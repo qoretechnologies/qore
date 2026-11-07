@@ -1449,9 +1449,16 @@
     - the result of \c *= and \c /= is now the value stored in the lvalue, as for an assignment
       (<tt>x *= y</tt> gives what <tt>x = x * y</tt> gives): with a \c float operand on an lvalue that stores the
       result converted, the computed value was returned instead (ex: <tt>softint v = 7; (v *= 2.5)</tt> gave
-      \c 17.5 while \c v holds \c 17, now \c 17); in the IR, JIT and tiered execution modes and in AOT-compiled
-      code the same happened with a \c number operand on a \c softint or \c *softint local or \c thread_local
-      variable
+      \c 17.5 while \c v holds \c 17, now \c 17), and with an \c int operand on a \c float or \c number
+      lvalue with no value the integer computed was returned (ex: <tt>*float f; (f *= 0)</tt> and
+      <tt>*float f; (f /= 2)</tt> gave \c 0 while \c f holds \c 0.0, now \c 0.0; <tt>*number n; (n *= 2)</tt> now
+      gives \c 0n; <tt>hash<string, float> h = {}; (h.k *= 2)</tt> now gives \c 0.0); in the IR, JIT and tiered
+      execution modes and in AOT-compiled code the same happened with a \c number operand on a \c softint or
+      \c *softint local or \c thread_local variable
+    - in the JIT and tiered execution modes, a local variable of no reference type (\c auto, \c any or no type)
+      assigned a reference (ex: <tt>auto r = \x;</tt>) kept reading as the value of the referenced lvalue when it
+      was assigned after the lvalue changed (ex: <tt>int x = 2; auto r = \x; x = 10;</tt> then \c r read as \c 2);
+      it now reads as the referenced lvalue, as with the AST interpreter
     - in AOT-compiled code, a class whose public member declaration declares no public member (an empty
       <tt>public {}</tt> block, or one with only constants or static class variables), and its subclasses, accepted
       undeclared members; they are now refused with \c INVALID-MEMBER, as in the other execution modes (the AOT
