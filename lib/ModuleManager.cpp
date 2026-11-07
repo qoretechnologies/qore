@@ -4876,6 +4876,30 @@ bool QoreModuleManager::getBinaryModuleDependencies(module_map_t::const_iterator
     return true;
 }
 
+void QoreModuleManager::getModuleDependencies(const char* name, strset_t& deps) {
+    AutoLocker al(mutex);
+    module_map_t::const_iterator i = map.find(name);
+    if (i == map.end()) {
+        return;
+    }
+    if (i->second->isUser()) {
+        // the user modules it requires
+        if (const strset_t* user_deps = rmd_map.getDeps(name)) {
+            deps.insert(user_deps->begin(), user_deps->end());
+        }
+        // the binary modules it requires
+        for (md_map_t::const_iterator bi = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); bi != e; ++bi) {
+            if (bi->second.find(name) != bi->second.end()) {
+                deps.insert(bi->first);
+            }
+        }
+        return;
+    }
+    std::vector<std::string> binary_deps;
+    getBinaryModuleDependencies(i, binary_deps);
+    deps.insert(binary_deps.begin(), binary_deps.end());
+}
+
 bool QoreModuleManager::deleteUnrequiredNativeModule() {
     // the modules that the binary modules left and the user modules left require
     strset_t required;

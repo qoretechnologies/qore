@@ -52,8 +52,24 @@ instead fails, `AOT-MODULE-STALE` follows its error in the exception chain (see
 ## The sources of a module
 
 The sources are the files that the dependency file of the module lists (`<qmod>.d`, written by qcc with `--depfile`
-for make): the module's own `.qm`, `.qc` and `.ql` files and those of the modules it depends on, and the binary
-modules it depends on.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
+for make).  For an AOT module (`.qmod`), qcc lists everything the module was compiled from
+(`qore_aot_set_module_closure_dep_sink()` in `include/qore/intern/qore_aot_deps.h`):
+
+- the module's own `.qm`, `.qc` and `.ql` files;
+- the files that its `%include` directives opened (`qore_program_private::included_files`, recorded by the scanner):
+  they are parsed as part of the module; qcc listed none of them before, so neither an incremental build nor the
+  loader saw a change to one;
+- the modules it requires **directly or not**: the module sees the declarations of what its dependencies re-export,
+  and the types of their own dependencies, so a module that listed only its direct dependencies by their sources
+  (`--depfile-module-deps=source`) was not rebuilt, nor found out of date, when a module that a dependency re-exports
+  changed.  The closure follows `QoreModuleManager::getModuleDependencies()` (the user and binary modules a source
+  module loaded, the descriptor dependencies of an AOT module, the declared dependencies of a native binary module);
+  each module is listed by its sources (or its file, for a binary module), with the files its `%include` directives
+  opened when it was loaded from its source and, for an AOT module of a build tree, everything its own depfile lists;
+- the candidate files of the modules of its failed `%try-module` directives.
+
+The depfile of a script object (`.qo`) is unchanged: it lists the modules the script loads directly, and its include
+closure as before.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
 directory are the sources.
 
 ## A dependency loaded from another module
@@ -124,7 +140,9 @@ process.
 another size) and a changed dependency are found; sources that only got new modification times are not; the
 fingerprint file lists the sources of the depfile; without a fingerprint file or a depfile, the modification time
 decides; a module that is not a link, or one that a Program without filesystem access loads, is not checked.
-`examples/test/ir/AOTModuleDependencyStale.qtest`: a dependency loaded from another module makes a module out of date;
+`examples/test/ir/AOTModuleDependencyStale.qtest`: a changed include file and a changed module that a dependency
+re-exports make a module out of date and are listed in its depfile; a dependency loaded from another module makes a
+module out of date;
 one loaded from its source, from its own AOT module or from an identical copy is the module compiled against.
 `examples/test/ir/AOTModuleStaleFallback.qtest`: a built module that is a regular file with its depfile, first in the
 module path of a child process as in `run_tests.sh`, is checked (a changed source is found, a touched one is not, and

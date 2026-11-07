@@ -1000,8 +1000,14 @@ static std::string module_name_from_path(const std::string& path) {
     return name;
 }
 
+//! Returns the dependencies of a module compile in the form --depfile-module-deps selects
+/** @param resolved_deps the files of the modules loaded, as the module dependency sink recorded them
+    @param qmod true for the compile of an AOT module (.qmod): with the source form, the depfile of an AOT module of a
+    build tree that is a dependency contributes everything it lists (see qore_aot_set_module_closure_dep_sink());
+    the depfile of an object (.qo) keeps the dependencies the incremental object scheduler reads
+*/
 static std::vector<std::string> qcc_module_depfile_inputs(
-        const std::vector<std::string>& resolved_deps) {
+        const std::vector<std::string>& resolved_deps, bool qmod = false) {
     if (depfile_module_deps_mode == DepfileModuleDepsMode::Artifact) {
         return resolved_deps;
     }
@@ -1037,6 +1043,16 @@ static std::vector<std::string> qcc_module_depfile_inputs(
             // representation that qcc can expand.
             sources.push_back(dep);
             continue;
+        }
+        // An AOT module of a build tree depends on what its own depfile lists:
+        // its sources, the files they include and the modules it requires; a
+        // module requiring it depends on all of them, as it sees the module's
+        // declarations (see qore_aot_set_module_closure_dep_sink())
+        if (qmod) {
+            std::vector<std::string> dep_depfile;
+            if (qore_aot_read_module_depfile(dep, dep_depfile)) {
+                sources.insert(sources.end(), dep_depfile.begin(), dep_depfile.end());
+            }
         }
         std::string name = module_name_from_path(dep);
         std::string parent = dirname_of(dep);
@@ -1087,6 +1103,16 @@ static const char* entry_fn = "main";
 static bool qcc_output_is_qmod(const std::string& output) {
     static constexpr const char ext[] = ".qmod";
     return output.size() > sizeof(ext) - 1 && !output.compare(output.size() - (sizeof(ext) - 1), sizeof(ext) - 1, ext);
+}
+
+//! Sets the module dependency sink of a module compile: for an AOT module (.qmod), the one that records everything the
+//! module depends on (see qore_aot_set_module_closure_dep_sink()), else the one that records the modules it loads
+static void qcc_set_module_dep_sink(std::vector<std::string>* sink, const std::string& output) {
+    if (qcc_output_is_qmod(output)) {
+        qore_aot_set_module_closure_dep_sink(sink);
+    } else {
+        qore_aot_set_module_dep_sink(sink);
+    }
 }
 
 static std::string qcc_depfile_target(const std::string& output) {
@@ -11431,9 +11457,9 @@ int main(int argc, char** argv) {
             }
         }
     } else if (is_split_module) {
-        // Compile split module directory
+        // Compile split module directory; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
-        qore_aot_set_module_dep_sink(&dep_module_files);
+        qcc_set_module_dep_sink(&dep_module_files, output);
         bool ok = QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
@@ -11458,7 +11484,7 @@ int main(int argc, char** argv) {
             // Leave `source` empty so the target dir is not double-listed.
             // Dependency modules use the selected deterministic depfile form.
             std::vector<std::string> module_deps =
-                qcc_module_depfile_inputs(dep_module_files);
+                qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       std::string(), source_file,
@@ -11467,9 +11493,9 @@ int main(int argc, char** argv) {
             }
         }
     } else if (module_mode) {
-        // Compile single-file module
+        // Compile single-file module; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
-        qore_aot_set_module_dep_sink(&dep_module_files);
+        qcc_set_module_dep_sink(&dep_module_files, output);
         bool ok = QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
@@ -11492,7 +11518,7 @@ int main(int argc, char** argv) {
             }
             // deps = the .qm file plus dependency modules in the selected form.
             std::vector<std::string> module_deps =
-                qcc_module_depfile_inputs(dep_module_files);
+                qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
             if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
                                                source_file, nullptr,
                                                &module_deps, qcc_output_is_qmod(output))) {

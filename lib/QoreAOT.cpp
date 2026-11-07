@@ -36,6 +36,7 @@
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/FileStreamIo.h"
+#include <deque>
 #include <qore/QoreRegexInterface.h>
 #include <qore/QoreObject.h>
 #include <qore/Qore.h>
@@ -718,16 +719,75 @@ const QoreTypeInfo* qore_reflection_get_type_from_string(QoreProgram* pgm, const
 // an AOT module compile (see qore_aot_deps.h).  Inactive (nullptr) for every
 // normal program, so the record hook is a single pointer test.
 static thread_local std::vector<std::string>* aot_module_dep_sink = nullptr;
+// true if the sink takes everything an AOT module depends on (qore_aot_set_module_closure_dep_sink())
+static thread_local bool aot_module_dep_sink_closure = false;
 
 void qore_aot_set_module_dep_sink(std::vector<std::string>* sink) {
     aot_module_dep_sink = sink;
+    aot_module_dep_sink_closure = false;
+}
+
+void qore_aot_set_module_closure_dep_sink(std::vector<std::string>* sink) {
+    aot_module_dep_sink = sink;
+    aot_module_dep_sink_closure = sink != nullptr;
+}
+
+//! Appends the real path of a module's file to \a files (none for a builtin module), and the files its %include
+//! directives opened if it was loaded from its source
+static void qore_aot_add_module_files(QoreAbstractModule* m, std::vector<std::string>& files) {
+    const char* fn = m->getFileName();
+    // skip synthetic ("<builtin>") and empty paths
+    if (fn && *fn && *fn != '<') {
+        char* resolved = realpath(fn, nullptr);
+        files.emplace_back(resolved ? resolved : fn);
+        free(resolved);
+    }
+    if (m->isUser()) {
+        if (QoreProgram* mpgm = m->getModuleProgram()) {
+            const strset_t& included = qore_program_private::get(*mpgm)->included_files;
+            files.insert(files.end(), included.begin(), included.end());
+        }
+    }
+}
+
+//! Appends the files of everything an AOT module depends on to \a files; see qore_aot_set_module_closure_dep_sink()
+static bool qore_aot_add_module_closure_files(qore_program_private* pp, std::vector<std::string>& files,
+        std::string& error) {
+    files.insert(files.end(), pp->included_files.begin(), pp->included_files.end());
+    // the modules required, directly or not, breadth first from those the module loaded itself
+    strset_t seen(pp->parse_modules.begin(), pp->parse_modules.end());
+    std::deque<std::string> todo(pp->parse_modules.begin(), pp->parse_modules.end());
+    size_t count = 0;
+    while (!todo.empty()) {
+        if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT module dependency closure")) {
+            error = "cancelled during AOT module dependency collection";
+            return false;
+        }
+        std::string name = std::move(todo.front());
+        todo.pop_front();
+        QoreAbstractModule* m = QMM.findModule(name.c_str());
+        if (!m) {
+            continue;
+        }
+        qore_aot_add_module_files(m, files);
+        strset_t deps;
+        QMM.getModuleDependencies(name.c_str(), deps);
+        for (const std::string& dep : deps) {
+            if (seen.insert(dep).second) {
+                todo.push_back(dep);
+            }
+        }
+    }
+    return true;
 }
 
 // Collect the on-disk file of every module loaded into the compile program and
 // also append it to the active module-dep sink. These are the module's direct
-// %requires closure; per-module transitivity makes recording direct deps
-// sufficient for the build to rebuild a dependent when a loaded artifact
-// changes.
+// %requires; a closure sink (qore_aot_set_module_closure_dep_sink(), set for an
+// AOT module) takes the files of the modules required directly or not and of
+// the %include directives as well: a dependent listing only the direct
+// dependencies by their sources was not rebuilt, nor found out of date by the
+// module loader, when a module that a dependency re-exports changed.
 static bool qore_aot_record_module_deps(QoreProgram* pgm,
         std::vector<std::string>& deps, std::string& error) {
     deps.clear();
@@ -759,8 +819,14 @@ static bool qore_aot_record_module_deps(QoreProgram* pgm,
     std::sort(deps.begin(), deps.end());
     deps.erase(std::unique(deps.begin(), deps.end()), deps.end());
     if (aot_module_dep_sink) {
-        aot_module_dep_sink->insert(aot_module_dep_sink->end(),
-            deps.begin(), deps.end());
+        if (aot_module_dep_sink_closure) {
+            if (!qore_aot_add_module_closure_files(pp, *aot_module_dep_sink, error)) {
+                return false;
+            }
+        } else {
+            aot_module_dep_sink->insert(aot_module_dep_sink->end(),
+                deps.begin(), deps.end());
+        }
         // The artifact is compiled without the modules of failed %try-module directives, so the build depends on
         // the files that could provide them: replacing a module that was too old, for example, must rebuild the
         // artifact.  A module that is installed later is detected when the artifact is loaded; see

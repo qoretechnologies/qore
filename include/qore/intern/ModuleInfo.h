@@ -831,6 +831,14 @@ public:
 
     DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
 
+    //! Adds the names of the modules that the loaded module \a name requires directly to \a deps
+    /** For a user module loaded from its source, the user and binary modules it loaded while it was parsed; for an
+        AOT module, the dependencies its descriptor names; for a native binary module, those it declares
+        (qore_module_dependencies).  Nothing is added for a module that is not loaded.  qcc lists the files of the
+        modules a module requires, directly or not, in the depfile of an AOT module (see qore_aot_deps.h).
+    */
+    DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
+
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
         would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when

@@ -539,6 +539,12 @@ public:
     */
     std::vector<std::string> unavailable_try_modules;
 
+    //! the files that %include directives opened while this Program was parsed, by their real paths, without duplicates
+    /** qcc lists them in the depfile of an AOT module, with which an incremental build and the module loader decide
+        whether the module is out of date with its sources (see design/aot-linked-module-sources.md)
+    */
+    strset_t included_files;
+
     struct ModuleParseCommand {
         std::string module;
         std::string command;
@@ -1131,6 +1137,16 @@ public:
         if (std::find(unavailable_try_modules.begin(), unavailable_try_modules.end(), spec)
                 == unavailable_try_modules.end()) {
             unavailable_try_modules.emplace_back(spec);
+        }
+    }
+
+    //! Records a file that a %include directive opened while the Program was parsed
+    DLLLOCAL void addIncludedFile(const char* path) {
+        QoreString resolved;
+        if (q_realpath(QoreString(path), resolved)) {
+            included_files.insert(path);
+        } else {
+            included_files.insert(resolved.c_str());
         }
     }
 

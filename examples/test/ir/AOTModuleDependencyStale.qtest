@@ -16,6 +16,9 @@
 
 #! An AOT module of a build tree is out of date when anything it was compiled from changes
 /** Beyond the module's own sources (see AOTModuleStaleFallback.qtest), these are:
+    - a file that a %include directive of the module opened: qcc lists it in the module's depfile;
+    - a module that a dependency of the module re-exports, or that a dependency requires: the depfile lists the
+      modules the module requires directly or not, as the module sees their declarations;
     - the module that is loaded for a dependency: when it is another module than the one the module was compiled
       against (one that appeared in a directory of the module path that is searched first), the module is out of
       date (\c AOT-MODULE-STALE), and its source module is loaded instead.
@@ -38,6 +41,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
 
+        addTestCase("a changed include file makes a module out of date", \includeTest());
+        addTestCase("a changed module that a dependency re-exports makes a module out of date", \transitiveTest());
         addTestCase("a module loaded for a dependency from another file makes a module out of date",
             \shadowedDependencyTest());
         set_return_value(main());
@@ -77,6 +82,14 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         assertTrue(is_file(qmod + ".d"), "depfile of " + name + ": " + out);
     }
 
+    #! returns the dependencies that a depfile lists
+    private list<string> depfileDeps(string depfile) {
+        string text = ReadOnlyFile::readTextFile(depfile);
+        text =~ s/\\\n/ /g;
+        list<string> l = (text =~ x/^[^:]+:(.*)$/)[0].split(" ");
+        return map $1, l, $1.val();
+    }
+
     #! runs a script with %requires in a child process, as a test run by run_tests.sh does, and returns its output
     /** The script prints the value of \a expr and the file that each named module was loaded from
     */
@@ -85,6 +98,65 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         write(script, sprintf("%%modern\n%%requires %s\nprintf(\"%%s %%s\\n\", %s, "
             "basename(get_module_hash().%s.filename));\n", name, expr, name));
         return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s", env, module_path, qore_bin, script)));
+    }
+
+    includeTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        write(src_dir + "/part.ql", "const Value = \"v1\";\n");
+        writeModule(src_dir, "Inc", "", "%include part.ql\npublic namespace Inc { public string sub value() { "
+            "return Value; } }");
+        compile(src_dir, src_dir, qmod_dir, "Inc");
+        # the depfile lists the include file
+        assertTrue(inlist(normalize_dir(src_dir) + "/part.ql", depfileDeps(qmod_dir + "/Inc.qmod.d")));
+        string module_path = qmod_dir + ":" + src_dir;
+        assertEq("v1 Inc.qmod", runRequires(module_path, tmp.path, "Inc", "Inc::value()"));
+
+        # the include file got another modification time only: the module is loaded
+        touchLater(src_dir + "/part.ql");
+        assertEq("v1 Inc.qmod", runRequires(module_path, tmp.path, "Inc", "Inc::value()"));
+
+        # the include file changed: the module is out of date, and its source is loaded
+        write(src_dir + "/part.ql", "const Value = \"v2\";\n");
+        touchLater(src_dir + "/part.ql");
+        string out = runRequires(module_path, tmp.path, "Inc", "Inc::value()");
+        assertEq("v2 Inc.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Inc\\.qmod' for feature 'Inc' is out of date: its source '.*/part\\.ql' has "
+            "changed", out);
+    }
+
+    transitiveTest() {
+        # Top requires Mid, which re-exports Base; Top uses a class of Base
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        writeModule(src_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"v1\"; } } }");
+        writeModule(src_dir, "Mid", "%requires(reexport) Base", "public namespace Mid { public int sub one() { "
+            "return 1; } }");
+        writeModule(src_dir, "Top", "%requires Mid", "public namespace Top { public string sub value() { "
+            "return (new Base::Value()).v; } }");
+        string module_path = qmod_dir + ":" + src_dir;
+        compile(module_path, src_dir, qmod_dir, "Base");
+        compile(module_path, src_dir, qmod_dir, "Mid");
+        compile(module_path, src_dir, qmod_dir, "Top");
+        # the depfile lists the sources of the module that the dependency re-exports
+        assertTrue(inlist(normalize_dir(src_dir) + "/Base.qm", depfileDeps(qmod_dir + "/Top.qmod.d")));
+        assertEq("v1 Top.qmod", runRequires(module_path, tmp.path, "Top", "Top::value()"));
+
+        # Base changed: Top is out of date too
+        writeModule(src_dir, "Base", "", "public namespace Base { public class Value { public { string v = "
+            "\"v2\"; } } }");
+        touchLater(src_dir + "/Base.qm");
+        string out = runRequires(module_path, tmp.path, "Top", "Top::value()");
+        assertEq("v2 Top.qm", out.split("\n").last(), out);
+        assertRegex("AOT module '.*/Top\\.qmod' for feature 'Top' is out of date: its source '.*/Base\\.qm' has "
+            "changed", out);
     }
 
     shadowedDependencyTest() {

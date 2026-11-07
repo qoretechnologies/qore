@@ -1999,6 +1999,9 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                     } else {
                                                        // save file name string in QoreProgram's list
                                                        const char* str = qore_program_private::get(*pgm)->addString(fname->c_str());
+                                                       // and record the file as a source of what is parsed, for the
+                                                       // depfile of an AOT module
+                                                       qore_program_private::get(*pgm)->addIncludedFile(fn);
                                                        beginParsing(str, (void*)YY_CURRENT_BUFFER);
                                                        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE, yyscanner), yyscanner);
                                                        BEGIN(INITIAL);
