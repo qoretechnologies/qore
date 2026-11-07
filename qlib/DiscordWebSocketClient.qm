@@ -336,6 +336,13 @@ public class DiscordHeartbeat {
 
         #! The client, by a weak reference: the heartbeat thread never keeps its client alive
         *DiscordWebSocketClient client;
+
+        #! Set when the heartbeat thread ended; protected by \c lock
+        bool ended = False;
+
+        #! Set when the heartbeat thread runs the client's destructor and is told to stop without being waited for;
+        #! protected by \c lock
+        bool detached = False;
     }
 
     #! Creates the record
@@ -682,11 +689,24 @@ hash<auto> h = ws.getInfo();
         int closed = getClosingConnectionId();
         # the connection is closing: cancel its watchdogs so a pending timer cannot fire a spurious reconnect during
         # teardown (the normal reconnect path handles a close-before-HELLO/RESUMED and will re-arm as needed)
-        cancelHelloWatchdog(closed);
-        cancelResumeWatchdog(closed);
-        if (!stopHeartbeatThread(closed)) {
-            logDebug("connection %d closed; the heartbeat of connection %d is left running", closed,
-                getCurrentConnectionId());
+        # each step is guarded, so a failing one does not skip the others
+        try {
+            cancelHelloWatchdog(closed);
+        } catch (hash<ExceptionInfo> ex) {
+            logError("closing connection %d: cannot cancel the HELLO watchdog: %s", closed, get_exception_string(ex));
+        }
+        try {
+            cancelResumeWatchdog(closed);
+        } catch (hash<ExceptionInfo> ex) {
+            logError("closing connection %d: cannot cancel the RESUME watchdog: %s", closed, get_exception_string(ex));
+        }
+        try {
+            if (!stopHeartbeatThread(closed)) {
+                logDebug("connection %d closed; the heartbeat of connection %d is left running", closed,
+                    getCurrentConnectionId());
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            logError("closing connection %d: cannot stop the heartbeat: %s", closed, get_exception_string(ex));
         }
     }
 
@@ -829,9 +849,10 @@ hash<auto> h = ws.getInfo();
     */
     private heartbeatHandoffFailed(DiscordHeartbeat h) {
         try {
-            # never waits for itself
+            # never waits for itself, nor for a heartbeat thread that runs the client's destructor (it is detached
+            # and may be waiting for this very thread in the destructor; see stopHeartbeatThread())
             if (h.tid != gettid()) {
-                h.running.waitForZero();
+                DiscordWebSocketClient::waitHeartbeatEndedOrDetached(h);
             }
             AutoLock al(heartbeat_lock);
             if (hb && hb.seq == h.seq) {
@@ -1280,19 +1301,48 @@ hash<auto> h = ws.getInfo();
             h.running.dec();
             remove hb;
         }
+        # the heartbeat thread sets the record's TID itself
 %ifdef PO_NO_THREAD_CONTROL
-        h.tid = start_thread(sub () { DiscordWebSocketClient::heartbeatMain(h); });
+        start_thread(DiscordWebSocketClient::heartbeatRunner(h));
 %else
-        h.tid = start_thread
-            ? start_thread(sub () { DiscordWebSocketClient::heartbeatMain(h); })
-            : background DiscordWebSocketClient::heartbeatMain(h);
+        if (start_thread) {
+            start_thread(DiscordWebSocketClient::heartbeatRunner(h));
+        } else {
+            background DiscordWebSocketClient::heartbeatMain(h);
+        }
 %endif
     }
 
+    #! Returns the code that runs the heartbeat thread of a record
+    /** Created in a static method: a closure created in a method holds a strong reference to its object while it
+        runs, which would keep the client alive for the life of the heartbeat thread.
+
+        @since DiscordWebSocketClient 1.2
+    */
+    private static code heartbeatRunner(DiscordHeartbeat h) {
+        return sub () { DiscordWebSocketClient::heartbeatMain(h); };
+    }
+
+    #! Waits until the thread of a heartbeat record ended or was detached (see stopHeartbeatThread())
+    /** @since DiscordWebSocketClient 1.2
+    */
+    private static waitHeartbeatEndedOrDetached(DiscordHeartbeat h) {
+        AutoLock al(h.lock);
+        while (!h.ended && !h.detached) {
+            h.cond.wait(h.lock);
+        }
+    }
+
     #! Sets the stop flag of a heartbeat record and wakes its thread
-    private static stopHeartbeatRecord(DiscordHeartbeat h) {
+    /** @param h the record
+        @param detach mark the record detached (its thread is not waited for)
+    */
+    private static stopHeartbeatRecord(DiscordHeartbeat h, *bool detach) {
         AutoLock al(h.lock);
         h.stop = True;
+        if (detach) {
+            h.detached = True;
+        }
         h.cond.broadcast();
     }
 
@@ -1328,7 +1378,8 @@ hash<auto> h = ws.getInfo();
             }
         }
         if (h.tid == gettid()) {
-            stopHeartbeatRecord(h);
+            # detached: nobody waits for this thread (it may run the destructor, which waits for other threads)
+            stopHeartbeatRecord(h, True);
             return True;
         }
         stopHeartbeatRecord(h);
@@ -1346,7 +1397,8 @@ hash<auto> h = ws.getInfo();
     /** @since DiscordWebSocketClient 1.2
     */
     private waitHeartbeatEnded(DiscordHeartbeat h) {
-        h.running.waitForZero();
+        # a detached heartbeat thread runs the client's destructor, which may wait for this thread
+        DiscordWebSocketClient::waitHeartbeatEndedOrDetached(h);
     }
 
     #! The heartbeat thread of a heartbeat record
@@ -1356,7 +1408,14 @@ hash<auto> h = ws.getInfo();
         @since DiscordWebSocketClient 1.2
     */
     private static heartbeatMain(DiscordHeartbeat h) {
-        on_exit h.running.dec();
+        on_exit {
+            {
+                AutoLock al(h.lock);
+                h.ended = True;
+                h.cond.broadcast();
+            }
+            h.running.dec();
+        }
         h.tid = gettid();
 
         bool running;
@@ -1419,7 +1478,23 @@ hash<auto> h = ws.getInfo();
             logWarn("the gateway did not acknowledge the previous heartbeat within the "
                 "heartbeat interval (%d ms); the connection is zombied, forcing a reconnect",
                 h.interval);
-            triggerZombieReconnect(h.cid, h);
+            try {
+                triggerZombieReconnect(h.cid, h);
+            } catch (hash<ExceptionInfo> ex) {
+                # the reconnect's thread cannot be started (e.g. the client is being destroyed): the reconnect is
+                # made on this thread instead, which ends its own heartbeat without waiting for itself
+                logError("cannot start the zombie-connection reconnect thread: %s; reconnecting on the heartbeat "
+                    "thread", get_exception_string(ex));
+                bool started;
+                try {
+                    started = reconnectIntern(h.cid >= 0 ? h.cid : NOTHING);
+                } catch (hash<ExceptionInfo> ex1) {
+                    logError("zombie-connection reconnect failed: %s", get_exception_string(ex1));
+                }
+                if (!started) {
+                    heartbeatHandoffFailed(h);
+                }
+            }
             return False;
         }
         try {

@@ -255,6 +255,15 @@ ws.send("Hello from HTTP/3!");
     still runs on its delivery task, so a callback can call
     @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" and then wait for the close event.
 
+    The destructor joins the client's threads: it closes the connections, then waits, without a time limit, until the
+    threads the client started for itself (automatic reconnects,
+    @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" workers) and its delivery tasks ended,
+    except the thread it runs on.  From the start of the destructor, no such thread is started, waits for another
+    connect, disconnect or reconnect end at once with \c WEBSOCKET-ERROR, and a handshake in progress is canceled; a
+    close handshake ends at the latest at its close timeout.  User code these threads run (callbacks, observers, the
+    logger, a \c start_thread hook, subclass hooks) must therefore not block on anything the thread destroying the
+    client holds, and a \c start_thread hook must run the code it is given.
+
     Each connection is reported open exactly once
     (@ref WebSocketClient::EVENT_WS_CONNECTED "EVENT_WS_CONNECTED" for
     @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"), and that report is
@@ -339,9 +348,12 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       @ref WebSocketClient::WebSocketClient::getEventConnectionId() "getEventConnectionId()",
       @ref WebSocketClient::WebSocketClient::getClosingConnectionId() "getClosingConnectionId()" and
       @ref WebSocketClient::WebSocketClient::getCurrentConnectionId() "getCurrentConnectionId()"
-    - the destructor waits for the threads the client started for itself (automatic reconnects and
-      @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" workers), except the thread it runs on,
-      so they no longer run on a destroyed client
+    - the destructor waits, without a time limit, for the threads the client started for itself (automatic
+      reconnects and @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" workers) and for its
+      delivery tasks, except the thread it runs on, so they no longer run on a destroyed client; from its start, no
+      such thread is started, action waits end with \c WEBSOCKET-ERROR and a handshake in progress is canceled (see
+      @ref websocketclient_lifecycle for what user code run by these threads must not do); before, the wait for
+      delivery tasks gave up after 30 seconds
     - the frames an HTTP/2 or HTTP/3 connection receives with its handshake are delivered without the client's lock;
       before, a raw frame callback calling a method of the client could deadlock with the connecting thread
     - a callback running on the thread that processes a connection's frames (e.g. the raw frame callback) that calls
@@ -613,8 +625,10 @@ public hashdecl WscAsyncIoResources {
 */
 #! The threads a WebSocketClient starts for itself; internal to WebSocketClient
 /** Not for use outside of @ref WebSocketClient::WebSocketClient "WebSocketClient" and its subclasses; it may change
-    without notice.  Counts the threads started (also before they run) and records the TIDs of the running ones, so
-    the client's destructor can wait for them, except for the thread it runs on.
+    without notice.  Each start gets a token, counted from before the thread runs until the thread ends or its start
+    fails, whichever comes first; the running threads are recorded by TID with the number of their tokens (a
+    \c start_thread hook can run the code inline, also nested), so the client's destructor can wait for all threads
+    but the one it runs on.  Once closed (by the destructor), no thread can be started.
 
     @since WebSocketClient 2.5
 */
@@ -622,59 +636,88 @@ public class WscLibraryThreads {
     private {
         Mutex m();
         Condition cond();
-        int count = 0;
-        hash<string, bool> tids = {};
+        #! the tokens counted
+        hash<string, bool> live = {};
+        #! the tokens whose thread started
+        hash<string, bool> entered = {};
+        #! the number of tokens running on each thread
+        hash<string, int> tids = {};
+        int seq = 0;
+        bool closed = False;
     }
 
-    #! Counts a thread about to be started
-    starting() {
-        AutoLock al(m);
-        ++count;
-    }
-
-    #! Uncounts a thread whose start failed
-    startFailed() {
-        AutoLock al(m);
-        --count;
-        cond.broadcast();
-    }
-
-    #! Records the calling thread as a running thread
-    enter() {
-        AutoLock al(m);
-        tids{gettid()} = True;
-    }
-
-    #! Removes the calling thread
-    leave() {
-        AutoLock al(m);
-        remove tids{gettid()};
-        --count;
-        cond.broadcast();
-    }
-
-    #! Waits until no thread but the calling one is counted
-    /** @param to the maximum time to wait
-
-        @return @ref True if the wait timed out
+    #! Counts a thread about to be started and returns its token
+    /** @throw WEBSOCKET-ERROR the client is being destroyed
     */
-    bool waitOthers(timeout to) {
-        date deadline = now_us() + milliseconds(to);
+    int starting() {
         AutoLock al(m);
-        while (count > (tids{gettid()} ? 1 : 0)) {
-            date remaining = deadline - now_us();
-            if (remaining <= 0s) {
-                return True;
-            }
-            cond.wait(m, remaining);
+        if (closed) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed; no thread can be started";
         }
-        return False;
+        int token = ++seq;
+        live{token} = True;
+        return token;
     }
 
-    #! Returns the number of threads counted
+    #! Uncounts a start that failed, unless its thread started (e.g. a \c start_thread hook that started it and then
+    #! threw): that thread uncounts it when it ends
+    startFailed(int token) {
+        AutoLock al(m);
+        if (!entered{token} && remove live{token}) {
+            cond.broadcast();
+        }
+    }
+
+    #! Records the calling thread as running the given start
+    enter(int token) {
+        AutoLock al(m);
+        # counted again if its start was reported failed before the thread ran
+        live{token} = True;
+        entered{token} = True;
+        ++tids{gettid()};
+    }
+
+    #! Records the end of the given start on the calling thread, and uncounts it unless its start failure did
+    leave(int token) {
+        AutoLock al(m);
+        string t = gettid().toString();
+        if (!--tids{t}) {
+            remove tids{t};
+        }
+        remove live{token};
+        remove entered{token};
+        cond.broadcast();
+    }
+
+    #! Closes the object: no thread can be started from now on
+    close() {
+        AutoLock al(m);
+        closed = True;
+    }
+
+    #! Returns @ref True if a counted start does not run on the calling thread; must be called with the lock held
+    private bool othersUnlocked() {
+        return live.size() > (tids{gettid()} ?? 0);
+    }
+
+    #! Returns @ref True if a counted start does not run on the calling thread
+    bool hasOthers() {
+        AutoLock al(m);
+        return othersUnlocked();
+    }
+
+    #! Waits until every counted start runs on the calling thread or ended
+    waitOthers() {
+        AutoLock al(m);
+        while (othersUnlocked()) {
+            cond.wait(m);
+        }
+    }
+
+    #! Returns the number of counted starts
     int getCount() {
         AutoLock al(m);
-        return count;
+        return live.size();
     }
 }
 
@@ -1124,6 +1167,21 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         WscLibraryThreads lib_threads();
 
+        #! Protects @ref handshake_stream and @ref handshake_canceled
+        /** @since WebSocketClient 2.5
+        */
+        Mutex handshake_lock();
+
+        #! The stream whose handshake response a connect waits for, if any; the destructor cancels it
+        /** @since WebSocketClient 2.5
+        */
+        *HttpClientIo::HttpClientStreamHandle handshake_stream;
+
+        #! Set by the destructor: a handshake in progress or started later is canceled
+        /** @since WebSocketClient 2.5
+        */
+        bool handshake_canceled = False;
+
         #! Counter tracking active delivery threads for deterministic shutdown
         /** Incremented when a delivery thread is launched, decremented when it exits.
             The destructor waits for this to reach zero to ensure the delivery thread
@@ -1234,6 +1292,10 @@ WebSocketClient ws(\event(), {
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
+        # no thread of the client is started from here on, and a handshake in progress on another thread (which
+        # holds the client's lock) is canceled
+        lib_threads.close();
+        cancelHandshakeForDestroy();
         {
             AutoLock al(m);
             self.reconnect = False;
@@ -1242,36 +1304,31 @@ WebSocketClient ws(\event(), {
             self.sleep_cond.broadcast();
         }
         disconnectIntern(WSCC_GoingAway, True);
-        # the threads the client started for itself (automatic reconnects, connectAsync() workers) end once they see
-        # the client stopping; they use the object, so it is not torn down before they ended
-        waitLibraryThreads();
-        # Wait for any pending delivery tasks to fully exit before members are destroyed.
-        # This covers the race where scheduleDelivery() has incremented the counter and
-        # submitted a ThreadPool task, but the task hasn't started yet (its TID is not
-        # recorded yet).  Without this wait the object would be destroyed before the task
-        # runs, causing OBJECT-ALREADY-DELETED in the ThreadPool worker.
-        #
-        # Skip the wait only in the self-deadlock case: a user callback on the delivery
+        # Skip the delivery-task wait only in the self-deadlock case: a user callback on the delivery
         # thread dropped the last reference and triggered this destructor.  In that case,
         # the delivery thread handles cleanup via !self checks after the destructor
         # returns, and its on_exit cnt.dec() uses a local Counter reference.
+        bool on_delivery_task;
         {
             AutoLock al(delivery_mutex);
-            if (delivery_tids{gettid()}) {
+            on_delivery_task = delivery_tids{gettid()} ? True : False;
+        }
+        # The threads the client started for itself (automatic reconnects, connectAsync() workers) and the
+        # delivery tasks use the object, so it is not torn down before they ended; they end once they see the client
+        # being destroyed (no new thread can be started, action waits and handshakes end at once).  They are waited
+        # for together, as one can wait for the other, until neither runs.  The delivery-task counter also covers a
+        # task submitted but not started yet.  The waits are not bounded: a bound that expires would leave threads
+        # running on a destroyed object; user code run by these threads must not block on something the destroying
+        # thread holds (see @ref websocketclient_lifecycle).
+        while (True) {
+            waitLibraryThreads();
+            if (on_delivery_task) {
                 return;
             }
-        }
-        # Defense-in-depth: bounded wait with a diagnostic warning rather than an
-        # unbounded waitForZero().  The root-cause fix in scheduleDelivery() makes
-        # this timeout unreachable in normal operation, but bugs in any future code
-        # path that bumps this counter without a matching dec would hang the
-        # destructor forever.  A bounded wait + logError turns "hang forever" into
-        # "log + proceed with destruction" (still buggy but diagnosable).
-        if (delivery_thread_counter.waitForZero(30s)) {
-            logError("destructor timed out after 30s waiting for delivery tasks; "
-                "proceeding with destruction (counter=%d) — this "
-                "indicates a bug: a delivery task was accounted for but never decremented",
-                delivery_thread_counter.getCount());
+            delivery_thread_counter.waitForZero();
+            if (!lib_threads.hasOthers()) {
+                break;
+            }
         }
         # Synchronous shutdown gate for the controller layer: the delivery-task
         # counter above only covers WS-layer deliverInBackground() tasks, not the
@@ -2307,6 +2364,10 @@ ws.connect();
                 # no connection is published from here on: a connect running on another thread (e.g. the worker of
                 # connectAsync()) fails instead of publishing a connection while the destructor closes the current one
                 destroying = True;
+                # threads waiting for an action stop waiting (see acquireActionUnlocked())
+                foreach Condition c in (action_waiters.iterator()) {
+                    c.signal();
+                }
             }
 
             # the destructor does not wait for an action; destroying the object while another thread runs one of its
@@ -3331,6 +3392,9 @@ ws.setEventQueue();
             ++action_exempt{tid};
             return;
         }
+        if (destroying) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
         if (action_tid || action_waiters) {
             string t = tid.toString();
             Condition cond();
@@ -3352,6 +3416,10 @@ ws.setEventQueue();
                 }
                 # rounded up, so the wait never ends before the deadline
                 cond.wait(m, (remaining_us + 999) / 1000);
+                # the destructor ends every action wait
+                if (destroying) {
+                    throw "WEBSOCKET-ERROR", "the client is being destroyed";
+                }
             }
         }
         action_tid = tid;
@@ -4027,12 +4095,14 @@ ws.setEventQueue();
 
         @since WebSocketClient 2.5
     */
+    /** @throw WEBSOCKET-ERROR the client is being destroyed
+    */
     private int startLibraryThread(code body, *bool use_start_thread) {
         WscLibraryThreads lt = lib_threads;
-        lt.starting();
+        int token = lt.starting();
         code run = sub () {
-            lt.enter();
-            on_exit lt.leave();
+            lt.enter(token);
+            on_exit lt.leave(token);
             body();
         };
         try {
@@ -4042,21 +4112,74 @@ ws.setEventQueue();
             return (use_start_thread && start_thread) ? start_thread(run) : background run();
 %endif
         } catch (hash<ExceptionInfo> ex) {
-            lt.startFailed();
+            lt.startFailed(token);
             rethrow;
         }
     }
 
+    #! Waits for the handshake response of the current connect's stream; the destructor cancels the wait
+    /** A connect running on another thread (e.g. a connectAsync() worker) holds the client's lock during its
+        handshake; the destructor, which needs that lock, cancels the stream instead of waiting for the response or
+        the connect timeout.
+
+        @throw WEBSOCKET-ERROR the client is being destroyed
+
+        @since WebSocketClient 2.5
+    */
+    private auto readHandshakeResponse() {
+        HttpClientIo::HttpClientStreamHandle stream = hcio_stream;
+        {
+            AutoLock al(handshake_lock);
+            if (handshake_canceled) {
+                stream.cancel();
+                throw "WEBSOCKET-ERROR", "the client is being destroyed";
+            }
+            handshake_stream = stream;
+        }
+        on_exit {
+            AutoLock al(handshake_lock);
+            remove handshake_stream;
+        }
+        auto rv;
+        try {
+            rv = stream.readData(timeout_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (handshake_canceled) {
+                throw "WEBSOCKET-ERROR", "the client is being destroyed";
+            }
+            rethrow;
+        }
+        if (handshake_canceled) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
+        return rv;
+    }
+
+    #! Cancels a handshake in progress, and every later one, for the destructor
+    /** @since WebSocketClient 2.5
+    */
+    private cancelHandshakeForDestroy() {
+        AutoLock al(handshake_lock);
+        handshake_canceled = True;
+        if (handshake_stream) {
+            try {
+                handshake_stream.cancel();
+            } catch (hash<ExceptionInfo> ex) {
+                logDebug("error canceling the handshake: %s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
     #! Waits in the destructor for the threads the client started for itself, except the calling thread
-    /** Bounded: a thread still running after 30 seconds is logged and the destructor goes on.
+    /** Not bounded: these threads end once they see the client being destroyed (an action wait, a connect and the
+        automatic reconnect's retry wait end at once; a close handshake ends at its close timeout).  User code they
+        run (a callback, the logger, a \c start_thread hook) must not block on something the destroying thread
+        holds.
 
         @since WebSocketClient 2.5
     */
     private waitLibraryThreads() {
-        if (lib_threads.waitOthers(30s)) {
-            logError("destructor timed out after 30s waiting for %d thread(s) of the client; proceeding with "
-                "destruction", lib_threads.getCount());
-        }
+        lib_threads.waitOthers();
     }
 
     private startReconnect() {
@@ -4741,7 +4864,7 @@ ws.setEventQueue();
         hcio_stream = stream;
 
         # Read the 101 response
-        auto rh = hcio_stream.readData(timeout_ms);
+        auto rh = readHandshakeResponse();
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo H1 WebSocket to %y failed: no response received",
                 http_opts.url);
@@ -4803,7 +4926,7 @@ ws.setEventQueue();
         hcio_stream = stream;
 
         # Read the CONNECT response
-        auto rh = hcio_stream.readData(timeout_ms);
+        auto rh = readHandshakeResponse();
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo CONNECT to %y failed: no response received",
                 http_opts.url);
@@ -4900,7 +5023,7 @@ ws.setEventQueue();
             False);
 
         # Read the 101 response headers from the Channel
-        auto rh = hcio_stream.readData(timeout_ms);
+        auto rh = readHandshakeResponse();
         if (!rh || rh.typeCode() != NT_HASH) {
             raiseError("HttpClientIo H1 WebSocket to %y failed: no response received",
                 http_opts.url);
