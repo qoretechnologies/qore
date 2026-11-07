@@ -836,14 +836,21 @@ public class HttpClientRedirectTest inherits QUnit::Test {
         AbstractPollOperation op = hc.startPollSendRecv("GET", "/to-block");
         *hash<SocketPollInfo> pi;
         # drive the operation until the redirected request has been received; the operation then waits for a
-        # response that the blocked handler does not send, so the poll also waits for the handler's notification
-        while (!peer_b.blocked.size()) {
+        # response that the blocked handler does not send, so the poll also waits for the handler's notification, which
+        # the handler sends after it has queued the request: the loop ends only on the notification
+        while (True) {
             pi = op.continuePoll();
             assertTrue(exists pi);
-            Socket::poll((pi, <SocketPollInfo>{"socket": peer_b.blocked_notifier, "events": SOCK_POLLIN}), 20000);
+            list<hash<SocketPollInfo>> ready = Socket::poll((pi, <SocketPollInfo>{
+                "socket": peer_b.blocked_notifier,
+                "events": SOCK_POLLIN,
+            }), 20000);
+            if (select ready, $1.socket == peer_b.blocked_notifier) {
+                break;
+            }
         }
         peer_b.blocked_notifier.acknowledge();
-        assertEq("/block", peer_b.blocked.get());
+        assertEq("/block", peer_b.blocked.get(20s));
         op.abort();
         assertFalse(op.goalReached(), "an aborted operation has not reached its goal");
         assertNothing(op.getOutput());
