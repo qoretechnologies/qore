@@ -20,8 +20,15 @@
     was not recorded: the AST interpreter and the IR and JIT tiers accepted undeclared members of the class and of its
     subclasses, while compiled code, which records each public member, refused them.
 
-    The script merges a hash with an undeclared key into objects of classes with each kind of declaration and assigns
-    an undeclared member; each function is called three times, in every execution mode and on the IR tier of tiered
+    Conversely, a public declaration that declares no public member (an empty one, or one with only constants or
+    static class variables) makes the class refuse undeclared members as well, but AOT-compiled code recreated the
+    class from its members alone and accepted them; the AOT class record now carries the declaration (binary format
+    version 22).
+
+    The script merges a hash with an undeclared key into objects of classes with each kind of declaration (members
+    and static variables, members only, both in separate declarations, an empty declaration, constants only, static
+    variables only), their subclasses, a class with only a private declaration and a class with none, and assigns an
+    undeclared member; each function is called three times, in every execution mode and on the IR tier of tiered
     execution (see ExecModeOutputTest).
 */
 class PublicMemberDeclarationTest inherits ExecModeOutputTest {
@@ -58,6 +65,40 @@ class K4 {
 class K6 inherits K1 {
 }
 
+# an empty public declaration, one with only constants and one with only static variables
+class KEmpty {
+    public {}
+}
+
+class KConst {
+    public {
+        const C = 1;
+    }
+}
+
+class KStatic {
+    public {
+        static auto sm;
+    }
+}
+
+# subclasses of these
+class KSubEmpty inherits KEmpty {
+}
+
+class KSubConst inherits KConst {
+}
+
+class KSubStatic inherits KStatic {
+}
+
+# a private declaration only: undeclared members can be added
+class KPrivate {
+    private {
+        auto p;
+    }
+}
+
 # no member declaration: undeclared members can be added
 class K8 {
 }
@@ -87,7 +128,8 @@ string sub declared(object k) {
 
 for (int i = 0; i < 3; ++i) {
     list<string> r = ();
-    foreach string c in ("K1", "K2", "K4", "K6", "K8") {
+    foreach string c in ("K1", "K2", "K4", "K6", "KEmpty", "KConst", "KStatic", "KSubEmpty", "KSubConst",
+            "KSubStatic", "KPrivate", "K8") {
         object k = create_object(c);
         r += sprintf("%s: %s, %s", c, tryMerge(k), tryAssign(k));
     }
@@ -97,9 +139,9 @@ for (int i = 0; i < 3; ++i) {
 
         #! the AST interpreter's output
         const Expected = (
-            "0 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; K8: merged 1, assigned 2 | K1 3",
-            "1 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; K8: merged 1, assigned 2 | K1 3",
-            "2 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; K8: merged 1, assigned 2 | K1 3",
+            "0 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; KEmpty: INVALID-MEMBER, INVALID-MEMBER; KConst: INVALID-MEMBER, INVALID-MEMBER; KStatic: INVALID-MEMBER, INVALID-MEMBER; KSubEmpty: INVALID-MEMBER, INVALID-MEMBER; KSubConst: INVALID-MEMBER, INVALID-MEMBER; KSubStatic: INVALID-MEMBER, INVALID-MEMBER; KPrivate: merged 1, assigned 2; K8: merged 1, assigned 2 | K1 3",
+            "1 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; KEmpty: INVALID-MEMBER, INVALID-MEMBER; KConst: INVALID-MEMBER, INVALID-MEMBER; KStatic: INVALID-MEMBER, INVALID-MEMBER; KSubEmpty: INVALID-MEMBER, INVALID-MEMBER; KSubConst: INVALID-MEMBER, INVALID-MEMBER; KSubStatic: INVALID-MEMBER, INVALID-MEMBER; KPrivate: merged 1, assigned 2; K8: merged 1, assigned 2 | K1 3",
+            "2 K1: INVALID-MEMBER, INVALID-MEMBER; K2: INVALID-MEMBER, INVALID-MEMBER; K4: INVALID-MEMBER, INVALID-MEMBER; K6: INVALID-MEMBER, INVALID-MEMBER; KEmpty: INVALID-MEMBER, INVALID-MEMBER; KConst: INVALID-MEMBER, INVALID-MEMBER; KStatic: INVALID-MEMBER, INVALID-MEMBER; KSubEmpty: INVALID-MEMBER, INVALID-MEMBER; KSubConst: INVALID-MEMBER, INVALID-MEMBER; KSubStatic: INVALID-MEMBER, INVALID-MEMBER; KPrivate: merged 1, assigned 2; K8: merged 1, assigned 2 | K1 3",
         );
     }
 
