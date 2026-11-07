@@ -235,6 +235,14 @@ loop.removeRegistration(fd, op_key, xsink);
     */
     DLLLOCAL void rearmAlwaysReady(int fd);
 
+    //! Returns true if a regular file is registered (see always_ready_count)
+    /** A caller that has to look up the descriptor to give to rearmAlwaysReady() checks this first, so that a loop
+        without regular files pays nothing for them
+    */
+    DLLLOCAL bool hasAlwaysReady() const {
+        return always_ready_count != 0;
+    }
+
     //! Adds a timer to the event loop
     /** @param deadline_us absolute deadline in microseconds since the epoch
         @param udata user data pointer to associate with this timer

@@ -13711,6 +13711,77 @@ static QoreValue f_dbg_quic_packets_received(const QoreListNode* params, Runtime
     return h.release();
 }
 
+namespace {
+//! Waits for its object a given number of times without using what is reported, and then reaches its goal
+/** As Socket::poll()'s operation does when it is reported ready before its caller waits for the result: its steps
+    wait for the same object and events again, which the I/O thread keeps registered as they are.  Its output is the
+    number of its continuePoll() calls.
+*/
+class DbgWaitAgainPollOperation : public SocketPollOperationBase {
+public:
+    //! @p obj is kept by the operation's object, whose \c sock member references it
+    DLLLOCAL DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits) : obj(obj), events(events),
+            waits(waits) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return calls > waits;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (calls++ >= waits) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", events, xsink);
+        info->setKeyValue("socket", obj->objectRefSelf(), xsink);
+        return *xsink ? nullptr : info.release();
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return static_cast<int64>(calls);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return calls > waits ? "done" : "waiting";
+    }
+
+private:
+    QoreObject* obj;
+    int events;
+    int waits;
+    int calls = 0;
+};
+}
+
+//! Debug-only: returns an operation that waits for an object @p waits times without using what is reported
+/** See DbgWaitAgainPollOperation; the operation runs on the I/O thread
+*/
+static QoreValue f_dbg_wait_again_poll_operation(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    int events = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    int64 waits = get_param_value(params, 2).getAsBigInt();
+    if (!(events & (SOCK_POLLIN | SOCK_POLLOUT)) || (events & ~(SOCK_POLLIN | SOCK_POLLOUT))) {
+        xsink->raiseException("DBG-WAIT-AGAIN-ERROR", "events must be SOCK_POLLIN, SOCK_POLLOUT or both; got %d",
+            events);
+        return QoreValue();
+    }
+    if (waits < 1 || waits > 1000) {
+        xsink->raiseException("DBG-WAIT-AGAIN-ERROR", "waits must be from 1 to 1000; got %lld", (long long)waits);
+        return QoreValue();
+    }
+    DbgWaitAgainPollOperation* op = new DbgWaitAgainPollOperation(obj, events, static_cast<int>(waits));
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), xsink);
+    op->setSelf(*op_obj);
+    op_obj->setValue("sock", obj->objectRefSelf(), xsink);
+    op_obj->setValue("goal", new QoreStringNode("wait-again"), xsink);
+    return *xsink ? QoreValue() : QoreValue(op_obj.release());
+}
+
 
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
@@ -16724,6 +16795,11 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_quic_packets_received", f_dbg_quic_packets_received,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_again_poll_operation", f_dbg_wait_again_poll_operation,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, QC_SOCKETPOLLOPERATION->getTypeInfo(), 3,
+        QC_ABSTRACTPOLLABLEIOOBJECTBASE->getTypeInfo(), QORE_PARAM_NO_ARG, "obj",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "events",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "waits");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");

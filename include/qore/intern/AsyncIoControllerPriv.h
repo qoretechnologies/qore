@@ -2187,6 +2187,15 @@ private:
     */
     DLLLOCAL void eraseRegisteredFd(IoThreadContext& t, const std::string& sock_hash);
 
+    //! Reports the registered descriptor of the object with the given hash ready again if it is a regular file
+    /** Called when an operation starts or resumes waiting for the object: poll(2) reports a regular file ready to
+        every wait, and the event loop reports one only when it is rearmed (see QoreEventLoop::rearmAlwaysReady()), so
+        an operation that waits for a regular file after its readiness was reported (to it, or to another operation
+        that waits for the same object) is reported it again instead of waiting until its timeout.  Does nothing for
+        any other descriptor, and costs one test when the I/O thread's loop has no regular file.
+    */
+    DLLLOCAL void rearmIfAlwaysReady(IoThreadContext& t, const std::string& sock_hash);
+
     //! Compute the event union for a socket
     DLLLOCAL int computeEventUnion(const IoThreadContext& t, const std::string& sock_hash) const;
 

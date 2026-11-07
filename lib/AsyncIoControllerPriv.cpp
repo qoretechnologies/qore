@@ -6500,6 +6500,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                     extra_xsink.clear();
                                 }
                             }
+                            // an operation that waits again for its object, which is a regular file (a File), has
+                            // consumed its readiness without reaching its goal (Socket::poll()'s operation, for
+                            // example, before its caller is ready for the result): the file is reported ready again,
+                            // as poll(2) reports it to every wait, instead of the operation waiting until its timeout
+                            rearmIfAlwaysReady(t, sock_hash);
                         }
 
                         // Defer SSL pending check to next iteration (nginx pattern).
@@ -8576,6 +8581,11 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
     } else {
         t.socket_refcounts[sock_hash]++;
         applyEventUnion(t, socket, sock_hash, xsink);
+        // another operation waits for the object already: if it is a regular file, its readiness can have been
+        // reported to that operation only, and the new one is reported it too (see rearmIfAlwaysReady())
+        if (ev_flags) {
+            rearmIfAlwaysReady(t, sock_hash);
+        }
     }
 }
 
@@ -9013,6 +9023,16 @@ void AsyncIoControllerPriv::eraseRegisteredFd(IoThreadContext& t, const std::str
     if (kit != t.reg_keys.end()) {
         t.key_hashes.erase(kit->second);
         t.reg_keys.erase(kit);
+    }
+}
+
+void AsyncIoControllerPriv::rearmIfAlwaysReady(IoThreadContext& t, const std::string& sock_hash) {
+    if (!t.loop->hasAlwaysReady()) {
+        return;
+    }
+    auto fd_it = t.registered_fds.find(sock_hash);
+    if (fd_it != t.registered_fds.end()) {
+        t.loop->rearmAlwaysReady(fd_it->second);
     }
 }
 
