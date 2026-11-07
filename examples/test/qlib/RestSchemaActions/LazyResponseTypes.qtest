@@ -216,7 +216,7 @@ class LazyResponseTypesTest inherits QUnit::Test {
         *hash<ExceptionInfo> ex = getException(sub () {
             RestSchemaActionSet set(schema(), GoodManifest + BadSchemaEntry);
         });
-        assertEq("RUNTIME-TYPE-ERROR", ex.err, "a schema that cannot be built fails at construction");
+        assertEq("TYPE-VALUE-ERROR", ex.err, "a schema that cannot be built fails at construction");
         ex = getException(sub () {
             RestSchemaActionSet set(schema(), GoodManifest + BadUnwrapEntry);
         });
@@ -230,11 +230,11 @@ class LazyResponseTypesTest inherits QUnit::Test {
 
         # a type that fails part of the way through its schema build
         *hash<ExceptionInfo> ex = getException(sub () { lazy.getOperationEx("get-bad").getResponseType(); });
-        assertEq("RUNTIME-TYPE-ERROR", ex.err);
+        assertEq("TYPE-VALUE-ERROR", ex.err);
         assertRegex("while building the output type of action \"get-bad\"", ex.desc);
         AbstractDataProviderType good = lazy.getOperationEx("get-node").getResponseType();
         ex = getException(sub () { lazy.getOperationEx("get-bad").getResponseType(); });
-        assertEq("RUNTIME-TYPE-ERROR", ex.err, "the failing type fails again");
+        assertEq("TYPE-VALUE-ERROR", ex.err, "the failing type fails again");
         assertTrue(lazy.getOperationEx("get-bad").isResponseTypePending(), "the failing type is still to be built");
         assertTrue(good === lazy.getOperationEx("get-node").getResponseType(), "the good type is built once");
         RestSchemaActionSet eager(schema(), GoodManifest);
@@ -299,6 +299,6 @@ class LazyResponseTypesTest inherits QUnit::Test {
             new RestSchemaActionSet(schema(), GoodManifest + BadSchemaEntry, NOTHING, NOTHING, NOTHING,
                 <RestSchemaActionSetOptionInfo>{"lazy_response_types": True});
         });
-        assertEq("RUNTIME-TYPE-ERROR", ex.err, "an eager set validates every output type at construction");
+        assertEq("TYPE-VALUE-ERROR", ex.err, "an eager set validates every output type at construction");
     }
 }

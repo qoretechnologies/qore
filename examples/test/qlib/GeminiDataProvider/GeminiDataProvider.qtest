@@ -219,7 +219,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
             assertEq(expected, fake.last_request.generationConfig);
         }
         AbstractDataProvider stream = dp.getChildProviderEx("stream-content");
-        assertThrows("RUNTIME-TYPE-ERROR", \stream.doRequest(), ({
+        assertThrows("TYPE-VALUE-ERROR", \stream.doRequest(), ({
             "model": "gemini-3.5-flash", "prompt": "Classify this invoice",
             "generationConfig": {"thinkingConfig": {"thinkingLevel": "invalid"}},
         },));

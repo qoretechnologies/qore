@@ -42,9 +42,9 @@ class OpenApi3UnionAlternativesTest inherits QUnit::Test {
     rejectTest() {
         OpenApi3Schema doc = document();
         AbstractDataProviderType expires_at = fieldType(doc, "Konbini", "expires_at");
-        assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), "tomorrow");
-        assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), 1.5);
-        assertThrows("RUNTIME-TYPE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), True);
+        assertThrows("TYPE-VALUE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), "tomorrow");
+        assertThrows("TYPE-VALUE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), 1.5);
+        assertThrows("TYPE-VALUE-ERROR", "does not match any anyOf", \expires_at.acceptsValue(), True);
     }
 
     serializeTest() {
@@ -79,8 +79,8 @@ class OpenApi3UnionAlternativesTest inherits QUnit::Test {
             "a base64 string is accepted, as the binary data its field gives it");
         assertEq({"content": <0102>}, window.acceptsValue({"content": <0102>}), "binary data is accepted as given");
         assertEq({"days": 3}, window.acceptsValue({"days": 3}));
-        assertThrows("RUNTIME-TYPE-ERROR", "multiple oneOf", \window.acceptsValue(), {"starts": starts, "days": 3});
-        assertThrows("RUNTIME-TYPE-ERROR", "any of the oneOf", \window.acceptsValue(), {});
+        assertThrows("TYPE-VALUE-ERROR", "multiple oneOf", \window.acceptsValue(), {"starts": starts, "days": 3});
+        assertThrows("TYPE-VALUE-ERROR", "any of the oneOf", \window.acceptsValue(), {});
     }
 
     #! Returns a document with the union shape of Stripe's payment method expiry

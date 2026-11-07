@@ -202,7 +202,7 @@ class SchemaExamplesTest inherits QUnit::Test {
             AbstractDataProviderType soft = field.getType();
             assertEq(s{i.key}.getConstraintInfo(), soft.getConstraints(), i.key);
             assertEq(i.value[0].toString(), soft.acceptsValue(i.value[0]).toString(), i.key);
-            assertThrows("RUNTIME-TYPE-ERROR", \soft.acceptsValue(), (i.value[1],), i.key);
+            assertThrows("TYPE-VALUE-ERROR", \soft.acceptsValue(), (i.value[1],), i.key);
 
             # the description of a type with the soft field restores a field with the same example
             HashDataType record("Record");

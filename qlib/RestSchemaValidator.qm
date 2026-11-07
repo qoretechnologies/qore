@@ -84,14 +84,14 @@ module RestSchemaValidator {
     The data types that a REST schema (OpenAPI or Swagger) gives its operations, which are the types of the options
     and fields of REST schema data providers and their actions, follow these rules:
     - the type of an object schema is the type of a request value, which has no field for a property that the schema
-      declares \c readOnly: a request value with such a field is refused with a \c RUNTIME-TYPE-ERROR exception;
+      declares \c readOnly: a request value with such a field is refused with a \c TYPE-VALUE-ERROR exception;
       the type of a response value
       (@ref RestSchemaValidator::AbstractRestSchemaValidator::getResponseDataType() "getResponseDataType()") has the
       read-only properties, and an OpenAPI one has no field for a \c writeOnly property
     - the type of a field for a scalar property enforces the constraints of the property's schema, such as
       \c maxLength, \c maximum, \c pattern and \c enum, before a request is sent, also when it converts a value
-      from a string, and a value that does not meet them is refused with a \c RUNTIME-TYPE-ERROR or
-      \c TYPE-VALUE-ERROR exception; the description of the type gives the constraints
+      from a string, and a value that does not meet them is refused with a \c TYPE-VALUE-ERROR
+      exception; the description of the type gives the constraints
     - the \c default of a property or parameter is the remote default value of its field, which is shown and never
       applied or sent (see @ref dataprovider_remote_default_values)
     - a nullable enumeration, which OpenAPI 3.1 writes as an \c anyOf or \c oneOf of the enumeration and the
@@ -2288,7 +2288,7 @@ public namespace RestSchemaValidator {
             @param candidates schema examples, defaults, and scalar examples in preference order
             @param constraints schema constraints to check even when the field type does not describe them
             @throw QORE-DATA-FIELD-ERROR invalid field construction information
-            @throw RUNTIME-TYPE-ERROR a supplied field value violates its type
+            @throw TYPE-VALUE-ERROR a supplied field value violates its type
         */
         constructor(hash<auto> info, list<auto> candidates, *hash<DataTypeConstraintInfo> constraints)
                 : QoreDataField(info) {

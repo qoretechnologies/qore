@@ -317,13 +317,13 @@ public class KitDataProviderTest inherits QUnit::Test {
 
         # these rejections are intentional: Kit subscribes exactly one address per call, so a
         # joined list or an RFC-5322 display-name form was never a working input
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             et.acceptsValue("a@example.com,b@example.com");
         }, NOTHING, "a comma-joined address list is rejected");
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             et.acceptsValue("Some User <user@example.com>");
         }, NOTHING, "an RFC-5322 display-name address is rejected");
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             et.acceptsValue("not-an-address");
         }, NOTHING, "a value with no @ is rejected");
 

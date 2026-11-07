@@ -516,13 +516,13 @@ public class MistralDataProviderTest inherits QUnit::Test {
         foreach string action in (keys ToolActions) {
             AbstractDataProviderType type;
             getToolAlternatives(action, \type);
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
                 (({"type": "function"},),));
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
                 (({"type": "connector", "library_ids": ("lib-1",)},),));
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
                 (({"type": "file_search"},),));
-            assertThrows("RUNTIME-TYPE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
+            assertThrows("TYPE-VALUE-ERROR", "does not match any oneOf schema", \type.acceptsValue(),
                 ((Tools.CustomConnector + {"authorization": {"type": "basic", "value": "secret"}},),));
         }
     }

@@ -550,10 +550,74 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         return rv;
     }
 
+    #! Returns the error code for reporting an error raised when a part of a value, such as a field, was checked
+    /** A value that a type refuses is reported with \c TYPE-VALUE-ERROR.  A type never refuses a value with one of
+        the %Qore language errors (a type error in the code, a call that no variant accepts, or an exhausted stack),
+        nor with \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the
+        value no longer exists: they mean that the check itself failed, so they keep their code, to be told apart
+        from a value that was refused.
+
+        @param err the code of the error raised when the part of the value was checked
+
+        @return the error code to report: \a err if it is a language error or \c SCHEMA-DOCUMENT-DESTROYED,
+        otherwise \c TYPE-VALUE-ERROR
+
+        @since DataProvider 3.11
+    */
+    static string getValueErrorCode(string err) {
+        switch (err) {
+            case "RUNTIME-TYPE-ERROR":
+            case "RUNTIME-OVERLOAD-ERROR":
+            case "STACK-LIMIT-EXCEEDED":
+            # a schema whose document has been destroyed cannot check the value (see the OpenApi3 and Swagger
+            # modules); this is a condition of the lifetime of the type, not a refused value
+            case "SCHEMA-DOCUMENT-DESTROYED":
+                return err;
+        }
+        return "TYPE-VALUE-ERROR";
+    }
+
+    #! Returns the error code for reporting an error raised when a part of a value that may be missing was checked
+    /** Like getValueErrorCode(), but a part that was refused because it is missing is reported with
+        \c MISSING-VALUE-ERROR; an error that means that the check itself failed keeps its code whether or not the
+        part has a value.
+
+        @param err the code of the error raised when the part of the value was checked
+        @param has_value whether the part of the value exists
+
+        @return the error code to report: \a err if getValueErrorCode() keeps it, otherwise \c TYPE-VALUE-ERROR for
+        a part with a value and \c MISSING-VALUE-ERROR for a missing part
+
+        @since DataProvider 3.11
+    */
+    static string getRefusalErrorCode(string err, bool has_value) {
+        string code = getValueErrorCode(err);
+        if (code != "TYPE-VALUE-ERROR") {
+            return code;
+        }
+        return has_value ? code : "MISSING-VALUE-ERROR";
+    }
+
+    #! Returns True if an error raised when one alternative of a union checked a value means that the check failed
+    /** A union tries its alternatives in turn, and an alternative that refuses the value does not match it.  An
+        error that means that the check itself failed (a call that no variant accepts, an exhausted stack or a schema
+        whose document no longer exists) must be raised instead of trying the next alternative.  \c RUNTIME-TYPE-ERROR
+        is not one of them here, as a type from outside this module may still refuse a value with it.
+
+        @param err the code of the error raised by the alternative
+
+        @return True if the error must be raised instead of trying the next alternative
+
+        @since DataProvider 3.11
+    */
+    static bool isAlternativeCheckFailure(string err) {
+        return err != "RUNTIME-TYPE-ERROR" && getValueErrorCode(err) != "TYPE-VALUE-ERROR";
+    }
+
     #! Checks the given value against the validation constraints of the type
     /** @param value the value to check; values of kinds that no constraint describes are not checked
 
-        @throw RUNTIME-TYPE-ERROR the value violates a constraint
+        @throw TYPE-VALUE-ERROR the value violates a constraint
 
         @since DataProvider 3.8
     */
@@ -574,25 +638,25 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 break;
             case NT_STRING:
                 if (exists constraints.min_length && value.length() < constraints.min_length) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires at least %d character%s; got %d",
+                    throw "TYPE-VALUE-ERROR", sprintf("type %y requires at least %d character%s; got %d",
                         getName(), constraints.min_length, constraints.min_length == 1 ? "" : "s", value.length());
                 }
                 if (exists constraints.max_length && value.length() > constraints.max_length) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y accepts at most %d character%s; got %d",
+                    throw "TYPE-VALUE-ERROR", sprintf("type %y accepts at most %d character%s; got %d",
                         getName(), constraints.max_length, constraints.max_length == 1 ? "" : "s", value.length());
                 }
                 if (constraints.pattern.val() && !regex(value, constraints.pattern)) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("value %y does not match the pattern %y of type %y", value,
+                    throw "TYPE-VALUE-ERROR", sprintf("value %y does not match the pattern %y of type %y", value,
                         constraints.pattern, getName());
                 }
                 break;
             case NT_LIST:
                 if (exists constraints.min_items && value.size() < constraints.min_items) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires at least %d element%s; got %d", getName(),
+                    throw "TYPE-VALUE-ERROR", sprintf("type %y requires at least %d element%s; got %d", getName(),
                         constraints.min_items, constraints.min_items == 1 ? "" : "s", value.size());
                 }
                 if (exists constraints.max_items && value.size() > constraints.max_items) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y accepts at most %d element%s; got %d", getName(),
+                    throw "TYPE-VALUE-ERROR", sprintf("type %y accepts at most %d element%s; got %d", getName(),
                         constraints.max_items, constraints.max_items == 1 ? "" : "s", value.size());
                 }
                 if (constraints.unique_items) {
@@ -600,7 +664,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                     foreach auto element in (value) {
                         string key = sprintf("%s:%y", element.type(), element);
                         if (seen{key}) {
-                            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires unique elements; %y is repeated",
+                            throw "TYPE-VALUE-ERROR", sprintf("type %y requires unique elements; %y is repeated",
                                 getName(), element);
                         }
                         seen{key} = True;
@@ -609,11 +673,11 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 break;
             case NT_HASH:
                 if (exists constraints.min_properties && value.size() < constraints.min_properties) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires at least %d key%s; got %d", getName(),
+                    throw "TYPE-VALUE-ERROR", sprintf("type %y requires at least %d key%s; got %d", getName(),
                         constraints.min_properties, constraints.min_properties == 1 ? "" : "s", value.size());
                 }
                 if (exists constraints.max_properties && value.size() > constraints.max_properties) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y accepts at most %d key%s; got %d", getName(),
+                    throw "TYPE-VALUE-ERROR", sprintf("type %y accepts at most %d key%s; got %d", getName(),
                         constraints.max_properties, constraints.max_properties == 1 ? "" : "s", value.size());
                 }
                 break;
@@ -625,19 +689,19 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         # compare decimal values: a float converted directly to a number carries its binary rounding error
         number n = value.typeCode() == NT_FLOAT ? number(value.toString()) : number(value);
         if (exists constraints.minimum && n < constraints.minimum) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value of at least %s; got %s", getName(),
+            throw "TYPE-VALUE-ERROR", sprintf("type %y requires a value of at least %s; got %s", getName(),
                 constraints.minimum.toString(), n.toString());
         }
         if (exists constraints.maximum && n > constraints.maximum) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value of at most %s; got %s", getName(),
+            throw "TYPE-VALUE-ERROR", sprintf("type %y requires a value of at most %s; got %s", getName(),
                 constraints.maximum.toString(), n.toString());
         }
         if (exists constraints.exclusive_minimum && n <= constraints.exclusive_minimum) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value greater than %s; got %s", getName(),
+            throw "TYPE-VALUE-ERROR", sprintf("type %y requires a value greater than %s; got %s", getName(),
                 constraints.exclusive_minimum.toString(), n.toString());
         }
         if (exists constraints.exclusive_maximum && n >= constraints.exclusive_maximum) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value less than %s; got %s", getName(),
+            throw "TYPE-VALUE-ERROR", sprintf("type %y requires a value less than %s; got %s", getName(),
                 constraints.exclusive_maximum.toString(), n.toString());
         }
         if (constraints.multiple_of) {
@@ -645,7 +709,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             number q = n / constraints.multiple_of;
             number nearest = number((q + (q < 0 ? -0.5n : 0.5n)).toInt());
             if (abs(q - nearest) > 0.000000001n * (abs(q) > 1n ? abs(q) : 1n)) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a multiple of %s; got %s", getName(),
+                throw "TYPE-VALUE-ERROR", sprintf("type %y requires a multiple of %s; got %s", getName(),
                     constraints.multiple_of.toString(), n.toString());
             }
         }

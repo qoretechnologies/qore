@@ -161,6 +161,8 @@ module SqlUtil {
       @ref SqlUtil::Tables::getConnectionValue() "Tables::getConnectionValue()", which reads a value of the connection
       once for all the templates of a cache
       (<a href="https://github.com/qoretechnologies/qore/issues/5584">issue 5584</a>)
+    - a column field treats a default value that its type refuses (\c TYPE-VALUE-ERROR) as an expression for the
+      server; any other error raised when the default value is checked is raised to the caller
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "AbstractDatabase::refreshMaterializedView()"
       and
       @ref SqlUtil::AbstractDatabase::getMaterializedViewRefreshOptions() "AbstractDatabase::getMaterializedViewRefreshOptions()" to refresh the stored data of a materialized view, with

@@ -197,7 +197,7 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         # a type object with the described structure can be created from the description
         AbstractDataProviderType type = AbstractDataProviderType::get(type_info);
         assertEq({"value": "x"}, type.acceptsValue({"value": "x"}));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue({"value": "x", "count": "not a number"}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue({"value": "x", "count": "not a number"}); });
 
         assertEq(action, ProviderIndexUtil::tryGetActionMetadata(CurrentApp, "send"));
         assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadata(CurrentApp, "unknown"));

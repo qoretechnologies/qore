@@ -633,10 +633,10 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         assertEq("https://example.com/a.pdf", url_type.acceptsValue("https://example.com/a.pdf"),
             "an absolute source URL is accepted");
         # this rejection is intentional: PDF.co cannot fetch a scheme-less value
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             url_type.acceptsValue("www.example.com");
         }, NOTHING, "a scheme-less source URL is rejected");
-        assertThrows("RUNTIME-TYPE-ERROR", "not a valid", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "not a valid", sub () {
             url_type.acceptsValue("/local/path/file.pdf");
         }, NOTHING, "a bare filesystem path is rejected as a source URL");
 

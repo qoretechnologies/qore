@@ -52,7 +52,7 @@ public class QoreBoolDataTypeBase inherits QoreDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         # try to convert from a string
@@ -63,7 +63,7 @@ public class QoreBoolDataTypeBase inherits QoreDataType {
             } else if (soft_type) {
                 # check for valid integer values
                 if (value !~ /^([-+])?[0-9]+$/) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("value %y cannot by parsed by type %y; the input data "
+                    throw "TYPE-VALUE-ERROR", sprintf("value %y cannot by parsed by type %y; the input data "
                         "contains non-integer text", value, getName());
                 }
                 value = boolean(value);

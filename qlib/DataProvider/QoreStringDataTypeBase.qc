@@ -104,7 +104,7 @@ public class QoreStringDataTypeBase inherits QoreDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         # the wrapped type defines its own conversion; the generic string conversion below would silently
@@ -120,7 +120,7 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         if (exists value && value !== NULL) {
             if (value.typeCode() != NT_STRING) {
                 if (!accept_type_hash_simple{value.type()}) {
-                    throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y cannot be converted to type %y (val: %y)",
+                    throw "TYPE-VALUE-ERROR", sprintf("value of type %y cannot be converted to type %y (val: %y)",
                         value.type(), getName(), value);
                 }
                 value = string(value, options."string.encoding");

@@ -53,7 +53,7 @@ class OpenApi3ReadOnlyWriteOnlyTest inherits QUnit::Test {
         assertEq(("label",), keys pet.getFields().tags.getType().getElementType().getFields());
         assertEq(("label",), keys pet.getFields().owner.getType().getFields());
         # a request that gives a value for a read-only property is refused, as the schema refuses it
-        assertThrows("RUNTIME-TYPE-ERROR", "property \"id\" is read-only and cannot be included in a request",
+        assertThrows("TYPE-VALUE-ERROR", "property \"id\" is read-only and cannot be included in a request",
             \pet.acceptsValue(), {"id": 1, "name": "Rex"});
         assertEq({"name": "Rex", "secret": "s"}, pet.acceptsValue({"name": "Rex", "secret": "s"}));
     }
@@ -71,7 +71,7 @@ class OpenApi3ReadOnlyWriteOnlyTest inherits QUnit::Test {
         assertEq(("name", "secret", "tags", "owner"), keys request.getFields());
         hash<auto> value = {"id": 1, "name": "Rex", "tags": ({"id": 2, "label": "dog"},)};
         assertEq(value, response.acceptsValue(value));
-        assertThrows("RUNTIME-TYPE-ERROR", "property \"secret\" is write-only and cannot be included in a response",
+        assertThrows("TYPE-VALUE-ERROR", "property \"secret\" is write-only and cannot be included in a response",
             \response.acceptsValue(), {"id": 1, "name": "Rex", "secret": "s"});
     }
 

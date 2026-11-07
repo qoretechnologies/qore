@@ -74,7 +74,7 @@ class SoftListMissingValuesTest inherits QUnit::Test {
             foreach AbstractDataProviderType copy in (type, Serializable::deserialize(type.serialize())) {
                 assertTrue(copy.isMandatory());
                 # like the Qore "list" type, only an "or nothing" soft list accepts no value
-                assertThrows("RUNTIME-TYPE-ERROR", \copy.acceptsValue(), (NOTHING,));
+                assertThrows("TYPE-VALUE-ERROR", \copy.acceptsValue(), (NOTHING,));
                 # a missing element is still validated by the element type
                 assertThrows("ITEM-MISSING", \copy.acceptsValue(), ((NOTHING,),));
                 assertThrows("ITEM-VALUE", \copy.acceptsValue(), (NULL,));
@@ -112,8 +112,8 @@ class SoftListMissingValuesTest inherits QUnit::Test {
             assertEq(NOTHING, type.acceptsValue({}).numbers);
             assertEq(NOTHING, type.acceptsValue({"numbers": NOTHING}).numbers);
             assertEq((1, 2), type.acceptsValue({"numbers": (1, 2)}).numbers);
-            assertThrows("RUNTIME-TYPE-ERROR", "ITEM-MISSING", \type.acceptsValue(), ({"numbers": (NOTHING,)},));
-            assertThrows("RUNTIME-TYPE-ERROR", "ITEM-VALUE", \type.acceptsValue(), ({"numbers": (-1,)},));
+            assertThrows("TYPE-VALUE-ERROR", "ITEM-MISSING", \type.acceptsValue(), ({"numbers": (NOTHING,)},));
+            assertThrows("TYPE-VALUE-ERROR", "ITEM-VALUE", \type.acceptsValue(), ({"numbers": (-1,)},));
             assertEq((0,), type.acceptsValue({"numbers": 0}).numbers);
         }
     }
@@ -185,8 +185,8 @@ class SoftListMissingValuesTest inherits QUnit::Test {
             assertEq(2, occurrences.size());
             assertEq({"id": "one"}, occurrences[0]);
             assertNothing(occurrences[1]);
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ({"rows": ("one",)},));
-            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ({"rows": "one"},));
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), ({"rows": ("one",)},));
+            assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), ({"rows": "one"},));
         }
 
         foreach AbstractDataProviderType type in (required_container,
@@ -228,7 +228,7 @@ class SoftListMissingValuesTest inherits QUnit::Test {
             assertEq(type.getValueType().getName(), restored.getValueType().getName(), label);
             assertEq(("a",), restored.acceptsValue("a"), label);
             assertEq(("a", "b"), restored.acceptsValue(("a", "b")), label);
-            assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), (1,), label);
+            assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), (1,), label);
             # a soft list type is restored as a soft list type; a mandatory Qore soft list type, which converts no
             # value to an empty list, is restored as get(Type) returns it
             if ((type instanceof SoftListDataType) || !type.isMandatory()) {
@@ -250,7 +250,7 @@ class SoftListMissingValuesTest inherits QUnit::Test {
         foreach AbstractDataProviderType type in (new ListDataType(StringType), new ListDataType(StringType, True)) {
             AbstractDataProviderType restored = AbstractDataProviderType::get(type.getInfo());
             assertEq(type.getName(), restored.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), ("a",));
+            assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), ("a",));
             assertEq(("a",), restored.acceptsValue(("a",)));
         }
     }

@@ -88,7 +88,7 @@ class OpenApi3NullableEnumTest inherits QUnit::Test {
     refusalTest() {
         AbstractDataProviderType type = ticket();
         foreach string name in (Nullable) {
-            assertThrows("RUNTIME-TYPE-ERROR", "bogus", \type.acceptsValue(), {name: "bogus"}, name);
+            assertThrows("TYPE-VALUE-ERROR", "bogus", \type.acceptsValue(), {name: "bogus"}, name);
         }
     }
 

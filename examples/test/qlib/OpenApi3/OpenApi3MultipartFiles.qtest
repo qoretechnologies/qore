@@ -177,7 +177,7 @@ class MultipartFilesTest inherits QUnit::Test {
                 error = ex;
             }
             assertTrue(exists error);
-            assertRegex("^(SCHEMA-VALIDATION-ERROR|RUNTIME-TYPE-ERROR|MISSING-VALUE-ERROR)$", error.err);
+            assertRegex("^(SCHEMA-VALIDATION-ERROR|TYPE-VALUE-ERROR|MISSING-VALUE-ERROR)$", error.err);
         }
     }
     private fieldTest() {

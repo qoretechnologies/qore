@@ -191,7 +191,7 @@ class CreateOutputTest inherits QUnit::Test {
 
         hash<GeneratedDataInfo> output = <GeneratedDataInfo>{"data": binary("a,b"), "record_count": 1};
         assertEq(output, GeneratedDataOutputDataType.acceptsValue(output));
-        assertThrows("RUNTIME-TYPE-ERROR", \GeneratedDataOutputDataType.acceptsValue(),
+        assertThrows("TYPE-VALUE-ERROR", \GeneratedDataOutputDataType.acceptsValue(),
             {"data": "not binary", "record_count": 1});
 
         # the type can be extended with provider-specific fields

@@ -102,7 +102,7 @@ public class SuperSoftStringDataType inherits AbstractDataProviderType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
         return getStringValue(value);
@@ -113,7 +113,7 @@ public class SuperSoftStringDataType inherits AbstractDataProviderType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
     */
     static string getStringValue(auto value) {
         switch (value.typeCode()) {
@@ -137,7 +137,7 @@ public class SuperSoftStringDataType inherits AbstractDataProviderType {
                 return regex_subst(trim(make_yaml(value)), "^%YAML [0-9.]+\\n---\\s*", "");
 
             default:
-                throw "RUNTIME-TYPE-ERROR", sprintf("This data type does not accept values of type %y (%y)",
+                throw "TYPE-VALUE-ERROR", sprintf("This data type does not accept values of type %y (%y)",
                     value.fullType(), value);
         }
     }

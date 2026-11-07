@@ -108,19 +108,19 @@ class RequestValidationTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> e) {
                 ex = e;
             }
-            assertEq("RUNTIME-TYPE-ERROR", ex.err, sprintf("%y", req));
+            assertEq("TYPE-VALUE-ERROR", ex.err, sprintf("%y", req));
             assertRegex("expects type 'hash<auto>', but got type '[a-z<>]+' instead", ex.desc, sprintf("%y", req));
-            assertThrows("RUNTIME-TYPE-ERROR", \prov.getRequestTypeWithData(), (req,), sprintf("%y", req));
+            assertThrows("TYPE-VALUE-ERROR", \prov.getRequestTypeWithData(), (req,), sprintf("%y", req));
         }
         assertEq((), prov.getReceived(), "no request reaches the data provider");
     }
 
     testWrongFieldType() {
         OrderRequestProvider prov();
-        assertThrows("RUNTIME-TYPE-ERROR", "mandatory int field \"order_id\".*expects type 'int', but got type "
+        assertThrows("TYPE-VALUE-ERROR", "mandatory int field \"order_id\".*expects type 'int', but got type "
             "'string'", \prov.doRequest(), {"order_id": "forty-two"});
-        assertThrows("RUNTIME-TYPE-ERROR", "field \"note\"", \prov.doRequest(), {"order_id": 42, "note": {"text": "x"}});
-        assertThrows("RUNTIME-TYPE-ERROR", "field \"order_id\"", \prov.getRequestTypeWithData(),
+        assertThrows("TYPE-VALUE-ERROR", "field \"note\"", \prov.doRequest(), {"order_id": 42, "note": {"text": "x"}});
+        assertThrows("TYPE-VALUE-ERROR", "field \"order_id\"", \prov.getRequestTypeWithData(),
             {"order_id": "forty-two"});
         assertEq((), prov.getReceived(), "no request reaches the data provider");
     }
@@ -152,7 +152,7 @@ class RequestValidationTest inherits QUnit::Test {
             ex = e;
         }
         assertEq("INVALID-REQUEST", ex.err);
-        assertEq("RUNTIME-TYPE-ERROR", ex.arg.ex.err);
+        assertEq("TYPE-VALUE-ERROR", ex.arg.ex.err);
         assertEq((), prov.getReceived(), "no request reaches the data provider");
         assertEq({"order_id": 42}, prov.doRequest({"order_id": 42}));
     }

@@ -153,12 +153,6 @@ private:
         }
     }
 
-#ifdef DARWIN
-    DLLLOCAL virtual void setPollNotifyFd(int fd) override {
-        sock->poll_notify_fd.store(fd, std::memory_order_release);
-    }
-#endif
-
     DLLLOCAL virtual bool hasPendingData() const override {
         if (sock->buflen) {
             return true;
