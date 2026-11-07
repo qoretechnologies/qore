@@ -77,6 +77,10 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - an automatic reconnect stops the heartbeat and switches to the resume gateway URL only if no connection was
+      opened after the connection it was started for ended; before, it could stop the heartbeat of the new
+      connection and change the URL while it was being connected
+    - @ref WebSocketClient::EVENT_WS_CONNECTED is raised for each connection, before its data and close events
     - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
       @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
       accepts an optional discovery URL and raises \c DISCORD-ERROR if the response gives no gateway URL
@@ -852,20 +856,24 @@ hash<auto> h = ws.getInfo();
 
     #! Executes before a reconnect
     private reconnectPreamble() {
-        # NOTE: the hartbeat thread will be restarted automatically when the HELLO message is received in the new
-        # connection
-        stopHeartbeatThread();
-        disconnectIntern();
+        # the heartbeat and the URL belong to the client's connection: they are changed in the reconnect's action, and
+        # only if no connection was published after the teardown that the reconnect was started for
+        runInReconnectAction(sub () {
+            # NOTE: the hartbeat thread will be restarted automatically when the HELLO message is received in the new
+            # connection
+            stopHeartbeatThread();
+            disconnectIntern();
 
-        if (!resume_gateway_url) {
-            logWarn("Reconnect message received, but no resume_gateway_url is present");
-        } else {
-            logInfo("Reconnect to %y", resume_gateway_url);
-            url = setupUrl(resume_gateway_url);
-            string http_url = url;
-            http_url =~ s/^ws/http/;
-            http_opts.url = http_url;
-        }
+            if (!resume_gateway_url) {
+                logWarn("Reconnect message received, but no resume_gateway_url is present");
+            } else {
+                logInfo("Reconnect to %y", resume_gateway_url);
+                url = setupUrl(resume_gateway_url);
+                string http_url = url;
+                http_url =~ s/^ws/http/;
+                http_opts.url = http_url;
+            }
+        });
     }
 
     #! Connects to the server when reconnecting
