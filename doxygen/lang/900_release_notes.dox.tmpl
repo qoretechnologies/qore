@@ -1428,6 +1428,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c += on an \c auto lvalue with no value
+      or holding \c NULL lost the complex type of a hash or list operand (ex: <tt>auto v; v += <StatInfo>{};</tt>
+      gave a plain \c hash), and so did Mapper::mapData() with a hashdecl input value; the lvalue now holds the
+      operand with its type, as with the AST interpreter (\c hash<StatInfo> in the example)
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the result of \c += and \c -= on a variable
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as

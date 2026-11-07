@@ -13421,7 +13421,14 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
     ValueHolder value(left.refSelf(), xsink);
     {
         LValueHelper lvh(xsink);
-        lvh.setValue(*value);
+        // the value is computed as for an "auto" lvalue, whose assignment converts nothing, and not for an lvalue
+        // without a type, whose assignment strips the complex type of a container (see
+        // QoreTypeInfo::acceptAssignment()): "auto v; v += <HD>{}" must give the "hash<HD>" that the AST interpreter
+        // gives.  The variables of other untyped declared types, "any" and "auto!", reach this function too; the
+        // store that follows applies the variable's declared type, which strips the complex type for them as their
+        // assignment does in the AST interpreter, and the result of += and -= is read from the variable afterwards
+        // (QoreIRLowering::compoundAssignmentResult())
+        lvh.setValue(*value, autoTypeInfo);
         ValueHolder res(qore_rt_apply_lvalue_compound(lvh, op, rhs_holder, xsink), xsink);
     }
     if (*xsink) {
