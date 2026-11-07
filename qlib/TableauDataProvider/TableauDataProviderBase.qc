@@ -247,13 +247,20 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Checks if a request should be retried
+    /** A transport error in @ref TableauDataProvider::RetrySet "RetrySet" is retried up to
+        @ref TableauDataProvider::MaxRetries "MaxRetries" times after 2, 4 and 8 units of the
+        @ref DataProvider::DataProviderRetryUtil::getTransportRetryDelayUnit() "transport retry delay" (seconds by
+        default), unless the name of the server cannot be resolved; a rate-limited request is retried after the time
+        given by the server.  Nothing is retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed".
+    */
     private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (retries >= MaxRetries) {
+        if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
             return False;
         }
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             ++retries;
-            sleep(pow(2, retries) * 1000ms);
+            DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
             return True;
         }
         if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429) {

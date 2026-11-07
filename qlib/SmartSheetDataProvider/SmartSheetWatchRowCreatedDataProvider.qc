@@ -53,9 +53,12 @@ public class SmartSheetWatchRowCreatedDataProvider inherits SmartSheetWatchDataP
 
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            hash<auto> response = doGet("events", {
-                "since": format_date("YYYY-MM-DDTHH:mm:SS.000Z", now_us() - 24h),
-                "maxCount": 100,
+            # the example data is requested once, without retries
+            hash<auto> response = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doGet("events", {
+                    "since": format_date("YYYY-MM-DDTHH:mm:SS.000Z", now_us() - 24h),
+                    "maxCount": 100,
+                });
             });
             if (response.data) {
                 foreach hash<auto> event in (response.data) {

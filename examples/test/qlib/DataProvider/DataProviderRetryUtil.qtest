@@ -1,0 +1,269 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  DataProviderRetryUtil.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+
+%exec-class DataProviderRetryUtilTest
+
+#! A readable provider that records whether retries were suppressed when its first record was searched
+class RetryRecordingProvider inherits AbstractDataProvider {
+    public {
+        #! retriesSuppressed() for each search, in order
+        list<bool> suppressed = ();
+    }
+
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "RetryRecordingProvider",
+            "supports_read": True,
+        };
+    }
+
+    string getName() {
+        return "retry-recording";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *hash<auto> searchFirstRecordImpl(hash<auto> where_cond, *hash<auto> search_options) {
+        suppressed += DataProviderRetryUtil::retriesSuppressed();
+        return {"id": 1};
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "id": new QoreDataField("id", "the id", IntType),
+        };
+    }
+}
+
+public class DataProviderRetryUtilTest inherits QUnit::Test {
+    private {
+        #! A name that is never resolved (RFC 6761 section 6.4)
+        const UnresolvableUrl = "http://data-provider-retry-util.invalid";
+
+        #! The transport errors retried in the tests
+        const RetrySet = {
+            "SOCKET-CONNECT-ERROR": True,
+            "HTTPCLIENT-CONNECT-ERROR": True,
+        };
+    }
+
+    constructor() : Test("DataProviderRetryUtil Test", "1.0") {
+        addTestCase("name resolution errors", \nameResolutionErrors());
+        addTestCase("real name resolution errors", \realNameResolutionErrors());
+        addTestCase("retriable transport errors", \retriableTransportErrors());
+        addTestCase("retry suppression", \retrySuppression());
+        addTestCase("transport retry delay", \transportRetryDelay());
+        addTestCase("example record", \exampleRecord());
+        set_return_value(main());
+    }
+
+    nameResolutionErrors() {
+        # the error itself
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-CANCELLED"}));
+        # the connection error in the argument, as raised by HttpClientIo
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({
+            "err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "desc": "Domain name not found"},
+        }));
+        # an argument nested in an argument
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({
+            "err": "PROVIDER-ERROR",
+            "arg": {"err": "HTTPCLIENT-CONNECT-ERROR", "arg": {"err": "QOREADDRINFO-GETINFO-ERROR"}},
+        }));
+        # a chained exception
+        assertTrue(DataProviderRetryUtil::isNameResolutionError({
+            "err": "HTTPCLIENT-CONNECT-ERROR",
+            "next": {"err": "SOCKET-CONNECT-ERROR", "next": {"err": "QOREADDRINFO-GETINFO-ERROR"}},
+        }));
+
+        # negative cases
+        assertFalse(DataProviderRetryUtil::isNameResolutionError());
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "SOCKET-CONNECT-ERROR",
+            "desc": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({
+            "err": "HTTPCLIENT-CONNECT-ERROR",
+            "desc": "ares_getaddrinfo() error: Domain name not found",
+            "arg": {"err": "SOCKET-CONNECT-ERROR", "desc": "Connection refused", "arg": 61},
+        }));
+        # an argument that is not an error hash is not searched
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({
+            "err": "REST-RESPONSE-ERROR",
+            "arg": {"body": {"err": "QOREADDRINFO-GETINFO-ERROR"}},
+        }));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": 1, "arg": "QOREADDRINFO-GETINFO-ERROR",
+            "next": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "XQOREADDRINFO-GETINFO-ERROR"}));
+    }
+
+    realNameResolutionErrors() {
+        # the synchronous client raises the resolver's error as it is
+        hash<ExceptionInfo> ex = getError(sub () {
+            RestClient rest({"url": UnresolvableUrl}, True);
+            rest.get("/");
+        });
+        assertRegex("^QOREADDRINFO-", ex.err);
+        assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}));
+
+        # the asynchronous client raises HTTPCLIENT-CONNECT-ERROR with the resolver's error in the argument
+        ex = getError(sub () {
+            RestClientIo rest({"url": UnresolvableUrl});
+            rest.restDoRequest("GET", "/");
+        });
+        assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
+        assertRegex("^QOREADDRINFO-", ex.arg.err);
+        assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
+
+        # a refused connection is not a name resolution failure and is retried
+        string url = sprintf("http://127.0.0.1:%d", getUnusedPort());
+        ex = getError(sub () {
+            RestClientIo rest({"url": url});
+            rest.restDoRequest("GET", "/");
+        });
+        assertTrue(RetrySet{ex.err}, ex.err);
+        assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
+    }
+
+    retriableTransportErrors() {
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-TIMEOUT"}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "REST-RESPONSE-ERROR",
+            "arg": {"status_code": 503}}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({}, RetrySet));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, {}));
+        assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR"}}, RetrySet));
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "SOCKET-CONNECT-ERROR"}}, RetrySet));
+        # no transport error is retried while retries are suppressed
+        assertFalse(DataProviderRetryUtil::runWithoutRetries(
+            bool sub () {
+                return DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, RetrySet);
+            }));
+    }
+
+    retrySuppression() {
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+        # the code's value is returned
+        assertEq(2, DataProviderRetryUtil::runWithoutRetries(int sub () {
+            assertTrue(DataProviderRetryUtil::retriesSuppressed());
+            # nested calls keep retries suppressed until the outermost call returns
+            int rv = DataProviderRetryUtil::runWithoutRetries(int sub () {
+                assertTrue(DataProviderRetryUtil::retriesSuppressed());
+                return 1;
+            });
+            assertTrue(DataProviderRetryUtil::retriesSuppressed());
+            return rv + 1;
+        }));
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+
+        # the suppression ends when the code raises an exception
+        assertThrows("RETRY-TEST-ERROR", sub () {
+            DataProviderRetryUtil::runWithoutRetries(sub () {
+                DataProviderRetryUtil::runWithoutRetries(sub () {
+                    throw "RETRY-TEST-ERROR";
+                });
+            });
+        });
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+
+        # other threads are not affected
+        Queue q();
+        DataProviderRetryUtil::runWithoutRetries(sub () {
+            background q.push(DataProviderRetryUtil::retriesSuppressed());
+            assertFalse(q.get());
+        });
+    }
+
+    transportRetryDelay() {
+        assertEq(1s, DataProviderRetryUtil::DefaultTransportRetryDelayUnit);
+        date orig = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        assertEq(DataProviderRetryUtil::DefaultTransportRetryDelayUnit, orig);
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig);
+
+        # with the default unit, the delay is the number of units in seconds
+        assertEq(8s, DataProviderRetryUtil::getTransportRetryDelay(8));
+        assertEq(1500ms, DataProviderRetryUtil::getTransportRetryDelay(1.5));
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelay(0));
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelay(-1));
+
+        DataProviderRetryUtil::setTransportRetryDelayUnit(5ms);
+        assertEq(5ms, DataProviderRetryUtil::getTransportRetryDelayUnit());
+        assertEq(40ms, DataProviderRetryUtil::getTransportRetryDelay(pow(2, 3)));
+
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelay(8));
+        # a zero delay returns at once
+        DataProviderRetryUtil::waitTransportRetry(8);
+
+        # a negative unit is refused and the unit is kept
+        assertThrows("TRANSPORT-RETRY-DELAY-ERROR", \DataProviderRetryUtil::setTransportRetryDelayUnit(), -1ms);
+        assertEq(0s, DataProviderRetryUtil::getTransportRetryDelayUnit());
+    }
+
+    exampleRecord() {
+        RetryRecordingProvider prov();
+        # the example record is searched without retries
+        assertEq({"id": 1}, prov.getExampleRecordData());
+        # a search for records is retried
+        assertEq({"id": 1}, prov.searchFirstRecord({}));
+        assertEq((True, False), prov.suppressed);
+    }
+
+    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
+    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
+        use on the host, for example by a listener of another test run at the same time
+    */
+    private static int getUnusedPort() {
+        Socket s();
+        s.bindINET("127.0.0.1", "0", False, AF_INET);
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
+    }
+
+    #! Returns the exception raised by the given code
+    private hash<ExceptionInfo> getError(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "the code did not raise an exception";
+    }
+}

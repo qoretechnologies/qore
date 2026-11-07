@@ -223,7 +223,9 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
 
     #! Makes a request to the WooCommerce API and returns the response
     /** Transport errors are retried up to @ref MaxRetries times: errors in @ref RetrySet for all requests, and
-        errors in @ref IdempotentRetrySet for requests with an idempotent method.
+        errors in @ref IdempotentRetrySet for requests with an idempotent method; a request that failed because the
+        name of the server cannot be resolved is not retried (see
+        @ref DataProvider::DataProviderRetryUtil::isRetriableTransportError() "isRetriableTransportError()").
 
         @param method the HTTP method
         @param path the API path, including any query string
@@ -243,7 +245,8 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
                 if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
                     throwApiError(ex.arg);
                 }
-                bool retriable = IdempotentMethods{method} ? IdempotentRetrySet{ex.err} : RetrySet{ex.err};
+                bool retriable = DataProviderRetryUtil::isRetriableTransportError(ex,
+                    IdempotentMethods{method} ? IdempotentRetrySet : RetrySet);
                 if (retriable && ++retries <= MaxRetries) {
                     log(LoggerLevel::WARN, "WooCommerce %s %s: %s: %s; retrying (%d/%d)", method, path, ex.err,
                         ex.desc, retries, MaxRetries);

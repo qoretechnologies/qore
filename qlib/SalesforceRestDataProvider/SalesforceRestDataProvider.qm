@@ -248,6 +248,9 @@ module SalesforceRestDataProvider {
     @section salesforcerestdataprovider_relnotes Release Notes
 
     @subsection salesforcerestdataprovider_v2_1 SalesforceRestDataProvider v2.1
+    - a request that failed because the name of the server cannot be resolved is no longer retried, and no
+      request is retried while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed"
+      (see @ref dataprovider_retries)
     - declared \c SalesforcePubSubDataProvider as an optional child module, so that an installed Salesforce
       Pub/Sub API event source attaches itself without the consumer having to load it explicitly
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)

@@ -110,6 +110,22 @@ class FakeTableauHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A Tableau REST client that counts the requests made through it
+class CountingTableauRestClientIo inherits TableauRestClient::TableauRestClientIo {
+    public {
+        #! the number of requests made
+        int requests = 0;
+    }
+
+    constructor(hash<auto> opts) : TableauRestClient::TableauRestClientIo(opts) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        ++requests;
+        return TableauRestClient::TableauRestClientIo::restDoRequest(method, path, body, hdr);
+    }
+}
+
 public class TableauDataProviderTest inherits QUnit::Test {
     private {
         #! Tableau REST client for integration tests
@@ -149,6 +165,9 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("local server tests", \localServerTests());
         addTestCase("url option tests", \urlOptionTests());
         addTestCase("connection url tests", \connectionUrlTests());
+        addTestCase("transport retry tests", \transportRetryTests());
+        addTestCase("example data request tests", \exampleDataRequestTests());
+        addTestCase("name resolution tests", \nameResolutionTests());
 
         # Integration tests (require Tableau credentials)
         addTestCase("integration tests", \integrationTests());
@@ -847,6 +866,90 @@ public class TableauDataProviderTest inherits QUnit::Test {
         list<hash<auto>> updates = ();
         conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
         assertEq(({"url": "tableaures://pod.online.tableau.com/api/3.24"},), updates);
+    }
+
+    #! Transport errors are retried after the configured delay
+    transportRetryTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        # a refused connection is retried
+        CountingTableauRestClientIo rest = getRefusingClient();
+        AbstractDataProvider projects = new TableauDataProvider::TableauDataProvider({"tableaurestclient": rest})
+            .getChildProviderEx("projects");
+        try {
+            projects.searchRecords();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(TableauDataProvider::RetrySet{ex.err}, ex.err);
+            assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
+        }
+        assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
+    }
+
+    #! Example data is requested once, and the fake data is returned when the request fails
+    exampleDataRequestTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        CountingTableauRestClientIo rest = getRefusingClient();
+        TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});
+        foreach string event in ("watch-projects", "watch-datasources") {
+            rest.requests = 0;
+            auto example = provider.getChildProviderPath("events/" + event).getExampleEventData(event);
+            assertTrue(example.name.val(), event);
+            assertEq(1, rest.requests, event);
+        }
+
+        # retries are suppressed only while the example data is requested
+        assertFalse(DataProviderRetryUtil::retriesSuppressed());
+        rest.requests = 0;
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \provider.getChildProviderEx("projects").searchRecords());
+        assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
+    }
+
+    #! A name that cannot be resolved is not retried
+    nameResolutionTests() {
+        CountingTableauRestClientIo rest({
+            "token_name": "pat-name",
+            "token_secret": "pat-secret",
+            "url": "http://tableau-retry-test.invalid/api/3.27",
+        });
+        AbstractDataProvider projects = new TableauDataProvider::TableauDataProvider({"tableaurestclient": rest})
+            .getChildProviderEx("projects");
+        try {
+            projects.searchRecords();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
+            assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
+        }
+        assertEq(1, rest.requests);
+    }
+
+    #! Returns a counting client for a port that refuses connections
+    private static CountingTableauRestClientIo getRefusingClient() {
+        return new CountingTableauRestClientIo({
+            "token_name": "pat-name",
+            "token_secret": "pat-secret",
+            "url": sprintf("http://127.0.0.1:%d/api/3.27", getUnusedPort()),
+        });
+    }
+
+    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
+    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
+        use on the host, for example by a listener of another test run at the same time
+    */
+    private static int getUnusedPort() {
+        Socket s();
+        s.bindINET("127.0.0.1", "0", False, AF_INET);
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
     }
 
     #! Requests against a local server

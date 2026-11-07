@@ -139,7 +139,10 @@ public class WooCommerceBaseEventDataProvider inherits WooCommerceDataProviderBa
     #! Returns example event data for UI preview
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            auto response = doGet(getResourcePath(), {"per_page": "1"});
+            # the example data is requested once, without retries
+            auto response = DataProviderRetryUtil::runWithoutRetries(auto sub () {
+                return doGet(getResourcePath(), {"per_page": "1"});
+            });
             if (response.typeCode() == NT_LIST && response.size() > 0) {
                 return response[0];
             }
