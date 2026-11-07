@@ -42,6 +42,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QuicSession.h"
 
 #include <map>
 #include <memory>
@@ -1804,6 +1805,252 @@ static void ut_event_loop_registrations(UnitTestCounters& c) {
     ::close(sv[0]);
     ::close(sv[1]);
 }
+
+#ifdef DEBUG
+//! A temporary regular file, opened for reading and writing; closed and removed on destruction
+struct UtRegularFile {
+    char path[64] = {};
+    int fd = -1;
+
+    DLLLOCAL ~UtRegularFile() {
+        if (fd >= 0) {
+            ::close(fd);
+        }
+        if (path[0]) {
+            unlink(path);
+        }
+    }
+
+    //! makes the file with some data, positioned at its end; returns false on error
+    DLLLOCAL bool open() {
+        strcpy(path, "/tmp/qore-ut-file-XXXXXX");
+        fd = mkstemp(path);
+        if (fd < 0) {
+            path[0] = '\0';
+            return false;
+        }
+        return ::write(fd, "data", 4) == 4;
+    }
+};
+
+//! A regular file is reported ready like an edge-triggered descriptor, and a close or a reuse of its number is seen
+/** poll(2) reports a regular file always ready; epoll refuses one and kqueue reports one readable only before its
+    end, so a wait for one lasted until its timeout.  Reporting it at every poll made an owner that waits for it with
+    something else, without reading it, spin; it is reported when it is registered, when its registrations or events
+    change and when rearmAlwaysReady() is called, and a closed file is reported once with an error and dropped
+*/
+static void ut_event_loop_always_ready(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "always ready: the event loop is created");
+    UtRegularFile file;
+    int sv[2];
+    if (xsink || !file.open() || socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        UT_ASSERT(c, false, "always ready: a regular file and a socket pair are made");
+        xsink.clear();
+        return;
+    }
+    int a = 0, b = 0;
+
+    // a new registration is reported once, at its end of file too
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 1, QORE_EV_READ | QORE_EV_WRITE, &a, &xsink),
+        "always ready: the file is registered");
+    UT_ASSERT(c, loop.dbgIsAlwaysReady(file.fd), "always ready: the file is not registered with the system");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgAlwaysReadyCount()), "always ready: one always-ready descriptor");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgArmedCount()), "always ready: the new registration is armed");
+    auto ev = ut_event_loop_poll_keys(loop, file.fd);
+    UT_ASSERT(c, ev.size() == 1 && ev.count(1) && ev[1].first == (QORE_EV_READ | QORE_EV_WRITE) && ev[1].second == &a,
+        "always ready: the file is reported ready for its events at its end");
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedCount()), "always ready: the report disarms it");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, file.fd).empty(), "always ready: it is not reported again by itself");
+
+    // the same events again do not arm it; a change of the events, a new registration or a rearm does
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 1, QORE_EV_READ | QORE_EV_WRITE, &a, &xsink),
+        "always ready: the same events are given again");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, file.fd).empty(),
+        "always ready: the same events given again are not reported");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 1, QORE_EV_READ, &a, &xsink), "always ready: the events change");
+    ev = ut_event_loop_poll_keys(loop, file.fd);
+    UT_ASSERT(c, ev.size() == 1 && ev[1].first == QORE_EV_READ, "always ready: changed events are reported");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(file.fd, 2, QORE_EV_WRITE, &b, &xsink),
+        "always ready: a second registration is added");
+    ev = ut_event_loop_poll_keys(loop, file.fd);
+    UT_ASSERT(c, ev.size() == 2 && ev[1].first == QORE_EV_READ && ev[2].first == QORE_EV_WRITE && ev[2].second == &b,
+        "always ready: each registration gets its events when one is added");
+    loop.rearmAlwaysReady(file.fd);
+    UT_ASSERT_EQ(c, 2, static_cast<int>(ut_event_loop_poll_keys(loop, file.fd).size()),
+        "always ready: a rearm reports it again");
+    loop.rearmAlwaysReady(sv[0]);
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedCount()), "always ready: a rearm of another descriptor is ignored");
+
+    // a mixed set: the file and a socket in the same poll
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 1, QORE_EV_READ, &a, &xsink), "always ready: a socket is added");
+    UT_ASSERT(c, ::write(sv[1], "x", 1) == 1, "always ready: the socket's peer writes");
+    loop.rearmAlwaysReady(file.fd);
+    {
+        std::vector<QoreEventInfo> events;
+        loop.poll(events, 0, &xsink);
+        int file_events = 0, sock_events = 0;
+        for (const QoreEventInfo& e : events) {
+            if (e.fd == file.fd) {
+                ++file_events;
+            } else if (e.fd == sv[0]) {
+                ++sock_events;
+            }
+        }
+        UT_ASSERT(c, file_events == 2 && sock_events == 1, "always ready: a poll reports the file and the socket");
+    }
+    UT_ASSERT_EQ(c, 0, loop.removeRegistration(sv[0], 1, &xsink), "always ready: the socket is removed");
+
+    // the last registration removes it
+    loop.removeRegistration(file.fd, 2, &xsink);
+    loop.removeRegistration(file.fd, 1, &xsink);
+    UT_ASSERT(c, !loop.size() && !loop.dbgAlwaysReadyCount() && !loop.dbgArmedCount(),
+        "always ready: removed with its last registration");
+
+    // a closed file is reported once with an error and dropped
+    UtRegularFile closed;
+    UT_ASSERT(c, closed.open(), "always ready: a second file is made");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(closed.fd, 1, QORE_EV_READ, &a, &xsink),
+        "always ready: the second file is registered");
+    int closed_fd = closed.fd;
+    ::close(closed.fd);
+    closed.fd = -1;
+    ev = ut_event_loop_poll_keys(loop, closed_fd);
+    UT_ASSERT(c, ev.size() == 1 && (ev[1].first & QORE_EV_ERROR), "always ready: a closed file is reported with an error");
+    UT_ASSERT(c, !loop.size() && !loop.dbgAlwaysReadyCount(), "always ready: the closed file is dropped");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, closed_fd).empty(), "always ready: a dropped file is not reported again");
+
+    // a file whose number is given to another file before it is reported is reported with an error and dropped
+    UtRegularFile replaced;
+    UT_ASSERT(c, replaced.open(), "always ready: a third file is made");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(replaced.fd, 1, QORE_EV_READ, &a, &xsink),
+        "always ready: the third file is registered");
+    UT_ASSERT(c, ::dup2(file.fd, replaced.fd) == replaced.fd, "always ready: its number is given to another file");
+    ev = ut_event_loop_poll_keys(loop, replaced.fd);
+    UT_ASSERT(c, ev.size() == 1 && (ev[1].first & QORE_EV_ERROR),
+        "always ready: a file whose number has another file is reported with an error");
+    UT_ASSERT(c, !loop.size(), "always ready: the replaced file is dropped");
+
+    // a registration follows its number when it is changed: from a regular file to a socket, and back
+    int moving = ::dup(file.fd);
+    UT_ASSERT(c, moving >= 0, "always ready: a file descriptor to move is made");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(moving, 1, QORE_EV_READ, &a, &xsink), "always ready: the file is added");
+    ut_event_loop_poll_keys(loop, moving);
+    // the socket's description is referred to by the moved number only, so that the system drops its registration
+    // when the number is given to the file again, as for a socket that is closed
+    int sp[2];
+    UT_ASSERT(c, !socketpair(AF_UNIX, SOCK_STREAM, 0, sp), "always ready: a socket pair to move to is made");
+    UT_ASSERT(c, ::dup2(sp[0], moving) == moving, "always ready: the number is given to a socket");
+    ::close(sp[0]);
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(moving, 1, QORE_EV_READ | QORE_EV_WRITE, &a, &xsink),
+        "always ready: the registration is changed");
+    UT_ASSERT(c, !loop.dbgIsAlwaysReady(moving) && !loop.dbgAlwaysReadyCount(),
+        "always ready: the registration moved to the system with the socket");
+    ev = ut_event_loop_poll_keys(loop, moving);
+    UT_ASSERT(c, ev.size() == 1 && (ev[1].first & QORE_EV_WRITE), "always ready: the socket's events are reported");
+    UT_ASSERT(c, ::dup2(file.fd, moving) == moving, "always ready: the number is given to a regular file again");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(moving, 1, QORE_EV_READ, &a, &xsink),
+        "always ready: the registration is changed again");
+    UT_ASSERT(c, loop.dbgIsAlwaysReady(moving) && loop.dbgAlwaysReadyCount() == 1,
+        "always ready: the registration moved back to the regular file");
+    ev = ut_event_loop_poll_keys(loop, moving);
+    UT_ASSERT(c, ev.size() == 1 && ev[1].first == QORE_EV_READ, "always ready: the moved registration is reported");
+    loop.removeRegistration(moving, 1, &xsink);
+    ::close(moving);
+    ::close(sp[1]);
+
+#ifdef DARWIN
+    // a named pipe and a regular file move into each other
+    UtFifo fifo;
+    if (fifo.open()) {
+        int num = ::dup(fifo.r);
+        UT_ASSERT_EQ(c, 0, loop.addRegistration(num, 1, QORE_EV_READ, &a, &xsink), "always ready: a named pipe is added");
+        UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgFifoCount()), "always ready: one named pipe");
+        UT_ASSERT(c, ::dup2(file.fd, num) == num, "always ready: the pipe's number is given to a regular file");
+        UT_ASSERT_EQ(c, 0, loop.addRegistration(num, 1, QORE_EV_READ | QORE_EV_WRITE, &a, &xsink),
+            "always ready: the pipe's registration is changed");
+        UT_ASSERT(c, !loop.dbgFifoCount() && loop.dbgIsAlwaysReady(num),
+            "always ready: the registration moved from the named pipe to the regular file");
+        UT_ASSERT(c, ::dup2(fifo.r, num) == num, "always ready: the number is given to the named pipe again");
+        UT_ASSERT_EQ(c, 0, loop.addRegistration(num, 1, QORE_EV_READ, &a, &xsink),
+            "always ready: the file's registration is changed");
+        UT_ASSERT(c, loop.dbgFifoCount() == 1 && !loop.dbgAlwaysReadyCount(),
+            "always ready: the registration moved from the regular file to the named pipe");
+        loop.removeRegistration(num, 1, &xsink);
+        ::close(num);
+        UT_ASSERT(c, !loop.dbgFifoCount(), "always ready: the named pipe is removed");
+    } else {
+        UT_ASSERT(c, false, "always ready: a named pipe is made");
+    }
+#endif
+
+    // a directory, which the system cannot wait for and which is not a regular file, is refused
+    int dir = ::open("/tmp", O_RDONLY);
+    UT_ASSERT(c, dir >= 0, "always ready: a directory is opened");
+    UT_ASSERT_EQ(c, -1, loop.addRegistration(dir, 1, QORE_EV_READ, &a, &xsink), "always ready: a directory is refused");
+    UT_ASSERT(c, xsink && !loop.size(), "always ready: the refusal raises an exception and registers nothing");
+    xsink.clear();
+    ::close(dir);
+    UT_ASSERT(c, !xsink, "always ready: no error");
+    xsink.clear();
+    ::close(sv[0]);
+    ::close(sv[1]);
+}
+
+#ifdef DARWIN
+//! A descriptor registered only for writing is removed from the kqueue
+/** The read and write filters were deleted in one kevent() call, which stops at the first change that fails: the
+    read filter that the descriptor does not have (ENOENT) left the write filter registered, and as a connected socket
+    is always writable, every kevent() of the I/O thread then returned at once (one CPU core spinning while an
+    operation waited on another socket).  poll() skips the stale event, so the check looks at the kqueue itself.
+*/
+static void ut_event_loop_remove_write_only_registration(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "write-only removal: the event loop is created");
+    int sv[2];
+    if (xsink || socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        xsink.clear();
+        return;
+    }
+    int a = 0;
+    auto kqueue_empty = [&loop]() -> bool {
+        struct kevent kev;
+        struct timespec ts = {0, 0};
+        return !kevent(loop.getKqueueFd(), nullptr, 0, &kev, 1, &ts);
+    };
+    int64_t unmatched = QoreEventLoop::dbgUnmatchedKernelEvents();
+
+    // add() and remove()
+    UT_ASSERT_EQ(c, 0, loop.add(sv[0], QORE_EV_WRITE, &a, &xsink), "write-only removal: a write registration is added");
+    UT_ASSERT(c, !ut_event_loop_poll_keys(loop, sv[0]).empty(), "write-only removal: the socket is writable");
+    loop.remove(sv[0], &xsink);
+    UT_ASSERT(c, kqueue_empty(), "write-only removal: the kqueue has no filter once the descriptor is removed");
+
+    // the registrations of the controller
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 7, QORE_EV_WRITE, &a, &xsink),
+        "write-only removal: a keyed write registration is added");
+    loop.removeRegistration(sv[0], 7, &xsink);
+    UT_ASSERT(c, kqueue_empty(), "write-only removal: the kqueue has no filter after the keyed registration");
+
+    // a write registration changed to a read registration, then removed
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 1, QORE_EV_WRITE, &a, &xsink),
+        "write-only removal: a write registration is added again");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 1, QORE_EV_READ, &a, &xsink),
+        "write-only removal: it is changed to a read registration");
+    loop.removeRegistration(sv[0], 1, &xsink);
+    UT_ASSERT(c, kqueue_empty(), "write-only removal: the kqueue has no filter after a write-then-read registration");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, sv[0]).empty(), "write-only removal: no event is reported");
+    UT_ASSERT_EQ(c, unmatched, QoreEventLoop::dbgUnmatchedKernelEvents(),
+        "write-only removal: no system event matched no registration");
+    UT_ASSERT(c, !xsink, "write-only removal: no error");
+    xsink.clear();
+    ::close(sv[0]);
+    ::close(sv[1]);
+}
+#endif
+#endif
 
 #ifdef DEBUG
 //! Closes the socket pairs of a test on destruction
@@ -5275,20 +5522,20 @@ public:
         }
     }
 
-    //! An extra fd that epoll cannot wait for is not left registered or held for the operation
+    //! An extra fd that the event loop refuses is not left registered or held for the operation
     /** The controller forgot an extra fd that the event loop refused, but a registration that the operation had for it
         stayed in the event loop, and the hold of an owned descriptor stayed in the I/O thread, which then kept the
-        descriptor open until it exited.  Linux only: epoll cannot wait for /dev/null (EPERM).
-        - "owned": the operation waits for an owned descriptor of /dev/null, which the event loop reports always ready,
-          as poll(2) does (see QoreEventLoop::always_ready_count); when the owner gives it up and the operation no
-          longer waits for it, it is closed.
+        descriptor open until it exited.  The event loop refuses /dev/null, a character device that neither epoll
+        (EPERM) nor kqueue (EINVAL) can wait for, and that is not a regular file (see
+        QoreEventLoop::always_ready_count).
+        - "owned": the operation waits for an owned descriptor of /dev/null, which the event loop refuses; when the
+          owner gives it up, it is closed.
         - "by number": the operation waits for a socket by number, whose number then goes to a copy of /dev/null, as a
           close by another thread and a reuse would, and the operation waits for the number again, also for writing:
-          epoll refuses the change of the stale registration, and the operation's registration of the number is
-          removed.
+          the event loop refuses the change, and the operation's registration of the number is removed.
     */
     static void runRefusedExtraFd(UnitTestCounters& c) {
-#ifdef __linux__
+#if defined(__linux__) || defined(DARWIN)
         for (bool by_number : {false, true}) {
             const char* v = by_number ? "by number" : "owned";
             ExceptionSink xsink;
@@ -13414,6 +13661,61 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: holds the callbacks of timers that fire from now on (True) or dispatches them again (False)
+static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgHoldTimerCallbacks(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until at least the given number of timer callbacks are held; False if the wait timed out
+static QoreValue f_dbg_async_io_wait_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    return AsyncIoControllerPriv::dbgWaitHeldTimerCallbacks(count < 0 ? 0 : static_cast<size_t>(count),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: runs the timer callbacks held, waits for them to complete, and returns their number
+static QoreValue f_dbg_async_io_release_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(xsink));
+}
+
+//! Debug-only: the number of system events that matched no event loop registration in the process
+/** See QoreEventLoop::dbgUnmatchedKernelEvents(): a registration left in the kqueue or the epoll set wakes every poll
+    at once
+*/
+static QoreValue f_dbg_event_loop_unmatched_kernel_events(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreEventLoop::dbgUnmatchedKernelEvents();
+}
+
+//! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
+static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
+    return *xsink ? QoreValue() : QoreValue(total);
+}
+
+//! Debug-only: the number of QUIC packets processed by client and server connections: {"client": int, "server": int}
+static QoreValue f_dbg_quic_packets_received(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t client, server;
+    qore_quic_test_packets_received(client, server);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("client", client, xsink);
+    h->setKeyValue("server", server, xsink);
+    return h.release();
+}
+
+//! Debug-only: waits until client and server connections have processed at least the given numbers of QUIC packets
+static QoreValue f_dbg_quic_wait_packets_received(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t client = get_param_value(params, 0).getAsBigInt();
+    int64_t server = get_param_value(params, 1).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 2).getAsBigInt();
+    return qore_quic_test_wait_packets_received(client, server, timeout_ms);
+}
+
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
     controller-backed sync socket calls without racing an actual close()
@@ -14300,6 +14602,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_event_loop_registrations(c);
     ut_event_loop_fifo_registrations(c);
 #ifdef DEBUG
+    ut_event_loop_always_ready(c);
+#ifdef DARWIN
+    ut_event_loop_remove_write_only_registration(c);
+#endif
     ut_event_loop_poll_buffer_reuse(c);
     ut_event_loop_poll_many_descriptors(c);
 #ifdef DARWIN
@@ -16406,6 +16712,27 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, bigIntTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_hold_timer_callbacks", f_dbg_async_io_hold_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_release_held_timer_callbacks", f_dbg_async_io_release_held_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_event_loop_unmatched_kernel_events", f_dbg_event_loop_unmatched_kernel_events,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_quic_packets_received", f_dbg_quic_packets_received,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_wait_packets_received", f_dbg_quic_wait_packets_received,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "client",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "server",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");

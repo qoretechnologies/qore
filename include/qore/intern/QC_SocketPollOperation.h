@@ -207,7 +207,8 @@ private:
 
 class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
 public:
-    DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock);
+    //! Creates the operation; @p write_only shuts down the sending side only (a half-close)
+    DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock, bool write_only = false);
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
@@ -242,6 +243,8 @@ public:
 private:
     int rc = 0;
     bool done = false;
+    //! true to shut down the sending side only, in which case an error is raised as an exception
+    bool write_only;
 };
 
 class SocketSetupPollOperation : public SocketPollSocketOperationBase {
@@ -2070,6 +2073,8 @@ private:
     //! fast on a closed port: if PTO retransmits manage to handshake within
     //! the window, recvmsg() returns data and we never check this deadline.
     int64_t econnrefused_deadline_ns_ = 0;
+    //! The grace period of @ref econnrefused_deadline_ns_, for the error message
+    int64_t econnrefused_grace_ns_ = 0;
 
 #ifdef DEBUG
     //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS

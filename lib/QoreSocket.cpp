@@ -9573,8 +9573,8 @@ int SocketShutdownSslPollState::continuePoll(ExceptionSink* xsink) {
     return ssl->startShutdown(xsink);
 }
 
-SocketShutdownPollOperation::SocketShutdownPollOperation(QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock) {
+SocketShutdownPollOperation::SocketShutdownPollOperation(QoreSocketObject* sock, bool write_only)
+        : SocketPollSocketOperationBase(sock), write_only(write_only) {
 }
 
 QoreHashNode* SocketShutdownPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -9589,8 +9589,23 @@ QoreHashNode* SocketShutdownPollOperation::continuePoll(ExceptionSink* xsink) {
         return nullptr;
     }
 
-    rc = qore_socket_private::get(*priv->socket)->shutdown_direct();
+    qore_socket_private* qsp = qore_socket_private::get(*priv->socket);
+    if (!write_only) {
+        rc = qsp->shutdown_direct();
+        done = true;
+        return nullptr;
+    }
+
     done = true;
+    if (!qsp->isOpen()) {
+        se_not_open("Socket", "shutdownWrite", xsink);
+        return nullptr;
+    }
+    rc = qsp->shutdown_write_direct();
+    if (rc) {
+        xsink->raiseErrnoException("SOCKET-SHUTDOWN-ERROR", errno, "error shutting down the sending side of the "
+            "connection");
+    }
     return nullptr;
 }
 

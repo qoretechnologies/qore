@@ -970,7 +970,12 @@ public class CookieHelper {
     \c Content-Length; reading such a value as a number (as a general conversion does) gives a different length than
     another parser would, which is how a request is smuggled or its body is waited for until the connection times out.
 
-    @param value the header value; leading and trailing white space is ignored
+    A \c Content-Length field that a request has more than once is received as a list of values, which is not valid
+    either (RFC 9112 section 6.3: a server responds with 400 and closes the connection; reading one of the values would
+    make another parser that reads the other one see a different request).
+
+    @param value the header value; leading and trailing white space is ignored; a list (the field received more than
+    once) is not valid
 
     @return the length in octets, or @ref nothing if the value is not a valid \c Content-Length (at most 18 digits)
 
@@ -984,8 +989,8 @@ if (!exists len) {
 
     @since %HttpServerUtil 1.6
 */
-public *int sub http_parse_content_length(*string value) {
-    if (!exists value) {
+public *int sub http_parse_content_length(auto value) {
+    if (value.typeCode() != NT_STRING) {
         return;
     }
     string v = trim(value);

@@ -52,6 +52,15 @@
 
 #include <atomic>
 
+#ifdef DEBUG
+//! The system events that matched no registration, in every loop of the process; see dbgUnmatchedKernelEvents()
+static std::atomic<int64_t> dbg_unmatched_kernel_events{0};
+
+int64_t QoreEventLoop::dbgUnmatchedKernelEvents() {
+    return dbg_unmatched_kernel_events.load(std::memory_order_relaxed);
+}
+#endif
+
 //! Returns the current wall-clock time in microseconds since the Unix epoch (CLOCK_REALTIME).
 /** Used only for comparing against user-supplied absolute deadlines (\c addTimer() deadlines
     come from \c DateTime::getEpochMicrosecondsUTC() and must therefore be compared in
@@ -195,14 +204,15 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
         }
 #endif
         FdWait wait;
-        if (kernelAttach(fd, events, udata, wait, xsink)) {
+        struct stat st;
+        if (kernelAttach(fd, events, udata, wait, st, xsink)) {
             return -1;
         }
         FdInfo& info = fd_map[fd];
         info.events = events;
         info.udata = udata;
         info.regs[key] = {events, udata};
-        setWait(info, wait);
+        setAttached(info, wait, st);
         return 0;
     }
 
@@ -231,6 +241,11 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
         return -1;
     }
     info.events = all;
+    // a regular file is reported again when a registration is added or changes its events, not when it is given the
+    // same events again, which its owner does when it waits again for something else (see always_ready_count)
+    if (info.always_ready && (!existed || prev.events != events)) {
+        setArmed(info, true);
+    }
     return 0;
 }
 
@@ -248,8 +263,9 @@ int QoreEventLoop::removeRegistration(int fd, uint64_t key, ExceptionSink* xsink
     void* removed_udata = rit->second.udata;
     info.regs.erase(rit);
     if (info.regs.empty()) {
-        // a named pipe and an always-ready descriptor are not registered with the system
+        // a named pipe and a regular file are not registered with the system
         const bool kernel = !info.fifo && !info.always_ready;
+        setArmed(info, false);
         setWait(info, FdWait::Kernel);
         fd_map.erase(it);
 #ifdef DEBUG
@@ -272,14 +288,28 @@ int QoreEventLoop::removeRegistration(int fd, uint64_t key, ExceptionSink* xsink
         return 0;
     }
     info.events = all;
-    return kernelUpdate(fd, info, all, xsink);
+    if (kernelUpdate(fd, info, all, xsink)) {
+        return -1;
+    }
+    if (info.always_ready) {
+        setArmed(info, true);
+    }
+    return 0;
 }
 
-int QoreEventLoop::kernelAttach(int fd, int events, void* udata, FdWait& wait, ExceptionSink* xsink) {
+void QoreEventLoop::rearmAlwaysReady(int fd) {
+    auto it = fd_map.find(fd);
+    if (it != fd_map.end() && it->second.always_ready) {
+        setArmed(it->second, true);
+    }
+}
+
+int QoreEventLoop::kernelAttach(int fd, int events, void* udata, FdWait& wait, struct stat& st,
+        ExceptionSink* xsink) {
 #ifdef DARWIN
     // a named pipe is watched with select(2) in poll() instead of by kqueue (see fifo_count), and a regular file is
-    // always ready (see always_ready_count)
-    struct stat st;
+    // always ready (see always_ready_count); kqueue would accept a regular file, but would not report it readable at
+    // its end
     if (!fstat(fd, &st)) {
         if (qore_stat_poll_misses_hangup(st)) {
             wait = FdWait::Fifo;
@@ -295,29 +325,71 @@ int QoreEventLoop::kernelAttach(int fd, int events, void* udata, FdWait& wait, E
     if (rc < 0) {
         return -1;
     }
-    // epoll refuses a descriptor that it cannot wait for, which poll(2) reports always ready (see always_ready_count)
-    wait = rc ? FdWait::AlwaysReady : FdWait::Kernel;
+    if (rc) {
+        // epoll refuses a descriptor that it cannot wait for: a regular file is always ready (see
+        // always_ready_count); another one (a directory, a character device without polling) is refused, as kqueue
+        // refuses it, which poll(2) reports invalid on macOS (POLLNVAL)
+        if (!fstat(fd, &st) && S_ISREG(st.st_mode)) {
+            wait = FdWait::AlwaysReady;
+            return 0;
+        }
+        xsink->raiseErrnoException("EVENT-LOOP-ERROR", EPERM, "epoll_ctl(ADD) failed for fd %d", fd);
+        return -1;
+    }
+    wait = FdWait::Kernel;
     return 0;
 }
 
+void QoreEventLoop::setAttached(FdInfo& info, FdWait wait, const struct stat& st) {
+    setWait(info, wait);
+    if (wait == FdWait::AlwaysReady) {
+        info.dev = st.st_dev;
+        info.ino = st.st_ino;
+        // a new registration of a regular file is reported at the next poll
+        setArmed(info, true);
+    } else {
+        setArmed(info, false);
+    }
+}
+
 int QoreEventLoop::kernelUpdate(int fd, FdInfo& info, int events, ExceptionSink* xsink) {
+    struct stat st;
     if (info.fifo) {
-        // a named pipe is watched for info.events by poll()
+        // a named pipe is watched for info.events by poll(), unless its number has been given to another kind of file,
+        // which the registration then follows
+        if (!fstat(fd, &st) && qore_stat_poll_misses_hangup(st)) {
+            return 0;
+        }
+        FdWait wait;
+        if (kernelAttach(fd, events, info.udata, wait, st, xsink)) {
+            return -1;
+        }
+        setAttached(info, wait, st);
         return 0;
     }
     if (info.always_ready) {
-        // the descriptor is not registered with the system; it can have been closed and its number given to one that
-        // the system can wait for, as a registration that holds no descriptor can outlive it (see kernelModify())
+        // the descriptor is not registered with the system; its number can have been given to another file, as a
+        // registration that holds no descriptor can outlive it (see kernelModify()): the registration then follows
+        // the number, as for a descriptor registered with the system
+        if (!fstat(fd, &st) && st.st_dev == info.dev && st.st_ino == info.ino) {
+            return 0;
+        }
         FdWait wait;
-        if (kernelAttach(fd, events, info.udata, wait, xsink)) {
+        if (kernelAttach(fd, events, info.udata, wait, st, xsink)) {
             return -1;
         }
-        setWait(info, wait);
+        setAttached(info, wait, st);
         return 0;
     }
-    // a registered descriptor whose number has been given to one that the system cannot wait for is refused, as
-    // before: the registration is stale, and its owner removes it
-    return kernelModify(fd, events, info.udata, xsink);
+    int rc = kernelModify(fd, events, info.udata, st, xsink);
+    if (rc < 0) {
+        return -1;
+    }
+    if (rc) {
+        // the system dropped the descriptor, and its number belongs to a regular file now
+        setAttached(info, FdWait::AlwaysReady, st);
+    }
+    return 0;
 }
 
 void QoreEventLoop::setWait(FdInfo& info, FdWait wait) {
@@ -341,6 +413,7 @@ void QoreEventLoop::setWait(FdInfo& info, FdWait wait) {
         if (always_ready) {
             ++always_ready_count;
         } else {
+            setArmed(info, false);
             assert(always_ready_count);
             --always_ready_count;
         }
@@ -348,23 +421,52 @@ void QoreEventLoop::setWait(FdInfo& info, FdWait wait) {
     }
 }
 
+void QoreEventLoop::setArmed(FdInfo& info, bool armed) {
+    if (armed == info.armed) {
+        return;
+    }
+    assert(!armed || info.always_ready);
+    if (armed) {
+        ++armed_count;
+    } else {
+        assert(armed_count);
+        --armed_count;
+    }
+    info.armed = armed;
+}
+
 void QoreEventLoop::addAlwaysReadyEvents(std::vector<QoreEventInfo>& events) {
-    assert(always_ready_count);
-    for (const auto& [fd, info] : fd_map) {
-        if (!info.always_ready) {
+    assert(armed_count);
+    for (auto& [fd, info] : fd_map) {
+        if (!info.armed) {
             continue;
         }
+        setArmed(info, false);
         int ev = info.events & (QORE_EV_READ | QORE_EV_WRITE);
-        if (!ev) {
-            continue;
-        }
-        // a descriptor closed while it is registered is reported with an error, as poll(2) reports it (POLLNVAL), so
-        // that the operations waiting for it run and see the close
-        if (fcntl(fd, F_GETFD) < 0 && errno == EBADF) {
+        // a file closed while it is registered, or whose number has been given to another file, is reported with an
+        // error, as poll(2) reports a closed descriptor (POLLNVAL), so that its owners see the close, and is dropped
+        // from the loop, so that it is not reported again
+        struct stat st;
+        if (fstat(fd, &st) || st.st_dev != info.dev || st.st_ino != info.ino) {
             ev |= QORE_EV_ERROR;
+            always_ready_drops.push_back(fd);
+        } else if (!ev) {
+            continue;
         }
         events.push_back({fd, ev, info.udata});
     }
+}
+
+void QoreEventLoop::dropAlwaysReady() {
+    for (int fd : always_ready_drops) {
+        auto it = fd_map.find(fd);
+        if (it == fd_map.end() || !it->second.always_ready) {
+            continue;
+        }
+        setWait(it->second, FdWait::Kernel);
+        fd_map.erase(it);
+    }
+    always_ready_drops.clear();
 }
 
 bool QoreEventLoop::hasRegistration(int fd, uint64_t key) const {
@@ -515,7 +617,27 @@ int QoreEventLoop::kernelAdd(int fd, int events, void* udata, ExceptionSink* xsi
 #endif
 }
 
-int QoreEventLoop::kernelModify(int fd, int events, void* udata, ExceptionSink* xsink) {
+#ifdef DARWIN
+bool QoreEventLoop::kernelDeleteFilters(int fd) {
+    // each filter in its own call: kevent() with no event list stops at the first change that fails, so a write
+    // filter after a read filter that the descriptor does not have (ENOENT) would stay registered, and a writable
+    // socket would then wake every poll at once
+    struct kevent change;
+    struct timespec ts = {0, 0};
+    bool deleted = false;
+    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    if (!kevent(event_fd, &change, 1, nullptr, 0, &ts)) {
+        deleted = true;
+    }
+    EV_SET(&change, fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+    if (!kevent(event_fd, &change, 1, nullptr, 0, &ts)) {
+        deleted = true;
+    }
+    return deleted;
+}
+#endif
+
+int QoreEventLoop::kernelModify(int fd, int events, void* udata, struct stat& st, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: need to remove old events and add new ones
     // Use level-triggered mode (no EV_CLEAR)
@@ -525,14 +647,16 @@ int QoreEventLoop::kernelModify(int fd, int events, void* udata, ExceptionSink* 
     // fails (e.g., ENOENT for a filter that wasn't registered), kevent() returns
     // -1 and stops processing the changelist — any subsequent EV_ADD entries
     // would never be applied.
-    struct kevent change;
     struct timespec ts = {0, 0};
 
     // Step 1: Delete both filters individually, ignoring errors (filter may not exist)
-    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    kevent(event_fd, &change, 1, nullptr, 0, &ts);
-    EV_SET(&change, fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    kevent(event_fd, &change, 1, nullptr, 0, &ts);
+    if (!kernelDeleteFilters(fd)) {
+        // kqueue had no filter: the descriptor was closed, and its number can belong to another file now; a regular
+        // file is not added to kqueue, which would not report it readable at its end (see always_ready_count)
+        if (!fstat(fd, &st) && S_ISREG(st.st_mode)) {
+            return 1;
+        }
+    }
 
     // Step 2: Add the desired filters
     struct kevent adds[2];
@@ -569,7 +693,12 @@ int QoreEventLoop::kernelModify(int fd, int events, void* udata, ExceptionSink* 
             // fd was auto-removed by epoll (e.g., socket closed and reopened with same fd number);
             // re-add it to the epoll set
             if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
-                xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno,
+                int err = errno;
+                // the number belongs to a regular file now, which is always ready (see always_ready_count)
+                if (err == EPERM && !fstat(fd, &st) && S_ISREG(st.st_mode)) {
+                    return 1;
+                }
+                xsink->raiseErrnoException("EVENT-LOOP-ERROR", err,
                     "epoll_ctl(ADD after MOD ENOENT) failed for fd %d", fd);
                 return -1;
             }
@@ -588,14 +717,9 @@ int QoreEventLoop::kernelModify(int fd, int events, void* udata, ExceptionSink* 
 
 int QoreEventLoop::kernelRemove(int fd, ExceptionSink* xsink) {
 #ifdef DARWIN
-    // kqueue: remove both filters (ignore errors if not registered)
-    struct kevent changes[2];
-    EV_SET(&changes[0], fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    EV_SET(&changes[1], fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-
-    struct timespec ts = {0, 0};
-    // Ignore errors - filters might not exist
-    kevent(event_fd, changes, 2, nullptr, 0, &ts);
+    // kqueue: remove both filters (errors are ignored: a filter that was not added, or a closed descriptor, whose
+    // filters kqueue has dropped)
+    kernelDeleteFilters(fd);
     return 0;
 
 #elif defined(__linux__)
@@ -795,8 +919,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             wait_us = remaining_us;
         }
     }
-    // an always-ready descriptor is ready now (see always_ready_count)
-    if (always_ready_count) {
+    // an armed always-ready descriptor is ready now (see always_ready_count)
+    if (armed_count) {
         wait_us = 0;
     }
 
@@ -942,7 +1066,11 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         // returning and processing the results
         auto fd_it = fd_map.find(fd);
         if (fd_it == fd_map.end()) {
-            // fd was removed after kevent() returned; skip stale event
+            // poll() and the removal of a descriptor run on the same thread, so this is a filter that was left in the
+            // kqueue when the descriptor was removed (see kernelDeleteFilters()), which wakes every poll at once
+#ifdef DEBUG
+            dbg_unmatched_kernel_events.fetch_add(1, std::memory_order_relaxed);
+#endif
             continue;
         }
 
@@ -958,12 +1086,15 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     // named pipes are not registered with kqueue, so their events are separate
     events.insert(events.end(), fifo_events_buf.begin(), fifo_events_buf.end());
     // and so are those of the always-ready descriptors
-    if (always_ready_count) {
+    if (armed_count) {
         addAlwaysReadyEvents(events);
     }
 
     // each registration of a descriptor gets the events it waits for
     expandRegistrations(events);
+    if (!always_ready_drops.empty()) {
+        dropAlwaysReady();
+    }
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
@@ -1061,16 +1192,25 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         // Look up udata from our fd_map
         auto it = fd_map.find(fd);
         void* udata = (it != fd_map.end()) ? it->second.udata : nullptr;
+#ifdef DEBUG
+        if (it == fd_map.end()) {
+            // a descriptor left in the epoll set when it was removed (see kernelRemove())
+            dbg_unmatched_kernel_events.fetch_add(1, std::memory_order_relaxed);
+        }
+#endif
 
         events.push_back({fd, ev, udata});
     }
     // the always-ready descriptors are not registered with epoll
-    if (always_ready_count) {
+    if (armed_count) {
         addAlwaysReadyEvents(events);
     }
 
     // each registration of a descriptor gets the events it waits for
     expandRegistrations(events);
+    if (!always_ready_drops.empty()) {
+        dropAlwaysReady();
+    }
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 

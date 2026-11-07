@@ -3058,9 +3058,9 @@ static int qore_socket_object_exec_quic_flush(QoreSocketObject* s, int64_t sessi
     return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, owner_name, "done", xsink);
 }
 
-static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink) {
+static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink, bool write_only = false) {
     s->ref();
-    SocketShutdownPollOperation* shutdown_poller = new SocketShutdownPollOperation(s);
+    SocketShutdownPollOperation* shutdown_poller = new SocketShutdownPollOperation(s, write_only);
     ReferenceHolder<SocketPollOperationBase> poller(shutdown_poller, xsink);
     if (*xsink) {
         return -1;
@@ -5381,6 +5381,10 @@ int QoreSocketObject::shutdown() {
         return -1;
     }
     return rc;
+}
+
+int QoreSocketObject::shutdownWrite(ExceptionSink* xsink) {
+    return qore_socket_object_exec_shutdown(this, xsink, true);
 }
 
 int QoreSocketObject::shutdownSSL(ExceptionSink* xsink) {

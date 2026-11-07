@@ -47,6 +47,7 @@
 #include <openssl/ssl.h>
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #include <atomic>
 #include <cassert>
@@ -874,6 +875,8 @@ public:
     DLLLOCAL void clearPendingWrite() { pending_write_.store(false, std::memory_order_release); }
 
     //! Get current timestamp in nanoseconds (monotonic clock)
+    /** In a DEBUG build, the offset set with qore_quic_test_advance_clock() is added
+    */
     DLLLOCAL static ngtcp2_tstamp timestamp();
 
     //! Copy the stored remote peer address into caller-provided buffers
@@ -1243,11 +1246,18 @@ public:
         bool is_pollable = false;
         bool need_reassign = true;
         bool eof = false;
+        //! A regular file, which is always ready: it is not waited for (see getExtraFds()), as in Http2Session
+        bool is_regular_file = false;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
             : input_stream(is), stream_fd(is->supportsNonBlockingIo() ? is->getPollableDescriptor() : -1),
-              is_pollable(stream_fd >= 0) {}
+              is_pollable(stream_fd >= 0) {
+            if (is_pollable) {
+                struct stat st;
+                is_regular_file = !fstat(stream_fd, &st) && S_ISREG(st.st_mode);
+            }
+        }
     };
 
     //! Store an InputStream for a stream (I/O thread will read from it)
@@ -2063,5 +2073,26 @@ public:
     //! Unregister a controller socket operation waiting for QUIC datagram notifications
     DLLLOCAL void unregisterDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 };
+
+#ifdef DEBUG
+//! Debug-only QUIC test clock: advances the clock of every QUIC connection of the process by @p ms milliseconds
+/** QuicSession::timestamp() adds the total of the advances, so the timers of the connections (idle timeout, keep-alive,
+    loss detection) run as if that much time had passed; the clock only goes forward, as ngtcp2 requires.  The
+    operations of every socket of the async I/O controller are then woken, so that they handle the timers that are due
+    on the new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets())
+
+    @return the total advance in milliseconds
+*/
+DLLLOCAL int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink);
+
+//! Debug-only: the number of QUIC packets that client and server connections of the process have processed
+DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
+
+//! Debug-only: waits until client and server connections of the process have processed at least the given numbers of
+//! QUIC packets
+/** @return true if the numbers were reached, false if the wait timed out (@p timeout_ms < 0: no timeout)
+*/
+DLLLOCAL bool qore_quic_test_wait_packets_received(int64_t client, int64_t server, int64_t timeout_ms);
+#endif
 
 #endif // _QORE_INTERN_QUICSESSION_H

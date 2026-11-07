@@ -644,6 +644,86 @@ struct AsyncIoDebugHeldReleases {
 };
 }
 
+// the timer callbacks held by the dbg_async_io_hold_timer_callbacks() test hook; see dbgHoldTimerCallbacks()
+namespace {
+struct AsyncIoDebugHeldTimers {
+    //! True while fired timer callbacks are held; checked without the lock first
+    std::atomic<bool> hold{false};
+    QoreThreadLock lock;
+    QoreCondition cond;
+    struct Held {
+        AsyncIoControllerPriv* ctrl;
+        ResolvedCallReferenceNode* code;
+        std::string owner;
+        AsyncIoSandboxContext sandbox_ctx;
+    };
+    std::vector<Held> held;
+
+    //! Returns the state, which is never destroyed (see AsyncIoDebugHeldReleases::get())
+    static AsyncIoDebugHeldTimers& get() {
+        static AsyncIoDebugHeldTimers* state = new AsyncIoDebugHeldTimers;
+        return *state;
+    }
+};
+}
+
+void AsyncIoControllerPriv::dbgHoldTimerCallbacks(bool hold) {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    AutoLocker al(state.lock);
+    state.hold.store(hold, std::memory_order_release);
+}
+
+bool AsyncIoControllerPriv::dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms) {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    int64_t deadline = q_clock_getmillis() + timeout_ms;
+    AutoLocker al(state.lock);
+    while (state.held.size() < count) {
+        int64_t remaining = deadline - q_clock_getmillis();
+        if (remaining <= 0) {
+            return false;
+        }
+        state.cond.wait(state.lock, static_cast<int>(remaining));
+    }
+    return true;
+}
+
+size_t AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink) {
+    assert(!on_async_io_thread);
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    std::vector<AsyncIoDebugHeldTimers::Held> held;
+    {
+        AutoLocker al(state.lock);
+        held.swap(state.held);
+    }
+    for (auto& h : held) {
+        h.ctrl->ensureCallDispatcher();
+        h.ctrl->call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(h.code, nullptr, h.owner,
+            std::move(h.sandbox_ctx));
+    }
+    // the callbacks have run when this returns
+    for (auto& h : held) {
+        h.ctrl->flushCallbacks();
+        h.ctrl->deref(xsink);
+    }
+    return held.size();
+}
+
+bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
+        AsyncIoSandboxContext& sandbox_ctx) {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    if (!state.hold.load(std::memory_order_acquire)) {
+        return false;
+    }
+    AutoLocker al(state.lock);
+    if (!state.hold.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ref();
+    state.held.push_back({this, code, owner, std::move(sandbox_ctx)});
+    state.cond.broadcast();
+    return true;
+}
+
 void AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink) {
     assert(!on_async_io_thread);
     AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
@@ -4552,6 +4632,23 @@ void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash, A
     }
 }
 
+#ifdef DEBUG
+size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
+    std::vector<std::string> hashes;
+    {
+        AutoLocker al(sock_route_lock);
+        hashes.reserve(sock_to_thread.size());
+        for (const auto& [hash, idx] : sock_to_thread) {
+            hashes.push_back(hash);
+        }
+    }
+    for (const std::string& hash : hashes) {
+        wakeSocket(hash);
+    }
+    return hashes.size();
+}
+#endif
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     if (forked()) {
         return;
@@ -6860,6 +6957,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // fired-but-not-yet-run callback via flushCallbacksByOwner()
                 ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
                 code_ref->ref();
+#ifdef DEBUG
+                // a test can hold the callback of a fired timer and run it later (see dbgHoldTimerCallbacks())
+                if (dbgHoldTimerCallback(code_ref, te.owner, te.sandbox_ctx)) {
+                    code_ref = nullptr;
+                }
+                if (code_ref)
+#endif
                 call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr, te.owner,
                     std::move(te.sandbox_ctx));
             } else if (cb_snapshot) {
@@ -8380,6 +8484,13 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
                 t.registered_events[sock_hash] = union_events;
                 fd_changed = true;
             }
+            // an operation that waits again for its object, which is a regular file (a File), has consumed its
+            // readiness, for example by reading from it: the file is reported ready again (see
+            // QoreEventLoop::always_ready_count); an extra descriptor is not, as an operation waits for one again
+            // without reading it while it waits for its object
+            if (curr_fd >= 0 && union_events) {
+                t.loop->rearmAlwaysReady(curr_fd);
+            }
             s->deref(xsink);
         }
         if (!fd_changed) {
@@ -8722,6 +8833,16 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
     // set to avoid erasing from new_fds during iteration (undefined behavior with unordered_set)
     std::vector<int> failed_fds;
     for (auto& [fd, ev_flags] : new_fd_events) {
+        if (!prev_fds.count(fd)) {
+            // a regular file is always ready (see QoreEventLoop::always_ready_count): waiting for one would run the
+            // operation at once whenever it waits, also while it cannot use the file (a stream that cannot send);
+            // it is not waited for, and the operation uses it when it runs for its object or its other descriptors
+            struct stat st;
+            if (!fstat(fd, &st) && S_ISREG(st.st_mode)) {
+                failed_fds.push_back(fd);
+                continue;
+            }
+        }
         // an owned descriptor (a connection attempt, a c-ares socket) is held open while it is registered: the hold
         // is taken before the descriptor is registered and released when the registration is removed
         // (removeExtraFdRegistration())
@@ -8734,8 +8855,10 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         t.extra_fd_to_key_events[fd][op_id] = ev_flags;
         t.loop->addRegistration(fd, extraRegKey(op_id), ev_flags, socket, xsink);
         if (*xsink) {
-            // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
-            // The I/O loop still drives streaming via POLLOUT on the socket fd
+            // Non-fatal: the event loop refuses a descriptor that the system cannot wait for and that is not a
+            // regular file (a directory, a character device without polling, or a stale registration whose number
+            // now has such a file); a regular file is always ready (see QoreEventLoop::always_ready_count).  The I/O
+            // loop still drives streaming via POLLOUT on the socket fd
             printd(2, "updateExtraFds() failed to update fd %d in event loop; skipping\n", fd);
             xsink->clear();
             // the operation does not wait for the descriptor: a registration of the operation's that the event loop

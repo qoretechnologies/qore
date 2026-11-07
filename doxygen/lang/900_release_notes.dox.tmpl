@@ -553,6 +553,9 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - new @ref Qore::Socket::getQuicSSLCipherName() "Socket::getQuicSSLCipherName()" and
       @ref Qore::Socket::getQuicSSLCipherVersion() "Socket::getQuicSSLCipherVersion()" for HTTP/3 QUIC sessions
+    - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection
+      only (a half-close): the peer reads the end of the stream, and the response that the peer sends can still be
+      read; a TLS connection sends its \c close_notify alert first
     @endparblock
 
     @par astparser Uses a tree-sitter Parser
@@ -1434,12 +1437,6 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
-    - a regular file is now reported ready for reading and writing at once by
-      @ref Qore::Socket::poll() "Socket::poll()" and by the @ref Qore::AsyncIoController "async I/O controller", as
-      \c poll(2) reports it; on Linux a wait for a regular file lasted until its timeout, so for example a non-blocking
-      read of a large file with @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" waited for
-      the poll timeout between its reads, and on macOS a wait to read a regular file at its end lasted until its
-      timeout
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c ++ and \c -- on a value of a hash typed
       with float or number values (ex: <tt>hash<string, float> h = {"v": 2.5}; ++h.v</tt>) gave an integer and
       stored a truncated value; they now give the same results as the AST interpreter (\c 3.5 in the example)
