@@ -499,11 +499,45 @@ Two rules keep its lifetime lexical, matching the AST interpreter:
   assigns the local); its inline cleanup would otherwise omit the local and leak
   the value.
 
-Object-typed locals whose type names a unique class stay AST-visible, but
+Object-typed locals whose type names a unique class stay on the runtime stack, but
 `*Class`, `auto`, and container-typed locals holding objects are IR-only, so
-destructor timing depends on these rules. `IRBlockScopedObjectLifetime.qtest`
-checks exact constructor/destructor order for these shapes in every tier and in
-AOT.
+destructor timing depends on these rules. As IR-only locals, object-typed locals ran a loop
+holding an object 2.5 times faster, but an object in a recursive graph held by such a local (a
+Queue that the values pushed to it refer to) made the collector decide at every dereference of
+the object, and such a loop ran 1.5 times the instructions of the runtime-stack variable; the
+cause is not known yet (see `computeIROnlyLocals()`). A third rule completes the lexical
+lifetime of IR-only locals: when a function is left, the values they own are released last
+local first, as the AST interpreter releases the variables of a frame, by an exception too (the
+IR interpreter's `SlotCacheCleanup` and `cleanupLocalCaches()` walk the slots in reverse, a
+local's slot being assigned where it first appears; native code releases its boxed exit slots in
+reverse, in the inline form as in `qore_rt_cleanup_run_allocas()`).
+`IRBlockScopedObjectLifetime.qtest` and `ObjectLocalLifetime.qtest` check exact
+constructor/destructor order for these shapes in every tier and in AOT (block exits, loops,
+returns, exceptions within and across functions, reassignment, `AutoLock`, recursive graphs).
+
+### References taken by compiled code
+
+Each reference taken to an object and released is a dereference, and the dereference of an
+object in a recursive graph is a garbage-collection decision that takes the object's locks. The
+engines take no reference the AST interpreter does not take:
+
+- a temporary argument that a call consumes is released right after the call's argument list is
+  built, before the call (`clearConsumedArgCleanups()`; the IR interpreter passes the arguments a
+  method call consumes the same way): released then, a temporary object is linked to nothing yet,
+  and its dereference needs no collection decision, while the list's release after the call can be
+  one (giving the temporary's reference to the list made an AOT loop pushing such values 13%
+  slower); a constructor called from compiled code gets its argument list as a temporary
+  (`execConstructor(..., tmp_args)`) instead of copying it;
+- a temporary stored in an IR-only local, its only use, gives its reference to the local;
+- in the IR interpreter, a load of an IR-only local whose only use is the base of a method call
+  in the same block, with no write to the local between, borrows the local's value when it is an
+  object (`interpreter_borrowed_bases`). A container is never borrowed (code receiving one with a
+  single reference can take it over or change it in place), and neither is an argument (a direct
+  or inlined call can take its argument's slot over as its parameter;
+  `BorrowedLocalArguments.qtest`).
+
+`benchmark_exec_modes.qr` (object_local, object_list_index, new_object_member, builtin_method,
+queue_cycle) measures these patterns in every mode.
 
 ## Large Int Ownership in Fused Local Updates
 

@@ -1461,6 +1461,9 @@
       gives \c 0n; <tt>hash<string, float> h = {}; (h.k *= 2)</tt> now gives \c 0.0); in the IR, JIT and tiered
       execution modes and in AOT-compiled code the same happened with a \c number operand on a \c softint or
       \c *softint local or \c thread_local variable
+    - the IR, JIT and tiered execution modes run code holding objects faster: loops declaring locals and member
+      assignments allocate no memory, and method and constructor calls take fewer references to their receivers and
+      arguments, which for objects in recursive graphs saves garbage-collection work
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, a local variable of no reference type
       (\c auto, \c any or no type) that holds a reference not created with <tt>\\x</tt> in the same function (a
       reference element of a container, ex: <tt>auto r = h.r;</tt>, a reference returned by a call, or a reference

@@ -6500,8 +6500,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             locally_uninstantiated.clear();
         }
         // Clear local slot cache, preserving IR-only locals (loop counters etc.)
-        // that only exist in the cache and have no variable-stack backing.
-        for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+        // that only exist in the cache and have no variable-stack backing.  The slots are released last slot first,
+        // as the AST interpreter releases the variables of a frame (see SlotCacheCleanup)
+        for (size_t ri = locals_slot_cache.size(); ri; --ri) {
+            const size_t i = ri - 1;
             if (preserveParentSlotForWriteback(i)) {
                 continue;
             }
@@ -6645,9 +6647,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     struct SlotCacheCleanup {
         IRLocalSlotCache& cache;
         ExceptionSink* xsink;
+        // the slots of IR-only locals own their values: they are released last slot first, as the AST interpreter
+        // releases the variables of a frame (a local's slot is assigned where it first appears, after those of the
+        // locals declared before it), so that an object local's destructor runs before that of a local declared
+        // before it when the function is left by an exception too
         ~SlotCacheCleanup() {
-            for (auto& v : cache) {
+            for (size_t i = cache.size(); i; --i) {
+                // raw slot: the value the slot owns is released
+                QoreValue& v = cache.storage(i - 1);
                 v.discard(xsink);
+                v = QoreValue();
             }
         }
     } slot_cache_cleanup{locals_slot_cache, xsink};

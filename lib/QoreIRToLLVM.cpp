@@ -3259,30 +3259,16 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
         return;
     }
 
-    // Boxed pre-instantiated entry loads use cleanup slots so lvalue mutation
-    // can clear them before function exit.  If already cleared, this is a no-op.
-    for (llvm::AllocaInst* alloca : preinstantiated_entry_cleanup_allocas) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
-
-    // Fast entry param allocas: load current value and decref.
-    // This correctly handles both:
-    //   - Non-reassigned params: decrefs the original incref'd value
-    //   - Reassigned params: decrefs the final value (intermediate values were
-    //     decreff'd by decref-before-store in StoreLocal for IR-only locals)
-    for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
-
-    // Boxed IR-only locals not represented on the runtime stack own their
-    // current alloca value directly.
-    for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
+    // The values that the function's boxed slots own (see getBoxedExitCleanupSlots()): pre-instantiated entry
+    // loads, which lvalue mutation can clear before the exit (a no-op then), fast-entry parameters, whose current
+    // value is released (a reassigned parameter released its previous values when it was stored), and the IR-only
+    // locals not represented on the runtime stack, which own their values.  They are released in the reverse of
+    // that order, last local first, as the AST interpreter releases the variables of a frame, and as the array form
+    // above (qore_rt_cleanup_run_allocas()) releases them: an object local's destructor runs before that of a local
+    // declared before it when a function is left by an exception too
+    const std::vector<llvm::AllocaInst*> slots = getBoxedExitCleanupSlots();
+    for (auto it = slots.rbegin(); it != slots.rend(); ++it) {
+        llvm::AllocaInst* alloca = *it;
         llvm::Value* val = builder->CreateLoad(i64_type, alloca);
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 alloca);
