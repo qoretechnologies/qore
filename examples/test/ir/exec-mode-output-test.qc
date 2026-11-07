@@ -5,10 +5,14 @@
 # AST interpreter's output, given as the expected output
 
 #! Runs a script in every execution mode and as a qcc-compiled executable, requiring the expected output
-/** The script is run with the ExecModeHarness environment: native compilation is synchronous and follows the first
-    call of a function (thresholds of 1), so tiered execution runs a function on the IR tier in its first call and as
-    native code from its second call on, and JIT execution runs it as native code; a script that calls each function
-    three times therefore runs it on every tier.  The AST interpreter is checked with <tt>--exec-mode=ast</tt>.
+/** The script is run in each of ExecModeHarness::ExecModes with the harness's environment: native compilation is
+    synchronous and follows the first call of a function (thresholds of 1), so JIT and tiered execution run nearly all
+    functions as native code; a function called through a call reference runs on the IR tier in its first call, and
+    one called by name from top-level code or from another function is compiled before its first call (see
+    ExecModeHarness).  The script is also run with tiered execution on the IR tier
+    (ExecModeHarness::run_ir_tier(), reported as \c "tiered-ir"), where every function that can be lowered to IR
+    runs on the IR tier in every call, and with <tt>--exec-mode=ir</tt>, which runs top-level code with the IR
+    interpreter as well.  The AST interpreter is checked with <tt>--exec-mode=ast</tt>.
 
     The expected output is the AST interpreter's; every mode is run before the result is checked, so that a failure
     shows every mode whose output differs, line by line.
@@ -60,9 +64,11 @@ class ExecModeOutputTest inherits QUnit::Test {
         TmpDir tmp("qore-" + prefix + "-");
         string path = writeScript(tmp);
         hash<string, list<string>> wrong();
-        foreach string mode in (ExecModeHarness::ExecModes) {
-            string actual = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b "
-                "--enable-debug --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode, path));
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, libqore_dir, qore_bin, ir_tier ? "tiered" : mode, path);
+            string actual = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
             list<string> diff = differences(expected, actual);
             if (diff) {
                 wrong{mode} = diff;

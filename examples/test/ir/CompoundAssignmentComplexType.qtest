@@ -28,7 +28,8 @@
     globals, thread_local variables, members and static variables), whose assignment strips the complex type in the
     AST interpreter, still hold a plain \c hash or \c list, and so do the lvalues with a declared type and the
     elements of a plain \c hash or \c list; and they check the other compound operators on an \c auto lvalue with no
-    value or \c NULL.  Each function is called three times, so that every tier runs it (see ExecModeOutputTest).
+    value or \c NULL.  Each function is called three times, in every execution mode and on the IR tier of tiered
+    execution (see ExecModeOutputTest).
 */
 class CompoundAssignmentComplexTypeTest inherits ExecModeOutputTest {
     public {

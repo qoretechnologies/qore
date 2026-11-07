@@ -23,8 +23,8 @@
     the store, and a rejected assignment leaves no copy.
 
     The script runs plain and compound assignments on \c softint, \c any, \c auto! and \c int thread_local variables,
-    and takes the results of assignments to them and to global variables, three times each, so that every tier runs
-    them (see ExecModeOutputTest).
+    and takes the results of assignments to them and to global variables, three times each, in every execution mode
+    and on the IR tier of tiered execution (see ExecModeOutputTest).
 */
 class ThreadLocalStoredValueTest inherits ExecModeOutputTest {
     public {

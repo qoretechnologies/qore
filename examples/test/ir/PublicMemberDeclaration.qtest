@@ -21,7 +21,8 @@
     subclasses, while compiled code, which records each public member, refused them.
 
     The script merges a hash with an undeclared key into objects of classes with each kind of declaration and assigns
-    an undeclared member; each function is called three times, so that every tier runs it (see ExecModeOutputTest).
+    an undeclared member; each function is called three times, in every execution mode and on the IR tier of tiered
+    execution (see ExecModeOutputTest).
 */
 class PublicMemberDeclarationTest inherits ExecModeOutputTest {
     public {

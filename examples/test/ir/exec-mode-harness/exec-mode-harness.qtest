@@ -27,6 +27,8 @@ class ExecModeHarnessTest inherits QUnit::Test {
         string toplevel;
         #! a function called through a call reference
         string function;
+        #! functions called by name, one of them running a loop
+        string loop;
         #! a script with a parse error
         string parse_error;
         #! a script that prints on stdout and stderr and exits with status 3
@@ -55,6 +57,9 @@ class ExecModeHarnessTest inherits QUnit::Test {
         function = write("function.q", "%modern\nint sub f(int i) {\n    return i + 1;\n}\n"
             "code<int(int)> c = \\f();\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += c(i);\n}\n"
             "printf(\"%d\\n\", t);\n");
+        loop = write("loop.q", "%modern\nint sub hot(int n) {\n    int t = 0;\n    for (int i = 0; i < n; ++i) {\n"
+            "        t += i;\n    }\n    return t;\n}\nint sub f(int n) {\n    return hot(n);\n}\n"
+            "for (int i = 0; i < 3; ++i) {\n    printf(\"%d\\n\", f(5000));\n}\n");
         parse_error = write("parse-error.q", "%modern\nint x = ;\n");
         output = write("output.q", "%modern\nprintf(\"out\\n\");\nstderr.print(\"err\\n\");\nexit(3);\n");
         loader_warning = write("loader-warning.q", sprintf("%%modern\nprintf(\"out\\n\");\nstderr.print(%y);\n"
@@ -67,6 +72,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
         addTestCase("execution mode of a command", \testGetMode());
         addTestCase("top-level code", \testTopLevel());
         addTestCase("functions", \testFunctions());
+        addTestCase("the IR tier of tiered execution", \testIRTier());
         addTestCase("output and exit status", \testOutput());
         addTestCase("module loader warnings are not output", \testLoaderWarnings());
         addTestCase("negative: native compilation checks", \testChecks());
@@ -140,10 +146,47 @@ class ExecModeHarnessTest inherits QUnit::Test {
             assertEq("6\n", ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode,
                 function), ExecModeHarness::NativeCheck::JitAndTiered), mode);
         }
-        # f() runs on the AST tier in its first call and on the IR tier in its second, which compiles it
+        # f(), called through a call reference, runs on the IR tier in its first call, which compiles it
         hash<ExecModeHarness::ModeRunResult> r = runScript("tiered", function);
         assertEq(1, (select r.trace, $1 =~ /^\[BG-JIT\] compiled 'f@.*' and promoted to JIT tier$/).size(),
             r.trace.join("\n"));
+    }
+
+    testIRTier() {
+        # tiered execution with the harness's environment compiles functions called by name before they run
+        hash<ExecModeHarness::ModeRunResult> r = runScript("tiered", loop);
+        assertEq("12497500\n12497500\n12497500\n", r.out);
+        assertTrue((select r.trace, ExecModeHarness::is_native_compilation($1)).size() > 0, r.trace.join("\n"));
+        # the IR tier run compiles nothing, though hot() runs a loop of 5000 iterations in each call
+        foreach string script in ((loop, function)) {
+            r = ExecModeHarness::run_command(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin, script), True,
+                ExecModeHarness::IRTierEnv);
+            assertEq((), (select r.trace, ExecModeHarness::is_native_compilation($1)), r.trace.join("\n"));
+            ExecModeHarness::check_ir_tier(r);
+        }
+        assertEq("12497500\n12497500\n12497500\n", ExecModeHarness::run_ir_tier(sprintf("%s %s -b "
+            "--exec-mode=tiered %s", env, qore_bin, loop)));
+        assertEq("6\n", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s", env, qore_bin,
+            function)));
+
+        # negative: the IR tier is a tier of tiered execution
+        foreach string mode in (("ast", "ir", "jit")) {
+            assertThrows("EXEC-MODE-HARNESS-ERROR", \ExecModeHarness::run_ir_tier(), (sprintf("%s %s -b "
+                "--exec-mode=%s %s", env, qore_bin, mode, loop),), mode);
+        }
+        assertThrows("EXEC-MODE-HARNESS-ERROR", \ExecModeHarness::run_ir_tier(), (sprintf("%s %s -b %s", env,
+            qore_bin, loop),));
+        # negative: native code in an IR tier run
+        r = <ExecModeHarness::ModeRunResult>{
+            "mode": "tiered",
+            "out": "",
+            "stdout": "",
+            "stderr": "",
+            "trace": ("[BG-JIT] compiled 'f@1_0' and promoted to JIT tier",),
+            "rc": 0,
+        };
+        assertThrows("EXEC-MODE-NATIVE-ERROR", "the IR tier run compiled code to native code",
+            \ExecModeHarness::check_ir_tier(), (r,));
     }
 
     testLoaderWarnings() {

@@ -23,7 +23,7 @@
 
     The script applies += to \c any and \c auto! locals, globals, thread_local variables, members and static
     variables, with no value and with \c NULL, and prints the results and the values; it calls each function three
-    times, so that every tier runs it (see ExecModeOutputTest).
+    times, in every execution mode and on the IR tier of tiered execution (see ExecModeOutputTest).
 */
 class CompoundAssignmentResultTest inherits ExecModeOutputTest {
     public {

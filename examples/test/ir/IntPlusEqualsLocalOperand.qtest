@@ -21,7 +21,7 @@
 
     The script adds \c auto, \c string and \c float locals to \c int and \c softint locals, with an \c int local as
     the control, and applies the compound operators to typed lvalues after them; each function is called three times,
-    so that every tier runs it (see ExecModeOutputTest).
+    in every execution mode and on the IR tier of tiered execution (see ExecModeOutputTest).
 */
 class IntPlusEqualsLocalOperandTest inherits ExecModeOutputTest {
     public {
