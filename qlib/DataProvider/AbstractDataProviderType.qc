@@ -552,13 +552,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
     #! Returns the error code for reporting an error raised when a part of a value, such as a field, was checked
     /** A value that a type refuses is reported with \c TYPE-VALUE-ERROR.  A type never refuses a value with one of
-        the %Qore language errors (a type error in the code, a call that no variant accepts, or an exhausted stack):
-        they mean that the check itself failed, so they keep their code, to be told apart from a value that was
-        refused.
+        the %Qore language errors (a type error in the code, a call that no variant accepts, or an exhausted stack),
+        nor with \c SCHEMA-DOCUMENT-DESTROYED, which a schema type raises when the document it needs to check the
+        value no longer exists: they mean that the check itself failed, so they keep their code, to be told apart
+        from a value that was refused.
 
         @param err the code of the error raised when the part of the value was checked
 
-        @return the error code to report: \a err if it is a language error, otherwise \c TYPE-VALUE-ERROR
+        @return the error code to report: \a err if it is a language error or \c SCHEMA-DOCUMENT-DESTROYED,
+        otherwise \c TYPE-VALUE-ERROR
 
         @since DataProvider 3.11
     */
@@ -567,6 +569,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             case "RUNTIME-TYPE-ERROR":
             case "RUNTIME-OVERLOAD-ERROR":
             case "STACK-LIMIT-EXCEEDED":
+            # a schema whose document has been destroyed cannot check the value (see the OpenApi3 and Swagger
+            # modules); this is a condition of the lifetime of the type, not a refused value
+            case "SCHEMA-DOCUMENT-DESTROYED":
                 return err;
         }
         return "TYPE-VALUE-ERROR";

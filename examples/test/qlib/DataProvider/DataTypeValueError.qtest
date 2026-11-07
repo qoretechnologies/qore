@@ -44,6 +44,16 @@ class DefectiveDataType inherits QoreDataType {
     }
 }
 
+#! a type whose schema document no longer exists, as a schema type of the OpenApi3 or Swagger module raises it
+class DestroyedDocumentDataType inherits QoreDataType {
+    constructor() : QoreDataType(IntType) {
+    }
+
+    auto acceptsValue(auto value) {
+        throw "SCHEMA-DOCUMENT-DESTROYED", "schema \"x\" can no longer build types or resolve references";
+    }
+}
+
 #! a type whose check recurses without end
 class RecursiveDataType inherits QoreDataType {
     constructor() : QoreDataType(AutoType) {
@@ -161,6 +171,7 @@ class DataTypeValueErrorTest inherits QUnit::Test {
         addTestCase("options", \options());
         addTestCase("column default values", \columnDefaults());
         addTestCase("accepted values are unchanged", \acceptedValues());
+        addTestCase("soft date text", \softDateText());
         addTestCase("soft types from the factory convert any text", \softFactoryTypes());
         set_return_value(main());
     }
@@ -199,6 +210,8 @@ class DataTypeValueErrorTest inherits QUnit::Test {
             "soft float": (new QoreSoftFloatDataType(), "text"),
             "soft number": (new QoreSoftNumberDataType(), "text"),
             "soft bool": (new QoreSoftBoolDataType(), "text"),
+            "soft date": (new QoreSoftDateDataType(), "text"),
+            "soft date out of range": (new QoreSoftDateDataType(), "2020-13-45"),
             "unix timestamp in ms": (new UnixTimestampMsType(), {}),
         };
         foreach hash<auto> i in (cases.pairIterator()) {
@@ -284,9 +297,15 @@ class DataTypeValueErrorTest inherits QUnit::Test {
     }
 
     languageErrorCodes() {
-        foreach string err in (("RUNTIME-TYPE-ERROR", "RUNTIME-OVERLOAD-ERROR", "STACK-LIMIT-EXCEEDED")) {
+        foreach string err in (("RUNTIME-TYPE-ERROR", "RUNTIME-OVERLOAD-ERROR", "STACK-LIMIT-EXCEEDED",
+                "SCHEMA-DOCUMENT-DESTROYED")) {
             assertEq(err, AbstractDataProviderType::getValueErrorCode(err));
         }
+        # a field whose schema can no longer check the value reports that, not a refused value
+        HashDataType h();
+        h.addField(new QoreDataField("a", NOTHING, new DestroyedDocumentDataType()));
+        hash<ExceptionInfo> ex = getException(sub () { h.acceptsValue({"a": 1}); });
+        assertEq("SCHEMA-DOCUMENT-DESTROYED", ex.err);
         foreach string err in (("TYPE-VALUE-ERROR", "FIELD-VALUE-ERROR", "MISSING-VALUE-ERROR", "OTHER-ERROR")) {
             assertEq("TYPE-VALUE-ERROR", AbstractDataProviderType::getValueErrorCode(err));
         }
@@ -355,10 +374,28 @@ class DataTypeValueErrorTest inherits QUnit::Test {
         assertEq("QoreDataType", AbstractDataProviderTypeMap."softint".className());
 
         foreach AbstractDataProviderType t in ((new QoreSoftIntDataType(), new QoreSoftFloatDataType(),
-                new QoreSoftNumberDataType())) {
+                new QoreSoftNumberDataType(), new QoreSoftDateDataType())) {
             assertEq("TYPE-VALUE-ERROR", getException(sub () { t.acceptsValue("text"); }).err, t.className());
         }
-        assertEq("INVALID-DATE", getException(sub () { new QoreSoftDateDataType().acceptsValue("text"); }).err);
+    }
+
+    softDateText() {
+        QoreSoftDateDataType type();
+        assertEq(2020-01-02, type.acceptsValue("2020-01-02"));
+
+        # the description names the value and the type and keeps the reason of the date parser
+        hash<ExceptionInfo> parser = getException(sub () { date d = date("2020-13-45"); remove d; });
+        assertEq("INVALID-DATE", parser.err);
+        hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue("2020-13-45"); });
+        assertEq("TYPE-VALUE-ERROR", ex.err);
+        assertRegex("\"2020-13-45\"", ex.desc);
+        assertRegex("softdate", ex.desc);
+        assertTrue(index(ex.desc, parser.desc) >= 0, ex.desc);
+
+        # a field of a hash type reports the refused text as a refused value
+        HashDataType h();
+        h.addField(new QoreDataField("when", NOTHING, type));
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { h.acceptsValue({"when": "text"}); }).err);
     }
 
     acceptedValues() {

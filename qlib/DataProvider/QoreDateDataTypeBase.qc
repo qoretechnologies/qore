@@ -74,7 +74,8 @@ public class QoreDateDataTypeBase inherits QoreDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw TYPE-VALUE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type, or a soft date type cannot parse the text of the
+        value as a date
     */
     auto acceptsValue(auto value) {
         if (exists value && value !== NULL) {
@@ -85,7 +86,16 @@ public class QoreDateDataTypeBase inherits QoreDataType {
                     throw "TYPE-VALUE-ERROR", sprintf("type %y cannot be assigned from a value of type %y",
                         getName(), value.type());
                 }
-                value = options."date.input_timezone".date(value, options."date.format");
+                try {
+                    value = options."date.input_timezone".date(value, options."date.format");
+                } catch (hash<ExceptionInfo> ex) {
+                    # text that is not a date is a refused value, as non-numeric text is for the soft numeric types
+                    if (ex.err != "INVALID-DATE") {
+                        rethrow;
+                    }
+                    rethrow "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y: %s", value, getName(),
+                        ex.desc), ex.arg;
+                }
             }
 
             # convert to the output TimeZone if necessary

@@ -173,7 +173,7 @@ RestHandler handler(NOTHING, swagger);
     - the \c default of a query or header parameter is the remote default value of its field, which is shown and
       never applied or sent (see @ref dataprovider_remote_default_values)
     - the type of a schema object is the type of a request value: it has no field for a \c readOnly property, and a
-      value with one is refused with \c RUNTIME-TYPE-ERROR;
+      value with one is refused with \c TYPE-VALUE-ERROR;
       @ref Swagger::SwaggerSchema::getResponseDataType() "SwaggerSchema::getResponseDataType()" gives the type of a
       response value, which has them (see @ref Swagger::SwaggerHashDataType "SwaggerHashDataType")
     - schema objects record their location in the document

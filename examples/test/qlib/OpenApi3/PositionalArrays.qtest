@@ -12,6 +12,7 @@ class PositionalArraysTest inherits QUnit::Test {
         addTestCase("typed positions and closed tails survive native serialization", \tupleTest());
         addTestCase("nested tuple alternatives retain timestamp and image positions", \nestedTest());
         addTestCase("positional response direction and recursive presentation are bounded", \directionTest());
+        addTestCase("positions of a list whose values all have one type are converted", \narrowedListTest());
         set_return_value(main());
     }
     private OpenApi3Schema document(hash<auto> schema) {
@@ -46,6 +47,31 @@ class PositionalArraysTest inherits QUnit::Test {
             type = Serializable::deserialize(type.serialize());
         }
     }
+    #! a literal list of integers has a value type narrowed to int; its number positions are converted to numbers
+    private narrowedListTest() {
+        auto doc = document({"type": "array", "prefixItems": ({"type": "number"}, {"type": "number"}),
+            "items": False, "minItems": 2});
+        list<int> ints = (1, 2);
+        auto value = ints;
+        doc.components.schemas.Value.check(False, True, "/", "POST", "array", \value);
+        assertEq((1.0, 2.0), value);
+        assertEq((1, 2), ints, "the caller's list is unchanged");
+        AbstractDataProviderType type = doc.components.schemas.Value.getDataType();
+        assertEq((1.0, 2.0), type.acceptsValue(ints));
+        # a refused value is refused as a value, not as a type error in the check
+        list<int> one = (1,);
+        assertEq("TYPE-VALUE-ERROR", getExceptionCode(sub () { type.acceptsValue(one); }));
+    }
+
+    private string getExceptionCode(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+        return "no exception";
+    }
+
     private directionTest() {
         auto doc = document({"type": "array", "prefixItems": ({"type": "object", "properties": {
             "id": {"type": "string", "readOnly": True}, "secret": {"type": "string", "writeOnly": True}},

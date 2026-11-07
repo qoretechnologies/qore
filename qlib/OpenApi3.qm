@@ -5185,11 +5185,13 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
     #! Retains branch identities when presentation replaces the types
     /** @param types replacement branches in the original order
         @return a type with the same discriminator mapping
-        @throw TYPE-VALUE-ERROR the replacement branch count differs
+        @throw DISCRIMINATOR-ALTERNATIVES-ERROR the number of replacement branches differs from the number of
+        alternatives, which is an error in the calling code, not a refused value
     */
     QoreUnionDataType copyWithUnionTypes(list<AbstractDataProviderType> types) {
         if (types.size() != alternatives.size()) {
-            throw "TYPE-VALUE-ERROR", "cannot change the number of discriminator alternatives";
+            throw "DISCRIMINATOR-ALTERNATIVES-ERROR", sprintf("cannot change the number of discriminator "
+                "alternatives from %d to %d", alternatives.size(), types.size());
         }
         hash<string, AbstractDataProviderType> replaced = {};
         int i = 0;
@@ -5262,12 +5264,18 @@ public class OpenApi3TupleDataType inherits ListDataType {
     /** @param value positional array
         @return validated array
         @throw TYPE-VALUE-ERROR the value is not an array accepted by the declared positions
+        @throw SCHEMA-DOCUMENT-DESTROYED the document of a schema that the check needs has been destroyed
     */
     auto acceptsValue(auto value) {
         if (!exists value && isOrNothingType()) { return value; }
         if (value.typeCode() != NT_LIST) { throw "TYPE-VALUE-ERROR", "expected a positional array"; }
-        try { schema.check(False, for_request, "/", "POST", schema.name, \value); }
-        catch (hash<ExceptionInfo> ex) { rethrow "TYPE-VALUE-ERROR", ex.desc; }
+        try {
+            schema.check(False, for_request, "/", "POST", schema.name, \value);
+        } catch (hash<ExceptionInfo> ex) {
+            # a language error and SCHEMA-DOCUMENT-DESTROYED keep their code; see
+            # AbstractDataProviderType::getValueErrorCode()
+            rethrow AbstractDataProviderType::getValueErrorCode(ex.err), ex.desc, ex.arg;
+        }
         return value;
     }
 }
@@ -7031,6 +7039,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             if (!additional_items && value.size() > (prefix_items ?? ()).size()) {
                 throw "SCHEMA-VALIDATION-ERROR", "array has elements forbidden by items:false";
             }
+            # the check of a position can convert its value, as an integer to a number, but the value type of a list
+            # whose values all have one type, as a literal (0, 1), is narrowed to that type
+            list<auto!> positions = ();
+            positions += value;
+            value = positions;
             for (int i = 0; i < value.size(); ++i) {
                 *SchemaObject item = i < (prefix_items ?? ()).size() ? prefix_items[i] : cast<*SchemaObject>(items);
                 if (item) {
