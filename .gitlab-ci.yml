@@ -115,8 +115,27 @@ check-fast-routes-core-sanitizers:
     - . test/docker_test/tree-tested-skip.sh
     - test/cpp/run-sanitizers.sh
 
+# The qmod build cache (design/qmod-build-cache.md): every job that builds Qore keeps the AOT modules it compiled in a
+# GitLab cache, keyed by the job and the branch, falling back to the develop branch's cache, and reuses a module only
+# when everything that can change what qcc writes is unchanged; test/docker_test/qmod-cache.sh fails the job when a
+# module the cache supplied is not what it verified, and prunes the cache to the modules of the build.  A sample of the
+# modules the cache supplies is compiled again and must be byte for byte the same (QORE_QMOD_CACHE_AUDIT; 1 audits
+# every one).  QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores nothing.
+.qmod-cache:
+  variables:
+    QORE_QMOD_CACHE_DIR: "${CI_PROJECT_DIR}/.qmod-cache"
+    QORE_QMOD_CACHE_AUDIT: "0.03:${CI_PIPELINE_ID}"
+  cache:
+    key: "qmod-${CI_JOB_NAME}-${CI_COMMIT_REF_SLUG}"
+    fallback_keys:
+      - "qmod-${CI_JOB_NAME}-develop"
+    paths:
+      - .qmod-cache/
+    when: on_success
+
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
@@ -133,6 +152,7 @@ build-ubuntu-amd64:
     expire_in: 1 day
 
 build-ubuntu-arm64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
@@ -149,6 +169,7 @@ build-ubuntu-arm64:
     expire_in: 1 day
 
 build-alpine-amd64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
@@ -165,6 +186,7 @@ build-alpine-amd64:
     expire_in: 1 day
 
 build-alpine-arm64:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
@@ -181,6 +203,7 @@ build-alpine-arm64:
     expire_in: 1 day
 
 build-perf:
+  extends: .qmod-cache
   stage: build
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
@@ -484,6 +507,7 @@ test-tiered-ubuntu-amd64:
     expire_in: 7 days
 
 test-macos:
+  extends: .qmod-cache
   stage: test
   timeout: 150 minutes
   needs: [{job: tree-already-tested, optional: true}]
