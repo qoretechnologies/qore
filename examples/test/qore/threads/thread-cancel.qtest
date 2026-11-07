@@ -954,9 +954,9 @@ bool sub do_cancel(int tid) {
             *binary data = pis.read(100);  # Block waiting for data
         });
 
-        # Clean up the pipe
-        try { pos.close(); } catch () {}
+        # Clean up the pipe: the input side finishes its close first, as PipeOutputStream::close() waits for it
         try { pis.finishClose(); } catch () {}
+        try { pos.close(); } catch () {}
 
         assertEq("THREAD-CANCELLED", ex.err, "PipeInputStream::read should throw THREAD-CANCELLED");
     }
