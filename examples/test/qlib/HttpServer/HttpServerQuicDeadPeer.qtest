@@ -286,6 +286,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         #! True if the QUIC timers run on the debug-only QUIC test clock
         bool virtual_clock = Option::HAVE_LIBRARY_DEBUGGING;
+
+        #! Counters that reach zero when the client processes exit, by pid file path
+        hash<string, Counter> client_exited;
     }
 
     constructor() : Test("HttpServerQuicDeadPeerTest", "1.0") {
@@ -402,7 +405,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         kill(pid, SIGKILL);
         date start = now_us();
         # past the idle timeout of the server's connection, which then sees no packet from the dead peer
-        advanceClockPastIdle();
+        advanceClockPastIdle(pid_path);
 
         assertEq("closed", ws_handler.closed_signal.get(ReapTimeout),
             "QUIC idle close reaped the dead peer's WebSocket handler");
@@ -437,7 +440,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertGt(0, pid, "client process recorded its pid");
 
         kill(pid, SIGKILL);
-        advanceClockPastIdle();
+        advanceClockPastIdle(pid_path);
 
         # The producer fills the 1 MB stream buffer, parks in the drain wait, and
         # is released only when the QUIC idle close marks the session closed and
@@ -595,11 +598,15 @@ l50Xb2GWQesIt9k5jF5IOw==
             "the slow handler actually ran");
     }
 
-    #! Advances the QUIC test clock past the idle timeout, if the QUIC timers run on it
-    /** Three idle timeouts: a dead peer is detected at about idle + idle/2 (see IdleTimeoutMs)
+    #! Advances the QUIC test clock past the idle timeout once the killed client has exited, if the QUIC timers run on it
+    /** Three idle timeouts: a dead peer is detected at about idle + idle/2 (see IdleTimeoutMs).  The client process
+        has exited first, so that every packet it sent is already in the server's socket buffer, where the advance
+        processes it on the current clock; a packet processed after the advance would give the server an RTT sample as
+        large as the advance, and raise its idle timeout (at least 3 PTOs) by as much
     */
-    private advanceClockPastIdle() {
+    private advanceClockPastIdle(string pid_path) {
         if (virtual_clock) {
+            client_exited{pid_path}.waitForZero();
             call_function("dbg_quic_advance_clock", IdleTimeoutMs * 3);
         }
     }
@@ -666,7 +673,7 @@ WebSocketClient wsc(sub (*data msg) {}, {
 wsc.connect();
 sleep(600s);
 ", get_module_path(), pid_path, port);
-        startClientScript(script);
+        client_exited{pid_path} = startClientScript(script);
         return pid_path;
     }
 
@@ -694,12 +701,14 @@ HttpClientIo::HttpClientConnectionManager mgr(
 mgr.request(\"https://127.0.0.1:%d\", \"GET\", \"/sse\");
 sleep(600s);
 ", get_module_path(), pid_path, port);
-        startClientScript(script);
+        client_exited{pid_path} = startClientScript(script);
         return pid_path;
     }
 
     #! Writes @a script to a temp file and runs it in a child qore process
-    private startClientScript(string script) {
+    /** @return a Counter that reaches zero when the child process has exited
+    */
+    private Counter startClientScript(string script) {
         string script_path = newTmpPath("qr");
         File f();
         f.open2(script_path, O_CREAT | O_WRONLY | O_TRUNC);
@@ -708,12 +717,18 @@ sleep(600s);
 
         # system() blocks until the child exits (i.e. until it is SIGKILLed), so
         # it must run on its own thread
-        background sub () {
-            try {
-                system(sprintf("%s %s", qore_exe, script_path));
-            } catch () {
-            }
-        }();
+        Counter exited(1);
+        background runClient(script_path, exited);
+        return exited;
+    }
+
+    #! Runs the client script and decrements @p exited when the child process has exited
+    private runClient(string script_path, Counter exited) {
+        on_exit exited.dec();
+        try {
+            system(sprintf("%s %s", qore_exe, script_path));
+        } catch () {
+        }
     }
 
     private string newTmpPath(string ext) {

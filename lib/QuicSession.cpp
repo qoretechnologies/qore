@@ -371,9 +371,6 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
             (long long)ms);
         return -1;
     }
-    int64_t total = quic_test_clock_offset_ns.fetch_add(ms * 1000000LL, std::memory_order_acq_rel)
-        + ms * 1000000LL;
-    // the operations of the connections handle the timers that are due on the new clock now
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
     if (*xsink || !ctl_obj) {
         return -1;
@@ -383,6 +380,17 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
     if (*xsink || !ctrl) {
         return -1;
     }
+    // the packets already received are processed on the current clock first: a packet processed after the advance
+    // would be taken as received now, and an acknowledgement in it would give an RTT sample as large as the advance,
+    // which raises the loss detection timers (and the idle timeout, at least 3 PTOs) by as much; the operations of
+    // the sockets are woken, and the wait ends when the I/O threads have run them
+    ctrl->dbgWakeAllSockets();
+    if (!ctrl->waitForProcessing(30000, xsink) && *xsink) {
+        return -1;
+    }
+    int64_t total = quic_test_clock_offset_ns.fetch_add(ms * 1000000LL, std::memory_order_acq_rel)
+        + ms * 1000000LL;
+    // the operations of the connections handle the timers that are due on the new clock now
     ctrl->dbgWakeAllSockets();
     return total / 1000000LL;
 }

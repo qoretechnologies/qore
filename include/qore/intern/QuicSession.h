@@ -2077,9 +2077,12 @@ public:
 #ifdef DEBUG
 //! Debug-only QUIC test clock: advances the clock of every QUIC connection of the process by @p ms milliseconds
 /** QuicSession::timestamp() adds the total of the advances, so the timers of the connections (idle timeout, keep-alive,
-    loss detection) run as if that much time had passed; the clock only goes forward, as ngtcp2 requires.  The
-    operations of every socket of the async I/O controller are then woken, so that they handle the timers that are due
-    on the new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets())
+    loss detection) run as if that much time had passed; the clock only goes forward, as ngtcp2 requires.  The packets
+    already received are processed on the current clock first (the operations of every socket of the async I/O
+    controller are woken, and the I/O threads are waited for), so that none is taken as received after the advance;
+    then the clock is advanced and the operations are woken again, so that they handle the timers that are due on the
+    new clock at once (see AsyncIoControllerPriv::dbgWakeAllSockets()).  A test must make sure that no peer still sends
+    packets that it does not want processed after the advance (a killed peer has exited, for example).
 
     @return the total advance in milliseconds
 */
