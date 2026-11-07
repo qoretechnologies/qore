@@ -638,16 +638,15 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
         assertEq("POST", fake.last_method);
         assertEq("_bulk", fake.last_path);
 
+        assertTrue(appender.isFlushTimerActive(), "the flush timer is active while the appender is open");
         appender.close();
 
-        # after close() the timer must no longer flush anything
+        # after close() the timer must no longer flush anything: close() cancels the timer and drains a timer callback
+        # that was already dispatched, so no timer is left that could flush the event logged after it
+        assertFalse(appender.isFlushTimerActive(), "the flush timer is stopped when close() returns");
         logger.info("message after close");
-        try {
-            string extra = fake.bulk_requests.get(TimerWaitMs);
-            fail(sprintf("the flush timer was still running after close(): %y", extra));
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("QUEUE-TIMEOUT", ex.err);
-        }
+        assertFalse(appender.isFlushTimerActive(), "an event logged after close() does not start the flush timer");
+        assertEq(0, fake.bulk_requests.size(), "nothing was flushed after close()");
     }
 
     #! Tests that closing the appender waits for a flush that is already in progress
