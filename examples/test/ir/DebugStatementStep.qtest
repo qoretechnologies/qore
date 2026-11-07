@@ -15,6 +15,7 @@
 # statement is tagged with a "### <tag>" comment, and the steps must be the tagged statements in the order in which
 # they run.  The debugger is attached before the functions are called, so they run with the AST or IR interpreter in
 # every execution mode; JitDebugStep.qtest tests the step events of native code.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 %modern
 

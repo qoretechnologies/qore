@@ -341,6 +341,9 @@ test-ast-ubuntu-amd64:
     # the core language tests with it, which cover the AST engine's own code paths without repeating the module,
     # I/O and network tests, which do not depend on the execution mode
     QORE_TEST_OPTS: '-penable-debug --exec-mode=ast'
+    # the harness tests whose checks all run in child processes with their own execution modes run in the
+    # default-mode jobs (see run_tests.sh)
+    QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN: "1"
     QORE_TEST_DIRS: 'qore/classes qore/closures qore/enums qore/functions qore/misc qore/namespaces qore/operators qore/stack qore/statements qore/strings qore/values qore/vars'
     TEST_TIMEOUT: "600"
   before_script:
@@ -381,6 +384,9 @@ test-ir-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=ir --ir-fallback-warn'
+    # the harness tests whose checks all run in child processes with their own execution modes run in the
+    # default-mode jobs (see run_tests.sh)
+    QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN: "1"
     TEST_TIMEOUT: "600"
   before_script:
     - . test/docker_test/tree-tested-skip.sh
@@ -420,6 +426,9 @@ test-jit-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=jit'
+    # the harness tests whose checks all run in child processes with their own execution modes run in the
+    # default-mode jobs (see run_tests.sh)
+    QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN: "1"
     TEST_TIMEOUT: "600"
   before_script:
     - . test/docker_test/tree-tested-skip.sh
@@ -459,6 +468,9 @@ test-tiered-ubuntu-amd64:
   variables:
     QORE_DB_CONNSTR_FREETDS: 'freetds:test/test@rippy'
     QORE_TEST_OPTS: '-penable-debug --exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10'
+    # the harness tests whose checks all run in child processes with their own execution modes run in the
+    # default-mode jobs (see run_tests.sh)
+    QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN: "1"
     TEST_TIMEOUT: "600"
   before_script:
     - . test/docker_test/tree-tested-skip.sh

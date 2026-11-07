@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class CompoundAssignmentOrNothingPlainInProcessTest
+
+#! Tests that soft-typed lvalues hold their declared type after a compound assignment in the test's execution mode
+/** The child processes of compound-assignment-or-nothing-plain.qtest check every execution mode against the AST
+    interpreter; these checks run in the process of the test, so each CI job checks them in its own execution mode.
+*/
+class CompoundAssignmentOrNothingPlainInProcessTest inherits QUnit::Test {
+    constructor() : QUnit::Test("CompoundAssignmentOrNothingPlainInProcess", "1.0", \ARGV) {
+        addTestCase("soft lvalues hold their declared type", \testSoftAst());
+
+        set_return_value(main());
+    }
+
+    #! a soft-typed lvalue holds its declared type after a compound assignment in the AST interpreter
+    testSoftAst() {
+        code id = auto sub (auto v) { return v; };
+        softint i = 10;
+        i *= id(1.5);
+        assertEq(15, i);
+        assertEq("integer", i.type());
+        i /= id(4n);
+        assertEq("integer", i.type());
+        softfloat f = 2.5;
+        f *= id(2n);
+        assertEq(5.0, f);
+        assertEq("float", f.type());
+        softnumber n = 2.5n;
+        n *= id(2.0);
+        assertEq("number", n.type());
+        *softint oi = 10;
+        oi *= id(2.5);
+        assertEq(25, oi);
+        hash<string, softint> h = {"a": 10};
+        h.a *= id(1.5);
+        assertEq("integer", h.a.type());
+    }
+}

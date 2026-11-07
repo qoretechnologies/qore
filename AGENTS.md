@@ -60,6 +60,12 @@
 - A test must end every process it starts (servers, helpers, children): on Linux, `run_tests.sh` fails a test that
   leaves processes running and kills them, as a leftover process keeps a CI job's output open and so the job running.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
+- A test that uses `examples/test/ExecModeHarness.qm` declares `# test-exec-mode: children - <why>` when all its checks
+  run in child processes that set their own `--exec-mode` (the CI jobs that run every test in one execution mode leave
+  it out, as the default-mode jobs run the same children), or `# test-exec-mode: parent - <why>` when it also checks
+  anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
+  child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
+  a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
 
 ## Running Tests Under valgrind
 - Disable signal handling with `-b` (`--disable-signals`), for example

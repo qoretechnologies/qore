@@ -29,6 +29,10 @@ print_usage () {
   echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
+  echo "  QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN"
+  echo "                           Set to '1' to leave out the tests that declare '# test-exec-mode: children'"
+  echo "                           (needs --exec-mode in QORE_TEST_OPTS): their child processes set their own"
+  echo "                           execution mode, so a run in the default mode makes the same checks."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -583,6 +587,42 @@ elif [ $PERF_ONLY -eq 1 ]; then
         fi
     done
     TESTS="$FILTERED"
+fi
+
+# The tests that declare "# test-exec-mode: children" make all their checks in child processes that set their own
+# execution mode (--exec-mode) with ExecModeHarness.qm, so the execution mode of the test itself changes nothing they
+# check: a run whose tests all get an execution mode (an --exec-mode option in QORE_TEST_OPTS) leaves them out when
+# QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1, as a run in the default mode runs the same child processes.  A harness test
+# with checks of its own declares "# test-exec-mode: parent" and always runs.
+# examples/test/runner/test_exec_mode_markers.py checks the declarations.
+if [ "${QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN}" = "1" ]; then
+    case " $QORE_TEST_OPTS " in
+        *" --exec-mode="*|*" --exec-mode "*) ;;
+        *)
+            echo "ERROR: QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1 needs an --exec-mode option in QORE_TEST_OPTS: the" \
+                "tests it leaves out run only in the default execution mode" >&2
+            exit 1
+            ;;
+    esac
+    CHILD_MODE_TESTS=""
+    if [ -n "$TESTS" ]; then
+        CHILD_MODE_TESTS=`grep -l '^# test-exec-mode: children' $TESTS`
+    fi
+    FILTERED=""
+    EXCLUDED_COUNT=0
+    for test in $TESTS; do
+        case "
+$CHILD_MODE_TESTS
+" in
+            *"
+$test
+"*) EXCLUDED_COUNT=$(( EXCLUDED_COUNT + 1 )) ;;
+            *) FILTERED="$FILTERED $test" ;;
+        esac
+    done
+    TESTS="$FILTERED"
+    echo "Left out $EXCLUDED_COUNT tests that declare 'test-exec-mode: children': their child processes set their" \
+        "own execution mode and run in the default-mode jobs"
 fi
 
 # Shard tests for parallel CI execution
