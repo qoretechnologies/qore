@@ -990,6 +990,15 @@ private:
     //! decide whether the in-progress compile must be awaited.
     const BgCompileWork* bg_in_progress = nullptr;
 
+    //! The Programs that the in-progress work item refers to, taken when the item was claimed
+    /** Protected by bg_queue_mutex.  The bg thread releases the references of the item (which can free the IR
+        functions and their variants) before it clears bg_in_progress, so a waiter must not look at the item itself
+        to decide whether it refers to a Program; it uses this copy.
+    */
+    std::vector<const QoreProgram*> bg_in_progress_pgms;
+    //! True if the in-progress item has an IR function with no Program (it is treated as referring to every Program)
+    bool bg_in_progress_any_pgm = false;
+
     //! Background thread worker loop
     void bgCompileThreadLoop();
 
@@ -1038,6 +1047,9 @@ private:
 
     //! True if a work item's root or any folded-in callee IR belongs to pgm.
     static bool workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm);
+
+    //! Collects the Programs that the work item refers to; see bg_in_progress_pgms
+    static void collectWorkPgms(const BgCompileWork& work, std::vector<const QoreProgram*>& pgms, bool& any_pgm);
 
     //! Complete a background work item: release refs, update active count, and notify waiters.
     void finishBgCompileWork(BgCompileWork& work);

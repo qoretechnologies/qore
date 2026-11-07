@@ -387,7 +387,7 @@ public:
     }
 
     DLLLOCAL unsigned getNumThreads() const {
-        return num_threads;
+        return num_threads.load(std::memory_order_relaxed);
     }
 
     //! acquires the lock before fork() (see QoreForkHandlers.h)
@@ -625,7 +625,8 @@ protected:
     QoreThreadLock join_lck;
     //! broadcast with join_lck held, after lck has been released, each time a TID is released; see joinThread()
     QoreCondition join_cond;
-    unsigned num_threads = 0;
+    //! changed under the lock, read by getNumThreads() from any thread
+    std::atomic<unsigned> num_threads {0};
     ThreadEntry entry[MAX_QORE_THREADS];
 
     tid_node* tid_head = nullptr,

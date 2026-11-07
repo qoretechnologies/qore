@@ -1239,8 +1239,8 @@ struct qore_httpclient_priv {
     // Helper to access the socket's HTTP/2 session
     // NOTE: The h2_session is now stored on the socket, not HTTPClient,
     // so that all layers (Socket, HTTPClient) share the same session
-    DLLLOCAL Http2Session* getH2Session() const {
-        return msock ? msock->socket->priv->h2_session.get() : nullptr;
+    DLLLOCAL Http2SessionPtr getH2Session() const {
+        return msock ? msock->socket->priv->h2_session.get() : Http2SessionPtr();
     }
 
     DLLLOCAL void setH2Session(const Http2SessionPtr& session) {
@@ -1988,7 +1988,7 @@ struct qore_httpclient_priv {
             // events reported for the client's requests identify the socket the client now owns
             event_sink->setId(active->getObjectIDForEvents());
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
-            active->enc = old->enc;
+            active->enc.store(old->enc.load());
 
             proxy_connected = false;
             persistent = false;

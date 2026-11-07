@@ -431,12 +431,12 @@ private:
     //! Current recv inner operation (recreated each read cycle); guarded by @ref m
     SocketRecvDataPollOperation* recv_op = nullptr;
 
-    WsState ws_state = WsState::CONNECTED;
+    std::atomic<WsState> ws_state {WsState::CONNECTED};
     //! True once the server's close frame was queued or the operation ended; read without a lock by
     //! checkDataSend()
     std::atomic<bool> closing{false};
     //! The close code: the client's once its close frame has arrived
-    uint16_t close_code = 1000;
+    std::atomic<uint16_t> close_code {1000};
     //! The close reason: the client's once its close frame has arrived
     std::string close_reason;
     bool close_sent = false;                //!< true once our close frame was queued

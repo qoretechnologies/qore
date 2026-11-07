@@ -329,7 +329,7 @@ private:
     //! Current recv inner operation (recreated each read cycle)
     SocketRecvDataPollOperation* recv_op = nullptr;
 
-    WsState ws_state = WsState::CONNECTED;
+    std::atomic<WsState> ws_state {WsState::CONNECTED};
     //! True once the operation left the connected state; read without a lock by checkDataSend()
     std::atomic<bool> closing{false};
     //! True once a close frame was put in the data to send; I/O thread only (see drainSendQueue())
@@ -337,7 +337,7 @@ private:
     //! True once requestClose() has queued a close request; read without a lock by getWsState()
     std::atomic<bool> close_requested{false};
     //! The close code: the server's once its close frame has arrived
-    uint16_t close_code = 1000;
+    std::atomic<uint16_t> close_code {1000};
     //! The close reason: the server's once its close frame has arrived
     std::string close_reason;
     bool close_initiated = false;           //!< true if we initiated the close handshake

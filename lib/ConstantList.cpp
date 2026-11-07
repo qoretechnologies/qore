@@ -226,7 +226,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         rt_in_init(false),
         // a shell's compile-time value is copied with the entry so every Program importing the same shell
         // resolves constant initializers the same way
-        aot_parse_shell_value_set(old.aot_parse_shell_value_set),
+        aot_parse_shell_value_set(old.aot_parse_shell_value_set.load()),
         runtime_dependent(old.runtime_dependent),
         mod_imported(old.mod_imported),
         // an unpopulated AOT shell keeps its deferred initializer in the copy, so the importing Program can run
@@ -248,8 +248,8 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
     std::lock_guard<std::mutex> value_lock(old.runtimeValueLock());
     val = old.val.refSelf();
     saved_val = old.saved_val.refSelf();
-    saved_val_set = old.saved_val_set;
-    aot_shell_pending = old.aot_shell_pending;
+    saved_val_set = old.saved_val_set.load();
+    aot_shell_pending = old.aot_shell_pending.load();
     // the copy keeps the original's sequence: importing a module must not reorder its constants relative
     // to each other, or the AOT writer would pick a different owner for a shared value in the importing
     // Program than the module was built with

@@ -1,0 +1,29 @@
+# ThreadSanitizer suppressions for running the Qore tests with a TSan build of libqore
+#
+# usage: TSAN_OPTIONS="suppressions=<this file> die_after_fork=0 report_thread_leaks=0" ...
+#
+# The libraries below are not built with TSan, and what TSan reports in them is not an error in libqore or in the
+# modules of this repository:
+#
+# - OpenSSL (libcrypto, libssl): the reference counts of its objects (SSL_SESSION, X509, stacks of them) are atomic
+#   operations inside the library, which TSan does not see: an object that one thread has released with the last
+#   reference and that another thread has read before then (with its own reference, as the QUIC ticket cache holds,
+#   taken with SSL_SESSION_up_ref()) is reported as a race between the read and the free().  The code in libqore takes
+#   and releases its references as OpenSSL requires.
+# - the Java virtual machine (libjvm, loaded by the jni module) and Node.js / V8 (libnode, loaded by the JavaScript
+#   module): the runtimes synchronize their own threads with primitives that TSan cannot model (their allocator,
+#   safepoints, thread-local allocation buffers), and report races and lock order inversions between their threads.
+called_from_lib:libcrypto.so.3
+called_from_lib:libssl.so.3
+called_from_lib:libjvm.so
+called_from_lib:libnode.so.127
+race:libjvm.so
+race:libnode.so.127
+deadlock:libnode.so.127
+
+# The locks that the fork handlers acquire in prepare() are acquired in rank order (see QoreForkHandlers.h).  In the
+# child, only the thread that called fork() exists and it holds those locks in TSan's model, which does not see the
+# locks being reset by the handlers' child() methods, so the lock order that the child then follows (qore_init() after a
+# fork, for example) is checked against locks that are no longer held, and reported as inverted.  The order of the
+# fork handlers is checked by the fork tests (misc/fork-leaf-locks, misc/fork-before-init) and by the rank assertions.
+deadlock:qore_fork_prepare

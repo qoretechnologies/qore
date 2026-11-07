@@ -160,22 +160,26 @@ public:
     // deferral that type inference already gets); nullptr once resolved or for built-in/already-resolved types
     QoreParseTypeInfo* parseTypeInfo = nullptr;
     QoreValue val{};
+    //! The flags that are set while a Program is parsed and do not change once it runs
     bool in_init : 1,     // being initialized
         pub : 1,          // public constant (modules only)
-        init : 1,         // already initialized
         builtin : 1,      // builtin vs user
         delayed_eval : 1, // delayed evaluation
         explicit_type : 1, // constant has an explicit declared type
         has_init_expr : 1, // had a delayed-eval init expression (for AOT)
-        saved_val_set : 1, // saved_val contains a runtime value or preserved init expression
-        aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
         external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
         external_stub_dependent : 1, // initializer references an external stub constant
-        rt_in_init : 1, // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
-        aot_parse_shell_value_set : 1, // a preloaded `.qo` shell supplied a compile-time value (see below)
         runtime_dependent : 1, // builtin whose value depends on the running library; see setRuntimeDependent()
         mod_imported : 1 // copied into this Program by importing a module; never exported again
         ;
+
+    //! The flags that change while the Program runs, when another thread can read the constant (importing a module,
+    //! evaluating a constant): separate objects, as a bitfield shares a memory location with its neighbors
+    std::atomic<bool> init;                      // already initialized
+    std::atomic<bool> saved_val_set;             // saved_val contains a runtime value or preserved init expression
+    std::atomic<bool> aot_shell_pending;         // AOT-deserialized shell whose init-func has not run
+    std::atomic<bool> rt_in_init;                // runtime value evaluation in progress (parseCommitRuntimeInit)
+    std::atomic<bool> aot_parse_shell_value_set; // a preloaded `.qo` shell supplied a compile-time value
 
     //! deferred AOT initializer for an unpopulated shell, or nullptr; owned by the AOT runtime
     /** Copied with the entry so that every Program importing the same AOT module can run the initializer from

@@ -254,7 +254,9 @@ public:
         return s == H3State::READING || s == H3State::WAIT_READ;
     }
 
+    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {
+        AutoLocker al(stream_lock);
         return error_info != nullptr;
     }
 

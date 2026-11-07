@@ -273,7 +273,9 @@ public:
         protocol_switched_listener = listener;
     }
 
+    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {
+        AutoLocker al(stream_lock);
         return error_info != nullptr;
     }
 
@@ -466,7 +468,7 @@ private:
 
     // --- Request sub-state (I/O thread only, no lock needed) ---
 
-    ReqState req_state = ReqState::IDLE;
+    std::atomic<ReqState> req_state {ReqState::IDLE};
 
     //! Request-body send sub-state for full-duplex streaming (I/O thread only)
     SendState send_state = SendState::INACTIVE;

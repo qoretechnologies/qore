@@ -71,13 +71,13 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 // codes, etc. — without packet capture.  Compile-time-on so it works in
 // Release builds for production triage; one cached env-var read at startup.
 static bool quic_ngtcp2_log_enabled() {
-    static int cached = -1;
-    if (cached < 0) {
+    // initialized once, by the first thread that gets here; the others wait for it
+    static const bool cached = []() {
         QoreEnvironmentValue v_holder("QORE_QUIC_NGTCP2_LOG");
         const char* v = v_holder.c_str();
-        cached = (v && *v && strcmp(v, "0") != 0) ? 1 : 0;
-    }
-    return cached != 0;
+        return v && *v && strcmp(v, "0") != 0;
+    }();
+    return cached;
 }
 
 static ngtcp2_duration get_configured_quic_idle_timeout_ns() {

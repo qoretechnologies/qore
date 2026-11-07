@@ -617,7 +617,7 @@ void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionS
 // --- Main reading/processing state handler ---
 
 QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
-    ASYNC_IO_TRACE("H1 handleReading: req_state=%d send_state=%d fd=%d\n", (int)req_state,
+    ASYNC_IO_TRACE("H1 handleReading: req_state=%d send_state=%d fd=%d\n", (int)req_state.load(),
         (int)send_state, sock_obj ? sock_obj->getSocket() : -1);
     // Full-duplex streaming send: drive the chunked request body send side
     // concurrently with the response-receive machine (req_state is a RECV_*

@@ -46,6 +46,7 @@
 class QoreEventNotifier;
 
 #include <atomic>
+#include <mutex>
 #include <deque>
 #include <string>
 #include <vector>
@@ -1955,7 +1956,7 @@ public:
             if (quic_session) {
                 quic_session->markClosed();
                 sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
-                quic_session.reset();
+                resetSession();
             }
             if (set_non_block) {
                 sock->priv->clearNonBlock();
@@ -1968,10 +1969,23 @@ public:
     }
 
     //! Get the QuicSession
-    DLLLOCAL std::shared_ptr<QuicSession> getSession() const { return quic_session; }
+    /** Can be called from any thread: the session is replaced and released by the I/O thread
+    */
+    DLLLOCAL std::shared_ptr<QuicSession> getSession() const {
+        std::lock_guard<std::mutex> lck(session_mtx_);
+        return quic_session;
+    }
 
     //! Check if connection is still open
-    DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
+    /** Can be called from any thread
+    */
+    DLLLOCAL bool isOpen() const {
+        if (qcs_state == QCS::CLOSED) {
+            return false;
+        }
+        std::shared_ptr<QuicSession> session = getSession();
+        return session && !session->isClosed();
+    }
 
     //! Returns the address family of the remote address, or AF_UNSPEC if it has not been resolved yet
     /** Can be called from any thread
@@ -1998,8 +2012,23 @@ private:
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     std::string host;
     std::string service;
+    //! the session is set and released by the I/O thread (setSession(), resetSession()) and read by any thread
+    //! (getSession(), isOpen()); the I/O thread reads it without the lock, as it is the only thread that changes it
     std::shared_ptr<QuicSession> quic_session;
-    QCS qcs_state = QCS::NONE;
+    mutable std::mutex session_mtx_;
+    DLLLOCAL void setSession(std::shared_ptr<QuicSession> session) {
+        std::lock_guard<std::mutex> lck(session_mtx_);
+        quic_session = std::move(session);
+    }
+    DLLLOCAL void resetSession() {
+        std::shared_ptr<QuicSession> old;
+        {
+            std::lock_guard<std::mutex> lck(session_mtx_);
+            old.swap(quic_session);
+        }
+        // the last reference is released outside the lock
+    }
+    std::atomic<QCS> qcs_state {QCS::NONE};
     struct sockaddr_storage local_addr_{};
     socklen_t local_addrlen_ = 0;
     struct sockaddr_storage remote_addr_{};
@@ -2259,7 +2288,7 @@ private:
     //! quic_sessions_lock).  This copy avoids lock contention in the hot path.
     std::unordered_map<int64_t, std::shared_ptr<QuicSession>> sessions_;
 
-    QCS qcs_state = QCS::NONE;
+    std::atomic<QCS> qcs_state {QCS::NONE};
 
     //! Headers-only mode flag
     bool headers_only_ = false;
@@ -2374,7 +2403,7 @@ public:
 
 private:
     std::shared_ptr<QuicSession> quic_session;
-    QCS qcs_state = QCS::NONE;
+    std::atomic<QCS> qcs_state {QCS::NONE};
     int64_t stream_id_ = -1;  //!< HTTP/3 stream ID (for ACK tracking in FLUSHING state)
     int status_code_ = 0;
     qore_http_header_pairs_t header_map_;
