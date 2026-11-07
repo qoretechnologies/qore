@@ -573,6 +573,18 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         (self.extra_dir / "Base.qm").unlink()
         self.assertEqual([], self.build_all())
 
+    def test_include_is_not_stored(self):
+        """qcc does not list the files a module includes in its depfile: a module with %include is not stored, and
+        neither are the modules that require it"""
+        (self.source / "qlib" / "part.ql").write_text("# part\n")
+        base = self.source / "qlib" / "Base.qm"
+        base.write_text("%include part.ql\nmodule Base {}\n")
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        self.assertEqual({"Base": "uncacheable", "Mid": "uncacheable", "Top": "uncacheable", "Other": "miss"},
+                         self.origins())
+        self.assertIn("%include", self.output)
+        self.assertEqual(["Base", "Mid", "Top"], self.build_all())
+
     def test_source_changed_during_compile_is_not_stored(self):
         (self.source / "slow.txt").write_text("1")
         self.build_all()

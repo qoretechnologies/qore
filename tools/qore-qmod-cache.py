@@ -113,6 +113,9 @@ FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
 
 QORE_SOURCE_SUFFIXES = (".qm", ".qc")
 
+#: a %include directive: qcc does not list the files a module includes in its depfile
+INCLUDE_DIRECTIVE = re.compile(rb"^[ \t]*%include\b", re.M)
+
 
 class CacheError(Exception):
     """An inconsistency that makes a module a miss, or makes "verify" fail"""
@@ -678,6 +681,26 @@ def lookup_module_key(build_dir, dep_path, own_root):
     return None
 
 
+def own_source_files(source_root):
+    """The Qore sources of a module: the files of its directory, or its .qm file"""
+    if not os.path.isdir(source_root):
+        return [source_root]
+    rv = []
+    for dirpath, _, names in os.walk(source_root):
+        rv += [os.path.join(dirpath, n) for n in sorted(names) if n.endswith((".qm", ".qc", ".ql", ".q"))]
+    return rv
+
+
+def check_no_include(source_root):
+    """Raises CacheError for a module whose sources include other files: qcc's depfile does not list them, so their
+    content could not be part of the key"""
+    for path in own_source_files(source_root):
+        with open(path, "rb") as f:
+            if INCLUDE_DIRECTIVE.search(f.read()):
+                raise CacheError("source '%s' has a %%include directive, and qcc does not list included files"
+                                 % path)
+
+
 def classify_dependencies(build_dir, source_root, deps):
     """Returns the dependency records of a module from its depfile's dependencies
 
@@ -972,6 +995,7 @@ class Module:
                 raise CacheError("source '%s' has gone" % path)
             if st.st_size != size or st.st_mtime_ns != mtime_ns:
                 raise CacheError("source '%s' changed while the module was compiled" % path)
+        check_no_include(self.source_root)
         records = classify_dependencies(self.build_dir, self.source_root, deps)
         required, optional_specs = read_module_info(self.out, self.name)
         # the compile may have written files in the module path since a lookup listed it

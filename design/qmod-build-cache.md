@@ -76,7 +76,9 @@ module's key into `<build>/qmod-cache-index/<digest of the module's source root>
 the module; a dependent finds a source's module as the nearest indexed directory above the source, or the source
 itself, and uses the key only while the qmod is the one recorded (size, modification time, inode).
 
-A dependency the key cannot cover makes the module uncacheable: a missing file, a Qore module source (`.qm`, `.qc`)
+A dependency the key cannot cover makes the module uncacheable: a module whose sources have a `%include` directive
+(qcc does not list included files in the depfile, so neither the cache nor the loader's staleness check nor an
+incremental build sees a change to one; no qlib module includes a file), a missing file, a Qore module source (`.qm`, `.qc`)
 of a module that was not built through the cache in this build tree (a module from outside the tree), and an AOT
 module that is not one of the tree's.  A binary (C++) module is covered by its content.
 
