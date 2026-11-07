@@ -507,6 +507,12 @@
     list, which is later than a Counter signalled from @ref on_exit; see the teardown order in its documentation
     (<a href="https://github.com/qoretechnologies/qore/issues/5575">issue 5575</a>).
 
+    @par Exit Hooks
+    register_exit_hook() registers code that the library calls before it waits for background threads to end, at the
+    end of the process or when a @ref Qore::Program "Program" is deleted, so that a module or a program can stop a
+    thread that runs until it is told to stop instead of keeping the process from ending (see
+    @ref user_module_exit_hooks)
+
     @par HTTP Server Fast Routes
     A path can be registered with @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()" so that the async I/O
     thread answers its qualifying requests in microseconds, with no worker hand-off and a response identical to the

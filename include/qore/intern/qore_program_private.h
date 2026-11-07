@@ -4700,4 +4700,23 @@ DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
 DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
 
+//! Registers code that the library calls before it waits for threads to end; see Qore::register_exit_hook()
+/** @return the hook's ID, or -1 if an exception was raised: the code is sandboxed, or the hooks of the process have
+    run already
+*/
+DLLLOCAL int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink);
+
+//! Removes an exit hook that the current Program registered; returns true if it was removed
+DLLLOCAL bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink);
+
+//! Runs the exit hooks of a Program, or all exit hooks if pgm is null, in the reverse order of their registration
+/** Called before the library waits for the threads of the process (pgm is null; no hook can be registered
+    afterwards), or for the threads of a Program being deleted.  Each hook runs once; an exception it raises is
+    reported, and the next hook runs.
+*/
+DLLLOCAL void qore_run_exit_hooks(QoreProgram* pgm);
+
+//! Releases the exit hooks of a Program without running them; called when the Program is destroyed
+DLLLOCAL void qore_drop_exit_hooks(QoreProgram* pgm);
+
 #endif

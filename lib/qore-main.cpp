@@ -397,7 +397,9 @@ void qore_cleanup() {
     // thing it does, so a host that has only destroyed its Programs (qore_destroy_program() waits for the threads
     // running in them) can still have threads finishing here, using what this function frees and, once the process
     // exits, the counter itself; the qore binary waits in ~QoreProgramHelper() already.  Teardown cannot be
-    // interrupted, so this is the internal, non-interruptible wait.
+    // interrupted, so this is the internal, non-interruptible wait.  The exit hooks, which can stop threads that
+    // would otherwise run forever, run first, unless they have run already (see ~QoreProgramHelper())
+    qore_run_exit_hooks(nullptr);
     thread_counter.waitForZero();
 
     // set shutdown flag for external modules

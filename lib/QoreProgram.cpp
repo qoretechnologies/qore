@@ -564,6 +564,8 @@ qore_program_private::~qore_program_private() {
     // wait till all debug calls are finished, no new calls possible as dpgm->removeProgram() set dpmg to NULL
     debug_program_counter.waitForZero();
     deleteAllBreakpoints();
+    // a hook that was not run (the Program was destroyed without being cleared) is never run
+    qore_drop_exit_hooks(pgm);
     QoreAutoRWWriteLocker al(&qore_program_private::lck_programMap);
     qore_program_set_t::iterator i = qore_program_set.find(pgm);
     assert(i != qore_program_set.end());
@@ -1674,6 +1676,9 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 }
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
+    // the exit hooks that the Program registered can stop the threads waited for below
+    qore_run_exit_hooks(pgm);
+
     // detach itself from debug
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to
@@ -5131,4 +5136,130 @@ QoreExternalProgramCallContextHelper::QoreExternalProgramCallContextHelper(QoreP
 
 QoreExternalProgramCallContextHelper::~QoreExternalProgramCallContextHelper() {
     delete priv;
+}
+
+// exit hooks: code that the library calls before it waits for the threads of the process, or of a Program being
+// deleted, to end; see qore_register_exit_hook()
+namespace {
+struct QoreExitHook {
+    //! the hook's ID, which also orders the hooks: they run in the reverse order of their registration
+    int64 id;
+    //! the Program whose code registered the hook; not referenced: its deletion runs or drops the hook first
+    QoreProgram* pgm;
+    //! the hook; referenced
+    ResolvedCallReferenceNode* code;
+};
+
+//! guards the hooks; never held while a hook runs or a reference is released
+std::mutex exit_hook_lock;
+//! the hooks registered, in registration order
+std::vector<QoreExitHook> exit_hooks;
+//! the last hook ID assigned
+int64 exit_hook_seq = 0;
+//! set when the hooks of the process have run: no hook can be registered afterwards
+bool exit_hooks_closed = false;
+
+//! Runs hooks taken from the registry, in the reverse order of their registration, and releases them
+void qore_run_exit_hook_list(std::vector<QoreExitHook>& run) {
+    for (auto i = run.rbegin(), e = run.rend(); i != e; ++i) {
+        ExceptionSink xsink;
+        {
+            // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program
+            ProgramThreadCountContextHelper tch(&xsink, i->pgm, true);
+            if (!xsink) {
+                QoreSandboxPolicyBarrierHelper barrier;
+                i->code->invoke(nullptr, &xsink).discard(&xsink);
+            }
+        }
+        i->code->deref(&xsink);
+        // an exception is reported, and the next hook runs
+        xsink.handleExceptions();
+    }
+}
+
+//! Takes the hooks of a Program, or all hooks, out of the registry
+void qore_take_exit_hooks(QoreProgram* pgm, std::vector<QoreExitHook>& run) {
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    if (!pgm) {
+        exit_hooks_closed = true;
+        run.swap(exit_hooks);
+        return;
+    }
+    for (auto i = exit_hooks.begin(); i != exit_hooks.end();) {
+        if (i->pgm == pgm) {
+            run.push_back(*i);
+            i = exit_hooks.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+}
+
+int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSink* xsink) {
+    // a hook runs, at the end of the process, with its Program's access and without a sandbox: sandboxed code
+    // cannot register one
+    {
+        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+        if (policy) {
+            xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered by code that a sandbox "
+                "governs");
+            return -1;
+        }
+    }
+    QoreProgram* pgm = getProgram();
+    assert(pgm);
+    std::lock_guard<std::mutex> l(exit_hook_lock);
+    if (exit_hooks_closed) {
+        xsink->raiseException("EXIT-HOOK-ERROR", "an exit hook cannot be registered after the exit hooks have run");
+        return -1;
+    }
+    int64 id = ++exit_hook_seq;
+    exit_hooks.push_back({id, pgm, code->refRefSelf()});
+    return id;
+}
+
+bool qore_deregister_exit_hook(int64 id, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    ResolvedCallReferenceNode* code = nullptr;
+    {
+        std::lock_guard<std::mutex> l(exit_hook_lock);
+        for (auto i = exit_hooks.begin(), e = exit_hooks.end(); i != e; ++i) {
+            // a Program removes only its own hooks
+            if (i->id == id && i->pgm == pgm) {
+                code = i->code;
+                exit_hooks.erase(i);
+                break;
+            }
+        }
+    }
+    if (!code) {
+        return false;
+    }
+    code->deref(xsink);
+    return true;
+}
+
+void qore_run_exit_hooks(QoreProgram* pgm) {
+    std::vector<QoreExitHook> run;
+    qore_take_exit_hooks(pgm, run);
+    if (run.empty()) {
+        return;
+    }
+    // a hook runs in a Qore thread
+    QoreForeignThreadHelper qfth;
+    qore_run_exit_hook_list(run);
+}
+
+void qore_drop_exit_hooks(QoreProgram* pgm) {
+    std::vector<QoreExitHook> drop;
+    qore_take_exit_hooks(pgm, drop);
+    if (drop.empty()) {
+        return;
+    }
+    ExceptionSink xsink;
+    for (auto& i : drop) {
+        i.code->deref(&xsink);
+    }
+    xsink.handleExceptions();
 }

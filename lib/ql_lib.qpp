@@ -33,6 +33,7 @@
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_lib.h"
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/ExecArgList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -566,6 +567,72 @@ abort();
 nothing abort() [dom=PROCESS] {
    threads_initialized = false;
    abort();
+}
+
+//! Registers code that the library calls before it waits for background threads to end
+/** The library waits for every background thread to end before a program ends (also when the main thread of the
+    @c qore binary has returned), and for the threads of a @ref Qore::Program "Program" before the Program is
+    deleted.  A thread that runs until it is told to stop, such as a worker waiting on a queue, would keep the
+    process or the Program from ending; an exit hook tells it to stop.
+
+    The hooks run:
+    - before the library waits for the threads of the process: every hook registered, once, in the reverse order of
+      their registration; no hook can be registered afterwards
+    - before a @ref Qore::Program "Program" waits for its threads when it is deleted: the hooks that its code
+      registered
+
+    A hook runs in the Program of the code that registered it, without the sandbox policy of the code that ends the
+    Program (see @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()").  An
+    exception that a hook raises is reported as an unhandled exception, and the next hook runs; when the hooks run as
+    the @c qore binary ends, a reported exception makes its exit status 3 if it would otherwise be 0, as any unhandled
+    exception raised while a program ends does.  A hook that does not return keeps the process from ending.
+
+    A module registers its hook in its \c init closure, and its \c del closure releases what the hook stopped (see
+    @ref user_module_exit_hooks).
+
+    @param hook the code to call; it takes no arguments
+
+    @return the hook's ID, for deregister_exit_hook()
+
+    @par Example:
+    @code{.py}
+# a worker that runs until it is told to stop
+Queue jobs();
+background sub () { while (auto job = jobs.get()) { job(); } }();
+# the worker stops before the library waits for it
+register_exit_hook(sub () { jobs.push(NOTHING); });
+    @endcode
+
+    @throw EXIT-HOOK-ERROR a sandbox governs the code that calls this function; or the hooks of the process have run
+    already
+
+    @see deregister_exit_hook()
+
+    @since %Qore 3.0
+ */
+int register_exit_hook(code hook) [dom=PROCESS] {
+    return qore_register_exit_hook(hook, xsink);
+}
+
+//! Removes an exit hook that the current Program registered
+/** @param id the ID returned by register_exit_hook()
+
+    @return @ref True if the hook was removed; @ref False if no hook of the current Program has the ID given, or it has
+    run already
+
+    @par Example:
+    @code{.py}
+int id = register_exit_hook(\stop_worker());
+# the worker was stopped otherwise
+deregister_exit_hook(id);
+    @endcode
+
+    @see register_exit_hook()
+
+    @since %Qore 3.0
+ */
+bool deregister_exit_hook(softint id) [flags=NAMED_ARGS;dom=PROCESS] {
+    return qore_deregister_exit_hook(id, xsink);
 }
 
 //! Replaces the current process image with another; this function does not return

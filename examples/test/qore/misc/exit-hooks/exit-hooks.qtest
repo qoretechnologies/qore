@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ExitHooksTest
+
+#! Verifies register_exit_hook() and deregister_exit_hook()
+/** The hooks run before the library waits for the threads of the process, or of a Program being deleted, so that a
+    thread that runs until it is told to stop does not keep the process or the Program from ending.  Each case that
+    would wait for ever without its hook is bounded by a limit that is reached only when the hook did not stop the
+    thread, and fails then.
+*/
+class ExitHooksTest inherits QUnit::Test {
+    public {
+        #! the most a deletion is given to end; reached only when nothing stops the thread it waits for
+        const Deadline = 60s;
+    }
+
+    constructor() : Test("exit hooks", "1.0", \ARGV) {
+        addTestCase("a module's worker stopped by its exit hook lets the process end", \moduleWorkerTest());
+        addTestCase("hooks run once, in the reverse order of their registration", \orderTest());
+        addTestCase("an exception in a hook is reported, the other hooks run and the exit status is 3", \exceptionTest());
+        addTestCase("a deregistered hook does not run", \deregisterTest());
+        addTestCase("no hook can be registered after the hooks have run", \lateRegistrationTest());
+        addTestCase("a deleted Program runs the hooks its code registered", \programDeletionTest());
+        addTestCase("sandboxed or restricted code cannot register a hook", \restrictedTest());
+        set_return_value(main());
+    }
+
+    moduleWorkerTest() {
+        # without the hook, the process waits for the worker until it gives up
+        hash<auto> r = runChild("%requires ExitHookWorker\n", "none");
+        assertEq(0, r.rc);
+        assertEq(("QUEUE-TIMEOUT", "del"), r.lines);
+        # with the hook, the worker stops before the process waits for it
+        r = runChild("%requires ExitHookWorker\n", "hook");
+        assertEq(0, r.rc);
+        assertEq(("hook", "stopped", "del"), r.lines);
+    }
+
+    orderTest() {
+        hash<auto> r = runChild("register_exit_hook(sub () { printf(\"1\\n\"); });\n"
+            "register_exit_hook(sub () { printf(\"2\\n\"); });\n"
+            "register_exit_hook(sub () { printf(\"3\\n\"); });\n");
+        assertEq(0, r.rc);
+        assertEq(("3", "2", "1"), r.lines);
+    }
+
+    exceptionTest() {
+        hash<auto> r = runChild("register_exit_hook(sub () { printf(\"after\\n\"); });\n"
+            "register_exit_hook(sub () { throw \"HOOK-TEST-ERROR\", \"a hook failed\"; });\n");
+        # the exception is reported as one raised in the teardown is: the process ends with exit status 3
+        assertEq(3, r.rc, r.output);
+        assertTrue(r.output =~ /HOOK-TEST-ERROR/, r.output);
+        assertTrue(inlist("after", r.lines), r.output);
+    }
+
+    deregisterTest() {
+        hash<auto> r = runChild("int id = register_exit_hook(sub () { printf(\"removed\\n\"); });\n"
+            "register_exit_hook(sub () { printf(\"kept\\n\"); });\n"
+            "printf(\"%y\\n\", deregister_exit_hook(id));\n"
+            "printf(\"%y\\n\", deregister_exit_hook(id));\n");
+        assertEq(0, r.rc);
+        assertEq(("True", "False", "kept"), r.lines);
+    }
+
+    lateRegistrationTest() {
+        hash<auto> r = runChild("register_exit_hook(sub () {\n"
+            "    try { register_exit_hook(sub () {}); printf(\"registered\\n\"); }\n"
+            "    catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }\n"
+            "});\n");
+        assertEq(0, r.rc);
+        assertEq(("EXIT-HOOK-ERROR",), r.lines);
+    }
+
+    programDeletionTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("our Queue jobs();\n"
+            "sub start() {\n"
+            "    background sub () { jobs.get(); }();\n"
+            "    register_exit_hook(sub () { jobs.push(1); });\n"
+            "}\n", "deleted-program");
+        p.callFunction("start");
+        Counter deleted(1);
+        background ExitHooksTest::deleteProgram(p, deleted);
+        remove p;
+        assertEq(0, deleted.waitForZero(Deadline), "the Program's hook stops its thread before it is waited for");
+    }
+
+    restrictedTest() {
+        SandboxManager sm();
+        Program sandboxed(PO_NEW_STYLE, True);
+        sandboxed.parse("sub reg() { register_exit_hook(sub () {}); }\n", "sandboxed");
+        sandboxed.setSandboxManager(sm);
+        assertThrows("EXIT-HOOK-ERROR", \sandboxed.callFunction(), ("reg",));
+        # restricted code cannot call the function at all
+        Program restricted(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL, True);
+        assertThrows("PARSE-EXCEPTION", \restricted.parse(), ("sub reg() { register_exit_hook(sub () {}); }\n",
+            "restricted"));
+    }
+
+    #! Deletes a Program in a thread of the test
+    private static deleteProgram(Program p, Counter deleted) {
+        on_exit deleted.dec();
+        delete p;
+    }
+
+    #! Runs a child process with the code given and returns its exit code, output and output lines
+    private hash<auto> runChild(string code, string mode = "") {
+        string dir = make_tmp_dir("exit-hooks-");
+        on_exit remove_tree(dir);
+        string script = dir + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n" + code);
+        f.close();
+        string output = dir + "/output.txt";
+        string command = sprintf("EXIT_HOOK_TEST='%s' QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", mode,
+            get_script_dir() + PathSep + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script, output);
+        int rc = system(command);
+        string out = ReadOnlyFile::readTextFile(output);
+        return {"rc": rc, "output": out, "lines": (map $1, trim(out).split("\n"), $1 !~ /^\s/ && $1 !~ /^(unhandled|call stack)/)};
+    }
+}
