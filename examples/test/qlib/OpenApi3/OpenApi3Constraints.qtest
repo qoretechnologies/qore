@@ -65,23 +65,23 @@ class OpenApi3ConstraintsTest inherits QUnit::Test {
         assertEq(<DataTypeConstraintInfo>{"min_length": 2, "max_length": 4, "pattern": "^[A-Z]"},
             code.getConstraints());
         assertEq("ABC", code.acceptsValue("ABC"));
-        assertThrows("RUNTIME-TYPE-ERROR", \code.acceptsValue(), "A");
-        assertThrows("RUNTIME-TYPE-ERROR", \code.acceptsValue(), "abc");
+        assertThrows("TYPE-VALUE-ERROR", \code.acceptsValue(), "A");
+        assertThrows("TYPE-VALUE-ERROR", \code.acceptsValue(), "abc");
         # an unconstrained schema of the same type does not share the constraints
         assertEq(NOTHING, s.Plain.getDataType().getConstraints());
         assertEq("a", s.Plain.getDataType().acceptsValue("a"));
 
         AbstractDataProviderType count = s.Count.getDataType();
         assertEq(10, count.acceptsValue(10));
-        assertThrows("RUNTIME-TYPE-ERROR", \count.acceptsValue(), 0);
-        assertThrows("RUNTIME-TYPE-ERROR", \count.acceptsValue(), 11);
+        assertThrows("TYPE-VALUE-ERROR", \count.acceptsValue(), 0);
+        assertThrows("TYPE-VALUE-ERROR", \count.acceptsValue(), 11);
 
         AbstractDataProviderType rate = s.Rate.getDataType();
-        assertThrows("RUNTIME-TYPE-ERROR", \rate.acceptsValue(), 0.3);
+        assertThrows("TYPE-VALUE-ERROR", \rate.acceptsValue(), 0.3);
 
         AbstractDataProviderType tags = s.Tags.getDataType();
-        assertThrows("RUNTIME-TYPE-ERROR", \tags.acceptsValue(), ((),));
-        assertThrows("RUNTIME-TYPE-ERROR", \tags.acceptsValue(), (("a", "a"),));
+        assertThrows("TYPE-VALUE-ERROR", \tags.acceptsValue(), ((),));
+        assertThrows("TYPE-VALUE-ERROR", \tags.acceptsValue(), (("a", "a"),));
 
         AbstractDataProviderType color = s.Color.getDataType();
         assertThrows("TYPE-VALUE-ERROR", \color.acceptsValue(), "blue");
@@ -103,12 +103,12 @@ class OpenApi3ConstraintsTest inherits QUnit::Test {
         assertTrue(id.getConstraints().exclusive_union);
         assertEq("x", id.acceptsValue("x"));
         assertEq(1, id.acceptsValue(1));
-        assertThrows("RUNTIME-TYPE-ERROR", \id.acceptsValue(), 1.5);
+        assertThrows("TYPE-VALUE-ERROR", \id.acceptsValue(), 1.5);
 
         AbstractDataProviderType flag = s.Flag.getDataType();
         assertEq(True, flag.acceptsValue(True));
         assertEq("auto", flag.acceptsValue("auto"));
-        assertThrows("RUNTIME-TYPE-ERROR", \flag.acceptsValue(), "x");
+        assertThrows("TYPE-VALUE-ERROR", \flag.acceptsValue(), "x");
 
         foreach AbstractDataProviderType type in ((id, flag)) {
             checkRestored(type, ("x", "", "auto", 1, 0, 1.5, True, False, (), {}));

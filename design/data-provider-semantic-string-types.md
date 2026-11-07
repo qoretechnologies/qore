@@ -23,7 +23,7 @@ string.
 - **Nullable variants for free.** `getOrNothingType()`/`getMandatoryType()` are inherited from
   `QoreDataType` (copy-mutate, `*`-prefix). Both `email` and `*email` are registered.
 - **Server-side validation is a backstop.** `acceptsValue()` validates string input against the format regex
-  and throws `RUNTIME-TYPE-ERROR` on failure. This fires **only on input/coercion paths** (request/message
+  and throws `TYPE-VALUE-ERROR` on failure. This fires **only on input/coercion paths** (request/message
   types, options, search criteria, expression returns); records returned by a provider are never run through
   `acceptsValue()`, so relayed third-party data is unaffected. Regexes are deliberately permissive (strict
   for `uuid`/`ipv4`/`ipv6`; lenient for `email`/`phone`/`hostname`/`uri`); a field that must accept anything

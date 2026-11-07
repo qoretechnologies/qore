@@ -95,7 +95,7 @@ class OpenApi3ConstTest inherits QUnit::Test {
         assertNothing(nullable_union.acceptsValue(NOTHING));
         assertEq({"kind": "filter"}, nullable_union.acceptsValue({"kind": "filter"}));
         assertEq(("first",), nullable_union.acceptsValue(("first",)));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { nullable_union.acceptsValue(False); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { nullable_union.acceptsValue(False); });
     }
 
     private discriminatorTest() {
@@ -108,8 +108,8 @@ class OpenApi3ConstTest inherits QUnit::Test {
         AbstractDataProviderType type = s.getDataType();
         assertEq({"model": "first"}, type.acceptsValue({"model": "first"}));
         assertEq({"model": "second"}, type.acceptsValue({"model": "second"}));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue({"model": "unknown"}); });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue({}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue({"model": "unknown"}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { type.acceptsValue({}); });
         SchemaObject constant_objects = schema({"oneOf": (
             {"const": {"kind": "first"}}, {"const": {"kind": "second"}},
         )});

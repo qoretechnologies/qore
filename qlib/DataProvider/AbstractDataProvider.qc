@@ -3582,7 +3582,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return the response to the request
 
         @throw INVALID-OPERATION the data provider does not support the request API
-        @throw RUNTIME-TYPE-ERROR the request type does not accept a value of the request: a request that is not a
+        @throw TYPE-VALUE-ERROR the request type does not accept a value of the request: a request that is not a
         hash for a hash request type, a field with a value of the wrong type, or a value that is not one of a field's
         allowed values; the description gives the type details; raised by getRequestTypeWithData(), whose default
         implementation checks the request with the request type
@@ -3959,7 +3959,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return the request type for this provider according to any call data passed
 
         @throw INVALID-OPERATION the data provider does not support the request API
-        @throw RUNTIME-TYPE-ERROR the request type does not accept a value of the request data: data that is not a
+        @throw TYPE-VALUE-ERROR the request type does not accept a value of the request data: data that is not a
         hash for a hash request type, a field with a value of the wrong type, or a value that is not one of a field's
         allowed values; the description gives the type details; the default implementation checks the data with the
         request type, and a missing value is accepted, as the data can be partial
@@ -7385,7 +7385,8 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     accepted = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "RUNTIME-TYPE-ERROR") {
+                    # a type that is not part of this module may still refuse a value with RUNTIME-TYPE-ERROR
+                    if (ex.err == "TYPE-VALUE-ERROR" || ex.err == "RUNTIME-TYPE-ERROR") {
                         type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
                             "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
                         continue;
@@ -7395,9 +7396,9 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             }
             if (!accepted) {
                 if (type_error) {
-                    error("RUNTIME-TYPE-ERROR", type_error);
+                    error("OPTION-VALUE-ERROR", "%s", type_error);
                 }
-                error("RUNTIME-TYPE-ERROR", "no type information available for option %y", i.key);
+                error("OPTION-VALUE-ERROR", "no type information available for option %y", i.key);
             }
             # check allowed values
             if (i.value.allowed_values && !i.value.allowed_values_creatable) {

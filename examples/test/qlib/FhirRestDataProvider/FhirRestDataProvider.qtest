@@ -642,7 +642,7 @@ class FhirRestDataProviderTest inherits QUnit::Test {
         });
         assertEq("OperationOutcome", outcome.resourceType);
 
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             patient.getChildProviderEx("create").doRequest({
                 "resource": {
                     "resourceType": "Observation",
@@ -650,7 +650,7 @@ class FhirRestDataProviderTest inherits QUnit::Test {
             });
         });
 
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             patient.getChildProviderEx("create").doRequest({
                 "resource": {
                     "resourceType": "Patient",
@@ -743,7 +743,7 @@ class FhirRestDataProviderTest inherits QUnit::Test {
         assertThrows("FHIR-RESOURCE-TYPE-ERROR", sub () {
             FhirRestDataProvider::getFhirR4GeneratedResourceDataType("NoSuchResource");
         });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("TYPE-VALUE-ERROR", sub () {
             patient_type.acceptsValue({
                 "resourceType": "Observation",
             });

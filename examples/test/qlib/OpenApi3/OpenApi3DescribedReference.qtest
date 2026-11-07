@@ -70,7 +70,7 @@ class OpenApi3DescribedReferenceTest inherits QUnit::Test {
             readonly.getSchemaIdentity());
         # read-only is a property of the use, which the object declaring the property validates
         AbstractDataProviderType chunk = type(doc, "Chunk");
-        assertThrows("RUNTIME-TYPE-ERROR", "read-only", \chunk.acceptsValue(),
+        assertThrows("TYPE-VALUE-ERROR", "read-only", \chunk.acceptsValue(),
             {"span": {"pageStart": 1}, "readonly": {"pageStart": 2}});
         assertEq({"span": {"pageStart": 1}}, chunk.acceptsValue({"span": {"pageStart": 1}}));
     }
@@ -177,13 +177,13 @@ class OpenApi3DescribedReferenceTest inherits QUnit::Test {
         AbstractDataProviderType referenced = fieldType(type(doc, "Chunk"), "direct");
         foreach AbstractDataProviderType t in ((described, referenced)) {
             assertEq({"pageStart": 1}, t.acceptsValue({"pageStart": 1}));
-            assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), {"pageStart": 1, "unknown": 2});
+            assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), {"pageStart": 1, "unknown": 2});
         }
         # the composition of the referenced schema is enforced on a described use, too
         AbstractDataProviderType choice = fieldType(type(doc, "Chunk"), "choice");
         assertEq("*Choice", choice.getName());
         assertEq({"a": 1}, choice.acceptsValue({"a": 1}));
-        assertThrows("RUNTIME-TYPE-ERROR", "oneOf", \choice.acceptsValue(), {"a": 1, "b": 2});
+        assertThrows("TYPE-VALUE-ERROR", "oneOf", \choice.acceptsValue(), {"a": 1, "b": 2});
     }
 
     compositionTest() {

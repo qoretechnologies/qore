@@ -35,7 +35,7 @@ public namespace DataProvider {
     interface can say why it refuses a value.
 
     When a format regex is supplied the type acts as a server-side backstop: @ref acceptsValue() validates
-    string input against the regex and throws \c RUNTIME-TYPE-ERROR on failure.  Validation is applied only
+    string input against the regex and throws \c TYPE-VALUE-ERROR on failure.  Validation is applied only
     on input/coercion paths (never on records returned from a data provider), and the regexes are
     deliberately permissive.
 
@@ -128,13 +128,13 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to the type or does not match the format
+        @throw TYPE-VALUE-ERROR value cannot be assigned to the type or does not match the format
     */
     auto acceptsValue(auto value) {
         value = QoreStringDataTypeBase::acceptsValue(value);
         if (format_regex.val() && exists value && value.typeCode() == NT_STRING && value.val()
                 && !regex(value, format_regex)) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("value %y is not a valid %y value", value, getName());
+            throw "TYPE-VALUE-ERROR", sprintf("value %y is not a valid %y value", value, getName());
         }
         return value;
     }

@@ -1631,6 +1631,23 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_11 DataProvider v3.11
+    - fixed @ref DataProvider::FileDataType::acceptsValue() "FileDataType::acceptsValue()" for a hash holding only
+      binary values, such as a literal <tt>{"content": binary("x")}</tt>: encoding the content raised
+      \c RUNTIME-TYPE-ERROR instead of checking the value
+    - soft numeric and date types refuse text that is no number or date with \c TYPE-VALUE-ERROR instead of
+      converting it to a zero value: the soft types that @ref DataProvider::AbstractDataProviderType::get()
+      "AbstractDataProviderType::get()" and @ref DataProvider::AbstractDataProviderTypeMap "AbstractDataProviderTypeMap"
+      give, and a soft numeric type with the \c number.format option, whose text must be a number in that format; a
+      number or date as text is converted as before
+    - a value that a data type refused with \c RUNTIME-TYPE-ERROR is refused with \c TYPE-VALUE-ERROR, and an option
+      value with \c OPTION-VALUE-ERROR, so that a caller's data can be told apart from a type error in the code; text
+      that a soft date type cannot parse as a date is also refused with \c TYPE-VALUE-ERROR instead of
+      \c INVALID-DATE, as non-numeric text is by the soft numeric types; a missing value is still reported with
+      \c MISSING-VALUE-ERROR and a missing required group of fields with \c REQUIRED-FIELD-GROUP-ERROR.
+      \c RUNTIME-TYPE-ERROR from a type now means that the check itself failed, and a field of a hash type reports
+      such an error, \c RUNTIME-OVERLOAD-ERROR, \c STACK-LIMIT-EXCEEDED and \c SCHEMA-DOCUMENT-DESTROYED with
+      their own code instead of as a refused value (@ref DataProvider::AbstractDataProviderType::getValueErrorCode()
+      "AbstractDataProviderType::getValueErrorCode()")
     - added catalog change listeners
       (@ref DataProvider::DataProviderActionCatalog::addCatalogChangeListener() "DataProviderActionCatalog::addCatalogChangeListener()",
       @ref DataProvider::DataProviderCatalogChangeListener "DataProviderCatalogChangeListener"): a listener is
@@ -1747,7 +1764,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       (\c "a whole number") for each base type and for the types of this module with a presentation of their own;
       DPQL completion names types with them
     - an allowed value or element choice that is a string with a NUL character, which cannot be a key of the set of
-      allowed values, raises \c RUNTIME-TYPE-ERROR when it is set on a field or type, and a value with a NUL
+      allowed values, raises \c TYPE-VALUE-ERROR when it is set on a field or type, and a value with a NUL
       character is refused as outside the allowed values (\c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR); before, the
       allowed values of a field and a value checked against them were cut at the NUL character, so that a value
       could be accepted that was not an allowed value.

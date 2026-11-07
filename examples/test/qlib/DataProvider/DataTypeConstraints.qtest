@@ -39,8 +39,8 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         });
         assertEq(1, t.acceptsValue(1));
         assertEq(9, t.acceptsValue(9));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 0);
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 10);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), 0);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), 10);
 
         # decimal multiples are not affected by binary floating-point rounding
         t = constrained("number", <DataTypeConstraintInfo>{"multiple_of": 0.1n});
@@ -48,11 +48,11 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         assertEq(7n, t.acceptsValue(7));
         # a float is compared as the decimal value it prints as
         t.acceptsValue(0.3);
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 0.35);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), 0.35);
 
         t = constrained("float", <DataTypeConstraintInfo>{"exclusive_minimum": 0, "maximum": 1.5});
         assertEq(1.5, t.acceptsValue(1.5));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 0.0);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), 0.0);
     }
 
     collectionTest() {
@@ -62,9 +62,9 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
             "pattern": "^a",
         });
         assertEq("ab", t.acceptsValue("ab"));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), "a");
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), "abcde");
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), "bcd");
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), "a");
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), "abcde");
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), "bcd");
 
         # enumerated values are compared as strings
         t = constrained("softstring", <DataTypeConstraintInfo>{"enum_values": ("ab", "1")});
@@ -78,22 +78,22 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
             "unique_items": True,
         });
         assertEq((1, 2), t.acceptsValue((1, 2)));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ((),));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ((1, 2, 3),));
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), ((),));
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), ((1, 2, 3),));
         # elements are compared after conversion
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ((1, "1"),));
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), ((1, "1"),));
 
         t = new SoftListDataType(AbstractDataProviderType::get("string")).copyWithConstraints(
             <DataTypeConstraintInfo>{"max_items": 1});
         assertEq(("x",), t.acceptsValue("x"));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), (("x", "y"),));
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), (("x", "y"),));
 
         HashDataType h("QoreTestHash");
         h.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
         t = h.copyWithConstraints(<DataTypeConstraintInfo>{"min_properties": 1, "max_properties": 1});
         assertEq({"a": 1}, t.acceptsValue({"a": 1}));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), {});
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), {"a": 1, "b": 2});
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), {});
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), {"a": 1, "b": 2});
     }
 
     copyTest() {
@@ -101,7 +101,7 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         AbstractDataProviderType t = shared.copyWithConstraints(<DataTypeConstraintInfo>{"minimum": 5});
         assertEq(NOTHING, shared.getConstraints());
         assertEq(1, shared.acceptsValue(1));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 1);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), 1);
         # no constraints: the type itself
         assertTrue(shared == shared.copyWithConstraints());
     }
@@ -114,20 +114,20 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         # restored from its description
         AbstractDataProviderType restored = AbstractDataProviderType::get(info);
         assertEq(t.getConstraints(), restored.getConstraints());
-        assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), 6);
+        assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), 6);
 
         # derived types keep the constraints
         foreach AbstractDataProviderType derived in ((t.getOrNothingType(), t.getOrNothingType().getMandatoryType(),
                 AbstractDataProviderType::get("int").copyWithConstraints(t.getConstraints()).getSoftType())) {
             assertEq(t.getConstraints(), derived.getConstraints(), derived.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \derived.acceptsValue(), 6);
+            assertThrows("TYPE-VALUE-ERROR", \derived.acceptsValue(), 6);
         }
 
         # a class-backed named type is copied, not modified
         AbstractDataProviderType email = AbstractDataProviderType::get(EmailType.copyWithConstraints(
             <DataTypeConstraintInfo>{"max_length": 20}).getInfo());
         assertEq(NOTHING, EmailType.getConstraints());
-        assertThrows("RUNTIME-TYPE-ERROR", \email.acceptsValue(), "someone.with.a.long.name@example.com");
+        assertThrows("TYPE-VALUE-ERROR", \email.acceptsValue(), "someone.with.a.long.name@example.com");
     }
 
     unionTest() {
@@ -151,7 +151,7 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         AbstractDataProviderType two = (new QoreUnionDataType((AbstractDataProviderType::get("string"),
             AbstractDataProviderType::get("string")))).copyWithConstraints(
             <DataTypeConstraintInfo>{"exclusive_union": True});
-        assertThrows("RUNTIME-TYPE-ERROR", \two.acceptsValue(), "x");
+        assertThrows("TYPE-VALUE-ERROR", \two.acceptsValue(), "x");
 
         HashDataType cat("Cat");
         cat.addField(new QoreDataField({"name": "kind", "type": AbstractDataProviderTypeMap."string"}));
@@ -165,21 +165,21 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         assertEq({"kind": "dog", "barks": True}, pet.acceptsValue({"kind": "dog", "barks": True}));
         # the discriminator selects the alternative, even if another would accept the value
         assertThrows("MISSING-VALUE-ERROR", \pet.acceptsValue(), {"kind": "dog", "meows": True});
-        assertThrows("RUNTIME-TYPE-ERROR", \pet.acceptsValue(), {"kind": "fish"});
-        assertThrows("RUNTIME-TYPE-ERROR", \pet.acceptsValue(), {"meows": True});
+        assertThrows("TYPE-VALUE-ERROR", \pet.acceptsValue(), {"kind": "fish"});
+        assertThrows("TYPE-VALUE-ERROR", \pet.acceptsValue(), {"meows": True});
     }
 
     conversionTest() {
         # booleans validate strings
         AbstractDataProviderType b = AbstractDataProviderType::get("softbool");
         assertEq(True, b.acceptsValue("1"));
-        assertThrows("RUNTIME-TYPE-ERROR", \b.acceptsValue(), "x");
+        assertThrows("TYPE-VALUE-ERROR", \b.acceptsValue(), "x");
         AbstractDataProviderType ob = AbstractDataProviderType::get("*softbool");
         assertEq(NOTHING, ob.acceptsValue(""));
 
         # a mandatory soft list accepts no value and does not describe itself as accepting one
         SoftListDataType mandatory(AbstractDataProviderType::get("string"));
-        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+        assertThrows("TYPE-VALUE-ERROR", \mandatory.acceptsValue(), NOTHING);
         assertFalse(mandatory.getInfo().types_accepted.contains("nothing"));
         SoftListDataType optional(AbstractDataProviderType::get("string"), True);
         assertEq(NOTHING, optional.acceptsValue(NOTHING));
@@ -213,7 +213,7 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         };
         AbstractDataProviderType t = AbstractDataProviderType::get(info);
         assertEq("5", t.acceptsValue(5));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), NOTHING);
         # the restored type is named and presented as described, not after its Qore value type
         assertEq("workflow", t.getName());
         assertEq("Workflow", t.getDisplayName());
@@ -242,7 +242,7 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         # a type that accepts only its own value type is not a soft type
         info.types_accepted = ("string",);
         t = AbstractDataProviderType::get(info);
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 5);
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), 5);
 
         # a description returning several value types cannot be restored
         info.types_returned = ("string", "int");
@@ -296,7 +296,7 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
             assertEq(c.constraints, soft.getConstraints(), label);
             assertEq(c.constraints, soft.getInfo().constraints, label);
             if (c.hasKey("value")) {
-                assertThrows(c.err ?? "RUNTIME-TYPE-ERROR", \soft.acceptsValue(), (c.value,), label);
+                assertThrows(c.err ?? "TYPE-VALUE-ERROR", \soft.acceptsValue(), (c.value,), label);
             }
             # the conversion does not change the original type
             assertEq(NOTHING, c.type.getConstraints(), label);
@@ -313,13 +313,13 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
                 new QoreSoftIntDataType())) {
             AbstractDataProviderType constrained = t.copyWithConstraints(bound);
             assertEq(10n, number(constrained.acceptsValue("10")), t.getName());
-            assertThrows("RUNTIME-TYPE-ERROR", \constrained.acceptsValue(), "10.5", t.getName());
+            assertThrows("TYPE-VALUE-ERROR", \constrained.acceptsValue(), "10.5", t.getName());
         }
         # a number format is used to convert the string, then the value is checked
         AbstractDataProviderType formatted = new QoreSoftFloatDataType({"number.format": ".,"})
             .copyWithConstraints(bound);
         assertEq(9.5, formatted.acceptsValue("9,5"));
-        assertThrows("RUNTIME-TYPE-ERROR", \formatted.acceptsValue(), "10,5");
+        assertThrows("TYPE-VALUE-ERROR", \formatted.acceptsValue(), "10,5");
 
         hash<DataTypeConstraintInfo> choice = <DataTypeConstraintInfo>{"enum_values": ("1",)};
         AbstractDataProviderType flag = new QoreSoftBoolDataType().copyWithConstraints(choice);

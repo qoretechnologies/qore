@@ -1776,7 +1776,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
 
         # an unknown job type never reaches a request: declaring the job types as allowed values means the
         # framework rejects it during request validation, naming what is accepted
-        assertThrows("RUNTIME-TYPE-ERROR", "allowed values", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "allowed values", sub () {
             prov.getChildProviderEx("check-job-status").doRequest({
                 "async_job_id": "j",
                 "job_type": "no-such-job",

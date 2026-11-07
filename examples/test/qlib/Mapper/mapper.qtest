@@ -937,7 +937,7 @@ public class MapperTest inherits QUnit::Test {
             Mapper m({"out0": "in0"}, {
                 "output": {"out0": new QoreDataField("out0", "test output field", StringType)},
             });
-            assertThrows("RUNTIME-TYPE-ERROR", \m.mapData(), {"inp0": NOTHING});
+            assertThrows("TYPE-VALUE-ERROR", \m.mapData(), {"inp0": NOTHING});
         }
         {
             Mapper m({"out0": "in0"}, {
@@ -1064,7 +1064,7 @@ public class MapperTest inherits QUnit::Test {
             v = m.mapData({"input_0": <StatInfo>{}}).output_0;
             assertEq(<StatInfo>{}, v);
             assertEq("hash<StatInfo>", v.fullType());
-            assertThrows("RUNTIME-TYPE-ERROR", \m.mapData(), {"input_0": 1});
+            assertThrows("TYPE-VALUE-ERROR", \m.mapData(), {"input_0": 1});
         }
         {
             Mapper m(TypeMap1, TypeOpts1);
@@ -1079,7 +1079,7 @@ public class MapperTest inherits QUnit::Test {
             v = m.mapData({"input_0": <StatInfo>{}}).output_0;
             assertEq(<StatInfo>{}, v);
             assertEq("hash<StatInfo>", v.fullType());
-            assertThrows("RUNTIME-TYPE-ERROR", \m.mapData(), {"input_0": 1});
+            assertThrows("TYPE-VALUE-ERROR", \m.mapData(), {"input_0": 1});
         }
 
         {

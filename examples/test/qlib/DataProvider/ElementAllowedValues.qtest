@@ -78,7 +78,7 @@ class ElementAllowedValuesTest inherits QUnit::Test {
     private rollback() {
         QoreDataField value = field(AbstractDataProviderType::get(IntType), (1,));
         auto choices = value.getElementAllowedValues();
-        assertThrows("RUNTIME-TYPE-ERROR", \value.setElementAllowedValues(), ((2, "invalid"), True));
+        assertThrows("TYPE-VALUE-ERROR", \value.setElementAllowedValues(), ((2, "invalid"), True));
         assertEq(choices, value.getElementAllowedValues());
         assertFalse(value.getElementAllowedValuesCreatable());
         assertEq((1,), value.acceptsValue((1,)));
@@ -95,7 +95,7 @@ class ElementAllowedValuesTest inherits QUnit::Test {
         assertEq("x", scalar.acceptsValue("x"));
         # "a\x00b" once named the key "a"
         assertThrows("FIELD-VALUE-ERROR", "does not accept value", \scalar.acceptsValue(), (nul,));
-        assertThrows("RUNTIME-TYPE-ERROR", "allowed value \"a\\\\x00b\" contains a NUL character",
+        assertThrows("TYPE-VALUE-ERROR", "allowed value \"a\\\\x00b\" contains a NUL character",
             \scalar.setAllowedValues(), (("y", nul),));
         # a refused list leaves the previous allowed values
         assertEq(("x", "a"), map $1.value, scalar.getAllowedValues());
@@ -107,14 +107,14 @@ class ElementAllowedValuesTest inherits QUnit::Test {
         QoreDataField list_field = field(string_type, ("x",));
         assertEq(("x",), list_field.acceptsValue(("x",)));
         assertThrows("FIELD-VALUE-ERROR", "allowed values for elements", \list_field.acceptsValue(), ((nul,),));
-        assertThrows("RUNTIME-TYPE-ERROR", "contains a NUL character", \list_field.setElementAllowedValues(),
+        assertThrows("TYPE-VALUE-ERROR", "contains a NUL character", \list_field.setElementAllowedValues(),
             (("y", nul),));
         assertEq(("x",), map $1.value, list_field.getElementAllowedValues());
 
         QoreDataType type(<QoreTypeInfo>{"type": StringType, "allowed_values": (<AllowedValueInfo>{"value": "x"},)});
         assertEq("x", type.acceptsValue("x"));
         assertThrows("TYPE-VALUE-ERROR", "does not accept value", \type.acceptsValue(), (nul,));
-        assertThrows("RUNTIME-TYPE-ERROR", "contains a NUL character", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "contains a NUL character", sub () {
             QoreDataType refused(<QoreTypeInfo>{"type": StringType, "allowed_values": (<AllowedValueInfo>{
                 "value": nul},)});
         });
@@ -122,7 +122,7 @@ class ElementAllowedValuesTest inherits QUnit::Test {
             "value": "x"},)});
         assertEq(("x",), element_type.acceptsValue(("x",)));
         assertThrows("TYPE-VALUE-ERROR", "allowed values for elements", \element_type.acceptsValue(), ((nul,),));
-        assertThrows("RUNTIME-TYPE-ERROR", "contains a NUL character", sub () {
+        assertThrows("TYPE-VALUE-ERROR", "contains a NUL character", sub () {
             QoreDataType refused(<QoreTypeInfo>{"type": AutoListType, "element_allowed_values": (<AllowedValueInfo>{
                 "value": nul},)});
         });

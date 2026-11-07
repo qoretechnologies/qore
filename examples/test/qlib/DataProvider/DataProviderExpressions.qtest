@@ -1340,7 +1340,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             err = ex;
         }
-        assertEq("RUNTIME-TYPE-ERROR", err.err);
+        assertEq("TYPE-VALUE-ERROR", err.err);
         assertRegex("^error in return value type \"int\" for \"qore-test-wrong-type\" expression: ", err.desc);
     }
 }

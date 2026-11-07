@@ -107,6 +107,12 @@
     restored as a cycle and a shared type as one type; code that walks the fields of restored types must recognize
     the types it has already visited.  See @ref dataprovider_v3_11.
 
+    @par Data Provider Types Refuse Values With TYPE-VALUE-ERROR
+    A value that a data provider type refuses raises \c TYPE-VALUE-ERROR, and a refused option value
+    \c OPTION-VALUE-ERROR, instead of \c RUNTIME-TYPE-ERROR, which now means a type error in the code; soft types also
+    refuse text that is no number or date.  Code that catches a refused value by its error code must use the new
+    codes.  See @ref dataprovider_v3_11.
+
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" raise
     \c INVALID-DATE for text after a date or time other than white space, a zone designator, \c UTC, \c GMT or the
@@ -175,7 +181,7 @@
 
     @par The Opacity of an RGB Color Is a Number From 0 to 1
     The \c a member of @ref DataProvider::RgbColorDataType "RgbColorDataType" is an opacity from \c 0 to \c 1 (default
-    \c 1), returned as a \c float; a value outside of this range, such as \c 255, raises \c RUNTIME-TYPE-ERROR.
+    \c 1), returned as a \c float; a value outside of this range, such as \c 255, raises \c TYPE-VALUE-ERROR.
 
     @par Text in the Other Byte Order Than Its UTF-16 or UTF-32 Encoding Is Refused
     @ref Qore::StreamReader "StreamReader", @ref Qore::BufferedStreamReader "BufferedStreamReader" and
@@ -456,7 +462,7 @@
     @parblock
     - the options and fields of REST schema actions enforce the constraints of their schema (such as \c maxLength or
       \c enum) before the request is sent (see @ref restschemavalidator_data_types)
-    - REST request types have no fields for \c readOnly properties, which are refused with \c RUNTIME-TYPE-ERROR
+    - REST request types have no fields for \c readOnly properties, which are refused with \c TYPE-VALUE-ERROR
       (see @ref restschemavalidator_data_types)
     - the documented \c default of an API property is a remote default value, which is shown and never sent (see
       @ref dataprovider_remote_default_values)
