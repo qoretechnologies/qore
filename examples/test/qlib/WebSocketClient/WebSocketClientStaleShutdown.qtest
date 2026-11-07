@@ -96,6 +96,14 @@ class StaleShutdownWsClient inherits WebSocketClient {
         bool report_teardown_task_end = False;
         #! released by the test to let a teardown held after handing delivery over end
         Counter release_handover(1);
+        #! the step of the next automatic reconnect to hold: "preamble" or "reestablish"
+        *string hold_reconnect_step;
+        #! released by the test to let a reconnect held at hold_reconnect_step go on
+        Counter release_reconnect_step(1);
+        #! after the next close handshake started by the client, wait until close_handshake_gate is released
+        bool gate_close_handshake = False;
+        #! released by the test to let the client go on after its close handshake
+        Counter close_handshake_gate(1);
         #! the number of delivery tasks still to hold when they start
         int hold_tasks = 0;
         #! released by the test to let the held delivery tasks go on, in the order they started
@@ -132,6 +140,11 @@ class StaleShutdownWsClient inherits WebSocketClient {
     armTeardown() {
         hold_release = True;
         release.dec();
+        armed = True;
+    }
+
+    #! records the delivery task that delivers the next "closed" message, without holding it
+    armTeardownNoHold() {
         armed = True;
     }
 
@@ -229,6 +242,64 @@ class StaleShutdownWsClient inherits WebSocketClient {
         }
     }
 
+    private bool sendCloseAndWaitUnlocked(int cmd) {
+        bool rv = WebSocketClient::sendCloseAndWaitUnlocked(cmd);
+        if (gate_close_handshake) {
+            gate_close_handshake = False;
+            # let the delivery task take the connection for its own teardown before going on
+            m.unlock();
+            on_exit m.lock();
+            close_handshake_gate.waitForZero(HandoffTimeout);
+        }
+        return rv;
+    }
+
+    #! disconnects in a new thread, which reports "disconnected"
+    disconnectInBackground() {
+        background disconnectAndReport();
+    }
+
+    private disconnectAndReport() {
+        try {
+            disconnect();
+            events.push("disconnected");
+        } catch (hash<ExceptionInfo> ex) {
+            events.push(sprintf("disconnect error: %s: %s", ex.err, ex.desc));
+        }
+    }
+
+    #! calls reconnect() in a new thread, which reports "reconnect-called"
+    reconnectInBackground() {
+        background reconnectAndReport();
+    }
+
+    private reconnectAndReport() {
+        try {
+            WebSocketClient::reconnect();
+            events.push("reconnect-called");
+        } catch (hash<ExceptionInfo> ex) {
+            events.push(sprintf("reconnect error: %s: %s", ex.err, ex.desc));
+        }
+    }
+
+    private reconnectPreamble() {
+        if (hold_reconnect_step == "preamble") {
+            remove hold_reconnect_step;
+            events.push("reconnect-step");
+            release_reconnect_step.waitForZero(HandoffTimeout);
+        }
+        WebSocketClient::reconnectPreamble();
+    }
+
+    private reestablishConnection(reference<hash<auto>> info) {
+        if (hold_reconnect_step == "reestablish") {
+            remove hold_reconnect_step;
+            events.push("reconnect-step");
+            release_reconnect_step.waitForZero(HandoffTimeout);
+        }
+        WebSocketClient::reestablishConnection(\info);
+    }
+
     private doReconnect() {
         if (hold_reconnect) {
             hold_reconnect = False;
@@ -273,7 +344,7 @@ class StaleShutdownWsClient inherits WebSocketClient {
 
     private waitAsyncTeardownUnlocked() {
         if (async_teardown_tid && async_teardown_tid != gettid()) {
-            events.push("connect-waiting");
+            events.push("teardown-wait");
         }
         WebSocketClient::waitAsyncTeardownUnlocked();
     }
@@ -305,6 +376,14 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("connect in the closing callback", \connectInClosingCallbackTest());
         addTestCase("connect and disconnect in the closing callback", \connectDisconnectInClosingCallbackTest());
         addTestCase("connect during a teardown that starts a reconnect", \connectDuringReconnectTeardownTest());
+        addTestCase("connect while a reconnect is about to disconnect", \connectDuringReconnectStepTest(),
+            "preamble");
+        addTestCase("connect while a reconnect is about to connect", \connectDuringReconnectStepTest(),
+            "reestablish");
+        addTestCase("disconnect during the teardown run by the delivery task", \closeDuringTeardownTest(),
+            "disconnect");
+        addTestCase("reconnect during the teardown run by the delivery task", \closeDuringTeardownTest(),
+            "reconnect");
         addTestCase("delivery task of a closed connection starting late", \lateDeliveryTaskTest());
         addTestCase("delivery task of a closed connection ending during a callback", \lateDeliveryTaskThreadTest());
         addTestCase("teardown ending after handing delivery over", \handOverDeliveryThreadTest());
@@ -375,7 +454,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
         wsc.connectInBackground();
         # the connect waits for the end of the teardown
-        assertEq("connect-waiting", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        assertEq("teardown-wait", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
         wsc.release_close.dec();
         wsc.watchDone();
         hash<string, bool> seen = {};
@@ -523,7 +602,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         wsc.send("bye");
         assertEq("detached", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
         wsc.connectInBackground();
-        assertEq("connect-waiting", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        assertEq("teardown-wait", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
         wsc.release_close.dec();
         wsc.watchDone();
         hash<string, bool> seen = {};
@@ -538,6 +617,115 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("reconnect-done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
 
         checkSecondConnection(wsc, msgs, closed_count);
+    }
+
+    #! A connect() made while an automatic reconnect is about to disconnect or to connect
+    /** The reconnect leaves the new connection alone: it checks with the client's lock held, in the disconnect and
+        connect it makes, that no connection was started after the teardown it was started for.
+    */
+    connectDuringReconnectStepTest(string step) {
+        Queue msgs();
+        Counter closed_count();
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            } else {
+                closed_count.inc();
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger, "reconnect": True});
+        on_exit {
+            if (wsc.release_reconnect_step.getCount()) {
+                wsc.release_reconnect_step.dec();
+            }
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+        wsc.hold_reconnect_step = step;
+        # the server closes the connection; the teardown starts a reconnect, which is held at the given step after
+        # its check that no connection was started meanwhile
+        wsc.send("bye");
+        assertEq("reconnect-step", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        assertEq(1, closed_count.getCount(), "the first connection is reported closed");
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the second connection is open");
+        wsc.release_reconnect_step.dec();
+        assertEq("reconnect-done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+
+        checkSecondConnection(wsc, msgs, closed_count);
+    }
+
+    #! A disconnect() or reconnect() whose close handshake ends while the delivery task tears the connection down
+    /** It waits for the end of that teardown, which reports the connection closed, instead of tearing the connection
+        down and reporting it closed a second time.
+    */
+    closeDuringTeardownTest(string call) {
+        Queue msgs();
+        Counter closed_count();
+        Counter in_callback(1);
+        Counter release_callback(1);
+        *StaleShutdownWsClient client;
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+                return;
+            }
+            closed_count.inc();
+            # the teardown run by the delivery task is held in its closing callback
+            if (client.hold_tid && gettid() == client.hold_tid && in_callback.getCount()) {
+                in_callback.dec();
+                release_callback.waitForZero(StaleShutdownWsClient::HandoffTimeout);
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        client = wsc;
+        on_exit {
+            remove client;
+            if (wsc.close_handshake_gate.getCount()) {
+                wsc.close_handshake_gate.dec();
+            }
+            if (release_callback.getCount()) {
+                release_callback.dec();
+            }
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+        # the delivery task that delivers the "closed" message is recorded, but not held there
+        wsc.release.dec();
+        wsc.armTeardownNoHold();
+        wsc.gate_close_handshake = True;
+        if (call == "disconnect") {
+            wsc.disconnectInBackground();
+        } else {
+            wsc.reconnectInBackground();
+        }
+        # the delivery task tears the connection down and is held in the closing callback
+        assertEq(0, in_callback.waitForZero(StaleShutdownWsClient::HandoffTimeout), "the teardown reports the close");
+        wsc.close_handshake_gate.dec();
+        string ended = call == "disconnect" ? "disconnected" : "reconnect-called";
+        # the call waits for the end of the teardown
+        assertEq("teardown-wait", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        release_callback.dec();
+        assertEq(ended, wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        if (call == "reconnect") {
+            assertEq("reconnect-done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+            assertTrue(wsc.isOpen(), "the client has reconnected");
+            wsc.disconnect();
+            assertEq(2, closed_count.getCount(), "the closed connection is reported closed once");
+        } else {
+            assertFalse(wsc.isOpen(), "the client is not connected");
+            assertEq(1, closed_count.getCount(), "the connection is reported closed once");
+        }
     }
 
     #! A delivery task scheduled for a connection that starts after the connection was closed and a new one started

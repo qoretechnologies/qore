@@ -271,6 +271,9 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       @ref WebSocketClient::WebSocketClient::connect() "connect()" made while the end of a connection is processed
       now waits until the closed connection has been reported closed, and an automatic reconnect started for the
       closed connection is not made when a connection was started meanwhile; before, it closed that connection
+    - a @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" or
+      @ref WebSocketClient::WebSocketClient::reconnect() "reconnect()" made while the end of the connection is
+      processed reports the connection closed once; before, it could be reported closed twice
     - the messages of a connection are delivered by one task at a time, in order, also when a connection is closed
       and a new one is started while the delivery of the closed connection's messages is still pending
     - @ref WebSocketClient::WebSocketClient::isOpen() "isOpen()" reports an HTTP/1.1 connection open as long as its
@@ -719,6 +722,14 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         int async_teardown_tid = 0;
 
+        #! The poll operation of the connection that the teardown in progress (@ref async_teardown_tid) tears down
+        /** A thread that runs a callback of this operation (e.g. the raw frame callback) does not wait for the
+            teardown, which may wait for that callback; see waitAsyncTeardownUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        *object async_teardown_op;
+
         #! The connection generation (@ref conn_generation) at the last clearTid() call
         /** An automatic reconnect started for a teardown does nothing when a connection was started after the
             teardown, e.g. by an explicit @ref connect(); see doReconnect().
@@ -726,6 +737,14 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             @since WebSocketClient 2.5
         */
         int reconnect_conn_generation = 0;
+
+        #! TID of the thread running doReconnect(), or 0
+        /** The disconnect and connect made by the reconnect check under the lock that no connection was started
+            since the teardown the reconnect was started for; see reconnectSupersededUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        int reconnect_tid = 0;
 
         #! Unique websocket connection ID; -1 when not connected
         int cid = -1;
@@ -1532,7 +1551,14 @@ ws.connect();
                     # First let the close handshake started above end (RFC 6455 section 5.5.1); the lock is
                     # released while waiting, and if the delivery pipeline tore the connection down meanwhile, it
                     # has also started the reconnect, as the stop flag is not set.
+                    int gen = tid_generation;
                     if (sendCloseAndWaitUnlocked(WSCC_NormalClosure)) {
+                        return True;
+                    }
+                    # the delivery task may have taken the connection for its own teardown meanwhile: it reports
+                    # the connection closed and starts the reconnect, so let it end instead of tearing down twice
+                    waitAsyncTeardownUnlocked();
+                    if (tid_generation != gen) {
                         return True;
                     }
                     stopAsyncIo();
@@ -1710,6 +1736,12 @@ ws.connect();
         }
 
         waitAsyncTeardownUnlocked();
+        # checked with the lock held, after any wait that releases it: an automatic reconnect never replaces a
+        # connection started after the teardown it was started for
+        if (reconnecting && reconnectSupersededUnlocked()) {
+            throw "WEBSOCKET-RECONNECT-SUPERSEDED", "a connection was started after the teardown that the reconnect "
+                "was started for";
+        }
         if (isOpenUnlocked()) {
             disconnectUnlocked();
         }
@@ -1724,6 +1756,10 @@ ws.connect();
 
         startAsyncIo();
         updateTid(-1);
+        if (reconnecting) {
+            # the connection belongs to the reconnect, which may still disconnect it
+            reconnect_conn_generation = conn_generation;
+        }
         logDebug("WS async I/O started (no delivery thread)");
         return h;
     }
@@ -1731,6 +1767,11 @@ ws.connect();
     #! Disconnect with the given @ref closecodes "close code"
     private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy) {
         AutoLock al(m);
+
+        # an automatic reconnect never closes a connection started after the teardown it was started for
+        if (reconnectSupersededUnlocked()) {
+            return;
+        }
 
         # HTTP/3 closes the TCP socket after QUIC handshake, so isOpen() returns False
         # even though the QUIC connection is active; check http3_websocket as well
@@ -2299,7 +2340,14 @@ ws.setEventQueue();
                 # First run the close handshake: send the close frame and wait for the server's (RFC 6455 section
                 # 5.5.1), at most the close timeout.  The lock is released while waiting, so the delivery
                 # pipeline may tear the connection down meanwhile: then there is nothing left to do here.
+                int gen = tid_generation;
                 if (sendCloseAndWaitUnlocked(cmd)) {
+                    return;
+                }
+                # the delivery task may have taken the connection for its own teardown meanwhile: it reports the
+                # connection closed, so let it end instead of tearing down twice
+                waitAsyncTeardownUnlocked();
+                if (tid_generation != gen) {
                     return;
                 }
                 stopAsyncIo();
@@ -2492,6 +2540,7 @@ ws.setEventQueue();
         # teardown even if the tid sentinel is immediately reused by a reconnect
         ++tid_generation;
         async_teardown_tid = 0;
+        remove async_teardown_op;
         # a reconnect started for this teardown is made only if no connection is started before it runs
         reconnect_conn_generation = conn_generation;
         if (tid_waiting) {
@@ -2518,13 +2567,16 @@ ws.setEventQueue();
     #! Waits until a teardown run by handleAsyncShutdown() on another thread has ended; must be called with \c m held
     /** handleAsyncShutdown() releases the lock while it closes the connection and while it calls the closing
         callback; a connection started meanwhile would otherwise be started before the closed connection is reported
-        closed.  No wait is made on the thread running the teardown, e.g. for a \c connect() made in the closing
-        callback.
+        closed, and a disconnect() or reconnect() made meanwhile would tear the connection down and report it closed
+        a second time.  No wait is made on the thread running the teardown, e.g. for a \c connect() made in the
+        closing callback, nor on a thread that runs a callback of the operation being torn down (e.g. the raw frame
+        callback), nor in the destructor, which can run on an I/O thread that the teardown waits for.
 
         @since WebSocketClient 2.5
     */
     private waitAsyncTeardownUnlocked() {
-        while (async_teardown_tid && async_teardown_tid != gettid()) {
+        while (async_teardown_tid && async_teardown_tid != gettid()
+            && !(async_teardown_op && async_teardown_op.isCallbackThread())) {
             ++tid_waiting;
             on_exit --tid_waiting;
             tid_cond.wait(m);
@@ -3037,6 +3089,7 @@ ws.setEventQueue();
             # connect() waits for the end of the teardown from here on; see waitAsyncTeardownUnlocked()
             async_teardown_tid = gettid();
             res = detachAsyncIo();
+            async_teardown_op = res.op;
             # with HTTP/1.1, the socket taken from the connection after the upgrade; see shutdownAndCloseUnlocked()
             wake_socket = remove async_wake_socket;
         }
@@ -3046,6 +3099,7 @@ ws.setEventQueue();
                 AutoLock al(m);
                 if (async_teardown_tid == gettid()) {
                     async_teardown_tid = 0;
+                    remove async_teardown_op;
                     if (tid_waiting) {
                         tid_cond.broadcast();
                     }
@@ -3318,6 +3372,18 @@ ws.setEventQueue();
         for, e.g. by an explicit @ref connect(): the reconnect would otherwise close that connection.
     */
     private doReconnect() {
+        {
+            AutoLock al(m);
+            reconnect_tid = gettid();
+        }
+        on_exit {
+            if (self) {
+                AutoLock al(m);
+                if (reconnect_tid == gettid()) {
+                    reconnect_tid = 0;
+                }
+            }
+        }
         try {
             {
                 AutoLock al(m);
@@ -3362,6 +3428,11 @@ ws.setEventQueue();
                     connected = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "WEBSOCKET-RECONNECT-SUPERSEDED") {
+                        logInfo("Reconnect %d: a connection was started meanwhile; no further attempt is made",
+                            retries);
+                        break;
+                    }
                     ++retries;
                     if (MaxReconnectRetries > 0 && (retries == MaxReconnectRetries)) {
                         logError("Reconnect %d: failed (%s: %s); max retries exhausted", retries, ex.err, ex.desc);
@@ -3415,6 +3486,16 @@ ws.setEventQueue();
                 }
             }
         }
+    }
+
+    #! Returns @ref True if the calling thread runs an automatic reconnect whose teardown was followed by a new connection; must be called with \c m held
+    /** Such a reconnect must neither close nor replace the client's connection: it was started by someone else,
+        e.g. by an explicit @ref connect(), after the teardown that the reconnect was started for.
+
+        @since WebSocketClient 2.5
+    */
+    private bool reconnectSupersededUnlocked() {
+        return reconnect_tid && reconnect_tid == gettid() && conn_generation != reconnect_conn_generation;
     }
 
     #! Executes before a reconnect
