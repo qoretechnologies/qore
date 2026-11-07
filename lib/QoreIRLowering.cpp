@@ -8049,6 +8049,20 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     return right;
 }
 
+// documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::compoundAssignmentResult(bool needs_rv, const VarRefNode* var,
+        const QoreValue& left, QoreIRValue result, std::string& error, const char* context) {
+    // the variable's type can convert the value that the operation computes when it is stored (ex: an any or auto!
+    // variable stores a hash<HD> as a plain hash, a softint variable stores 2.5 as 2), and the AST interpreter's += and
+    // -= operators return the value the lvalue holds afterwards (doPlusEqualsOnLValue() and
+    // doMinusEqualsOnLValue()), so the variable is read again; the other compound operators return the value they
+    // compute, as these AST operators do, and do not use this function
+    if (!needs_rv) {
+        return result;
+    }
+    return loadVarRef(var, error, context, left);
+}
+
 QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QorePlusEqualsOperatorNode*>(node);
@@ -8267,7 +8281,8 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (!storeVarRef(left_var, result, error, "plus-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "plus-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string& error) {
@@ -8481,7 +8496,8 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (!storeVarRef(left_var, result, error, "minus-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "minus-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::string& error) {

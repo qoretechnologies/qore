@@ -185,6 +185,25 @@ public:
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
     QoreIRValue lowerVarRef(const QoreValue& expr, std::string& error);
     QoreIRValue lowerAssignment(const QoreValue& expr, std::string& error);
+    //! Returns the result of += or -= on a variable that is changed by loading it, computing its new value and
+    //! storing it
+    /** The result is the value the variable holds after the store, as in the AST interpreter, whose += and -=
+        operators return the lvalue's value: the variable's declared type can convert the computed value when it is
+        stored (ex: an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash), so the variable is read
+        again when the result is used.  The other compound operators of the AST interpreter return the value they
+        compute, and so do their lowerings.
+
+        @param needs_rv true if the result of the operator is used
+        @param var the variable
+        @param left the operator's lvalue expression
+        @param result the computed value that was stored
+        @param error for an error message
+        @param context the context of the load for error messages
+
+        @return the result of the operator
+    */
+    QoreIRValue compoundAssignmentResult(bool needs_rv, const VarRefNode* var, const QoreValue& left,
+        QoreIRValue result, std::string& error, const char* context);
     QoreIRValue lowerPlusEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMinusEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMultiplyEquals(const QoreValue& expr, std::string& error);

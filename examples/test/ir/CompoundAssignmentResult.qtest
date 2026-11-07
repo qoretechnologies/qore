@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CompoundAssignmentResultTest
+
+#! Regression test: the result of += and -= on a variable is the value the variable holds afterwards
+/** The AST interpreter's += and -= operators return the value of the lvalue after the operation.  A variable's
+    declared type can convert the value that the operation computes when it is stored: an \c any or \c auto! variable
+    stores a \c hash<HD> operand of += on no value as a plain \c hash, and a \c list<int> as a plain \c list.  Compiled
+    code gave the value it computed instead, before the store converted it: native code returns the operand itself
+    for an lvalue with no value, so <tt>(v += <HD>{}).fullType()</tt> gave \c "hash<HD>" for an \c any or \c auto!
+    variable.  The result is now read from the variable when it is used.
+
+    The script applies += to \c any and \c auto! locals, globals, thread_local variables, members and static
+    variables, with no value and with \c NULL, and prints the results and the values; it calls each function three
+    times, so that every tier runs it (see ExecModeOutputTest).
+*/
+class CompoundAssignmentResultTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+hashdecl HD { int a = 1; }
+any ga;
+auto! gb;
+thread_local any ta;
+thread_local auto! tb;
+class C {
+    public {
+        any ma;
+        auto! mb;
+        static any sa;
+        static auto! sb;
+    }
+}
+
+string sub t(auto v) { return v.fullType(); }
+
+# the result of += on an lvalue with no value or NULL is the value the lvalue holds: any and auto! store a hash<HD>
+# as a plain hash
+string sub locals(auto o) {
+    any la;
+    auto! lb;
+    string r = sprintf("%s %s", t(la += o), t(lb += o));
+    la = NULL;
+    lb = NULL;
+    return r + sprintf(" %s %s / %s %s", t(la += o), t(lb += o), t(la), t(lb));
+}
+
+string sub others(auto o) {
+    C c();
+    remove ga;
+    remove gb;
+    ta = NULL;
+    tb = NULL;
+    remove C::sa;
+    remove C::sb;
+    return sprintf("%s %s %s %s %s %s %s %s", t(ga += o), t(gb += o), t(ta += o), t(tb += o), t(c.ma += o),
+        t(c.mb += o), t(C::sa += o), t(C::sb += o));
+}
+
+list<auto> ops = (<HD>{}, cast<list<int>>((1, 2)));
+for (int i = 0; i < 3; ++i) {
+    foreach auto o in (ops) {
+        printf("%d %s: %s | %s\n", i, o.fullType(), locals(o), others(o));
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
+            "0 list<int>: list list list list / list list | list list list list list list list list",
+            "1 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
+            "1 list<int>: list list list list / list list | list list list list list list list list",
+            "2 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
+            "2 list<int>: list list list list / list list | list list list list list list list list",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CompoundAssignmentResult", Script, (map $1 + "\n", Expected).join(""),
+            "gives the value the variable holds as the result of += and -=") {
+    }
+}

@@ -1428,6 +1428,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the result of \c += and \c -= on a variable
+      could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
+      gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
+      with the AST interpreter
     - in the IR and tiered execution modes, a \c thread_local variable read after an assignment in the same function
       gave the value assigned instead of the value the variable holds (ex: <tt>thread_local softint t; t = "5";</tt>
       then <tt>t.type()</tt> gave \c "string"), and so did the result of the assignment; a rejected assignment
