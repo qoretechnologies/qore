@@ -38,6 +38,8 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
+#include "qore/intern/QoreIR.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -14238,6 +14240,158 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 }
 
 #ifdef DEBUG
+//! Checks the inline method cache of one IR dot-eval call site against class lifetime
+/** A call site's cache names the receiver's class, the method and the class context by address.  When the class is
+    destroyed with its Program, a later class can be allocated at the same address; a cache entry then matched by the
+    address alone dereferences the freed method (qore#5631).  The entry made for the destroyed class is modelled here
+    by changing the recorded serial number of a published entry while the live class keeps the address.
+
+    @param target an object whose class has a public method "value" returning 42 and a private method "hidden"
+    returning 7, both executed at least once in the IR interpreter; the call sites run in the context of that class
+*/
+template <typename DotEvalInst>
+static void ut_ir_inline_method_cache_class_lifetime(UnitTestCounters& c, const char* label, DotEvalInst& value_inst,
+        DotEvalInst& hidden_inst, QoreObject* target, QoreProgram* pgm) {
+    std::string prefix = std::string(label) + ": ";
+    auto msg = [&prefix](const char* text) {
+        return prefix + text;
+    };
+    ExceptionSink xsink;
+    QoreValue base(target);
+    const QoreClass* cls = target->getClass();
+    uint64_t serial = qore_class_private::get(*cls)->getInstanceSerial();
+    // a builtin function runs without a class context: run the call sites as code of the target's class
+    ObjectSubstitutionHelper osh(target, qore_class_private::get(*cls));
+    const qore_class_private* class_ctx = runtime_get_class();
+    UT_ASSERT(c, class_ctx == qore_class_private::get(*cls), msg("the test runs in the target's class context").c_str());
+
+    // a public method: the cache records the receiver class with its serial number
+    QoreValue result;
+    bool done = qore_ir_dbg_try_inline_dot_eval_method(&value_inst, base, "value", pgm, result, &xsink);
+    UT_ASSERT(c, done && !xsink, msg("the first call publishes the cache and runs the method inline").c_str());
+    UT_ASSERT_EQ(c, 42, result.getAsBigInt(), msg("the inline call returns the method's value").c_str());
+    UT_ASSERT(c, value_inst.inline_ir_state.load() > 0, msg("the cache is published").c_str());
+    UT_ASSERT(c, value_inst.cached_object_class == cls, msg("the cache names the receiver's class").c_str());
+    UT_ASSERT_EQ(c, serial, value_inst.cached_object_class_serial,
+        msg("the cache records the class's serial number").c_str());
+    result.discard(&xsink);
+    result = QoreValue();
+    done = qore_ir_dbg_try_inline_dot_eval_method(&value_inst, base, "value", pgm, result, &xsink);
+    UT_ASSERT(c, done && !xsink && result.getAsBigInt() == 42, msg("a later call hits the cache").c_str());
+    result.discard(&xsink);
+    result = QoreValue();
+
+    // the entry made for a destroyed class at this address: its method is freed memory, modelled by a pointer that
+    // faults if read
+    const QoreMethod* method = value_inst.cached_method;
+    value_inst.cached_object_class_serial = serial + 1;
+    value_inst.cached_method = reinterpret_cast<const QoreMethod*>(static_cast<uintptr_t>(0x10));
+    done = qore_ir_dbg_try_inline_dot_eval_method(&value_inst, base, "value", pgm, result, &xsink);
+    UT_ASSERT(c, !done && !xsink, msg("an entry for an earlier class at the same address is not used").c_str());
+    UT_ASSERT(c, result.isNothing(), msg("a rejected entry returns no value").c_str());
+    value_inst.cached_method = method;
+    done = qore_ir_dbg_try_inline_dot_eval_method(&value_inst, base, "value", pgm, result, &xsink);
+    UT_ASSERT(c, !done && !xsink,
+        msg("an entry with the method of an earlier class at the same address is not used").c_str());
+    value_inst.cached_object_class_serial = serial;
+    done = qore_ir_dbg_try_inline_dot_eval_method(&value_inst, base, "value", pgm, result, &xsink);
+    UT_ASSERT(c, done && !xsink && result.getAsBigInt() == 42,
+        msg("the entry of the live class is used again").c_str());
+    result.discard(&xsink);
+    result = QoreValue();
+
+    // a private method: the cache also records the class context with its serial number
+    done = qore_ir_dbg_try_inline_dot_eval_method(&hidden_inst, base, "hidden", pgm, result, &xsink);
+    UT_ASSERT(c, done && !xsink, msg("a private method call publishes the cache and runs inline").c_str());
+    UT_ASSERT_EQ(c, 7, result.getAsBigInt(), msg("the private method returns its value").c_str());
+    result.discard(&xsink);
+    result = QoreValue();
+    UT_ASSERT(c, hidden_inst.cached_class_ctx == class_ctx, msg("the cache names the class context").c_str());
+    UT_ASSERT_EQ(c, class_ctx ? class_ctx->getInstanceSerial() : 0, hidden_inst.cached_class_ctx_serial,
+        msg("the cache records the class context's serial number").c_str());
+    // the class context of the entry was a destroyed class at this address
+    uint64_t ctx_serial = hidden_inst.cached_class_ctx_serial;
+    hidden_inst.cached_class_ctx_serial = ctx_serial + 1;
+    done = qore_ir_dbg_try_inline_dot_eval_method(&hidden_inst, base, "hidden", pgm, result, &xsink);
+    UT_ASSERT(c, !done && !xsink,
+        msg("an entry for an earlier class context at the same address is not used").c_str());
+    UT_ASSERT(c, result.isNothing(), msg("a rejected private entry returns no value").c_str());
+    hidden_inst.cached_class_ctx_serial = ctx_serial;
+    done = qore_ir_dbg_try_inline_dot_eval_method(&hidden_inst, base, "hidden", pgm, result, &xsink);
+    UT_ASSERT(c, done && !xsink && result.getAsBigInt() == 7,
+        msg("the private entry of the live class context is used again").c_str());
+    result.discard(&xsink);
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
+//! Every class has its own serial number, and destroying a class or hashdecl makes method dispatch cache entries stale
+/** The AOT method dispatch cache keys entries by class and type pointers that can be reused after the class or
+    hashdecl is freed, so its epoch must change at the destruction.
+*/
+static void ut_class_lifetime_identity(UnitTestCounters& c) {
+    uint64_t sb;
+    {
+        QoreClassHolder a(new QoreClass("DbgClassLifetimeA", "::DbgClassLifetimeA"));
+        uint64_t sa = qore_class_private::get(*a)->getInstanceSerial();
+        uint64_t epoch;
+        {
+            QoreClassHolder b(new QoreClass("DbgClassLifetimeB", "::DbgClassLifetimeB"));
+            sb = qore_class_private::get(*b)->getInstanceSerial();
+            UT_ASSERT(c, sa && sb, "a class serial number is never 0");
+            UT_ASSERT(c, sa != sb, "two classes have different serial numbers");
+            {
+                // a wrapper sharing the private class is the same class
+                QoreClassHolder ac(static_cast<QoreClass*>(a)->copy());
+                UT_ASSERT_EQ(c, sa, qore_class_private::get(*ac)->getInstanceSerial(),
+                    "a copied class wrapper shares its class's serial number");
+            }
+            epoch = qore_get_method_dispatch_epoch();
+        }
+        UT_ASSERT(c, qore_get_method_dispatch_epoch() > epoch,
+            "destroying a class makes dispatch cache entries stale");
+    }
+    {
+        QoreClassHolder n(new QoreClass("DbgClassLifetimeN", "::DbgClassLifetimeN"));
+        UT_ASSERT(c, qore_class_private::get(*n)->getInstanceSerial() > sb,
+            "a class created later has a new serial number, even at a reused address");
+    }
+    uint64_t epoch;
+    {
+        TypedHashDeclHolder hd(new TypedHashDecl("DbgHashDeclLifetime", "::DbgHashDeclLifetime"));
+        epoch = qore_get_method_dispatch_epoch();
+    }
+    UT_ASSERT(c, qore_get_method_dispatch_epoch() > epoch,
+        "destroying a hashdecl makes dispatch cache entries stale");
+}
+
+//! Debug-only: runs the unit tests of the class lifetime identities used by the IR and AOT method caches
+/** @see ut_ir_inline_method_cache_class_lifetime() for the argument
+*/
+static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* target = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    UnitTestCounters c;
+    ut_class_lifetime_identity(c);
+    {
+        QoreIRDotEvalMethodDirectInstruction value_inst(nullptr, nullptr, nullptr, QoreValue(), false);
+        QoreIRDotEvalMethodDirectInstruction hidden_inst(nullptr, nullptr, nullptr, QoreValue(), false);
+        ut_ir_inline_method_cache_class_lifetime(c, "call", value_inst, hidden_inst, target, rc.getProgram());
+    }
+    {
+        QoreIRInvokeDotEvalMethodDirectInstruction value_inst(nullptr, nullptr, nullptr, QoreValue(), false, nullptr,
+            nullptr);
+        QoreIRInvokeDotEvalMethodDirectInstruction hidden_inst(nullptr, nullptr, nullptr, QoreValue(), false,
+            nullptr, nullptr);
+        ut_ir_inline_method_cache_class_lifetime(c, "call in try block", value_inst, hidden_inst, target,
+            rc.getProgram());
+    }
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
+#ifdef DEBUG
 //! Debug-only: runs the unit tests of the once-only LLVM target initialization
 static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -16376,6 +16530,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
