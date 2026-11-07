@@ -737,13 +737,12 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             string key = string(raw.contentBlockDelta.contentBlockIndex);
             hash<auto!> block = state.bedrock_reasoning{key} ?? {};
             if (exists delta.redactedContent) {
-                # encrypted reasoning can arrive in several deltas, each base64 on the wire: the bytes are joined
-                # and the block keeps them encoded once, as the response form has them
-                binary bytes = block.redactedContent
-                    ? parse_base64_string(block.redactedContent) : binary();
+                # encrypted reasoning can arrive in several deltas, each base64 on the wire: the decoded bytes are
+                # joined here, and encoded once when the block stops, as the response form has them
+                binary bytes = block.redacted_bytes ?? binary();
                 bytes += delta.redactedContent.typeCode() == NT_BINARY
                     ? delta.redactedContent : parse_base64_string(delta.redactedContent);
-                block.redactedContent = make_base64_string(bytes);
+                block.redacted_bytes = bytes;
             } else {
                 hash<auto!> text = block.reasoningText ?? {};
                 if (exists delta.text) {
@@ -758,6 +757,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
         if (exists raw.contentBlockStop.contentBlockIndex) {
             *hash<auto> block = remove state.bedrock_reasoning{string(raw.contentBlockStop.contentBlockIndex)};
+            if (exists block.redacted_bytes) {
+                block.redactedContent = make_base64_string(remove block.redacted_bytes);
+            }
             if (*hash<auto> reasoning = BedrockLlmProvider::fromConverseReasoning(block)) {
                 if (state.reasoning_blocks.typeCode() != NT_LIST) {
                     state.reasoning_blocks = ();
