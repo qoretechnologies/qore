@@ -233,7 +233,9 @@ ws.send("Hello from HTTP/3!");
     seconds, as for the close handshake) for a disconnect or reconnect; then it raises \c WEBSOCKET-ACTION-TIMEOUT.
     While a connect runs its handshake, the client's lock is held, so other calls wait for the handshake as before.
     @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" returns once it is its turn, and makes the
-    connection in the background, still in call order: a call made after it returned runs after the connect.
+    connection in the background, still in call order: a call made after it returned runs after the connect.  A call
+    made on the thread that processes the frames of the connection (e.g. in the raw frame callback) does not wait for
+    an action in progress, which may need that thread to finish its close handshake: it runs at once.
 
     These calls never wait for the end of a connection that the client processes on its own (when the server closes
     the connection or it is lost), nor for any callback: a connection is taken from the client in one step when it
@@ -311,6 +313,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       events; before, a message being delivered, or the connect event, could be reported after the close
     - the frames an HTTP/2 or HTTP/3 connection receives with its handshake are delivered without the client's lock;
       before, a raw frame callback calling a method of the client could deadlock with the connecting thread
+    - a callback running on the thread that processes a connection's frames (e.g. the raw frame callback) that calls
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" or
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" does not wait for another connect, disconnect
+      or reconnect in progress, which may need that thread to finish its close handshake
     - @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" makes its connection in call order: a
       @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" made after it returned closes the connection;
       a failed async connect no longer disconnects the client nor disables automatic reconnects
@@ -809,15 +815,8 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         Condition tid_cond();
 
         #! Monotonic teardown generation; incremented by each clearTid() call
-        /** Used by waitTidCleared() to detect that the connection it is waiting
-            for has been torn down even when the @ref tid sentinel is immediately
-            reused by a reconnect.  In async mode @ref tid is the constant
-            sentinel -1, so comparing @ref tid alone suffers an ABA race: a
-            reconnect can tear down the old connection (clearTid() sets tid to
-            NOTHING) and re-establish a new one (updateTid(-1)) before the
-            waiter re-evaluates its predicate, leaving the waiter blocked forever
-            on a healthy connection.  Tracking a generation that only ever
-            increases makes the wait robust to sentinel reuse.
+        /** A thread waiting on @ref tid_cond for a teardown compares it, as the @ref tid sentinel is reused by every
+            async connection.
         */
         int tid_generation = 0;
 
@@ -882,6 +881,18 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             @since WebSocketClient 2.5
         */
         hash<string, bool> action_handed_over();
+
+        #! The number of calls of each thread that act without the action; protected by \c m
+        /** See acquireActionUnlocked().
+
+            @since WebSocketClient 2.5
+        */
+        hash<string, int> action_exempt();
+
+        #! True once the destructor started; no connection is published afterwards; protected by \c m
+        /** @since WebSocketClient 2.5
+        */
+        bool destroying = False;
 
         #! Unique websocket connection ID; -1 when not connected
         int cid = -1;
@@ -1027,7 +1038,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
 
             @since WebSocketClient 2.5
         */
-        hash<string, string> closing_causes();
+        hash<string, list<string>> closing_causes();
 
         #! True if a close frame has been sent in async mode (prevents duplicate sends)
         /** @since WebSocketClient 2.4
@@ -1233,9 +1244,9 @@ WebSocketClient ws(\event(), {
             AutoLock al(delivery_mutex);
             # in the closing callback of a connection, its own close cause, also when another connection was started
             # meanwhile
-            *string cause = closing_causes{gettid()};
-            if (exists cause) {
-                return cause;
+            *list<string> causes = closing_causes{gettid()};
+            if (causes) {
+                return causes.last();
             }
         }
         return async_close_cause;
@@ -1903,6 +1914,11 @@ ws.connect();
                 throw "WEBSOCKET-RECONNECT-SUPERSEDED", "a connection was started after the teardown that the "
                     "reconnect was started for";
             }
+            # an explicit disconnect() or the destructor stopped automatic reconnects meanwhile; checked in the
+            # action, so no connection is published after them
+            if (reconnecting && (!self.reconnect || self.reconnect_stopping || self.stop)) {
+                throw "WEBSOCKET-RECONNECT-SUPERSEDED", "the automatic reconnect was stopped";
+            }
 
             replaced = closeAllConnectionsUnlocked();
 
@@ -1975,7 +1991,12 @@ ws.connect();
             op = c.op;
         }
         if (op instanceof WebSocketClientHcioPollOp) {
-            cast<WebSocketClientHcioPollOp>(op).initialDrain();
+            try {
+                cast<WebSocketClientHcioPollOp>(op).initialDrain();
+            } catch (hash<ExceptionInfo> ex) {
+                # an exception of the raw frame callback, logged as in notifyIo(); the frames drained are delivered
+                logError("exception delivering the frames received with the handshake: %s: %s", ex.err, ex.desc);
+            }
         }
         scheduleDelivery(c);
     }
@@ -2025,6 +2046,16 @@ ws.connect();
         }
     }
 
+    #! Called by an explicit @ref disconnect() once it holds its action, before the connection is closed
+    /** Runs without the client's lock; the base class does nothing.  A subclass stops here what must not survive an
+        explicit disconnect (e.g. timers that would reconnect); a disconnect that times out waiting for the action
+        does not call it.
+
+        @since WebSocketClient 2.5
+    */
+    private explicitDisconnect() {
+    }
+
     #! Disconnect with the given @ref closecodes "close code"
     /** @param cmd the close code
         @param destroy @ref True if called from the destructor
@@ -2035,9 +2066,15 @@ ws.connect();
         @since WebSocketClient 2.5 added the \a explicit parameter
     */
     private disconnectIntern(int cmd = WSCC_GoingAway, *bool destroy, *bool explicit) {
-        *hash<WscAsyncIoResources> res;
+        list<hash<WscAsyncIoResources>> taken = ();
         {
             AutoLock al(m);
+
+            if (destroy) {
+                # no connection is published from here on: a connect running on another thread (e.g. the worker of
+                # connectAsync()) fails instead of publishing a connection while the destructor closes the current one
+                destroying = True;
+            }
 
             # the destructor does not wait for an action; destroying the object while another thread runs one of its
             # methods is an error of the caller
@@ -2062,16 +2099,34 @@ ws.connect();
                 reconnect_stopping = True;
                 stop = cmd;
                 sleep_cond.broadcast();
+                # subclass steps of an explicit disconnect run in the action, without the lock
+                m.unlock();
+                on_exit m.lock();
+                try {
+                    explicitDisconnect();
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("exception in explicitDisconnect(): %s", get_exception_string(ex));
+                }
             }
 
-            res = closeAndWaitUnlocked(cmd);
+            if (destroy) {
+                # the destructor closes every connection, also one published while it waited for a close handshake
+                taken = closeAllConnectionsUnlocked();
+            } else {
+                *hash<WscAsyncIoResources> res = closeAndWaitUnlocked(cmd);
+                if (res) {
+                    push taken, res;
+                }
+            }
         }
         # Release the connection and report it closed outside the action and without the lock; the connection is no
         # longer the client's, so re-entrant disconnect() calls are no-ops, and a connect() made meanwhile starts a
         # new connection
-        if (res) {
+        foreach hash<WscAsyncIoResources> res in (taken) {
             releaseClaimedConnection(res);
-            notifyClosed(res, destroy);
+            if (!notifyClosed(res, destroy)) {
+                break;
+            }
         }
     }
 
@@ -2583,18 +2638,6 @@ ws.setEventQueue();
         # HTTPClient hc member removed — all paths use HCIO
     }
 
-    private disconnectUnlocked(int cmd = WSCC_GoingAway) {
-        *hash<WscAsyncIoResources> res = closeAndWaitUnlocked(cmd);
-        if (!res) {
-            return;
-        }
-        # Release the connection and report it closed without the lock; the connection is no longer the client's,
-        # so re-entrant disconnect() calls are no-ops, and a connect() made meanwhile starts a new connection
-        m.unlock();
-        on_exit m.lock();
-        releaseClaimedConnection(res);
-        notifyClosed(res);
-    }
 
     #! Runs the close handshake of the current connection and takes it; must be called with \c m held
     /** The caller releases the connection with releaseClaimedConnection() and reports it closed with notifyClosed(),
@@ -2645,7 +2688,7 @@ ws.setEventQueue();
 
     #! Closes and takes the client's connections until it has none; must be called with \c m held
     /** closeConnectionUnlocked() releases the lock, so a connection may be published meanwhile by a path that does
-        not start an action (finishAsyncConnect(), startEventLoop()).
+        not start an action (startEventLoop()).
 
         @return the resources of the connections taken, to be released and reported closed without the lock
 
@@ -2682,6 +2725,9 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private WscConnection publishConnectionUnlocked() {
+        if (destroying) {
+            throw "WEBSOCKET-ERROR", "the client is being destroyed";
+        }
         remove closing_op;
         WscConnection c(++conn_seq);
         conn = c;
@@ -2764,12 +2810,16 @@ ws.setEventQueue();
                 res.conn.pending_close = res;
                 return True;
             }
-            closing_causes{t} = res.close_cause ?? "";
+            # a stack: a closing callback can report another connection closed on the same thread
+            push closing_causes{t}, res.close_cause ?? "";
         }
         on_exit {
             if (self) {
                 AutoLock al(delivery_mutex);
-                remove closing_causes{t};
+                pop closing_causes{t};
+                if (!closing_causes{t}) {
+                    remove closing_causes{t};
+                }
             }
         }
         try {
@@ -2966,7 +3016,7 @@ ws.setEventQueue();
         remove tid;
         stop = 0;
         do_reconnect = False;
-        # advance the teardown generation so waitTidCleared() observes this
+        # advance the teardown generation so a waiter observes this
         # teardown even if the tid sentinel is immediately reused by a reconnect
         ++tid_generation;
         # a reconnect started for this teardown is made only if no connection is published before it runs
@@ -3013,6 +3063,15 @@ ws.setEventQueue();
             ++action_count;
             return;
         }
+        # A thread running a callback of the operation of the current connection, or of the connection whose close
+        # handshake is waited for (e.g. the raw frame callback), never waits for the action: the action's owner may
+        # need this very thread to process the server's close frame.  It acts without the action; taking the
+        # connection under the lock keeps that safe.
+        if (action_tid && ((poll_op && poll_op.isCallbackThread())
+            || (closing_op && closing_op.isCallbackThread()))) {
+            ++action_exempt{tid};
+            return;
+        }
         if (action_tid || action_waiters) {
             string t = tid.toString();
             Condition cond();
@@ -3044,7 +3103,15 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.5
     */
     private releaseActionUnlocked() {
-        if (action_tid != gettid()) {
+        int tid = gettid();
+        # a call that did not wait for the action (see acquireActionUnlocked())
+        if (action_exempt{tid}) {
+            if (!--action_exempt{tid}) {
+                remove action_exempt{tid};
+            }
+            return;
+        }
+        if (action_tid != tid) {
             return;
         }
         if (--action_count) {
@@ -3070,7 +3137,8 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private timeout getConnectActionTimeout() {
-        softint ct = http_opts.connect_timeout ?? 0;
+        # timeout: an integer is milliseconds, a relative date is converted
+        timeout ct = http_opts.connect_timeout ?? 0;
         return ct > 0 ? ct : getActionTimeout();
     }
 
@@ -3084,22 +3152,6 @@ ws.setEventQueue();
         return timeout_ms > 0 ? timeout_ms : DefaultTimeout;
     }
 
-    private waitTidCleared(int old_tid) {
-        # Wait for the next clearTid() (teardown of the connection active when
-        # this method was entered) rather than for the tid value to change.  In
-        # async mode tid is the constant sentinel -1, which a reconnect reuses
-        # immediately via updateTid(-1); waiting on the tid value alone would
-        # then race (ABA) and block forever.  Capturing the generation while
-        # holding m guarantees we observe exactly the teardown we are waiting
-        # for.  The tid check is retained so callers that wait on a still-active
-        # legacy event-thread tid behave as before.
-        int gen = tid_generation;
-        while (tid_generation == gen && tid == old_tid) {
-            ++tid_waiting;
-            tid_cond.wait(m);
-            --tid_waiting;
-        }
-    }
 
     #! Initializes the poll operation and submits it to the async I/O controller
     /** Must be called while holding the mutex \c m.
@@ -4193,47 +4245,6 @@ ws.setEventQueue();
         return http_opts.ssl_verify_cert.typeCode() == NT_BOOLEAN && !http_opts.ssl_verify_cert;
     }
 
-    #! Called from connectAsync's on_complete callback when H1 handshake completes
-    /** Sets up the WebSocketClient state for the WS event loop.
-        Called on the controller's I/O thread — must be lightweight.
-
-        @param rh the 101 response headers
-        @param new_poll_op the WS poll operation for frame I/O
-        @param ws_sock the socket for wake calls
-
-        @since WebSocketClient 2.5
-    */
-    finishAsyncConnect(hash<auto> rh, WebSocketClientPollOperation new_poll_op,
-            Socket ws_sock) {
-        # a connection replaced here is reported closed without the lock; no close handshake can be run on the I/O
-        # thread
-        *hash<WscAsyncIoResources> replaced;
-        {
-            AutoLock al(m);
-            if (conn) {
-                replaced = claimConnectionUnlocked(conn);
-            }
-            http2_websocket = False;
-            http3_websocket = False;
-
-            # Process extensions from the handshake response
-            hash<auto> rhdr = rh.headers ?? rh;
-            processExtensions(rhdr);
-
-            use_hcio = True;
-            poll_op = new_poll_op;
-            async_wake_socket = ws_sock;
-            finishConnect();
-            WscConnection c = publishConnectionUnlocked();
-            c.op = new_poll_op;
-            updateTid(-1);
-        }
-        # the replaced connection is reported closed without the lock
-        if (replaced) {
-            releaseClaimedConnection(replaced);
-            notifyClosed(replaced);
-        }
-    }
 
     #! Returns the connection path from http_opts.url
     /** Parses the URL and returns the path component, defaulting to "/" if no
@@ -7436,285 +7447,6 @@ public class WebSocketClientHcioPollOp {
         }
     }
 }
-
-%ifdef __REMOVED_WEBSOCKET_CONNECT_AND_RUN_POLL_OPERATION__
-# thread), which prevents them from delegating to C++ poll operations that require
-# I/O-thread execution. The DelegatingPollOperation approach is used instead.
-public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOperation<auto> {
-    private {
-        #! The WebSocketClient that created this operation
-        WebSocketClient wsc;
-
-        #! The H1 connection (owns the socket)
-        HttpClientIo::Http1ClientConnection h1conn;
-
-        #! The H1 poll operation (drives TCP/TLS/HTTP handshake)
-        HttpClientIo::Http1ClientPollOperation h1op;
-
-        #! Channel for receiving the 101 response headers
-        Channel data_channel(-1);
-
-        #! WebSocket handshake key
-        string ws_key;
-
-        #! True after H1 request has been submitted
-        bool request_submitted = False;
-
-        #! True after 101 received and WS poll op created
-        bool connected = False;
-
-        #! The WS frame I/O poll operation (phase 2)
-        *WebSocketClientPollOperation ws_op;
-
-        #! Headers for the upgrade request (queued until connection ready)
-        hash<auto> upgrade_hdr;
-
-        #! Request path
-        string request_path;
-
-        #! Optional queue to signal when connection is ready
-        *Queue ready_queue;
-
-        #! Active extensions for the WS connection
-        *list<AbstractWebSocketExtension> offered_extensions;
-
-        #! Timeout for the connection
-        timeout timeout_ms;
-
-        #! Logger
-        *Logger::LoggerInterface logger;
-
-        #! Raw callback for frame inspection
-        *code raw_callback;
-
-        #! Callback for delivery scheduling
-        *code on_poll_complete;
-
-        #! Error flag
-        bool has_error = False;
-
-        #! Error info
-        *hash<auto> error_info;
-    }
-
-    #! Creates a new WebSocketConnectAndRunPollOperation
-    /** @param wsc the WebSocketClient that created this operation
-        @param url_info parsed URL info (scheme should be http/https, not ws/wss)
-        @param hdr HTTP headers for the upgrade request
-        @param offered_extensions optional extensions to offer
-        @param ws_ver WebSocket protocol version
-        @param timeout_ms connection/I/O timeout
-        @param logger optional logger
-        @param raw_callback optional raw frame callback
-        @param on_poll_complete delivery scheduling callback
-        @param ready_queue optional queue to signal when connected
-    */
-    constructor(WebSocketClient wsc, hash<auto> url_info, hash<auto> hdr,
-            *list<AbstractWebSocketExtension> offered_extensions,
-            softint ws_ver, timeout timeout_ms,
-            *Logger::LoggerInterface logger, *code raw_callback,
-            *code on_poll_complete, *Queue ready_queue) {
-        self.wsc = wsc;
-        self.offered_extensions = offered_extensions;
-        self.timeout_ms = timeout_ms;
-        self.logger = logger;
-        self.raw_callback = raw_callback;
-        self.on_poll_complete = on_poll_complete;
-        self.ready_queue = ready_queue;
-
-        # Create H1 connection directly (bypass HCIO manager — WS needs no pooling)
-        bool accept_all_certs = wsc.isAcceptAllCerts();
-        h1conn = new HttpClientIo::Http1ClientConnection(url_info, timeout_ms, logger, 1,
-            NOTHING, accept_all_certs);
-        h1op = cast<HttpClientIo::Http1ClientPollOperation>(h1conn.getPollOperation());
-
-        # Build WebSocket upgrade headers (stored for submission after connect)
-        ws_key = get_random_string(16).toBase64();
-        hdr += {
-            "Upgrade": "websocket",
-            "Connection": "Upgrade",
-            "Sec-WebSocket-Key": ws_key,
-        };
-        if (ws_ver) {
-            hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
-        }
-        if (offered_extensions) {
-            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
-            if (ext_header) {
-                hdr."Sec-WebSocket-Extensions" = ext_header;
-            }
-        }
-
-        upgrade_hdr = hdr;
-        request_path = url_info.path ?? "/";
-    }
-
-    #! Returns the socket for controller registration
-    Socket getSocket() {
-        return h1conn.getSocket();
-    }
-
-    string getGoal() {
-        return connected ? "ws-event-loop" : "ws-connect";
-    }
-
-    string getState() {
-        if (connected) {
-            return "connected";
-        }
-        return "connecting";
-    }
-
-    bool goalReached() {
-        # The unified op never signals goal reached — it runs until the WS
-        # connection is closed (handled by onComplete)
-        if (ws_op) {
-            return ws_op.goalReached();
-        }
-        return False;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        if (!connected) {
-            # Phase 1: delegate to H1 poll op (TCP/TLS/HTTP handshake)
-            *hash<SocketPollInfo> rv = h1op.continuePoll();
-
-            # Submit the WS upgrade request once the H1 connection is established
-            # Use the C++ isReady() (checks H1State enum, not Qore state string)
-            if (!request_submitted
-                    && (cast<Http1ClientPollOperationBase>(h1op)).isReady()) {
-                h1op.submitRequestStreaming("GET", request_path, upgrade_hdr, NOTHING,
-                    data_channel, 1, True);
-                request_submitted = True;
-                # Return poll info to continue reading the response
-                return rv ?? h1op.continuePoll();
-            }
-
-            # Check for protocol switch (101 received)
-            if (h1op.isProtocolSwitched()) {
-                try {
-                    handleProtocolSwitched();
-                    # Immediately start WS frame reading
-                    return ws_op.continuePoll();
-                } catch (hash<ExceptionInfo> ex) {
-                    has_error = True;
-                    error_info = ex;
-                    if (ready_queue) {
-                        ready_queue.push({"error": ex});
-                    }
-                    return NOTHING;
-                }
-            }
-
-            # Check for H1 errors
-            if (h1op.hasError()) {
-                has_error = True;
-                error_info = h1op.getError();
-                if (ready_queue) {
-                    ready_queue.push({"error": error_info});
-                }
-                return NOTHING;
-            }
-
-            return rv;
-        }
-
-        # Phase 2: delegate to WS poll op (frame I/O)
-        return ws_op.continuePoll();
-    }
-
-    #! Called by the controller on a worker thread after continuePoll() has data
-    public onPollComplete() {
-        if (ws_op) {
-            ws_op.onPollComplete();
-        }
-    }
-
-    #! Called when the poll operation completes (closed or error)
-    nothing onComplete(hash<SocketPollResultInfo> result) {
-        if (ws_op) {
-            ws_op.onComplete(result);
-        }
-        if (!connected && ready_queue) {
-            # Connection failed before handshake completed
-            if (result.ex) {
-                ready_queue.push({"error": result.ex});
-            } else if (result.canceled) {
-                ready_queue.push({"error": {"err": "WEBSOCKET-CONNECT-ERROR",
-                    "desc": "async connect was canceled"}});
-            }
-        }
-    }
-
-    auto getOutput() {
-        if (ws_op) {
-            return ws_op.getOutput();
-        }
-        return NOTHING;
-    }
-
-    abort() {
-        if (ws_op) {
-            ws_op.abort();
-        }
-    }
-
-    #! Handles the transition from H1 handshake to WS event loop
-    private handleProtocolSwitched() {
-        # Read 101 response from Channel (non-blocking — data already delivered by H1 poll op)
-        auto rh = data_channel.recv(0s);
-        if (!rh || rh.typeCode() != NT_HASH) {
-            throw "WEBSOCKET-CONNECT-ERROR", "HTTP/1.1 WebSocket handshake failed: no response";
-        }
-
-        int status_code = rh.status_code ?? 0;
-        if (status_code != 101) {
-            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: expected 101, "
-                "got %d", status_code);
-        }
-
-        # Validate Sec-WebSocket-Accept
-        hash<auto> rhdr = rh.headers ?? rh;
-        *string accept_key = rhdr."sec-websocket-accept";
-        if (!accept_key) {
-            throw "WEBSOCKET-CONNECT-ERROR", "WebSocket handshake failed: missing "
-                "Sec-WebSocket-Accept header";
-        }
-        string expected_key = ws_get_response_key(ws_key);
-        if (accept_key != expected_key) {
-            throw "WEBSOCKET-CONNECT-ERROR", sprintf("WebSocket handshake failed: invalid "
-                "Sec-WebSocket-Accept: got %y, expected %y", accept_key, expected_key);
-        }
-
-        # Create WS poll op on the same socket
-        Socket ws_sock = h1conn.getSocket();
-        ws_op = new WebSocketClientPollOperation(ws_sock, "http1", 0,
-            offered_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
-        ws_op.setHeartbeat(wsc.getAsyncHeartbeat());
-        if (wsc.getAsyncIdleTimeout() > 0) {
-            ws_op.setIdleTimeout(wsc.getAsyncIdleTimeout());
-        }
-
-        # Notify the WebSocketClient of the successful connect
-        wsc.finishAsyncConnect(rh, ws_op, ws_sock);
-
-        connected = True;
-
-        # Signal the ready queue
-        if (ready_queue) {
-            ready_queue.push(rh);
-        }
-
-        logDebug("WebSocket handshake complete, transitioning to WS event loop");
-    }
-
-    private logDebug(string fmt, ...) {
-        if (logger) {
-            logger.log(LoggerLevel::DEBUG, "%s", "WsConnectAndRun: " + vsprintf(fmt, argv));
-        }
-    }
-}
-%endif
 
 #! Poll operation for non-blocking WebSocket sends
 /** Supports HTTP/1.1, HTTP/2, and HTTP/3 transports.

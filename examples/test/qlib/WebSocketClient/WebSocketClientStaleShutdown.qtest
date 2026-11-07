@@ -152,6 +152,12 @@ class LifecycleWsClient inherits WebSocketClient {
 
         #! gets an event when the destructor starts
         Queue destructor_started();
+
+        #! report a thread that starts to wait for a close handshake
+        bool report_handshake_wait = False;
+
+        #! report explicitDisconnect() calls
+        bool report_explicit_disconnect = False;
     }
 
     constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
@@ -245,6 +251,20 @@ class LifecycleWsClient inherits WebSocketClient {
             release_reconnect_step, release_handshake, release_opened) + release_task;
     }
 
+    private waitCloseHandshake(hash<WscAsyncIoResources> res) {
+        if (report_handshake_wait) {
+            report_handshake_wait = False;
+            events.push("handshake-wait");
+        }
+        WebSocketClient::waitCloseHandshake(res);
+    }
+
+    private explicitDisconnect() {
+        if (report_explicit_disconnect) {
+            events.push("explicit-disconnect");
+        }
+    }
+
     private connectionOpened() {
         if (hold_opened) {
             hold_opened = False;
@@ -308,8 +328,9 @@ class LifecycleWsClient inherits WebSocketClient {
             events.push("action-wait");
         }
         bool reentry = action_tid == gettid();
+        bool handed = action_handed_over{gettid()} ?? False;
         WebSocketClient::acquireActionUnlocked(to);
-        if (gate_mode == "action" && !reentry) {
+        if ((gate_mode == "action" && !reentry) || (gate_mode == "handover" && handed)) {
             remove gate_mode;
             gateUnlocked();
         }
@@ -518,9 +539,17 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 \lateDeliveryTaskThreadTest(), proto);
             addTestCase(proto + ": message callback before the close", \messageBeforeCloseTest(), proto);
             addTestCase(proto + ": connect event before the close event", \connectedBeforeClosedTest(), proto);
+            addTestCase(proto + ": disconnect from a raw callback during a close handshake",
+                \rawCallbackDuringHandshakeTest(), proto);
+            addTestCase(proto + ": disconnect while a reconnect is about to connect", \reconnectStoppedTest(), proto);
+            addTestCase(proto + ": destructor while connectAsync connects", \destructorDuringConnectAsyncTest(),
+                proto);
+            addTestCase(proto + ": close cause in a nested closing report", \nestedCloseCauseTest(), proto);
         }
         foreach string proto in ("h2", "h3") {
             addTestCase(proto + ": raw callback during the initial drain", \rawCallbackInitialDrainTest(), proto);
+            addTestCase(proto + ": raw callback exception during the initial drain",
+                \rawCallbackInitialDrainErrorTest(), proto);
         }
         addTestCase("HTTP/1.1 connection whose HttpClientIo operation ended", \endedHttpClientIoOperationTest());
         addTestCase("disconnect from the raw frame callback", \rawCallbackDisconnectTest());
@@ -530,7 +559,6 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("connectAsync lifecycle", \connectAsyncTest());
         addTestCase("failed connectAsync", \connectAsyncFailureTest());
         addTestCase("connectAsync followed by disconnect", \connectAsyncOrderTest());
-        addTestCase("finishAsyncConnect replacing a connection", \finishAsyncConnectTest());
         addTestCase("action timeout rules", \actionTimeoutRulesTest());
         addTestCase("disconnect timing out keeps automatic reconnects", \disconnectTimeoutKeepsReconnectTest());
 
@@ -1258,30 +1286,6 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         checkCurrentConnection(ctx, 1);
     }
 
-    #! finishAsyncConnect() reports a replaced connection closed without the client's lock
-    finishAsyncConnectTest() {
-        LifecycleCtx ctx = makeCtx();
-        connectChecked(ctx);
-        Queue in_callback();
-        ctx.on_closed = sub (int n) {
-            # the client's methods can be called in the closing callback
-            in_callback.push(ctx.wsc.isOpen());
-        };
-        Socket sock = ctx.wsc.getSocketForTest();
-        WebSocketClientPollOperation op(sock, "http1", 0, NOTHING, 5000, NOTHING, NOTHING, NOTHING);
-        ctx.wsc.finishAsyncConnect({}, op, sock);
-        assertEq(0, ctx.errors.size(), sprintf("the closing callback ran without error: %y", ctx.errors.size()
-            ? ctx.errors.get() : NOTHING));
-        assertEq(1, ctx.closed.getCount(), "the replaced connection is reported closed");
-        assertTrue(in_callback.get(0ms), "the new connection is the client's in the callback");
-        ctx.on_closed = NOTHING;
-        # the new connection runs no operation: disconnect it and connect again
-        ctx.wsc.disconnect();
-        assertEq(2, ctx.closed.getCount(), "the new connection is reported closed");
-        ctx.wsc.connect();
-        checkCurrentConnection(ctx, 2);
-    }
-
     #! A raw frame callback that calls a method of the client while the frames received with an HTTP/2 or HTTP/3
     #! handshake are delivered
     rawCallbackInitialDrainTest(string proto) {
@@ -1449,10 +1453,13 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         ctx.wsc.gate_mode = "action";
         ctx.wsc.inBackground("connected", sub () { ctx.wsc.connect(); });
         assertEq("gated", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        ctx.wsc.report_explicit_disconnect = True;
         assertThrows("WEBSOCKET-ACTION-TIMEOUT", \ctx.wsc.disconnect());
         assertTrue(ctx.wsc.getReconnectFlag(), "automatic reconnects stay enabled");
         ctx.wsc.gate_handshake.dec();
+        # the timed-out disconnect did not run the subclass steps of an explicit disconnect
         assertEq("connected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        ctx.wsc.report_explicit_disconnect = False;
         assertTrue(ctx.wsc.getReconnectFlag(), "automatic reconnects are still enabled");
         assertEq(1, ctx.closed.getCount(), "the replaced connection is reported closed");
         checkCurrentConnection(ctx, 1);
@@ -1466,6 +1473,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq({"connect": 2000, "other": 3000}, ctx.wsc.getActionTimeouts());
         ctx = makeCtx(NOTHING, {"timeout": 3000});
         assertEq({"connect": 3000, "other": 3000}, ctx.wsc.getActionTimeouts());
+        ctx = makeCtx(NOTHING, {"connect_timeout": 2s, "timeout": 3s});
+        assertEq({"connect": 2000, "other": 3000}, ctx.wsc.getActionTimeouts());
     }
 
     #! An action timeout in the automatic reconnect's preamble does not end the reconnect: it goes on with its
@@ -1497,6 +1506,132 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertTrue(ctx.wsc.reestablish_attempts > 0, "the reconnect made attempts after its preamble timed out");
         assertTrue(ctx.wsc.isOpen(), "the explicit connection is open");
         checkCurrentConnection(ctx, 1);
+    }
+    #! A raw frame callback that calls disconnect() while another thread waits for a close handshake that needs the
+    #! callback's thread: the callback does not wait for the action
+    rawCallbackDuringHandshakeTest(string proto) {
+        Counter go(1);
+        *LifecycleWsClient client;
+        code raw = int sub (hash<WsMsgInfo> event) {
+            if (event.msg == "ECHO:raw-quit") {
+                client.events.push("raw-in");
+                go.waitForZero(LifecycleWsClient::HandoffTimeout);
+                try {
+                    client.disconnect();
+                    client.events.push("raw-disconnected");
+                } catch (hash<ExceptionInfo> ex) {
+                    client.events.push(sprintf("raw error: %s: %s", ex.err, ex.desc));
+                }
+            }
+            return WSC_Process;
+        };
+        LifecycleCtx ctx = makeCtx(proto, {"raw_callback": raw, "timeout": 3000});
+        client = ctx.wsc;
+        on_exit {
+            remove client;
+            if (go.getCount()) {
+                go.dec();
+            }
+        }
+        connectChecked(ctx, proto);
+        ctx.wsc.send("raw-quit");
+        assertEq("raw-in", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        # another thread disconnects and waits for the close handshake, which the callback's thread must process
+        ctx.wsc.report_handshake_wait = True;
+        ctx.wsc.inBackground("disconnected", sub () { ctx.wsc.disconnect(); });
+        assertEq("handshake-wait", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        go.dec();
+        # the callback's disconnect does not wait for the action; the handshake then completes
+        assertEq("raw-disconnected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("disconnected", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
+    }
+
+    #! An explicit disconnect() made while an automatic reconnect is about to connect stops the reconnect: no
+    #! connection is published after it
+    reconnectStoppedTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto, {"reconnect": True});
+        connectChecked(ctx, proto);
+        ctx.wsc.hold_reconnect_step = "reestablish";
+        ctx.wsc.send("bye");
+        assertEq("reconnect-step", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(1, ctx.closed.getCount(), "the first connection is reported closed");
+        ctx.wsc.disconnect();
+        ctx.wsc.release_reconnect_step.dec();
+        assertEq("reconnect-done", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        assertFalse(ctx.wsc.isOpen(), "the reconnect did not connect after the disconnect");
+        assertEq(1, ctx.closed.getCount(), "no further connection is reported closed");
+    }
+
+    #! The destructor closes the current connection while the worker of connectAsync() is about to connect: the
+    #! worker publishes no connection
+    destructorDuringConnectAsyncTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto);
+        connectChecked(ctx, proto);
+        Queue ready();
+        # the worker is held once it started the action handed over by connectAsync()
+        ctx.wsc.gate_mode = "handover";
+        ctx.wsc.connectAsync(NOTHING, ready);
+        assertEq("gated", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        LifecycleWsClient c = remove ctx.wsc;
+        Counter gate = c.gate_handshake;
+        Queue events = c.events;
+        Queue deleted();
+        c.report_handshake_wait = True;
+        background sub () {
+            delete c;
+            deleted.push(True);
+        }();
+        # the destructor waits for the close handshake of the connection it took; the worker goes on meanwhile
+        assertEq("handshake-wait", events.get(LifecycleWsClient::HandoffTimeout));
+        gate.dec();
+        auto rv = ready.get(LifecycleWsClient::HandoffTimeout);
+        assertEq("WEBSOCKET-ERROR", rv.error.err, "the worker publishes no connection");
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+        assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
+    }
+
+    #! getAsyncCloseCause() in a closing callback returns the connection's own cause, also after the callback
+    #! reported another connection closed on the same thread
+    nestedCloseCauseTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto, {"idle_timeout": 200, "heartbeat": 0});
+        Queue causes();
+        ctx.on_closed = sub (int n) {
+            if (n == 1) {
+                causes.push(ctx.wsc.getAsyncCloseCause());
+                ctx.wsc.connect();
+                ctx.wsc.disconnect();
+                causes.push(ctx.wsc.getAsyncCloseCause());
+            }
+        };
+        connectChecked(ctx, proto);
+        # the connection ends at its idle timeout
+        string cause = causes.get(LifecycleWsClient::HandoffTimeout);
+        assertEq("idle-timeout", cause, "the cause of the idle connection");
+        assertEq(cause, causes.get(LifecycleWsClient::HandoffTimeout), "its cause after a nested closing report");
+        assertEq(2, ctx.closes.get(LifecycleWsClient::HandoffTimeout), "the nested close is reported");
+        assertEq(1, ctx.closes.get(LifecycleWsClient::HandoffTimeout));
+    }
+
+    #! An exception of the raw frame callback while the frames received with the handshake are delivered does not
+    #! make connect() fail, and the connection works
+    rawCallbackInitialDrainErrorTest(string proto) {
+        code raw = int sub (hash<WsMsgInfo> event) {
+            if (event.msg == "HELLO") {
+                throw "TEST-RAW-ERROR", "the raw frame callback fails";
+            }
+            return WSC_Process;
+        };
+        LifecycleCtx ctx = makeCtx(proto, {"raw_callback": raw});
+        ctx.wsc.connect({"hdr": {"X-Greet": "1"}});
+        if (proto == "h2" && !ctx.wsc.isHttp2()) {
+            testSkip("HTTP/2 was not negotiated");
+        }
+        if (proto == "h3" && !ctx.wsc.isHttp3()) {
+            testSkip("HTTP/3 was not negotiated");
+        }
+        assertTrue(ctx.wsc.isOpen(), "the connection is open");
+        checkCurrentConnection(ctx, 0);
     }
 }
 

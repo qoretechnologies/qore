@@ -80,6 +80,9 @@ module DiscordWebSocketClient {
     - an automatic reconnect stops the heartbeat and switches to the resume gateway URL only if no connection was
       opened after the connection it was started for ended; before, it could stop the heartbeat of the new
       connection and change the URL while it was being connected
+    - an explicit @ref DiscordWebSocketClient::DiscordWebSocketClient::disconnect() "disconnect()" stops the
+      heartbeat and the watchdogs once it is its turn; one that times out waiting for another connect, disconnect or
+      reconnect leaves them running with the connection
     - @ref WebSocketClient::EVENT_WS_CONNECTED is raised for each connection, before its data and close events
     - the gateway URL is discovered with @ref httpclientiointro "HttpClientIo";
       @ref DiscordWebSocketClient::DiscordWebSocketConnection::discoverUrl() "DiscordWebSocketConnection::discoverUrl()"
@@ -494,19 +497,28 @@ DiscordWebSocketClient ws();
     }
 
     #! Disconnects from the gateway and stops the heartbeat thread
-    /** Stops the heartbeat thread before calling the parent disconnect to prevent the heartbeat
-        thread from blocking service shutdown when it was started via \c start_thread.
+    /** Stops the heartbeat thread and the watchdogs once the disconnect holds its action (see explicitDisconnect()),
+        to prevent the heartbeat thread from blocking service shutdown when it was started via \c start_thread; a
+        disconnect that times out waiting for the action leaves them running with the connection.
 
         @param cmd the WebSocket close code to send
 
         @since DiscordWebSocketClient 1.1
     */
     disconnect(int cmd = WSCC_GoingAway) {
-        # explicit disconnect: never let a watchdog resurrect the connection
+        WebSocketClientWithSerialization::disconnect(cmd);
+    }
+
+    #! Stops the watchdogs and the heartbeat thread for an explicit disconnect
+    /** Called by @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" in its action, without the
+        client's lock: an explicit disconnect never lets a watchdog resurrect the connection.
+
+        @since DiscordWebSocketClient 1.2
+    */
+    private explicitDisconnect() {
         cancelHelloWatchdog();
         cancelResumeWatchdog();
         stopHeartbeatThread();
-        WebSocketClientWithSerialization::disconnect(cmd);
     }
 
     #! Returns performance statistics for the socket
