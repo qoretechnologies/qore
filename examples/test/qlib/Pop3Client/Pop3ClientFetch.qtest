@@ -31,6 +31,8 @@ class MockPop3Server {
         bool stop_flag = False;
         #! The socket of the session being served, if any
         *Socket current;
+        #! Set by wait() when it closes the session being served, whose error is then not recorded
+        bool current_closed_by_wait;
         #! Serializes stop_flag and current between wait() and the server thread
         Mutex m();
         #! Error from server thread
@@ -65,6 +67,7 @@ class MockPop3Server {
             AutoLock al(m);
             stop_flag = True;
             if (current) {
+                current_closed_by_wait = True;
                 current.close();
             }
         }
@@ -99,7 +102,10 @@ class MockPop3Server {
             try {
                 client = listener.accept();
             } catch (hash<ExceptionInfo> ex) {
-                recordServerError(ex);
+                # wait() closes the listener to stop the loop
+                if (!stopping()) {
+                    recordServerError(ex);
+                }
                 break;
             }
             {
@@ -110,14 +116,22 @@ class MockPop3Server {
                 }
                 current = client;
             }
+            *hash<ExceptionInfo> session_error;
             try {
                 serveClient(client);
             } catch (hash<ExceptionInfo> ex) {
-                recordServerError(ex);
+                session_error = ex;
             }
+            bool closed_by_wait;
             {
                 AutoLock al(m);
                 remove current;
+                closed_by_wait = current_closed_by_wait;
+                current_closed_by_wait = False;
+            }
+            # an error caused by wait() closing the session is not recorded; any other error is
+            if (session_error && !closed_by_wait) {
+                recordServerError(session_error);
             }
             try {
                 client.close();
@@ -139,10 +153,6 @@ class MockPop3Server {
     private recordServerError(hash<ExceptionInfo> ex) {
         if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-NOT-OPEN"
             || ex.err == "SOCKET-TIMEOUT") {
-            return;
-        }
-        # wait() closes the listener and the session being served
-        if (stopping()) {
             return;
         }
         if (!server_error) {
