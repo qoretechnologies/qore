@@ -28,6 +28,11 @@ default:
 
 variables:
   REPO_NAME: qore
+  # Every job clones the last 3 commits only: the project sets no default depth, so each job cloned the whole history
+  # (103-195 s per job in pipeline 63444).  No build or test reads more than HEAD and its parents: the build embeds
+  # the HEAD commit (cmake/UpdateGitRevision.cmake), the checks list the tracked files (git ls-files) and
+  # tree-already-tested.sh reads the parents of HEAD; test_ci_shallow_clone.py in examples/test/runner keeps it so
+  GIT_DEPTH: "3"
   POSTGRES_PASSWORD: qore
   POSTGRES_PASSWORD_MAP: pgsql=qore
   TZ: 'Europe/Prague'
@@ -59,8 +64,6 @@ tree-already-tested:
     - amd64
   services: []
   before_script: []
-  variables:
-    GIT_DEPTH: "3"
   rules:
     - if: $CI_COMMIT_BRANCH == "develop"
   script:
