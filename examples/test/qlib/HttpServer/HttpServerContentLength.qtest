@@ -156,7 +156,8 @@ class HttpServerContentLengthTest inherits QUnit::Test {
             string body = len ? c.recv(len, Timeout) : "";
             assertTrue(body =~ /Content-Length/i, "the error names the header");
             # the server closes the connection after the error, which is the only response
-            assertEq("closed", HttpServerContentLengthTest::readEnd(c), sprintf("the connection is closed: %y", values));
+            assertEq("closed", HttpServerContentLengthTest::readEnd(c),
+                sprintf("the connection is closed: %y", values));
         }
         assertEq(calls, ContentLengthTestHandler::calls.getCount(), "the handler was not called");
     }
