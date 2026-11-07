@@ -70,8 +70,18 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 // forward reference to private class implementation
 class qore_class_private;
 
-//! Process-wide epoch incremented whenever a callable method table changes.
+//! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
+/** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
+    increment at destruction makes every entry naming the destroyed metadata stale before its memory can be reused
+    for another class.
+*/
 DLLLOCAL uint64_t qore_get_method_dispatch_epoch();
+
+//! Increments the epoch returned by qore_get_method_dispatch_epoch()
+DLLLOCAL void qore_bump_method_dispatch_epoch();
+
+//! Returns a new process-unique class instance serial number; never 0 and never reused
+DLLLOCAL uint64_t qore_get_next_class_instance_serial();
 
 // map from abstract signature to variant for fast tracking of abstract variants
 //typedef vector_map_t<const char*, MethodVariantBase*> vmap_t;
@@ -2321,6 +2331,14 @@ public:
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
+
+    //! the identity of this private class instance for the lifetime of the process
+    /** Unlike the class ID, which a copy of a class keeps, and the address, which a later class can reuse after this
+        one is freed, no other qore_class_private ever has this serial number.  A cache holding raw class or method
+        pointers compares it with the serial of a live class to prove that the cached metadata is that class's.
+    */
+    const uint64_t instance_serial = qore_get_next_class_instance_serial();
+
     mutable QoreReferenceCounter refs;  // existence references
     mutable QoreReferenceCounter const_refs; // constant references
     mutable QoreReferenceCounter var_refs;   // static var references
@@ -2439,6 +2457,11 @@ public:
 
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();
+    }
+
+    //! Returns the process-unique serial number of this private class instance; see instance_serial
+    DLLLOCAL uint64_t getInstanceSerial() const {
+        return instance_serial;
     }
 
     // get base class list to add virtual class indexes for private data

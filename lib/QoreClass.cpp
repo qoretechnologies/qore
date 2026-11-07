@@ -63,8 +63,16 @@ uint64_t qore_get_method_dispatch_epoch() {
     return qore_method_dispatch_epoch.load(std::memory_order_acquire);
 }
 
-static void qore_bump_method_dispatch_epoch() {
+void qore_bump_method_dispatch_epoch() {
     qore_method_dispatch_epoch.fetch_add(1, std::memory_order_release);
+}
+
+// starts at 1 so that 0 never identifies a class
+static std::atomic<uint64_t> qore_class_instance_serial_seq{1};
+
+uint64_t qore_get_next_class_instance_serial() {
+    // only uniqueness is needed: the serial is published with the class pointer it identifies
+    return qore_class_instance_serial_seq.fetch_add(1, std::memory_order_relaxed);
 }
 
 AbstractQoreClassUserData::~AbstractQoreClassUserData() {
@@ -978,6 +986,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
+    // dispatch caches keyed by this class's address, its methods or its types must miss from now on, before the
+    // memory can be reused for another class
+    qore_bump_method_dispatch_epoch();
 
     if (spgm) {
         if (deref_source_program) {

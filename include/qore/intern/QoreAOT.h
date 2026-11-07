@@ -175,8 +175,11 @@ struct QoreAOTMethodDispatchCacheEntry {
     const QoreClass* receiver_class = nullptr;
     const QoreTypeInfo* receiver_type_info = nullptr;
     const qore_class_private* class_ctx = nullptr;
-    const QoreProgram* caller_program = nullptr;
-    const QoreProgram* object_program = nullptr;
+    // Programs are identified by their never-reused IDs: a later Program can be allocated at a destroyed one's
+    // address.  The class and type pointers above are safe as keys because the destruction of a class or hashdecl
+    // increments the dispatch epoch, so no entry naming one can match after it is freed.
+    qore_program_id_t caller_program_id = 0;
+    qore_program_id_t object_program_id = 0;
     const QoreMethod* method = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreParseOptions parse_options;

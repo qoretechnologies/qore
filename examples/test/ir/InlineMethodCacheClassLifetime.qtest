@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class InlineMethodCacheClassLifetimeTest
+
+#! Checks that a method call site's inline cache never uses a class that has been destroyed
+/** An IR call site in one Program calling a method of an object of a class from a child Program caches the class,
+    the method and the callee by address (qore#5631).  When the child Program is destroyed, its classes are freed and
+    a class created later can be allocated at the same address; the call site then matched the new class against
+    the cache by its address and called the freed method: the ncurses widget gallery crashed in
+    QoreMethod::isPrivate() calling QRepl::joinEvaluation() after a story had replaced its QRepl Program.
+
+    The cache now also records the serial number of the class and of the class context, which no other class ever
+    has, and the AOT method dispatch cache becomes stale whenever a class or hashdecl is destroyed.
+
+    The allocator decides whether a class gets a destroyed class's address, so the call site tests below show that
+    calls through a persistent call site stay correct over many destroyed Programs, while the C++ unit tests (debug
+    builds) model the reused address deterministically.
+*/
+class InlineMethodCacheClassLifetimeTest inherits QUnit::Test {
+    public {
+        #! the number of target Programs created and destroyed behind one set of call sites
+        const Generations = 200;
+
+        #! the calls made through each call site for each generation
+        const CallsPerGeneration = 3;
+
+        #! the persistent call sites, executed in the IR interpreter
+        const CallerSource = "%modern
+int sub call_value(auto o) {
+    return o.value();
+}
+
+int sub call_guarded(auto o) {
+    try {
+        return o.value();
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+
+int sub call_inherited(auto o) {
+    return o.inheritedValue();
+}
+
+string sub call_deleted(auto o) {
+    try {
+        o.value();
+        return \"no exception\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the source of the debug-build unit test target; see dbg_run_method_cache_lifetime_tests()
+        const UnitTargetSource = "%modern
+class Target {
+    int value() {
+        return 42;
+    }
+
+    private int hidden() {
+        return 7;
+    }
+
+    hash<auto> run() {
+        # the callees must have IR before a call site can cache them
+        value();
+        hidden();
+        return dbg_run_method_cache_lifetime_tests(self);
+    }
+}
+
+hash<auto> sub run_tests() {
+    Target t();
+    return t.run();
+}
+";
+    }
+
+    constructor() : QUnit::Test("InlineMethodCacheClassLifetimeTest", "1.0", \ARGV) {
+        addTestCase("call sites outlive the classes they called", \testCallSitesOutliveClasses());
+        addTestCase("a call site called with a deleted object", \testDeletedReceiver());
+        addTestCase("a private method called through a call site in its class", \testPrivateMethod());
+%ifdef QoreDebug
+        addTestCase("C++ unit tests of the class lifetime identities", \testUnitTests());
+%endif
+%ifndef QoreDebug
+        addTestCase("C++ unit tests of the class lifetime identities", \testRequiresDebugBuild());
+%endif
+        set_return_value(main());
+    }
+
+    #! Each generation's objects are called through the same call sites after the earlier Programs are destroyed
+    testCallSitesOutliveClasses() {
+        Program caller = newCallerProgram();
+        list<string> errors = ();
+        for (int gen = 1; gen <= Generations; ++gen) {
+            Program target = newTargetProgram(gen);
+            {
+                object worker = target.callFunction("make_worker");
+                object derived = target.callFunction("make_derived");
+                for (int i = 0; i < CallsPerGeneration; ++i) {
+                    checkCall(\errors, gen, "call_value", caller.callFunction("call_value", worker), gen);
+                    checkCall(\errors, gen, "call_guarded", caller.callFunction("call_guarded", worker), gen);
+                    checkCall(\errors, gen, "call_value (subclass)", caller.callFunction("call_value", derived),
+                        gen * 10);
+                    checkCall(\errors, gen, "call_inherited", caller.callFunction("call_inherited", derived),
+                        gen + 1000);
+                }
+                delete worker;
+                delete derived;
+            }
+            # the target Program and its classes are destroyed here; the caller's call sites remain
+            delete target;
+        }
+        assertEq((), errors, sprintf("all calls through the persistent call sites over %d destroyed Programs "
+            "returned the value of their own object's class", Generations));
+    }
+
+    #! A deleted object is rejected by a call site whose cache names its class
+    testDeletedReceiver() {
+        Program caller = newCallerProgram();
+        Program target = newTargetProgram(1);
+        object worker = target.callFunction("make_worker");
+        # publish the call site's cache with the worker's class
+        for (int i = 0; i < CallsPerGeneration; ++i) {
+            assertEq("no exception", caller.callFunction("call_deleted", worker), "a valid object is called");
+        }
+        object other = target.callFunction("make_worker");
+        # "delete" clears the variable; the second reference keeps the deleted object
+        object deleted = worker;
+        delete worker;
+        assertEq("OBJECT-ALREADY-DELETED", caller.callFunction("call_deleted", deleted),
+            "a deleted object of the cached class raises an exception");
+        assertEq("no exception", caller.callFunction("call_deleted", other), "another object is called");
+        remove deleted;
+        delete other;
+        delete target;
+        # a later Program's deleted object of a new class
+        target = newTargetProgram(2);
+        worker = target.callFunction("make_worker");
+        deleted = worker;
+        delete worker;
+        assertEq("OBJECT-ALREADY-DELETED", caller.callFunction("call_deleted", deleted),
+            "a deleted object of a later class raises an exception");
+        remove deleted;
+        delete target;
+    }
+
+    #! Private methods called in their class's context over destroyed Programs return their own class's value
+    testPrivateMethod() {
+        list<string> errors = ();
+        for (int gen = 1; gen <= Generations / 4; ++gen) {
+            Program target = newTargetProgram(gen);
+            for (int i = 0; i < CallsPerGeneration; ++i) {
+                checkCall(\errors, gen, "callHidden", target.callFunction("call_hidden"), gen + 500);
+            }
+            delete target;
+        }
+        assertEq((), errors, "private method calls returned the value of their own class");
+    }
+
+%ifdef QoreDebug
+    testUnitTests() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.setExecMode(EM_IR);
+        pgm.parse(UnitTargetSource, "inline-method-cache-unit-target");
+        hash<auto> res = pgm.callFunction("run_tests");
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed", res.test_count));
+    }
+%endif
+
+%ifndef QoreDebug
+    testRequiresDebugBuild() {
+        testSkip("the C++ unit tests require a debug build of the Qore library: "
+            "dbg_run_method_cache_lifetime_tests() is only registered when the library is built with DEBUG");
+    }
+%endif
+
+    #! Returns a new Program with the persistent call sites, executed in the IR interpreter
+    private static Program newCallerProgram() {
+        Program caller(PO_NO_CHILD_PO_RESTRICTIONS);
+        caller.setExecMode(EM_IR);
+        caller.parse(CallerSource, "inline-method-cache-caller");
+        return caller;
+    }
+
+    #! Returns a new Program whose classes return values identifying the generation
+    /** Each method is called once in the target Program, so that it has IR before the caller's call sites see it.
+    */
+    private static Program newTargetProgram(int gen) {
+        Program target(PO_NO_CHILD_PO_RESTRICTIONS);
+        target.setExecMode(EM_IR);
+        string src = sprintf("%%modern
+class Worker {
+    int value() {
+        return %d;
+    }
+
+    private int hidden() {
+        return %d;
+    }
+
+    int callHidden() {
+        return hidden();
+    }
+}
+
+class Derived inherits Worker {
+    int value() {
+        return %d;
+    }
+
+    int inheritedValue() {
+        return %d;
+    }
+}
+
+object sub make_worker() {
+    Worker w();
+    w.value();
+    w.callHidden();
+    return w;
+}
+
+object sub make_derived() {
+    Derived d();
+    d.value();
+    d.inheritedValue();
+    return d;
+}
+
+int sub call_hidden() {
+    Worker w();
+    return w.callHidden();
+}
+", gen, gen + 500, gen * 10, gen + 1000);
+        target.parse(src, sprintf("inline-method-cache-target-%d", gen));
+        return target;
+    }
+
+    #! Records a call that did not return the expected value
+    private static checkCall(reference<list<string>> errors, int gen, string call, int actual, int expected) {
+        if (actual != expected) {
+            push errors, sprintf("generation %d: %s returned %d; expected %d", gen, call, actual, expected);
+        }
+    }
+}
