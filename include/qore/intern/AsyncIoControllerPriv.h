@@ -742,6 +742,17 @@ public:
     */
     DLLLOCAL void wakeSocket(const std::string& sock_hash);
 
+#ifdef DEBUG
+    //! Debug-only: wakes the operations of every socket that has a route to an I/O thread
+    /** Each operation runs again and computes its timers anew; used after the QUIC test clock has been advanced
+        (see qore_quic_test_advance_clock()), so that timers that are due on the new clock are handled at once instead
+        of when the wait computed with the old clock ends
+
+        @return the number of sockets woken
+    */
+    DLLLOCAL size_t dbgWakeAllSockets();
+#endif
+
     //! Wakes a socket operation by QoreObject identity
     /** Looks up the socket's registered hash from registered_sockets to find the
         correct cache entry. This avoids the hash mismatch that occurs when the

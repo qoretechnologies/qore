@@ -34,6 +34,15 @@
 
     These tests kill a real client process with SIGKILL — nothing else
     reproduces a peer that stops answering without a single farewell packet.
+
+    In a library-debug build the QUIC timers run on the debug-only QUIC test
+    clock (dbg_quic_advance_clock()): instead of waiting for the idle timeout,
+    the tests advance the clock of the connections of this process past it,
+    and a live peer is kept alive across the idle windows by advancing the
+    clock one keep-alive interval at a time and waiting for both ends to
+    receive a packet (dbg_quic_wait_packets_received()).  The QUIC timers then
+    decide the outcome exactly as with the real clock, without waiting for it.
+    In other builds the tests wait for the real clock.
 */
 
 %modern
@@ -49,6 +58,7 @@
 %requires HttpServer
 %requires WebSocketUtil
 %requires WebSocketHandler
+%requires WebSocketClient
 %requires HttpClientIo
 
 %exec-class HttpServerQuicDeadPeerTest
@@ -166,17 +176,24 @@ class SilentSlowHandler inherits AbstractHttpRequestHandler {
     public {
         int delay_secs;
         Queue request_started();
+        #! with the QUIC test clock, the handler answers when this counter is zero instead of after delay_secs
+        *Counter release;
     }
 
-    constructor(int n_delay_secs) : AbstractHttpRequestHandler() {
+    constructor(int n_delay_secs, *Counter release) : AbstractHttpRequestHandler() {
         delay_secs = n_delay_secs;
+        self.release = release;
     }
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
         request_started.push("started");
         # deliberately blocking and silent: no headers, no body, no trailers
-        sleep(delay_secs);
+        if (release) {
+            release.waitForZero();
+        } else {
+            sleep(delay_secs);
+        }
         return makeResponse(200, "slow-ok", {"Content-Type": MimeTypeText});
     }
 }
@@ -266,6 +283,9 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         #! Temporary files created for child client processes
         list<string> tmp_files();
+
+        #! True if the QUIC timers run on the debug-only QUIC test clock
+        bool virtual_clock = Option::HAVE_LIBRARY_DEBUGGING;
     }
 
     constructor() : Test("HttpServerQuicDeadPeerTest", "1.0") {
@@ -381,6 +401,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         # CONNECTION_CLOSE — the server will never hear from it again
         kill(pid, SIGKILL);
         date start = now_us();
+        # past the idle timeout of the server's connection, which then sees no packet from the dead peer
+        advanceClockPastIdle();
 
         assertEq("closed", ws_handler.closed_signal.get(ReapTimeout),
             "QUIC idle close reaped the dead peer's WebSocket handler");
@@ -415,6 +437,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertGt(0, pid, "client process recorded its pid");
 
         kill(pid, SIGKILL);
+        advanceClockPastIdle();
 
         # The producer fills the 1 MB stream buffer, parks in the drain wait, and
         # is released only when the QUIC idle close marks the session closed and
@@ -424,6 +447,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! A live peer must not be reaped: keepalive PINGs hold the session open
+    /** The client runs in this process, so that its connection runs on the same QUIC clock as the server's
+    */
     testH3WsLivePeerNotReaped() {
         checkDeadPeerSupported();
 
@@ -435,8 +460,18 @@ l50Xb2GWQesIt9k5jF5IOw==
             delete server;
         }
 
-        string pid_path = startWsClient(setup.port);
-        on_exit killClient(pid_path);
+        Queue echoes();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                echoes.push(msg);
+            }
+        }, {
+            "url": "wss://127.0.0.1:" + setup.port,
+            "http3_mode": "required",
+            "ssl_verify_cert": False,
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
 
         assertEq("connected", ws_handler.connected_signal.get(30s),
             "server-side WebSocket handler started");
@@ -445,16 +480,33 @@ l50Xb2GWQesIt9k5jF5IOw==
         # data.  The QUIC keepalive must hold the session open; mis-firing the
         # idle close here would tear down a healthy connection, which is the
         # regression risk of this fix.
-        bool timed_out = False;
-        try {
-            ws_handler.closed_signal.get(LivePeerWait);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "QUEUE-TIMEOUT") {
-                rethrow;
+        if (virtual_clock) {
+            # one keep-alive interval at a time: each step makes both ends send their keep-alive PING, and the next
+            # step starts only once both ends have received a packet, so the connection is never idle for longer
+            # than one step, which is less than the idle timeout
+            int step = IdleTimeoutMs / 2 + 1000;
+            for (int elapsed = 0; elapsed <= LivePeerWait.durationMilliseconds(); elapsed += step) {
+                hash<auto> rx = call_function("dbg_quic_packets_received");
+                call_function("dbg_quic_advance_clock", step);
+                assertTrue(call_function("dbg_quic_wait_packets_received", rx.client + 1, rx.server + 1, 30s),
+                    sprintf("both ends received a packet after %d ms of idle time", elapsed + step));
             }
-            timed_out = True;
+            assertEq(0, ws_handler.closed_signal.size(), "live peer's WebSocket handler was not reaped");
+        } else {
+            bool timed_out = False;
+            try {
+                ws_handler.closed_signal.get(LivePeerWait);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+                timed_out = True;
+            }
+            assertTrue(timed_out, "live peer's WebSocket handler was not reaped");
         }
-        assertTrue(timed_out, "live peer's WebSocket handler was not reaped");
+        # the connection still carries messages
+        wsc.send("ping-after-idle");
+        assertEq("ping-after-idle", echoes.get(30s), "the live connection still works after the idle windows");
     }
 
     #! A silent slow upstream must not idle-close the caller's H3 session
@@ -486,7 +538,13 @@ l50Xb2GWQesIt9k5jF5IOw==
         # IdleTimeoutMs is 10s, so keep-alive fires at ~5s; stay silent well
         # past two full idle windows
         int delay_secs = (IdleTimeoutMs / 1000) * 5 / 2;
-        SilentSlowHandler handler(delay_secs);
+        # with the QUIC test clock, the handler answers when the test releases it, after the clock has advanced by
+        # delay_secs
+        *Counter release = virtual_clock ? new Counter(1) : NOTHING;
+        on_exit if (release && release.getCount()) {
+            release.dec();
+        }
+        SilentSlowHandler handler(delay_secs, release);
         hash<auto> setup = setupServer(handler);
         HttpServer server = setup.server;
         on_exit {
@@ -517,7 +575,11 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         hash<auto> resp;
         try {
-            resp = mgr.request("https://127.0.0.1:" + setup.port, "GET", "/slow");
+            if (virtual_clock) {
+                resp = requestOnVirtualClock(mgr, "https://127.0.0.1:" + setup.port, handler, release, delay_secs);
+            } else {
+                resp = mgr.request("https://127.0.0.1:" + setup.port, "GET", "/slow");
+            }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTP3-IDLE-CLOSE") {
                 fail(sprintf("the QUIC session idle-closed while waiting for a "
@@ -531,6 +593,56 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "silence is received");
         assertEq("started", handler.request_started.get(1s),
             "the slow handler actually ran");
+    }
+
+    #! Advances the QUIC test clock past the idle timeout, if the QUIC timers run on it
+    /** Three idle timeouts: a dead peer is detected at about idle + idle/2 (see IdleTimeoutMs)
+    */
+    private advanceClockPastIdle() {
+        if (virtual_clock) {
+            call_function("dbg_quic_advance_clock", IdleTimeoutMs * 3);
+        }
+    }
+
+    #! Makes the request of testH3SlowSilentResponseNotIdleClosed() while the QUIC test clock advances by delay_secs
+    /** The request runs in a thread; once the handler has the request, the clock advances one keep-alive interval at a
+        time, and the next step starts only once the server has received the client's PING and the client the
+        server's answer to it; then the handler is released.
+
+        @return the response; an error of the request is raised
+    */
+    private hash<auto> requestOnVirtualClock(HttpClientIo::HttpClientConnectionManager mgr, string url,
+            SilentSlowHandler handler, Counter release, int delay_secs) {
+        Queue result();
+        background sendRequest(mgr, url, result);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        assertEq("started", handler.request_started.get(30s), "the slow handler received the request");
+        int step = IdleTimeoutMs / 2 + 1000;
+        for (int elapsed = 0; elapsed < delay_secs * 1000; elapsed += step) {
+            hash<auto> rx = call_function("dbg_quic_packets_received");
+            call_function("dbg_quic_advance_clock", step);
+            assertTrue(call_function("dbg_quic_wait_packets_received", rx.client + 1, rx.server + 1, 30s),
+                sprintf("both ends received a packet after %d ms of silence", elapsed + step));
+        }
+        # put the start signal back for the assertion of the test case
+        handler.request_started.push("started");
+        release.dec();
+        hash<auto> h = result.get(60s);
+        if (h.ex) {
+            throw h.ex.err, h.ex.desc, h.ex.arg;
+        }
+        return h.resp;
+    }
+
+    #! Makes the request in its own thread and pushes the response or the error on @p result
+    private sendRequest(HttpClientIo::HttpClientConnectionManager mgr, string url, Queue result) {
+        try {
+            result.push({"resp": mgr.request(url, "GET", "/slow")});
+        } catch (hash<ExceptionInfo> ex) {
+            result.push({"ex": ex});
+        }
     }
 
     #! Starts the victim WebSocket client and returns its pid file path

@@ -42,6 +42,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QuicSession.h"
 
 #include <map>
 #include <memory>
@@ -13414,6 +13415,31 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
+static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
+    return *xsink ? QoreValue() : QoreValue(total);
+}
+
+//! Debug-only: the number of QUIC packets processed by client and server connections: {"client": int, "server": int}
+static QoreValue f_dbg_quic_packets_received(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t client, server;
+    qore_quic_test_packets_received(client, server);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("client", client, xsink);
+    h->setKeyValue("server", server, xsink);
+    return h.release();
+}
+
+//! Debug-only: waits until client and server connections have processed at least the given numbers of QUIC packets
+static QoreValue f_dbg_quic_wait_packets_received(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t client = get_param_value(params, 0).getAsBigInt();
+    int64_t server = get_param_value(params, 1).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 2).getAsBigInt();
+    return qore_quic_test_wait_packets_received(client, server, timeout_ms);
+}
+
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
     controller-backed sync socket calls without racing an actual close()
@@ -16406,6 +16432,16 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, bigIntTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_quic_packets_received", f_dbg_quic_packets_received,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_wait_packets_received", f_dbg_quic_wait_packets_received,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 3,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "client",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "server",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");

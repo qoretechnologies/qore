@@ -4552,6 +4552,23 @@ void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash, A
     }
 }
 
+#ifdef DEBUG
+size_t AsyncIoControllerPriv::dbgWakeAllSockets() {
+    std::vector<std::string> hashes;
+    {
+        AutoLocker al(sock_route_lock);
+        hashes.reserve(sock_to_thread.size());
+        for (const auto& [hash, idx] : sock_to_thread) {
+            hashes.push_back(hash);
+        }
+    }
+    for (const std::string& hash : hashes) {
+        wakeSocket(hash);
+    }
+    return hashes.size();
+}
+#endif
+
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     if (forked()) {
         return;

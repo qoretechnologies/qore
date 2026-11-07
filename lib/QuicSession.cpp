@@ -55,6 +55,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <chrono>
+#include <condition_variable>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -344,6 +346,66 @@ std::string QuicSession::getCipherVersion() const {
 
 // ===== Timestamp helper =====
 
+#ifdef DEBUG
+//! The total advance of the QUIC test clock in nanoseconds; see qore_quic_test_advance_clock()
+static std::atomic<int64_t> quic_test_clock_offset_ns{0};
+
+//! The QUIC packets processed by client and server connections; see qore_quic_test_wait_packets_received()
+static std::mutex quic_test_rx_m;
+static std::condition_variable quic_test_rx_cv;
+static int64_t quic_test_rx_client = 0;
+static int64_t quic_test_rx_server = 0;
+
+//! Counts a packet processed by a connection
+static void quic_test_count_rx(bool is_server) {
+    {
+        std::lock_guard<std::mutex> g(quic_test_rx_m);
+        ++(is_server ? quic_test_rx_server : quic_test_rx_client);
+    }
+    quic_test_rx_cv.notify_all();
+}
+
+int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
+    if (ms < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the QUIC test clock only goes forward; got %lld ms",
+            (long long)ms);
+        return -1;
+    }
+    int64_t total = quic_test_clock_offset_ns.fetch_add(ms * 1000000LL, std::memory_order_acq_rel)
+        + ms * 1000000LL;
+    // the operations of the connections handle the timers that are due on the new clock now
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return -1;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return -1;
+    }
+    ctrl->dbgWakeAllSockets();
+    return total / 1000000LL;
+}
+
+void qore_quic_test_packets_received(int64_t& client, int64_t& server) {
+    std::lock_guard<std::mutex> g(quic_test_rx_m);
+    client = quic_test_rx_client;
+    server = quic_test_rx_server;
+}
+
+bool qore_quic_test_wait_packets_received(int64_t client, int64_t server, int64_t timeout_ms) {
+    std::unique_lock<std::mutex> g(quic_test_rx_m);
+    auto reached = [client, server]() {
+        return quic_test_rx_client >= client && quic_test_rx_server >= server;
+    };
+    if (timeout_ms < 0) {
+        quic_test_rx_cv.wait(g, reached);
+        return true;
+    }
+    return quic_test_rx_cv.wait_for(g, std::chrono::milliseconds(timeout_ms), reached);
+}
+#endif
+
 ngtcp2_tstamp QuicSession::timestamp() {
     struct timespec tp;
 #if defined(DARWIN) && defined(CLOCK_MONOTONIC_RAW)
@@ -357,8 +419,12 @@ ngtcp2_tstamp QuicSession::timestamp() {
 #else
     clock_gettime(CLOCK_MONOTONIC, &tp);
 #endif
-    return static_cast<ngtcp2_tstamp>(tp.tv_sec) * NGTCP2_SECONDS
+    ngtcp2_tstamp ts = static_cast<ngtcp2_tstamp>(tp.tv_sec) * NGTCP2_SECONDS
          + static_cast<ngtcp2_tstamp>(tp.tv_nsec);
+#ifdef DEBUG
+    ts += static_cast<ngtcp2_tstamp>(quic_test_clock_offset_ns.load(std::memory_order_acquire));
+#endif
+    return ts;
 }
 
 ngtcp2_tstamp QuicSession::nowLocked() const {
@@ -1548,6 +1614,9 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     // generates ACK frames that need to be sent.  Skipping this would cause
     // delayed ACKs and potential retransmissions from the peer.
     pending_write_.store(true, std::memory_order_release);
+#ifdef DEBUG
+    quic_test_count_rx(is_server_);
+#endif
 
     return 0;
 }
@@ -1660,6 +1729,9 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
                 i, count, ngtcp2_strerror(rv), rv);
             continue;
         }
+#ifdef DEBUG
+        quic_test_count_rx(is_server_);
+#endif
     }
 
     // Signal pending write once for the entire batch
