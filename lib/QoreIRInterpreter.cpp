@@ -1793,8 +1793,12 @@ static void mirrorLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
     helper.assign(value);
 }
 
-static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
-    QoreValue stored = value.needsRef() ? value.refSelf() : value;
+//! Returns the value stored in an IR-only local, with the reference its slot owns
+/** @param transfer true if \a value's reference is given to the local (it is released if the value is refused)
+*/
+static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink,
+        bool transfer = false) {
+    QoreValue stored = !transfer && value.needsRef() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
     ti = qore_substitute_type_params_if_needed(ti);
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
@@ -2268,6 +2272,58 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_reference_slots = std::move(reference_slots);
+    // the loads of IR-only locals whose only use is the base of a method call in the same block, with no write to
+    // the local between: when the value is an object, they borrow it, as the AST interpreter evaluates the base of a
+    // method call without a reference of its own; each reference taken and released was a dereference of the object,
+    // which is a garbage-collection decision for an object in a recursive graph.  An argument is never borrowed: a
+    // direct or inlined call can take its argument's slot over as the parameter's, and a container is never
+    // borrowed: code that receives one with a single reference can take it over or change it in place
+    {
+        std::vector<uint8_t> borrowed_bases(func.max_value_id + 1, 0);
+        const std::vector<uint8_t>& bases = func.interpreter_dot_eval_only_bases;
+        for (const auto& block : func.blocks) {
+            const auto& insts = block->instructions;
+            for (size_t i = 0; i < insts.size(); ++i) {
+                const QoreIRInstruction* load = insts[i].get();
+                if (load->opcode != QoreIROpcode::LoadLocal || !load->result.isValid()) {
+                    continue;
+                }
+                const uint32_t rid = load->result.id;
+                if (rid >= bases.size() || !bases[rid]) {
+                    continue;
+                }
+                const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(load)->local;
+                if (!lv || !func.ir_only_locals.count(reinterpret_cast<const void*>(lv))
+                        || !static_cast<const QoreIRLocalInstruction*>(load)->auto_ref) {
+                    continue;
+                }
+                for (size_t j = i + 1; j < insts.size(); ++j) {
+                    const QoreIRInstruction* next = insts[j].get();
+                    bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
+                        || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
+                            static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
+                    if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
+                        borrowed_bases[rid] = 1;
+                        break;
+                    }
+                    // a write to the local can release the value borrowed
+                    const LocalVar* written = nullptr;
+                    if (next->opcode == QoreIROpcode::StoreLocal || next->opcode == QoreIROpcode::UninstantiateLocal
+                            || next->opcode == QoreIROpcode::StoreClosure) {
+                        written = static_cast<const QoreIRLocalInstruction*>(next)->local;
+                    } else if (next->opcode == QoreIROpcode::IncrementLocalInt) {
+                        written = static_cast<const QoreIRIncrementLocalIntInstruction*>(next)->local;
+                    } else if (next->opcode == QoreIROpcode::AddAssignLocalInt) {
+                        written = static_cast<const QoreIRAddAssignLocalIntInstruction*>(next)->target;
+                    }
+                    if (written == lv) {
+                        break;
+                    }
+                }
+            }
+        }
+        func.interpreter_borrowed_bases = std::move(borrowed_bases);
+    }
     // the locals owned by the function, which ensureLocalInstantiated() tells from the variables of an enclosing
     // scope: the pre-instantiated locals and every body local
     {
@@ -8770,6 +8826,15 @@ next_instruction:
                                 result_slot_owned = false;
                                 goto load_local_done;
                             }
+                            // the base of a method call that nothing can release before the call borrows the
+                            // local's value if it is an object (see interpreter_borrowed_bases)
+                            if (is_ir_only_local && cached_node_type == NT_OBJECT
+                                    && local_inst->result.id < func.interpreter_borrowed_bases.size()
+                                    && func.interpreter_borrowed_bases[local_inst->result.id]) {
+                                out = cached_val;
+                                result_slot_owned = false;
+                                goto load_local_done;
+                            }
                             // Cache hit: one refSelf, no hash lookups, no instantiation check
                             out = cached_val.needsRef() ? cached_val.refSelf() : cached_val;
                             result_slot_owned = out.needsRef();
@@ -11019,7 +11084,26 @@ load_local_done:
                         ++ip;
                         break;
                     }
-                    QoreValue stored = coerceIRLocalValue(local_inst->local, val, xsink);
+                    // an owned temporary whose only use is this store gives its reference to the local, as a
+                    // store to a local on the runtime stack does (assignLocalVarValueTransfer() below): another
+                    // reference taken and the temporary's released at the end of the statement dereferenced an
+                    // object one more time, which is a garbage-collection scan for an object holding objects
+                    bool transfer = !normalized_weak_ref && store_mode == AssignmentMode::Normal
+                        && operand.isValid() && operand.id < values.size()
+                        && operand.id < value_use_counts.size() && value_use_counts[operand.id] == 1
+                        && values[operand.id].hasNode() && hasCleanupEntry(cleanup, operand.id)
+                        && !weak_load_temp_slots.count(operand.id)
+                        && !(operand.id < borrowed_temp_remaining.size()
+                            && borrowed_temp_remaining[operand.id] > 0);
+                    QoreValue stored;
+                    if (transfer) {
+                        // the slot's reference belongs to the local now, or is released by a failed coercion
+                        removeAllCleanupEntries(cleanup, operand.id);
+                        values[operand.id] = QoreValue();
+                        stored = coerceIRLocalValue(local_inst->local, val, xsink, true);
+                    } else {
+                        stored = coerceIRLocalValue(local_inst->local, val, xsink);
+                    }
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
                             cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -15758,11 +15842,66 @@ load_local_done:
                         called_external = inline_may_invalidate_external_caches;
                     } else if (direct_inst->method && direct_inst->qc) {
                         called_external = true;
+                        // a temporary argument that the call consumes (its only use; see buildValueUseCounts()) is
+                        // released right after the call's argument list is built, before the call, as compiled code
+                        // releases it (clearConsumedArgCleanups()): a temporary object is then dereferenced while it
+                        // is linked to nothing yet; released after the call, as releaseConsumedCallArgs() releases
+                        // it, its dereference is a garbage-collection decision when the call linked it into a
+                        // recursive graph (a value pushed to a Queue that it holds), which made such a loop take
+                        // 1.17 times the instructions
+                        uint64_t consumed_cells[SMALL_BUF];
+                        uint64_t* consumed_ptrs[SMALL_BUF];
+                        bool any_consumed = false;
+                        if (nargs <= SMALL_BUF) {
+                            for (int i = 0; i < nargs; ++i) {
+                                consumed_ptrs[i] = nullptr;
+                                uint32_t id = direct_inst->operands[i + 1].id;
+                                if (direct_inst->operands[i + 1].isValid() && id < values.size()
+                                        && id < consumed_call_args.size() && consumed_call_args[id]
+                                        && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                                        && !weak_load_temp_slots.count(id)
+                                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                                    // the same slot passed twice is released once
+                                    bool dup = false;
+                                    for (int j = 0; j < i; ++j) {
+                                        if (consumed_ptrs[j] && direct_inst->operands[j + 1].id == id) {
+                                            dup = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!dup) {
+                                        consumed_cells[i] = nanboxed_args[i];
+                                        consumed_ptrs[i] = &consumed_cells[i];
+                                        any_consumed = true;
+                                    }
+                                }
+                            }
+                        }
                         res = fromBits(explicit_inst
-                            ? qore_rt_dot_eval_method_direct_with_inst(toBits(base), direct_inst->method,
-                                direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, explicit_inst, xsink)
-                            : qore_rt_dot_eval_method_direct(toBits(base), direct_inst->method, direct_inst->qc,
-                                direct_inst->variant, nanboxed_args, nargs, xsink));
+                            ? (any_consumed
+                                ? qore_rt_dot_eval_method_direct_with_inst_consume_args(toBits(base),
+                                    direct_inst->method, direct_inst->qc, direct_inst->variant, nanboxed_args,
+                                    consumed_ptrs, nargs, explicit_inst, xsink)
+                                : qore_rt_dot_eval_method_direct_with_inst(toBits(base), direct_inst->method,
+                                    direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, explicit_inst,
+                                    xsink))
+                            : (any_consumed
+                                ? qore_rt_dot_eval_method_direct_consume_args(toBits(base), direct_inst->method,
+                                    direct_inst->qc, direct_inst->variant, nanboxed_args, consumed_ptrs, nargs,
+                                    xsink)
+                                : qore_rt_dot_eval_method_direct(toBits(base), direct_inst->method,
+                                    direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, xsink)));
+                        // an argument whose cell the call cleared was released by it: its slot no longer owns it,
+                        // which must be known before an exception is handled below
+                        if (any_consumed) {
+                            for (int i = 0; i < nargs; ++i) {
+                                if (consumed_ptrs[i] && !consumed_cells[i]) {
+                                    uint32_t id = direct_inst->operands[i + 1].id;
+                                    removeAllCleanupEntries(cleanup, id);
+                                    values[id] = QoreValue();
+                                }
+                            }
+                        }
                     } else if (mname) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, mname,

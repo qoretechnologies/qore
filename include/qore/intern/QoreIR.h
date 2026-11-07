@@ -3783,6 +3783,9 @@ public:
     //! The locals the function owns (QoreIRFunction::pre_instantiated_locals and every body local), which the
     //! interpreter tells from the variables of an enclosing scope
     mutable std::unordered_set<const void*> interpreter_function_own_locals;
+    //! Non-zero for the values of LoadLocal instructions that borrow their IR-only local's value if it is an object:
+    //! the only use is the base of a method call in the same block with no write to the local before it
+    mutable std::vector<uint8_t> interpreter_borrowed_bases;
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
     //! Slots whose definition and uses are not all in the same basic block.
     /** The interpreter's scope-exit cleanup decides whether a value slot is

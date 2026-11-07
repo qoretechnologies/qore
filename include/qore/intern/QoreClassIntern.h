@@ -837,9 +837,11 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    //! @param tmp_args true if \a args is a temporary list with one reference, whose values the call takes over
+    //! (see CodeEvaluationHelper), instead of copying the list to convert an argument
     DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, bool tmp_args = false) const;
 
     DLLLOCAL virtual MethodFunctionBase* copy(const QoreClass* n_qc) const {
         return new ConstructorMethodFunction(*this, n_qc);
@@ -3427,10 +3429,11 @@ public:
 
     // allow_abstract = true if only for other languages that have inherited this class and have implemented
     // the abstract methods
+    // tmp_args = true if args is a temporary list with one reference, whose values the constructor takes over
     DLLLOCAL QoreObject* execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
-        const QoreTypeInfo* object_type_info = nullptr) const;
+        const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) const;
 
     DLLLOCAL void addBuiltinMethod(const char* mname, MethodVariantBase* variant);
     DLLLOCAL void addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant);
@@ -3932,8 +3935,8 @@ public:
 
     DLLLOCAL static QoreObject* execConstructor(const QoreClass& qc, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink,
-            const QoreTypeInfo* object_type_info = nullptr) {
-        return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info);
+            const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) {
+        return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info, tmp_args);
     }
 
     DLLLOCAL static bool injected(const QoreClass& qc) {
@@ -4291,8 +4294,10 @@ public:
     }
 
     DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
-            const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) {
-        CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink);
+            const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
+            bool tmp_args = false) {
+        CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+            tmp_args);
     }
 
     DLLLOCAL void evalCopy(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const {

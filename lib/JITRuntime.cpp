@@ -16892,6 +16892,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_ref_foreach_cleanup_
 
 // --- Direct dot-eval method call (pre-evaluated base + args) ---
 
+//! Builds the argument list of a call from NaN-boxed arguments, which the list references
+/** The owners of consumed arguments (arg_cleanups) are released right after the list is built
+    (clearConsumedArgCleanups()), before the call: a temporary object is then dereferenced while it is linked to
+    nothing yet, which needs no garbage-collection decision.  Giving the owner's reference to the list instead leaves
+    the dereference to the list's release after the call, when the call may have linked the object into a recursive
+    graph (a value pushed to a Queue that it holds), where it is a garbage-collection decision: that made an AOT loop
+    pushing such values 13% slower.
+*/
 static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, ExceptionSink* xsink) {
     if (nargs <= 0) {
         return nullptr;
@@ -17000,8 +17008,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
     object_type_info = qore_substitute_type_params_if_needed(object_type_info);
     // Pass nullptr (not *arg_list) when nargs=0: buildArgListFromNanBoxed
     // returns null for empty lists and *arg_list on a null holder is UB.
+    // the list is the call's own, which gives its values to the constructor (tmp_args)
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
-        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
+        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info, true));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb(QoreAOTContext* ctx, const char* class_path,
@@ -17046,8 +17055,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
     }
     RuntimeConfig& rc = rc_get_current_ref();
     object_type_info = qore_substitute_type_params_if_needed(object_type_info);
+    // the list is the call's own, which gives its values to the constructor (tmp_args)
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
-        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
+        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info, true));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb_consume_args(QoreAOTContext* ctx, const char* class_path,

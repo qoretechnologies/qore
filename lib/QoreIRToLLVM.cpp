@@ -15047,6 +15047,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Runtime value or out-of-range constant: track for cleanup
                 trackBoxedTempCleanup(boxed);
             }
+            // the operand's own NaN-boxed value, which an IR-only store can take over (see below)
+            llvm::Value* operand_bits = nanboxed_values.count(inst->operands[0].id) ? boxed : nullptr;
             // Type handling before storing to the local alloca.
             bool is_aot_body_local = aot_mode && aot_body_locals.count(key);
             const QoreTypeInfo* local_ti = linst->local ? linst->local->getTypeInfoForLValue() : nullptr;
@@ -15240,8 +15242,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (is_ir_only) {
                 // IR-only locals do not publish this value to the runtime stack,
                 // so the local cache (or its associated cleanup slot) must own a
-                // reference independent of statement temporaries.
-                llvm::Value* owned_boxed = emitHelperRef(module, boxed);
+                // reference independent of statement temporaries.  A temporary
+                // whose last use is this store gives its reference to the cache
+                // when its cleanup slot still holds it: taking another reference
+                // and releasing the temporary's dereferenced an object one more
+                // time, which is a garbage-collection check for an object that
+                // holds objects
+                llvm::Value* owned_boxed = nullptr;
+                llvm::Value* steal_cleanup = nullptr;
+                if (operand_bits && boxed == operand_bits) {
+                    auto uses_it = operand_remaining_uses.find(inst->operands[0].id);
+                    if (uses_it == operand_remaining_uses.end() || uses_it->second <= 1) {
+                        auto alloca_it = invoke_alloca_map.find(inst->operands[0].id);
+                        if (alloca_it != invoke_alloca_map.end()) {
+                            steal_cleanup = alloca_it->second ? alloca_it->second
+                                : promoteSsaEntryToAlloca(inst->operands[0].id, module, llvm_func);
+                        }
+                    }
+                }
+                if (steal_cleanup) {
+                    llvm::Value* owner = builder->CreateLoad(i64_type, steal_cleanup);
+                    llvm::BasicBlock* steal_bb = llvm::BasicBlock::Create(ctx, "store_take_temp", llvm_func);
+                    llvm::BasicBlock* ref_bb = llvm::BasicBlock::Create(ctx, "store_ref_value", llvm_func);
+                    llvm::BasicBlock* taken_bb = llvm::BasicBlock::Create(ctx, "store_value_owned", llvm_func);
+                    builder->CreateCondBr(builder->CreateICmpEQ(owner, boxed), steal_bb, ref_bb);
+                    builder->SetInsertPoint(steal_bb);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), steal_cleanup);
+                    builder->CreateBr(taken_bb);
+                    builder->SetInsertPoint(ref_bb);
+                    auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
+                            llvm::FunctionType::get(void_type, {i64_type}, false));
+                    builder->CreateCall(incref_fn, {boxed});
+                    builder->CreateBr(taken_bb);
+                    builder->SetInsertPoint(taken_bb);
+                    owned_boxed = boxed;
+                } else {
+                    owned_boxed = emitHelperRef(module, boxed);
+                }
                 auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
