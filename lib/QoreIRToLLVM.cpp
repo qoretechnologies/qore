@@ -10248,6 +10248,59 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Clear COW tracking for new function
     cow_modified_locals.clear();
 
+    // The locals assigned a reference (auto r = \x;): a reference-typed local reads through its reference, and so
+    // must a local of no reference type that holds one, since the value it reads changes with the referenced lvalue
+    // (see readsThroughReference())
+    reference_assigned_locals.clear();
+    {
+        std::unordered_set<uint32_t> parse_refs;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->result.isValid()
+                        && (inst_ptr->opcode == QoreIROpcode::CreateParseRef
+                            || (inst_ptr->opcode == QoreIROpcode::Invoke
+                                && static_cast<const QoreIRInvokeInstruction*>(inst_ptr.get())->invoke_opcode
+                                    == QoreIROpcode::CreateParseRef))) {
+                    parse_refs.insert(inst_ptr->result.id);
+                }
+            }
+        }
+        // a reference can reach the store through a phi (auto r = c ? \x : \y;)
+        for (bool changed = !parse_refs.empty(); changed;) {
+            changed = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr->opcode != QoreIROpcode::Phi || !inst_ptr->result.isValid()
+                            || parse_refs.count(inst_ptr->result.id)) {
+                        continue;
+                    }
+                    const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst_ptr.get());
+                    for (const auto& in : phi->incoming) {
+                        if (parse_refs.count(in.value.id)) {
+                            parse_refs.insert(inst_ptr->result.id);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (!parse_refs.empty()) {
+            for (const auto& block : func.blocks) {
+                for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr->opcode != QoreIROpcode::StoreLocal || inst_ptr->operands.empty()
+                            || !parse_refs.count(inst_ptr->operands.front().id)) {
+                        continue;
+                    }
+                    const auto* store = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                    if (store->local) {
+                        reference_assigned_locals.insert(store->local);
+                    }
+                }
+            }
+        }
+    }
+
     // Reset deferred exception checking flag for new function
     deferred_check_needed = false;
 
@@ -10619,7 +10672,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const QoreTypeInfo* ti = lv->getTypeInfo();
             // a reference parameter is read through the reference on every load (see LoadLocal), never from a
             // native copy
-            if (QoreTypeInfo::isReference(ti)) {
+            if (QoreTypeInfo::isReference(ti) || readsThroughReference(lv)) {
                 continue;
             }
             // Enum types report base type NT_INT, but an enum VALUE is a tagged
@@ -11451,7 +11504,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     || store->mode != AssignmentMode::Normal || store->is_ref
                     || !store->initial_assignment
                     || store->operands.size() != 1
-                    || QoreTypeInfo::isReference(local->getTypeInfo())) {
+                    || readsThroughReference(local)) {
                 continue;
             }
             QoreIRValue source = store->operands.front();
@@ -11591,7 +11644,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     || loads == local_load_instructions.end()
                     || loads->second.empty() || local->closureUse()
                     || local->isTopLevel()
-                    || QoreTypeInfo::isReference(local->getTypeInfo())
+                    || readsThroughReference(local)
                     || func.has_opaque_ast_local_access
                     || func.isAstVisibleLocal(local_key)
                     || !assigned_non_nothing_locals.count(local_key)) {
@@ -11682,7 +11735,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             const void* key = reinterpret_cast<const void*>(local);
             if (!local || local->closureUse()
-                    || QoreTypeInfo::isReference(local->getTypeInfo())
+                    || readsThroughReference(local)
                     || stored_locals.count(local)
                     || func.isAstVisibleLocal(key)) {
                 continue;
@@ -14240,8 +14293,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // reference on every load: the variable it refers to is shared, so another thread can assign it at any
             // time, and a value cached in an alloca when the function is entered would never see the new value (a
             // loop waiting for a flag passed by reference then never ends).  Assignments already go through the
-            // runtime helpers, which assign the referenced variable.
-            if (linst->local && QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
+            // runtime helpers, which assign the referenced variable.  So is a local of another type that the
+            // function assigns a reference (auto r = \x;): its cache, refreshed from the runtime stack after the
+            // store, would hold the value the reference had then, while the referenced lvalue can change without a
+            // store to the local (see readsThroughReference())
+            if (readsThroughReference(linst->local)) {
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -15253,7 +15309,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // runtime slot stores the same bits already in the alloca.  Keep
                 // the cache correct by retaining those bits directly instead of
                 // emitting a qore_rt_load_local_aot() round trip.
-                if (QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
+                if (readsThroughReference(linst->local)) {
                     // Reference locals write through to another variable; any local
                     // cache could now be stale.
                     reloadAllLocalsFromRuntime(module, llvm_func);
@@ -26408,8 +26464,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             definition->second);
                     weak_or_reference_local = load->is_ref
                         || (load->local
-                            && (QoreTypeInfo::isReference(
-                                    load->local->getTypeInfo())
+                            && (readsThroughReference(load->local)
                                 || weak_assigned_locals.count(
                                     reinterpret_cast<const void*>(
                                         load->local))));

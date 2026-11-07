@@ -21,14 +21,22 @@
     \c r read as \c 2, and a loop summing \c r while changing \c x summed the first value.  LoadLocal no longer caches
     the value of a local that holds a reference, as it does not cache the target of a weak reference.
 
+    A local of another type (\c auto, \c any) assigned a reference reads the same way.  JIT and tiered native code
+    refreshed the local's native cache from the runtime stack after the store, which gave the referenced value of
+    that moment, and later loads read the cache; such a local is now read through the reference on every load, as a
+    reference-typed local is (AOT code kept the reference itself in the cache and was right).  A parameter given a
+    reference whose slot is the variable itself (an IR-only local) read as no value in the IR interpreter after the
+    previous change; the slot now holds the reference, which each load reads through.
+
     In every compiled mode, a loop condition comparing an \c int local with a \c reference<int> local (or two such
     locals) kept using the first value of the reference when its target changed in the loop: the lowering gave it
     the fused instruction BranchIfLtLocalInt, which caches its operands; such a comparison is no longer fused.
 
     The script reads \c reference and \c reference<int> locals referring to locals, hash and list elements after
     the target changed directly, by increment, through the reference, in a callee, in a closure and in a loop, reads
-    a reference parameter, and uses reference locals and parameters as loop bounds whose target changes in the
-    loop; each function is called three times through a call reference and by name, in every execution mode and on
+    a reference parameter, uses reference locals and parameters as loop bounds whose target changes in the loop,
+    reads \c auto and \c any locals assigned a reference directly, later, in branches and with the conditional
+    operator, writes through them, and reads an \c auto parameter given a reference; each function is called three times through a call reference and by name, in every execution mode and on
     the IR tier of tiered execution (see ExecModeOutputTest).
 */
 class ReferenceLocalReadTest inherits ExecModeOutputTest {
@@ -47,6 +55,19 @@ string sub list_elem() { list<int> l = (1, 2); reference rr = \l[1]; int a = rr;
 string sub loop_bound() { int x = 1; reference<int> n = \x; int i = 0; int c = 0; while (i < n) { ++i; ++c; if (c == 1) { x = 3; } if (c > 5) { break; } } return sprintf("%y %y", i, c); }
 string sub param_bound(reference<int> n) { int i = 0; int c = 0; while (i < n) { ++i; ++c; if (c == 1) { n = 3; } if (c > 5) { break; } } return sprintf("%y %y", i, c); }
 string sub param_bound_call() { int x = 1; return param_bound(\x); }
+# locals of no reference type assigned a reference read as the referenced lvalue as well
+string sub auto_read() { int x = 2; auto rr = \x; int a = rr; x = 10; int b = rr; return sprintf("%y %y", a, b); }
+string sub any_read() { int x = 2; any rr = \x; int a = rr; x = 10; int b = rr; return sprintf("%y %y", a, b); }
+string sub auto_later() { int x = 2; auto rr; rr = \x; int a = rr; x = 10; int b = rr; return sprintf("%y %y", a, b); }
+string sub auto_branch(bool c) { int x = 2; int y = 3; auto rr; if (c) { rr = \x; } else { rr = \y; } int a = rr; x = 10; y = 20; int b = rr; return sprintf("%y %y", a, b); }
+string sub auto_ternary(bool c) { int x = 2; int y = 3; auto rr = c ? \x : \y; int a = rr; x = 10; y = 20; int b = rr; return sprintf("%y %y", a, b); }
+string sub auto_write() { int x = 2; auto rr = \x; rr = 5; int a = x; ++rr; rr += 3; return sprintf("%y %y %y", a, x, rr); }
+string sub auto_elem() { hash<auto> h = {"a": 1}; auto rr = \h.a; h.a = 3; auto b = rr; rr = 7; return sprintf("%y %y", b, h); }
+string sub auto_loop() { int x = 0; auto rr = \x; int s = 0; for (int i = 0; i < 3; ++i) { x = i * 10; s += rr; } return sprintf("%y", s); }
+string sub auto_copy() { int x = 2; auto rr = \x; auto r2 = rr; x = 10; return sprintf("%y %y", r2, rr); }
+# a parameter of no reference type given a reference reads as the referenced lvalue
+string sub param_read(auto p) { int a = p; int b = p; return sprintf("%y %y", a, b); }
+string sub param_read_call() { int x = 4; return param_read(\x); }
 sub set(reference<int> r, int v) { r = v; }
 string sub callee() { int x = 2; reference rr = \x; int a = rr; set(\x, 9); int b = rr; return sprintf("%y %y", a, b); }
 string sub loop() { int x = 0; reference rr = \x; int s = 0; for (int i = 0; i < 3; ++i) { x = i * 10; s += rr; } return sprintf("%y", s); }
@@ -58,6 +79,11 @@ hash<string, code> tests = {
     "read_after_store": \read_after_store(), "write_through": \write_through(), "typed": \typed(),
     "element": \element(), "increment": \increment(), "list_elem": \list_elem(), "callee": \callee(),
     "loop": \loop(), "param_call": \param_call(), "closure": \closure(), "loop_bound": \loop_bound(), "param_bound": \param_bound_call(),
+    "auto_read": \auto_read(), "any_read": \any_read(), "auto_later": \auto_later(),
+    "auto_branch": string sub () { return auto_branch(True) + " " + auto_branch(False); },
+    "auto_ternary": string sub () { return auto_ternary(True) + " " + auto_ternary(False); },
+    "auto_write": \auto_write(), "auto_elem": \auto_elem(), "auto_loop": \auto_loop(), "auto_copy": \auto_copy(),
+    "param_read": \param_read_call(),
 };
 for (int i = 0; i < 3; ++i) {
     foreach hash<auto> t in (tests.pairIterator()) {
@@ -65,7 +91,8 @@ for (int i = 0; i < 3; ++i) {
     }
 }
 for (int i = 0; i < 3; ++i) {
-    printf("%d direct: %s | %s | %s | %s\n", i, read_after_store(), element(), loop(), loop_bound());
+    printf("%d direct: %s | %s | %s | %s | %s | %s | %s\n", i, read_after_store(), element(), loop(), loop_bound(),
+        auto_read(), auto_ternary(True), param_read_call());
 }
 ';
 
@@ -83,6 +110,16 @@ for (int i = 0; i < 3; ++i) {
             "0 closure: 2 20",
             "0 loop_bound: 3 3",
             "0 param_bound: 3 3",
+            "0 auto_read: 2 10",
+            "0 any_read: 2 10",
+            "0 auto_later: 2 10",
+            "0 auto_branch: 2 10 3 20",
+            "0 auto_ternary: 2 10 3 20",
+            "0 auto_write: 5 9 9",
+            "0 auto_elem: 3 {a: 7}",
+            "0 auto_loop: 30",
+            "0 auto_copy: 2 10",
+            "0 param_read: 4 4",
             "1 read_after_store: 2 10",
             "1 write_through: 2 5",
             "1 typed: 2 10",
@@ -95,6 +132,16 @@ for (int i = 0; i < 3; ++i) {
             "1 closure: 2 20",
             "1 loop_bound: 3 3",
             "1 param_bound: 3 3",
+            "1 auto_read: 2 10",
+            "1 any_read: 2 10",
+            "1 auto_later: 2 10",
+            "1 auto_branch: 2 10 3 20",
+            "1 auto_ternary: 2 10 3 20",
+            "1 auto_write: 5 9 9",
+            "1 auto_elem: 3 {a: 7}",
+            "1 auto_loop: 30",
+            "1 auto_copy: 2 10",
+            "1 param_read: 4 4",
             "2 read_after_store: 2 10",
             "2 write_through: 2 5",
             "2 typed: 2 10",
@@ -107,9 +154,19 @@ for (int i = 0; i < 3; ++i) {
             "2 closure: 2 20",
             "2 loop_bound: 3 3",
             "2 param_bound: 3 3",
-            "0 direct: 2 10 | 1 3 | 30 | 3 3",
-            "1 direct: 2 10 | 1 3 | 30 | 3 3",
-            "2 direct: 2 10 | 1 3 | 30 | 3 3",
+            "2 auto_read: 2 10",
+            "2 any_read: 2 10",
+            "2 auto_later: 2 10",
+            "2 auto_branch: 2 10 3 20",
+            "2 auto_ternary: 2 10 3 20",
+            "2 auto_write: 5 9 9",
+            "2 auto_elem: 3 {a: 7}",
+            "2 auto_loop: 30",
+            "2 auto_copy: 2 10",
+            "2 param_read: 4 4",
+            "0 direct: 2 10 | 1 3 | 30 | 3 3 | 2 10 | 2 10 | 4 4",
+            "1 direct: 2 10 | 1 3 | 30 | 3 3 | 2 10 | 2 10 | 4 4",
+            "2 direct: 2 10 | 1 3 | 30 | 3 3 | 2 10 | 2 10 | 4 4",
         );
     }
 

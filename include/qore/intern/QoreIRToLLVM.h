@@ -712,6 +712,16 @@ private:
     // (or NOTHING if the target has already been deleted), rather than reading
     // the cached WeakReferenceNode from an LLVM alloca.
     std::unordered_set<const void*> weak_assigned_locals;
+    //! Locals of the function that are assigned a reference (auto r = \x;): see readsThroughReference()
+    std::unordered_set<const LocalVar*> reference_assigned_locals;
+    //! Returns true if a local can hold a reference and so reads as the referenced lvalue
+    /** A local declared with a reference type, or assigned a reference (\x) in the function, reads as the value of
+        the referenced lvalue, which can change without a store to the local (x = 10): it is read through the
+        reference on every load, never from its native cache, and a store to it writes the referenced lvalue.
+    */
+    bool readsThroughReference(const LocalVar* local) const {
+        return local && (QoreTypeInfo::isReference(local->getTypeInfo()) || reference_assigned_locals.count(local));
+    }
     //! IR-only variables of foreach loops (AssignmentMode::Element): their caches can hold weak references, which
     //! read as their targets (see loadLocalCacheValue())
     std::unordered_set<const void*> ir_only_element_locals;

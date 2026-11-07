@@ -8600,7 +8600,21 @@ next_instruction:
                             result_slot_owned = false;
                             goto load_local_done;
                         }
-                        if (cache_has_value && cached_node_type != NT_REFERENCE) {
+                        if (cache_has_value && cached_node_type == NT_REFERENCE) {
+                            // a local holding a reference reads as the referenced lvalue: the slot holds the
+                            // reference itself (see below), which is read every time, as the AST interpreter reads
+                            // it; the slot of an IR-only local, such as a parameter, is the variable itself
+                            out = cached_val.getInternalNode()->eval(xsink);
+                            if (xsink && *xsink) {
+                                out.discard(xsink);
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupLocalCaches();
+                                return false;
+                            }
+                            result_slot_owned = out.needsRef();
+                            goto load_local_done;
+                        }
+                        if (cache_has_value) {
                             if (local_inst->borrowed_local_load) {
                                 // Load pairs with a local mutation and has no
                                 // other consumers: borrow the slot-cache reference
@@ -8658,7 +8672,7 @@ next_instruction:
                         // a local holding a reference (reference r = \x;) is read as the value of the referenced
                         // lvalue, which can change without a store to this local (x = 10;), so that value is never
                         // cached: every load reads it through the reference, as the AST interpreter does
-                        bool is_reference_local = false;
+                        ReferenceNode* reference_value = nullptr;
                         if ((!needs_deref && val.hasNode())
                                 || qore_ir_type_may_hold_reference(local_inst->local->getTypeInfo())) {
                             LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
@@ -8668,7 +8682,7 @@ next_instruction:
                                         || raw_type == NT_WEAKREF_LIST) {
                                     is_weak_ref_local = true;
                                 } else if (raw_type == NT_REFERENCE) {
-                                    is_reference_local = true;
+                                    reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
                             }
                         }
@@ -8689,7 +8703,11 @@ next_instruction:
                         // Store in slot cache for fast access on next load (unless weak-ref)
                         if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                             locals_slot_cache.storage(sid).discard(xsink);
-                            if (is_weak_ref_local || is_reference_local) {
+                            if (reference_value) {
+                                // the slot holds the reference itself, which the fast path above reads through on
+                                // every load; for an IR-only local an empty slot would read as no value
+                                locals_slot_cache.storage(sid) = reference_value->refRefSelf();
+                            } else if (is_weak_ref_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
                                 locals_slot_cache.storage(sid) = QoreValue();
