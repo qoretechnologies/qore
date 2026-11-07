@@ -1490,6 +1490,10 @@ qcc of this Qore installation
     the source \c qlib directory) and to a module that is a regular file with its dependency file next to it (as in
     the directory of the built modules).
 
+    A module is out of date as well when a module it requires is loaded from another module than the one it was
+    compiled against, for example one that appeared in a directory of the module path that is searched first: the
+    module loader raises \c AOT-MODULE-STALE for it and loads its source module instead.
+
     A module without a dependency file next to it is not checked: an installed module (the install rules do not
     install dependency files), and a module compiled by hand with <tt>qcc --compile-module</tt> without
     <tt>--depfile</tt>, which is loaded even if its source has changed since it was compiled.  Rebuild such a module

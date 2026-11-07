@@ -1018,6 +1018,19 @@ protected:
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             ModuleLoadMapHelper* load_guard = nullptr);
 
+    //! Checks that the dependencies loaded for an AOT module of a build tree are the modules it was compiled against
+    /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
+        A dependency is the module the AOT module was compiled against if the file it was loaded from is listed in the
+        depfile, or if it is an AOT module of a build tree whose own sources are listed there.  Otherwise (a module
+        that appeared in a directory of the module path that is searched first, for example), an \c AOT-MODULE-STALE
+        exception is raised.  The mutex must be held.
+
+        @return 0 if the dependencies are the ones compiled against, or nothing was checked; -1 if an exception was
+        raised
+    */
+    DLLLOCAL int checkAOTModuleDependencyFiles(ExceptionSink& xsink, const char* path, const char* feature,
+            const std::vector<std::string>& dependencies, const QoreProgram* pgm);
+
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
             const std::vector<std::string>& dependencies, QoreProgram* path_pgm);

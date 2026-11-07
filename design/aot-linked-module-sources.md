@@ -56,6 +56,28 @@ for make): the module's own `.qm`, `.qc` and `.ql` files and those of the module
 modules it depends on.  Without a dependency file, the main source of the module and the `.qm` and `.qc` files of its
 directory are the sources.
 
+## A dependency loaded from another module
+
+The sources say what the module was compiled from, not which module the loader finds for a dependency now: a module
+that appears in a directory of the module path that is searched first (an installed module, a test's stand-in) is
+loaded instead of the one the module was compiled against, and the module's code would run against declarations it
+was not compiled for.  So once the dependencies of an AOT module of a build tree are loaded
+(`QoreModuleManager::checkAOTModuleDependencyFiles()`, called by `loadBinaryModuleFromPath()` before the module is
+mapped), each one must be the module it was compiled against:
+
+- the file it was loaded from is listed in the module's depfile (a source module, a binary module, or an AOT module
+  with `--depfile-module-deps=artifact`);
+- or it is a copy of such a file, with the same name, size and content hash (as the fingerprint file records them; a
+  link farm, an installed copy);
+- or it is an AOT module of a build tree whose own sources (the file of the module's main source, or the files of its
+  module directory, as its own depfile lists them) are listed there.
+
+Otherwise the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot be loaded, loads the source
+module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  A builtin module, a file the sandbox does not let the
+loader read and a module loaded into a Program without filesystem access are not checked.  An incremental build
+cannot see such a module appear (a make prerequisite cannot be a file that does not exist); the loader reports it and
+asks for the module to be rebuilt.
+
 ## When a source has changed
 
 A source's modification time cannot decide on its own: a git checkout, an artifact copy and a package extraction
@@ -102,6 +124,8 @@ process.
 another size) and a changed dependency are found; sources that only got new modification times are not; the
 fingerprint file lists the sources of the depfile; without a fingerprint file or a depfile, the modification time
 decides; a module that is not a link, or one that a Program without filesystem access loads, is not checked.
+`examples/test/ir/AOTModuleDependencyStale.qtest`: a dependency loaded from another module makes a module out of date;
+one loaded from its source, from its own AOT module or from an identical copy is the module compiled against.
 `examples/test/ir/AOTModuleStaleFallback.qtest`: a built module that is a regular file with its depfile, first in the
 module path of a child process as in `run_tests.sh`, is checked (a changed source is found, a touched one is not, and
 without the depfile the module is loaded); a module compiled without `--depfile` is not checked; and an out-of-date
