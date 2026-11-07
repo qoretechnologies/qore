@@ -393,6 +393,11 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! Heartbeat thread ID
         int hb_tid;
 
+        #! The ID of the connection whose HELLO started the heartbeat thread; protected by @ref heartbeat_lock
+        /** @since DiscordWebSocketClient 1.2
+        */
+        int hb_cid = -1;
+
         #! Heartbeat mutex
         Mutex heartbeat_lock();
 
@@ -564,26 +569,35 @@ hash<auto> h = ws.getInfo();
         @since DiscordWebSocketClient 1.2
     */
     private closingConnection() {
-        if (!closesCurrentConnection()) {
-            logDebug("connection %d closed after connection %d was opened; heartbeat left running",
-                getClosingConnectionId(), getConnectionId());
-            return;
+        bool current = closesCurrentConnection();
+        if (current) {
+            # the connection is closing: cancel watchdogs so a pending timer cannot
+            # fire a spurious reconnect during teardown (the normal reconnect path
+            # handles a close-before-HELLO/RESUMED and will re-arm as needed)
+            cancelHelloWatchdog();
+            cancelResumeWatchdog();
         }
-        # the connection is closing: cancel watchdogs so a pending timer cannot
-        # fire a spurious reconnect during teardown (the normal reconnect path
-        # handles a close-before-HELLO/RESUMED and will re-arm as needed)
-        cancelHelloWatchdog();
-        cancelResumeWatchdog();
-        stopHeartbeatThread();
+        # the heartbeat is stopped with the connection it belongs to
+        bool own_heartbeat;
+        {
+            AutoLock al(heartbeat_lock);
+            own_heartbeat = getClosingConnectionId() == hb_cid;
+        }
+        if (current || own_heartbeat) {
+            stopHeartbeatThread();
+        } else {
+            logDebug("connection %d closed after connection %d was opened; its heartbeat is left running",
+                getClosingConnectionId(), getCurrentConnectionId());
+        }
     }
 
     #! Returns @ref True if the connection reported closed is the client's last connection
-    /** @return @ref False if a newer connection was opened (or is being opened) meanwhile
+    /** @return @ref False if the client has a newer connection
 
         @since DiscordWebSocketClient 1.2
     */
     private bool closesCurrentConnection() {
-        int current = getConnectionId();
+        int current = getCurrentConnectionId();
         return current < 0 || getClosingConnectionId() == current;
     }
 
@@ -716,9 +730,11 @@ hash<auto> h = ws.getInfo();
         detection), the watchdog forces a reconnect instead of dying silently.
     */
     private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
-        hash<auto> rv = WebSocketClient::connectIntern(opts, \info, reconnect);
+        # armed before the connection can deliver anything: connectIntern() runs callbacks before it returns, and
+        # the connection's HELLO can be handled in them, which must disarm the watchdog, not be undone by it
         armHelloWatchdog();
-        return rv;
+        on_error cancelHelloWatchdog();
+        return WebSocketClient::connectIntern(opts, \info, reconnect);
     }
 
     #! Arms (or re-arms) the HELLO watchdog timer for the current connection
@@ -954,6 +970,18 @@ hash<auto> h = ws.getInfo();
         if (!hbi) {
             throw "DISCORD-ERROR", sprintf("Missing heartbeat interval in Hello msg: %y", d);
         }
+        # the heartbeat belongs to its connection: a heartbeat still running for an older connection (e.g. one
+        # replaced by an explicit connect(), whose close can be reported after this HELLO) is restarted, so its
+        # acknowledgement state does not carry over
+        int ecid = getEventConnectionId();
+        bool restart;
+        {
+            AutoLock al(heartbeat_lock);
+            restart = hb_tid && hb_cid != ecid;
+        }
+        if (restart) {
+            stopHeartbeatThread();
+        }
         {
             AutoLock al(heartbeat_lock);
             bool interval_changed = (hbi != heartbeat_interval);
@@ -962,6 +990,7 @@ hash<auto> h = ws.getInfo();
             }
             # the heartbeat thread will not be running on a new connection
             if (!hb_tid) {
+                hb_cid = ecid;
                 startHeartbeatThreadIntern();
             } else if (interval_changed) {
                 # in case we get a HELLO message while the connection is still up (should not happen)

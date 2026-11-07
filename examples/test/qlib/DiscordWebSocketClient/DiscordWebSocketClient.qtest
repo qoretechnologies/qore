@@ -33,6 +33,9 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
 
         #! the connection ID returned by getClosingConnectionId(), when set
         *int closing_cid;
+
+        #! the connection ID returned by getCurrentConnectionId()
+        int current_cid = -1;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -45,7 +48,11 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
 
     #! sets the ID of the client's current connection
     setConnectionIdForTest(int id) {
-        cid = id;
+        current_cid = id;
+    }
+
+    int getCurrentConnectionId() {
+        return current_cid;
     }
 
     #! reports a connection closed as the closing callback does
