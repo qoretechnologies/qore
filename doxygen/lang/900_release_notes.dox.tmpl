@@ -1428,6 +1428,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - in the IR and tiered execution modes, <tt>i += v</tt> on an \c int or \c softint local \c i changed the value of
+      a local \c v that is not an \c int local to an integer (ex: a \c string local holding \c "3" then held \c 3)
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c += on an \c auto lvalue with no value
       or holding \c NULL lost the complex type of a hash or list operand (ex: <tt>auto v; v += <StatInfo>{};</tt>
       gave a plain \c hash), and so did Mapper::mapData() with a hashdecl input value; the lvalue now holds the
