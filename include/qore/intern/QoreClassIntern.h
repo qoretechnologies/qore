@@ -2812,18 +2812,17 @@ public:
             }
             int rc = 0;
             if ((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !parseHasMemberGate()) {
-                if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
+                // one error for one access: in a class that declares its members, an undeclared member is an
+                // illegal access whatever the parse options; otherwise it is an error only if types are required
+                if (parseHasPublicMembersInHierarchy()) {
+                    parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
+                        "member list (or inherited public member list)", mem, name.c_str());
+                    rc = -1;
+                } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                     parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was " \
                         "not declared in a public or private member list, but parse options require type " \
                         "information for all declarations",
                         mem, name.c_str());
-                    rc = -1;
-                }
-                if (parseHasPublicMembersInHierarchy()) {
-                    //printd(5, "qore_class_private::parseCheckMemberAccess() %s %%.%s memberGate: %d pflag: %d\n",
-                    //  name.c_str(), mem, parseHasMemberGate(), pflag);
-                    parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
-                        "member list (or inherited public member list)", mem, name.c_str());
                     rc = -1;
                 }
             }
@@ -2877,17 +2876,17 @@ public:
             return rc;
         }
         if (!omi) {
-            if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
-                parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
-                    "declared in a public or private member list, but parse options require type information for " \
-                    "all declarations", mem, name.c_str());
-                if (!rc) {
-                    rc = -1;
-                }
-            }
+            // one error for one access; see parseCheckMemberAccess()
             if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
                     "list (or inherited public member list)", mem, name.c_str());
+                if (!rc) {
+                    rc = -1;
+                }
+            } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
+                parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
+                    "declared in a public or private member list, but parse options require type information for " \
+                    "all declarations", mem, name.c_str());
                 if (!rc) {
                     rc = -1;
                 }
