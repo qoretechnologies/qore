@@ -1631,6 +1631,266 @@ bool QoreIRFunction::detectCreatesReference() const {
     return ref_created || unknown_node_found;
 }
 
+//! Returns true if an instruction with this opcode never gives a reference as its value
+/** A reference is a value only where <tt>\var</tt> creates it, where a container holds it (an element, a member),
+    and where a call, an AST expression, an argument or a phi passes one on; a load of a variable dereferences a
+    reference it holds.  This list is the opposite: the opcodes whose value is known not to be one.  An opcode that is
+    not listed is treated as one that can give a reference, which is safe: it only keeps a local of no reference type
+    assigned its value off the IR-only path (see QoreIRFunction::computeReferenceStoreLocals()).
+*/
+static bool qore_ir_opcode_never_gives_reference(QoreIROpcode op) {
+    switch (op) {
+        // constants
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstBoolBoxed:
+        case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstNull:
+        case QoreIROpcode::ConstString:
+        case QoreIROpcode::ConstDate:
+        case QoreIROpcode::ConstEnum:
+        case QoreIROpcode::ConstChar:
+        case QoreIROpcode::LoadConstant:
+        // loads of variables, which dereference a reference that the variable holds
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::LoadGlobal:
+        case QoreIROpcode::LoadThreadLocal:
+        // new containers, objects and code values
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::CreateEmptyList:
+        case QoreIROpcode::CreateSizedList:
+        case QoreIROpcode::NewHashDecl:
+        case QoreIROpcode::NewHashDeclFromHash:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewComplexList:
+        case QoreIROpcode::NewComplexBuffer:
+        case QoreIROpcode::NewObject:
+        case QoreIROpcode::CreateClosure:
+        case QoreIROpcode::CreateCallRef:
+        case QoreIROpcode::CreateMethodRef:
+        // arithmetic, bit and string operations
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::AddAny:
+        case QoreIROpcode::AddString:
+        case QoreIROpcode::AddNumber:
+        case QoreIROpcode::AddTimeout:
+        case QoreIROpcode::StringConcat:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::SubAny:
+        case QoreIROpcode::SubNumber:
+        case QoreIROpcode::SubTimeout:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::MulAny:
+        case QoreIROpcode::MulNumber:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::DivAny:
+        case QoreIROpcode::DivNumber:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ModAny:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::AndAny:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::OrAny:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::XorAny:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShlAny:
+        case QoreIROpcode::ShrInt:
+        case QoreIROpcode::ShrAny:
+        case QoreIROpcode::UnaryPlusAny:
+        case QoreIROpcode::UnaryMinusInt:
+        case QoreIROpcode::UnaryMinusFloat:
+        case QoreIROpcode::UnaryMinusAny:
+        case QoreIROpcode::IncrementLocalInt:
+        case QoreIROpcode::AddAssignLocalInt:
+        // compound assignments computing a variable's new value from the value loaded, which is dereferenced
+        case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
+        case QoreIROpcode::AddAssignAny:
+        case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
+        case QoreIROpcode::SubAssignAny:
+        case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
+        case QoreIROpcode::MulAssignAny:
+        case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
+        case QoreIROpcode::DivAssignAny:
+        case QoreIROpcode::ModAssignInt:
+        case QoreIROpcode::ModAssignAny:
+        case QoreIROpcode::AndAssignInt:
+        case QoreIROpcode::AndAssignAny:
+        case QoreIROpcode::OrAssignInt:
+        case QoreIROpcode::OrAssignAny:
+        case QoreIROpcode::XorAssignInt:
+        case QoreIROpcode::XorAssignAny:
+        case QoreIROpcode::ShlAssignInt:
+        case QoreIROpcode::ShlAssignAny:
+        case QoreIROpcode::ShrAssignInt:
+        case QoreIROpcode::ShrAssignAny:
+        // comparisons and conversions
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
+        case QoreIROpcode::EqString:
+        case QoreIROpcode::EqAny:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
+        case QoreIROpcode::NeString:
+        case QoreIROpcode::NeAny:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LtString:
+        case QoreIROpcode::LtAny:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::LeFloat:
+        case QoreIROpcode::LeString:
+        case QoreIROpcode::LeAny:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GtString:
+        case QoreIROpcode::GtAny:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::GeFloat:
+        case QoreIROpcode::GeString:
+        case QoreIROpcode::GeAny:
+        case QoreIROpcode::CmpInt:
+        case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::CmpString:
+        case QoreIROpcode::CmpAny:
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
+        case QoreIROpcode::IsNullOrNothing:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::IsCollectionType:
+        case QoreIROpcode::ToString:
+        case QoreIROpcode::ToInt:
+        case QoreIROpcode::ToFloat:
+        case QoreIROpcode::Sprintf:
+        case QoreIROpcode::SprintfIntFixed:
+        // sizes and string results
+        case QoreIROpcode::ListSize:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
+        case QoreIROpcode::Backquote:
+        case QoreIROpcode::StringJoinStart:
+        case QoreIROpcode::StringJoinAppend:
+        case QoreIROpcode::FoldlStringJoin:
+        case QoreIROpcode::FoldrStringJoin:
+        case QoreIROpcode::ListStringJoin:
+        case QoreIROpcode::ListStringJoinIdentityMap:
+        case QoreIROpcode::StringMethodJoinStart:
+        case QoreIROpcode::ListIntSprintfJoin:
+        case QoreIROpcode::AppendStringCow:
+        // a push gives the list
+        case QoreIROpcode::ListPush:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIR.h
+void QoreIRFunction::computeReferenceStoreLocals() {
+    reference_store_locals.clear();
+    // the instruction that defines each value
+    std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid()) {
+                defs[inst->result.id] = inst.get();
+            }
+        }
+    }
+    // the values that can be a reference: a fixed point, as a phi or a guard gives a reference if one of its
+    // operands can (a value with no definition, such as a parameter value, can be one)
+    std::unordered_set<uint32_t> may_ref;
+    std::vector<const QoreIRInstruction*> forwarders;
+    for (const auto& [id, def] : defs) {
+        if (def->opcode == QoreIROpcode::Phi || def->opcode == QoreIROpcode::GuardType
+                || def->opcode == QoreIROpcode::GuardNotNothing || def->opcode == QoreIROpcode::RefSelf) {
+            forwarders.push_back(def);
+        } else {
+            // an instruction that can throw in a try block is an invoke, whose value is that of its operation
+            QoreIROpcode op = def->opcode == QoreIROpcode::Invoke
+                ? static_cast<const QoreIRInvokeInstruction*>(def)->invoke_opcode : def->opcode;
+            if (!qore_ir_opcode_never_gives_reference(op)) {
+                may_ref.insert(id);
+            }
+        }
+    }
+    auto may_be_reference = [&](uint32_t id) -> bool {
+        return may_ref.count(id) || !defs.count(id);
+    };
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (const QoreIRInstruction* def : forwarders) {
+            if (may_ref.count(def->result.id)) {
+                continue;
+            }
+            bool any = false;
+            if (def->opcode == QoreIROpcode::Phi) {
+                for (const auto& in : static_cast<const QoreIRPhiInstruction*>(def)->incoming) {
+                    if (may_be_reference(in.value.id)) {
+                        any = true;
+                        break;
+                    }
+                }
+            } else {
+                any = def->operands.empty() || may_be_reference(def->operands.front().id);
+            }
+            if (any) {
+                may_ref.insert(def->result.id);
+                changed = true;
+            }
+        }
+    }
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode != QoreIROpcode::StoreLocal || inst->operands.empty()) {
+                continue;
+            }
+            const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
+            // a weak or opaque store assigns no reference, and the variable of a foreach loop, assigned each
+            // element as it is (AssignmentMode::Element), reads a reference element through its own mechanism (see
+            // QoreIRToLLVM::loadLocalCacheValue() and IRLocalSlotCache)
+            if (!linst->local || linst->mode != AssignmentMode::Normal
+                    || !qore_ir_local_may_hold_reference(linst->local)
+                    || QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
+                continue;
+            }
+            const void* key = reinterpret_cast<const void*>(linst->local);
+            if (!reference_store_locals.count(key) && may_be_reference(inst->operands.front().id)) {
+                reference_store_locals.insert(key);
+            }
+        }
+    }
+}
+
 // documented in QoreIR.h
 std::unordered_set<const void*> QoreIRFunction::buildBodyLocalKeys() const {
     std::unordered_set<const void*> keys;
@@ -1647,7 +1907,8 @@ bool QoreIRFunction::localMayHoldReference(const LocalVar* lv, bool creates_refe
     if (!qore_ir_local_may_hold_reference(lv)) {
         return false;
     }
-    if (QoreTypeInfo::isReference(lv->getTypeInfo()) || creates_reference) {
+    if (QoreTypeInfo::isReference(lv->getTypeInfo()) || creates_reference
+            || reference_store_locals.count(reinterpret_cast<const void*>(lv))) {
         return true;
     }
     // An untyped local can still receive a reference from outside this function if it is a
@@ -1661,7 +1922,12 @@ bool QoreIRFunction::localMayHoldReference(const LocalVar* lv, bool creates_refe
 }
 
 void QoreIRFunction::computeIROnlyLocals() {
+    // the locals that a reference can reach other than from \var in this function: they are reference-capable
+    // (localMayHoldReference()), and those that would otherwise be IR-only keep the reference in their own storage
+    // (reference_slot_locals)
+    computeReferenceStoreLocals();
     ir_only_locals.clear();
+    reference_slot_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
     weak_store_locals.clear();
@@ -1952,6 +2218,19 @@ void QoreIRFunction::computeIROnlyLocals() {
         if (QoreTypeInfo::isReference(lv->getTypeInfo())
                 || (localMayHoldReference(lv, reference_created, body_local_keys)
                     && qore_ir_local_is_written(*this, lv))) {
+            // a body local that a reference reaches only as a value stored in it (an element of a container, the
+            // value of a call), in a function that creates no reference, keeps its own storage: the reference it
+            // holds is the value in its slot or native cache, which every read reads through and every store
+            // writes through (see reference_slot_locals); no variable of the function can be the referenced
+            // lvalue, as a reference to one is created only by \var in the function.  The variable of a foreach
+            // loop, assigned each element as it is, keeps the runtime path.
+            if (!reference_created && !QoreTypeInfo::isReference(lv->getTypeInfo()) && !lv->isTopLevel()
+                    && body_local_keys.count(key) && reference_store_locals.count(key)
+                    && !element_store_locals.count(key)) {
+                printd(5, "  local '%s' (%p): reference slot (IR storage)\n", lv->getName(), key);
+                reference_slot_locals.insert(key);
+                continue;
+            }
             printd(5, "  local '%s' (%p): may hold a reference (non-IR-only)\n", lv->getName(), key);
             continue;
         }
@@ -1970,10 +2249,11 @@ void QoreIRFunction::computeIROnlyLocals() {
         ir_only_locals.insert(key);
     }
 
-    // Build filtered instantiation list: body locals NOT classified as IR-only.
+    // Build filtered instantiation list: body locals NOT classified as IR-only, which have no storage on the runtime
+    // stack
     ast_visible_body_locals.clear();
     for (LocalVar* lv : all_body_locals) {
-        if (!ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
+        if (!hasIRStorage(reinterpret_cast<const void*>(lv))) {
             ast_visible_body_locals.push_back(lv);
         }
     }

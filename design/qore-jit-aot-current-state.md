@@ -530,6 +530,63 @@ int updates (`AddAssignLocalInt`, `IncrementLocalInt`) follow `StoreLocal`:
   referenced lvalue; `LoadLocal` does not cache the value of a local holding a reference
   (`examples/test/ir/ReferenceLocalRead.qtest`).
 
+### Locals of no reference type that hold a reference
+
+A local of a type that can hold a reference (`auto`, `any`, no type) holds one whenever a
+value that is a reference is stored in it: an assignment of `\x`, of a reference element of
+a container (`auto r = h.r`), of a reference returned by a call, or an argument `\x` given
+to such a parameter. The AST interpreter then reads and writes the referenced lvalue
+through the variable. The engines keep the same semantics without slowing locals that never
+hold a reference (`examples/test/ir/ReferenceLocalReach.qtest`,
+`examples/test/ir/ReferenceLocalStorage.qtest`):
+
+- `QoreIRFunction::computeReferenceStoreLocals()` (QoreIRVerifier.cpp, run first in
+  `computeIROnlyLocals()`) finds `reference_store_locals`, the locals that a `StoreLocal`
+  may give a reference: a stored value whose definition is not an opcode that never gives
+  one (`qore_ir_opcode_never_gives_reference()`: constants, loads of variables, new
+  containers and objects, arithmetic, comparisons, conversions, `ListPush`...; an `Invoke` is
+  judged by its opcode), followed through `Phi`, guards and `RefSelf`. They are
+  reference-capable (`localMayHoldReference()`, the `is_ref` of their instructions), which
+  keeps the optimizations keyed on `is_ref` away from them. Adding an opcode that can give a
+  reference to the never-gives list is a correctness defect; leaving one out only costs
+  speed.
+- A body local of `reference_store_locals` that would otherwise be IR-only, in a function
+  that creates no reference, is a reference slot local (`reference_slot_locals`): it keeps
+  its value in IR storage as an IR-only local does (the slot of the IR interpreter, the
+  native cache), and a reference it holds is that value. A read reads the referenced lvalue
+  with `qore_local_reference_eval()`, which evaluates the reference's lvalue expression as
+  `LocalVarValue::eval()` does (never `ReferenceNode::eval()`, which resolves it as an lvalue
+  and creates a missing hash key); a store that is not the local's declaration
+  (`initial_assignment`) assigns the referenced lvalue through an `LValueHelper` on the
+  reference (the IR interpreter; `qore_rt_reference_slot_write()` in native code), and the
+  local keeps the reference. No variable of the function can be the referenced lvalue, as a
+  reference to one is created only by `\var` in the function. Reference slot locals are not
+  in `ir_only_locals`, so the IR optimizations keyed on that set (CSE, LICM, native SSA
+  promotion, CoW pairing), which take an IR-only local's storage to be its value, leave
+  them alone; the engines and the instantiation lists treat them as IR-only
+  (`hasIRStorage()`, `areAllBodyLocalsIROnly()`), and the debugger clears them with
+  `ir_only_locals`. Every other local of `reference_store_locals` stays on the runtime
+  stack, whose variable follows the reference.
+- Native code (JIT, tiered, AOT) keeps a reference flag for each local that can hold a
+  reference and whose cache it owns (`QoreIRToLLVM::usesReferenceFlag()`): a parameter of
+  such a type, a local of `reference_store_locals`, and any such local of a function that
+  creates a reference. The flag is an i8 alloca that is never given to a helper, so the
+  optimizer promotes it to a register. It is set wherever the cache is filled from the
+  runtime: at entry (`qore_rt_load_local_raw()`, which returns a reference itself, and
+  `qore_rt_value_is_reference()`; fast-entry parameters from the argument bits), on a stale
+  reload (`qore_rt_reload_local_if_stale_raw()`, which returns the flag), and by a store.
+  `LoadLocal` with the flag set reads the referenced lvalue (`qore_rt_read_reference_local()`);
+  the branch is weighted as unlikely. A store to a runtime-stack local with the flag set
+  reloads the cache and advances the reload epoch, so a write through the reference is seen
+  by every other local; an AOT body local assigned a value as it is keeps the stored value
+  in its cache unless the store wrote through a reference. A store to a reference slot local
+  with the flag set writes through and advances the epoch; otherwise the cache takes the
+  value and the flag is set from it (only a node is checked). `UninstantiateLocal` clears a
+  reference slot local's flag with its cache. The flag is loop invariant in a loop that does
+  not store the local, so LLVM's loop unswitching can hoist the test; with the default cost
+  threshold (50) a loop with debugger step blocks is usually too large, and the read then
+  costs one compare and branch on a register.
+
 Code that only inspects an lvalue must not read it through `getValue()`, which
 creates a new heap node for a large int stored natively;
 `LValueHelper::getInternalNode()` returns the stored node without creating one.

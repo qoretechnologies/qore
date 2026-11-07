@@ -1,0 +1,230 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceLocalStorageTest
+
+#! Regression test: a local that keeps a reference in its own storage reads and writes the referenced lvalue
+/** A body local of no reference type that a reference reaches only as a stored value (a container element, the value
+    of a call), in a function that creates no reference, keeps the reference in its own storage, as IR-only locals
+    keep their values: the slot of the IR interpreter, the cache of native code (QoreIRFunction::reference_slot_locals).
+    A read of it reads the referenced lvalue as a read of a variable holding a reference reads it, without creating a
+    missing hash key (qore_local_reference_eval()); ReferenceNode::eval() resolves the reference as an lvalue and
+    created the key, in the IR interpreter for a reference-typed local too.  A store that is not the local's
+    declaration assigns the referenced lvalue and the local keeps the reference.
+
+    The script reads a reference to a missing hash key, assigns a value that the referenced lvalue refuses and catches
+    the error, unwinds an exception through the scope of a local holding a reference, writes through a closure's
+    captured local and calls a closure that does not capture the local, redeclares a local without a value in a loop,
+    alternates a reference and a value in a loop, uses the value of an assignment through the reference, sums a
+    reference in loops while another variable or a called function changes the referenced lvalue, and stores, pushes to
+    and computes in a \c try block ordinary \c auto locals as controls; each function is called three times through a
+    call reference and by name, in every execution mode and on the IR tier of tiered execution (see ExecModeOutputTest).
+*/
+class ReferenceLocalStorageTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a local of no reference type that a reference reaches as a stored value keeps it in its own storage: reads and
+# writes follow the reference across exceptions, closures, loops and re-declarations
+hash<auto> sub mk(reference<auto> r) { return {"r": \r}; }
+# reading the referenced lvalue does not create a missing hash key
+string sub missing_key() {
+    hash<auto> store = {"a": 1};
+    hash<auto> h = mk(\store.missing);
+    auto r = h.r;
+    string s = sprintf("%y", r);
+    return sprintf("%s %y", s, store);
+}
+# an assignment the referenced lvalue refuses raises its error; the local keeps the reference
+string sub write_error() {
+    int x = 1;
+    hash<auto> h = mk(\x);
+    auto r = h.r;
+    string err;
+    try {
+        r = "text";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    x = 3;
+    int a = r;
+    r = 4;
+    return sprintf("%s %y %y", err, a, x);
+}
+# the local holds the reference while an exception unwinds through its scope, and the next call starts afresh
+sub throw_with_ref(hash<auto> h) { auto r = h.r; r = 5; throw "STOP", r; }
+string sub unwind() {
+    int x = 1;
+    string err;
+    try {
+        throw_with_ref(mk(\x));
+    } catch (hash<ExceptionInfo> ex) {
+        err = sprintf("%s %y", ex.err, ex.desc);
+    }
+    return sprintf("%s %y", err, x);
+}
+# a closure created in the function reads and writes the referenced lvalue through its own variable
+string sub closure() {
+    int x = 1;
+    hash<auto> h = mk(\x);
+    auto r = h.r;
+    code c = sub (int v) { r = v; };
+    c(6);
+    int a = r;
+    x = 8;
+    return sprintf("%y %y %y", a, r, x);
+}
+# a closure that does not capture the local: the local holds the reference across the call of the closure
+string sub closure_other() {
+    int x = 1;
+    hash<auto> h = mk(\x);
+    auto r = h.r;
+    int y = 0;
+    code c = sub () { ++y; };
+    c();
+    r = 9;
+    return sprintf("%y %y", x, y);
+}
+# a declaration without a value in a loop body is a new variable in each iteration
+string sub redecl_no_value() {
+    int x = 1;
+    hash<auto> h = mk(\x);
+    for (int i = 0; i < 3; ++i) {
+        auto r;
+        if (!i) {
+            r = h.r;
+        }
+        r = 10 + i;
+    }
+    return sprintf("%y", x);
+}
+# a loop that stores the local each iteration, alternating a reference and a value
+string sub loop_alternate() {
+    int x = 0;
+    hash<auto> h = mk(\x);
+    list<auto> l = ();
+    for (int i = 0; i < 4; ++i) {
+        auto r = (i % 2) ? 7 : h.r;
+        r += 1;
+        push l, r;
+    }
+    return sprintf("%y %y", l, x);
+}
+# the value of an assignment through the reference
+string sub assign_value() {
+    int x = 1;
+    hash<auto> h = mk(\x);
+    auto r = h.r;
+    auto v = (r = 12);
+    return sprintf("%y %y", v, x);
+}
+# a loop reads the referenced lvalue each time while another variable changes it; the function creates no reference
+int sub slot_sum(hash<auto> h, reference<int> x) { auto r = h.r; int s = 0; for (int i = 0; i < 3; ++i) { x = i * 10; s += r; } return s; }
+string sub slot_loop() { int x = 0; return sprintf("%y %y", slot_sum(mk(\x), \x), x); }
+# the referenced lvalue is a global variable that a called function changes
+our int g = 1;
+sub bump() { g += 100; }
+int sub global_sum(hash<auto> h) { auto r = h.r; int s = 0; for (int i = 0; i < 3; ++i) { bump(); s += r; } r = 5; return s; }
+string sub slot_global() { g = 1; int s = global_sum(mk(\g)); return sprintf("%y %y", s, g); }
+# a store in a loop: an ordinary auto local assigned an element that is not a reference
+string sub plain_store_loop() {
+    hash<auto> h = {"a": 2};
+    auto v;
+    int s = 0;
+    for (int i = 0; i < 5; ++i) {
+        v = h.a;
+        s += v;
+        v = 1;
+    }
+    return sprintf("%y %y", s, v);
+}
+
+# controls: an auto local pushed to in a loop, and a value computed in a try block
+string sub push_control() {
+    auto l = ();
+    for (int i = 0; i < 3; ++i) {
+        push l, i;
+    }
+    try {
+        auto v = l[1] + 1;
+        push l, v;
+    } catch (hash<ExceptionInfo> ex) {
+        push l, ex.err;
+    }
+    return sprintf("%y", l);
+}
+
+hash<string, code> tests = {
+    "missing_key": \missing_key(), "write_error": \write_error(), "unwind": \unwind(), "closure": \closure(),
+    "closure_other": \closure_other(), "redecl_no_value": \redecl_no_value(), "loop_alternate": \loop_alternate(),
+    "assign_value": \assign_value(), "plain_store_loop": \plain_store_loop(), "slot_loop": \slot_loop(),
+    "slot_global": \slot_global(), "push_control": \push_control(),
+};
+for (int i = 0; i < 3; ++i) {
+    foreach hash<auto> t in (tests.pairIterator()) {
+        printf("%d %s: %s\n", i, t.key, t.value());
+    }
+}
+for (int i = 0; i < 3; ++i) {
+    printf("%d direct: %s | %s | %s | %s\n", i, missing_key(), write_error(), redecl_no_value(), loop_alternate());
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 missing_key: null {a: 1}",
+            "0 write_error: RUNTIME-TYPE-ERROR 3 4",
+            "0 unwind: STOP 5 5",
+            "0 closure: 6 8 8",
+            "0 closure_other: 9 1",
+            "0 redecl_no_value: 10",
+            "0 loop_alternate: [1, 8, 2, 8] 2",
+            "0 assign_value: 12 12",
+            "0 plain_store_loop: 10 1",
+            "0 slot_loop: 30 20",
+            "0 slot_global: 603 5",
+            "0 push_control: [0, 1, 2, 2]",
+            "1 missing_key: null {a: 1}",
+            "1 write_error: RUNTIME-TYPE-ERROR 3 4",
+            "1 unwind: STOP 5 5",
+            "1 closure: 6 8 8",
+            "1 closure_other: 9 1",
+            "1 redecl_no_value: 10",
+            "1 loop_alternate: [1, 8, 2, 8] 2",
+            "1 assign_value: 12 12",
+            "1 plain_store_loop: 10 1",
+            "1 slot_loop: 30 20",
+            "1 slot_global: 603 5",
+            "1 push_control: [0, 1, 2, 2]",
+            "2 missing_key: null {a: 1}",
+            "2 write_error: RUNTIME-TYPE-ERROR 3 4",
+            "2 unwind: STOP 5 5",
+            "2 closure: 6 8 8",
+            "2 closure_other: 9 1",
+            "2 redecl_no_value: 10",
+            "2 loop_alternate: [1, 8, 2, 8] 2",
+            "2 assign_value: 12 12",
+            "2 plain_store_loop: 10 1",
+            "2 slot_loop: 30 20",
+            "2 slot_global: 603 5",
+            "2 push_control: [0, 1, 2, 2]",
+            "0 direct: null {a: 1} | RUNTIME-TYPE-ERROR 3 4 | 10 | [1, 8, 2, 8] 2",
+            "1 direct: null {a: 1} | RUNTIME-TYPE-ERROR 3 4 | 10 | [1, 8, 2, 8] 2",
+            "2 direct: null {a: 1} | RUNTIME-TYPE-ERROR 3 4 | 10 | [1, 8, 2, 8] 2",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceLocalStorage", Script, (map $1 + "\n", Expected).join(""),
+            "keeps a reference in the storage of a local") {
+    }
+}

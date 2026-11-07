@@ -196,6 +196,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
+    { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
+    { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
+    { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
+    { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
+    { "qore_rt_reload_local_if_stale_raw", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
@@ -392,6 +397,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
+    { "qore_rt_load_local_raw_aot", reinterpret_cast<void*>(&qore_rt_load_local_raw_aot) },
+    { "qore_rt_reload_local_if_stale_raw_aot",
+        reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
@@ -1991,6 +1999,91 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* x
     QoreValue result = var->eval(needs_deref, xsink);
     QoreValue rv = qore_rt_deref_loaded_var_value(result, needs_deref, xsink);
     return toBits(rv);
+}
+
+//! Returns 1 if the value is a reference (as <tt>\x</tt> creates), 0 otherwise
+/** A local variable of no reference type (no type, \c auto, \c any) can hold a reference, which it reads as the
+    referenced lvalue; native code records whether the value in such a variable's cache is one (see
+    QoreIRToLLVM::localReferenceFlag())
+*/
+extern "C" DLLEXPORT uint8_t qore_rt_value_is_reference(uint64_t value) {
+    QoreValue v = fromBits(value);
+    return v.hasNode() && v.getInternalNode()->getType() == NT_REFERENCE ? 1 : 0;
+}
+
+//! Loads a local variable's value for its native cache: a reference it holds is returned as the reference itself
+/** As qore_rt_load_local(), except that a reference held by the variable is not dereferenced: the cache of a variable
+    of no reference type then holds the reference, which every read dereferences (qore_rt_read_reference_local()),
+    so that the variable reads as the referenced lvalue whenever the lvalue changes, as the AST interpreter reads it;
+    native code sets the variable's reference flag from the value returned (qore_rt_value_is_reference())
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink) {
+    if (var && !var->closureUse()) {
+        LocalVarValue* lvv = thread_try_find_lvar(var);
+        if (lvv && lvv->isRef()) {
+            return toBits(lvv->val.getReferencedValue());
+        }
+    }
+    return qore_rt_load_local(var, xsink);
+}
+
+//! Reads the value in the native cache of a local variable of no reference type that holds a reference
+/** @param value the value in the cache: a reference (see qore_rt_load_local_raw()) or any other value
+    @return the value of the referenced lvalue, or the value itself, always with a reference for the caller
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    if (v.hasNode() && v.getInternalNode()->getType() == NT_REFERENCE) {
+        // read as a read of the variable reads it, without creating a missing hash key or list element
+        bool needs_deref = true;
+        QoreValue rv = qore_local_reference_eval(*reinterpret_cast<const ReferenceNode*>(v.getInternalNode()),
+            needs_deref, xsink);
+        if (!needs_deref && rv.needsRef()) {
+            rv = rv.refSelf();
+        }
+        return toBits(rv);
+    }
+    return toBits(v.needsRef() ? v.refSelf() : v);
+}
+
+//! Assigns a value through the reference that the native cache of an IR-only local holds
+/** A store to a local that holds a reference assigns the referenced lvalue, as LocalVarValue::getLValue() resolves
+    it for an assignment, and the local keeps the reference.  An IR-only local has no LocalVarValue: its cache is the
+    variable (see QoreIRFunction::reference_slot_locals).
+
+    @param ref the value in the local's cache: a reference
+    @param value the value assigned, whose reference is taken
+*/
+extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink) {
+    QoreValue rv = fromBits(ref);
+    ValueHolder val(fromBits(value), xsink);
+    assert(rv.hasNode() && rv.getInternalNode()->getType() == NT_REFERENCE);
+    LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(rv.getInternalNode()), xsink);
+    if (!lvh) {
+        return;
+    }
+    lvh.assign(val.release(), "<lvalue>");
+}
+
+//! As qore_rt_reload_local_if_stale(), loading the value with qore_rt_load_local_raw()
+/** @return 1 if the value in the cache, reloaded or not, is a reference, 0 otherwise: the variable's reference flag,
+    returned rather than written through a pointer so that native code keeps the flag in a register
+*/
+extern "C" DLLEXPORT uint8_t qore_rt_reload_local_if_stale_raw(LocalVar* var, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink) {
+    assert(cache && tracker && deferred && valid_epoch);
+    if (*valid_epoch != epoch) {
+        uint64_t old_tracker = *tracker;
+        uint64_t old_deferred = *deferred;
+        uint64_t reloaded = qore_rt_load_local_raw(var, xsink);
+
+        *cache = reloaded;
+        *tracker = reloaded;
+        *deferred = old_tracker;
+        qore_rt_decref(old_deferred, xsink);
+        *valid_epoch = epoch;
+    }
+    return qore_rt_value_is_reference(*cache);
 }
 
 extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache,
@@ -12163,6 +12256,21 @@ extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* c
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local(ctx->locals[idx], xsink);
+}
+
+//! AOT variant of qore_rt_load_local_raw()
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_load_local_raw(ctx->locals[idx], xsink);
+}
+
+//! AOT variant of qore_rt_reload_local_if_stale_raw()
+extern "C" DLLEXPORT uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t* cache, uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_reload_local_if_stale_raw(ctx->locals[idx], cache, tracker, deferred, valid_epoch, epoch,
+        xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_aot(QoreAOTContext* ctx, int32_t idx,

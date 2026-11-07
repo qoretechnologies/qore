@@ -1442,9 +1442,9 @@
       of the reference when its target changed in the loop; it now reads the reference each time, as with the AST
       interpreter
     - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter, a
-      local variable holding a reference (ex: <tt>reference r = \x;</tt> or a \c reference<T> parameter) kept
+      local variable holding a reference (ex: <tt>reference r = \\x;</tt> or a \c reference<T> parameter) kept
       reading as the first value read after the referenced lvalue changed without an assignment to the variable (ex:
-      <tt>int x = 2; reference r = \x; int a = r; x = 10;</tt> then \c r read as \c 2); it now reads as the
+      <tt>int x = 2; reference r = \\x; int a = r; x = 10;</tt> then \c r read as \c 2); it now reads as the
       referenced lvalue, as with the AST interpreter
     - the result of \c *= and \c /= is now the value stored in the lvalue, as for an assignment
       (<tt>x *= y</tt> gives what <tt>x = x * y</tt> gives): with a \c float operand on an lvalue that stores the
@@ -1455,13 +1455,19 @@
       gives \c 0n; <tt>hash<string, float> h = {}; (h.k *= 2)</tt> now gives \c 0.0); in the IR, JIT and tiered
       execution modes and in AOT-compiled code the same happened with a \c number operand on a \c softint or
       \c *softint local or \c thread_local variable
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a local variable of no reference type
+      (\c auto, \c any or no type) that holds a reference not created with <tt>\\x</tt> in the same function (a
+      reference element of a container, ex: <tt>auto r = h.r;</tt>, a reference returned by a call, or a reference
+      passed to a parameter of no reference type) read as the value that the referenced lvalue had when the variable
+      was assigned or the function entered, and an assignment to the variable could be lost instead of writing the
+      referenced lvalue; the variable now reads and writes the referenced lvalue, as with the AST interpreter
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the
       program's next cancellation check point, as with the AST interpreter
     - in the JIT and tiered execution modes, a local variable of no reference type (\c auto, \c any or no type)
-      assigned a reference (ex: <tt>auto r = \x;</tt>) kept reading as the value of the referenced lvalue when it
-      was assigned after the lvalue changed (ex: <tt>int x = 2; auto r = \x; x = 10;</tt> then \c r read as \c 2);
+      assigned a reference (ex: <tt>auto r = \\x;</tt>) kept reading as the value of the referenced lvalue when it
+      was assigned after the lvalue changed (ex: <tt>int x = 2; auto r = \\x; x = 10;</tt> then \c r read as \c 2);
       it now reads as the referenced lvalue, as with the AST interpreter
     - in AOT-compiled code, a class whose public member declaration declares no public member (an empty
       <tt>public {}</tt> block, or one with only constants or static class variables), and its subclasses, accepted

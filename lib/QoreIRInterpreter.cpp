@@ -2097,6 +2097,8 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         }
     }
     std::vector<uint8_t> locals_ir_only;
+    // the slots of locals that keep a reference they hold in their slot (see QoreIRFunction::reference_slot_locals)
+    std::vector<uint8_t> reference_slots;
     bool has_non_ir_only_locals = false;
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
@@ -2104,8 +2106,15 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         locals_ir_only.assign(local_slot_count, 0);
         for (auto& [lvar, sid] : func.local_var_slots) {
             if (lvar && sid < local_slot_count) {
-                if (func.ir_only_locals.count(reinterpret_cast<const void*>(lvar))) {
+                const void* key = reinterpret_cast<const void*>(lvar);
+                if (func.hasIRStorage(key)) {
                     locals_ir_only[sid] = 1;
+                    if (func.reference_slot_locals.count(key)) {
+                        if (reference_slots.empty()) {
+                            reference_slots.assign(local_slot_count, 0);
+                        }
+                        reference_slots[sid] = 1;
+                    }
                 } else {
                     has_non_ir_only_locals = true;
                 }
@@ -2119,6 +2128,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
+    func.interpreter_reference_slots = std::move(reference_slots);
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
     func.interpreter_cross_block_slots = std::move(cross_block_slots);
     // the slots of native scalars own their value (see IRCleanupSlots)
@@ -10813,6 +10823,41 @@ load_local_done:
                         && (store_mode == AssignmentMode::Normal || store_mode == AssignmentMode::Element)
                         && local_inst->slot_id != UINT32_MAX
                         && local_inst->slot_id < locals_slot_cache.size()) {
+                    // a local whose slot holds a reference (see QoreIRFunction::reference_slot_locals): a store
+                    // that is not its declaration assigns the referenced lvalue, and the local keeps the
+                    // reference, as LocalVarValue::getLValue() resolves an assignment to a variable holding one
+                    // (raw slot: the reference itself is checked)
+                    if (store_mode == AssignmentMode::Normal && !local_inst->initial_assignment
+                            && local_inst->slot_id < func.interpreter_reference_slots.size()
+                            && func.interpreter_reference_slots[local_inst->slot_id]
+                            && qore_ir_value_node_type(locals_slot_cache.storage(local_inst->slot_id))
+                                == NT_REFERENCE) {
+                        {
+                            // raw slot: the reference is assigned through
+                            LValueHelper lvh(*reinterpret_cast<const ReferenceNode*>(
+                                locals_slot_cache.storage(local_inst->slot_id).getInternalNode()), xsink);
+                            if (lvh) {
+                                lvh.assign(val.needsRef() ? val.refSelf() : val, "<lvalue>");
+                            }
+                        }
+                        // the referenced lvalue can be another variable whose value a slot caches
+                        cleanupLocalCaches();
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        markParentLocalStoreDirty(local_inst);
+                        ++ip;
+                        break;
+                    }
                     QoreValue stored = coerceIRLocalValue(local_inst->local, val, xsink);
                     if (xsink && *xsink) {
                         if (inst->exception_target) {

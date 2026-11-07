@@ -3557,6 +3557,29 @@ public:
     // the private (runtime-stack-free) path — a read yields the dereferenced value either way.
     std::unordered_set<const void*> stored_locals;
 
+    //! Locals assigned a value that can be a reference (see computeReferenceStoreLocals())
+    /** A reference reaches a local of no reference type not only from <tt>\var</tt> in the same function: it can
+        be the element of a container (<tt>auto r = h.r</tt> where \c h.r holds a reference), the value a call
+        returns, or the operand of a phi of such values; such a local then reads and writes the referenced lvalue,
+        and localMayHoldReference() is true for it.
+    */
+    std::unordered_set<const void*> reference_store_locals;
+
+    //! Locals in reference_store_locals that keep their value in IR storage, as IR-only locals do
+    /** A body local that would be IR-only but for a store of a value that can be a reference: the reference it holds,
+        if one arrives, is the value in its storage (the slot of the IR interpreter, the native cache), and a read
+        reads the referenced lvalue (qore_local_reference_eval()) and a store that is not its declaration assigns it,
+        as a variable on the runtime stack holding the reference reads and assigns it.  These locals are not in
+        ir_only_locals, so that the IR optimizations keyed on that set, which take an IR-only local's storage to be
+        its value, leave them alone; the engines store them as IR-only locals (see hasIRStorage()).
+    */
+    std::unordered_set<const void*> reference_slot_locals;
+
+    //! Returns true if a local keeps its value in IR storage only and has none on the runtime stack
+    bool hasIRStorage(const void* key) const {
+        return ir_only_locals.count(key) || reference_slot_locals.count(key);
+    }
+
     // Locals referenced by AST expression subtrees retained in otherwise
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.
@@ -3611,6 +3634,14 @@ public:
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
 
+    //! Computes reference_store_locals: the locals of a StoreLocal whose operand can be a reference
+    /** An operand can be a reference unless the instruction that produces it is known never to give one (a
+        constant, a load of a variable, which dereferences a reference it holds, an arithmetic, comparison or string
+        operation, a new container, ...); a phi can give one if any of its incoming values can, and a guard gives
+        its operand
+    */
+    void computeReferenceStoreLocals();
+
     //! Returns true if this function can create a reference (\c "\\var") anywhere
     /** Conservative: also true when the IR contains a construct whose AST body this analysis
         cannot see through.  An untyped local of a function that creates no reference can never
@@ -3641,10 +3672,10 @@ public:
     //! never accessed via thread-local stack).  When true, callers can skip
     //! instantiating/uninstantiating body locals on the thread-local stack.
     bool areAllBodyLocalsIROnly() const {
-        return !all_body_locals.empty() && !ir_only_locals.empty()
+        return !all_body_locals.empty() && (!ir_only_locals.empty() || !reference_slot_locals.empty())
             && std::all_of(all_body_locals.begin(), all_body_locals.end(),
                 [this](const LocalVar* lv) {
-                    return ir_only_locals.count(reinterpret_cast<const void*>(lv));
+                    return hasIRStorage(reinterpret_cast<const void*>(lv));
                 });
     }
 
@@ -3687,6 +3718,9 @@ public:
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
     mutable std::vector<uint8_t> interpreter_locals_ir_only;
+    //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
+    //! through
+    mutable std::vector<uint8_t> interpreter_reference_slots;
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
     //! Slots whose definition and uses are not all in the same basic block.
     /** The interpreter's scope-exit cleanup decides whether a value slot is

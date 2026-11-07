@@ -487,6 +487,15 @@ private:
     // runtime-stack ownership. Proven-assigned native int/float locals can stay
     // IR-only because they carry no references and cannot trigger double-free.
     std::unordered_set<const void*> aot_adjusted_ir_only;
+    //! The locals with IR storage (QoreIRFunction::hasIRStorage()) when the function has reference slot locals: the
+    //! set that ir_only_locals_set points to, which then includes them
+    std::unordered_set<const void*> ir_storage_locals;
+    //! The body locals of the function being lowered, which hold a reference only if a store gives them one or the
+    //! function creates one (see usesReferenceFlag())
+    std::unordered_set<const void*> reference_flag_body_locals;
+    //! True if the function being lowered creates a reference (\\var), so that any local of a type that can hold
+    //! one can be given one (see usesReferenceFlag())
+    bool function_creates_reference = false;
 
     // Lazy local-cache invalidation. Calls that can execute AST/Qore code bump
     // the function epoch; LoadLocal reloads only the specific stale local it
@@ -712,16 +721,63 @@ private:
     // (or NOTHING if the target has already been deleted), rather than reading
     // the cached WeakReferenceNode from an LLVM alloca.
     std::unordered_set<const void*> weak_assigned_locals;
-    //! Locals of the function that are assigned a reference (auto r = \x;): see readsThroughReference()
-    std::unordered_set<const LocalVar*> reference_assigned_locals;
-    //! Returns true if a local can hold a reference and so reads as the referenced lvalue
-    /** A local declared with a reference type, or assigned a reference (\x) in the function, reads as the value of
-        the referenced lvalue, which can change without a store to the local (x = 10): it is read through the
-        reference on every load, never from its native cache, and a store to it writes the referenced lvalue.
+    //! Returns true if a local is declared with a reference type: it is read through the runtime stack on every load
+    /** Its value is that of the referenced lvalue, which can change without a store to the local (x = 10), so it is
+        never read from its native cache, and a store to it writes the referenced lvalue.  A local of no reference
+        type that holds a reference is handled by its reference flag instead (see usesReferenceFlag()).
     */
     bool readsThroughReference(const LocalVar* local) const {
-        return local && (QoreTypeInfo::isReference(local->getTypeInfo()) || reference_assigned_locals.count(local));
+        return local && QoreTypeInfo::isReference(local->getTypeInfo());
     }
+
+    //! The reference flag of each local that has one: see localReferenceFlag()
+    std::unordered_map<const void*, llvm::AllocaInst*> local_reference_flags;
+
+    //! Returns true if a local can hold a reference without a reference type and so has a reference flag
+    /** A local of no type, \c auto or \c any can hold a reference (<tt>auto r = \x;</tt>, a reference element of a
+        container, a reference passed to a parameter), which it reads as the referenced lvalue and through which a
+        store writes; its native cache then holds the reference itself (see qore_rt_load_local_raw()), and the flag
+        records whether it does: a load dereferences the cached value only when the flag is set
+        (qore_rt_read_reference_local()), so a local that never holds a reference reads its cache as any other.
+        Closure-bound, weak-assigned and foreach variables have mechanisms of their own.
+    */
+    bool usesReferenceFlag(const void* key) const;
+
+    //! Returns true if a local keeps a reference it holds in its native cache (QoreIRFunction::reference_slot_locals)
+    bool isReferenceSlotLocal(const void* key) const {
+        return current_ir_func && current_ir_func->reference_slot_locals.count(key)
+            && ir_only_locals_set && ir_only_locals_set->count(key);
+    }
+
+    //! Returns the reference flag of a local (an i8 that is non-zero if its native cache holds a reference)
+    /** Created in the entry block, cleared, the first time it is needed; null if the local has none (see
+        usesReferenceFlag())
+    */
+    llvm::AllocaInst* localReferenceFlag(const void* key, llvm::Function* llvm_func);
+
+    //! Emits the load of a local's value from the runtime stack for its native cache
+    /** For a local with a reference flag (see usesReferenceFlag()), a reference that the local holds is loaded as the
+        reference itself and the flag is set accordingly (qore_rt_load_local_raw()); any other local is loaded with
+        qore_rt_load_local().  Every load that fills a local's native cache uses this function.
+
+        @return the value loaded, with a reference for the cache
+    */
+    llvm::Value* emitLocalCacheLoad(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+
+    //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
+    /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
+        for the consumers of the value returned, until the read after the next one at this site or the exit of the
+        function, as a reload of a local's cache keeps the value it replaces
+
+        @param cached the value in the local's cache
+    */
+    llvm::Value* emitReferenceLocalRead(const void* key, llvm::Value* cached, llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    //! Emits the reference flag of a value (an i8, non-zero if the value is a reference) at the builder's position
+    /** Only a node can be a reference: qore_rt_value_is_reference() is called for a node only
+    */
+    llvm::Value* emitValueIsReference(llvm::Value* value, llvm::Module& module, llvm::Function* llvm_func);
     //! IR-only variables of foreach loops (AssignmentMode::Element): their caches can hold weak references, which
     //! read as their targets (see loadLocalCacheValue())
     std::unordered_set<const void*> ir_only_element_locals;

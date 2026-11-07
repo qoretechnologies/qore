@@ -5192,8 +5192,9 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         ir->computeIROnlyLocals();
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
-            if (!ir->ir_only_locals.empty()) {
+            if (!ir->ir_only_locals.empty() || !ir->reference_slot_locals.empty()) {
                 ir->ir_only_locals.clear();
+                ir->reference_slot_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
             }
         }
@@ -5802,8 +5803,9 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
-        if (!func->ir_only_locals.empty()) {
+        if (!func->ir_only_locals.empty() || !func->reference_slot_locals.empty()) {
             func->ir_only_locals.clear();
+            func->reference_slot_locals.clear();
             func->ast_visible_body_locals = func->all_body_locals;
         }
     }

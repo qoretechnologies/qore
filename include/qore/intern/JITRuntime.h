@@ -409,6 +409,21 @@ void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, Exceptio
 void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tracker,
         uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink);
 
+//! Returns 1 if the value is a reference, 0 otherwise
+uint8_t qore_rt_value_is_reference(uint64_t value);
+
+//! As qore_rt_load_local(), except that a reference held by the variable is returned itself
+uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
+
+//! Reads a cached value that can be a reference: the referenced value, or the value itself, with a reference
+uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
+//! Assigns a value (whose reference is taken) through the reference in the native cache of an IR-only local
+void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink);
+
+//! As qore_rt_reload_local_if_stale(), loading the value with qore_rt_load_local_raw(); returns the reference flag
+uint8_t qore_rt_reload_local_if_stale_raw(LocalVar* var, uint64_t* cache, uint64_t* tracker,
+        uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink);
+
 //! Clear a local variable's value on the Qore thread-local variable stack
 //! without popping the stack entry.  This triggers destructors (via decref)
 //! at block scope exit for pre-instantiated locals whose stack entry must
@@ -1420,6 +1435,13 @@ uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink*
 void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
         uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
         ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_load_local_raw()
+uint64_t qore_rt_load_local_raw_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_reload_local_if_stale_raw()
+uint8_t qore_rt_reload_local_if_stale_raw_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink);
 
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
