@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # Copyright 2026 Qore Technologies, s.r.o.
 # Deterministic database regressions; every case owns a new schema of the run, removed on exit.
+# test-parallel: serial - it uses the test databases, whose schemas the database tests share
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit

@@ -16,7 +16,7 @@ Relevant code:
 - `modules/i18n/src/ql_i18n.qpp` — `i18n_discover_catalog_files()`, the consumer
 - `qlib/DataProvider/DataProviderPresentation.qc` —
   `DataProviderPresentationCatalog`, which rejects conflicting fragments
-- `examples/test/ir/CMakeBuildHelpers.qtest` — the install-lifecycle tests
+- `examples/test/ir/CMakeBuildHelpers.qc` (`CMakeBuildHelpers-*.qtest`) — the install-lifecycle tests
 
 The user-facing view of the same subject is `modules/i18n/docs/catalogs.dox.tmpl`
 (catalog discovery and composition).
@@ -201,7 +201,7 @@ package build reconciles the staged tree and never touches the live prefix.
 
 ## Tests
 
-`examples/test/ir/CMakeBuildHelpers.qtest` configures, builds and installs
+`examples/test/ir/CMakeBuildHelpers.qc` (`CMakeBuildHelpers-*.qtest`) configures, builds and installs
 fixture CMake projects into temporary prefixes and covers: an app migrating
 between owner modules; every installed domain composing afterwards; an unrelated
 app keeping its old owner's fragment; another project's fragment in the same root

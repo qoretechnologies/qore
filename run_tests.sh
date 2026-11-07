@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 print_usage () {
-  echo "Usage: run_tests.sh [OPTIONS]"
-  echo "Run qore tests."
+  echo "Usage: run_tests.sh [OPTIONS] [TEST...]"
+  echo "Run qore tests: the given test files, or else the tests in the test directories."
   echo
   echo "  -d <dir>   Run only specified tests (as found in $BASE_TEST_PATH)."
   echo "  -j         Use --format=junit option for the tests, making them print JUnit output."
@@ -112,6 +112,23 @@ while getopts ":d:jlvtEP" opt; do
     esac
 done
 
+shift `expr $OPTIND - 1`
+# the test files given as arguments, instead of the tests in the test directories
+TEST_FILES=""
+for test in "$@"; do
+    case "$test" in
+        *" "*|*"	"*)
+            echo "ERROR: a test path cannot contain spaces: '$test'" >&2
+            exit 1
+            ;;
+    esac
+    if [ ! -f "$test" ]; then
+        echo "ERROR: test '$test' is not a file" >&2
+        exit 1
+    fi
+    TEST_FILES="$TEST_FILES $test"
+done
+
 if [ $PERF_EXCLUDE -eq 1 ] && [ $PERF_ONLY -eq 1 ]; then
     echo "Cannot use -E and -P together." >&2
     exit 1
@@ -144,7 +161,11 @@ for dir in $QORE_TEST_EXTRA_DIRS; do
 done
 
 # Search for tests in the test directory.
-TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
+if [ -n "$TEST_FILES" ]; then
+    TESTS=$TEST_FILES
+else
+    TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
+fi
 FAILED_TESTS=""
 
 # Helper: check if a test matches the perf/stress test pattern
@@ -235,12 +256,14 @@ if [ -r "$TEST_DURATIONS_FILE" ]; then
         }' "$TEST_DURATIONS_FILE"`
 fi
 
-# Prints "<shard>	<seconds>	<test>" for each test in TESTS, in their order, with the shards (1 to the given number)
+# Prints "<shard>	<seconds>	<number>	<test>" for each test in TESTS (its number is its place in TESTS), in their
+# order (longest first with a second argument), with the shards (1 to the given number)
 # that longest-processing-time-first packing gives: the longest test goes to the shard with the least work so far
 # (the first such shard on a tie), and tests of the same duration in the order of their names, so that every shard of
 # a job computes the same split.  A test counts as at least 0.1 s.
 plan_tests() {
-    printf '%s\n' $TESTS | awk -v shards="$1" -v durations="$TEST_DURATIONS_FILE" -v profile="$TEST_DURATION_COLUMN" '
+    printf '%s\n' $TESTS | awk -v shards="$1" -v order="$2" -v durations="$TEST_DURATIONS_FILE" \
+            -v profile="$TEST_DURATION_COLUMN" '
         # sorts idx[lo..hi] by descending duration, then by name
         function before(a, b) {
             return dur[a] > dur[b] || (dur[a] == dur[b] && key[a] < key[b])
@@ -338,8 +361,9 @@ plan_tests() {
                 shard[i] = best
                 load[best] += dur[i]
             }
-            for (i = 0; i < n; ++i) {
-                printf "%d\t%s\t%s\n", shard[i], dur[i], test[i]
+            for (j = 0; j < n; ++j) {
+                i = order ? idx[j] : j
+                printf "%d\t%s\t%d\t%s\n", shard[i], dur[i], i + 1, test[i]
             }
         }'
 }
@@ -357,7 +381,7 @@ if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 
         exit 1
     fi
     TEST_PLAN=`plan_tests "$CI_NODE_TOTAL"`
-    TESTS=`printf '%s\n' "$TEST_PLAN" | awk -F '\t' -v shard="$CI_NODE_INDEX" '$1 == shard { print $3 }'`
+    TESTS=`printf '%s\n' "$TEST_PLAN" | awk -F '\t' -v shard="$CI_NODE_INDEX" '$1 == shard { print $4 }'`
     # on stderr with -l, which lists only the tests on stdout
     if [ $PRINT_TEXT -eq 1 ]; then
         printf '%s\n' "$TEST_PLAN" | awk -F '\t' -v shard="$CI_NODE_INDEX" -v total="$CI_NODE_TOTAL" \
@@ -369,6 +393,7 @@ if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 
 fi
 
 TEST_COUNT=`echo $TESTS | wc -w`
+TEST_COUNT=`expr $TEST_COUNT + 0`
 if [ $TEST_COUNT -eq 0 ]; then
     echo "ERROR: no tests found to run" >&2
     exit 1
@@ -679,6 +704,18 @@ find_test_core() {
             continue
         fi
         CORE_SEARCH_NAME=$(core_search_name "$CORE_SEARCH_DIR")
+        # Tests that run at the same time (TEST_JOBS > 1) write their cores to the same places, so only a core
+        # whose name has the process ID of the test as a part of its own (core.%e.%p.%t on Linux CI, core.%P on
+        # macOS CI) is the test's
+        if [ "$TEST_JOBS" -gt 1 ] && [ -n "$TEST_PID" ]; then
+            CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" -print 2>/dev/null \
+                | awk -v pid="$TEST_PID" '{ n = split($0, path, "/"); m = split(path[n], part, ".") }
+                    { for (j = 2; j <= m; ++j) { if (part[j] == pid) { print; exit } } }')
+            if [ -n "$CORE_FILE" ]; then
+                break
+            fi
+            continue
+        fi
         CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" \
             -newer "$TEST_START_MARKER" -print 2>/dev/null | head -1)
         if [ -z "$CORE_FILE" ]; then
@@ -728,9 +765,14 @@ find_test_survivors() {
     if [ ! -r /proc/self/environ ]; then
         return
     fi
-    if [ -n "$TEST_OUTPUT_PIPES" ]; then
+    # the output of a test of a parallel run is its log (TEST_LOG, an absolute path without spaces)
+    test_outputs="$TEST_OUTPUT_PIPES"
+    if [ -n "$TEST_LOG" ]; then
+        test_outputs="$TEST_LOG"
+    fi
+    if [ -n "$test_outputs" ]; then
         # the commands that look for them must not hold the output themselves
-        TEST_SURVIVORS=`{ ls -l /proc/[0-9]*/fd/1 /proc/[0-9]*/fd/2 | awk -v pipes="$TEST_OUTPUT_PIPES" \
+        TEST_SURVIVORS=`{ ls -l /proc/[0-9]*/fd/1 /proc/[0-9]*/fd/2 | awk -v pipes="$test_outputs" \
             -v own="$RUN_TESTS_ANCESTORS" 'BEGIN {
                 n = split(pipes, list, " ")
                 for (i = 1; i <= n; ++i) {
@@ -808,6 +850,37 @@ echo
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
+# The number of tests run at the same time: QORE_TEST_JOBS, a number or "auto" (the number of CPUs); 1 by default.
+# A parallel run prints the output of each test when the test has ended, as a whole.  A test that cannot run beside
+# others declares a lane on its own line:
+#   # test-parallel: serial - <why>     one serial test at a time, beside the other tests (ex: tests that share a
+#                                       database schema or service data)
+#   # test-parallel: exclusive - <why>  no other test at the same time (ex: tests of the limits of the machine, or of
+#                                       timing that the load of other tests changes)
+# examples/test/runner/test_parallel_runner.py checks the parallel runner.
+case "${QORE_TEST_JOBS:-1}" in
+    auto)
+        TEST_JOBS=`getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1`
+        ;;
+    *[!0-9]*|"")
+        echo "ERROR: QORE_TEST_JOBS is a number of tests or \"auto\": '$QORE_TEST_JOBS'" >&2
+        exit 1
+        ;;
+    *)
+        TEST_JOBS=${QORE_TEST_JOBS:-1}
+        ;;
+esac
+if [ "$TEST_JOBS" -lt 1 ] 2>/dev/null; then
+    TEST_JOBS=1
+fi
+if [ $MEASURE_TIME -eq 1 ] && [ "$TEST_JOBS" -gt 1 ]; then
+    echo "-t measures one test at a time: QORE_TEST_JOBS=$QORE_TEST_JOBS is ignored"
+    TEST_JOBS=1
+fi
+if [ "$TEST_JOBS" -gt "$TEST_COUNT" ]; then
+    TEST_JOBS=$TEST_COUNT
+fi
+
 # Run single test with timeout (default 300s = 5 minutes).
 # A test that legitimately needs more time than the default declares its own budget with a
 # "# test-timeout: <seconds>" comment on its own line; the default still guards every other test, so a
@@ -872,9 +945,19 @@ run_with_watchdog() {
     fi
     # opened for reading and writing, so that neither the writes below nor the test's block
     exec 4<>"$TEST_EVENT_FIFO"
-    QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
+    if [ -n "$TEST_LOG" ]; then
+        QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- >> "$TEST_LOG" 2>&1 &
+    else
+        QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
+    fi
     test_pid=$!
+    # the process of the test (env executes qore), whose core is found by its process ID (see find_test_core())
+    TEST_PID=$test_pid
     (
+        # the watchdog's messages go where the test's output goes
+        if [ -n "$TEST_LOG" ]; then
+            exec >> "$TEST_LOG" 2>&1
+        fi
         event=`read_test_event $limit`
         if [ "$event" = exit ]; then
             exit 0
@@ -908,17 +991,32 @@ run_with_watchdog() {
     return $test_rc
 }
 
-# Run tests.
-i=1
-for test in $TESTS; do
+# Prints the header of a test (the arguments: the test and its number)
+print_test_header() {
     if [ $PRINT_TEXT -eq 1 ]; then
         echo "====================================="
-        echo "Running test ($i/$TEST_COUNT): $test"
+        echo "Running test ($2/$TEST_COUNT): $1"
         echo "-------------------------------------"
-        echo "cmdline: $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT"
+        echo "cmdline: $QORE $QORE_TEST_OPTS $1 $TEST_OUTPUT_FORMAT"
         echo "-------------------------------------"
     fi
+}
 
+# Prints the footer of a test (the arguments: the test and the seconds it took)
+print_test_footer() {
+    if [ $PRINT_TEXT -eq 1 ]; then
+        # read by update-test-durations.py
+        echo "Test time: $1: $2s"
+        echo "-------------------------------------"
+        echo
+    fi
+}
+
+# Runs a test (the arguments: the test and its number), with its diagnostics when it fails; sets test_exit to the
+# result: 0 if it passed.  The output of the test goes to stdout, or to TEST_LOG if set, which is then printed.
+run_test() {
+    test=$1
+    i=$2
     # the test's own budget, if it declares one
     THIS_TEST_TIMEOUT=`sed -n 's/^[	 ]*#[	 ]*test-timeout:[	 ]*\([0-9][0-9]*\).*/\1/p' "$test" 2>/dev/null | head -1`
     if [ -z "$THIS_TEST_TIMEOUT" ]; then
@@ -931,20 +1029,33 @@ for test in $TESTS; do
     # find_test_survivors())
     TEST_PROCESS_MARK="$$.$i"
     TEST_ENV="env QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
+    TEST_PID=""
+    # a parallel run writes the output of the test to its log (TEST_LOG), which is printed when the test has ended;
+    # it is opened for appending, as the watchdog appends its messages to it too
+    TEST_LOG_REDIRECT=""
+    if [ -n "$TEST_LOG" ]; then
+        : > "$TEST_LOG"
+        TEST_LOG_REDIRECT='>> "$TEST_LOG" 2>&1'
+    fi
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
-            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
         else
-            eval $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT $TEST_LOG_REDIRECT
         fi
     else
         if [ -n "$TIMEOUT_CMD" ]; then
             run_with_watchdog $THIS_TEST_TIMEOUT $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+        elif [ -n "$TEST_LOG" ]; then
+            $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT >> "$TEST_LOG" 2>&1
         else
             $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     fi
     test_exit=$?
+    if [ -n "$TEST_LOG" ]; then
+        cat "$TEST_LOG"
+    fi
 
     # A test must end every process it starts: one still running keeps the output of the tests open, so that a CI job
     # running them does not end until its time limit, and it can interfere with the tests that follow
@@ -996,11 +1107,7 @@ EOF
         fi
     fi
 
-    if [ $test_exit -eq 0 ]; then
-        PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
-    else
-        FAILED_TEST_COUNT=`expr $FAILED_TEST_COUNT + 1`
-        FAILED_TESTS="$FAILED_TESTS $test"
+    if [ $test_exit -ne 0 ]; then
         # BusyBox reports its deliberate timeout termination as SIGTERM (143). It is already
         # recorded above; rerunning that hung test under gdb would lose the timeout entirely.
         # Capture crash diagnostics only for unexpected signals.
@@ -1051,6 +1158,11 @@ EOF
                 # SIGABRT raised without a message (e.g. a libpthread or malloc integrity check)
                 if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
                     REPORT=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/qore*.ips 2>/dev/null | head -1)
+                    # tests that run at the same time: the newest report of the test's process
+                    if [ "$TEST_JOBS" -gt 1 ] && [ -n "$TEST_PID" ]; then
+                        REPORT=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/qore*.ips 2>/dev/null \
+                            | while read -r r; do if grep -q "\"pid\" *: *$TEST_PID," "$r"; then echo "$r"; break; fi; done)
+                    fi
                     # BSD stat: GNU coreutils may be first in PATH; only a report written just now belongs to this test
                     if [ -n "$REPORT" ] && [ $(( $(date +%s) - $(/usr/bin/stat -f %m "$REPORT") )) -lt 120 ]; then
                         echo "*** Crash report: $REPORT ***"
@@ -1075,10 +1187,209 @@ EOF
         fi
     fi
 
-    i=`expr $i + 1`
-    if [ $PRINT_TEXT -eq 1 ]; then echo "-------------------------------------"; echo; fi
-done
+}
 
+# Counts the result of a test (the arguments: the test and its result)
+count_test_result() {
+    if [ "$2" -eq 0 ]; then
+        PASSED_TEST_COUNT=`expr $PASSED_TEST_COUNT + 1`
+    else
+        FAILED_TEST_COUNT=`expr $FAILED_TEST_COUNT + 1`
+        FAILED_TESTS="$FAILED_TESTS $1"
+    fi
+}
+
+# Runs the tests TEST_JOBS at a time (see TEST_JOBS above): the exclusive tests first, one by one, then the others,
+# with at most one serial test at a time, each lane longest first by the durations of the tests (see plan_tests()).
+# Each test runs in a background shell with a directory of its own (its slot), and writes its output there; the
+# shell writes the number of its slot to a FIFO when the test has ended, and the runner, which reads the FIFO, prints
+# the output and the result and starts the next test.
+run_tests_parallel() {
+    RUN_DIR=`mktemp -d "${TMPDIR:-/tmp}/qore-run-tests.XXXXXX"` || exit 1
+    RUN_DIR=`cd "$RUN_DIR" && pwd -P`
+    RUN_PIDS=""
+    # a run that ends early (a signal) ends its tests too
+    trap 'kill $RUN_PIDS 2>/dev/null; rm -rf "$RUN_DIR"; rm -f "$TEST_START_MARKER" "$TEST_CORES_BEFORE"' 0
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    if ! mkfifo "$RUN_DIR/done"; then
+        echo "ERROR: cannot make the FIFO of the parallel run in $RUN_DIR" >&2
+        exit 1
+    fi
+    # opened for reading and writing, so that it never reaches its end while tests run
+    exec 5<>"$RUN_DIR/done"
+
+    # the lanes, longest first
+    # "<number> <test>" lines
+    TEST_ORDER=`plan_tests 1 order | awk -F '\t' '{ print $3 " " $4 }'`
+    SERIAL_TESTS=`grep -l '^# test-parallel: serial' $TESTS 2>/dev/null`
+    EXCLUSIVE_TESTS=`grep -l '^# test-parallel: exclusive' $TESTS 2>/dev/null`
+    PENDING_FREE=""
+    PENDING_SERIAL=""
+    PENDING_EXCLUSIVE=""
+    while read -r number test; do
+        case "
+$EXCLUSIVE_TESTS
+" in
+            *"
+$test
+"*) PENDING_EXCLUSIVE="$PENDING_EXCLUSIVE$number $test
+"; continue ;;
+        esac
+        case "
+$SERIAL_TESTS
+" in
+            *"
+$test
+"*) PENDING_SERIAL="$PENDING_SERIAL$number $test
+"; continue ;;
+        esac
+        PENDING_FREE="$PENDING_FREE$number $test
+"
+    done <<EOF
+$TEST_ORDER
+EOF
+    echo "Running $TEST_COUNT tests, $TEST_JOBS at a time ($(printf '%s' "$PENDING_SERIAL" | grep -c .) serial," \
+        "$(printf '%s' "$PENDING_EXCLUSIVE" | grep -c .) exclusive)"
+    echo
+
+    FREE_SLOTS=""
+    slot=1
+    while [ $slot -le $TEST_JOBS ]; do
+        mkdir "$RUN_DIR/$slot" || exit 1
+        FREE_SLOTS="$FREE_SLOTS $slot"
+        slot=`expr $slot + 1`
+    done
+    RUNNING=0
+    SERIAL_RUNNING=0
+    EXCLUSIVE_RUNNING=0
+    DONE_COUNT=0
+    while :; do
+        # start the tests that can start
+        while [ $RUNNING -lt $TEST_JOBS ] && [ $EXCLUSIVE_RUNNING -eq 0 ]; do
+            next=""
+            lane=""
+            if [ -n "$PENDING_EXCLUSIVE" ]; then
+                # alone: once the tests that run have ended
+                if [ $RUNNING -eq 0 ]; then
+                    next=${PENDING_EXCLUSIVE%%"
+"*}
+                    PENDING_EXCLUSIVE=${PENDING_EXCLUSIVE#*"
+"}
+                    lane=exclusive
+                fi
+            elif [ -n "$PENDING_SERIAL" ] && [ $SERIAL_RUNNING -eq 0 ]; then
+                next=${PENDING_SERIAL%%"
+"*}
+                PENDING_SERIAL=${PENDING_SERIAL#*"
+"}
+                lane=serial
+            elif [ -n "$PENDING_FREE" ]; then
+                next=${PENDING_FREE%%"
+"*}
+                PENDING_FREE=${PENDING_FREE#*"
+"}
+                lane=free
+            fi
+            if [ -z "$next" ]; then
+                break
+            fi
+            set -- $FREE_SLOTS
+            slot=$1
+            shift
+            FREE_SLOTS="$*"
+            set -- $next
+            number=$1
+            next=$2
+            echo "$next" > "$RUN_DIR/$slot/test"
+            echo "$lane" > "$RUN_DIR/$slot/lane"
+            # the outer shell reports the slot when the inner one has ended, however it ended, so that the runner
+            # never waits for a test that is gone; the inner one runs the test, which does not get the FIFO
+            (
+                trap - 0 INT TERM
+                (
+                    exec > "$RUN_DIR/$slot/output" 2>&1 5>&-
+                    # the slot's own files (see find_test_core() and run_with_watchdog())
+                    TEST_START_MARKER="$RUN_DIR/$slot/start"
+                    TEST_CORES_BEFORE="$RUN_DIR/$slot/cores"
+                    TEST_EVENT_FIFO="$RUN_DIR/$slot/events"
+                    TEST_LOG="$RUN_DIR/$slot/log"
+                    print_test_header "$next" $number
+                    test_start=`date +%s`
+                    test_exit=1
+                    run_test "$next" $number
+                    print_test_footer "$next" `expr \`date +%s\` - $test_start`
+                    echo "$test_exit" > "$RUN_DIR/$slot/result"
+                )
+                echo "$slot" >&5
+            ) &
+            RUN_PIDS="$RUN_PIDS $!"
+            echo "$!" > "$RUN_DIR/$slot/pid"
+            RUNNING=`expr $RUNNING + 1`
+            case $lane in
+                serial) SERIAL_RUNNING=1 ;;
+                exclusive) EXCLUSIVE_RUNNING=1 ;;
+            esac
+        done
+        if [ $RUNNING -eq 0 ]; then
+            break
+        fi
+        # the next test that ends
+        if ! IFS= read -r slot <&5; then
+            echo "ERROR: the parallel run lost its FIFO" >&2
+            exit 1
+        fi
+        pid=`cat "$RUN_DIR/$slot/pid"`
+        wait $pid 2>/dev/null
+        RUN_PIDS=`for p in $RUN_PIDS; do [ "$p" = "$pid" ] || echo $p; done`
+        test=`cat "$RUN_DIR/$slot/test"`
+        result=`cat "$RUN_DIR/$slot/result" 2>/dev/null`
+        if [ -z "$result" ]; then
+            result=1
+            echo "*** the shell that ran $test ended without its result ***" >> "$RUN_DIR/$slot/output"
+        fi
+        cat "$RUN_DIR/$slot/output"
+        count_test_result "$test" "$result"
+        DONE_COUNT=`expr $DONE_COUNT + 1`
+        case `cat "$RUN_DIR/$slot/lane"` in
+            serial) SERIAL_RUNNING=0 ;;
+            exclusive) EXCLUSIVE_RUNNING=0 ;;
+        esac
+        rm -f "$RUN_DIR/$slot/output" "$RUN_DIR/$slot/result" "$RUN_DIR/$slot/log" "$RUN_DIR/$slot/test" \
+            "$RUN_DIR/$slot/lane" "$RUN_DIR/$slot/pid"
+        FREE_SLOTS="$FREE_SLOTS $slot"
+        RUNNING=`expr $RUNNING - 1`
+    done
+    exec 5>&-
+    # the failed tests in the order of their names
+    FAILED_TESTS=`for test in $FAILED_TESTS; do echo "$test"; done | sort`
+}
+
+# Run tests.
+if [ "$TEST_JOBS" -le 1 ]; then
+    i=1
+    for test in $TESTS; do
+        print_test_header "$test" $i
+        test_start=`date +%s`
+        TEST_LOG=""
+        run_test "$test" $i
+        count_test_result "$test" $test_exit
+        print_test_footer "$test" `expr \`date +%s\` - $test_start`
+        i=`expr $i + 1`
+    done
+else
+    run_tests_parallel
+fi
+
+# Every test has a result: a run that lost one (a parallel run whose shell ended without writing it is counted as a
+# failure) must not pass
+if [ `expr $PASSED_TEST_COUNT + $FAILED_TEST_COUNT` -ne $TEST_COUNT ]; then
+    echo "ERROR: $TEST_COUNT tests were selected, but $PASSED_TEST_COUNT passed and $FAILED_TEST_COUNT failed" >&2
+    FAILED_TEST_COUNT=`expr $TEST_COUNT - $PASSED_TEST_COUNT`
+    if [ $FAILED_TEST_COUNT -lt 1 ]; then
+        FAILED_TEST_COUNT=1
+    fi
+fi
 
 # Print test summary.
 if [ $PRINT_TEXT -eq 1 ]; then

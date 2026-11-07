@@ -340,6 +340,10 @@ if [ "$NEED_RELEASE_BUILD" = "1" ]; then
 else
     echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
 fi
+# the CPUs and memory the job may use, and (after the tests) its peak memory use (see ci-resource-report.sh); the
+# tests run one at a time (QORE_TEST_JOBS, see run_tests.sh) until these show the memory to run more
+. "${QORE_SRC_DIR}/test/docker_test/ci-resource-report.sh"
+qore_ci_resource_report "before the tests"
 TEST_RC=0
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
@@ -354,6 +358,7 @@ gosu qore:qore env \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh || TEST_RC=$?
+qore_ci_resource_report "after the tests"
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"

@@ -969,7 +969,7 @@ was the completeness defect above -- `OmqMap.qc` was neither compiled nor preloa
 `new OmqMap()` was deferred and its deferred value read as no value -- and not a missing body. On
 the current Qorus tree a partial parse compiling `MetadataActionContext.qc` with
 `QorusMapManager.qc`, `GroupRuntimeContext.qc` and `OmqMap.qc` all preloaded commits cleanly, and
-`CMakeBuildHelpers.qtest` pins the same call chain, counting the preloaded body's runs.
+`CMakeBuildHelpers.qc` (`CMakeBuildHelpers-*.qtest`) pins the same call chain, counting the preloaded body's runs.
 
 What #5466 did find was a hole in what an object records about a **static class variable**. A
 read the parse resolves is a `LoadStaticVar` that names the variable itself and takes no
@@ -1768,7 +1768,7 @@ which two builders can still race to restore.
   in the compiled source's own initializer exits 1; and that a static class variable another
   source declares is imported the same way by a batch and a standalone compile, whether it is
   folded into a constant, read in a body or written
-- `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
+- `examples/test/ir/AOTSccIncrementalDriver.qc` (`AOTSccIncrementalDriver-*.qtest`) — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a stale component whose compile moves no contract compiled
   without parsing the group, and one whose compile moves a widely followed contract
@@ -1788,7 +1788,7 @@ which two builders can still race to restore.
   that a SIGKILLed holder's lock is free with nothing to reclaim, that the lock file
   survives, and that arguments are not re-split by a shell
 - `examples/test/ir/AOTDepfileAtomicWrite.qtest` — depfile publication atomicity
-- `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end, including
+- `examples/test/ir/CMakeBuildHelpers.qc` (`CMakeBuildHelpers-*.qtest`) — the CMake surface end to end, including
   that no member depfile reaches a target consuming the object stamps, that a module a member
   started requiring after the group parse is watched and an edit to it rebuilds that member
   alone, and that configuring resets the consolidated dependencies an earlier configuration

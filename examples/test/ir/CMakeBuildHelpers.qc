@@ -1,23 +1,10 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# The cases of the CMakeBuildHelpers-*.qtest tests: each runs one part of them, so that each takes a
+# short time, and together they run every case (see addPartCase())
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/FsUtil.qm
-%requires ../TestFileTime.qm
-# catalog install reconciliation is verified by composing what it leaves installed
-%requires ../../../qlib/DataProvider
-%requires i18n
-%requires json
-
-%exec-class CMakeBuildHelpersTest
-
-class CMakeBuildHelpersTest inherits QUnit::Test {
+class CMakeBuildHelpersBase inherits QUnit::Test {
     public {
         #! How the engine in testIncrementalExecutedCalleePreload() reaches its provider, by variant name
         const ExecutedCalleeVariants = {
@@ -28,6 +15,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
     }
 
     private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
         string qore_bin;
         string qore_build_dir;
         *string qore_dir;
@@ -35,7 +24,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         *string cmake;
     }
 
-    constructor() : QUnit::Test("CMakeBuildHelpersTest", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
             ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
@@ -52,56 +42,63 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             cmake = cmake_path;
         }
 
-        addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
-        addTestCase("a build tree reached through another path is reported, not loaded as an SDK",
+        addPartCase(1, "exported Qore CMake build helpers", \testExportedHelpers());
+        addPartCase(1, "a build tree reached through another path is reported, not loaded as an SDK",
             \testMovedBuildTree());
-        addTestCase("downstream catalog install root",
+        addPartCase(1, "downstream catalog install root",
             \testDownstreamCatalogInstallRoot());
-        addTestCase("catalog install reconciles obsolete owner fragments",
+        addPartCase(1, "catalog install reconciles obsolete owner fragments",
             \testCatalogInstallReconciliation());
-        addTestCase("catalog reconciliation retires orphans it owns by name",
+        addPartCase(1, "catalog reconciliation retires orphans it owns by name",
             \testCatalogOwnedOrphanRetirement());
-        addTestCase("catalog reconciliation refuses unsafe manifest entries",
+        addPartCase(1, "catalog reconciliation refuses unsafe manifest entries",
             \testCatalogManifestEntryValidation());
-        addTestCase("catalog reconciliation honours DESTDIR staging",
+        addPartCase(1, "catalog reconciliation honours DESTDIR staging",
             \testCatalogInstallDestdirStaging());
-        addTestCase("generic qcc object helper builds standalone .qo files",
+        addPartCase(1, "generic qcc object helper builds standalone .qo files",
             \testGenericQccObjectHelpers());
-        addTestCase("managed qcc outputs prune stale artifacts safely",
+        addPartCase(2, "managed qcc outputs prune stale artifacts safely",
             \testManagedQccOutputPruning());
-        addTestCase("source qmod links reject stale format artifacts",
+        addPartCase(1, "source qmod links reject stale format artifacts",
             \testSourceQmodSymlinkFreshness());
-        addTestCase("source qmod link cleanup keeps other build trees' links",
+        addPartCase(1, "source qmod link cleanup keeps other build trees' links",
             \testSourceQmodSymlinkOtherBuildTree());
-        addTestCase("module source globs track added and removed sources",
+        addPartCase(1, "module source globs track added and removed sources",
             \testModuleSourceGlobTracking());
-        addTestCase("qcc format fingerprint covers every AOT format source",
+        addPartCase(1, "qcc format fingerprint covers every AOT format source",
             \testFormatFingerprintCoverage());
-        addTestCase("qcc build inputs track libqore for an installed qore",
+        addPartCase(1, "qcc build inputs track libqore for an installed qore",
             \testQccDepsTrackInstalledLibqore());
-        addTestCase("external AOT qmods rebuild for a new Qore library and use its qcc runtime",
+        addPartCase(1, "external AOT qmods rebuild for a new Qore library and use its qcc runtime",
             \testExternalQmodsTrackQoreRuntime());
-        addTestCase("cyclic source components build as one atomic generation",
+        addPartCase(2, "cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
-        addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
+        addPartCase(2, "an incremental compile preloads the owner of a sibling's aliased constant",
             \testIncrementalConstantOwnerPreload());
-        addTestCase("an incremental compile preloads a newly referenced typedef",
+        addPartCase(2, "an incremental compile preloads a newly referenced typedef",
             \testIncrementalTypedefPreload());
-        addTestCase("a group watches what its members read from outside it through one depfile",
+        addPartCase(3, "a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
         # one case per kind of reference, so a failure in one does not hide the others
         foreach hash<auto> variant in (ExecutedCalleeVariants.pairIterator()) {
-            addTestCase("an incremental compile preloads what a preloaded sibling's code runs at parse commit: "
+            addPartCase(3, "an incremental compile preloads what a preloaded sibling's code runs at parse commit: "
                 + variant.key, \testIncrementalExecutedCalleePreload(), (variant.key, variant.value));
         }
-        addTestCase("a partial parse runs a preloaded provider's body from a constant initializer",
+        addPartCase(3, "a partial parse runs a preloaded provider's body from a constant initializer",
             \testSubsetParseInitializerCallsPreloadedBody());
-        addTestCase("an edit to a provider and its consumer compiles the provider first",
+        addPartCase(3, "an edit to a provider and its consumer compiles the provider first",
             \testIncrementalStaleProviderCompiledFirst());
-        addTestCase("a partial aggregate of a group links the contracts its members baked",
+        addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
             \testPartialAggregateBodyContracts());
 
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! The cases build CMake projects with the cmake in the PATH: without one, each is skipped with the reason

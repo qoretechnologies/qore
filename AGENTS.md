@@ -66,6 +66,15 @@
   anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
   child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
   a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
+- `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs) and
+  prints each test's output whole when it ends.  Tests must therefore not share state: listen on port 0, write under
+  their own `make_tmp_dir()`/`TmpDir`, and use names of their own for shared objects.  A test that cannot run beside
+  others declares `# test-parallel: serial - <why>` (one at a time beside the others: the database and service tests,
+  which share schemas and data) or `# test-parallel: exclusive - <why>` (alone).  A test that takes more than about two
+  minutes is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each `<name>-<part>.qtest`
+  runs one part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
+- The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
+  pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 
 ## Running Tests Under valgrind
 - Disable signal handling with `-b` (`--disable-signals`), for example

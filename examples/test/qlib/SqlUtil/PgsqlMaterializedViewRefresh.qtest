@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-parallel: serial - it uses the test databases, whose schemas the database tests share
 
 %modern
 %enable-all-warnings
