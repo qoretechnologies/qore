@@ -412,7 +412,7 @@ public class AbstractDataField inherits Qore::Serializable {
     /** @param allowed_values raw values or AllowedValueInfo records
         @param allowed_values_creatable whether values outside the allowed values are accepted
         @return this field
-        @throw RUNTIME-TYPE-ERROR an allowed value cannot be converted to the field's type, or a string allowed value
+        @throw TYPE-VALUE-ERROR an allowed value cannot be converted to the field's type, or a string allowed value
         contains a NUL character, which cannot be a key of the set of allowed values
         @note A refused list leaves the previous allowed values unchanged.
     */
@@ -450,7 +450,7 @@ public class AbstractDataField inherits Qore::Serializable {
     /** @param element_allowed_values raw values or AllowedValueInfo records; an empty list clears choices
         @param element_allowed_values_creatable whether values outside the choices are accepted
         @return this field
-        @throw RUNTIME-TYPE-ERROR a choice cannot be converted to the list element type, or a string choice contains a
+        @throw TYPE-VALUE-ERROR a choice cannot be converted to the list element type, or a string choice contains a
         NUL character, which cannot be a key of the set of choices
         @note Failed conversion leaves the previous choices and membership rules unchanged.
         @par Example
@@ -1416,7 +1416,7 @@ class DataProviderAllowedValueKeys {
     static check(list<hash<AllowedValueInfo>> choices) {
         foreach hash<AllowedValueInfo> choice in (choices) {
             if (choice.value.typeCode() == NT_STRING && choice.value.contains(chr(0))) {
-                throw "RUNTIME-TYPE-ERROR", sprintf("allowed value \"%s\" contains a NUL character",
+                throw "TYPE-VALUE-ERROR", sprintf("allowed value \"%s\" contains a NUL character",
                     replace(choice.value, chr(0), "\\x00"));
             }
         }

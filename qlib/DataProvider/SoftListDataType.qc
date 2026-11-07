@@ -98,7 +98,7 @@ public class SoftListDataType inherits ListDataType {
 
         @return the value to be assigned; can be converted by the type
 
-        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+        @throw TYPE-VALUE-ERROR value cannot be assigned to type
 
         @note A missing optional collection returns NOTHING without validating an item. A configured
         collection default is converted and validated item by item. Explicit list items, including NOTHING
@@ -122,7 +122,7 @@ public class SoftListDataType inherits ListDataType {
                 return;
             } else {
                 # like the Qore "list" type, only an "or nothing" soft list accepts no value
-                throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value", name);
+                throw "TYPE-VALUE-ERROR", sprintf("type %y requires a value", name);
             }
         }
         string typename = value.type();

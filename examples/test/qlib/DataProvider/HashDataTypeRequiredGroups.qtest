@@ -345,7 +345,7 @@ public class HashDataTypeRequiredGroupsTest inherits QUnit::Test {
         type.setRequiredGroups((("path", "data"),));
 
         # If we pass an invalid type for path, we should get a type error, not a required group error
-        assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ({
+        assertThrows("TYPE-VALUE-ERROR", \type.acceptsValue(), ({
             "path": 12345,  # Invalid: expecting string
         }), "type validation before required groups");
 

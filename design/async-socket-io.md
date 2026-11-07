@@ -1293,18 +1293,24 @@ The fix clears `O_NONBLOCK` via `fcntl(F_SETFL)` on every accepted fd immediatel
 `accept()` returns. The second `fcntl` return value is unchecked — failure is essentially
 impossible on a just-accepted fd and non-critical.
 
-### macOS kqueue Closed-fd Detection
+### Closing a Socket While It Is Polled
 
-File: `lib/QoreSocket.cpp`
+Files: `include/qore/intern/qore_socket_private.h`, `lib/AsyncIoControllerPriv.cpp`
 
-On macOS, closing a monitored fd removes its kqueue registration without delivering an event.
-If a socket is closed by another thread while the I/O thread is blocked in `kevent()`,
-`kevent()` may return 0 (timeout) with no events for the closed fd. The fix scans all
-monitored fds after `kevent()` returns and reports `SOCK_POLLERR` for any fd that has become
-invalid (`fcntl(F_GETFD)` returns `EBADF`).
+On macOS, closing a descriptor that a kqueue monitors removes its registration without delivering an event, and on
+every platform a descriptor number that is closed while it is registered can be reused by another file or socket.
+So the I/O thread never waits on a descriptor that a close can release:
 
-**Caller contract**: This means `Socket::poll()` may return results even when `kevent()`
-returned 0 events. All callers handle this correctly:
+- while a socket's descriptor is registered in an event loop, the async I/O controller holds it open through
+  `AbstractPollableIoObjectBase::holdPollableDescriptor()`; a close in another thread meanwhile finds the hold, so
+  `close_and_reset_locked()` sets `close_on_release` instead of closing the descriptor, and the descriptor is closed
+  when the last hold is released;
+- `close_internal()` always calls `::shutdown(sock, SHUT_RDWR)` before it releases the descriptor, so the descriptor
+  that the event loop still monitors becomes readable with an end of file or an error, which wakes the waiting
+  `kevent()`, `epoll_wait()` or `poll()` call; the waiter then finds the socket closed and reports `SOCK_POLLERR`.
+
+**Caller contract**: a wait on a socket that another thread closes ends with a result for that socket (an error or
+an end of file), not with a timeout.  All callers handle this:
 - `AsyncSocketIoController` builds a `ready_sockets` presence map from the poll result list.
   A socket with `SOCK_POLLERR` is correctly treated as "ready", and `continuePoll()` detects
   the error state.
@@ -1330,8 +1336,8 @@ Known failure modes include:
   before the I/O thread's Phase 1 snapshot captures the accept operation, the accept may not be
   polled in time. Combined with macOS `O_NONBLOCK` inheritance on accepted sockets, this can
   produce invalid TLS handshakes. The required controls are (1) `waitForProcessing()` for
-  deterministic readiness, (2) clearing `O_NONBLOCK` on accepted fds, and (3) kqueue closed-fd
-  detection. Callers that need to connect immediately after submitting accept operations should use
+  deterministic readiness, (2) clearing `O_NONBLOCK` on accepted fds, and (3) the hold and the
+  shutdown that wake a wait on a socket that is closed (see "Closing a Socket While It Is Polled"). Callers that need to connect immediately after submitting accept operations should use
   `waitForProcessing()` rather than `waitReady()`.
 - **Callback dispatch ordering** (client-side): Stream callbacks are dispatched in the order responses
   complete (FIFO from `completed_responses` deque), not in submission order. Callers must not assume

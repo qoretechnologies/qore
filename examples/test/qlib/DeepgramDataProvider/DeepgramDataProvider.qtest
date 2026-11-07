@@ -344,7 +344,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
             "audio": AudioBytes,
         },));
         # a file value without content is rejected by the file type before any I/O
-        assertThrows("RUNTIME-TYPE-ERROR", "content", \prov.doRequest(),
+        assertThrows("TYPE-VALUE-ERROR", "content", \prov.doRequest(),
             ({"audio": {"name": "clip.wav"}},));
         # nothing was sent
         assertFalse(exists fake.last_method);

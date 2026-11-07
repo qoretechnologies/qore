@@ -454,15 +454,6 @@ if (accepted) {
     */
     DLLEXPORT int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override;
 
-#ifdef DARWIN
-    //! Sets the write end of a notification pipe for kqueue poll on macOS
-    /** @see AbstractPollableIoObjectBase::setPollNotifyFd()
-
-        @since %Qore 3.0
-    */
-    DLLEXPORT void setPollNotifyFd(int fd) override;
-#endif
-
     DLLEXPORT int setSendTimeout(int ms);
     DLLEXPORT int setRecvTimeout(int ms);
     DLLEXPORT int getSendTimeout();

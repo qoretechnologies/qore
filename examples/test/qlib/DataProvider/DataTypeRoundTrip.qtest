@@ -213,8 +213,8 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
         assertEq("ObjectClassNameDataType", restored.className());
         RoundTripObjectSubclass obj();
         assertEq(obj, restored.acceptsValue(obj), "an object of a subclass is accepted");
-        assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), new Mutex());
-        assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), NOTHING);
+        assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), new Mutex());
+        assertThrows("TYPE-VALUE-ERROR", \restored.acceptsValue(), NOTHING);
         assertNothing(restored.getOrNothingType().acceptsValue(NOTHING));
     }
 
@@ -304,10 +304,10 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
                 # each value is accepted by its own alternative only
                 int own = $# == 0 ? 0 : 1;
                 assertEq(value, alternatives[own].acceptsValue(value), value.type);
-                assertThrows("RUNTIME-TYPE-ERROR", "does not accept value", \alternatives[1 - own].acceptsValue(),
+                assertThrows("TYPE-VALUE-ERROR", "does not accept value", \alternatives[1 - own].acceptsValue(),
                     value, value.type);
             }
-            assertThrows("RUNTIME-TYPE-ERROR", \restored_tool.acceptsValue(), {"type": "web_search"});
+            assertThrows("TYPE-VALUE-ERROR", \restored_tool.acceptsValue(), {"type": "web_search"});
             # each alternative's discriminator gives its own example
             assertEq("function", alternatives[0].getFields().type.getExampleValue());
             assertEq("connector", alternatives[1].getFields().type.getExampleValue());

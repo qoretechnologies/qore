@@ -1,0 +1,536 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+
+%exec-class DataTypeValueErrorTest
+
+#! a type with a defect in its code: its check fails with a type error of the language, whatever the value is
+class DefectiveDataType inherits QoreDataType {
+    constructor() : QoreDataType(IntType) {
+    }
+
+    auto acceptsValue(auto value) {
+        auto not_a_hash = "text";
+        hash<auto> h = not_a_hash;
+        return h;
+    }
+}
+
+#! a type whose schema document no longer exists, as a schema type of the OpenApi3 or Swagger module raises it
+class DestroyedDocumentDataType inherits QoreDataType {
+    constructor() : QoreDataType(IntType) {
+    }
+
+    auto acceptsValue(auto value) {
+        throw "SCHEMA-DOCUMENT-DESTROYED", "schema \"x\" can no longer build types or resolve references";
+    }
+}
+
+#! a type whose check recurses without end
+class RecursiveDataType inherits QoreDataType {
+    constructor() : QoreDataType(AutoType) {
+    }
+
+    auto acceptsValue(auto value) {
+        return acceptsValue(value);
+    }
+}
+
+#! a type from outside the module that refuses a value with the code that the module's own types used to use
+class ExternalRefusingDataType inherits QoreDataType {
+    constructor() : QoreDataType(AutoType) {
+    }
+
+    auto acceptsValue(auto value) {
+        if (value.typeCode() != NT_STRING) {
+            throw "RUNTIME-TYPE-ERROR", "only strings are accepted";
+        }
+        return value;
+    }
+}
+
+#! a provider with options of given types
+class OptionProvider inherits AbstractDataProvider {
+    private {
+        hash<string, hash<DataProviderOptionInfo>> option_desc;
+    }
+
+    constructor(hash<string, hash<DataProviderOptionInfo>> option_desc) {
+        self.option_desc = option_desc;
+    }
+
+    string getName() {
+        return "test";
+    }
+
+    *string getDesc() {
+        return "test";
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "type": "OptionProvider",
+            "supports_read": False,
+            "supports_create": True,
+            "supports_update": False,
+            "supports_upsert": False,
+            "supports_delete": False,
+            "supports_native_search": False,
+            "supports_bulk_read": False,
+            "supports_bulk_create": False,
+            "supports_bulk_upsert": False,
+            "supports_children": False,
+            "constructor_options": {},
+            "search_options": NOTHING,
+            "create_options": option_desc,
+            "upsert_options": NOTHING,
+            "transaction_management": False,
+            "has_record": True,
+        };
+    }
+
+    *hash<auto> check(*hash<auto> options) {
+        return checkOptions("CREATE-OPTION-ERROR", option_desc, options);
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {};
+    }
+
+    *hash<string, hash<DataProviderOptionInfo>> getCreateOptions() {
+        return option_desc;
+    }
+}
+
+hashdecl ValueErrorTestInfo {
+    int count;
+}
+
+#! raises a type error in its own code, as a defective initializer would
+int sub value_error_defective_init() {
+    auto text = "text";
+    int i = text;
+    return i;
+}
+
+#! a hashdecl whose member initializer has a defect
+hashdecl ValueErrorDefectiveInitInfo {
+    int count;
+    int computed = value_error_defective_init();
+}
+
+#! a hashdecl with the defective hashdecl in a member
+hashdecl ValueErrorDefectiveNestedInfo {
+    list<hash<ValueErrorDefectiveInitInfo>> children;
+}
+
+our int value_error_init_calls;
+
+#! counts the calls of an initializer
+int sub value_error_counted_init() {
+    return ++value_error_init_calls;
+}
+
+hashdecl ValueErrorCountedInfo {
+    int count;
+    int serial = value_error_counted_init();
+}
+
+hashdecl ValueErrorCountedNestedInfo {
+    list<hash<ValueErrorCountedInfo>> children;
+}
+
+hashdecl ValueErrorBaseInfo {
+    int count;
+}
+
+hashdecl ValueErrorChildInfo inherits ValueErrorBaseInfo {
+    string name = "x";
+}
+
+class DataTypeValueErrorTest inherits QUnit::Test {
+    public {
+        #! a value that each named type refuses
+        const RefusedValues = {
+            "bool": "text",
+            "softbool": "text",
+            "int": "text",
+            "float": "text",
+            "number": "text",
+            "string": 1,
+            "date": "text",
+            "binary": "text",
+            "hash": "text",
+            "list": "text",
+            "email": "not an email",
+            "uuid": "not a uuid",
+            "ipv4": "999.0.0.1",
+            "file": "not a hash",
+            "epoch": {},
+            "unixts": {},
+            "rgbcolor": "text",
+        };
+    }
+
+    constructor() : QUnit::Test("DataTypeValueErrorTest", "1.0", \ARGV) {
+        addTestCase("named types", \namedTypes());
+        addTestCase("declared types", \declaredTypes());
+        addTestCase("an error in a hashdecl initializer is not a refused value", \hashDeclInitializer());
+        addTestCase("a failed check of a missing value keeps its code", \missingValueCheckFailure());
+        addTestCase("a union raises a failed check of an alternative", \unionCheckFailure());
+        addTestCase("native check keeps its description and diagnostic", \nativeCheck());
+        addTestCase("hash fields", \hashFields());
+        addTestCase("missing values", \missingValues());
+        addTestCase("defect in a type", \defectInType());
+        addTestCase("stack exhaustion in a type", \stackInType());
+        addTestCase("language errors keep their code", \languageErrorCodes());
+        addTestCase("union types", \unionTypes());
+        addTestCase("options", \options());
+        addTestCase("column default values", \columnDefaults());
+        addTestCase("accepted values are unchanged", \acceptedValues());
+        addTestCase("soft date text", \softDateText());
+        addTestCase("soft types from the factory refuse text that is no number or date", \softFactoryTypes());
+        addTestCase("soft numeric types with a number format refuse text that is no number", \formattedNumbers());
+        set_return_value(main());
+    }
+
+    #! returns the exception raised by the code, which must raise one
+    private hash<ExceptionInfo> getException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "no exception was raised";
+    }
+
+    namedTypes() {
+        foreach hash<auto> i in (RefusedValues.pairIterator()) {
+            AbstractDataProviderType type = AbstractDataProviderTypeMap{i.key}
+                ?? AbstractDataProviderType::get(i.key);
+            hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue(i.value); });
+            assertEq("TYPE-VALUE-ERROR", ex.err, sprintf("%s: %s", i.key, ex.desc));
+        }
+    }
+
+    hashDeclInitializer() {
+        HashDeclDataType type(new TypedHash("ValueErrorDefectiveInitInfo"));
+        # the value given is valid; the initializer of a member that is not given fails
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { type.acceptsValue({"count": 1}); }).err);
+        # a member value of the wrong type is refused before any initializer runs
+        hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue({"count": "text"}); });
+        assertEq("TYPE-VALUE-ERROR", ex.err);
+        assertRegex("key \"count\"", ex.desc);
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { type.acceptsValue(1); }).err, "not a hash");
+        assertEq("HASHDECL-INIT-ERROR", getException(sub () { type.acceptsValue({"unknown": 1}); }).err);
+        assertEq(<ValueErrorDefectiveInitInfo>{"count": 1, "computed": 2},
+            type.acceptsValue({"count": 1, "computed": 2}));
+        # an initializer of a hashdecl in a member value, the same
+        HashDeclDataType nested(new TypedHash("ValueErrorDefectiveNestedInfo"));
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () {
+            nested.acceptsValue({"children": ({"count": 1},)}); }).err);
+        assertEq("TYPE-VALUE-ERROR", getException(sub () {
+            nested.acceptsValue({"children": ({"count": "text"},)}); }).err);
+        # the initializers of hashdecls in member values run once
+        HashDeclDataType counted(new TypedHash("ValueErrorCountedNestedInfo"));
+        value_error_init_calls = 0;
+        hash<auto> h = counted.acceptsValue({"children": ({"count": 1}, {"count": 2})});
+        assertEq(2, value_error_init_calls);
+        assertEq((1, 2), map $1.serial, h.children);
+        # an inherited member is checked as a member
+        HashDeclDataType child(new TypedHash("ValueErrorChildInfo"));
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { child.acceptsValue({"count": "text"}); }).err);
+        assertEq(<ValueErrorChildInfo>{"count": 1, "name": "x"}, child.acceptsValue({"count": 1}));
+        # a column default value is not taken as an expression for the server when the initializer fails
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            SqlUtilColumnField f("a", "a", type, {"count": 1});
+            remove f;
+        });
+    }
+
+    missingValueCheckFailure() {
+        HashDataType h();
+        h.addField(new QoreDataField("a", NOTHING, new DefectiveDataType()));
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { h.acceptsValue({"a": NOTHING}); }).err,
+            "a missing value whose check fails is not reported as missing");
+        # the same for a field of the default type of other fields
+        HashDataType other();
+        other.setDefaultOtherFieldType(new DefectiveDataType());
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { other.acceptsValue({"x": NOTHING}); }).err);
+        # a missing value that the type refuses is still reported as missing
+        HashDataType m();
+        m.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        assertEq("MISSING-VALUE-ERROR", getException(sub () { m.acceptsValue({"a": NOTHING}); }).err);
+    }
+
+    unionCheckFailure() {
+        QoreUnionDataType destroyed((new DestroyedDocumentDataType(), AbstractDataProviderTypeMap."int"));
+        assertEq("SCHEMA-DOCUMENT-DESTROYED", getException(sub () { destroyed.acceptsValue(1); }).err,
+            "the failed check of an alternative is raised, not taken as a non-match");
+        # a type outside this module may still refuse a value with RUNTIME-TYPE-ERROR: the next alternative is tried
+        QoreUnionDataType legacy((new DefectiveDataType(), AbstractDataProviderTypeMap."int"));
+        assertEq(1, legacy.acceptsValue(1));
+    }
+
+    declaredTypes() {
+        hash<string, list<auto>> cases = {
+            "int list element": (new ListDataType(IntType), ("a",)),
+            "not a list": (new ListDataType(IntType), 1),
+            "soft list element": (new SoftListDataType(IntType), "a"),
+            "object class": (new ObjectClassNameDataType("Mutex"), 1),
+            "hash declaration": (new HashDeclDataType(new TypedHash("ValueErrorTestInfo")),
+                {"count": "text"}),
+            "super soft string": (new SuperSoftStringDataType(), new Mutex()),
+            # the value type of this hash is narrowed to binary, and the name is missing
+            "file content only": (new FileDataType(), {"content": binary("x")}),
+            "soft int": (new QoreSoftIntDataType(), "text"),
+            "soft float": (new QoreSoftFloatDataType(), "text"),
+            "soft number": (new QoreSoftNumberDataType(), "text"),
+            "soft bool": (new QoreSoftBoolDataType(), "text"),
+            "soft date": (new QoreSoftDateDataType(), "text"),
+            "soft date out of range": (new QoreSoftDateDataType(), "2020-13-45"),
+            "unix timestamp in ms": (new UnixTimestampMsType(), {}),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            AbstractDataProviderType type = i.value[0];
+            auto value = i.value[1];
+            hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue(value); });
+            assertEq("TYPE-VALUE-ERROR", ex.err, sprintf("%s: %s", i.key, ex.desc));
+        }
+    }
+
+    nativeCheck() {
+        hash<ExceptionInfo> direct = getException(sub () { IntType.acceptsValue("text"); });
+        assertEq("RUNTIME-TYPE-ERROR", direct.err, "the language raises its own error for the check");
+
+        hash<ExceptionInfo> ex = getException(sub () { AbstractDataProviderTypeMap."int".acceptsValue("text"); });
+        assertEq("TYPE-VALUE-ERROR", ex.err);
+        assertEq(direct.desc, ex.desc, "the description is the one of the check");
+        assertEq(direct.arg, ex.arg, "the structured diagnostic of the check is kept");
+    }
+
+    hashFields() {
+        HashDataType type();
+        type.addField(new QoreDataField("a", "a", AbstractDataProviderTypeMap."int"));
+        assertEq({"a": 1}, type.acceptsValue({"a": 1}));
+
+        hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue({"a": "text"}); });
+        assertEq("TYPE-VALUE-ERROR", ex.err, "wrong value of a field");
+        assertRegex("field \"a\"", ex.desc);
+
+        ex = getException(sub () { type.acceptsValue({"a": 1, "b": 1}); });
+        assertEq("TYPE-VALUE-ERROR", ex.err, "unknown field");
+
+        ex = getException(sub () { type.acceptsValue("text"); });
+        assertEq("TYPE-VALUE-ERROR", ex.err, "not a hash");
+
+        HashDataType other();
+        other.setDefaultOtherFieldType(AbstractDataProviderTypeMap."int");
+        ex = getException(sub () { other.acceptsValue({"x": "text"}); });
+        assertEq("TYPE-VALUE-ERROR", ex.err, "wrong value of an undeclared field");
+
+        # a field with choices refuses a value with its own code; the hash reports the value as refused
+        HashDataType choices();
+        choices.addField(new QoreDataField({
+            "name": "c",
+            "type": AbstractDataProviderTypeMap."string",
+            "allowed_values": ("x", "y"),
+        }));
+        ex = getException(sub () { choices.acceptsValue({"c": "z"}); });
+        assertEq("TYPE-VALUE-ERROR", ex.err, "value outside of the allowed values");
+        assertRegex("FIELD-VALUE-ERROR", ex.desc);
+    }
+
+    missingValues() {
+        HashDataType type();
+        type.addField(new QoreDataField("a", "a", AbstractDataProviderTypeMap."int"));
+        assertThrows("MISSING-VALUE-ERROR", \type.acceptsValue(), {});
+        assertThrows("MISSING-VALUE-ERROR", \type.acceptsValue());
+    }
+
+    defectInType() {
+        DefectiveDataType defective();
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { defective.acceptsValue(1); }).err, "type");
+
+        ListDataType list_type(defective);
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { list_type.acceptsValue((1,)); }).err, "list element");
+
+        HashDataType hash_type();
+        hash_type.addField(new QoreDataField("a", "a", defective));
+        hash<ExceptionInfo> ex = getException(sub () { hash_type.acceptsValue({"a": 1}); });
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "field");
+        assertRegex("field \"a\"", ex.desc, "field description");
+
+        HashDataType other();
+        other.setDefaultOtherFieldType(defective);
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { other.acceptsValue({"a": 1}); }).err, "undeclared field");
+
+    }
+
+    stackInType() {
+        HashDataType hash_type();
+        hash_type.addField(new QoreDataField("a", "a", new RecursiveDataType()));
+        assertEq("STACK-LIMIT-EXCEEDED", getException(sub () { hash_type.acceptsValue({"a": 1}); }).err);
+    }
+
+    languageErrorCodes() {
+        foreach string err in (("RUNTIME-TYPE-ERROR", "RUNTIME-OVERLOAD-ERROR", "STACK-LIMIT-EXCEEDED",
+                "SCHEMA-DOCUMENT-DESTROYED")) {
+            assertEq(err, AbstractDataProviderType::getValueErrorCode(err));
+        }
+        # a field whose schema can no longer check the value reports that, not a refused value
+        HashDataType h();
+        h.addField(new QoreDataField("a", NOTHING, new DestroyedDocumentDataType()));
+        hash<ExceptionInfo> ex = getException(sub () { h.acceptsValue({"a": 1}); });
+        assertEq("SCHEMA-DOCUMENT-DESTROYED", ex.err);
+        foreach string err in (("TYPE-VALUE-ERROR", "FIELD-VALUE-ERROR", "MISSING-VALUE-ERROR", "OTHER-ERROR")) {
+            assertEq("TYPE-VALUE-ERROR", AbstractDataProviderType::getValueErrorCode(err));
+        }
+    }
+
+    unionTypes() {
+        QoreUnionDataType type((AbstractDataProviderTypeMap."int", AbstractDataProviderTypeMap."date"));
+        assertEq(1, type.acceptsValue(1));
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { type.acceptsValue({}); }).err);
+
+        # an alternative from outside the module can still refuse a value for another alternative to accept it
+        QoreUnionDataType external((new ExternalRefusingDataType(), AbstractDataProviderTypeMap."int"));
+        assertEq(1, external.acceptsValue(1));
+        assertEq("a", external.acceptsValue("a"));
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { external.acceptsValue({}); }).err);
+    }
+
+    options() {
+        hash<string, hash<DataProviderOptionInfo>> desc = {
+            "opt": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderTypeMap."int", new ExternalRefusingDataType()),
+                "desc": "an option",
+            },
+            "single": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderTypeMap."int",),
+                "desc": "an option",
+            },
+        };
+        OptionProvider dp(desc);
+        # the second alternative accepts what the first refuses, and refuses with the former code itself
+        assertEq("a", dp.check({"opt": "a"}).opt);
+        assertEq(1, dp.check({"single": 1}).single);
+
+        hash<ExceptionInfo> ex = getException(sub () { dp.check({"single": "50%s"}); });
+        assertEq("OPTION-VALUE-ERROR", ex.err);
+        assertRegex("option \"single\" of type \"int\"", ex.desc);
+        assertRegex("50%s", ex.desc, "a value in the description is not taken as a format");
+        assertEq("OPTION-VALUE-ERROR", getException(sub () { dp.check({"opt": {}}); }).err);
+    }
+
+    columnDefaults() {
+        # a default value that the type refuses is an expression that is executed by the server
+        SqlUtilColumnField field("a", "a", AbstractDataProviderTypeMap."int", "now()");
+        assertEq("a", field.getName());
+
+        # a failure of the check itself is not such a default value
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            SqlUtilColumnField f("a", "a", new DefectiveDataType(), 1);
+            remove f;
+        });
+    }
+
+    #! the soft types from the factory refuse text that is no number or date, as the soft type classes do
+    softFactoryTypes() {
+        foreach string name in (("softint", "softfloat", "softnumber", "softdate", "*softint", "*softdate")) {
+            AbstractDataProviderType t = AbstractDataProviderTypeMap{name} ?? AbstractDataProviderType::get(name);
+            assertEq("TYPE-VALUE-ERROR", getException(sub () { t.acceptsValue("text"); }).err, name);
+        }
+        assertEq("TYPE-VALUE-ERROR", getException(sub () {
+            AbstractDataProviderTypeMap."softint".acceptsValue("12abc"); }).err);
+        # numbers and dates as text are converted as before; empty text is converted by the language as before
+        assertEq(12, AbstractDataProviderTypeMap."softint".acceptsValue(" 12 "));
+        assertEq(1, AbstractDataProviderTypeMap."softint".acceptsValue("1.5"));
+        assertEq(-1.5e3, AbstractDataProviderTypeMap."softfloat".acceptsValue("-1.5e3"));
+        assertEq(0.5n, AbstractDataProviderTypeMap."softnumber".acceptsValue(".5"));
+        assertEq(2020-01-02, AbstractDataProviderTypeMap."softdate".acceptsValue("2020-01-02"));
+        assertEq(0, AbstractDataProviderTypeMap."softint".acceptsValue(""));
+        assertEq("QoreDataType", AbstractDataProviderTypeMap."softint".className());
+
+        foreach AbstractDataProviderType t in ((new QoreSoftIntDataType(), new QoreSoftFloatDataType(),
+                new QoreSoftNumberDataType(), new QoreSoftDateDataType())) {
+            assertEq("TYPE-VALUE-ERROR", getException(sub () { t.acceptsValue("text"); }).err, t.className());
+        }
+    }
+
+    #! a soft numeric type with a number format refuses text that is no number in the format
+    formattedNumbers() {
+        hash<auto> opts = {"number.format": ".,"};
+        foreach AbstractDataProviderType t in ((new QoreSoftIntDataType(opts), new QoreSoftFloatDataType(opts),
+                new QoreSoftNumberDataType(opts))) {
+            foreach string text in (("text", "12abc", "1,2,3", "1.2.3,4,5")) {
+                hash<ExceptionInfo> ex = getException(sub () { t.acceptsValue(text); });
+                assertEq("TYPE-VALUE-ERROR", ex.err, sprintf("%s: %y", t.className(), text));
+                assertRegex("number format", ex.desc);
+            }
+        }
+        assertEq(1150200, new QoreSoftIntDataType(opts).acceptsValue("1.150.200"));
+        # a fraction alone and an exponent are numbers
+        assertEq(0.5, new QoreSoftFloatDataType(opts).acceptsValue(",5"));
+        assertEq(1500.0, new QoreSoftFloatDataType(opts).acceptsValue("1,5e3"));
+        assertEq(1500n, new QoreSoftNumberDataType(opts).acceptsValue("1,5e3"));
+        assertEq(1150200.55, new QoreSoftFloatDataType(opts).acceptsValue("1.150.200,55"));
+        assertEq(1150200.55n, new QoreSoftNumberDataType(opts).acceptsValue(" -1.150.200,55 ") * -1);
+        # a format whose separators are the other way around
+        assertEq(1150200.5, new QoreSoftFloatDataType({"number.format": ",."}).acceptsValue("1,150,200.5"));
+    }
+
+    softDateText() {
+        QoreSoftDateDataType type();
+        assertEq(2020-01-02, type.acceptsValue("2020-01-02"));
+
+        # the description names the value and the type and keeps the reason of the date parser
+        hash<ExceptionInfo> parser = getException(sub () { date d = date("2020-13-45"); remove d; });
+        assertEq("INVALID-DATE", parser.err);
+        hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue("2020-13-45"); });
+        assertEq("TYPE-VALUE-ERROR", ex.err);
+        assertRegex("\"2020-13-45\"", ex.desc);
+        assertRegex("softdate", ex.desc);
+        assertTrue(index(ex.desc, parser.desc) >= 0, ex.desc);
+
+        # a field of a hash type reports the refused text as a refused value
+        HashDataType h();
+        h.addField(new QoreDataField("when", NOTHING, type));
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { h.acceptsValue({"when": "text"}); }).err);
+    }
+
+    acceptedValues() {
+        assertEq(1, AbstractDataProviderTypeMap."softint".acceptsValue("1"));
+        assertEq("1", AbstractDataProviderTypeMap."softstring".acceptsValue(1));
+        assertEq((1, 2), new ListDataType(IntType).acceptsValue((1, 2)));
+        assertEq(NOTHING, AbstractDataProviderTypeMap."*int".acceptsValue(NOTHING));
+    }
+}

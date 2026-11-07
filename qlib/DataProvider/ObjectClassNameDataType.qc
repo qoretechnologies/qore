@@ -87,7 +87,7 @@ public class ObjectClassNameDataType inherits QoreDataType {
 
         @return the value
 
-        @throw RUNTIME-TYPE-ERROR the value is not an object of the class or of a class that inherits it, nor no value
+        @throw TYPE-VALUE-ERROR the value is not an object of the class or of a class that inherits it, nor no value
         when the type also accepts no value
     */
     auto acceptsValue(auto value) {
@@ -102,7 +102,7 @@ public class ObjectClassNameDataType inherits QoreDataType {
                 }
             }
         }
-        throw "RUNTIME-TYPE-ERROR", sprintf("type %y expects an object of class %y, but got type %y instead",
+        throw "TYPE-VALUE-ERROR", sprintf("type %y expects an object of class %y, but got type %y instead",
             getName(), class_name, value.fullType());
     }
 

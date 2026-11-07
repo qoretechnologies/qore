@@ -462,7 +462,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         assertEq({"id": 2, "name": "a", "tags": ("t",)}, type.acceptsValue({"id": 2, "name": "a", "tags": "t"}));
         assertThrows("MISSING-VALUE-ERROR", "required field \"id\" is absent", \type.acceptsValue(),
             {"name": "a"});
-        assertThrows("RUNTIME-TYPE-ERROR", "field \"id\"", \type.acceptsValue(), {"id": "x"});
+        assertThrows("TYPE-VALUE-ERROR", "field \"id\"", \type.acceptsValue(), {"id": "x"});
 
         # an action without options has no option type
         assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));

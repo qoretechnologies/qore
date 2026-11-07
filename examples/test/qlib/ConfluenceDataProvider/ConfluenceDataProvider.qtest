@@ -453,7 +453,9 @@ public class ConfluenceDataProviderTest inherits QUnit::Test {
         assertEq("storage", sent.body.representation);
 
         rest.push_response({"throw_status": 404, "body": {"errors": ({"title": "Not Found"},)}});
-        assertThrows("REST-RESPONSE-ERROR", \get_page.doRequest(), {"id": "nope"});
+        assertThrows("REST-RESPONSE-ERROR", \get_page.doRequest(), {"id": "999999"});
+        # an id that is no number is refused before a request is sent, instead of being sent as 0
+        assertThrows("TYPE-VALUE-ERROR", "non-numeric text", \get_page.doRequest(), {"id": "nope"});
     }
 
     private connectionTest() {

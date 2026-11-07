@@ -32,7 +32,7 @@ class RequiredFieldsTest inherits QUnit::Test {
         assertThrows("MISSING-VALUE-ERROR", \t.acceptsValue(), (NOTHING,));
         assertThrows("MISSING-VALUE-ERROR", \t.acceptsValue(), ({},));
         assertEq({"code": "EUR", "flag": False}, t.acceptsValue({"code": "EUR"}));
-        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ({"code": "EUR", "unknown": 7},));
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), ({"code": "EUR", "unknown": 7},));
     }
 
     requiredFirst() {
