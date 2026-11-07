@@ -741,7 +741,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsin
             have_data = !send_body_queue.empty();
         }
         if (have_data) {
-            hook(QoreDbgHttp1SendEvent::BeforeSendSide, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+            hook(QoreDbgHttp1SendEvent::BeforeSendSide, dbgHookFd(), nullptr);
         }
     }
 #endif
@@ -792,13 +792,13 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                         sock_obj ? sock_obj->getSocket() : -1);
 #ifdef DEBUG
                     if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
-                        hook(QoreDbgHttp1SendEvent::RecoveryStart, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+                        hook(QoreDbgHttp1SendEvent::RecoveryStart, dbgHookFd(), nullptr);
                     }
 #endif
                     abandonFailedSend(saved_err, saved_desc, xsink);
 #ifdef DEBUG
                     if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
-                        hook(QoreDbgHttp1SendEvent::RecoveryRead, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+                        hook(QoreDbgHttp1SendEvent::RecoveryRead, dbgHookFd(), nullptr);
                     }
 #endif
                     return 0;
@@ -933,7 +933,7 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
 
 #ifdef DEBUG
     if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
-        hook(QoreDbgHttp1SendEvent::RecoveryStart, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+        hook(QoreDbgHttp1SendEvent::RecoveryStart, dbgHookFd(), nullptr);
     }
 #endif
 
@@ -964,7 +964,7 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     abandonFailedSend(err, desc, xsink);
 #ifdef DEBUG
     if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
-        hook(QoreDbgHttp1SendEvent::RecoveryRead, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+        hook(QoreDbgHttp1SendEvent::RecoveryRead, dbgHookFd(), nullptr);
     }
 #endif
     return handleFullDuplex(xsink);
@@ -1207,6 +1207,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             return nullptr;
         }
         current_op->setSelf(*self);
+#ifdef DEBUG
+        // the descriptor that the test hooks identify the connection by, also once the socket has been closed
+        dbg_hook_fd.store(fd, std::memory_order_release);
+#endif
         // req_state was already set to SENDING when the request was taken
         // from pending_request_data above
         return handleSending(xsink);
@@ -2923,7 +2927,7 @@ void Http1ClientPollOperationPriv::publishError(const char* err, const char* des
 #ifdef DEBUG
     if (published) {
         if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
-            hook(QoreDbgHttp1SendEvent::ErrorPublished, sock_obj ? sock_obj->getSocket() : -1, err);
+            hook(QoreDbgHttp1SendEvent::ErrorPublished, dbgHookFd(), err);
         }
     }
 #endif

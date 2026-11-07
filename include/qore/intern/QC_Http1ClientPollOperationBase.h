@@ -822,6 +822,20 @@ private:
     */
     DLLLOCAL bool sendFailureReadsResponse(ExceptionSink& send_xsink, bool header_written) const;
 
+#ifdef DEBUG
+    //! Debug-only: the descriptor of the connection when its last request was started; see dbgHookFd()
+    std::atomic<int> dbg_hook_fd{-1};
+
+    //! Debug-only: the descriptor that the test hooks of ql_debug.h identify the connection by
+    /** The descriptor of the connection when its request was started, so an event reported after another thread
+        closed the socket still names the connection; the socket's descriptor before the first request.
+    */
+    DLLLOCAL int dbgHookFd() const {
+        int fd = dbg_hook_fd.load(std::memory_order_acquire);
+        return fd >= 0 ? fd : (sock_obj ? sock_obj->getSocket() : -1);
+    }
+#endif
+
     //! Returns true if the operation was closed or published an error, as a cancel or an abort does
     /** A cancel publishes its error and an abort closes the operation before the socket is shut down, so a send that
         then fails was interrupted locally and not by the peer.
