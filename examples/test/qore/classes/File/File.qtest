@@ -14,18 +14,27 @@
 
 %exec-class FileTest
 
-#! A poll operation that waits once for events of a pollable object, and then reaches its goal
+#! A poll operation that waits for events of a pollable object a given number of times, and then reaches its goal
+/** It does nothing with the events reported to it, as an operation that is reported ready before it can use it (the
+    operation of Socket::poll() before its caller waits for the result)
+*/
 class WaitOncePollOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the number of continuePoll() calls
+        int calls;
+    }
+
     private {
         AbstractPollableIoObjectBase obj;
         int events;
-        bool waited;
+        int waits;
         bool done;
     }
 
-    constructor(AbstractPollableIoObjectBase obj, int events) {
+    constructor(AbstractPollableIoObjectBase obj, int events, int waits = 1) {
         self.obj = obj;
         self.events = events;
+        self.waits = waits;
     }
 
     string getGoal() {
@@ -33,7 +42,7 @@ class WaitOncePollOperation inherits AbstractPollOperation<auto> {
     }
 
     string getState() {
-        return done ? "done" : (waited ? "waiting" : "start");
+        return done ? "done" : (calls ? "waiting" : "start");
     }
 
     bool goalReached() {
@@ -41,8 +50,7 @@ class WaitOncePollOperation inherits AbstractPollOperation<auto> {
     }
 
     *hash<SocketPollInfo> continuePoll() {
-        if (!waited) {
-            waited = True;
+        if (calls++ < waits) {
             return <SocketPollInfo>{"socket": obj, "events": events};
         }
         done = True;
@@ -73,6 +81,7 @@ class FileTest inherits QUnit::Test {
         # writei8() and writei8LSB() wrote only 4 of the 8 bytes of the integer
         addTestCase("8-byte integers are written whole", \int8WriteTest());
         addTestCase("a regular file is always ready for a poll", \regularFilePollTest());
+        addTestCase("a regular file is reported to each wait for it", \regularFileWaitAgainTest());
         set_return_value(main());
     }
 
@@ -321,6 +330,50 @@ class FileTest inherits QUnit::Test {
                 }
             }
         }
+    }
+
+    #! A regular file is reported ready to each wait of an operation, as poll(2) reports it
+    /** An operation run on the I/O thread that waited again for a regular file after it was reported ready, without
+        reading from it, was not reported it again, as the I/O thread kept its registration as it was, and waited until
+        its timeout: Socket::poll() of a regular file returned only at its timeout when the I/O thread reported the
+        file before Socket::poll() waited for the result.  An operation run in a worker thread is registered again at
+        each step.
+    */
+    regularFileWaitAgainTest() {
+        TmpFile tmp("qore-File-");
+        tmp.file.write("data");
+        ReadOnlyFile file(tmp.path);
+        foreach int events in ((SOCK_POLLIN, SOCK_POLLOUT, SOCK_POLLIN | SOCK_POLLOUT)) {
+            # waits three times: the first two reports are not used
+            WaitOncePollOperation op(file, events, 3);
+            runWaitAgain(file, op, sprintf("an operation in a worker thread, events %d", events));
+            assertEq(4, op.calls, sprintf("an operation in a worker thread, events %d: it ran at its start and once "
+                "for each of its three waits", events));
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                # an operation run on the I/O thread
+                SocketPollOperation iop = call_function("dbg_wait_again_poll_operation", file, events, 3);
+                runWaitAgain(file, iop, sprintf("an operation on the I/O thread, events %d", events));
+                assertEq(4, iop.getOutput(), sprintf("an operation on the I/O thread, events %d: it ran at its start "
+                    "and once for each of its three waits", events));
+            }
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_wait_again_poll_operation() is only registered in a library-debug build");
+        }
+    }
+
+    #! Runs an operation that waits for a regular file several times
+    private runWaitAgain(AbstractPollableIoObjectBase file, AbstractPollOperation op,
+            string label) {
+        # the timeout is only reached, and the operation fails with it, if a wait is not reported
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": file,
+            "spop": op,
+            "to": 30s,
+            "owner": "file-wait-again-test",
+        });
+        assertNothing(result.ex, label + ": no error");
+        assertTrue(op.goalReached(), label + ": the operation reached its goal");
     }
 
     closedFileDescriptorTest() {
