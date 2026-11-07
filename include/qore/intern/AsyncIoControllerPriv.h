@@ -1856,7 +1856,26 @@ public:
     */
     DLLLOCAL static void dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink);
 
+    //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
+    /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer
+        that fired before the timer's owner stopped it, after the owner has stopped it (see
+        dbgReleaseHeldTimerCallbacks()); with @a hold = false, fired timers are dispatched again, and the callbacks
+        already held stay held until they are released
+    */
+    DLLLOCAL static void dbgHoldTimerCallbacks(bool hold);
+
+    //! Debug-only: waits until at least @p count timer callbacks are held; returns false if the wait timed out
+    DLLLOCAL static bool dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms);
+
+    //! Debug-only: dispatches the timer callbacks held and waits for them to complete; returns their number
+    DLLLOCAL static size_t dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink);
+
 private:
+    //! Debug-only: holds the callback of a fired timer if timer callbacks are held; returns true if it was held
+    /** The reference of @p code is taken over when it is held
+    */
+    DLLLOCAL bool dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
+            AsyncIoSandboxContext& sandbox_ctx);
 #endif
 
     //! Start the I/O thread (caller must hold lock)

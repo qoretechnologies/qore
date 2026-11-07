@@ -13661,6 +13661,27 @@ static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: holds the callbacks of timers that fire from now on (True) or dispatches them again (False)
+static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgHoldTimerCallbacks(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until at least the given number of timer callbacks are held; False if the wait timed out
+static QoreValue f_dbg_async_io_wait_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    return AsyncIoControllerPriv::dbgWaitHeldTimerCallbacks(count < 0 ? 0 : static_cast<size_t>(count),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: runs the timer callbacks held, waits for them to complete, and returns their number
+static QoreValue f_dbg_async_io_release_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(xsink));
+}
+
 //! Debug-only: the number of system events that matched no event loop registration in the process
 /** See QoreEventLoop::dbgUnmatchedKernelEvents(): a registration left in the kqueue or the epoll set wakes every poll
     at once
@@ -16691,6 +16712,15 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, bigIntTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_hold_timer_callbacks", f_dbg_async_io_hold_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_release_held_timer_callbacks", f_dbg_async_io_release_held_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_event_loop_unmatched_kernel_events", f_dbg_event_loop_unmatched_kernel_events,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,

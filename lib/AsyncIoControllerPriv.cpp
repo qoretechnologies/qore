@@ -644,6 +644,86 @@ struct AsyncIoDebugHeldReleases {
 };
 }
 
+// the timer callbacks held by the dbg_async_io_hold_timer_callbacks() test hook; see dbgHoldTimerCallbacks()
+namespace {
+struct AsyncIoDebugHeldTimers {
+    //! True while fired timer callbacks are held; checked without the lock first
+    std::atomic<bool> hold{false};
+    QoreThreadLock lock;
+    QoreCondition cond;
+    struct Held {
+        AsyncIoControllerPriv* ctrl;
+        ResolvedCallReferenceNode* code;
+        std::string owner;
+        AsyncIoSandboxContext sandbox_ctx;
+    };
+    std::vector<Held> held;
+
+    //! Returns the state, which is never destroyed (see AsyncIoDebugHeldReleases::get())
+    static AsyncIoDebugHeldTimers& get() {
+        static AsyncIoDebugHeldTimers* state = new AsyncIoDebugHeldTimers;
+        return *state;
+    }
+};
+}
+
+void AsyncIoControllerPriv::dbgHoldTimerCallbacks(bool hold) {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    AutoLocker al(state.lock);
+    state.hold.store(hold, std::memory_order_release);
+}
+
+bool AsyncIoControllerPriv::dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms) {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    int64_t deadline = q_clock_getmillis() + timeout_ms;
+    AutoLocker al(state.lock);
+    while (state.held.size() < count) {
+        int64_t remaining = deadline - q_clock_getmillis();
+        if (remaining <= 0) {
+            return false;
+        }
+        state.cond.wait(state.lock, static_cast<int>(remaining));
+    }
+    return true;
+}
+
+size_t AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(ExceptionSink* xsink) {
+    assert(!on_async_io_thread);
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    std::vector<AsyncIoDebugHeldTimers::Held> held;
+    {
+        AutoLocker al(state.lock);
+        held.swap(state.held);
+    }
+    for (auto& h : held) {
+        h.ctrl->ensureCallDispatcher();
+        h.ctrl->call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(h.code, nullptr, h.owner,
+            std::move(h.sandbox_ctx));
+    }
+    // the callbacks have run when this returns
+    for (auto& h : held) {
+        h.ctrl->flushCallbacks();
+        h.ctrl->deref(xsink);
+    }
+    return held.size();
+}
+
+bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code, const std::string& owner,
+        AsyncIoSandboxContext& sandbox_ctx) {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    if (!state.hold.load(std::memory_order_acquire)) {
+        return false;
+    }
+    AutoLocker al(state.lock);
+    if (!state.hold.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ref();
+    state.held.push_back({this, code, owner, std::move(sandbox_ctx)});
+    state.cond.broadcast();
+    return true;
+}
+
 void AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink) {
     assert(!on_async_io_thread);
     AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
@@ -6877,6 +6957,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // fired-but-not-yet-run callback via flushCallbacksByOwner()
                 ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
                 code_ref->ref();
+#ifdef DEBUG
+                // a test can hold the callback of a fired timer and run it later (see dbgHoldTimerCallbacks())
+                if (dbgHoldTimerCallback(code_ref, te.owner, te.sandbox_ctx)) {
+                    code_ref = nullptr;
+                }
+                if (code_ref)
+#endif
                 call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr, te.owner,
                     std::move(te.sandbox_ctx));
             } else if (cb_snapshot) {

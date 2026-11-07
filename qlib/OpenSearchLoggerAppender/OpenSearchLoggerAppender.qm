@@ -409,18 +409,6 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
         return flushIntervalMs;
     }
 
-    #! Returns @ref True "True" if the periodic flush timer is active
-    /** The timer is started when the appender is opened and stopped when it is closed: once the close has returned,
-        the timer has been canceled and a timer callback that had already been dispatched has completed, so no
-        periodic flush runs any more
-
-        @return @ref True "True" if the periodic flush timer is active
-    */
-    public bool isFlushTimerActive() {
-        AutoLock al(timerMutex);
-        return !timerStopped || exists flushTimerId;
-    }
-
     #! Processes log events
     /** @param type the event type (EVENT_OPEN, EVENT_LOG, EVENT_CLOSE)
         @param params the event parameters (serialized event for EVENT_LOG)
