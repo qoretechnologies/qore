@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%exec-class LazyModuleActionsTest
+
+#! Verifies that the provider modules generating actions from REST schemas build them on first use
+/** Loading such a module registers its apps and builds no action set; the first read of an app's actions builds
+    them, once, even when several threads read them at once.  See
+    @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions() "registerLazyAppActions()".
+*/
+class LazyModuleActionsTest inherits QUnit::Test {
+    public {
+        #! The modules registering their actions lazily, and their apps
+        const Modules = {
+            "AssemblyAiDataProvider": ("AssemblyAI",),
+            "AwsTextractDataProvider": ("AwsTextract",),
+            "AzureDocumentIntelligenceDataProvider": ("AzureDocumentIntelligence",),
+            "AzureOpenAiDataProvider": ("AzureOpenAI",),
+            "BedrockDataProvider": ("AWSBedrock",),
+            "BflDataProvider": ("BlackForestLabs",),
+            "BitbucketDataProvider": ("Bitbucket",),
+            "CohereDataProvider": ("Cohere",),
+            "ConfluenceDataProvider": ("Confluence",),
+            "ExaDataProvider": ("Exa",),
+            "FireworksDataProvider": ("FireworksAi",),
+            "GitHubDataProvider": ("Github",),
+            "GitLabDataProvider": ("Gitlab",),
+            "GoogleDocumentAiDataProvider": ("GoogleDocumentAi",),
+            "IntercomDataProvider": ("Intercom",),
+            "JinaDataProvider": ("JinaAi",),
+            "KlaviyoDataProvider": ("Klaviyo",),
+            "LlamaParseDataProvider": ("LlamaParse",),
+            "MistralDataProvider": ("MistralAi",),
+            "PaddleDataProvider": ("Paddle",),
+            "PineconeDataProvider": ("PineconeAdmin", "Pinecone"),
+            "StabilityAiDataProvider": ("StabilityAi",),
+            "StripeDataProvider": ("Stripe",),
+            "TogetherDataProvider": ("TogetherAi",),
+            "UnstructuredDataProvider": ("UnstructuredIo",),
+            "XeroDataProvider": ("Xero",),
+        };
+
+        #! Modules whose public types are built from the schema when the module is loaded
+        /** Their public static request and response types or constants are part of their API and are built from
+            the schema when the module is loaded, so loading them parses the schema, and most of them build action
+            sets; their action registrations are lazy all the same
+        */
+        const SchemaTypesAtLoad = {
+            "AwsTextractDataProvider": True,
+            "AzureDocumentIntelligenceDataProvider": True,
+            "BflDataProvider": True,
+            "CohereDataProvider": True,
+            "GoogleDocumentAiDataProvider": True,
+            "JinaDataProvider": True,
+            "MistralDataProvider": True,
+            "StabilityAiDataProvider": True,
+        };
+
+        #! The module whose actions are read by concurrent threads
+        const ConcurrentModule = "ExaDataProvider";
+    }
+
+    private {
+        #! the qlib source directory
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+
+        #! the number of action sets constructed by loading each module
+        hash<string, int> load_sets = {};
+    }
+
+    constructor() : Test("REST-schema provider modules build their actions on first use", "1.0") {
+        addTestCase("the module list names every module with a lazy action registration", \moduleListTest());
+        addTestCase("concurrent first reads build the action sets once", \concurrentTest());
+        # every other module is loaded before any app is read, so that a read cannot load a module
+        foreach string mod in (keys Modules) {
+            if (mod == ConcurrentModule) {
+                continue;
+            }
+            int before = RestSchemaActionSet::getConstructionCount();
+            load_module(mod);
+            load_sets{mod} = RestSchemaActionSet::getConstructionCount() - before;
+            addTestCase(mod, \moduleTest(), mod);
+        }
+        set_return_value(main());
+    }
+
+    moduleListTest() {
+        hash<string, bool> lazy = {};
+        Dir top();
+        top.chdir(qlib);
+        foreach string name in (top.listDirs()) {
+            string path = qlib + DirSep + name + DirSep + name + ".qm";
+            # a call in the module's code, not a mention in its documentation
+            if (is_file(path) && ReadOnlyFile::readTextFile(path)
+                    =~ /\n\s+DataProviderActionCatalog::registerLazyAppActions\(/) {
+                lazy{name} = True;
+            }
+        }
+        assertEq(sort(keys Modules), sort(keys lazy));
+    }
+
+    concurrentTest() {
+        string mod = ConcurrentModule;
+        int before = RestSchemaActionSet::getConstructionCount();
+        load_module(mod);
+        assertEq(before, RestSchemaActionSet::getConstructionCount(), "loading builds no action set");
+        string app = Modules{mod}[0];
+        assertTrue(DataProviderActionCatalog::hasLazyAppActions(app));
+
+        int threads = 8;
+        Counter ready(threads);
+        Counter go(1);
+        Counter done(threads);
+        Queue results();
+        for (int i = 0; i < threads; ++i) {
+            background LazyModuleActionsTest::readActions(app, ready, go, done, results);
+        }
+        ready.waitForZero();
+        go.dec();
+        done.waitForZero();
+
+        # the module builds one action set
+        assertEq(before + 1, RestSchemaActionSet::getConstructionCount(), "the action set is built once");
+        list<string> expected = map $1.action, DataProviderActionCatalog::getActions(app, False);
+        assertTrue(expected.size() > 1);
+        assertEq(threads, results.size());
+        while (results.size()) {
+            assertEq(expected, results.get());
+        }
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    moduleTest(string mod) {
+        # a module with public types built from its schema builds them when it is loaded
+        if (!SchemaTypesAtLoad{mod}) {
+            assertEq(0, load_sets{mod}, "loading builds no action set");
+        }
+        foreach string app in (Modules{mod}) {
+            assertTrue(DataProviderActionCatalog::hasLazyAppActions(app), app + " is lazy after loading");
+            int before = RestSchemaActionSet::getConstructionCount();
+            list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app, False);
+            assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), app + " is complete after reading");
+            assertTrue(actions.size() > 1, app + " has its actions");
+            if (!SchemaTypesAtLoad{mod}) {
+                assertTrue(RestSchemaActionSet::getConstructionCount() > before,
+                    app + ": the first read builds the action sets");
+            }
+            assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+            int after = RestSchemaActionSet::getConstructionCount();
+            DataProviderActionCatalog::getActions(app, False);
+            assertEq(after, RestSchemaActionSet::getConstructionCount(), app + ": a second read builds nothing");
+        }
+    }
+
+    #! Reads the actions of the app once every thread is ready; runs in a thread of the test
+    private static readActions(string app, Counter ready, Counter go, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            ready.dec();
+            go.waitForZero();
+            results.push(map $1.action, DataProviderActionCatalog::getActions(app, False));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex);
+        }
+    }
+}

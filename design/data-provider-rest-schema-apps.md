@@ -55,7 +55,7 @@ The convention both existing applications follow:
 ```
 qlib/<App>RestClient.qm              # connection + client; conventional, see the development guide
 qlib/<App>DataProvider/
-  <App>DataProvider.qm               # module definition, registerApp(), registerActions()
+  <App>DataProvider.qm               # module definition, registerApp(), registerLazyAppActions()
   <App>DataProviderDefs.qc           # module dir, logo, shared constants
   <App>DataProviderFactory.qc        # factory registration
   <App>DataProvider.qc               # root provider
@@ -322,6 +322,34 @@ same reason the canonical field of a name, which is also the recursion cut a pro
 is handed, is the field of the bare use, and a use with a description or default of its own gets a copy.
 `examples/test/qlib/RestSchemaValidator/VariantOrder.qtest` builds each variant on its own and after the others,
 for OpenAPI 3 and Swagger 2.0, and requires the same result.
+
+## Actions are registered on first use
+
+A module registers its app when it is loaded and its actions with
+`DataProviderActionCatalog::registerLazyAppActions()`: the closure it passes builds the action set and registers
+everything from the first generated action on, and runs the first time that the catalog is asked for the app or
+its actions. Loading the module then parses no schema and builds no action set; a program that only constructs a
+provider, or only needs the connection, never registers the actions at all.
+
+- **The closure registers everything that came after the first generated action**, the hand-written and event
+  actions included, so that the app's actions are registered in the same order as when they were registered at
+  load. What a provider needs without the catalog - codecs (`RestSchemaActionCodecs::registerCodec()`), the
+  `initializeTypes()` of a provider's public static types - stays outside it.
+- **Every catalog getter runs the closure first**, `getActionsNoInit()` and `getAllAppsNoInit()` included, and
+  so do `checkpointDiscoverySnapshot()` and `sealDiscovery()`, so a getter returns what it returned when the
+  actions were registered at load. Concurrent first reads wait for the one that runs the closure. A closure that
+  fails is retained as an initialization failure of the app and not run again; at load, the same failure made
+  the module fail to load.
+- **A public static type or constant built from the schema defeats it.** The module then parses its schema when
+  it is loaded whatever the catalog does: `MistralDataProvider`, `CohereDataProvider`, `JinaDataProvider`,
+  `BflDataProvider`, `StabilityAiDataProvider`, `AzureDocumentIntelligenceDataProvider` and
+  `GoogleDocumentAiDataProvider` build their public `RequestType`, `ResponseType` or `Fields` from it, and load
+  in 0.3 to 1.3 s on a debug build, where the other modules load in less than 0.1 s. A new module builds such a
+  type on first use, behind an accessor.
+- `examples/test/qlib/RestSchemaActions/LazyModuleActions.qtest` loads every module that makes a lazy
+  registration, checks that loading builds no action set (`RestSchemaActionSet::getConstructionCount()`) and that
+  the first read builds them once, also from concurrent threads, and fails if a module with a lazy registration is
+  not in its list. `examples/test/qlib/DataProvider/LazyAppActions.qtest` covers the catalog.
 
 ### The type caches of schema objects and the garbage collector
 

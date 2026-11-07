@@ -37,7 +37,9 @@ other; release qualification requires both.
    registering or throwing cannot disappear silently. Source, factory, scheme, and publication errors are reported
    explicitly with `reportDiscoveryFailure()`.
 3. After all intentional loading and deferred initialization, `checkpointDiscoverySnapshot()` records the exact
-   revision immediately before the authoritative consumer copies registry state. Factory registration participates
+   revision immediately before the authoritative consumer copies registry state. It first runs the lazy action
+   registrations (`registerLazyAppActions()`) of the apps in the session's scope, as `sealDiscovery()` does, because
+   they are part of the registered state; one made after the checkpoint changes the revision like any registration. Factory registration participates
    in the same catalog mutation critical section, so factory contents and the revision have one linearization point.
    The connection-scheme registry maintains its own revision and holds its registration lock around the nested
    catalog-qualified publication. Every pending or registered state transition advances that revision, including

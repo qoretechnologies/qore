@@ -80,56 +80,60 @@ module StabilityAiDataProvider {
         });
 
         StabilityAiGenerateImageDataProvider::initializeTypes();
-        foreach hash<DataProviderActionInfo> action in (StabilityAiApi::getActionSet()
-                .getActionInfoList(StabilityAiDataProvider::AppName)) {
-            if (action.metadata.kind != "json") {
-                # the media type replaces the schema's response, so no output type is built from it
-                remove action.get_output_type;
-                action.output_type = StabilityAiOperation::MediaType;
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(StabilityAiDataProvider::AppName, sub () {
+            foreach hash<DataProviderActionInfo> action in (StabilityAiApi::getActionSet()
+                    .getActionInfoList(StabilityAiDataProvider::AppName)) {
+                if (action.metadata.kind != "json") {
+                    # the media type replaces the schema's response, so no output type is built from it
+                    remove action.get_output_type;
+                    action.output_type = StabilityAiOperation::MediaType;
+                }
+                DataProviderActionCatalog::registerAction(action);
             }
-            DataProviderActionCatalog::registerAction(action);
-        }
-        foreach hash<auto> job in (StabilityAiWaitDataProvider::Jobs.pairIterator()) {
+            foreach hash<auto> job in (StabilityAiWaitDataProvider::Jobs.pairIterator()) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": StabilityAiDataProvider::AppName, "action": job.key, "path": "/" + job.key,
+                    "display_name": job.value[1], "short_desc": job.value[2],
+                    "desc": "Waits for an existing job and returns verified media. The timeout includes every status request. "
+                        "Timeout errors preserve the job ID and last status. Waiting never resubmits or cancels a job.",
+                    "action_code": DPAT_API, "mutates_state": False,
+                    "options": DataProviderActionCatalog::getActionOptionFromFields(StabilityAiWaitDataProvider::RequestType.getFields()),
+                    "output_type": StabilityAiOperation::MediaType,
+                });
+            }
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": StabilityAiDataProvider::AppName, "action": job.key, "path": "/" + job.key,
-                "display_name": job.value[1], "short_desc": job.value[2],
-                "desc": "Waits for an existing job and returns verified media. The timeout includes every status request. "
-                    "Timeout errors preserve the job ID and last status. Waiting never resubmits or cancels a job.",
-                "action_code": DPAT_API, "mutates_state": False,
-                "options": DataProviderActionCatalog::getActionOptionFromFields(StabilityAiWaitDataProvider::RequestType.getFields()),
-                "output_type": StabilityAiOperation::MediaType,
+                "app": StabilityAiDataProvider::AppName,
+                "path": "/generate-image",
+                "action": "generate-image",
+                "display_name": "Generate Image",
+                "short_desc": "Generate an image from a text prompt",
+                "desc": "Generates an image from a text prompt via Stability AI's "
+                    "v2beta `/stable-image/generate/*` endpoints.  The `model` "
+                    "option selects the endpoint (`ultra` / `sd3` / `core`).\n\n"
+                    "Returns raw image bytes — `image` holds the bytes, "
+                    "`content_type` the verified MIME type, and `finish_reason` reports completion. "
+                    "Safety-filtered responses raise an error. Select a concrete SD3.5 model with `sd3_model`.",
+                "action_code": DPAT_API,
+                "groups": ("Image Generation",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    StabilityAiGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
+                        "preselected": True, "required": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    StabilityAiGenerateImageDataProvider::RequestType.getFields(){
+                        "model", "output_format", "aspect_ratio",
+                    }, {
+                        "preselected": True,
+                    }
+                ) + DataProviderActionCatalog::getActionOptionFromFields(
+                    StabilityAiGenerateImageDataProvider::RequestType.getFields() - (
+                        "prompt", "model", "output_format", "aspect_ratio",
+                    )
+                ),
+                "output_type": StabilityAiGenerateImageDataProvider::ResponseType,
             });
-        }
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": StabilityAiDataProvider::AppName,
-            "path": "/generate-image",
-            "action": "generate-image",
-            "display_name": "Generate Image",
-            "short_desc": "Generate an image from a text prompt",
-            "desc": "Generates an image from a text prompt via Stability AI's "
-                "v2beta `/stable-image/generate/*` endpoints.  The `model` "
-                "option selects the endpoint (`ultra` / `sd3` / `core`).\n\n"
-                "Returns raw image bytes — `image` holds the bytes, "
-                "`content_type` the verified MIME type, and `finish_reason` reports completion. "
-                "Safety-filtered responses raise an error. Select a concrete SD3.5 model with `sd3_model`.",
-            "action_code": DPAT_API,
-            "groups": ("Image Generation",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                StabilityAiGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                StabilityAiGenerateImageDataProvider::RequestType.getFields(){
-                    "model", "output_format", "aspect_ratio",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                StabilityAiGenerateImageDataProvider::RequestType.getFields() - (
-                    "prompt", "model", "output_format", "aspect_ratio",
-                )
-            ),
-            "output_type": StabilityAiGenerateImageDataProvider::ResponseType,
         });
     };
 }

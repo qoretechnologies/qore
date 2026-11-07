@@ -86,47 +86,51 @@ module XeroDataProvider {
             "groups": (DataProvider::AppGroup::AccountingErp,),
         });
 
-        # register every action of every set; each set routes itself, because a request's URI prefix comes
-        # from the base path of the schema its action was generated from
-        map $1.registerActions(XeroDataProvider::AppName), XeroSchema::getActionSets();
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(XeroDataProvider::AppName, sub () {
+            # register every action of every set; each set routes itself, because a request's URI prefix comes
+            # from the base path of the schema its action was generated from
+            map $1.registerActions(XeroDataProvider::AppName), XeroSchema::getActionSets();
 
-        # register the record-based table actions; declaring the tables is only half of it, and a table no
-        # action reaches is offered to nobody
-        RestSchemaTablesDataProvider::registerRecordActions(XeroDataProvider::AppName,
-            "/" + XeroDataProvider::TablesChildName, XeroSchema::getActionSets(),
-            XeroRecordTables::Tables, XeroRecordTables::RecordActionIds, {
-                "groups": (XeroRecordTables::RecordGroup,),
-            });
+            # register the record-based table actions; declaring the tables is only half of it, and a table no
+            # action reaches is offered to nobody
+            RestSchemaTablesDataProvider::registerRecordActions(XeroDataProvider::AppName,
+                "/" + XeroDataProvider::TablesChildName, XeroSchema::getActionSets(),
+                XeroRecordTables::Tables, XeroRecordTables::RecordActionIds, {
+                    "groups": (XeroRecordTables::RecordGroup,),
+                });
 
-        # register the hand-written employee actions
-        foreach string action in (XeroEmployeesDataProvider::ActionNames) {
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": XeroDataProvider::AppName,
-                "path": "/" + action,
-                "action": action,
-                "display_name": XeroEmployeesDataProvider::DisplayNames{action},
-                "short_desc": XeroEmployeesDataProvider::ShortDescs{action},
-                "desc": XeroEmployeesDataProvider::Descs{action},
-                "action_code": DPAT_API,
-                "groups": ("Payroll",),
-            });
-        }
+            # register the hand-written employee actions
+            foreach string action in (XeroEmployeesDataProvider::ActionNames) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": XeroDataProvider::AppName,
+                    "path": "/" + action,
+                    "action": action,
+                    "display_name": XeroEmployeesDataProvider::DisplayNames{action},
+                    "short_desc": XeroEmployeesDataProvider::ShortDescs{action},
+                    "desc": XeroEmployeesDataProvider::Descs{action},
+                    "action_code": DPAT_API,
+                    "groups": ("Payroll",),
+                });
+            }
 
-        # register the polling event actions
-        foreach hash<auto> i in (XeroEventsDataProvider::EventMap.pairIterator()) {
-            Class cls = i.value;
-            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-                "app": XeroDataProvider::AppName,
-                "path": "/" + XeroDataProvider::EventsChildName + "/" + i.key,
-                "action": i.key,
-                "display_name": cls.getConstant("DisplayName").getValue(),
-                "short_desc": cls.getConstant("ShortDesc").getValue(),
-                "desc": cls.getConstant("Desc").getValue(),
-                "action_code": DPAT_EVENT,
-                "action_val": i.key,
-                "groups": ("Events",),
-            });
-        }
+            # register the polling event actions
+            foreach hash<auto> i in (XeroEventsDataProvider::EventMap.pairIterator()) {
+                Class cls = i.value;
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": XeroDataProvider::AppName,
+                    "path": "/" + XeroDataProvider::EventsChildName + "/" + i.key,
+                    "action": i.key,
+                    "display_name": cls.getConstant("DisplayName").getValue(),
+                    "short_desc": cls.getConstant("ShortDesc").getValue(),
+                    "desc": cls.getConstant("Desc").getValue(),
+                    "action_code": DPAT_EVENT,
+                    "action_val": i.key,
+                    "groups": ("Events",),
+                });
+            }
+        });
     };
 }
 

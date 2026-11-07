@@ -1631,6 +1631,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_11 DataProvider v3.11
+    - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()
+      "DataProviderActionCatalog::registerLazyAppActions()", with which a module registers code that builds the
+      actions of its app the first time that the catalog is asked for them, so that loading the module does not
+      build them (see @ref dataprovider_lazy_actions); the deferred initialization of an app runs on one thread at a
+      time, and a thread that reads the app meanwhile waits for it instead of reading part of what it registers
     - fixed @ref DataProvider::FileDataType::acceptsValue() "FileDataType::acceptsValue()" for a hash holding only
       binary values, such as a literal <tt>{"content": binary("x")}</tt>: encoding the content raised
       \c RUNTIME-TYPE-ERROR instead of checking the value

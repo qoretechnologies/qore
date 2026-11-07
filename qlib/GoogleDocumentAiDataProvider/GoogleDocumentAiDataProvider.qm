@@ -80,52 +80,56 @@ module GoogleDocumentAiDataProvider {
             ),
         });
 
-        foreach RestSchemaActionSet set in (GoogleDocumentAiSchema::getActionSets()) {
-            foreach hash<DataProviderActionInfo> action in (set
-                    .getActionInfoList(GoogleDocumentAiDataProvider::AppName)) {
-                if (action.metadata.internal) { continue; }
-                action.options -= ("project_id", "location");
-                if (set.getOperationEx(action.action).getMethod().upr() == "PATCH") { action.options -= "name"; }
-                DataProviderActionCatalog::registerAction(action);
-            }
-        }
         GoogleDocumentAiProcessDocumentDataProvider::initializeTypes();
         GoogleDocumentAiWaitOperationDataProvider::initializeTypes();
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(GoogleDocumentAiDataProvider::AppName, sub () {
+            foreach RestSchemaActionSet set in (GoogleDocumentAiSchema::getActionSets()) {
+                foreach hash<DataProviderActionInfo> action in (set
+                        .getActionInfoList(GoogleDocumentAiDataProvider::AppName)) {
+                    if (action.metadata.internal) { continue; }
+                    action.options -= ("project_id", "location");
+                    if (set.getOperationEx(action.action).getMethod().upr() == "PATCH") { action.options -= "name"; }
+                    DataProviderActionCatalog::registerAction(action);
+                }
+            }
 
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": GoogleDocumentAiDataProvider::AppName,
-            "path": "/process-document",
-            "action": "process-document",
-            "display_name": "Process Document",
-            "short_desc": "Run a Document AI processor over a document",
-            "desc": "Calls a Document AI processor's `:process` endpoint to "
-                "extract text and structure from a document.  The processor "
-                "ID determines the schema of the response — prebuilt "
-                "processors return typed entities; custom processors return "
-                "the schema you trained.\n\n"
-                "**Document sources** — supply one of:\n"
-                "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
-                "- `document_path` — local file path (read and base64-encoded)\n"
-                "- `gcs_uri` — GCS object URI (`gs://bucket/path`)\n"
-                "- `inline_document` — an existing typed Document object\n\n"
-                "Supply exactly one source. Select a processor version to override the processor's default. "
-                "Processing options, output field masks, labels, and image omission are supported.",
-            "action_code": DPAT_API,
-            "groups": ("Document Extraction",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GoogleDocumentAiProcessDocumentDataProvider::RequestType.getFields()),
-            "output_type": GoogleDocumentAiProcessDocumentDataProvider::ResponseType,
-        });
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": GoogleDocumentAiDataProvider::AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
-            "display_name": "Wait for Operation", "short_desc": "Wait for a job and return its complete final outcome",
-            "desc": "Polls an existing operation until it finishes. Returns its name, metadata, result, or service "
-                "error, including per-document batch outcomes. A timeout preserves the operation name and last "
-                "status in the exception argument. Waiting does not cancel or delete the job.",
-            "action_code": DPAT_API, "groups": ("Operations",), "mutates_state": False,
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GoogleDocumentAiWaitOperationDataProvider::RequestType.getFields()),
-            "output_type": GoogleDocumentAiWaitOperationDataProvider::ResponseType,
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GoogleDocumentAiDataProvider::AppName,
+                "path": "/process-document",
+                "action": "process-document",
+                "display_name": "Process Document",
+                "short_desc": "Run a Document AI processor over a document",
+                "desc": "Calls a Document AI processor's `:process` endpoint to "
+                    "extract text and structure from a document.  The processor "
+                    "ID determines the schema of the response — prebuilt "
+                    "processors return typed entities; custom processors return "
+                    "the schema you trained.\n\n"
+                    "**Document sources** — supply one of:\n"
+                    "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
+                    "- `document_path` — local file path (read and base64-encoded)\n"
+                    "- `gcs_uri` — GCS object URI (`gs://bucket/path`)\n"
+                    "- `inline_document` — an existing typed Document object\n\n"
+                    "Supply exactly one source. Select a processor version to override the processor's default. "
+                    "Processing options, output field masks, labels, and image omission are supported.",
+                "action_code": DPAT_API,
+                "groups": ("Document Extraction",),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    GoogleDocumentAiProcessDocumentDataProvider::RequestType.getFields()),
+                "output_type": GoogleDocumentAiProcessDocumentDataProvider::ResponseType,
+            });
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": GoogleDocumentAiDataProvider::AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
+                "display_name": "Wait for Operation", "short_desc": "Wait for a job and return its complete final outcome",
+                "desc": "Polls an existing operation until it finishes. Returns its name, metadata, result, or service "
+                    "error, including per-document batch outcomes. A timeout preserves the operation name and last "
+                    "status in the exception argument. Waiting does not cancel or delete the job.",
+                "action_code": DPAT_API, "groups": ("Operations",), "mutates_state": False,
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    GoogleDocumentAiWaitOperationDataProvider::RequestType.getFields()),
+                "output_type": GoogleDocumentAiWaitOperationDataProvider::ResponseType,
+            });
         });
     };
 }

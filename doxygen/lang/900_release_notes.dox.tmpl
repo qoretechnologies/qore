@@ -876,6 +876,9 @@
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
       - watch data providers persist delivery checkpoints (see @ref dataprovider_watch)
+      - a module can register actions to be built on first use, and the provider modules generating actions
+        from REST API descriptions do, so loading them no longer builds their actions (see
+        @ref dataprovider_lazy_actions)
       - see @ref dataprovider_v3_11 for all changes
 
     - @ref dbdataproviderintro "DbDataProvider" module

@@ -59,7 +59,11 @@ module MistralDataProvider {
             "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::Documents,),
         });
 
-        (MistralSchema::getActionSet()).registerActions(MistralDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(MistralDataProvider::AppName, sub () {
+            (MistralSchema::getActionSet()).registerActions(MistralDataProvider::AppName);
+        });
     };
 }
 

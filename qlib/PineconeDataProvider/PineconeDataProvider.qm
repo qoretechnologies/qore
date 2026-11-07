@@ -54,8 +54,12 @@ module PineconeDataProvider {
             "scheme": "pinecone-admin", "logo": PineconeLogo, "logo_file_name": "pinecone-logo.svg",
             "logo_mime_type": MimeTypeSvg, "groups": (AppGroup::Databases, AppGroup::AiLlm),
         });
-        RestSchemaActionSet admin = PineconeSchema::getAdminActionSet();
-        admin.registerActions("PineconeAdmin");
+        # the actions are built from the vendored API descriptions the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions("PineconeAdmin", sub () {
+            RestSchemaActionSet admin = PineconeSchema::getAdminActionSet();
+            admin.registerActions("PineconeAdmin");
+        });
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": PineconeDataProvider::AppName,
@@ -95,12 +99,14 @@ module PineconeDataProvider {
             "groups": (DataProvider::AppGroup::Databases, DataProvider::AppGroup::AiLlm,),
         });
 
-        # every action generated from the vendored Pinecone API descriptions; see PineconeManifest for
-        # what is exported and why
-        map $1.registerActions(PineconeDataProvider::AppName), PineconeSchema::getActionSets();
-        RestSchemaTablesDataProvider::registerRecordActions(PineconeDataProvider::AppName, "tables",
-            PineconeSchema::getActionSets(), PineconeRecordTables::Tables,
-            <RestSchemaRecordActionIds>{}, {"groups": ("Record-Based",)});
+        DataProviderActionCatalog::registerLazyAppActions(PineconeDataProvider::AppName, sub () {
+            # every action generated from the vendored Pinecone API descriptions; see PineconeManifest for
+            # what is exported and why
+            map $1.registerActions(PineconeDataProvider::AppName), PineconeSchema::getActionSets();
+            RestSchemaTablesDataProvider::registerRecordActions(PineconeDataProvider::AppName, "tables",
+                PineconeSchema::getActionSets(), PineconeRecordTables::Tables,
+                <RestSchemaRecordActionIds>{}, {"groups": ("Record-Based",)});
+        });
     };
 }
 

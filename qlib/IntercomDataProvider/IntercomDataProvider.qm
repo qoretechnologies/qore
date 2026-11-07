@@ -75,48 +75,52 @@ module IntercomDataProvider {
             "groups": (DataProvider::AppGroup::CustomerSupport,),
         });
 
-        # register every action in the manifest
-        RestSchemaActionSet action_set = IntercomSchema::getActionSet();
-        action_set.registerActions(IntercomDataProvider::AppName);
+        # the actions are built from the vendored API description the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
+        DataProviderActionCatalog::registerLazyAppActions(IntercomDataProvider::AppName, sub () {
+            # register every action in the manifest
+            RestSchemaActionSet action_set = IntercomSchema::getActionSet();
+            action_set.registerActions(IntercomDataProvider::AppName);
 
-        # register the record-based table actions; declaring the tables is only half of it, and a table no
-        # action reaches is offered to nobody
-        RestSchemaTablesDataProvider::registerRecordActions(IntercomDataProvider::AppName,
-            "/" + IntercomDataProvider::TablesChildName, action_set, IntercomRecordTables::Tables,
-            IntercomRecordTables::RecordActionIds, {
-                "groups": (IntercomRecordTables::RecordGroup,),
-            });
+            # register the record-based table actions; declaring the tables is only half of it, and a table no
+            # action reaches is offered to nobody
+            RestSchemaTablesDataProvider::registerRecordActions(IntercomDataProvider::AppName,
+                "/" + IntercomDataProvider::TablesChildName, action_set, IntercomRecordTables::Tables,
+                IntercomRecordTables::RecordActionIds, {
+                    "groups": (IntercomRecordTables::RecordGroup,),
+                });
 
-        # register the one hand-written action; see IntercomReplyConversationDataProvider for why it is
-        # not generated
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": IntercomDataProvider::AppName,
-            "path": "/" + IntercomDataProvider::ReplyConversationAction,
-            "action": IntercomDataProvider::ReplyConversationAction,
-            "display_name": IntercomReplyConversationDataProvider::DisplayName,
-            "short_desc": IntercomReplyConversationDataProvider::ShortDesc,
-            "desc": IntercomReplyConversationDataProvider::Desc,
-            "action_code": DPAT_API,
-            "groups": (IntercomManifest::GroupConversations,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                IntercomReplyConversationDataProvider::RequestType.getFields()),
-            "output_type": IntercomReplyConversationDataProvider::getConversationRecordType(action_set),
-        });
-
-        # register the polling event actions
-        foreach hash<auto> event in (IntercomEvents) {
+            # register the one hand-written action; see IntercomReplyConversationDataProvider for why it is
+            # not generated
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": IntercomDataProvider::AppName,
-                "path": "/" + IntercomDataProvider::EventsChildName + "/" + event.event,
-                "action": event.event,
-                "display_name": event.display_name,
-                "short_desc": event.short_desc,
-                "desc": event.desc,
-                "action_code": DPAT_EVENT,
-                "action_val": event.event,
-                "groups": ("Events",),
+                "path": "/" + IntercomDataProvider::ReplyConversationAction,
+                "action": IntercomDataProvider::ReplyConversationAction,
+                "display_name": IntercomReplyConversationDataProvider::DisplayName,
+                "short_desc": IntercomReplyConversationDataProvider::ShortDesc,
+                "desc": IntercomReplyConversationDataProvider::Desc,
+                "action_code": DPAT_API,
+                "groups": (IntercomManifest::GroupConversations,),
+                "options": DataProviderActionCatalog::getActionOptionFromFields(
+                    IntercomReplyConversationDataProvider::RequestType.getFields()),
+                "output_type": IntercomReplyConversationDataProvider::getConversationRecordType(action_set),
             });
-        }
+
+            # register the polling event actions
+            foreach hash<auto> event in (IntercomEvents) {
+                DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "app": IntercomDataProvider::AppName,
+                    "path": "/" + IntercomDataProvider::EventsChildName + "/" + event.event,
+                    "action": event.event,
+                    "display_name": event.display_name,
+                    "short_desc": event.short_desc,
+                    "desc": event.desc,
+                    "action_code": DPAT_EVENT,
+                    "action_val": event.event,
+                    "groups": ("Events",),
+                });
+            }
+        });
     };
 }
 
