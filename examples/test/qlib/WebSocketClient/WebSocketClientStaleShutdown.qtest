@@ -13,6 +13,10 @@
 # (all 1 connections to the server have reached the concurrent stream limit), as the open stream of the leaked
 # connection still held the only connection of the client's connection manager.
 #
+# Further cases cover a connect() made while such a teardown is in progress, from another thread or from the closing
+# callback, a connect() that fails after the handshake, and an HTTP/1.1 WebSocket whose HttpClientIo connection was
+# marked closed, which isOpen() reported closed so that disconnect() did nothing.
+#
 # The delivery task is held with lock handoffs in a subclass, so the interleavings are reproduced without timing.
 
 %modern
@@ -75,6 +79,9 @@ class StaleShutdownWsClient inherits WebSocketClient {
         bool hold_close = False;
         #! hold the delivery task after it has taken the connection's resources in the teardown
         bool hold_release = False;
+        #! the step at which the next connect fails: "handshake" (after the handshake) or "start" (when the async
+        #! I/O is started)
+        *string fail_connect_at;
     }
 
     private {
@@ -150,6 +157,38 @@ class StaleShutdownWsClient inherits WebSocketClient {
         WebSocketClient::stopAsyncIo();
     }
 
+    #! aborts the poll operation of the HttpClientIo connection that the HTTP/1.1 WebSocket was upgraded on
+    /** The same happens when the client cancels the operation after the upgrade while the I/O thread still runs
+        it: the HttpClientIo connection is marked closed, while the WebSocket stays open on its socket.
+    */
+    abortHttpClientIoOperation() {
+        AutoLock al(m);
+        hcio_stream.getConnection().getPollOperation().abort();
+    }
+
+    #! returns True if a delivery task is active or scheduled
+    bool deliveryActive() {
+        AutoLock al(delivery_mutex);
+        return delivery_active;
+    }
+
+    private hash<auto> connectUnlocked(*hash<auto> hdr0, *reference<hash<auto>> info, *bool reconnect) {
+        hash<auto> rv = WebSocketClient::connectUnlocked(hdr0, \info, reconnect);
+        if (fail_connect_at == "handshake") {
+            remove fail_connect_at;
+            throw "TEST-CONNECT-ERROR", "the connect fails after the handshake";
+        }
+        return rv;
+    }
+
+    private startAsyncIo() {
+        if (fail_connect_at == "start") {
+            remove fail_connect_at;
+            throw "TEST-CONNECT-ERROR", "the connect fails when the async I/O is started";
+        }
+        WebSocketClient::startAsyncIo();
+    }
+
     private releaseAsyncIo(hash<WscAsyncIoResources> res) {
         if (hold_release && hold_tid && gettid() == hold_tid) {
             hold_release = False;
@@ -191,6 +230,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("connect during the teardown of a connection closed by the server",
             \connectDuringTeardownTest());
         addTestCase("connect in the closing callback", \connectInClosingCallbackTest());
+        addTestCase("failed connect in the closing callback", \failedConnectInClosingCallbackTest());
+        addTestCase("HTTP/1.1 connection whose HttpClientIo operation ended", \endedHttpClientIoOperationTest());
+        addTestCase("failed connect after the handshake", \failedConnectTest(), "handshake");
+        addTestCase("failed connect when the async I/O starts", \failedConnectTest(), "start");
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -253,14 +296,12 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("detached", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
 
         wsc.connectInBackground();
-        string ev = wsc.events.get(StaleShutdownWsClient::HandoffTimeout);
-        # the connect waits for the end of the teardown; when it does not wait, it has connected already
-        if (ev != "connected") {
-            assertEq("connect-waiting", ev);
-        }
+        # the connect waits for the end of the teardown
+        assertEq("connect-waiting", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
         wsc.release_close.dec();
         wsc.watchDone();
-        hash<string, bool> seen = {ev: True};
+        hash<string, bool> seen = {};
+        string ev;
         while (!seen.connected || !seen.done) {
             ev = wsc.events.get(StaleShutdownWsClient::HandoffTimeout);
             assertTrue(ev == "connected" || ev == "done", sprintf("unexpected event %y", ev));
@@ -318,6 +359,130 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq(0, errors.size(), "the connect in the closing callback succeeds");
 
         checkSecondConnection(wsc, msgs, closed_count);
+    }
+
+    #! A connect() in the closing callback that fails when it starts the async I/O
+    /** The teardown that called the callback releases the delivery flag, and the client connects again.
+    */
+    failedConnectInClosingCallbackTest() {
+        Queue msgs();
+        Counter closed_count();
+        Queue errors();
+        *StaleShutdownWsClient client;
+        bool reconnected;
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+                return;
+            }
+            closed_count.inc();
+            if (!reconnected) {
+                reconnected = True;
+                client.fail_connect_at = "start";
+                try {
+                    client.connect();
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(ex.err);
+                }
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        client = wsc;
+        on_exit {
+            remove client;
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the first connection is open");
+        wsc.armTeardown();
+        wsc.release_close.dec();
+        wsc.send("bye");
+        assertEq("detached", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        wsc.watchDone();
+        assertEq("done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        assertEq("TEST-CONNECT-ERROR", errors.get(0ms), "the connect in the closing callback fails");
+        assertEq(1, closed_count.getCount(), "the first connection is reported closed once");
+        assertFalse(wsc.deliveryActive(), "no delivery task is left active");
+        assertFalse(wsc.isOpen(), "the client is not connected");
+
+        checkNextConnection(wsc, msgs, closed_count, 1);
+    }
+
+    #! An HTTP/1.1 WebSocket stays open when the HttpClientIo connection it was upgraded on is marked closed
+    /** disconnect() then closes it; before, isOpen() returned False and disconnect() did nothing.
+    */
+    endedHttpClientIoOperationTest() {
+        Queue msgs();
+        Counter closed_count();
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            } else {
+                closed_count.inc();
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+        wsc.abortHttpClientIoOperation();
+        assertTrue(wsc.isOpen(), "the WebSocket is open");
+        wsc.send("one");
+        assertEq("ECHO:one", msgs.get(StaleShutdownWsClient::HandoffTimeout));
+        wsc.disconnect();
+        assertFalse(wsc.isOpen(), "the WebSocket is closed");
+        assertEq(1, closed_count.getCount(), "the WebSocket is reported closed");
+
+        checkNextConnection(wsc, msgs, closed_count, 1);
+    }
+
+    #! A connect() that fails after acquiring its connection releases it, and the client connects again
+    failedConnectTest(string step) {
+        Queue msgs();
+        Counter closed_count();
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            } else {
+                closed_count.inc();
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.fail_connect_at = step;
+        assertThrows("TEST-CONNECT-ERROR", \wsc.connect());
+        assertFalse(wsc.isOpen(), "the client is not connected");
+
+        checkNextConnection(wsc, msgs, closed_count, 0);
+    }
+
+    #! checks that the client connects, that the connection works, and that disconnect() closes it
+    private checkNextConnection(StaleShutdownWsClient wsc, Queue msgs, Counter closed_count, int closed) {
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the next connection is open");
+        wsc.send("next");
+        assertEq("ECHO:next", msgs.get(StaleShutdownWsClient::HandoffTimeout));
+        wsc.disconnect();
+        assertFalse(wsc.isOpen(), "the next connection is closed");
+        assertEq(closed + 1, closed_count.getCount(), "the next connection is reported closed");
     }
 
     #! checks that the client's second connection is open, works, and is closed with disconnect()
