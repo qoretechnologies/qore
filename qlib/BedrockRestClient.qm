@@ -735,33 +735,39 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (raw.contentBlockDelta.delta.reasoningContent.typeCode() == NT_HASH) {
             hash<auto> delta = raw.contentBlockDelta.delta.reasoningContent;
             string key = string(raw.contentBlockDelta.contentBlockIndex);
+            # each delta is written to its part's stream as it arrives, and each part is read once when the block
+            # stops: a long reasoning stream of many deltas costs its size, not the size of every prefix; encrypted
+            # reasoning arrives base64 on the wire and is encoded once, as the response form has it, and the signed
+            # text is replayed unchanged
             hash<auto!> block = state.bedrock_reasoning{key} ?? {};
             if (exists delta.redactedContent) {
-                # encrypted reasoning can arrive in several deltas, each base64 on the wire: each delta's bytes are
-                # written to the block's stream as they arrive, and encoded once when the block stops, as the
-                # response form has them
-                if (!block.redacted_bytes) {
-                    block.redacted_bytes = new BinaryOutputStream();
-                }
-                cast<BinaryOutputStream>(block.redacted_bytes).write(delta.redactedContent.typeCode() == NT_BINARY
+                writeReasoningPart(\block, "redacted", delta.redactedContent.typeCode() == NT_BINARY
                     ? delta.redactedContent : parse_base64_string(delta.redactedContent));
             } else {
-                hash<auto!> text = block.reasoningText ?? {};
                 if (exists delta.text) {
-                    text.text = (text.text ?? "") + delta.text;
+                    writeReasoningPart(\block, "text", binary(delta.text));
                 }
                 if (exists delta.signature) {
-                    text.signature = (text.signature ?? "") + delta.signature;
+                    writeReasoningPart(\block, "signature", binary(delta.signature));
                 }
-                block.reasoningText = text;
             }
             state.bedrock_reasoning{key} = block;
         }
         if (exists raw.contentBlockStop.contentBlockIndex) {
             *hash<auto> block = remove state.bedrock_reasoning{string(raw.contentBlockStop.contentBlockIndex)};
-            if (exists block.redacted_bytes) {
-                block.redactedContent = make_base64_string(cast<BinaryOutputStream>(remove block.redacted_bytes)
-                    .getData());
+            if (exists block.redacted) {
+                block.redactedContent = make_base64_string(cast<BinaryOutputStream>(remove block.redacted).getData());
+            } else if (exists block.text || exists block.signature) {
+                hash<auto!> text = {
+                    "text": exists block.text
+                        ? binary_to_string(cast<BinaryOutputStream>(remove block.text).getData(), "UTF-8")
+                        : "",
+                };
+                if (exists block.signature) {
+                    text.signature = binary_to_string(cast<BinaryOutputStream>(remove block.signature).getData(),
+                        "UTF-8");
+                }
+                block.reasoningText = text;
             }
             if (*hash<auto> reasoning = BedrockLlmProvider::fromConverseReasoning(block)) {
                 if (state.reasoning_blocks.typeCode() != NT_LIST) {
@@ -837,6 +843,14 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             streamed += {"index": idx} + tool_call;
         }
         return streamed;
+    }
+
+    #! Writes a delta of a streamed reasoning block to the stream of its part (\c text, \c signature or \c redacted)
+    private:internal static writeReasoningPart(reference<hash<auto!>> block, string part, binary data) {
+        if (!block{part}) {
+            block{part} = new BinaryOutputStream();
+        }
+        cast<BinaryOutputStream>(block{part}).write(data);
     }
 
     #! Returns a Converse reasoning block in the Anthropic Messages API's form
@@ -1296,7 +1310,12 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     */
     private:internal static addCachePoint(reference<list<hash<auto>>> blocks, *hash<auto> cache_control) {
         if (cache_control) {
-            push blocks, {"cachePoint": {"type": "default"}};
+            hash<auto!> cache_point = {"type": "default"};
+            # a marker's lifetime (\c "5m" or \c "1h") is the cache point's
+            if (cache_control.ttl.val()) {
+                cache_point.ttl = cache_control.ttl;
+            }
+            push blocks, {"cachePoint": cache_point};
         }
     }
 

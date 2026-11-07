@@ -597,6 +597,15 @@ public class BedrockTest inherits QUnit::Test {
             testSkip("no fake server");
         }
         hash<auto> ephemeral = {"type": "ephemeral"};
+        # a one-hour marker's lifetime is its cache point's
+        newProvider("eu.anthropic.claude-opus-5-5").chat((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": (
+                <QoreLlmUtils::ContentPart>{"type": "text", "text": "long-lived",
+                    "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+            )},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "ping"},
+        ));
+        assertEq(({"text": "long-lived"}, {"cachePoint": {"type": "default", "ttl": "1h"}}), handler.last_body.system);
         newProvider("eu.anthropic.claude-opus-5-5").chat((
             <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": (
                 <QoreLlmUtils::ContentPart>{"type": "text", "text": "stable policy", "cache_control": ephemeral},
@@ -747,6 +756,8 @@ public class BedrockTest inherits QUnit::Test {
         foreach hash<auto> raw in ((
                 {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": "which "}}}},
                 {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": "tool"}}}},
+                # non-ASCII text survives its join unchanged
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": " – ok"}}}},
                 {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"signature": "c2ln"}}}},
                 {"contentBlockStop": {"contentBlockIndex": 0}},
                 # one encrypted block in two deltas: "en" and "c", each base64 ("ZW4=", "Yw==")
@@ -759,7 +770,7 @@ public class BedrockTest inherits QUnit::Test {
             )) {
             p.updateOpenAiStreamStateFromRaw(\state, raw);
         }
-        assertEq(({"type": "thinking", "thinking": "which tool", "signature": "c2ln"},
+        assertEq(({"type": "thinking", "thinking": "which tool – ok", "signature": "c2ln"},
             {"type": "redacted_thinking", "data": "ZW5j"}), state.reasoning_blocks,
             "each block when it stops, in order, its encrypted bytes joined; a stopped block with no reasoning adds none");
     }
