@@ -9524,8 +9524,9 @@ load_local_done:
                         return false;
                     }
                     target_val = tv.getAsBigInt();
-                    if (fused_inst->target_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->target_slot_id) = QoreValue(target_val);
+                    // the slot is set to the result below; until then it may only hold what the variable holds
+                    if (tv.getType() == NT_INT && fused_inst->target_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache.storage(fused_inst->target_slot_id) = tv;
                     }
                     if (nd && tv.needsRef()) {
                         tv.discard(xsink);
@@ -9553,8 +9554,18 @@ load_local_done:
                         return false;
                     }
                     source_val = sv.getAsBigInt();
-                    if (fused_inst->source_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->source_slot_id) = QoreValue(source_val);
+                    // the slot caches the value the variable holds, as LoadLocal does, never the int it is read as:
+                    // the source keeps its value, whatever it is (ex: an int local with no value stays without one),
+                    // and the slot of an IR-only local, now marked instantiated, is the variable itself; the target
+                    // of a weak reference, which eval() gives without a reference, is not cached, as in LoadLocal
+                    bool weak_source = false;
+                    if (!nd && sv.hasNode()) {
+                        LocalVarValue* lvv = thread_try_find_lvar(fused_inst->source);
+                        weak_source = lvv && isWeakReferenceType(lvv->val.getType());
+                    }
+                    if (!weak_source && fused_inst->source_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache.storage(fused_inst->source_slot_id).discard(xsink);
+                        locals_slot_cache.storage(fused_inst->source_slot_id) = sv.needsRef() ? sv.refSelf() : sv;
                     }
                     if (nd && sv.needsRef()) {
                         sv.discard(xsink);
@@ -9723,8 +9734,10 @@ load_local_done:
                         return false;
                     }
                     lhs_val = lv.getAsBigInt();
-                    if (fused_inst->lhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->lhs_slot_id) = QoreValue(lhs_val);
+                    // a comparison only reads its operands: the slot may only cache the value the variable holds,
+                    // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    if (lv.getType() == NT_INT && fused_inst->lhs_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache.storage(fused_inst->lhs_slot_id) = lv;
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -9751,8 +9764,10 @@ load_local_done:
                         return false;
                     }
                     rhs_val = rv.getAsBigInt();
-                    if (fused_inst->rhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->rhs_slot_id) = QoreValue(rhs_val);
+                    // a comparison only reads its operands: the slot may only cache the value the variable holds,
+                    // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    if (rv.getType() == NT_INT && fused_inst->rhs_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache.storage(fused_inst->rhs_slot_id) = rv;
                     }
                     if (nd && rv.needsRef()) {
                         rv.discard(xsink);

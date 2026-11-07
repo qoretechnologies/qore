@@ -8112,9 +8112,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && !QoreTypeInfo::isReference(left_var->getTypeInfo())) {
         const AbstractQoreNode* right_node = right_expr.getInternalNode();
         auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
-        // the source must be an int local as well: the instruction reads it as an int and caches that int in the
-        // source's slot, which would change the value of a local of any other type (ex: "3" in an auto local
-        // would read as 3 afterwards)
+        // the source must be an int local as well, the case the native implementations of the instruction are
+        // written for (a reference local, for example, is read as the value it referred to when it was first read);
+        // the instruction reads the source as an int and leaves it unchanged, whatever it holds (ex: an int local
+        // with no value)
         if (isLocalNonClosureVar(right_var) && right_var->getTypeInfo() == bigIntTypeInfo) {
             // target += source (both typed int locals) → AddAssignLocalInt
             auto* inst = builder.createAddAssignLocalInt(
