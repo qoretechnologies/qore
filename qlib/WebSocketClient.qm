@@ -269,7 +269,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" did not close it and the next
       @ref WebSocketClient::WebSocketClient::connect() "connect()" failed with \c HTTPCLIENT-CAPACITY-ERROR; a
       @ref WebSocketClient::WebSocketClient::connect() "connect()" made while the end of a connection is processed
-      now waits until the closed connection has been reported closed
+      now waits until the closed connection has been reported closed, and an automatic reconnect started for the
+      closed connection is not made when a connection was started meanwhile; before, it closed that connection
+    - the messages of a connection are delivered by one task at a time, in order, also when a connection is closed
+      and a new one is started while the delivery of the closed connection's messages is still pending
     - @ref WebSocketClient::WebSocketClient::isOpen() "isOpen()" reports an HTTP/1.1 connection open as long as its
       WebSocket is open, and @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" closes it; before,
       the connection could be reported closed when the HTTP connection that the WebSocket was upgraded on was marked
@@ -715,6 +718,14 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             starts; see waitAsyncTeardownUnlocked().
         */
         int async_teardown_tid = 0;
+
+        #! The connection generation (@ref conn_generation) at the last clearTid() call
+        /** An automatic reconnect started for a teardown does nothing when a connection was started after the
+            teardown, e.g. by an explicit @ref connect(); see doReconnect().
+
+            @since WebSocketClient 2.5
+        */
+        int reconnect_conn_generation = 0;
 
         #! Unique websocket connection ID; -1 when not connected
         int cid = -1;
@@ -2466,8 +2477,10 @@ ws.setEventQueue();
 
     private updateTid(int tid) {
         self.tid = tid;
-        # a connection starts: a teardown in progress belongs to an earlier connection
+        # a connection starts: a teardown in progress belongs to an earlier connection, and a connect() made in its
+        # closing callback must not take the new connection for the one being torn down
         ++conn_generation;
+        async_shutdown_tid = -2;
     }
 
     #! Clears the tid and stop variables and wakes up any waiting threads
@@ -2479,6 +2492,8 @@ ws.setEventQueue();
         # teardown even if the tid sentinel is immediately reused by a reconnect
         ++tid_generation;
         async_teardown_tid = 0;
+        # a reconnect started for this teardown is made only if no connection is started before it runs
+        reconnect_conn_generation = conn_generation;
         if (tid_waiting) {
             tid_cond.broadcast();
         }
@@ -2845,6 +2860,12 @@ ws.setEventQueue();
         # (destructor called from a user callback on this thread)
         {
             AutoLock al(delivery_mutex);
+            # a task queued for an earlier connection may start after a teardown has reset the delivery flag and the
+            # new connection has started its own task: such a task delivers nothing and leaves the other task's
+            # TID alone
+            if (delivery_task_id != id || !delivery_active) {
+                return;
+            }
             delivery_thread_id = gettid();
         }
         on_exit {
@@ -2852,7 +2873,11 @@ ws.setEventQueue();
             # the destructor has already completed and members are destroyed
             if (self) {
                 AutoLock al(delivery_mutex);
-                delivery_thread_id = 0;
+                # a task that handed delivery over can end after the task that took it over has started: only the
+                # thread's own TID is cleared
+                if (delivery_thread_id == gettid()) {
+                    delivery_thread_id = 0;
+                }
             }
         }
 
@@ -2893,6 +2918,14 @@ ws.setEventQueue();
                 # a task delivers the messages of one connection only: when the client has a new connection, the
                 # task hands delivery over to a task for the new connection
                 if (!delivery_op) {
+                    # a task queued for an earlier connection may start after a teardown has reset the delivery
+                    # flag and the new connection has started its own task: such a task delivers nothing
+                    {
+                        AutoLock al(delivery_mutex);
+                        if (delivery_task_id != id || !delivery_active) {
+                            return;
+                        }
+                    }
                     delivery_op = op;
                 } else if (op != delivery_op) {
                     handOverDelivery(id);
@@ -3281,8 +3314,19 @@ ws.setEventQueue();
     }
 
     #! Handles reconnections
+    /** Does nothing, or stops retrying, when a connection was started after the teardown the reconnect was started
+        for, e.g. by an explicit @ref connect(): the reconnect would otherwise close that connection.
+    */
     private doReconnect() {
         try {
+            {
+                AutoLock al(m);
+                if (conn_generation != reconnect_conn_generation) {
+                    logInfo("Reconnect: a connection was started meanwhile; no reconnect is made");
+                    do_reconnect = False;
+                    return;
+                }
+            }
             reconnectPreamble();
 
             # connect to the new gateway
@@ -3292,6 +3336,11 @@ ws.setEventQueue();
                 {
                     AutoLock al(m);
                     if (!self.reconnect || self.reconnect_stopping || self.stop) {
+                        break;
+                    }
+                    if (conn_generation != reconnect_conn_generation) {
+                        logInfo("Reconnect %d: a connection was started meanwhile; no further attempt is made",
+                            retries);
                         break;
                     }
                 }
