@@ -49,10 +49,11 @@ class LazyAppActionsTest inherits QUnit::Test {
         addTestCase("a failed lazy registration is retained and not run again", \failureTest());
         addTestCase("concurrent first reads run the registration once and read all of it", \concurrentTest());
         addTestCase("a lazy registration that reads its own app does not wait for itself", \reentrantTest());
-        addTestCase("two registrations reading each other's app do not deadlock", \crossAppTest());
+        addTestCase("two initializations reading each other's app do not deadlock", \crossAppTest());
+        addTestCase("two lazy registrations reading each other's app run nested", \crossLazyTest());
         addTestCase("deregistering an app drops its lazy registrations", \deregistrationTest());
         addTestCase("discovery qualifies lazy actions", \discoveryTest());
-        addTestCase("pending registrations keep their own rules", \pendingRulesTest());
+        addTestCase("NoInit getters run no deferred registration", \pendingRulesTest());
         set_return_value(main());
     }
 
@@ -96,8 +97,6 @@ class LazyAppActionsTest inherits QUnit::Test {
             "getActionHashEx": sub (string app) { DataProviderActionCatalog::getActionHashEx(app); },
             "getAppAction": sub (string app) { DataProviderActionCatalog::getAppAction(app, "lazy-b"); },
             "getAppActionEx": sub (string app) { DataProviderActionCatalog::getAppActionEx(app, "lazy-c"); },
-            "getActionsNoInit": sub (string app) { DataProviderActionCatalog::getActionsNoInit(app); },
-            "getAllAppsNoInit": sub (string app) { DataProviderActionCatalog::getAllAppsNoInit(); },
             "getAllApps": sub (string app) { DataProviderActionCatalog::getAllApps(); },
             "getAllActions": sub (string app) { DataProviderActionCatalog::getAllActions(); },
             "searchAppRegex": sub (string app) { DataProviderActionCatalog::searchAppRegex(app); },
@@ -139,6 +138,7 @@ class LazyAppActionsTest inherits QUnit::Test {
             assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), getter.key);
             assertEq(("eager-a", "lazy-b", "lazy-c"),
                 (map $1.action, DataProviderActionCatalog::getActionsNoInit(app)), getter.key);
+            assertTrue(DataProviderActionCatalog::getAppEx(app).supports_apis, getter.key);
             DataProviderActionCatalog::getActions(app, False);
             assertEq(1, LazyRuns::get(app), getter.key + " does not run it again");
         }
@@ -152,7 +152,7 @@ class LazyAppActionsTest inherits QUnit::Test {
         map registerAction(eager, $1), ("eager-a", "lazy-b", "lazy-c");
 
         # the app's capability flags are set by its actions
-        list<hash<DataProviderAppInfo>> apps = DataProviderActionCatalog::getAllAppsNoInit();
+        list<hash<DataProviderAppInfo>> apps = DataProviderActionCatalog::getAllApps();
         assertEq((select apps, $1.name == lazy)[0] - ("name", "display_name"),
             (select apps, $1.name == eager)[0] - ("name", "display_name"));
         assertEq((map LazyAppActionsTest::withoutApp($1), DataProviderActionCatalog::getActions(eager, False)),
@@ -240,20 +240,46 @@ class LazyAppActionsTest inherits QUnit::Test {
         assertEq(1, LazyRuns::get(app));
     }
 
+    crossLazyTest() {
+        string a = registerApp("LazyNestedA");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        string b = registerApp("LazyNestedB");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        *list<string> read_a;
+        *list<string> read_b;
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            registerAction(a, "lazy-a");
+            read_b = map $1.action, DataProviderActionCatalog::getActions(b, False);
+        });
+        DataProviderActionCatalog::registerLazyAppActions(b, sub () {
+            registerAction(b, "lazy-b");
+            read_a = map $1.action, DataProviderActionCatalog::getActions(a, False);
+        });
+        Counter done(1);
+        background LazyAppActionsTest::readApp(a, done);
+        assertEq(0, done.waitForZero(60s), "the reader does not wait forever");
+        # a's registration ran b's, which read what a had registered so far
+        assertEq(("lazy-b",), read_b);
+        assertEq(("lazy-a",), read_a);
+        assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
+    }
+
     crossAppTest() {
         string a = registerApp("LazyCrossA");
         on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
         string b = registerApp("LazyCrossB");
         on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
-        # both registrations run before either reads the other app
+        # both registrations run before either reads the other app; pending registrations run on their readers'
+        # threads (lazy ones run on the catalog worker, one at a time)
         Counter started(2);
-        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+        DataProviderActionCatalog::registerPendingAppAction(a, "lazy-a", sub () {
             registerAction(a, "lazy-a");
             started.dec();
             started.waitForZero();
             DataProviderActionCatalog::getActions(b, False);
         });
-        DataProviderActionCatalog::registerLazyAppActions(b, sub () {
+        DataProviderActionCatalog::registerPendingAppAction(b, "lazy-b", sub () {
             registerAction(b, "lazy-b");
             started.dec();
             started.waitForZero();
@@ -263,7 +289,8 @@ class LazyAppActionsTest inherits QUnit::Test {
         # each thread is given its app as an argument; a closure would share the loop variable
         background LazyAppActionsTest::readApp(a, done);
         background LazyAppActionsTest::readApp(b, done);
-        done.waitForZero();
+        # a deadlock fails the test instead of hanging it; the limit is reached only when a wait cannot end
+        assertEq(0, done.waitForZero(60s), "neither thread waits for the other forever");
         assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
         assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActions(b, False));
         assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
@@ -319,9 +346,10 @@ class LazyAppActionsTest inherits QUnit::Test {
             pending_ran = True;
             registerAction(app, "pending-d");
         });
-        # a NoInit getter runs the lazy registration but not the pending one
-        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
+        # a NoInit getter runs neither registration
+        assertEq(("eager-a",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
         assertFalse(pending_ran);
+        assertEq(0, LazyRuns::get(app));
         assertEq(("eager-a", "lazy-b", "lazy-c", "pending-d"),
             map $1.action, DataProviderActionCatalog::getActions(app, False));
         assertTrue(pending_ran);

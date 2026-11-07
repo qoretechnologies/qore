@@ -335,11 +335,24 @@ provider, or only needs the connection, never registers the actions at all.
   actions included, so that the app's actions are registered in the same order as when they were registered at
   load. What a provider needs without the catalog, such as codecs (`RestSchemaActionCodecs::registerCodec()`),
   stays outside it.
-- **Every catalog getter runs the closure first**, `getActionsNoInit()` and `getAllAppsNoInit()` included, and
-  so do `checkpointDiscoverySnapshot()` and `sealDiscovery()`, so a getter returns what it returned when the
-  actions were registered at load. Concurrent first reads wait for the one that runs the closure. A closure that
-  fails is retained as an initialization failure of the app and not run again; at load, the same failure made
-  the module fail to load.
+- **The getters that use the app run the closure first**, and so do `checkpointDiscoverySnapshot()` and
+  `sealDiscovery()`, so they return what they returned when the actions were registered at load. Concurrent first
+  uses wait for the one that runs the closure. `getActionsNoInit()` and `getAllAppsNoInit()` never run or wait for
+  it: listings, pickers and other readers that need actions without using the app read them from the provider
+  index, which holds every app's actions; `hasLazyAppActions()` says when an app's live catalog entry is partial.
+- **The closure runs on the catalog worker**, a thread of the DataProvider Program started from the first lazy
+  registration's (trusted) module context. An object created while serving sandboxed code keeps that code's sandbox,
+  interrupts included, and what the closure creates (schemas, types) is shared by every reader, so the closure never
+  runs on a sandboxed reader's thread: the reader waits for the worker, and its own interrupt or limit ends only its
+  wait. An exit hook (`register_exit_hook()`) stops the worker before the library waits for the process's threads;
+  without a worker, and on a thread loading a module (which never waits for the worker, as the worker can be waiting
+  for that module), trusted readers run the closure themselves and sandboxed ones are refused with
+  `DATA-PROVIDER-LAZY-INIT-ERROR`. A closure that fails is retained as an initialization failure of the app and not
+  run again (at load, the same failure made the module fail to load), unless its thread was interrupted, cancelled
+  or over a limit, or exited: then the next reader runs it again.
+  `examples/test/qlib/DataProvider/LazyAppActionsSafety.qtest` covers sandboxed readers, interrupted waits,
+  `thread_exit`, the catalog lock, module loads, deregistration during an initialization, `fork()` and the end of
+  the process.
 - **A type built from the schema is built on first use, behind an accessor**, never in a constant, a static
   member's initializer or the module's initialization: any of those parses the schema when the module is loaded,
   whatever the catalog does. A provider class returns its types from `requestType()` and `responseType()`, which

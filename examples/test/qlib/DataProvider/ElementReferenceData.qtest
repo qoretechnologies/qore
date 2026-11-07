@@ -95,6 +95,10 @@ public class ElementReferenceDataTest inherits QUnit::Test {
         map load_module($1), keys modules;
 
         foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllAppsNoInit()) {
+            # the NoInit getter does not run an app's lazy action registrations; using the app does
+            if (DataProviderActionCatalog::hasLazyAppActions(app.name)) {
+                DataProviderActionCatalog::getApp(app.name);
+            }
             foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsNoInit(app.name)) {
                 *list<string> names = map $1.key, (action.options ?? {}).pairIterator(),
                     $1.value.element_ref_data.val();

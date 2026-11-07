@@ -198,7 +198,9 @@ hash<auto> rv = {"apps": {}};
 foreach hash<auto> i in (app_modules.pairIterator()) {
     string app = i.key;
     hash<auto> info = {"module": i.value, "actions": {}};
-    # the actions as registered, before any output type is resolved
+    # the actions as registered, before any output type is resolved: using the app runs its lazy action
+    # registrations, which resolve no output type, and the NoInit getter returns what they registered
+    DataProviderActionCatalog::getApp(app);
     foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActionsNoInit(app)) {
         info.actions{action.action}.registered_lazy = exists action.get_output_type;
     }
