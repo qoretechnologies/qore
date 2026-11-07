@@ -84,6 +84,28 @@ static constexpr int QUIC_CLIENT_RECV_BUDGET = 32;
 //! covers a couple of PTO retransmits at the typical 333 ms initial RTT.
 static constexpr int64_t QUIC_ECONNREFUSED_GRACE_NS = 1500000000LL;
 
+//! Returns the grace period (nanoseconds) after the first ICMP "port unreachable" of a QUIC client handshake
+/** QUIC_ECONNREFUSED_GRACE_NS, except in a DEBUG build, where the test hook QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS
+    (milliseconds, 0 or more) replaces it, so a test of a refused connection does not wait for the grace period of
+    each attempt: with 0 the handshake fails at its next poll, which the operation asks for at once (see
+    clampPollTimeoutToDeadline()).  Read for every refusal because tests scope the variable to one case in a shared
+    test process; a value that is not a number of milliseconds is ignored.
+*/
+static int64_t quic_econnrefused_grace_ns() {
+#ifdef DEBUG
+    QoreEnvironmentValue ms_holder("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS");
+    if (const char* ms = ms_holder.c_str()) {
+        char* end;
+        errno = 0;
+        long long v = strtoll(ms, &end, 10);
+        if (*ms && !*end && !errno && v >= 0 && v <= 3600000LL) {
+            return static_cast<int64_t>(v) * 1000000LL;
+        }
+    }
+#endif
+    return QUIC_ECONNREFUSED_GRACE_NS;
+}
+
 static int quic_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
     if (!is->supportsNonBlockingIo()) {
         return -1;
@@ -881,8 +903,8 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
             if (econnrefused_deadline_ns_ == 0
                 && (qcs_state == QCS::HANDSHAKE_SEND
                     || qcs_state == QCS::HANDSHAKE_RECV)) {
-                econnrefused_deadline_ns_ =
-                    QuicSession::timestamp() + QUIC_ECONNREFUSED_GRACE_NS;
+                econnrefused_grace_ns_ = quic_econnrefused_grace_ns();
+                econnrefused_deadline_ns_ = QuicSession::timestamp() + econnrefused_grace_ns_;
             }
             return SOCK_POLLIN;  // need to wait for read
         }
@@ -1062,7 +1084,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
             "unreachable) and did not recover within %lld ms; peer UDP port "
             "appears closed",
             host.c_str(), static_cast<unsigned>(port_),
-            (long long)(QUIC_ECONNREFUSED_GRACE_NS / 1000000LL));
+            (long long)(econnrefused_grace_ns_ / 1000000LL));
         return nullptr;
     }
 

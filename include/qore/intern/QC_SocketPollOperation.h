@@ -2073,6 +2073,8 @@ private:
     //! fast on a closed port: if PTO retransmits manage to handshake within
     //! the window, recvmsg() returns data and we never check this deadline.
     int64_t econnrefused_deadline_ns_ = 0;
+    //! The grace period of @ref econnrefused_deadline_ns_, for the error message
+    int64_t econnrefused_grace_ns_ = 0;
 
 #ifdef DEBUG
     //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS
