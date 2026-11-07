@@ -13337,7 +13337,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
             if (arithmetic && (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER)) {
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign:
-                        lvh.multiplyEqualsNumber(rhs);
+                        lvh.multiplyEqualsNumber(rhs, "<*= operator>");
                         if (!*xsink) {
                             res = lvh.getReferencedValue();
                         }
@@ -13347,7 +13347,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in arbitrary-precision numeric expression");
                         } else {
-                            lvh.divideEqualsNumber(rhs);
+                            lvh.divideEqualsNumber(rhs, "</= operator>");
                             if (!*xsink) {
                                 res = lvh.getReferencedValue();
                             }
@@ -13361,7 +13361,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                 // stores 17.5 as 17)
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign:
-                        lvh.multiplyEqualsFloat(rv);
+                        lvh.multiplyEqualsFloat(rv, "<*= operator>");
                         if (!*xsink) {
                             res = lvh.getReferencedValue();
                         }
@@ -13371,7 +13371,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in floating-point expression");
                         } else {
-                            lvh.divideEqualsFloat(rv);
+                            lvh.divideEqualsFloat(rv, "</= operator>");
                             if (!*xsink) {
                                 res = lvh.getReferencedValue();
                             }
@@ -13387,9 +13387,9 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                         // *float lvalue with no value), as in the AST interpreter; the result is the value the
                         // lvalue holds afterwards
                         if (!lvh.getAsBigInt() || !rv) {
-                            lvh.assign(0ll, "<*= operator>");
+                            lvh.assign(0ll);
                         } else {
-                            lvh.multiplyEqualsBigInt(rv);
+                            lvh.multiplyEqualsBigInt(rv, "<*= operator>");
                         }
                         if (!*xsink) {
                             res = lvh.getReferencedValue();
@@ -13400,7 +13400,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in integer expression");
                         } else {
-                            lvh.divideEqualsBigInt(rv);
+                            lvh.divideEqualsBigInt(rv, "</= operator>");
                             if (!*xsink) {
                                 res = lvh.getReferencedValue();
                             }
@@ -13411,14 +13411,16 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             lvh.assign(0ll, "<%= operator>");
                             res = 0ll;
                         } else {
-                            res = lvh.modulaEqualsBigInt(rv);
+                            res = lvh.modulaEqualsBigInt(rv, "<%= operator>");
                         }
                         break;
-                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                    // the descriptions of the AST operators, which errors (ex: the lvalue's type rejecting the
+                    // result) give
+                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv, "<&= operator>"); break;
+                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv, "<|= operator>"); break;
+                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv, "<^= operator>"); break;
+                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv, "<<= operator>"); break;
+                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv, "<>>= operator>"); break;
                     default: break;
                 }
             }

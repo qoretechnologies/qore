@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CompoundAssignmentErrorDescriptionTest
+
+#! Regression test: *= and /= whose result the lvalue's type refuses raise the AST interpreter's error
+/** The AST interpreter's *= and /= raise \c RUNTIME-TYPE-ERROR with the operator's description when the lvalue's
+    type refuses the value computed (ex: <tt>\<*= operator\> expects type 'timeout', but got type 'float'</tt> for a
+    \c timeout lvalue and a float operand).  Compiled code changed a local or thread_local variable by loading it,
+    computing its value and storing it, and the store raised the error as an assignment does
+    (<tt>\<lvalue\> expects ...</tt>); the lvalue path helper of the other lvalues gave no description either.  Such
+    a variable is now changed through its lvalue path when the operand can be a float or a number, and the helper
+    gives the AST operators' descriptions.
+
+    The script applies *= and /= with float, number and int operands (in \c auto parameters) to \c int, \c timeout
+    and \c *int locals, members, static variables, globals, thread_local variables and hash and list elements and
+    prints the result or the error with its description; each function is called three times, in every execution
+    mode and on the IR tier of tiered execution (see ExecModeOutputTest).
+*/
+class CompoundAssignmentErrorDescriptionTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+our int gi;
+our timeout gt;
+thread_local int ti;
+thread_local timeout tt;
+class C { public { int mi; timeout mt; static int si; } }
+string sub li_mul(auto o) { int li = 7; try { return sprintf("ok %y", li *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub li_div(auto o) { int li = 7; try { return sprintf("ok %y", li /= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub lt_mul(auto o) { timeout lt = 7; try { return sprintf("ok %y", lt *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub lt_div(auto o) { timeout lt = 7; try { return sprintf("ok %y", lt /= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub oi_mul(auto o) { *int oi = 7; try { return sprintf("ok %y", oi *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub mi_mul(auto o) { C c(); c.mi = 7; try { return sprintf("ok %y", c.mi *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub mt_div(auto o) { C c(); c.mt = 7; try { return sprintf("ok %y", c.mt /= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub si_mul(auto o) { C::si = 7; try { return sprintf("ok %y", C::si *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub gi_mul(auto o) { gi = 7; try { return sprintf("ok %y", gi *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub gt_mul(auto o) { gt = 7; try { return sprintf("ok %y", gt *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub ti_mul(auto o) { ti = 7; try { return sprintf("ok %y", ti *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub tt_div(auto o) { tt = 7; try { return sprintf("ok %y", tt /= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub h_mul(auto o) { hash<string, int> h = {"k": 7}; try { return sprintf("ok %y", h.k *= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+string sub l_div(auto o) { list<int> l = (7,); try { return sprintf("ok %y", l[0] /= o); } catch (hash<ExceptionInfo> ex) { return sprintf("%s: %s", ex.err, ex.desc); } }
+hash<string, code> cases = {"li_mul": \li_mul(), "li_div": \li_div(), "lt_mul": \lt_mul(), "lt_div": \lt_div(), "oi_mul": \oi_mul(), "mi_mul": \mi_mul(), "mt_div": \mt_div(), "si_mul": \si_mul(), "gi_mul": \gi_mul(), "gt_mul": \gt_mul(), "ti_mul": \ti_mul(), "tt_div": \tt_div(), "h_mul": \h_mul(), "l_div": \l_div()};
+for (int i = 0; i < 3; ++i) {
+    foreach auto o in ((2.5, 2.5n, 2)) {
+        foreach hash<auto> c in (cases.pairIterator()) {
+            printf("%d %y %s: %s\n", i, o, c.key, c.value(o));
+        }
+    }
+
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 2.5 li_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 li_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 lt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'float' instead",
+            "0 2.5 lt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "0 2.5 oi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type '*int', but got type 'float' instead",
+            "0 2.5 mi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 mt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "0 2.5 si_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 gi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 gt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'float' instead",
+            "0 2.5 ti_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 tt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "0 2.5 h_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 l_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'float' instead",
+            "0 2.5 li_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 li_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 lt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'number' instead",
+            "0 2.5 lt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "0 2.5 oi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type '*int', but got type 'number' instead",
+            "0 2.5 mi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 mt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "0 2.5 si_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 gi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 gt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'number' instead",
+            "0 2.5 ti_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 tt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "0 2.5 h_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "0 2.5 l_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'number' instead",
+            "0 2 li_mul: ok 14",
+            "0 2 li_div: ok 3",
+            "0 2 lt_mul: ok 14",
+            "0 2 lt_div: ok 3",
+            "0 2 oi_mul: ok 14",
+            "0 2 mi_mul: ok 14",
+            "0 2 mt_div: ok 3",
+            "0 2 si_mul: ok 14",
+            "0 2 gi_mul: ok 14",
+            "0 2 gt_mul: ok 14",
+            "0 2 ti_mul: ok 14",
+            "0 2 tt_div: ok 3",
+            "0 2 h_mul: ok 14",
+            "0 2 l_div: ok 3",
+            "1 2.5 li_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 li_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 lt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'float' instead",
+            "1 2.5 lt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "1 2.5 oi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type '*int', but got type 'float' instead",
+            "1 2.5 mi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 mt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "1 2.5 si_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 gi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 gt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'float' instead",
+            "1 2.5 ti_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 tt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "1 2.5 h_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 l_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'float' instead",
+            "1 2.5 li_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 li_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 lt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'number' instead",
+            "1 2.5 lt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "1 2.5 oi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type '*int', but got type 'number' instead",
+            "1 2.5 mi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 mt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "1 2.5 si_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 gi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 gt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'number' instead",
+            "1 2.5 ti_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 tt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "1 2.5 h_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "1 2.5 l_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'number' instead",
+            "1 2 li_mul: ok 14",
+            "1 2 li_div: ok 3",
+            "1 2 lt_mul: ok 14",
+            "1 2 lt_div: ok 3",
+            "1 2 oi_mul: ok 14",
+            "1 2 mi_mul: ok 14",
+            "1 2 mt_div: ok 3",
+            "1 2 si_mul: ok 14",
+            "1 2 gi_mul: ok 14",
+            "1 2 gt_mul: ok 14",
+            "1 2 ti_mul: ok 14",
+            "1 2 tt_div: ok 3",
+            "1 2 h_mul: ok 14",
+            "1 2 l_div: ok 3",
+            "2 2.5 li_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 li_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 lt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'float' instead",
+            "2 2.5 lt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "2 2.5 oi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type '*int', but got type 'float' instead",
+            "2 2.5 mi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 mt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "2 2.5 si_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 gi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 gt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'float' instead",
+            "2 2.5 ti_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 tt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'float' instead",
+            "2 2.5 h_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 l_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'float' instead",
+            "2 2.5 li_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 li_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 lt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'number' instead",
+            "2 2.5 lt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "2 2.5 oi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type '*int', but got type 'number' instead",
+            "2 2.5 mi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 mt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "2 2.5 si_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 gi_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 gt_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'timeout', but got type 'number' instead",
+            "2 2.5 ti_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 tt_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'timeout', but got type 'number' instead",
+            "2 2.5 h_mul: RUNTIME-TYPE-ERROR: <*= operator> expects type 'int', but got type 'number' instead",
+            "2 2.5 l_div: RUNTIME-TYPE-ERROR: </= operator> expects type 'int', but got type 'number' instead",
+            "2 2 li_mul: ok 14",
+            "2 2 li_div: ok 3",
+            "2 2 lt_mul: ok 14",
+            "2 2 lt_div: ok 3",
+            "2 2 oi_mul: ok 14",
+            "2 2 mi_mul: ok 14",
+            "2 2 mt_div: ok 3",
+            "2 2 si_mul: ok 14",
+            "2 2 gi_mul: ok 14",
+            "2 2 gt_mul: ok 14",
+            "2 2 ti_mul: ok 14",
+            "2 2 tt_div: ok 3",
+            "2 2 h_mul: ok 14",
+            "2 2 l_div: ok 3",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CompoundAssignmentErrorDescription", Script, (map $1 + "\n", Expected).join(""),
+            "raises the AST interpreter's errors for *= and /=") {
+    }
+}

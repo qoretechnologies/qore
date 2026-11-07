@@ -8510,6 +8510,27 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         "minus-equals result");
 }
 
+//! Returns true if *= or /= on a variable of the given type must change it through its lvalue path
+/** The operator's value can be a float or a number (with such an operand, or a float or number lvalue), which a
+    variable of a type that accepts neither (ex: \c int, \c timeout) refuses.  The AST interpreter's operator raises
+    the error with its own description (ex: <tt>\<*= operator\> expects type 'timeout'</tt>); a load, compute and
+    store lowering would raise it from the store, as an assignment (<tt>\<lvalue\></tt>), so such a variable is
+    changed through its lvalue path, which runs the AST operator, whenever the operand can be a float or a number.
+
+    @param ti the type of the variable
+    @param operand the operand of the operator
+*/
+static bool qore_ir_multiplicative_store_may_fail(const QoreTypeInfo* ti, const QoreValue& operand) {
+    if (!QoreTypeInfo::hasType(ti)
+            || (QoreTypeInfo::parseAccepts(ti, floatTypeInfo) != QTI_NOT_EQUAL
+                && QoreTypeInfo::parseAccepts(ti, numberTypeInfo) != QTI_NOT_EQUAL)) {
+        return false;
+    }
+    const QoreTypeInfo* oti = operand.getTypeInfo();
+    return !QoreTypeInfo::hasType(oti) || QoreTypeInfo::parseReturns(oti, NT_FLOAT) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(oti, NT_NUMBER) != QTI_NOT_EQUAL;
+}
+
 QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node);
@@ -8524,12 +8545,14 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store produces wrong result types
+    // Force lvalue path for types where load-compute-store produces wrong result types or errors; see
+    // qore_ir_multiplicative_store_may_fail()
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())) {
             left_var = nullptr;
         }
     }
@@ -8640,12 +8663,14 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store produces wrong result types
+    // Force lvalue path for types where load-compute-store produces wrong result types or errors; see
+    // qore_ir_multiplicative_store_may_fail()
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                || qore_ir_multiplicative_store_may_fail(ti, op->getRight())) {
             left_var = nullptr;
         }
     }
