@@ -139,6 +139,11 @@ hash<ChatResponse> r = p.chat((
 
     @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
     - initial release
+    - a system block, a content block or a tool marked with \c cache_control is followed by a Converse
+      \c cachePoint, so the request is cached up to it
+    - usage counts the input read from and written to the prompt cache: the prompt and input counts are the whole
+      input, with \c prompt_tokens_details.cached_tokens, \c cache_read_input_tokens and \c cache_write_input_tokens
+    - a reasoning effort asks the Claude models that take adaptive thinking for it at that effort
 */
 
 #! Contains all public definitions in the BedrockRestClient module
@@ -861,6 +866,31 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return NOTHING;
     }
 
+    #! Returns the \c additionalModelRequestFields that ask a Claude model for adaptive thinking at an effort
+    /** Converse carries Claude's thinking controls as the Messages API's own fields: \c thinking \c "adaptive"
+        and \c output_config.effort, as AnthropicRestClient maps
+        @ref QoreLlmUtils::LlmRequestOptions::reasoning_effort "LlmRequestOptions::reasoning_effort".  Claude
+        Opus 5.5 takes them, as measured for the lowest effort (@ref getClaudeReasoningOffFields()); the models that
+        take adaptive thinking are the Claude 5 models and Claude Opus 4.6 to 4.8 and Claude Sonnet 4.6.
+
+        @param model_id the model ID or inference profile ID
+        @param effort the reasoning effort
+
+        @return the \c additionalModelRequestFields, or @ref nothing for a model that does not take adaptive thinking
+    */
+    static *hash<auto> getClaudeReasoningEffortFields(string model_id, string effort) {
+        string id = model_id.lwr();
+        if (id !~ /^([a-z-]+\.)?anthropic\.claude-/) {
+            return NOTHING;
+        }
+        id = regex_subst(id, "^([a-z-]+\\.)?anthropic\\.", "");
+        id = regex_subst(id, "-v[0-9]+(:[0-9]+)?$", "");
+        if (id =~ /^claude-((opus|sonnet|haiku|fable|mythos)-5(-[0-9])?|mythos-preview|opus-4-[6-8]|sonnet-4-6)(-[0-9]{8})?$/) {
+            return {"thinking": {"type": "adaptive"}, "output_config": {"effort": effort}};
+        }
+        return NOTHING;
+    }
+
     string getBedrockModelId(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         return getRequestModel(opts);
     }
@@ -881,7 +911,14 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         foreach hash<QoreLlmUtils::ChatMessage> msg in (messages) {
             if (msg.role == "system") {
-                if (msg.content.val()) {
+                if (msg.content_parts) {
+                    foreach hash<QoreLlmUtils::ContentPart> part in (msg.content_parts) {
+                        if (part.type == "text" && part.text.val()) {
+                            push system_blocks, {"text": part.text};
+                            addCachePoint(\system_blocks, part.cache_control);
+                        }
+                    }
+                } else if (msg.content.val()) {
                     push system_blocks, {"text": msg.content};
                 }
                 continue;
@@ -922,7 +959,10 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         };
                     } else if (part.type == "text" && part.text.val()) {
                         push content_blocks, {"text": part.text};
+                    } else {
+                        continue;
                     }
+                    addCachePoint(\content_blocks, part.cache_control);
                 }
             } else if (msg.content.val()) {
                 push content_blocks, {"text": msg.content};
@@ -978,12 +1018,18 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         },
                     },
                 };
+                addCachePoint(\tool_specs, td.cache_control);
             }
             body.toolConfig = {"tools": tool_specs};
         }
 
         if (getRequestReasoningOff(opts)) {
             *hash<auto> fields = getClaudeReasoningOffFields(getBedrockModelId(opts));
+            if (fields) {
+                body.additionalModelRequestFields = fields;
+            }
+        } else if (*string effort = getRequestReasoningEffort(opts)) {
+            *hash<auto> fields = getClaudeReasoningEffortFields(getBedrockModelId(opts), effort);
             if (fields) {
                 body.additionalModelRequestFields = fields;
             }
@@ -1084,13 +1130,22 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Maps Bedrock \c usage to the OpenAI-style counters
+    /** Converse reports the input it read from and wrote to the prompt cache apart from \c inputTokens, which
+        counts only the rest (measured on Bedrock on 2026-11-07 with \c eu.anthropic.claude-opus-5-5: 13 input
+        tokens, 17603 written, then 13 input tokens, 17603 read; \c totalTokens 17620 both times).  The prompt and
+        input counts here are the whole input, as OpenAI counts it; @c prompt_tokens_details.cached_tokens and
+        @c cache_read_input_tokens are what was read from the cache, and @c cache_write_input_tokens what was written
+        to it.
+    */
     private:internal hash<auto> normalizeUsage(*hash<auto> usage) {
         if (!usage) {
             return {};
         }
-        int prompt_tokens = usage.inputTokens ?? 0;
+        int cache_read = usage.cacheReadInputTokens ?? 0;
+        int cache_write = usage.cacheWriteInputTokens ?? 0;
+        int prompt_tokens = (usage.inputTokens ?? 0) + cache_read + cache_write;
         int completion_tokens = usage.outputTokens ?? 0;
-        return {
+        hash<auto!> rv = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": usage.totalTokens
@@ -1098,6 +1153,27 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "input_tokens": prompt_tokens,
             "output_tokens": completion_tokens,
         };
+        if (exists usage.cacheReadInputTokens || exists usage.cacheWriteInputTokens) {
+            rv += {
+                "prompt_tokens_details": {"cached_tokens": cache_read},
+                "cache_read_input_tokens": cache_read,
+                "cache_write_input_tokens": cache_write,
+            };
+        }
+        return rv;
+    }
+
+    #! Adds a cache point after the last block when the block it follows is marked for the prompt cache
+    /** A block or tool marked with \c cache_control (as the Anthropic Messages API marks it) is followed by a
+        Converse \c cachePoint, so the request is cached up to it.
+
+        @param blocks the system blocks, content blocks or tool specifications being built
+        @param cache_control the marker of the block just added
+    */
+    private:internal static addCachePoint(reference<list<hash<auto>>> blocks, *hash<auto> cache_control) {
+        if (cache_control) {
+            push blocks, {"cachePoint": {"type": "default"}};
+        }
     }
 
     #! Maps Bedrock \c stopReason values to the QoreLlmUtils stop-reason vocabulary
