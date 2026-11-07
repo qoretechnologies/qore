@@ -173,6 +173,8 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("marked blocks and tools are followed by cache points", \cachePointTest());
         addTestCase("usage counts the input read from and written to the cache", \cacheUsageTest());
         addTestCase("a reasoning effort asks Claude for adaptive thinking", \reasoningEffortTest());
+        addTestCase("Claude's reasoning is returned and replayed before its tool call", \reasoningReplayTest());
+        addTestCase("streamed reasoning is collected for its replay", \streamedReasoningTest());
         addTestCase("Bedrock connection metadata and provider", \connectionTest());
         addTestCase("Bedrock connection authenticated ping", \connectionPingTest());
 
@@ -214,6 +216,8 @@ public class BedrockTest inherits QUnit::Test {
         assertEq("BedrockRestClient", info.module_name);
         assertTrue(info.supports_tools);
         assertTrue(info.supports_multimodal);
+        assertTrue(info.supports_reasoning_effort, "Claude's adaptive thinking takes an effort");
+        assertTrue(f.getModelInfo("eu.anthropic.claude-opus-5-5").supports_reasoning_effort);
     }
 
     private converseChatTest() {
@@ -679,6 +683,71 @@ public class BedrockTest inherits QUnit::Test {
             "content": "ping"},), NOTHING, <QoreLlmUtils::LlmRequestOptions>{"disable_reasoning": True});
         assertEq({"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}},
             handler.last_body.additionalModelRequestFields);
+    }
+
+    private reasoningReplayTest() {
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        hash<auto> saved_response = handler.converse_response;
+        on_exit handler.converse_response = saved_response;
+        handler.converse_response = {
+            "output": {"message": {"role": "assistant", "content": (
+                {"reasoningContent": {"reasoningText": {"text": "which tool", "signature": "c2ln"}}},
+                {"reasoningContent": {"redactedContent": "ZW5j"}},
+                {"toolUse": {"toolUseId": "tu_1", "name": "lookup", "input": {"symbol": "UserApi"}}},
+            )}},
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
+        };
+        BedrockRestClient::BedrockLlmProvider p = newProvider("eu.anthropic.claude-opus-5-5");
+        hash<QoreLlmUtils::ChatResponse> r = p.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},),
+            (<QoreLlmUtils::ToolDefinition>{"name": "lookup"},));
+        list<auto> blocks = (
+            {"type": "thinking", "thinking": "which tool", "signature": "c2ln"},
+            {"type": "redacted_thinking", "data": "ZW5j"},
+        );
+        assertEq(blocks, r.reasoning_blocks, "reasoning in the Anthropic Messages API's form");
+        assertEq("lookup", r.tool_calls[0].name);
+        # the follow-up replays the reasoning unchanged, before the tool call
+        handler.converse_response = saved_response;
+        p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},
+            <QoreLlmUtils::ChatMessage>{"role": "assistant", "tool_calls": r.tool_calls,
+                "reasoning_blocks": r.reasoning_blocks},
+            <QoreLlmUtils::ChatMessage>{"role": "tool", "tool_call_id": "tu_1", "content": "{}"},
+        ), (<QoreLlmUtils::ToolDefinition>{"name": "lookup"},));
+        list<auto> sent = handler.last_body.messages[1].content;
+        assertEq({"reasoningContent": {"reasoningText": {"text": "which tool", "signature": "c2ln"}}}, sent[0]);
+        assertEq({"reasoningContent": {"redactedContent": "ZW5j"}}, sent[1]);
+        assertEq("tu_1", sent[2].toolUse.toolUseId);
+        # another provider's reasoning (DeepSeek's) is not sent to Converse
+        p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "assistant", "content": "x",
+                "reasoning_blocks": ({"type": "deepseek_reasoning", "text": "r"},)},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},
+        ));
+        assertEq(({"text": "x"},), handler.last_body.messages[0].content);
+    }
+
+    private streamedReasoningTest() {
+        BedrockRestClient::BedrockLlmProvider p = newProvider("eu.anthropic.claude-opus-5-5");
+        hash<auto> state = {};
+        foreach hash<auto> raw in ((
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": "which "}}}},
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"text": "tool"}}}},
+                {"contentBlockDelta": {"contentBlockIndex": 0, "delta": {"reasoningContent": {"signature": "c2ln"}}}},
+                {"contentBlockStop": {"contentBlockIndex": 0}},
+                {"contentBlockDelta": {"contentBlockIndex": 1, "delta": {"reasoningContent":
+                    {"redactedContent": "ZW5j"}}}},
+                {"contentBlockStop": {"contentBlockIndex": 1}},
+                {"contentBlockStop": {"contentBlockIndex": 2}},
+            )) {
+            p.updateOpenAiStreamStateFromRaw(\state, raw);
+        }
+        assertEq(({"type": "thinking", "thinking": "which tool", "signature": "c2ln"},
+            {"type": "redacted_thinking", "data": "ZW5j"}), state.reasoning_blocks,
+            "each block when it stops, in order; a stopped block with no reasoning adds none");
     }
 
     private errorMessageTest() {
