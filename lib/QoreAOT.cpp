@@ -1991,7 +1991,9 @@ std::string qore_aot_get_compile_runtime_identity() {
 /** BUILD_INFO is informational.  Nothing about the source file's state on disk, such as its modification time, is
     recorded: an artifact depends only on the content it was compiled from, so compiling the same content again
     produces the same bytes, whatever the source file's modification time (a checkout or a rebase rewrites files
-    with unchanged content).  No runtime reads such data from an artifact; the loader checks the sources of a module
+    with unchanged content).  Nor is the git revision of the compiling Qore: a commit that changes nothing qcc
+    compiles with would otherwise change every artifact, so that a build cache (design/qmod-build-cache.md) could
+    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  No runtime reads such data from an artifact; the loader checks the sources of a module
     linked into a source tree with the fingerprints file beside the module (see --depfile). */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
         const char* target_triple, int opt_level, bool include_source) {
@@ -2004,7 +2006,6 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("binary-kind", binary_kind ? binary_kind : "");
     add("qore-version", std::to_string(QORE_VERSION_MAJOR) + "."
         + std::to_string(QORE_VERSION_MINOR) + "." + std::to_string(QORE_VERSION_PATCH));
-    add("qore-git-hash", qore_git_hash ? qore_git_hash : "");
     add("aot-runtime-identity", qore_aot_get_compile_runtime_identity());
     add("aot-format-version", std::to_string(QORE_AOT_BINARY_VERSION));
     add("supported-features", std::to_string(QORE_AOT_SUPPORTED_FEATURES));
