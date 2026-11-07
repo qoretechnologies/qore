@@ -325,7 +325,11 @@ public class LinkedInOrganizationsDataProviderBase inherits DataProvider::Abstra
 
     #! Returns True if the error indicates that the operation should be retried
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (RetrySet{ex.err}) {
+        # nothing is retried while retries are suppressed (see DataProviderRetryUtil::runWithoutRetries())
+        if (DataProviderRetryUtil::retriesSuppressed()) {
+            return False;
+        }
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             if (++retries == MaxIoRetries) {
                 LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;

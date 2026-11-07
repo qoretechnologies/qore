@@ -139,6 +139,9 @@ module DiscordDataProvider {
     @section Discorddataprovider_relnotes Release Notes
 
     @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    - a request that failed because the name of the server cannot be resolved is no longer retried, and no
+      request is retried while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed"
+      (see @ref dataprovider_retries)
     - API calls are made with an asynchronous @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
       from the connection's \c getAsync() or created from the options; a synchronous
       @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" passed to the data provider, directly or in the
