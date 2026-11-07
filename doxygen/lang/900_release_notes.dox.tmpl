@@ -1655,6 +1655,11 @@
       raises \c PARSE-URL-ERROR instead
     - fixed @ref Qore::HTTPClient "HTTPClient" delivering a response body that it streams to an output stream or a
       callback still compressed; see @ref httpclient_response_body
+    - fixed @ref Qore::HTTPClient "HTTPClient" and @ref httpclientiointro "HttpClientIo" raising
+      \c SOCKET-SEND-ERROR instead of returning the server's response when the server answers a request before it
+      has read all of it, such as with a \c 413 or \c 431 error, and then closes the connection while the request is
+      still being sent; the send error is raised only if no response arrives
+      (<a href="https://github.com/qoretechnologies/qore/issues/5630">issue 5630</a>)
     - fixed \c qget: \c ftp:// and \c ftps:// downloads, saving an empty body, the exit status and error output of a
       failed retrieval, and a \c Content-Disposition file name that could write outside the current directory
     - fixed a crash when a file included with @ref include "%include" ends inside a literal or a block comment

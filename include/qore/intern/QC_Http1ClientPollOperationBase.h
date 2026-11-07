@@ -118,7 +118,14 @@ public:
         INACTIVE,   //!< no concurrent request-body send is in progress
         IDLE,       //!< full-duplex active, no send in flight, awaiting queued data
         SENDING,    //!< a request-body chunk (or the final terminator) is being sent
-        DONE        //!< the request body is fully sent
+        DONE,       //!< the request body is fully sent
+        //! the send of a buffered request failed and was given up; the response is still read
+        /** Nothing more is sent, and since the request is incomplete, the connection is closed after the response;
+            see Http1ClientPollOperationPriv::abandonFailedBufferedSend().
+
+            @since %Qore 3.0
+        */
+        ABANDONED,
     };
 
     //! Creates the poll operation with an initial TCP connect operation
@@ -512,11 +519,11 @@ private:
     size_t request_header_len = 0;
 
     //! True while the response is read after the send of a buffered request failed
-    /** The request header block had reached the wire when the write failed, so the peer may have answered it
-        (a fault such as 413, say) before it stopped reading and reset the connection.  The response, if there is
-        one, is delivered as it is when the request body is abandoned in the same way; when there is none, the
-        error that setError() reports is the send error saved in @ref send_failure_err and @ref send_failure_desc,
-        not the receive error that follows it.  I/O thread only.
+    /** The request header block had reached the wire when the write failed, or may have, so the peer may have
+        answered it (a fault such as 413, say) before it stopped reading and reset the connection.  The response, if
+        there is one, is delivered as it is when the request body is abandoned in the same way; when there is none,
+        the error that setError() reports is the send error saved in @ref send_failure_err and
+        @ref send_failure_desc, not the receive error that follows it.  I/O thread only.
 
         @since %Qore 3.0
     */
@@ -755,11 +762,14 @@ private:
     */
     DLLLOCAL QoreHashNode* awaitBufferedSend(ExceptionSink* xsink);
 
-    //! Reads the response after the send of a buffered request failed once its header block had been written
-    /** The peer may have answered the request before it read the body and then closed or reset the connection,
-        which is what made the write fail; the answer is delivered instead of the write error.  When there is no
-        answer, the error reported is the send error (see @ref send_failure_pending).  The request is abandoned
-        the way abandonBufferedSendAndDeliver() abandons one, so the connection is closed afterwards.
+    //! Reads the response after the first send of a buffered request failed
+    /** Called from handleSending() when the request header block had been written, or when the write failed
+        because the peer closed or reset the connection (see sendFailedOnPeerClose()), in which case the header block
+        may have reached the peer even though the write reported no progress.  The peer may have answered the request
+        before it read the rest and then closed or reset the connection, which is what made the write fail; the
+        answer is delivered instead of the write error.  When there is no answer, the error reported is the send
+        error (see @ref send_failure_pending).  The request is abandoned (see abandonFailedBufferedSend()), so the
+        connection is closed afterwards.
 
         @param err the error code of the failed send
         @param desc the error description of the failed send
@@ -770,6 +780,36 @@ private:
     DLLLOCAL QoreHashNode* recoverResponseAfterSendFailure(const std::string& err, const std::string& desc,
         ExceptionSink* xsink);
 
+    //! Gives up the send of a buffered request that failed, so that the response can still be read
+    /** Releases the send operation, enters @ref SendState::ABANDONED and saves the send error, which setError()
+        reports if no response arrives (see @ref send_failure_pending).  The response read is left as it is.
+
+        @param err the error code of the failed send
+        @param desc the error description of the failed send
+        @param xsink exception sink
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void abandonFailedBufferedSend(const std::string& err, const std::string& desc, ExceptionSink* xsink);
+
+    //! Returns true if a failed write means that the peer closed or reset the connection
+    /** The connection is gone, so a read after the failure returns at once with whatever the peer sent before it
+        closed, and then EOF or an error; it cannot wait for data that never comes.
+
+        A write that a reset interrupts may also fail without reporting the bytes it had already transmitted:
+        BSD-derived stacks (macOS) report the failure and discard the partial count.  The request header block may
+        therefore have reached the peer, which may have answered it, even when the send operation counted no
+        progress.
+
+        @param send_xsink the exception raised by the failed send
+
+        @return true if the exception carries the errno of a connection closed or reset by the peer (@c ECONNRESET,
+        @c EPIPE or @c ECONNABORTED)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL static bool sendFailedOnPeerClose(ExceptionSink& send_xsink);
+
     //! Resumes the dispatch of the response that @ref ReqState::AWAIT_SEND deferred
     DLLLOCAL QoreHashNode* completeDeferredResponse(ExceptionSink* xsink);
 
@@ -777,7 +817,8 @@ private:
     /** Used when the peer answered and then stopped reading: the response in hand is complete and
         authoritative, so it is what the caller gets.  @ref send_state is deliberately left at
         @ref SendState::SENDING so the dispatch forces the connection closed - it can never be reused
-        with a half-written request on it.
+        with a half-written request on it.  @ref SendState::ABANDONED does the same for a send given up while the
+        response was still being read.
 
         @since %Qore 3.0
     */

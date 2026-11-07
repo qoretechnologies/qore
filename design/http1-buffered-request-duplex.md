@@ -74,16 +74,36 @@ once (an early `413`, say) can reset the connection while the client is still in
 buffered request, before the socket has ever reported that it would block.  The next write of the body then fails
 with `EPIPE` or `ECONNRESET`, and that happens before any handover.
 
-`handleSending()` therefore treats a failed send of a buffered request as "the peer may have answered" once the
+`handleSending()` therefore treats a failed send of a buffered request as "the peer may have answered" when the
 header block has reached the wire (`SocketSendPollOperation::getBytesSent()` keeps the count of bytes written
-before a failure, and it is at least `request_header_len`).  `recoverResponseAfterSendFailure()` abandons the
-request the way `abandonBufferedSendAndDeliver()` does and reads the response: if one has arrived it is delivered
-and the connection is closed; if not, the error reported is the original send error (`send_failure_pending`), not
-the receive error that follows it.  A send that fails before the headers are out is reported as it was.
+before a failure, and it is at least `request_header_len`), **or** when the write failed because the peer closed or
+reset the connection (`sendFailedOnPeerClose()`: the exception's errno is `ECONNRESET`, `EPIPE` or `ECONNABORTED`).
+`recoverResponseAfterSendFailure()` abandons the request (`SendState::ABANDONED`, see below) and reads the
+response: if one has arrived it is delivered and the connection is closed; if not, the error reported is the
+original send error (`send_failure_pending`), not the receive error that follows it.  Any other send failure before
+the headers are out is reported as it was.
+
+The byte count alone is not enough, because it can be short after a reset.  A BSD-derived stack (macOS) fails a
+`send()` that a reset interrupts and discards the count of the bytes that call had already transmitted (XNU
+`sendit()` keeps a partial count only for `EINTR` and `EWOULDBLOCK`); Linux returns the partial count and reports
+the error on the next call.  So on macOS the first write of a request can put the whole header block and part of
+the body on the wire, the peer can answer and reset, and the write fails with `ECONNRESET` having counted nothing
+(issue #5630).  A write that starts after the reset arrived fails at once, typically with `EPIPE` (seen on both
+Linux and macOS in the tests), and with `ECONNRESET` when the reset is still pending on the socket.
+After any of these the connection is gone, so the read returns at once with whatever the peer sent and then EOF; it
+can never wait for a response that is not coming.  A peer that answers before it has read the whole header block
+(a `431`, say) is handled by the same rule.
+
+The same holds after the handover.  `handleFullDuplex()` drives the receive side before the send side, but the
+response and the reset can arrive between the two: the receive side finds nothing, and the write of the rest of the
+body fails.  `driveSendSide()` then gives the buffered send up with `abandonFailedBufferedSend()` instead of failing
+the request, and the read on the next cycle returns the response, or EOF and the send error.  In
+`SendState::ABANDONED` nothing more is sent and, since the request is incomplete, the connection is closed after
+the response, as with `abandonBufferedSendAndDeliver()`.
 
 How early the peer's close arrives depends on how fast the peer's own socket close completes, which is why a
 change to the cost of `Socket` close (see `async-socket-io.md`) moves this race.  `repeatedEarlyFaultTest` in
-`HttpClientBufferedDuplex.qtest` covers it.
+`HttpClientBufferedDuplex.qtest` repeats the race; the `EarlyAnswerPeer` cases force the failed write deterministically: the request header block is larger than the socket buffers and the peer answers after reading 1 KiB of it, then resets the connection (with or without a FIN first), so the write fails before the header block is out on every platform.
 
 Only a response that is on the wire before the peer's reset can be delivered: a peer that closes with request data
 unread resets the connection, and the reset discards whatever the peer has not yet transmitted.  A client that is
@@ -129,7 +149,9 @@ Only `100` is consumed.  `101` ends HTTP framing and is handled separately, and 
 writes its whole response before it reads a single body byte, so `PeerObserved::response_written`
 can only become true if the client read while its own upload was in flight.  It covers plain and
 TLS transports, string and binary bodies, `Content-Length` / chunked / close-delimited response
-framing, an early fault from a peer that stops reading, `100 Continue` mid-upload, peer EOF,
+framing, an early fault from a peer that stops reading, a fault answered and followed by a reset while
+the request header block is still being written (and a reset with no answer, which reports the send error),
+`100 Continue` mid-upload, peer EOF,
 request timeout, caller cancellation, same-client recovery after each of those, and a small
 request that must still go out in one write and leave the connection poolable.
 

@@ -43,6 +43,8 @@
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/ql_debug.h"
 
+#include <cerrno>
+
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -749,8 +751,27 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             if (poll_xsink) {
                 QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
                 QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
-                setError(*err_str ? err_str->c_str() : "HTTP1-SEND-ERROR",
-                    *desc_str ? desc_str->c_str() : "streaming request-body send failed", xsink);
+                const char* err = *err_str ? err_str->c_str() : "HTTP1-SEND-ERROR";
+                const char* desc = *desc_str ? desc_str->c_str() : "streaming request-body send failed";
+
+                // The peer closed or reset the connection while the rest of a buffered request was going out.  It
+                // read the header block, so it may have answered the request before it stopped reading, and the
+                // answer can be in the receive buffer although the receive side found nothing on this cycle: it
+                // ran first, and the response and the reset arrived after it.  The connection is gone, so the
+                // read on the next cycle returns at once: the response, or EOF, in which case the send error is
+                // reported.
+                if (send_buffered_body && sendFailedOnPeerClose(poll_xsink)) {
+                    std::string saved_err(err);
+                    std::string saved_desc(desc);
+                    poll_xsink.clear();
+                    ASYNC_IO_TRACE("H1 driveSendSide: the buffered request body send failed (%s: %s) - reading "
+                        "the response the peer may have sent fd=%d\n", saved_err.c_str(), saved_desc.c_str(),
+                        sock_obj ? sock_obj->getSocket() : -1);
+                    abandonFailedBufferedSend(saved_err, saved_desc, xsink);
+                    return 0;
+                }
+
+                setError(err, desc, xsink);
                 poll_xsink.clear();
                 return -1;
             }
@@ -780,7 +801,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             }
         }
 
-        if (send_state == SendState::DONE) {
+        if (send_state == SendState::DONE || send_state == SendState::ABANDONED) {
             return 0;
         }
 
@@ -885,21 +906,41 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     }
     read_op->setSelf(*self);
 
-    ASYNC_IO_TRACE("H1 handleSending: the request send failed (%s) after its headers were written - reading "
-        "the response the peer may have sent fd=%d\n", err.c_str(), sock_obj ? sock_obj->getSocket() : -1);
+    ASYNC_IO_TRACE("H1 handleSending: the request send failed (%s: %s) - reading the response the peer may have "
+        "sent fd=%d\n", err.c_str(), desc.c_str(), sock_obj ? sock_obj->getSocket() : -1);
 
-    // the failed send operation is released; the request is abandoned the way awaitBufferedSend() abandons one
-    // the peer stopped reading (send_state is not DONE, so a response closes the connection)
+    // the failed send operation is released, and the request is abandoned (send_state is not DONE, so a response
+    // closes the connection)
     releaseCurrentOp(xsink);
     current_op = read_op;
-    send_state = SendState::SENDING;
+    req_state = ReqState::RECV_HEADER;
+    abandonFailedBufferedSend(err, desc, xsink);
+    return handleFullDuplex(xsink);
+}
+
+void Http1ClientPollOperationPriv::abandonFailedBufferedSend(const std::string& err, const std::string& desc,
+        ExceptionSink* xsink) {
+    releaseSendOp(xsink);
+    send_state = SendState::ABANDONED;
     send_buffered_body = false;
     send_final_pending = false;
-    req_state = ReqState::RECV_HEADER;
     send_failure_pending = true;
     send_failure_err = err;
     send_failure_desc = desc;
-    return handleFullDuplex(xsink);
+}
+
+bool Http1ClientPollOperationPriv::sendFailedOnPeerClose(ExceptionSink& send_xsink) {
+    // the socket layer raises a failed write with the errno as the exception argument
+    QoreValue arg = send_xsink.getExceptionArg();
+    if (arg.getType() != NT_INT) {
+        return false;
+    }
+    int64 en = arg.getAsBigInt();
+    return en == ECONNRESET || en == EPIPE
+#ifdef ECONNABORTED
+        || en == ECONNABORTED
+#endif
+        ;
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsink) {
@@ -1239,15 +1280,22 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         const char* err = *err_str ? err_str->c_str() : "HTTP1-SEND-ERROR";
         const char* desc = *desc_str ? desc_str->c_str() : "send failed";
 
-        // The write failed after the header block had reached the wire.  A peer that answers a request before it
-        // has read the body (a fault such as 413) and then closes or resets the connection makes the next write
-        // of the body fail, and that can happen within this very first send, before the socket ever reports that
-        // it would block.  The answer is complete and authoritative, so read it rather than report the write
-        // error it caused; see recoverResponseAfterSendFailure().
+        // The write failed after the header block had reached the wire, or may have.  A peer that answers a request
+        // before it has read all of it (a fault such as 413 or 431) and then closes or resets the connection makes
+        // the next write fail, and that can happen within this very first send, before the socket ever reports that
+        // it would block.  The answer is complete and authoritative, so read it rather than report the write error
+        // it caused; see recoverResponseAfterSendFailure().
+        //
+        // The count of bytes written does not show that the header block went out when the peer closed or reset
+        // the connection: a BSD-derived stack (macOS) fails a write that a reset interrupts without reporting the
+        // bytes it had already transmitted, so a send that wrote the header block and part of the body in its first
+        // write can fail having counted nothing.  The connection is gone in that case, so reading costs nothing: the
+        // read returns at once, with the response or with EOF, and then the send error is reported.
         if (!streaming_send_io && send_state == SendState::INACTIVE && req_state == ReqState::SENDING
                 && request_header_len) {
             assert(dynamic_cast<SocketSendPollOperation*>(current_op));
-            if (static_cast<SocketSendPollOperation*>(current_op)->getBytesSent() >= request_header_len) {
+            if (static_cast<SocketSendPollOperation*>(current_op)->getBytesSent() >= request_header_len
+                    || sendFailedOnPeerClose(poll_xsink)) {
                 std::string saved_err(err);
                 std::string saved_desc(desc);
                 poll_xsink.clear();
@@ -2550,6 +2598,8 @@ void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
 
 QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* xsink) {
     empty_read_count = 0;
+    // the response arrived: a send that failed before it is not reported
+    send_failure_pending = false;
 
     // The response is complete but a buffered request body is not.  The request declared a
     // Content-Length, so stopping short of it would leave the peer holding a request it cannot process -
@@ -2747,10 +2797,17 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
 void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, const QoreHashNode* extra,
         ExceptionSink* xsink, QoreValue arg) {
     // the response that was read after a failed send did not arrive: the send error is the real one
+    // (copied, as the members can be reassigned by the time the strings are used below)
+    std::string saved_err, saved_desc;
     if (send_failure_pending) {
         send_failure_pending = false;
-        err = send_failure_err.c_str();
-        desc = send_failure_desc.c_str();
+        saved_err.swap(send_failure_err);
+        saved_desc.swap(send_failure_desc);
+        err = saved_err.c_str();
+        desc = saved_desc.c_str();
+        // the argument and extra information belong to the error that is replaced
+        arg = QoreValue();
+        extra = nullptr;
     }
     {
         AutoLocker al(stream_lock);
