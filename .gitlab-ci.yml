@@ -202,6 +202,9 @@ build-perf:
 # Test stage - install pre-built artifacts and run tests
 # Every test job has a 105-minute time limit: the tests of the slowest job (test-jit-ubuntu-amd64 2/2) took 76 minutes
 # on a busy node (job 213206).
+# The shards of a job (parallel: N) are balanced by the durations of its tests in
+# examples/test/docker_test/test-durations.tsv; after a change in the number of shards, the tests or their durations,
+# refresh it from a green pipeline with examples/test/docker_test/update-test-durations.py <pipeline ID>.
 test-ubuntu-amd64:
   stage: test
   parallel: 2
@@ -264,9 +267,11 @@ test-ubuntu-arm64:
       - crash-dumps/
     expire_in: 7 days
 
+# The longest test job: three shards (the explicit execution-mode jobs leave out the harness tests that the
+# default-mode jobs run, which gives the capacity for the third shard; test-ast-ubuntu-amd64 runs in one)
 test-alpine-amd64:
   stage: test
-  parallel: 2
+  parallel: 3
   timeout: 105 minutes
   needs: [build-alpine-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
@@ -326,9 +331,9 @@ test-alpine-arm64:
       - crash-dumps/
     expire_in: 7 days
 
+# One job: without the harness tests that the default-mode jobs run, its tests take about 830 s
 test-ast-ubuntu-amd64:
   stage: test
-  parallel: 2
   timeout: 105 minutes
   needs: [build-ubuntu-amd64, {job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop

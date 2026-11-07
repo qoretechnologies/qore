@@ -7,6 +7,7 @@ print_usage () {
   echo
   echo "  -d <dir>   Run only specified tests (as found in $BASE_TEST_PATH)."
   echo "  -j         Use --format=junit option for the tests, making them print JUnit output."
+  echo "  -l         List the tests that would run (after the selection and the shard), one per line, and exit."
   echo "  -E         Exclude performance/stress tests (matched by *Perf* or PipelineMemory pattern)."
   echo "  -P         Run only performance/stress tests."
   echo "  -t         Measure execution time of the tests."
@@ -26,7 +27,11 @@ print_usage () {
   echo "  QORE_TEST_STACK_DUMP_WAIT"
   echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
-  echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
+  echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution; the shards are balanced by"
+  echo "                           the durations of the tests in examples/test/docker_test/test-durations.tsv."
+  echo "  QORE_TEST_DURATION_PROFILE"
+  echo "                           The column of test-durations.tsv used (default: CI_JOB_NAME without its shard)."
+  echo "  QORE_TEST_DURATIONS_FILE The durations file (default: examples/test/docker_test/test-durations.tsv)."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
   echo "  QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN"
@@ -52,6 +57,7 @@ TEST_DIRS=""
 TEST_OUTPUT_FORMAT=""
 PERF_EXCLUDE=0
 PERF_ONLY=0
+LIST_TESTS=0
 
 # Support environment variables for CI integration
 if [ "${QORE_EXCLUDE_PERF_TESTS}" = "1" ]; then
@@ -61,7 +67,7 @@ if [ "${QORE_PERF_TESTS_ONLY}" = "1" ]; then
     PERF_ONLY=1
 fi
 
-while getopts ":d:jvtEP" opt; do
+while getopts ":d:jlvtEP" opt; do
     case $opt in
         d)
             TEST_DIRS="$TEST_DIRS $BASE_TEST_PATH/$OPTARG"
@@ -80,6 +86,9 @@ while getopts ":d:jvtEP" opt; do
             else
                 TEST_OUTPUT_FORMAT="-v"
             fi
+            ;;
+        l)
+            LIST_TESTS=1
             ;;
         t)
             MEASURE_TIME=1
@@ -133,6 +142,244 @@ for dir in $QORE_TEST_EXTRA_DIRS; do
     fi
     TEST_DIRS="$TEST_DIRS $dir"
 done
+
+# Search for tests in the test directory.
+TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
+FAILED_TESTS=""
+
+# Helper: check if a test matches the perf/stress test pattern
+is_perf_test() {
+    # the file name, without a subshell for each of the 2000 tests
+    case "${1##*/}" in
+        *Perf*|PipelineMemory.qtest) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Filter perf tests if requested
+if [ $PERF_EXCLUDE -eq 1 ]; then
+    FILTERED=""
+    for test in $TESTS; do
+        if ! is_perf_test "$test"; then
+            FILTERED="$FILTERED $test"
+        fi
+    done
+    TESTS="$FILTERED"
+elif [ $PERF_ONLY -eq 1 ]; then
+    FILTERED=""
+    for test in $TESTS; do
+        if is_perf_test "$test"; then
+            FILTERED="$FILTERED $test"
+        fi
+    done
+    TESTS="$FILTERED"
+fi
+
+# The tests that declare "# test-exec-mode: children" make all their checks in child processes that set their own
+# execution mode (--exec-mode) with ExecModeHarness.qm, so the execution mode of the test itself changes nothing they
+# check: a run whose tests all get an execution mode (an --exec-mode option in QORE_TEST_OPTS) leaves them out when
+# QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1, as a run in the default mode runs the same child processes.  A harness test
+# with checks of its own declares "# test-exec-mode: parent" and always runs.
+# examples/test/runner/test_exec_mode_markers.py checks the declarations.
+if [ "${QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN}" = "1" ]; then
+    case " $QORE_TEST_OPTS " in
+        *" --exec-mode="*|*" --exec-mode "*) ;;
+        *)
+            echo "ERROR: QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1 needs an --exec-mode option in QORE_TEST_OPTS: the" \
+                "tests it leaves out run only in the default execution mode" >&2
+            exit 1
+            ;;
+    esac
+    CHILD_MODE_TESTS=""
+    if [ -n "$TESTS" ]; then
+        CHILD_MODE_TESTS=`grep -l '^# test-exec-mode: children' $TESTS`
+    fi
+    FILTERED=""
+    EXCLUDED_COUNT=0
+    for test in $TESTS; do
+        case "
+$CHILD_MODE_TESTS
+" in
+            *"
+$test
+"*) EXCLUDED_COUNT=$(( EXCLUDED_COUNT + 1 )) ;;
+            *) FILTERED="$FILTERED $test" ;;
+        esac
+    done
+    TESTS="$FILTERED"
+    if [ $LIST_TESTS -eq 0 ]; then
+        echo "Left out $EXCLUDED_COUNT tests that declare 'test-exec-mode: children': their child processes set" \
+            "their own execution mode and run in the default-mode jobs"
+    fi
+fi
+
+# The durations of the tests: each CI test job is a column of test-durations.tsv (see update-test-durations.py),
+# named by the job without its shard (CI_JOB_NAME "test-alpine-amd64 2/3" reads column test-alpine-amd64), or by
+# QORE_TEST_DURATION_PROFILE; another name reads column test-ubuntu-amd64.  A test with no duration counts as the
+# median of the others.
+TEST_DURATIONS_FILE=${QORE_TEST_DURATIONS_FILE:-$BASE_TEST_PATH/docker_test/test-durations.tsv}
+TEST_DURATION_PROFILE=${QORE_TEST_DURATION_PROFILE:-${CI_JOB_NAME% [0-9]*/[0-9]*}}
+# the column read: the profile's, else test-ubuntu-amd64; none without a durations file
+TEST_DURATION_COLUMN=""
+if [ -r "$TEST_DURATIONS_FILE" ]; then
+    TEST_DURATION_COLUMN=`awk -F '\t' -v profile="$TEST_DURATION_PROFILE" '
+        /^#/ { next }
+        $1 == "test" {
+            for (i = 2; i <= NF; ++i) {
+                if ($i == profile) {
+                    found = profile
+                }
+            }
+            print (found != "" ? found : "test-ubuntu-amd64")
+            exit
+        }' "$TEST_DURATIONS_FILE"`
+fi
+
+# Prints "<shard>	<seconds>	<test>" for each test in TESTS, in their order, with the shards (1 to the given number)
+# that longest-processing-time-first packing gives: the longest test goes to the shard with the least work so far
+# (the first such shard on a tie), and tests of the same duration in the order of their names, so that every shard of
+# a job computes the same split.  A test counts as at least 0.1 s.
+plan_tests() {
+    printf '%s\n' $TESTS | awk -v shards="$1" -v durations="$TEST_DURATIONS_FILE" -v profile="$TEST_DURATION_COLUMN" '
+        # sorts idx[lo..hi] by descending duration, then by name
+        function before(a, b) {
+            return dur[a] > dur[b] || (dur[a] == dur[b] && key[a] < key[b])
+        }
+        function sort_tests(lo, hi,    i, last, t) {
+            if (lo >= hi) {
+                return
+            }
+            t = idx[lo]; idx[lo] = idx[int((lo + hi) / 2)]; idx[int((lo + hi) / 2)] = t
+            last = lo
+            for (i = lo + 1; i <= hi; ++i) {
+                if (before(idx[i], idx[lo])) {
+                    ++last
+                    t = idx[last]; idx[last] = idx[i]; idx[i] = t
+                }
+            }
+            t = idx[lo]; idx[lo] = idx[last]; idx[last] = t
+            sort_tests(lo, last - 1)
+            sort_tests(last + 1, hi)
+        }
+        function sort_values(lo, hi,    i, last, t) {
+            if (lo >= hi) {
+                return
+            }
+            t = val[lo]; val[lo] = val[int((lo + hi) / 2)]; val[int((lo + hi) / 2)] = t
+            last = lo
+            for (i = lo + 1; i <= hi; ++i) {
+                if (val[i] < val[lo]) {
+                    ++last
+                    t = val[last]; val[last] = val[i]; val[i] = t
+                }
+            }
+            t = val[lo]; val[lo] = val[last]; val[last] = t
+            sort_values(lo, last - 1)
+            sort_values(last + 1, hi)
+        }
+        BEGIN {
+            # the number of tests, a number from the start: an unassigned variable is "" as a subscript
+            n = 0
+            col = 0
+            while ((getline line < durations) > 0) {
+                if (line ~ /^#/ || line == "") {
+                    continue
+                }
+                nf = split(line, f, "\t")
+                if (f[1] == "test") {
+                    for (i = 2; i <= nf; ++i) {
+                        if (f[i] == profile) {
+                            col = i
+                        }
+                    }
+                    continue
+                }
+                if (col && f[col] != "" && f[col] != "-") {
+                    known[f[1]] = f[col] + 0
+                }
+            }
+        }
+        {
+            test[n] = $0
+            key[n] = $0
+            sub(/^\.\//, "", key[n])
+            ++n
+        }
+        END {
+            nv = 0
+            for (i = 0; i < n; ++i) {
+                if (key[i] in known) {
+                    val[nv++] = known[key[i]]
+                }
+            }
+            sort_values(0, nv - 1)
+            median = nv ? (nv % 2 ? val[int(nv / 2)] : (val[nv / 2 - 1] + val[nv / 2]) / 2) : 1
+            # a test takes at least 0.1 s (the durations have that precision), so that the shortest tests are
+            # spread over the shards too
+            for (i = 0; i < n; ++i) {
+                dur[i] = (key[i] in known) ? known[key[i]] : median
+                if (dur[i] < 0.1) {
+                    dur[i] = 0.1
+                }
+                idx[i] = i
+            }
+            sort_tests(0, n - 1)
+            for (s = 1; s <= shards; ++s) {
+                load[s] = 0
+            }
+            for (j = 0; j < n; ++j) {
+                i = idx[j]
+                best = 1
+                for (s = 2; s <= shards; ++s) {
+                    if (load[s] < load[best]) {
+                        best = s
+                    }
+                }
+                shard[i] = best
+                load[best] += dur[i]
+            }
+            for (i = 0; i < n; ++i) {
+                printf "%d\t%s\t%s\n", shard[i], dur[i], test[i]
+            }
+        }'
+}
+
+# Shard tests for parallel CI execution: GitLab sets CI_NODE_INDEX (1-based) and CI_NODE_TOTAL with parallel: N; the
+# shards are balanced by the durations of the tests (see plan_tests())
+TEST_PLAN=""
+SHARD_SUMMARY_FD=1
+if [ $LIST_TESTS -eq 1 ]; then
+    SHARD_SUMMARY_FD=2
+fi
+if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 1 ] 2>/dev/null; then
+    if [ "$CI_NODE_INDEX" -lt 1 ] 2>/dev/null || [ "$CI_NODE_INDEX" -gt "$CI_NODE_TOTAL" ] 2>/dev/null; then
+        echo "ERROR: CI_NODE_INDEX $CI_NODE_INDEX is not a shard of $CI_NODE_TOTAL" >&2
+        exit 1
+    fi
+    TEST_PLAN=`plan_tests "$CI_NODE_TOTAL"`
+    TESTS=`printf '%s\n' "$TEST_PLAN" | awk -F '\t' -v shard="$CI_NODE_INDEX" '$1 == shard { print $3 }'`
+    # on stderr with -l, which lists only the tests on stdout
+    if [ $PRINT_TEXT -eq 1 ]; then
+        printf '%s\n' "$TEST_PLAN" | awk -F '\t' -v shard="$CI_NODE_INDEX" -v total="$CI_NODE_TOTAL" \
+            -v column="${TEST_DURATION_COLUMN:-no durations file}" '
+            { all += $2; if ($1 == shard) { mine += $2; ++n } }
+            END { printf "Shard %d/%d selected: %d tests, %.0fs of %.0fs by the durations of %s\n", shard, total, n,
+                  mine, all, column }' >&$SHARD_SUMMARY_FD
+    fi
+fi
+
+TEST_COUNT=`echo $TESTS | wc -w`
+if [ $TEST_COUNT -eq 0 ]; then
+    echo "ERROR: no tests found to run" >&2
+    exit 1
+fi
+# -l: the tests that would run, one per line, and nothing else
+if [ $LIST_TESTS -eq 1 ]; then
+    for test in $TESTS; do
+        echo "$test"
+    done
+    exit 0
+fi
 
 QORE=""
 QR=""
@@ -558,96 +805,6 @@ if [ $MEASURE_TIME -eq 1 ]; then
 fi
 echo
 
-# Search for tests in the test directory.
-TESTS=`find $TEST_DIRS -name "*.qtest" | sort`
-FAILED_TESTS=""
-
-# Helper: check if a test matches the perf/stress test pattern
-is_perf_test() {
-    case "$(basename "$1")" in
-        *Perf*|PipelineMemory.qtest) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-# Filter perf tests if requested
-if [ $PERF_EXCLUDE -eq 1 ]; then
-    FILTERED=""
-    for test in $TESTS; do
-        if ! is_perf_test "$test"; then
-            FILTERED="$FILTERED $test"
-        fi
-    done
-    TESTS="$FILTERED"
-elif [ $PERF_ONLY -eq 1 ]; then
-    FILTERED=""
-    for test in $TESTS; do
-        if is_perf_test "$test"; then
-            FILTERED="$FILTERED $test"
-        fi
-    done
-    TESTS="$FILTERED"
-fi
-
-# The tests that declare "# test-exec-mode: children" make all their checks in child processes that set their own
-# execution mode (--exec-mode) with ExecModeHarness.qm, so the execution mode of the test itself changes nothing they
-# check: a run whose tests all get an execution mode (an --exec-mode option in QORE_TEST_OPTS) leaves them out when
-# QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1, as a run in the default mode runs the same child processes.  A harness test
-# with checks of its own declares "# test-exec-mode: parent" and always runs.
-# examples/test/runner/test_exec_mode_markers.py checks the declarations.
-if [ "${QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN}" = "1" ]; then
-    case " $QORE_TEST_OPTS " in
-        *" --exec-mode="*|*" --exec-mode "*) ;;
-        *)
-            echo "ERROR: QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN=1 needs an --exec-mode option in QORE_TEST_OPTS: the" \
-                "tests it leaves out run only in the default execution mode" >&2
-            exit 1
-            ;;
-    esac
-    CHILD_MODE_TESTS=""
-    if [ -n "$TESTS" ]; then
-        CHILD_MODE_TESTS=`grep -l '^# test-exec-mode: children' $TESTS`
-    fi
-    FILTERED=""
-    EXCLUDED_COUNT=0
-    for test in $TESTS; do
-        case "
-$CHILD_MODE_TESTS
-" in
-            *"
-$test
-"*) EXCLUDED_COUNT=$(( EXCLUDED_COUNT + 1 )) ;;
-            *) FILTERED="$FILTERED $test" ;;
-        esac
-    done
-    TESTS="$FILTERED"
-    echo "Left out $EXCLUDED_COUNT tests that declare 'test-exec-mode: children': their child processes set their" \
-        "own execution mode and run in the default-mode jobs"
-fi
-
-# Shard tests for parallel CI execution
-# GitLab sets CI_NODE_INDEX (1-based) and CI_NODE_TOTAL with parallel: N
-if [ -n "$CI_NODE_INDEX" ] && [ -n "$CI_NODE_TOTAL" ] && [ "$CI_NODE_TOTAL" -gt 1 ] 2>/dev/null; then
-    SHARDED=""
-    j=0
-    for test in $TESTS; do
-        shard=$(( (j % CI_NODE_TOTAL) + 1 ))
-        if [ $shard -eq $CI_NODE_INDEX ]; then
-            SHARDED="$SHARDED $test"
-        fi
-        j=$(( j + 1 ))
-    done
-    TESTS="$SHARDED"
-    if [ $PRINT_TEXT -eq 1 ]; then
-        echo "Shard $CI_NODE_INDEX/$CI_NODE_TOTAL selected"
-    fi
-fi
-
-TEST_COUNT=`echo $TESTS | wc -w`
-if [ $TEST_COUNT -eq 0 ]; then
-    echo "ERROR: no tests found to run" >&2
-    exit 1
-fi
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
