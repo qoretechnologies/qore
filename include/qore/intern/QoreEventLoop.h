@@ -344,13 +344,44 @@ private:
         //! A named pipe on Darwin, which is watched with select(2) instead of kqueue (see fifo_count); always false
         //! on other platforms
         bool fifo = false;
+        //! A descriptor that is always ready, which is not registered with the system (see always_ready_count)
+        bool always_ready = false;
     };
 
+    //! How a registered descriptor is waited for
+    enum class FdWait {
+        Kernel,         //!< it is registered with the system (kqueue or epoll)
+        Fifo,           //!< a named pipe on Darwin, watched with select(2) (see fifo_count)
+        AlwaysReady,    //!< it is always ready and is not waited for (see always_ready_count)
+    };
+
+    //! Registers a descriptor that has no registration in the loop, and returns how it is waited for in @p wait
+    /** @return 0 for success, -1 for error (exception raised)
+    */
+    DLLLOCAL int kernelAttach(int fd, int events, void* udata, FdWait& wait, ExceptionSink* xsink);
+
+    //! Gives the system the events of a registered descriptor again; @p events are the union of its registrations'
+    /** @return 0 for success, -1 for error (exception raised)
+    */
+    DLLLOCAL int kernelUpdate(int fd, FdInfo& info, int events, ExceptionSink* xsink);
+
+    //! Records how the descriptor of @p info is waited for, and keeps @ref fifo_count and @ref always_ready_count
+    DLLLOCAL void setWait(FdInfo& info, FdWait wait);
+
     //! Registers the descriptor with the system; @p events are the union of its registrations' events
+    /** @return 0 for success, 1 if the system cannot wait for the descriptor (epoll refuses a regular file or a
+        directory with EPERM; no exception is raised), -1 for error (exception raised)
+    */
     DLLLOCAL int kernelAdd(int fd, int events, void* udata, ExceptionSink* xsink);
 
     //! Changes the events of a descriptor registered with the system (adds it if the system has dropped it)
+    /** @return 0 for success, -1 for error (exception raised), also if the system has dropped the descriptor and
+        cannot wait for the one that has its number now
+    */
     DLLLOCAL int kernelModify(int fd, int events, void* udata, ExceptionSink* xsink);
+
+    //! Adds an event for each always-ready descriptor to @p events (see always_ready_count)
+    DLLLOCAL void addAlwaysReadyEvents(std::vector<QoreEventInfo>& events);
 
     //! Removes a descriptor from the system
     DLLLOCAL int kernelRemove(int fd, ExceptionSink* xsink);
@@ -411,6 +442,15 @@ private:
 
     //! Map of fd -> info
     std::unordered_map<int, FdInfo> fd_map;
+
+    //! the number of always-ready descriptors in fd_map
+    /** poll(2) reports a regular file always ready to read and to write: a read or a write of one does not wait for
+        anything that the system could report.  epoll refuses to wait for one (EPERM, also for a directory), and kqueue
+        reports one readable only before its end, so a wait for a regular file at its end, or for any regular file on
+        Linux, lasted until its timeout.  Such a descriptor is not registered with the system; while there are any,
+        poll() does not wait and reports each one ready for the events it is registered for, as poll(2) does.
+    */
+    size_t always_ready_count = 0;
 
 #ifdef DARWIN
     int event_fd = -1;  //!< kqueue file descriptor

@@ -5275,15 +5275,17 @@ public:
         }
     }
 
-    //! An extra fd that the event loop refuses is not left registered or held for the operation
+    //! An extra fd that epoll cannot wait for is not left registered or held for the operation
     /** The controller forgot an extra fd that the event loop refused, but a registration that the operation had for it
         stayed in the event loop, and the hold of an owned descriptor stayed in the I/O thread, which then kept the
-        descriptor open until it exited.  Linux only: epoll refuses /dev/null.
-        - "owned": the operation waits for an owned descriptor of /dev/null, which epoll refuses; when the owner gives
-          it up, it is closed.
+        descriptor open until it exited.  Linux only: epoll cannot wait for /dev/null (EPERM).
+        - "owned": the operation waits for an owned descriptor of /dev/null, which the event loop reports always ready,
+          as poll(2) does (see QoreEventLoop::always_ready_count); when the owner gives it up and the operation no
+          longer waits for it, it is closed.
         - "by number": the operation waits for a socket by number, whose number then goes to a copy of /dev/null, as a
           close by another thread and a reuse would, and the operation waits for the number again, also for writing:
-          epoll refuses the change, and the operation's registration of the number is removed.
+          epoll refuses the change of the stale registration, and the operation's registration of the number is
+          removed.
     */
     static void runRefusedExtraFd(UnitTestCounters& c) {
 #ifdef __linux__
@@ -5406,6 +5408,17 @@ public:
                     });
                 }
                 UT_ASSERT(c, stepped, (std::string(v) + ": the operation gives the descriptor up").c_str());
+                // the next step of the operation, for the notifier, runs once the I/O thread has taken the poll info
+                // of the step that gave the descriptor up, which no longer has it, so the registration and its hold
+                // have been removed by then
+                notifier->notify();
+                {
+                    std::unique_lock<std::mutex> g(slog.l);
+                    stepped = slog.cv.wait_for(g, std::chrono::seconds(30), [&slog]() {
+                        return slog.steps > 1;
+                    });
+                }
+                UT_ASSERT(c, stepped, (std::string(v) + ": the operation runs again for the notifier").c_str());
                 struct stat st;
                 UT_ASSERT(c, fstat(owned_fd, &st) || st.st_ino != ost.st_ino || st.st_dev != ost.st_dev,
                     (std::string(v) + ": the refused descriptor is closed when its owner gives it up").c_str());

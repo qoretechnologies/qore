@@ -38,9 +38,11 @@
 #include <climits>
 #include <cstring>
 #include <new>
+#include <fcntl.h>
 #include <unistd.h>
 #include <poll.h>
 #include <time.h>
+#include <sys/stat.h>
 #if defined(__linux__)
 #include <sys/syscall.h>
 #endif
@@ -192,24 +194,15 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
             dbg_before_register(fd);
         }
 #endif
-        // a named pipe is watched with select(2) in poll() instead of by kqueue (see fifo_count)
-        bool fifo = false;
-#ifdef DARWIN
-        fifo = qore_fd_poll_misses_hangup(fd);
-#endif
-        if (!fifo && kernelAdd(fd, events, udata, xsink)) {
+        FdWait wait;
+        if (kernelAttach(fd, events, udata, wait, xsink)) {
             return -1;
         }
         FdInfo& info = fd_map[fd];
         info.events = events;
         info.udata = udata;
         info.regs[key] = {events, udata};
-#ifdef DARWIN
-        if (fifo) {
-            info.fifo = true;
-            ++fifo_count;
-        }
-#endif
+        setWait(info, wait);
         return 0;
     }
 
@@ -228,9 +221,8 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
     }
 #endif
     // the system is given the union of the events again also when it is unchanged: the system drops a descriptor
-    // that is closed, and a registration without a hold of its descriptor can have outlived it (see kernelModify());
-    // a named pipe is watched for info.events by poll()
-    if (!info.fifo && kernelModify(fd, all, info.udata, xsink)) {
+    // that is closed, and a registration without a hold of its descriptor can have outlived it (see kernelModify())
+    if (kernelUpdate(fd, info, all, xsink)) {
         if (existed) {
             info.regs[key] = prev;
         } else {
@@ -256,22 +248,16 @@ int QoreEventLoop::removeRegistration(int fd, uint64_t key, ExceptionSink* xsink
     void* removed_udata = rit->second.udata;
     info.regs.erase(rit);
     if (info.regs.empty()) {
-        const bool fifo = info.fifo;
+        // a named pipe and an always-ready descriptor are not registered with the system
+        const bool kernel = !info.fifo && !info.always_ready;
+        setWait(info, FdWait::Kernel);
         fd_map.erase(it);
 #ifdef DEBUG
         if (dbg_before_remove) {
             dbg_before_remove(fd);
         }
 #endif
-        if (fifo) {
-            // a named pipe is not registered with kqueue
-#ifdef DARWIN
-            assert(fifo_count);
-            --fifo_count;
-#endif
-            return 0;
-        }
-        return kernelRemove(fd, xsink);
+        return kernel ? kernelRemove(fd, xsink) : 0;
     }
 
     // the other registrations stay: the descriptor is polled for their events
@@ -286,8 +272,99 @@ int QoreEventLoop::removeRegistration(int fd, uint64_t key, ExceptionSink* xsink
         return 0;
     }
     info.events = all;
-    // a named pipe is watched for info.events by poll()
-    return info.fifo ? 0 : kernelModify(fd, all, info.udata, xsink);
+    return kernelUpdate(fd, info, all, xsink);
+}
+
+int QoreEventLoop::kernelAttach(int fd, int events, void* udata, FdWait& wait, ExceptionSink* xsink) {
+#ifdef DARWIN
+    // a named pipe is watched with select(2) in poll() instead of by kqueue (see fifo_count), and a regular file is
+    // always ready (see always_ready_count)
+    struct stat st;
+    if (!fstat(fd, &st)) {
+        if (qore_stat_poll_misses_hangup(st)) {
+            wait = FdWait::Fifo;
+            return 0;
+        }
+        if (S_ISREG(st.st_mode)) {
+            wait = FdWait::AlwaysReady;
+            return 0;
+        }
+    }
+#endif
+    int rc = kernelAdd(fd, events, udata, xsink);
+    if (rc < 0) {
+        return -1;
+    }
+    // epoll refuses a descriptor that it cannot wait for, which poll(2) reports always ready (see always_ready_count)
+    wait = rc ? FdWait::AlwaysReady : FdWait::Kernel;
+    return 0;
+}
+
+int QoreEventLoop::kernelUpdate(int fd, FdInfo& info, int events, ExceptionSink* xsink) {
+    if (info.fifo) {
+        // a named pipe is watched for info.events by poll()
+        return 0;
+    }
+    if (info.always_ready) {
+        // the descriptor is not registered with the system; it can have been closed and its number given to one that
+        // the system can wait for, as a registration that holds no descriptor can outlive it (see kernelModify())
+        FdWait wait;
+        if (kernelAttach(fd, events, info.udata, wait, xsink)) {
+            return -1;
+        }
+        setWait(info, wait);
+        return 0;
+    }
+    // a registered descriptor whose number has been given to one that the system cannot wait for is refused, as
+    // before: the registration is stale, and its owner removes it
+    return kernelModify(fd, events, info.udata, xsink);
+}
+
+void QoreEventLoop::setWait(FdInfo& info, FdWait wait) {
+    bool fifo = wait == FdWait::Fifo;
+    if (fifo != info.fifo) {
+#ifdef DARWIN
+        if (fifo) {
+            ++fifo_count;
+        } else {
+            assert(fifo_count);
+            --fifo_count;
+        }
+#else
+        // only Darwin watches named pipes with select(2)
+        assert(false);
+#endif
+        info.fifo = fifo;
+    }
+    bool always_ready = wait == FdWait::AlwaysReady;
+    if (always_ready != info.always_ready) {
+        if (always_ready) {
+            ++always_ready_count;
+        } else {
+            assert(always_ready_count);
+            --always_ready_count;
+        }
+        info.always_ready = always_ready;
+    }
+}
+
+void QoreEventLoop::addAlwaysReadyEvents(std::vector<QoreEventInfo>& events) {
+    assert(always_ready_count);
+    for (const auto& [fd, info] : fd_map) {
+        if (!info.always_ready) {
+            continue;
+        }
+        int ev = info.events & (QORE_EV_READ | QORE_EV_WRITE);
+        if (!ev) {
+            continue;
+        }
+        // a descriptor closed while it is registered is reported with an error, as poll(2) reports it (POLLNVAL), so
+        // that the operations waiting for it run and see the close
+        if (fcntl(fd, F_GETFD) < 0 && errno == EBADF) {
+            ev |= QORE_EV_ERROR;
+        }
+        events.push_back({fd, ev, info.udata});
+    }
 }
 
 bool QoreEventLoop::hasRegistration(int fd, uint64_t key) const {
@@ -422,6 +499,10 @@ int QoreEventLoop::kernelAdd(int fd, int events, void* udata, ExceptionSink* xsi
                 return -1;
             }
             return 0;
+        }
+        if (errno == EPERM) {
+            // epoll cannot wait for the descriptor: a regular file or a directory, which is always ready
+            return 1;
         }
         xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(ADD) failed for fd %d", fd);
         return -1;
@@ -714,6 +795,10 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             wait_us = remaining_us;
         }
     }
+    // an always-ready descriptor is ready now (see always_ready_count)
+    if (always_ready_count) {
+        wait_us = 0;
+    }
 
     // Check if we have any fds to poll
     bool has_fds;
@@ -872,6 +957,10 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     }
     // named pipes are not registered with kqueue, so their events are separate
     events.insert(events.end(), fifo_events_buf.begin(), fifo_events_buf.end());
+    // and so are those of the always-ready descriptors
+    if (always_ready_count) {
+        addAlwaysReadyEvents(events);
+    }
 
     // each registration of a descriptor gets the events it waits for
     expandRegistrations(events);
@@ -974,6 +1063,10 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         void* udata = (it != fd_map.end()) ? it->second.udata : nullptr;
 
         events.push_back({fd, ev, udata});
+    }
+    // the always-ready descriptors are not registered with epoll
+    if (always_ready_count) {
+        addAlwaysReadyEvents(events);
     }
 
     // each registration of a descriptor gets the events it waits for
