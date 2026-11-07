@@ -577,6 +577,43 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         return "TYPE-VALUE-ERROR";
     }
 
+    #! Returns the error code for reporting an error raised when a part of a value that may be missing was checked
+    /** Like getValueErrorCode(), but a part that was refused because it is missing is reported with
+        \c MISSING-VALUE-ERROR; an error that means that the check itself failed keeps its code whether or not the
+        part has a value.
+
+        @param err the code of the error raised when the part of the value was checked
+        @param has_value whether the part of the value exists
+
+        @return the error code to report: \a err if getValueErrorCode() keeps it, otherwise \c TYPE-VALUE-ERROR for
+        a part with a value and \c MISSING-VALUE-ERROR for a missing part
+
+        @since DataProvider 3.11
+    */
+    static string getRefusalErrorCode(string err, bool has_value) {
+        string code = getValueErrorCode(err);
+        if (code != "TYPE-VALUE-ERROR") {
+            return code;
+        }
+        return has_value ? code : "MISSING-VALUE-ERROR";
+    }
+
+    #! Returns True if an error raised when one alternative of a union checked a value means that the check failed
+    /** A union tries its alternatives in turn, and an alternative that refuses the value does not match it.  An
+        error that means that the check itself failed (a call that no variant accepts, an exhausted stack or a schema
+        whose document no longer exists) must be raised instead of trying the next alternative.  \c RUNTIME-TYPE-ERROR
+        is not one of them here, as a type from outside this module may still refuse a value with it.
+
+        @param err the code of the error raised by the alternative
+
+        @return True if the error must be raised instead of trying the next alternative
+
+        @since DataProvider 3.11
+    */
+    static bool isAlternativeCheckFailure(string err) {
+        return err != "RUNTIME-TYPE-ERROR" && getValueErrorCode(err) != "TYPE-VALUE-ERROR";
+    }
+
     #! Checks the given value against the validation constraints of the type
     /** @param value the value to check; values of kinds that no constraint describes are not checked
 

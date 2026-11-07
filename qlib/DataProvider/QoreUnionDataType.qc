@@ -355,6 +355,9 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
                 checkConstraints(rv);
                 return rv;
             } catch (hash<ExceptionInfo> ex) {
+                if (AbstractDataProviderType::isAlternativeCheckFailure(ex.err)) {
+                    rethrow;
+                }
                 last_exception = ex;
             }
         }
@@ -414,6 +417,9 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
                 }
                 push matched, type.getName();
             } catch (hash<ExceptionInfo> ex) {
+                if (AbstractDataProviderType::isAlternativeCheckFailure(ex.err)) {
+                    rethrow;
+                }
                 last_exception = ex;
             }
         }

@@ -281,7 +281,8 @@ auto v = t.getDefaultValue();
                 value{key} = field.acceptsValue(val);
             } catch (hash<ExceptionInfo> ex) {
                 AbstractDataProviderType field_type = field.getType();
-                rethrow exists val ? AbstractDataProviderType::getValueErrorCode(ex.err) : "MISSING-VALUE-ERROR",
+                # a failed check keeps its code also for a missing value; see getRefusalErrorCode()
+                rethrow AbstractDataProviderType::getRefusalErrorCode(ex.err, exists val),
                     sprintf("Error in type %y %s %s "
                     "field %y: %s: %s", getName(), field.isMandatory() ? "mandatory" : "optional",
                     field_type.getBaseTypeName(), key, ex.err, ex.desc);
@@ -294,9 +295,7 @@ auto v = t.getDefaultValue();
                         try {
                             value{i.key} = default_other_field_type.acceptsValue(i.value);
                         } catch (hash<ExceptionInfo> ex) {
-                            rethrow exists i.value
-                                ? AbstractDataProviderType::getValueErrorCode(ex.err)
-                                : "MISSING-VALUE-ERROR",
+                            rethrow AbstractDataProviderType::getRefusalErrorCode(ex.err, exists i.value),
                                 sprintf("Error in type %y default field %y: %s: %s", getName(), i.key, ex.err,
                                 ex.desc);
                         }

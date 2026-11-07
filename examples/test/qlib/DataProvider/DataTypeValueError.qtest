@@ -134,6 +134,19 @@ hashdecl ValueErrorTestInfo {
     int count;
 }
 
+#! raises a type error in its own code, as a defective initializer would
+int sub value_error_defective_init() {
+    auto text = "text";
+    int i = text;
+    return i;
+}
+
+#! a hashdecl whose member initializer has a defect
+hashdecl ValueErrorDefectiveInitInfo {
+    int count;
+    int computed = value_error_defective_init();
+}
+
 class DataTypeValueErrorTest inherits QUnit::Test {
     public {
         #! a value that each named type refuses
@@ -161,6 +174,9 @@ class DataTypeValueErrorTest inherits QUnit::Test {
     constructor() : QUnit::Test("DataTypeValueErrorTest", "1.0", \ARGV) {
         addTestCase("named types", \namedTypes());
         addTestCase("declared types", \declaredTypes());
+        addTestCase("an error in a hashdecl initializer is not a refused value", \hashDeclInitializer());
+        addTestCase("a failed check of a missing value keeps its code", \missingValueCheckFailure());
+        addTestCase("a union raises a failed check of an alternative", \unionCheckFailure());
         addTestCase("native check keeps its description and diagnostic", \nativeCheck());
         addTestCase("hash fields", \hashFields());
         addTestCase("missing values", \missingValues());
@@ -194,6 +210,49 @@ class DataTypeValueErrorTest inherits QUnit::Test {
             hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue(i.value); });
             assertEq("TYPE-VALUE-ERROR", ex.err, sprintf("%s: %s", i.key, ex.desc));
         }
+    }
+
+    hashDeclInitializer() {
+        HashDeclDataType type(new TypedHash("ValueErrorDefectiveInitInfo"));
+        # the value given is valid; the initializer of a member that is not given fails
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { type.acceptsValue({"count": 1}); }).err);
+        # a member value of the wrong type is refused before any initializer runs
+        hash<ExceptionInfo> ex = getException(sub () { type.acceptsValue({"count": "text"}); });
+        assertEq("TYPE-VALUE-ERROR", ex.err);
+        assertRegex("key \"count\"", ex.desc);
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { type.acceptsValue(1); }).err, "not a hash");
+        assertEq("HASHDECL-INIT-ERROR", getException(sub () { type.acceptsValue({"unknown": 1}); }).err);
+        assertEq(<ValueErrorDefectiveInitInfo>{"count": 1, "computed": 2},
+            type.acceptsValue({"count": 1, "computed": 2}));
+        # a column default value is not taken as an expression for the server when the initializer fails
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            SqlUtilColumnField f("a", "a", type, {"count": 1});
+            remove f;
+        });
+    }
+
+    missingValueCheckFailure() {
+        HashDataType h();
+        h.addField(new QoreDataField("a", NOTHING, new DefectiveDataType()));
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { h.acceptsValue({"a": NOTHING}); }).err,
+            "a missing value whose check fails is not reported as missing");
+        # the same for a field of the default type of other fields
+        HashDataType other();
+        other.setDefaultOtherFieldType(new DefectiveDataType());
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () { other.acceptsValue({"x": NOTHING}); }).err);
+        # a missing value that the type refuses is still reported as missing
+        HashDataType m();
+        m.addField(new QoreDataField("a", NOTHING, AbstractDataProviderTypeMap."int"));
+        assertEq("MISSING-VALUE-ERROR", getException(sub () { m.acceptsValue({"a": NOTHING}); }).err);
+    }
+
+    unionCheckFailure() {
+        QoreUnionDataType destroyed((new DestroyedDocumentDataType(), AbstractDataProviderTypeMap."int"));
+        assertEq("SCHEMA-DOCUMENT-DESTROYED", getException(sub () { destroyed.acceptsValue(1); }).err,
+            "the failed check of an alternative is raised, not taken as a non-match");
+        # a type outside this module may still refuse a value with RUNTIME-TYPE-ERROR: the next alternative is tried
+        QoreUnionDataType legacy((new DefectiveDataType(), AbstractDataProviderTypeMap."int"));
+        assertEq(1, legacy.acceptsValue(1));
     }
 
     declaredTypes() {
@@ -394,6 +453,10 @@ class DataTypeValueErrorTest inherits QUnit::Test {
             }
         }
         assertEq(1150200, new QoreSoftIntDataType(opts).acceptsValue("1.150.200"));
+        # a fraction alone and an exponent are numbers
+        assertEq(0.5, new QoreSoftFloatDataType(opts).acceptsValue(",5"));
+        assertEq(1500.0, new QoreSoftFloatDataType(opts).acceptsValue("1,5e3"));
+        assertEq(1500n, new QoreSoftNumberDataType(opts).acceptsValue("1,5e3"));
         assertEq(1150200.55, new QoreSoftFloatDataType(opts).acceptsValue("1.150.200,55"));
         assertEq(1150200.55n, new QoreSoftNumberDataType(opts).acceptsValue(" -1.150.200,55 ") * -1);
         # a format whose separators are the other way around

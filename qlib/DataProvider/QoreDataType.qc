@@ -615,9 +615,10 @@ class DataProviderSoftText {
     static checkFormattedNumber(string value, string format, string type_name) {
         string thousands = format.length() ? quote(format[0]) : "";
         string decimal = format.length() > 1 ? quote(format[1]) : "\\.";
-        # digits, which a thousands separator can divide, and an optional fraction
-        string pattern = "^[[:space:]]*[-+]?[0-9]+" + (thousands.val() ? "(" + thousands + "[0-9]+)*" : "")
-            + "(" + decimal + "[0-9]*)?[[:space:]]*$";
+        # digits, which a thousands separator can divide, with an optional fraction, or a fraction alone, and an
+        # optional exponent
+        string pattern = "^[[:space:]]*[-+]?([0-9]+" + (thousands.val() ? "(" + thousands + "[0-9]+)*" : "")
+            + "(" + decimal + "[0-9]*)?|" + decimal + "[0-9]+)([eE][-+]?[0-9]+)?[[:space:]]*$";
         if (!regex(value, pattern)) {
             throw "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y with number format %y; the input "
                 "data contains non-numeric text", value, type_name, format);

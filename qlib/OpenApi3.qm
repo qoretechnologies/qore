@@ -5401,6 +5401,9 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
                     have_first = True;
                 }
             } catch (hash<ExceptionInfo> ex) {
+                if (AbstractDataProviderType::isAlternativeCheckFailure(ex.err)) {
+                    rethrow;
+                }
                 last_exception = ex;
             }
         }
@@ -7017,7 +7020,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         }
                         ++matches;
                     } catch (hash<ExceptionInfo> ex) {
-                        # This alternative does not accept the value.
+                        # this alternative does not accept the value, unless its check failed
+                        if (AbstractDataProviderType::isAlternativeCheckFailure(ex.err)) {
+                            rethrow;
+                        }
                     }
                 }
                 if (!matches || (keyword == "oneOf" && matches != 1)) {
