@@ -364,6 +364,13 @@ lvalue paths retain distinct SSA ownership. Set `QORE_DISABLE_IR_CSE=1` to
 retain the unoptimized same-binary path; the `QORE_IR_OPT_STATS=1` output
 includes forwarded-load and eliminated-expression counts.
 
+Work an engine does on its own behalf in the thread of a call (the IR interpreter's
+analysis of a function on its first IR call, compilation) is never a cancellation point
+that raises: a thread whose cancellation is pending, such as cleanup code that caught
+`THREAD-CANCELLED`, gets the exception at the program's next check point (a loop, a
+blocking call), as with the AST interpreter, not from the entry of a function that one
+engine happens to analyse there (`examples/test/ir/PendingCancellationFirstCall.qtest`).
+
 The optimizer also replaces a conditional branch whose SSA condition is a
 literal boolean with an unconditional branch. It deliberately leaves the
 unreachable block and phi structure intact; native backends remove that code,

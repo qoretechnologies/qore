@@ -1884,22 +1884,14 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
     }
 }
 
-//! Raises the cancellation that stopped an IR analysis without an exception sink
-/** qore_ir_visit_value_operands() and the other analysis helpers check for cancellation without an exception sink
-    and only report it; the caller raises it here, so an interpreter analysis stopped by a cancellation fails with the
-    exception of the cancellation instead of failing without one.
-
-    @return false, so the caller can return the result directly
+//! The interpreter's analysis of a function (buildValueUseCounts(), buildInterpreterAnalysis()) has no cancellation
+//! check point
+/** It runs once per function, in the thread of the function's first call on the IR tier, and is linear in the size of
+    the function.  A check point there would make the entry of a function a cancellation point on the IR tier only:
+    a thread whose cancellation is pending (for example, one that caught the THREAD-CANCELLED exception and goes on
+    running cleanup code) would get the exception again from a call that the AST interpreter runs to its first check
+    point of its own, such as a loop.  A pending cancellation is raised at the program's next check point instead.
 */
-static bool raiseInterpreterAnalysisCancel(ExceptionSink* xsink) {
-    if (!qore_check_cancel(xsink, "IR interpreter analysis")) {
-        // the request can be dropped by another thread after the analysis stopped; the analysis is incomplete in
-        // any case
-        xsink->raiseException("THREAD-CANCELLED", "IR interpreter analysis: the analysis was cancelled");
-    }
-    return false;
-}
-
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
         std::vector<uint8_t>& consumed_call_args, ExceptionSink* xsink) {
@@ -1916,26 +1908,15 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     // values created by a call: the temporaries whose release is observable; a value loaded from a variable or a
     // constant is not a temporary, and the interpreter can read it again from its slot
     std::vector<uint8_t> def_by_call(counts.size(), 0);
-    size_t inst_count = 0;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
-            if (((++inst_count % 100) == 0)
-                    && qore_check_cancel(xsink, "IR interpreter analysis")) {
-                return false;
-            }
             const QoreIRInstruction* inst = inst_uptr.get();
-            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+            qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
-            }, &inst_count, "IR interpreter analysis")) {
-                return raiseInterpreterAnalysisCancel(xsink);
-            }
+            });
             int arg_start = qore_ir_call_arg_start(inst);
             if (arg_start >= 0) {
                 for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
-                    if (((++inst_count % 100) == 0)
-                            && qore_check_cancel(xsink, "IR interpreter analysis")) {
-                        return false;
-                    }
                     QoreIRValue arg = inst->operands[i];
                     if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
                             && (def_block[arg.id] == block.get()
@@ -1956,18 +1937,12 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (dot_eval && !inst->operands.empty()) {
                 markIRValueUse(dot_eval_base_candidates, inst->operands[0]);
                 for (size_t i = 1; i < inst->operands.size(); ++i) {
-                    if (((++inst_count % 100) == 0)
-                            && qore_check_cancel(xsink, "IR interpreter analysis")) {
-                        return false;
-                    }
                     markIRValueUse(non_dot_eval_uses, inst->operands[i]);
                 }
             } else {
-                if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     markIRValueUse(non_dot_eval_uses, operand);
-                }, &inst_count, "IR interpreter analysis")) {
-                    return raiseInterpreterAnalysisCancel(xsink);
-                }
+                });
             }
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = block.get();
@@ -1979,9 +1954,6 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     dot_eval_only_bases.assign(counts.size(), 0);
     consumed_call_args.assign(counts.size(), 0);
     for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
-        if (i && ((i % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
-            return false;
-        }
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
             dot_eval_only_bases[i] = 1;
         }
@@ -2028,15 +2000,10 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint32_t> slot_use_block(func.max_value_id + 1, no_block);
     std::vector<uint8_t> slot_multi_def_block(func.max_value_id + 1, 0);
     std::vector<uint8_t> slot_multi_use_block(func.max_value_id + 1, 0);
-    size_t inst_count = 0;
     uint32_t block_index = 0;
     for (const auto& b : func.blocks) {
         const uint32_t cur_block = block_index++;
         for (const auto& inst_ptr : b->instructions) {
-            if (((++inst_count % 100) == 0)
-                    && qore_check_cancel(xsink, "IR interpreter analysis")) {
-                return false;
-            }
             if (!inst_ptr) {
                 continue;
             }
@@ -2084,19 +2051,13 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     }
                 }
             };
-            if (!qore_ir_visit_value_operands(*inst_ptr, countOperand, &inst_count,
-                    "IR interpreter analysis")) {
-                return raiseInterpreterAnalysisCancel(xsink);
-            }
+            qore_ir_visit_value_operands(*inst_ptr, countOperand);
         }
     }
     // A slot is safe for the block-local liveness scan only when its single definition and
     // every use live in the same block; otherwise the scan cannot prove the value is dead.
     std::vector<uint8_t> cross_block_slots(func.max_value_id + 1, 0);
     for (size_t id = 0; id < cross_block_slots.size(); ++id) {
-        if (id && ((id % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
-            return false;
-        }
         if (slot_use_block[id] == no_block) {
             // never read: the block-local scan has nothing to get wrong
             continue;
@@ -2163,9 +2124,6 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // the slots of native scalars own their value (see IRCleanupSlots)
     std::vector<uint8_t> slot_owned_values(func.max_value_id + 1, 0);
     for (size_t id = 0; id < slot_owned_values.size() && id < func.value_facts.size(); ++id) {
-        if (id && ((id % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
-            return false;
-        }
         QoreIRValueRepresentation representation = func.value_facts[id].representation;
         slot_owned_values[id] = representation == QoreIRValueRepresentation::NativeInt
             || representation == QoreIRValueRepresentation::NativeFloat;

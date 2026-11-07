@@ -1455,6 +1455,10 @@
       gives \c 0n; <tt>hash<string, float> h = {}; (h.k *= 2)</tt> now gives \c 0.0); in the IR, JIT and tiered
       execution modes and in AOT-compiled code the same happened with a \c number operand on a \c softint or
       \c *softint local or \c thread_local variable
+    - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
+      interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
+      caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the
+      program's next cancellation check point, as with the AST interpreter
     - in the JIT and tiered execution modes, a local variable of no reference type (\c auto, \c any or no type)
       assigned a reference (ex: <tt>auto r = \x;</tt>) kept reading as the value of the referenced lvalue when it
       was assigned after the lvalue changed (ex: <tt>int x = 2; auto r = \x; x = 10;</tt> then \c r read as \c 2);
