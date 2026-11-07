@@ -61,6 +61,7 @@ public class QoreFloatDataTypeBase inherits QoreDataType {
                 remove value;
             } else if (soft_type) {
                 if (options."number.format") {
+                    DataProviderSoftText::checkFormattedNumber(value, options."number.format", getName());
                     value = parse_float(value, options."number.format");
                 } else if (value !~ /^([-+])?[0-9]+(\.[0-9]+)?+$/) {
                     throw "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y; the input data "

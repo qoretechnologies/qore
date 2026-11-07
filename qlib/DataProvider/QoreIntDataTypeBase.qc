@@ -80,6 +80,7 @@ public class QoreIntDataTypeBase inherits QoreDataType {
                 remove value;
             } else if (soft_type) {
                 if (options."number.format") {
+                    DataProviderSoftText::checkFormattedNumber(value, options."number.format", getName());
                     value = parse_int(value, options."number.format");
                 } else {
                     # check for valid integer values

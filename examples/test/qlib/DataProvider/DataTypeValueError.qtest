@@ -172,7 +172,8 @@ class DataTypeValueErrorTest inherits QUnit::Test {
         addTestCase("column default values", \columnDefaults());
         addTestCase("accepted values are unchanged", \acceptedValues());
         addTestCase("soft date text", \softDateText());
-        addTestCase("soft types from the factory convert any text", \softFactoryTypes());
+        addTestCase("soft types from the factory refuse text that is no number or date", \softFactoryTypes());
+        addTestCase("soft numeric types with a number format refuse text that is no number", \formattedNumbers());
         set_return_value(main());
     }
 
@@ -358,25 +359,45 @@ class DataTypeValueErrorTest inherits QUnit::Test {
         });
     }
 
-    #! documents a known difference between the two ways to get a soft type, which is not a decision to keep it
-    /** AbstractDataProviderType::get() has validating branches only for strings and booleans, so the other soft types
-        that it returns are plain QoreDataType objects with the conversion of the language, where text that is not a
-        number or a date is a zero value.  QoreSoftIntDataType and the other classes refuse that text.  Using the classes
-        in the factory changes the type digests and catalogs of the data provider modules and refuses values that
-        working APIs give, so it needs a decision of its own; this test fails when that changes, as a reminder to update
-        it and the code that relies on it.
-    */
+    #! the soft types from the factory refuse text that is no number or date, as the soft type classes do
     softFactoryTypes() {
-        assertEq(0, AbstractDataProviderTypeMap."softint".acceptsValue("text"));
-        assertEq(0.0, AbstractDataProviderTypeMap."softfloat".acceptsValue("text"));
-        assertEq(0n, AbstractDataProviderTypeMap."softnumber".acceptsValue("text"));
-        assertEq(localtime(0), AbstractDataProviderTypeMap."softdate".acceptsValue("text"));
+        foreach string name in (("softint", "softfloat", "softnumber", "softdate", "*softint", "*softdate")) {
+            AbstractDataProviderType t = AbstractDataProviderTypeMap{name} ?? AbstractDataProviderType::get(name);
+            assertEq("TYPE-VALUE-ERROR", getException(sub () { t.acceptsValue("text"); }).err, name);
+        }
+        assertEq("TYPE-VALUE-ERROR", getException(sub () {
+            AbstractDataProviderTypeMap."softint".acceptsValue("12abc"); }).err);
+        # numbers and dates as text are converted as before; empty text is converted by the language as before
+        assertEq(12, AbstractDataProviderTypeMap."softint".acceptsValue(" 12 "));
+        assertEq(1, AbstractDataProviderTypeMap."softint".acceptsValue("1.5"));
+        assertEq(-1.5e3, AbstractDataProviderTypeMap."softfloat".acceptsValue("-1.5e3"));
+        assertEq(0.5n, AbstractDataProviderTypeMap."softnumber".acceptsValue(".5"));
+        assertEq(2020-01-02, AbstractDataProviderTypeMap."softdate".acceptsValue("2020-01-02"));
+        assertEq(0, AbstractDataProviderTypeMap."softint".acceptsValue(""));
         assertEq("QoreDataType", AbstractDataProviderTypeMap."softint".className());
 
         foreach AbstractDataProviderType t in ((new QoreSoftIntDataType(), new QoreSoftFloatDataType(),
                 new QoreSoftNumberDataType(), new QoreSoftDateDataType())) {
             assertEq("TYPE-VALUE-ERROR", getException(sub () { t.acceptsValue("text"); }).err, t.className());
         }
+    }
+
+    #! a soft numeric type with a number format refuses text that is no number in the format
+    formattedNumbers() {
+        hash<auto> opts = {"number.format": ".,"};
+        foreach AbstractDataProviderType t in ((new QoreSoftIntDataType(opts), new QoreSoftFloatDataType(opts),
+                new QoreSoftNumberDataType(opts))) {
+            foreach string text in (("text", "12abc", "1,2,3", "1.2.3,4,5")) {
+                hash<ExceptionInfo> ex = getException(sub () { t.acceptsValue(text); });
+                assertEq("TYPE-VALUE-ERROR", ex.err, sprintf("%s: %y", t.className(), text));
+                assertRegex("number format", ex.desc);
+            }
+        }
+        assertEq(1150200, new QoreSoftIntDataType(opts).acceptsValue("1.150.200"));
+        assertEq(1150200.55, new QoreSoftFloatDataType(opts).acceptsValue("1.150.200,55"));
+        assertEq(1150200.55n, new QoreSoftNumberDataType(opts).acceptsValue(" -1.150.200,55 ") * -1);
+        # a format whose separators are the other way around
+        assertEq(1150200.5, new QoreSoftFloatDataType({"number.format": ",."}).acceptsValue("1,150,200.5"));
     }
 
     softDateText() {

@@ -339,6 +339,27 @@ public class QoreDataType inherits AbstractDataProviderType {
         if (!exists value && exists default_value) {
             return default_value;
         }
+        # the language's conversion turns text that is no number or date into a zero value
+        if (soft_type && value.typeCode() == NT_STRING && value.val()) {
+            switch (type.getBaseTypeCode()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                    DataProviderSoftText::checkNumber(value, getName());
+                    break;
+                case NT_DATE:
+                    try {
+                        value = date(value);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "INVALID-DATE") {
+                            rethrow;
+                        }
+                        rethrow "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y: %s", value,
+                            getName(), ex.desc), ex.arg;
+                    }
+                    break;
+            }
+        }
         try {
             value = type.acceptsValue(value);
         } catch (hash<ExceptionInfo> ex) {
@@ -559,6 +580,54 @@ public class QoreDataType inherits AbstractDataProviderType {
         if (!return_type_hash_simple) {
             return_type_hash_simple = type.getReturnTypeHash(True);
         }
+    }
+}
+}
+
+# Private namespace
+namespace Priv {
+# checks the text that a soft numeric or date type converts, so that text that is no number or date is refused
+# instead of becoming a zero value
+class DataProviderSoftText {
+    public {
+        #! a decimal number as text, with an optional sign, fraction and exponent, and white space around it
+        const NumberRegex = "^[[:space:]]*[-+]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][-+]?[0-9]+)?[[:space:]]*$";
+    }
+
+    #! refuses text that is not a decimal number
+    /** @throw TYPE-VALUE-ERROR the text is not a decimal number
+    */
+    static checkNumber(string value, string type_name) {
+        if (!regex(value, NumberRegex)) {
+            throw "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y; the input data contains "
+                "non-numeric text", value, type_name);
+        }
+    }
+
+    #! refuses text that is not a number in the given format
+    /** @param value the text to check
+        @param format the format of the number: the first character is the thousands separator, the second the
+        decimal point, as for @ref Qore::parse_float() "parse_float()"
+        @param type_name the name of the type, for the error
+
+        @throw TYPE-VALUE-ERROR the text is not a number in the format
+    */
+    static checkFormattedNumber(string value, string format, string type_name) {
+        string thousands = format.length() ? quote(format[0]) : "";
+        string decimal = format.length() > 1 ? quote(format[1]) : "\\.";
+        # digits, which a thousands separator can divide, and an optional fraction
+        string pattern = "^[[:space:]]*[-+]?[0-9]+" + (thousands.val() ? "(" + thousands + "[0-9]+)*" : "")
+            + "(" + decimal + "[0-9]*)?[[:space:]]*$";
+        if (!regex(value, pattern)) {
+            throw "TYPE-VALUE-ERROR", sprintf("value %y cannot be parsed by type %y with number format %y; the input "
+                "data contains non-numeric text", value, type_name, format);
+        }
+    }
+
+    #! returns a regular expression that matches the given character literally
+    private static string quote(string c) {
+        # a backslash before a letter or digit has a meaning of its own in a regular expression
+        return c =~ /^[[:alnum:]]$/ ? c : "\\" + c;
     }
 }
 }
