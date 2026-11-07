@@ -1881,7 +1881,8 @@ static void ut_event_loop_always_ready(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 2, static_cast<int>(ut_event_loop_poll_keys(loop, file.fd).size()),
         "always ready: a rearm reports it again");
     loop.rearmAlwaysReady(sv[0]);
-    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedCount()), "always ready: a rearm of another descriptor is ignored");
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.dbgArmedCount()),
+        "always ready: a rearm of another descriptor is ignored");
 
     // a mixed set: the file and a socket in the same poll
     UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 1, QORE_EV_READ, &a, &xsink), "always ready: a socket is added");
@@ -1917,9 +1918,11 @@ static void ut_event_loop_always_ready(UnitTestCounters& c) {
     ::close(closed.fd);
     closed.fd = -1;
     ev = ut_event_loop_poll_keys(loop, closed_fd);
-    UT_ASSERT(c, ev.size() == 1 && (ev[1].first & QORE_EV_ERROR), "always ready: a closed file is reported with an error");
+    UT_ASSERT(c, ev.size() == 1 && (ev[1].first & QORE_EV_ERROR),
+        "always ready: a closed file is reported with an error");
     UT_ASSERT(c, !loop.size() && !loop.dbgAlwaysReadyCount(), "always ready: the closed file is dropped");
-    UT_ASSERT(c, ut_event_loop_poll_keys(loop, closed_fd).empty(), "always ready: a dropped file is not reported again");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, closed_fd).empty(),
+        "always ready: a dropped file is not reported again");
 
     // a file whose number is given to another file before it is reported is reported with an error and dropped
     UtRegularFile replaced;
@@ -1965,7 +1968,8 @@ static void ut_event_loop_always_ready(UnitTestCounters& c) {
     UtFifo fifo;
     if (fifo.open()) {
         int num = ::dup(fifo.r);
-        UT_ASSERT_EQ(c, 0, loop.addRegistration(num, 1, QORE_EV_READ, &a, &xsink), "always ready: a named pipe is added");
+        UT_ASSERT_EQ(c, 0, loop.addRegistration(num, 1, QORE_EV_READ, &a, &xsink),
+            "always ready: a named pipe is added");
         UT_ASSERT_EQ(c, 1, static_cast<int>(loop.dbgFifoCount()), "always ready: one named pipe");
         UT_ASSERT(c, ::dup2(file.fd, num) == num, "always ready: the pipe's number is given to a regular file");
         UT_ASSERT_EQ(c, 0, loop.addRegistration(num, 1, QORE_EV_READ | QORE_EV_WRITE, &a, &xsink),
