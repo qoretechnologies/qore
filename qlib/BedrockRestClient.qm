@@ -37,7 +37,7 @@
 %requires json
 
 module BedrockRestClient {
-    version = "1.1";
+    version = "1.2";
     desc = "REST client and LLM provider for AWS Bedrock — speaks the unified "
         "Converse API across Anthropic, Llama, Mistral, "
         "Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families";
@@ -137,8 +137,7 @@ hash<ChatResponse> r = p.chat((
 
     @section bedrockrestclientrelnotes Release Notes
 
-    @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
-    - initial release
+    @subsection bedrockrestclient_v1_2 BedrockRestClient v1.2
     - a system block, a content block or a tool marked with \c cache_control is followed by a Converse
       \c cachePoint, so the request is cached up to it
     - usage counts the input read from and written to the prompt cache: the prompt and input counts are the whole
@@ -149,6 +148,9 @@ hash<ChatResponse> r = p.chat((
       @ref QoreLlmUtils::ChatResponse::reasoning_blocks "ChatResponse::reasoning_blocks", streamed or not, in the
       Anthropic Messages API's form, and replayed unchanged before an assistant turn's content, which a tool-result
       follow-up with adaptive thinking requires; the factory declares \c supports_reasoning_effort
+
+    @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
+    - initial release
 */
 
 #! Contains all public definitions in the BedrockRestClient module
@@ -833,6 +835,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         @param reasoning the \c reasoningContent of a Converse content block
         @return the block, or @ref nothing for no reasoning
+
+        @since BedrockRestClient 1.2
     */
     static *hash<auto> fromConverseReasoning(*hash<auto> reasoning) {
         if (!reasoning) {
@@ -854,6 +858,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     #! Returns a reasoning block in the Anthropic Messages API's form as a Converse content block
     /** @param block a block of @ref QoreLlmUtils::ChatMessage::reasoning_blocks "ChatMessage::reasoning_blocks"
         @return the Converse \c reasoningContent block, or @ref nothing for a block of another provider's form
+
+        @since BedrockRestClient 1.2
     */
     static *hash<auto> toConverseReasoning(auto block) {
         if (block.typeCode() != NT_HASH) {
@@ -960,6 +966,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         @param effort the reasoning effort
 
         @return the \c additionalModelRequestFields, or @ref nothing for a model that does not take adaptive thinking
+
+        @since BedrockRestClient 1.2
     */
     static *hash<auto> getClaudeReasoningEffortFields(string model_id, string effort) {
         string id = model_id.lwr();
