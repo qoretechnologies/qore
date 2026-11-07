@@ -70,7 +70,6 @@ module AzureDocumentIntelligenceDataProvider {
             ),
         });
 
-        AzureDocumentIntelligenceAnalyzeDocumentDataProvider::initializeTypes();
         # the actions are built from the vendored API description the first time that the catalog is asked for
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(AzureDocumentIntelligenceDataProvider::AppName, sub () {
@@ -106,10 +105,10 @@ module AzureDocumentIntelligenceDataProvider {
                         "preselected": True,
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
-                    AzureDocumentIntelligenceAnalyzeDocumentDataProvider::RequestType.getFields()
+                    AzureDocumentIntelligenceAnalyzeDocumentDataProvider::requestType().getFields()
                         - ("model_id", "document_url", "document_bytes", "document_path")
                 ),
-                "output_type": AzureDocumentIntelligenceAnalyzeDocumentDataProvider::ResponseType,
+                "output_type": AzureDocumentIntelligenceAnalyzeDocumentDataProvider::responseType(),
             });
         });
     };

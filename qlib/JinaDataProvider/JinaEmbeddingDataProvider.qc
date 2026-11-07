@@ -36,10 +36,40 @@ public class JinaEmbeddingDataProvider inherits JinaDataProviderCommon {
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static JinaEmbeddingRequestDataType RequestType = new JinaEmbeddingRequestDataType();
 
-        static JinaEmbeddingResponseDataType ResponseType =
-            new JinaEmbeddingResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *JinaEmbeddingRequestDataType request_type;
+        #! Serializes building the request type
+        static Mutex request_type_lock();
+        #! The response type, built on first use; see responseType()
+        static *JinaEmbeddingResponseDataType response_type;
+        #! Serializes building the response type
+        static Mutex response_type_lock();
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static JinaEmbeddingRequestDataType requestType() {
+        AutoLock al(request_type_lock);
+        if (!request_type) {
+            request_type = new JinaEmbeddingRequestDataType();
+        }
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static JinaEmbeddingResponseDataType responseType() {
+        AutoLock al(response_type_lock);
+        if (!response_type) {
+            response_type = new JinaEmbeddingResponseDataType();
+        }
+        return response_type;
     }
 
     constructor(RestClientIo::RestClientIo rest) : JinaDataProviderCommon(rest) {

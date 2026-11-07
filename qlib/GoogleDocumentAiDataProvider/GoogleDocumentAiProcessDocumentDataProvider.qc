@@ -35,20 +35,41 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static GoogleDocumentAiProcessDocumentRequestDataType RequestType;
-        static GoogleDocumentAiProcessDocumentResponseDataType ResponseType;
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *GoogleDocumentAiProcessDocumentRequestDataType request_type;
+        #! The response type, built on first use; see responseType()
+        static *GoogleDocumentAiProcessDocumentResponseDataType response_type;
     }
 
     private { static Mutex type_lock(); }
 
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static GoogleDocumentAiProcessDocumentRequestDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static GoogleDocumentAiProcessDocumentResponseDataType responseType() {
+        initializeTypes();
+        return response_type;
+    }
+
     #! Initializes schema-backed helper types after the independent inventory is published
-    static initializeTypes() {
+    private static initializeTypes() {
         AutoLock al(type_lock);
-        if (!RequestType) {
+        if (!request_type) {
             GoogleDocumentAiProcessDocumentRequestDataType request();
             GoogleDocumentAiProcessDocumentResponseDataType response();
-            RequestType = request;
-            ResponseType = response;
+            request_type = request;
+            response_type = response;
         }
     }
 
@@ -58,8 +79,8 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
     constructor(*hash<auto> options) : GoogleDocumentAiDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     #! Validates source presence and fundamental types before optional-field coercion

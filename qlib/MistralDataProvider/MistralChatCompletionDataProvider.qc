@@ -34,18 +34,47 @@ public class MistralChatCompletionDataProvider inherits MistralDataProviderCommo
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-        static MistralChatCompletionRequestDataType RequestType =
-            new MistralChatCompletionRequestDataType();
-        static MistralChatCompletionResponseDataType ResponseType =
-            new MistralChatCompletionResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *MistralChatCompletionRequestDataType request_type;
+        #! Serializes building the request type
+        static Mutex request_type_lock();
+        #! The response type, built on first use; see responseType()
+        static *MistralChatCompletionResponseDataType response_type;
+        #! Serializes building the response type
+        static Mutex response_type_lock();
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static MistralChatCompletionRequestDataType requestType() {
+        AutoLock al(request_type_lock);
+        if (!request_type) {
+            request_type = new MistralChatCompletionRequestDataType();
+        }
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static MistralChatCompletionResponseDataType responseType() {
+        AutoLock al(response_type_lock);
+        if (!response_type) {
+            response_type = new MistralChatCompletionResponseDataType();
+        }
+        return response_type;
     }
 
     constructor(RestClientIo::RestClientIo rest) : MistralDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : MistralDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

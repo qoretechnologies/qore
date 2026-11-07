@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%exec-class LazySchemaTypesTest
+
+#! Verifies that the public request and response types built from a vendored schema are built on first use
+/** Loading the modules builds no action set; each accessor builds its type once and returns the same type
+    afterwards, also to threads calling it at once
+*/
+class LazySchemaTypesTest inherits QUnit::Test {
+    public {
+        #! The modules, and their classes with type accessors
+        const Classes = {
+            "MistralDataProvider": (
+                "MistralDataProvider::MistralChatCompletionDataProvider",
+                "MistralDataProvider::MistralEmbeddingDataProvider",
+                "MistralDataProvider::MistralOcrDataProvider",
+            ),
+            "CohereDataProvider": (
+                "CohereDataProvider::CohereChatDataProvider",
+                "CohereDataProvider::CohereEmbedDataProvider",
+                "CohereDataProvider::CohereRerankDataProvider",
+                "CohereDataProvider::CohereClassifyDataProvider",
+            ),
+            "JinaDataProvider": (
+                "JinaDataProvider::JinaEmbeddingDataProvider",
+                "JinaDataProvider::JinaRerankDataProvider",
+            ),
+            "GoogleDocumentAiDataProvider": (
+                "GoogleDocumentAiDataProvider::GoogleDocumentAiProcessDocumentDataProvider",
+                "GoogleDocumentAiDataProvider::GoogleDocumentAiWaitOperationDataProvider",
+            ),
+            "AzureDocumentIntelligenceDataProvider": (
+                "AzureDocumentIntelligenceDataProvider::AzureDocumentIntelligenceAnalyzeDocumentDataProvider",
+            ),
+            "StabilityAiDataProvider": (
+                "StabilityAiDataProvider::StabilityAiGenerateImageDataProvider",
+            ),
+        };
+
+        #! Classes with a request type accessor only
+        const RequestOnly = {
+            "BflDataProvider": (
+                "BflDataProvider::BflGenerateImageDataProvider",
+            ),
+        };
+
+        #! The shared batch types of the Jina module, built from its schema-derived embedding type
+        const JinaShared = (
+            "JinaDataProvider::JinaBatchRecordResponseDataType",
+            "JinaDataProvider::JinaBatchRecordDataType",
+            "JinaDataProvider::JinaBatchDownloadResponseDataType",
+        );
+    }
+
+    private {
+        #! the action sets built by loading the modules
+        int load_sets;
+    }
+
+    constructor() : Test("public schema types are built on first use", "1.0") {
+        int before = RestSchemaActionSet::getConstructionCount();
+        map load_module($1), keys (Classes + RequestOnly);
+        load_sets = RestSchemaActionSet::getConstructionCount() - before;
+
+        addTestCase("loading builds no action set", \loadTest());
+        addTestCase("concurrent first calls build one type", \concurrentTest());
+        addTestCase("each accessor builds its type once", \accessorTest());
+        addTestCase("the Jina batch types are shared and built on first use", \jinaTest());
+        set_return_value(main());
+    }
+
+    loadTest() {
+        assertEq(0, load_sets);
+    }
+
+    concurrentTest() {
+        string cls = "CohereDataProvider::CohereChatDataProvider";
+        int threads = 8;
+        Counter ready(threads);
+        Counter go(1);
+        Counter done(threads);
+        Queue results();
+        for (int i = 0; i < threads; ++i) {
+            background LazySchemaTypesTest::callAccessor(cls, "responseType", ready, go, done, results);
+        }
+        ready.waitForZero();
+        go.dec();
+        done.waitForZero();
+        assertEq(threads, results.size());
+        object first = results.get();
+        assertTrue(first instanceof AbstractDataProviderType);
+        while (results.size()) {
+            assertTrue(first == results.get(), "every thread gets the same type");
+        }
+        assertTrue(first == call_static_method(cls, "responseType"));
+    }
+
+    accessorTest() {
+        foreach hash<auto> i in ((Classes + RequestOnly).pairIterator()) {
+            foreach string cls in (i.value) {
+                list<string> methods = RequestOnly{i.key} ? ("requestType",) : ("requestType", "responseType");
+                foreach string method in (methods) {
+                    auto t = call_static_method(cls, method);
+                    assertTrue(t instanceof AbstractDataProviderType, sprintf("%s::%s()", cls, method));
+                    assertTrue(t.getName().val(), sprintf("%s::%s() has a name", cls, method));
+                    assertTrue(t == call_static_method(cls, method), sprintf("%s::%s() is built once", cls, method));
+                }
+            }
+        }
+    }
+
+    jinaTest() {
+        foreach string cls in (JinaShared) {
+            auto t = call_static_method(cls, "instance");
+            assertTrue(t instanceof AbstractDataProviderType, cls);
+            assertTrue(t == call_static_method(cls, "instance"), cls + " is built once");
+        }
+        # the record body is the embedding response type that the provider returns
+        assertEq(call_static_method("JinaDataProvider::JinaEmbeddingDataProvider", "responseType").getName(),
+            call_static_method("JinaDataProvider::JinaBatchRecordResponseDataType", "instance").getFields().body
+                .getType().getMandatoryType().getName());
+    }
+
+    #! Calls a type accessor once every thread is ready; runs in a thread of the test
+    private static callAccessor(string cls, string method, Counter ready, Counter go, Counter done, Queue results) {
+        on_exit done.dec();
+        try {
+            ready.dec();
+            go.waitForZero();
+            results.push(call_static_method(cls, method));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex);
+        }
+    }
+}

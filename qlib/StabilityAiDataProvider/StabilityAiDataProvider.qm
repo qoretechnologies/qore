@@ -79,7 +79,6 @@ module StabilityAiDataProvider {
             ),
         });
 
-        StabilityAiGenerateImageDataProvider::initializeTypes();
         # the actions are built from the vendored API description the first time that the catalog is asked for
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(StabilityAiDataProvider::AppName, sub () {
@@ -118,21 +117,21 @@ module StabilityAiDataProvider {
                 "action_code": DPAT_API,
                 "groups": ("Image Generation",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
-                    StabilityAiGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
+                    StabilityAiGenerateImageDataProvider::requestType().getFields(){"prompt",}, {
                         "preselected": True, "required": True,
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
-                    StabilityAiGenerateImageDataProvider::RequestType.getFields(){
+                    StabilityAiGenerateImageDataProvider::requestType().getFields(){
                         "model", "output_format", "aspect_ratio",
                     }, {
                         "preselected": True,
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
-                    StabilityAiGenerateImageDataProvider::RequestType.getFields() - (
+                    StabilityAiGenerateImageDataProvider::requestType().getFields() - (
                         "prompt", "model", "output_format", "aspect_ratio",
                     )
                 ),
-                "output_type": StabilityAiGenerateImageDataProvider::ResponseType,
+                "output_type": StabilityAiGenerateImageDataProvider::responseType(),
             });
         });
     };

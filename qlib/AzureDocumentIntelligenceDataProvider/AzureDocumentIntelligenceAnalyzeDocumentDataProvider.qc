@@ -36,22 +36,43 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static AzureDocumentIntelligenceAnalyzeRequestDataType RequestType;
-        static AzureDocumentIntelligenceAnalyzeResponseDataType ResponseType;
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *AzureDocumentIntelligenceAnalyzeRequestDataType request_type;
+        #! The response type, built on first use; see responseType()
+        static *AzureDocumentIntelligenceAnalyzeResponseDataType response_type;
     }
     private {
         static Mutex type_lock();
     }
 
+    #! Returns the request type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AzureDocumentIntelligenceAnalyzeRequestDataType requestType() {
+        initializeTypes();
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** It is built from the vendored API description, so loading the module does not parse it
+    */
+    static AzureDocumentIntelligenceAnalyzeResponseDataType responseType() {
+        initializeTypes();
+        return response_type;
+    }
+
     #! Initializes complete helper types after the lightweight inventory is registered
     /** @throw AZURE-DOCUMENT-INTELLIGENCE-SCHEMA-ERROR an unreviewed schema resource is installed */
-    static initializeTypes() {
+    private static initializeTypes() {
         AutoLock al(type_lock);
-        if (!RequestType) {
+        if (!request_type) {
             AzureDocumentIntelligenceAnalyzeRequestDataType request();
             AzureDocumentIntelligenceAnalyzeResponseDataType response();
-            RequestType = request;
-            ResponseType = response;
+            request_type = request;
+            response_type = response;
         }
     }
 
@@ -61,8 +82,8 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             : AzureDocumentIntelligenceDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

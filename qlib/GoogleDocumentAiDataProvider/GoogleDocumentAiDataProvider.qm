@@ -80,8 +80,6 @@ module GoogleDocumentAiDataProvider {
             ),
         });
 
-        GoogleDocumentAiProcessDocumentDataProvider::initializeTypes();
-        GoogleDocumentAiWaitOperationDataProvider::initializeTypes();
         # the actions are built from the vendored API description the first time that the catalog is asked for
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(GoogleDocumentAiDataProvider::AppName, sub () {
@@ -116,8 +114,8 @@ module GoogleDocumentAiDataProvider {
                 "action_code": DPAT_API,
                 "groups": ("Document Extraction",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
-                    GoogleDocumentAiProcessDocumentDataProvider::RequestType.getFields()),
-                "output_type": GoogleDocumentAiProcessDocumentDataProvider::ResponseType,
+                    GoogleDocumentAiProcessDocumentDataProvider::requestType().getFields()),
+                "output_type": GoogleDocumentAiProcessDocumentDataProvider::responseType(),
             });
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": GoogleDocumentAiDataProvider::AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
@@ -127,8 +125,8 @@ module GoogleDocumentAiDataProvider {
                     "status in the exception argument. Waiting does not cancel or delete the job.",
                 "action_code": DPAT_API, "groups": ("Operations",), "mutates_state": False,
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
-                    GoogleDocumentAiWaitOperationDataProvider::RequestType.getFields()),
-                "output_type": GoogleDocumentAiWaitOperationDataProvider::ResponseType,
+                    GoogleDocumentAiWaitOperationDataProvider::requestType().getFields()),
+                "output_type": GoogleDocumentAiWaitOperationDataProvider::responseType(),
             });
         });
     };

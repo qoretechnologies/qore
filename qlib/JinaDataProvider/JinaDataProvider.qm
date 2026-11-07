@@ -139,7 +139,7 @@ module JinaDataProvider {
                 "action_code": DPAT_API,
                 "groups": ("Batch Embeddings",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(JinaBatchDownloadRequestDataType::Fields),
-                "output_type": JinaBatchDownloadResponseDataType,
+                "output_type": JinaBatchDownloadResponseDataType::instance(),
             });
 
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -152,7 +152,7 @@ module JinaDataProvider {
                 "action_code": DPAT_API,
                 "groups": ("Batch Embeddings",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(JinaBatchDownloadRequestDataType::Fields),
-                "output_type": JinaBatchDownloadResponseDataType,
+                "output_type": JinaBatchDownloadResponseDataType::instance(),
             });
         });
     };

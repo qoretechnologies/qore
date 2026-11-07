@@ -13,8 +13,8 @@
 %exec-class LazyModuleActionsTest
 
 #! Verifies that the provider modules generating actions from REST schemas build them on first use
-/** Loading such a module registers its apps and builds no action set; the first read of an app's actions builds
-    them, once, even when several threads read them at once.  See
+/** Loading such a module registers its apps and builds no action set, and no type built from its schema; the first
+    read of an app's actions builds them, once, even when several threads read them at once.  See
     @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions() "registerLazyAppActions()".
 */
 class LazyModuleActionsTest inherits QUnit::Test {
@@ -30,6 +30,7 @@ class LazyModuleActionsTest inherits QUnit::Test {
             "BitbucketDataProvider": ("Bitbucket",),
             "CohereDataProvider": ("Cohere",),
             "ConfluenceDataProvider": ("Confluence",),
+            "EasyPostDataProvider": ("EasyPost",),
             "ExaDataProvider": ("Exa",),
             "FireworksDataProvider": ("FireworksAi",),
             "GitHubDataProvider": ("Github",),
@@ -46,23 +47,18 @@ class LazyModuleActionsTest inherits QUnit::Test {
             "StripeDataProvider": ("Stripe",),
             "TogetherDataProvider": ("TogetherAi",),
             "UnstructuredDataProvider": ("UnstructuredIo",),
+            "WooCommerceDataProvider": ("WooCommerce",),
             "XeroDataProvider": ("Xero",),
         };
 
-        #! Modules whose public types are built from the schema when the module is loaded
-        /** Their public static request and response types or constants are part of their API and are built from
-            the schema when the module is loaded, so loading them parses the schema, and most of them build action
-            sets; their action registrations are lazy all the same
+        #! Modules whose lazy registration builds no action set
+        /** \c AwsTextractDataProvider generates its actions from its OpenAPI types directly, and the other two
+            register hand-written actions; their first read is checked by the actions it registers only
         */
-        const SchemaTypesAtLoad = {
+        const NoActionSets = {
             "AwsTextractDataProvider": True,
-            "AzureDocumentIntelligenceDataProvider": True,
-            "BflDataProvider": True,
-            "CohereDataProvider": True,
-            "GoogleDocumentAiDataProvider": True,
-            "JinaDataProvider": True,
-            "MistralDataProvider": True,
-            "StabilityAiDataProvider": True,
+            "EasyPostDataProvider": True,
+            "WooCommerceDataProvider": True,
         };
 
         #! The module whose actions are read by concurrent threads
@@ -140,17 +136,14 @@ class LazyModuleActionsTest inherits QUnit::Test {
     }
 
     moduleTest(string mod) {
-        # a module with public types built from its schema builds them when it is loaded
-        if (!SchemaTypesAtLoad{mod}) {
-            assertEq(0, load_sets{mod}, "loading builds no action set");
-        }
+        assertEq(0, load_sets{mod}, "loading builds no action set");
         foreach string app in (Modules{mod}) {
             assertTrue(DataProviderActionCatalog::hasLazyAppActions(app), app + " is lazy after loading");
             int before = RestSchemaActionSet::getConstructionCount();
             list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app, False);
             assertFalse(DataProviderActionCatalog::hasLazyAppActions(app), app + " is complete after reading");
             assertTrue(actions.size() > 1, app + " has its actions");
-            if (!SchemaTypesAtLoad{mod}) {
+            if (!NoActionSets{mod}) {
                 assertTrue(RestSchemaActionSet::getConstructionCount() > before,
                     app + ": the first read builds the action sets");
             }

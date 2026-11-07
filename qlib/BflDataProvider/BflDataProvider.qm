@@ -79,7 +79,6 @@ module BflDataProvider {
             ),
         });
 
-        BflGenerateImageDataProvider::initializeTypes();
         # the actions are built from the vendored API description the first time that the catalog is asked for
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(BflDataProvider::AppName, sub () {
@@ -114,17 +113,17 @@ module BflDataProvider {
                 "data_dependent_options": True,
                 "groups": ("Image Generation",),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
-                    BflGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
+                    BflGenerateImageDataProvider::requestType().getFields(){"prompt",}, {
                         "preselected": True, "required": True,
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
-                    BflGenerateImageDataProvider::RequestType.getFields(){
+                    BflGenerateImageDataProvider::requestType().getFields(){
                         "model", "aspect_ratio",
                     }, {
                         "preselected": True,
                     }
                 ) + DataProviderActionCatalog::getActionOptionFromFields(
-                    BflGenerateImageDataProvider::RequestType.getFields() - (
+                    BflGenerateImageDataProvider::requestType().getFields() - (
                         "prompt", "model", "aspect_ratio",
                     )
                 ),

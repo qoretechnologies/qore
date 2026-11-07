@@ -35,16 +35,47 @@ public class CohereChatDataProvider inherits CohereDataProviderCommon {
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
-        static CohereChatRequestDataType RequestType = new CohereChatRequestDataType();
-        static CohereChatResponseDataType ResponseType = new CohereChatResponseDataType();
+    }
+
+    private {
+        #! The request type, built on first use; see requestType()
+        static *CohereChatRequestDataType request_type;
+        #! Serializes building the request type
+        static Mutex request_type_lock();
+        #! The response type, built on first use; see responseType()
+        static *CohereChatResponseDataType response_type;
+        #! Serializes building the response type
+        static Mutex response_type_lock();
+    }
+
+    #! Returns the request type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static CohereChatRequestDataType requestType() {
+        AutoLock al(request_type_lock);
+        if (!request_type) {
+            request_type = new CohereChatRequestDataType();
+        }
+        return request_type;
+    }
+
+    #! Returns the response type, which is built on first use
+    /** Built from the vendored API description, so loading the module does not parse it
+    */
+    static CohereChatResponseDataType responseType() {
+        AutoLock al(response_type_lock);
+        if (!response_type) {
+            response_type = new CohereChatResponseDataType();
+        }
+        return response_type;
     }
 
     constructor(RestClientIo::RestClientIo rest) : CohereDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : CohereDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return requestType(); }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {

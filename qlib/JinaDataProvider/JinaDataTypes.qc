@@ -25,14 +25,16 @@
 public namespace JinaDataProvider {
 #! Compatibility type backed by the pinned Jina request schema
 public class JinaEmbeddingRequestDataType inherits HashDataType {
-    public {
-        const Fields = JinaSchema::getActionSet().getOperationEx("create-embeddings")
-            .getRequestType().getFields();
+    #! Returns the fields of the type, from the pinned schema
+    /** The schema is parsed when the fields are first needed, not when the module is loaded
+    */
+    static *hash<string, AbstractDataField> schemaFields() {
+        return JinaSchema::getActionSet().getOperationEx("create-embeddings").getRequestType().getFields();
     }
 
     #! Creates the schema-derived data type
     constructor() : HashDataType("JinaEmbeddingRequest") {
-        foreach AbstractDataField field in (Fields.values()) {
+        foreach AbstractDataField field in (schemaFields().values()) {
             addField(field);
         }
     }
@@ -87,14 +89,16 @@ public class JinaUsageDataType inherits HashDataType {
 
 #! Compatibility type backed by the pinned Jina response schema
 public class JinaEmbeddingResponseDataType inherits HashDataType {
-    private {
-        const Fields = JinaSchema::getActionSet().getOperationEx("create-embeddings")
-            .getResponseType().getFields();
+    #! Returns the fields of the type, from the pinned schema
+    /** The schema is parsed when the fields are first needed, not when the module is loaded
+    */
+    static *hash<string, AbstractDataField> schemaFields() {
+        return JinaSchema::getActionSet().getOperationEx("create-embeddings").getResponseType().getFields();
     }
 
     #! Creates the schema-derived data type
     constructor() : HashDataType("JinaEmbeddingResponse") {
-        foreach AbstractDataField field in (Fields.values()) {
+        foreach AbstractDataField field in (schemaFields().values()) {
             addField(field);
         }
     }
@@ -102,14 +106,16 @@ public class JinaEmbeddingResponseDataType inherits HashDataType {
 
 #! Compatibility type backed by the pinned Jina request schema
 public class JinaRerankRequestDataType inherits HashDataType {
-    public {
-        const Fields = JinaSchema::getActionSet().getOperationEx("rerank")
-            .getRequestType().getFields();
+    #! Returns the fields of the type, from the pinned schema
+    /** The schema is parsed when the fields are first needed, not when the module is loaded
+    */
+    static *hash<string, AbstractDataField> schemaFields() {
+        return JinaSchema::getActionSet().getOperationEx("rerank").getRequestType().getFields();
     }
 
     #! Creates the schema-derived data type
     constructor() : HashDataType("JinaRerankRequest") {
-        foreach AbstractDataField field in (Fields.values()) {
+        foreach AbstractDataField field in (schemaFields().values()) {
             addField(field);
         }
     }
@@ -143,25 +149,23 @@ public class JinaRerankResultDataType inherits HashDataType {
 
 #! Compatibility type backed by the pinned Jina response schema
 public class JinaRerankResponseDataType inherits HashDataType {
-    private {
-        const Fields = JinaSchema::getActionSet().getOperationEx("rerank")
-            .getResponseType().getFields();
+    #! Returns the fields of the type, from the pinned schema
+    /** The schema is parsed when the fields are first needed, not when the module is loaded
+    */
+    static *hash<string, AbstractDataField> schemaFields() {
+        return JinaSchema::getActionSet().getOperationEx("rerank").getResponseType().getFields();
     }
 
     #! Creates the schema-derived data type
     constructor() : HashDataType("JinaRerankResponse") {
-        foreach AbstractDataField field in (Fields.values()) {
+        foreach AbstractDataField field in (schemaFields().values()) {
             addField(field);
         }
     }
 }
 
-public const JinaEmbeddingRequestDataType = new JinaEmbeddingRequestDataType();
 public const JinaEmbeddingItemDataType = new JinaEmbeddingItemDataType();
 public const JinaUsageDataType = new JinaUsageDataType();
-public const JinaEmbeddingResponseDataType = new JinaEmbeddingResponseDataType();
-public const JinaRerankRequestDataType = new JinaRerankRequestDataType();
 public const JinaRerankResultDataType = new JinaRerankResultDataType();
-public const JinaRerankResponseDataType = new JinaRerankResponseDataType();
 
 }
