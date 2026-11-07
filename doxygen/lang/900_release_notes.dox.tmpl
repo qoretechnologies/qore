@@ -1428,6 +1428,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c ++ and \c -- on a value of a hash typed
+      with float or number values (ex: <tt>hash<string, float> h = {"v": 2.5}; ++h.v</tt>) gave an integer and
+      stored a truncated value; they now give the same results as the AST interpreter (\c 3.5 in the example)
     - an AOT-compiled module loaded with a module older than the one it was compiled against, which lacks an enum or
       an enum member that the module uses, failed with only "unsupported AOT slot metadata"; the error now names the
       missing symbol and the modules loaded

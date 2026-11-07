@@ -9037,6 +9037,22 @@ static bool qore_ir_hash_subscript_may_raise_invalid_member(const VarRefNode* co
     return true;
 }
 
+//! Returns true if the values of the hash that the variable holds are integers
+/** The hash key fast path of ++ and -- (emitHashKeyCompoundOp() and emitHashKeyDynamicCompoundOp() with
+    AddAssignInt or SubAssignInt) computes an integer result; the AST operators add 1 to a float or number value and
+    give a float or number, so the fast path is taken only for a hash of integers, and any other value type takes the
+    lvalue path, which applies the AST operators' implementation.
+*/
+static bool qore_ir_hash_values_are_int(const VarRefNode* container_var) {
+    const QoreTypeInfo* value_type = QoreTypeInfo::getUniqueReturnComplexHash(container_var
+        ? container_var->getTypeInfo() : nullptr);
+    if (!value_type || QoreTypeInfo::getReturnEnum(value_type)) {
+        return false;
+    }
+    // an or-nothing value type (*int) gives its plain type; any other type is given unchanged
+    return QoreTypeInfo::isType(get_or_nothing_base_type(value_type), NT_INT);
+}
+
 QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node);
@@ -9094,12 +9110,14 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         std::string key_name;
         QoreValue key_expr;
         if (isConstKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_name, key_expr)
+                && qore_ir_hash_values_are_int(container_var)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
         }
         if (isDynamicKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_expr)
+                && qore_ir_hash_values_are_int(container_var)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
@@ -9248,12 +9266,14 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         std::string key_name;
         QoreValue key_expr;
         if (isConstKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_name, key_expr)
+                && qore_ir_hash_values_are_int(container_var)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
         }
         if (isDynamicKeyHashSubscript(foreach_element_locals, lvexp, container_var, key_expr)
+                && qore_ir_hash_values_are_int(container_var)
                 && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,

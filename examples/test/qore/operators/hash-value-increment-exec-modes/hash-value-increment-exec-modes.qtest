@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HashValueIncrementExecModesTest
+
+#! Tests ++ and -- on the values of typed hashes in every execution mode against the AST interpreter
+/** The IR, JIT and tiered execution modes and compiled (AOT) code applied ++ and -- to a value of a typed hash in a
+    local variable with an integer operation, whatever the hash's value type: on a <tt>hash<string, float></tt>
+    holding 2.5, <tt>++h.v</tt> gave the integer 3 and stored 3.0, where the AST interpreter gives and stores 3.5.
+    The same happened with number, *float and softfloat values, and with a key given by an expression.  Only a hash
+    of integers now takes the integer operation; any other value type gets the AST operators' result.
+
+    The test generates a program applying the operators to such values and prints the result and the stored value
+    with their types.  The AST interpreter's output is the expected result; every other execution mode, the default
+    execution mode and a qcc-compiled executable must give the same output.
+*/
+class HashValueIncrementExecModesTest inherits QUnit::Test {
+    public {
+        #! the hash value types
+        const ValueTypes = (
+            "int", "*int", "float", "*float", "number", "*number", "softint", "softfloat", "softnumber", "auto",
+        );
+
+        #! the values (as Qore source) that a key holds before the operation; NOTHING: the key does not exist
+        const Values = ("2", "2.5", "-0.5", "2.5n", "NOTHING");
+
+        #! the operators: the format of the expression for an lvalue
+        const Operators = ("++%s", "--%s", "%s++", "%s--");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("HashValueIncrementExecModes", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("the AST interpreter's ++ and -- on float and number hash values", \testAst());
+        addTestCase("every execution mode gives the AST result", \testMatrix());
+
+        set_return_value(main());
+    }
+
+    #! the reference results: ++ and -- keep the float or number value of a typed hash
+    testAst() {
+        hash<string, float> hf = {"v": 2.5};
+        assertEq(3.5, ++hf.v);
+        assertEq(3.5, hf.v);
+        assertEq(2.5, --hf.v);
+        assertEq(2.5, hf.v--);
+        assertEq(1.5, hf.v);
+        string k = "v";
+        assertEq(2.5, ++hf{k});
+        hash<string, number> hn = {"v": 2.5n};
+        assertEq(3.5n, ++hn.v);
+        assertEq("number", hn.v.type());
+        hash<string, int> hi = {"v": 2};
+        assertEq(3, ++hi.v);
+        assertEq("integer", hi.v.type());
+    }
+
+    testMatrix() {
+        TmpDir tmp("qore-hash-value-increment-");
+        string file = tmp.path + DirSep + "increment.q";
+        int rows = writeProgram(file);
+
+        list<string> expected = run(sprintf("--exec-mode=ast %s", file));
+        assertEq(rows, (select expected, $1 =~ / => /).size(), "every row gave a result");
+        # the rows that the integer operation got wrong must be among them
+        assertEq(1, (select expected, $1 == "local|float|2.5|++%s|const => 3.5 float | 3.5 float").size());
+        assertEq(1, (select expected, $1 == "local|number|2.5n|--%s|dyn => 1.5 number | 1.5 number").size());
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            compare(mode, expected, run(sprintf("--exec-mode=%s %s", mode, file)));
+        }
+        # the default execution mode
+        compare("default", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s",
+            libqore_dir, libqore_dir, qore_bin, file)).split("\n"));
+
+        string exe = tmp.path + DirSep + "increment";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, file));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        compare("executable", expected, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, exe)).split("\n"));
+    }
+
+    private list<string> run(string args) {
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,
+            libqore_dir, qore_bin, args)).split("\n");
+    }
+
+    #! compares the lines of a mode with the AST lines, reporting the first differences
+    private compare(string mode, list<string> expected, list<string> actual) {
+        list<string> diffs = ();
+        int count = 0;
+        int n = max(expected.size(), actual.size());
+        for (int i = 0; i < n; ++i) {
+            if (expected[i] !== actual[i]) {
+                ++count;
+                if (diffs.size() < 20) {
+                    diffs += sprintf("ast: %y\n%s: %y", expected[i], mode, actual[i]);
+                }
+            }
+        }
+        assertEq((), diffs, sprintf("%s: %d differences:\n%s", mode, count, diffs.join("\n")));
+    }
+
+    #! writes the program and returns the number of rows it prints
+    private int writeProgram(string file) {
+        string src = "%modern\n%disable-all-warnings\n"
+            "sub show(string label, auto r, auto v) { printf(\"%s => %y %s | %y %s\\n\", label, r, r.type(), v, "
+                "v.type()); }\n"
+            "sub fail(string label, hash<ExceptionInfo> ex) { printf(\"%s => EXC %s\\n\", label, ex.err); }\n"
+            # gives the value at runtime, so that the parser does not know its type
+            "auto sub id(auto v) { return v; }\n";
+        list<string> calls = ();
+        int rows = 0;
+        foreach string vtype in (ValueTypes) {
+            foreach string val in (Values) {
+                foreach string opfmt in (Operators) {
+                    foreach string keykind in (("const", "dyn")) {
+                        string label = sprintf("local|%s|%s|%s|%s", vtype, val, opfmt, keykind);
+                        string fn = sprintf("c%d", rows);
+                        string lv = keykind == "const" ? "h.v" : "h{k}";
+                        # the hash is declared with its type so that the parser knows its value type; the value is
+                        # assigned at runtime, which converts it as the value type does, or refuses it
+                        string init = val == "NOTHING" ? "" : sprintf("        h.v = id(%s);\n", val);
+                        src += sprintf("sub %s() {\n    string k = \"v\";\n    try {\n"
+                            "        hash<string, %s> h = {};\n%s"
+                            "        auto r = %s;\n        show(%y, r, h{k});\n"
+                            "    } catch (hash<ExceptionInfo> ex) {\n        fail(%y, ex);\n    }\n}\n",
+                            fn, vtype, init, sprintf(opfmt, lv), label, label);
+                        calls += fn + "();";
+                        ++rows;
+                    }
+                }
+            }
+        }
+        src += calls.join("\n") + "\n";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        return rows;
+    }
+}
