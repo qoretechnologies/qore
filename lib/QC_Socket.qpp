@@ -6182,6 +6182,32 @@ int Socket::shutdown() {
     return s->shutdown();
 }
 
+//! Shuts down the sending side of the connection only (a half-close)
+/** The peer receives the end of the stream after the data already sent (a TCP \c FIN, RFC 9293 section 3.6), while
+    this side can still receive data, for example the response to a request that the peer reads to the end of the
+    stream.  A secure connection sends its TLS \c close_notify alert first, as RFC 8446 section 6.1 requires before
+    the write side of a connection is closed; the peer's alert is not waited for.  The socket stays open: close it with
+    close() when it is no longer needed.  Data cannot be sent on the connection afterwards.
+
+    @par Example:
+    @code{.py}
+sock.send("GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+# the server sees the end of the request stream; the response can still be read
+sock.shutdownWrite();
+hash<auto> hdr = sock.readHTTPHeader(10s);
+    @endcode
+
+    @throw SOCKET-NOT-OPEN the socket is not open
+    @throw SOCKET-SHUTDOWN-ERROR the system refused the shutdown; the description has the error
+
+    @see shutdown()
+
+    @since %Qore 3.0
+*/
+nothing Socket::shutdownWrite() [dom=NETWORK] {
+    s->shutdownWrite(xsink);
+}
+
 //! Shuts down the SSL connection on a secure connection
 /** If any errors occur, an exception is raised
 

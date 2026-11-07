@@ -207,7 +207,8 @@ private:
 
 class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
 public:
-    DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock);
+    //! Creates the operation; @p write_only shuts down the sending side only (a half-close)
+    DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock, bool write_only = false);
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
@@ -242,6 +243,8 @@ public:
 private:
     int rc = 0;
     bool done = false;
+    //! true to shut down the sending side only, in which case an error is raised as an exception
+    bool write_only;
 };
 
 class SocketSetupPollOperation : public SocketPollSocketOperationBase {

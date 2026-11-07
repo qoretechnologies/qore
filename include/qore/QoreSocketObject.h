@@ -461,6 +461,10 @@ if (accepted) {
     DLLEXPORT int close();
     DLLEXPORT int shutdown();
     DLLEXPORT int shutdownSSL(ExceptionSink* xsink) ;
+    //! Shuts down the sending side of the connection only (a half-close); see Socket::shutdownWrite()
+    /** @return 0 for success, -1 for error (exception raised)
+    */
+    DLLLOCAL int shutdownWrite(ExceptionSink* xsink);
     DLLEXPORT const char* getSSLCipherName();
     DLLEXPORT const char* getSSLCipherVersion();
     DLLEXPORT bool isSecure();
