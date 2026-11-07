@@ -2896,6 +2896,18 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     QoreAOTTypeResolver resolver(pgm);
     const QoreTypeInfo* ti = resolver.resolve(resolve_path, error);
 
+    // The resolver stands a placeholder in for a class or hashdecl that it cannot find, as deserialization needs one
+    // for a declaration that appears later.  When a cast runs, every declaration of the Program is in place, so a
+    // placeholder means the type does not exist here: a module that provides it is missing or older than the one
+    // the code was compiled against.  The placeholder accepts any object (or hash), so casting to it would let the
+    // value through unchecked; the AST, which cannot even parse a cast to an unknown type, is the reference.
+    if (ti && qore_type_info_is_aot_deferred(ti)) {
+        xsink->raiseException("IR-CAST-ERROR", "cannot resolve cast type '%s': the type is not declared in this "
+            "Program; the code was compiled against a build where it existed, so a module providing it is missing "
+            "or older than the one compiled against", type_path);
+        return toBits(QoreValue());
+    }
+
     if (ti && QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
         QoreValue result = QoreScalarCastOperatorNode::castValueToType(ti, or_nothing != 0, inner, xsink);
         return toBits(result);

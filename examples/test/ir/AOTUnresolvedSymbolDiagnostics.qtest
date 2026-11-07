@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# AOT modules that use types from a binary module, and AOT modules loaded against a provider module that lacks a
+# symbol they were compiled against.
+#
+# A compiled module (NcursesUi) failed to load with only
+#   AOT slot map registration failed for '...processEvent(hash<Qore::Ncurses::InputEvent>)':
+#   unsupported AOT slot metadata; source fallback is disabled
+# which suggested that a binary-module hashdecl in a signature could not be handled.  The real cause was an installed
+# binary module older than the one the module was compiled against.
+#
+# - binary-module types in signatures (hashdecl parameter and return types, *hash<X>, list<hash<X>>, class
+#   parameters, closures taking the hashdecl) behave in every execution mode as in the AST;
+# - a cast to a class that the provider no longer declares raises an error in every mode instead of passing the
+#   value through unchecked.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+%exec-class AOTUnresolvedSymbolDiagnosticsTest
+
+class AOTUnresolvedSymbolDiagnosticsTest inherits QUnit::Test {
+    public {
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+    }
+
+    constructor() : QUnit::Test("AOTUnresolvedSymbolDiagnosticsTest", "1.0", \ARGV) {
+        addTestCase("binary-module types in signatures behave as in the AST", \binaryModuleTypes());
+        addTestCase("a cast to a missing class raises an error", \castToMissingClass());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static writeText(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit f.close();
+        f.write(text);
+    }
+
+    #! runs qore; returns its exit status and combined output
+    private hash<auto> runQore(string dir, string module_path, list<string> args) {
+        string output_path = dir + "/output.log";
+        string command = sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+            "--enable-debug", quote(libqore_dir), quote(libqore_dir), quote(libqore_dir), quote(module_path),
+            quote(qore_bin));
+        foreach string arg in (args) {
+            command += " " + quote(arg);
+        }
+        int status = system(command + " > " + quote(output_path) + " 2>&1");
+        return {"status": status, "output": File::readTextFile(output_path) ?? ""};
+    }
+
+    private string modulePath(string first, *string second) {
+        string rv = first;
+        if (second) {
+            rv += ":" + second;
+        }
+        return rv + ":" + (ENV.QORE_MODULE_DIR ?? "");
+    }
+
+    #! writes a user module source and compiles it to an AOT module
+    private compileModule(string dir, string name, string code, string module_path) {
+        string source = dir + "/src/" + name + ".qm";
+        writeText(source, "%modern\nmodule " + name + " { version = \"1.0\"; "
+            + "desc = \"AOT unresolved symbol regression\"; author = \"Qore\"; license = \"MIT\"; }\n" + code);
+        string artifact = dir + "/compiled/" + name + ".qmod";
+        hash<auto> res = runQore(dir, module_path, ("--compile-module", "--strip-source", "--output", artifact,
+            source));
+        assertEq(0, res.status, res.output);
+        assertTrue(is_file(artifact), "module compiler produced " + artifact + ": " + res.output);
+    }
+
+    private string makeDirs(string prefix) {
+        string dir = make_tmp_dir(prefix);
+        foreach string subdir in ("src", "compiled", "provider-new", "provider-old") {
+            mkdir(dir + "/" + subdir);
+        }
+        return dir;
+    }
+
+    #! writes the provider module: the version the consumer is compiled against and an older one without NewBox
+    private writeProviders(string dir) {
+        string header = "%modern\nmodule Prov { version = \"1.0\"; desc = \"provider\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\n";
+        writeText(dir + "/provider-new/Prov.qm", header + "public namespace Prov {
+    public class Box { int get() { return 1; } }
+    public class NewBox { int get() { return 2; } }
+}
+");
+        writeText(dir + "/provider-old/Prov.qm", header + "public namespace Prov {
+    public class Box { int get() { return 1; } }
+}
+");
+    }
+
+    binaryModuleTypes() {
+        string dir = makeDirs("aot-binary-module-types-");
+        on_exit remove_tree(dir);
+
+        compileModule(dir, "YamlTypes", "%requires yaml
+public namespace YamlTypes {
+    public class Base {
+        int processEvent(hash<Qore::YAML::YamlSaxEvent> ev) {
+            return ev.type == Qore::YAML::YamlSaxEventType::Scalar ? 1 : 0;
+        }
+    }
+    public class Derived inherits Base {
+        int processEvent(hash<YAML::YamlSaxEvent> ev) {
+            string v = ev.value ?? \"\";
+            if (v == \"base\") {
+                return Base::processEvent(ev);
+            }
+            return v.size();
+        }
+    }
+    public hash<Qore::YAML::YamlSaxEvent> sub scalar(string v) {
+        return <Qore::YAML::YamlSaxEvent>{\"type\": Qore::YAML::YamlSaxEventType::Scalar, \"value\": v};
+    }
+    public *hash<Qore::YAML::YamlSaxEvent> sub maybe(*hash<Qore::YAML::YamlSaxEvent> ev) {
+        return ev;
+    }
+    public list<hash<Qore::YAML::YamlSaxEvent>> sub events(Qore::YAML::YamlSaxParser parser, string yaml) {
+        list<hash<Qore::YAML::YamlSaxEvent>> rv = ();
+        parser.parse(yaml, sub (hash<Qore::YAML::YamlSaxEvent> ev) { rv += ev; });
+        return rv;
+    }
+    public string sub summary(list<hash<Qore::YAML::YamlSaxEvent>> l) {
+        return foldl $1 + \",\" + $2, (map $1.value ?? \"-\", l);
+    }
+}
+", modulePath(dir + "/src"));
+
+        string probe = dir + "/probe.q";
+        writeText(probe, "%modern
+%requires yaml
+%requires YamlTypes
+hash<YamlSaxEvent> e = YamlTypes::scalar(\"base\");
+printf(\"%d %d %d\\n\", (new YamlTypes::Derived()).processEvent(e),
+    (new YamlTypes::Derived()).processEvent(YamlTypes::scalar(\"four\")), (new YamlTypes::Base()).processEvent(e));
+printf(\"%y %y\\n\", YamlTypes::maybe(), YamlTypes::maybe(e).value);
+list<hash<YamlSaxEvent>> l = YamlTypes::events(new YamlSaxParser(), \"a: 1\");
+printf(\"%s %s\\n\", YamlTypes::summary(l), l[0].fullType());
+");
+        # the AST reference: the module from its source
+        hash<auto> ref = runQore(dir, modulePath(dir + "/src"), ("--exec-mode=ast", probe));
+        assertEq(0, ref.status, ref.output);
+        assertEq("1 4 1\nnull \"base\"\n-,-,-,a,1,-,-,- hash<YamlSaxEvent>\n", ref.output);
+
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled"), ("--exec-mode=" + mode, probe));
+            assertEq(0, res.status, mode + ": " + res.output);
+            assertEq(ref.output, res.output, mode);
+        }
+    }
+
+    castToMissingClass() {
+        string dir = makeDirs("aot-cast-missing-class-");
+        on_exit remove_tree(dir);
+        writeProviders(dir);
+        compileModule(dir, "CastCons", "%requires Prov
+public namespace CastCons {
+    public auto sub castBox(object o) { return cast<Prov::NewBox>(o); }
+    public auto sub castBoxOrNothing(*object o) { return cast<*Prov::NewBox>(o); }
+}
+", modulePath(dir + "/provider-new"));
+
+        string code = "%requires Prov\n%requires CastCons\n"
+            "try { CastCons::castBox(new Prov::Box()); printf(\"passed\\n\"); } "
+            "catch (hash<ExceptionInfo> ex) { printf(\"%s: %s\\n\", ex.err, ex.desc); }\n"
+            "try { CastCons::castBoxOrNothing(new Prov::Box()); printf(\"passed\\n\"); } "
+            "catch (hash<ExceptionInfo> ex) { printf(\"%s: %s\\n\", ex.err, ex.desc); }\n"
+            "printf(\"%y\\n\", CastCons::castBoxOrNothing());\n";
+
+        # with the provider it was compiled against, the cast checks the class in every mode, as in the AST
+        hash<auto> ref = runQore(dir, modulePath(dir + "/src", dir + "/provider-new"), ("--exec-mode=ast", "-ne",
+            code));
+        assertEq(0, ref.status, ref.output);
+        assertEq("RUNTIME-CAST-ERROR: cannot cast from class 'Box' to class 'NewBox'\n"
+            "RUNTIME-CAST-ERROR: cannot cast from class 'Box' to class 'NewBox'\nnull\n", ref.output);
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-new"),
+                ("--exec-mode=" + mode, "-ne", code));
+            assertEq(0, res.status, mode + ": " + res.output);
+            assertEq(ref.output, res.output, mode);
+        }
+
+        # against the older provider, the class does not exist: the cast must not let the object through
+        foreach string mode in (Modes) {
+            hash<auto> res = runQore(dir, modulePath(dir + "/compiled", dir + "/provider-old"),
+                ("--exec-mode=" + mode, "-ne", code));
+            assertEq(-1, res.output.find("passed"), mode + ": the cast let the object through: " + res.output);
+            assertTrue(res.output =~ /Prov::NewBox/, mode + ": the error names the class: " + res.output);
+        }
+    }
+}

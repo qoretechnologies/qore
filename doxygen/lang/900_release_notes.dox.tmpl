@@ -1428,6 +1428,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a cast in an AOT-compiled module to a class that is not declared where the module is loaded, as when it is
+      loaded with a module older than the one it was compiled against, let the value through unchecked; it now raises
+      an \c IR-CAST-ERROR naming the type
     - fixed a deadlock when a user module failed to load while another thread used a binary module, such as the jni
       module, whose program cleanup code calls the module manager: the failed module is now destroyed without the
       module manager's lock, which every thread loading a module afterwards also waited for
