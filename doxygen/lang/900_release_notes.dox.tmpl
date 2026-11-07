@@ -108,11 +108,10 @@
     the types it has already visited.  See @ref dataprovider_v3_11.
 
     @par Data Provider Types Refuse Values With TYPE-VALUE-ERROR
-    A value that a data provider type refused with \c RUNTIME-TYPE-ERROR raises \c TYPE-VALUE-ERROR, and an option
-    value that its types refuse raises \c OPTION-VALUE-ERROR; \c RUNTIME-TYPE-ERROR now means a type error in the
-    code.  Text that a soft date type cannot parse raises \c TYPE-VALUE-ERROR instead of \c INVALID-DATE, and text
-    that is no number, which soft numeric types converted to zero, also raises \c TYPE-VALUE-ERROR.  Code that
-    catches a refused value by its error code must use the new code.  See @ref dataprovider_v3_11.
+    A value that a data provider type refuses raises \c TYPE-VALUE-ERROR, and a refused option value
+    \c OPTION-VALUE-ERROR, instead of \c RUNTIME-TYPE-ERROR, which now means a type error in the code; soft types also
+    refuse text that is no number or date.  Code that catches a refused value by its error code must use the new
+    codes.  See @ref dataprovider_v3_11.
 
     @par date() Raises an Exception for Text After a Date or Time
     @ref Qore::date(string) "date(string)" and @ref Qore::TimeZone::date(string) "TimeZone::date(string)" raise

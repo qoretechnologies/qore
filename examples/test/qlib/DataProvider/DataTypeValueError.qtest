@@ -147,6 +147,35 @@ hashdecl ValueErrorDefectiveInitInfo {
     int computed = value_error_defective_init();
 }
 
+#! a hashdecl with the defective hashdecl in a member
+hashdecl ValueErrorDefectiveNestedInfo {
+    list<hash<ValueErrorDefectiveInitInfo>> children;
+}
+
+our int value_error_init_calls;
+
+#! counts the calls of an initializer
+int sub value_error_counted_init() {
+    return ++value_error_init_calls;
+}
+
+hashdecl ValueErrorCountedInfo {
+    int count;
+    int serial = value_error_counted_init();
+}
+
+hashdecl ValueErrorCountedNestedInfo {
+    list<hash<ValueErrorCountedInfo>> children;
+}
+
+hashdecl ValueErrorBaseInfo {
+    int count;
+}
+
+hashdecl ValueErrorChildInfo inherits ValueErrorBaseInfo {
+    string name = "x";
+}
+
 class DataTypeValueErrorTest inherits QUnit::Test {
     public {
         #! a value that each named type refuses
@@ -224,6 +253,22 @@ class DataTypeValueErrorTest inherits QUnit::Test {
         assertEq("HASHDECL-INIT-ERROR", getException(sub () { type.acceptsValue({"unknown": 1}); }).err);
         assertEq(<ValueErrorDefectiveInitInfo>{"count": 1, "computed": 2},
             type.acceptsValue({"count": 1, "computed": 2}));
+        # an initializer of a hashdecl in a member value, the same
+        HashDeclDataType nested(new TypedHash("ValueErrorDefectiveNestedInfo"));
+        assertEq("RUNTIME-TYPE-ERROR", getException(sub () {
+            nested.acceptsValue({"children": ({"count": 1},)}); }).err);
+        assertEq("TYPE-VALUE-ERROR", getException(sub () {
+            nested.acceptsValue({"children": ({"count": "text"},)}); }).err);
+        # the initializers of hashdecls in member values run once
+        HashDeclDataType counted(new TypedHash("ValueErrorCountedNestedInfo"));
+        value_error_init_calls = 0;
+        hash<auto> h = counted.acceptsValue({"children": ({"count": 1}, {"count": 2})});
+        assertEq(2, value_error_init_calls);
+        assertEq((1, 2), map $1.serial, h.children);
+        # an inherited member is checked as a member
+        HashDeclDataType child(new TypedHash("ValueErrorChildInfo"));
+        assertEq("TYPE-VALUE-ERROR", getException(sub () { child.acceptsValue({"count": "text"}); }).err);
+        assertEq(<ValueErrorChildInfo>{"count": 1, "name": "x"}, child.acceptsValue({"count": 1}));
         # a column default value is not taken as an expression for the server when the initializer fails
         assertThrows("RUNTIME-TYPE-ERROR", sub () {
             SqlUtilColumnField f("a", "a", type, {"count": 1});

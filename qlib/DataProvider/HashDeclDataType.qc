@@ -59,30 +59,43 @@ public class HashDeclDataType inherits QoreDataType {
             throw "TYPE-VALUE-ERROR", sprintf("type %y expects a hash, but got type %y instead", getName(),
                 value.type());
         }
-        # the values given are checked here, as the cast below also runs the initializers of the members that are
-        # not given, and an error raised by an initializer is an error in its code, not a refused value; a key that
+        # the values given are checked and converted here, as the cast below also runs the initializers of the members
+        # that are not given, and an error raised by an initializer is an error in its code, not a refused value; the
+        # converted values are cast, so the initializers of hashdecls in member values do not run twice; a key that
         # is not a member is refused by the cast
+        hash<auto> checked = {};
         foreach hash<auto> i in (value.pairIterator()) {
-            TypedHashMember member;
-            try {
-                member = hd.getMember(i.key);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "UNKNOWN-MEMBER") {
-                    continue;
-                }
-                rethrow;
+            *TypedHashMember member = findMember(i.key);
+            if (!member) {
+                checked{i.key} = i.value;
+                continue;
             }
             try {
-                member.getType().acceptsValue(i.value);
+                checked{i.key} = member.getType().acceptsValue(i.value);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "RUNTIME-TYPE-ERROR") {
+                # an error raised in user code, such as the initializer of a hashdecl in the member value, is not a
+                # refusal of the value; the check of the value itself raises the error in the type check
+                if (ex.err != "RUNTIME-TYPE-ERROR" || ex.callstack[0].type == "user") {
                     rethrow;
                 }
                 rethrow "TYPE-VALUE-ERROR", sprintf("key %y of hashdecl %y: %s", i.key, hd.getName(), ex.desc),
                     ex.arg;
             }
         }
-        return hd.doCast(value);
+        return hd.doCast(checked);
+    }
+
+    #! Returns the member of the hashdecl or of a hashdecl that it inherits, if any
+    private *TypedHashMember findMember(string name) {
+        for (*TypedHash t = hd; t; t = t.getParentTypedHash()) {
+            try {
+                return t.getMember(name);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "UNKNOWN-MEMBER") {
+                    rethrow;
+                }
+            }
+        }
     }
 
     #! Returns True if this type can be assigned from values of the argument type
