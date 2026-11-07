@@ -115,7 +115,7 @@ FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
 QORE_SOURCE_SUFFIXES = (".qm", ".qc")
 
 #: a %include directive: qcc does not list the files a module includes in its depfile
-INCLUDE_DIRECTIVE = re.compile(rb"^[ \t]*%include\b", re.M)
+INCLUDE_DIRECTIVE = re.compile(rb"^[ \t]*%include\b[ \t]*([^\r\n]*)", re.M)
 
 
 class CacheError(Exception):
@@ -692,14 +692,23 @@ def own_source_files(source_root):
     return rv
 
 
-def check_no_include(source_root):
-    """Raises CacheError for a module whose sources include other files: qcc's depfile does not list them, so their
-    content could not be part of the key"""
+def check_includes_listed(source_root, deps):
+    """Raises CacheError for a module whose sources include a file that its depfile does not list: a qcc that does not
+    list included files (before the fix of design/aot-linked-module-sources.md "The sources of a module") would leave
+    their content out of the key.  A file included by a name that cannot be resolved here (an environment variable,
+    a file found through QORE_INCLUDE_DIR) counts as not listed."""
+    listed = set(os.path.realpath(d) for d in deps)
     for path in own_source_files(source_root):
         with open(path, "rb") as f:
-            if INCLUDE_DIRECTIVE.search(f.read()):
-                raise CacheError("source '%s' has a %%include directive, and qcc does not list included files"
-                                 % path)
+            text = f.read()
+        for m in INCLUDE_DIRECTIVE.finditer(text):
+            name = m.group(1).strip().decode("utf-8", "replace")
+            if len(name) > 1 and name[0] == name[-1] and name[0] in "\"'":
+                name = name[1:-1]
+            included = os.path.realpath(os.path.join(os.path.dirname(path), name)) if name and name[0] != "$" \
+                else None
+            if not included or included not in listed:
+                raise CacheError("source '%s' includes '%s', which its depfile does not list" % (path, name))
 
 
 def classify_dependencies(build_dir, source_root, deps):
@@ -1097,7 +1106,7 @@ class Module:
                 raise CacheError("source '%s' has gone" % path)
             if st.st_size != size or st.st_mtime_ns != mtime_ns:
                 raise CacheError("source '%s' changed while the module was compiled" % path)
-        check_no_include(self.source_root)
+        check_includes_listed(self.source_root, deps)
         records = classify_dependencies(self.build_dir, self.source_root, deps)
         required, optional_specs = read_module_info(self.out, self.name)
         # the compile may have written files in the module path since a lookup listed it

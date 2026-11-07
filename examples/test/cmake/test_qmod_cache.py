@@ -143,6 +143,27 @@ class ModuleInfoTest(unittest.TestCase):
         self.assertEqual(["a/Opt-api-2.0.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
 
 
+class IncludeTest(unittest.TestCase):
+    def test_includes_listed(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        mod = root / "M.qm"
+        part = root / "part.ql"
+        part.write_text("x\n")
+        mod.write_text("%modern\nmodule M {}\n")
+        qc.check_includes_listed(str(mod), [str(mod)])
+        for directive in ("%include part.ql", "  %include \"part.ql\"", "%include 'part.ql'"):
+            mod.write_text(directive + "\nmodule M {}\n")
+            qc.check_includes_listed(str(mod), [str(mod), str(part)])
+            with self.assertRaises(qc.CacheError, msg=directive):
+                qc.check_includes_listed(str(mod), [str(mod)])
+        # a name that cannot be resolved here
+        mod.write_text("%include $DIR/part.ql\nmodule M {}\n")
+        with self.assertRaises(qc.CacheError):
+            qc.check_includes_listed(str(mod), [str(mod), str(part)])
+
+
 class AuditSampleTest(unittest.TestCase):
     def test_sample(self):
         keys = ["%064x" % i for i in range(2000)]
@@ -347,6 +368,14 @@ def module_path(name):
     return None
 own = sources(src)
 text = "".join(p.read_text() for p in own)
+# a qcc that lists included files in the depfile (list-includes.txt), as qcc does since the fix of
+# design/aot-linked-module-sources.md, or one that does not
+includes = []
+if (here / "list-includes.txt").exists():
+    for p in own:
+        for name in re.findall(r"^%include (\S+)", p.read_text(), re.M):
+            includes.append(p.parent / name)
+            text += (p.parent / name).read_text()
 deps, optional, required = [], [], []
 for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
     p = module_path(name)
@@ -357,7 +386,7 @@ for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
     else:
         deps += sources(p)
         required.append(name)
-all_deps = own + deps
+all_deps = own + includes + deps
 lines = ["# qore AOT module source fingerprints 1"]
 for p in all_deps:
     st = p.stat()
@@ -574,15 +603,28 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual([], self.build_all())
 
     def test_include_is_not_stored(self):
-        """qcc does not list the files a module includes in its depfile: a module with %include is not stored, and
-        neither are the modules that require it"""
+        """A qcc that does not list the files a module includes in its depfile: a module with %include is not stored,
+        and neither are the modules that require it"""
         (self.source / "qlib" / "part.ql").write_text("# part\n")
         base = self.source / "qlib" / "Base.qm"
         base.write_text("%include part.ql\nmodule Base {}\n")
         self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
         self.assertEqual({"Base": "uncacheable", "Mid": "uncacheable", "Top": "uncacheable", "Other": "miss"},
                          self.origins())
-        self.assertIn("%include", self.output)
+        self.assertIn("which its depfile does not list", self.output)
+        self.assertEqual(["Base", "Mid", "Top"], self.build_all())
+
+    def test_include_listed_is_stored(self):
+        """A qcc that lists included files: the module is stored, and a change to the included file is a miss"""
+        (self.source / "list-includes.txt").write_text("1")
+        part = self.source / "qlib" / "part.ql"
+        part.write_text("# part\n")
+        base = self.source / "qlib" / "Base.qm"
+        base.write_text("%include part.ql\nmodule Base {}\n")
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        self.assertEqual({"Base": "miss", "Mid": "miss", "Top": "miss", "Other": "miss"}, self.origins())
+        self.assertEqual([], self.build_all())
+        part.write_text("# part changed\n")
         self.assertEqual(["Base", "Mid", "Top"], self.build_all())
 
     def test_source_changed_during_compile_is_not_stored(self):
