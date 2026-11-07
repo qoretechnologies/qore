@@ -139,7 +139,9 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     private {
         HttpServer server;
         StallHandler handler();
-        TrickleServer trickle();
+        #! started by globalSetUp() and stopped by globalTearDown(), so a run that runs no test (--list) has no thread
+        #! left that keeps the program from exiting
+        *TrickleServer trickle;
         hash<string, string> urls;
         *int quic_port;
     }
@@ -153,6 +155,7 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
     }
 
     globalSetUp() {
+        trickle = new TrickleServer();
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
@@ -185,7 +188,9 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
 
     globalTearDown() {
         handler.stall.dec();
-        trickle.stop();
+        if (trickle) {
+            trickle.stop();
+        }
         if (server) {
             server.stop();
         }
