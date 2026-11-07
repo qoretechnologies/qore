@@ -6,12 +6,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Logger.qm
-%requires ../../../../../qlib/HttpServerUtil.qm
-%requires ../../../../../qlib/HttpServer.qm
+%requires Util
+%requires Mime
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class Main
 

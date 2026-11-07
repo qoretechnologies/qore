@@ -25,8 +25,9 @@
 %modern
 %no-child-restrictions
 
-%requires ../../../qlib/Util.qm
-%requires ../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires Util
+%requires QUnit
 %requires ../ExecModeHarness.qm
 
 %exec-class SprintfErrorExecModesTest

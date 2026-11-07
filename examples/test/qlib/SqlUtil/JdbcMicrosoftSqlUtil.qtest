@@ -4,12 +4,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qmod
-%requires ../../../../qlib/Logger.qmod
-%requires ../../../../qlib/DataProvider/DataProvider.qmod
-%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
-%requires ../../../../qlib/MssqlSqlUtilBase.qmod
-%requires ../../../../qlib/JdbcMicrosoftSqlUtil.qmod
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires JdbcMicrosoftSqlUtil
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./SqlUtilTestBase.qm

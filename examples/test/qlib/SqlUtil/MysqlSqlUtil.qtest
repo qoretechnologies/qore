@@ -5,11 +5,11 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
-%requires ../../../../qlib/Util.qmod
-%requires ../../../../qlib/Logger.qmod
-%requires ../../../../qlib/DataProvider/DataProvider.qmod
-%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
-%requires ../../../../qlib/MysqlSqlUtil.qmod
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires MysqlSqlUtil
 
 %requires ./SqlUtilTestBase.qm
 

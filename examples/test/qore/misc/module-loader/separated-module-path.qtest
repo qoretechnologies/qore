@@ -4,8 +4,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %exec-class SeparatedModulePathTest
 
 #! Directory-module metadata must identify the file found in the module search path

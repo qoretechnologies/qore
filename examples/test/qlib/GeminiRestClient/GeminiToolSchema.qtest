@@ -7,11 +7,11 @@
 %requires Mime
 %requires HttpServerUtil
 %requires HttpServer
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/GeminiBodyShape.qm
-%requires ../../../../qlib/GeminiRestClient.qm
-%requires ../../../../qlib/VertexAiRestClient.qm
-%requires ../../../../qlib/QoreLlmUtils
+%requires QUnit
+%requires GeminiBodyShape
+%requires GeminiRestClient
+%requires VertexAiRestClient
+%requires QoreLlmUtils
 %requires json
 %exec-class GeminiToolSchemaTest
 

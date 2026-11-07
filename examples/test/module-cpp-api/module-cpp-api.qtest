@@ -32,7 +32,7 @@
 %prepend-module-path "${SCRIPT_DIR}"
 %requires cppapisrc.qm
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
+%requires QUnit
 
 %exec-class ModuleCppApiTest
 

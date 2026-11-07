@@ -7,10 +7,10 @@
 %allow-weak-references
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/OpenApi3.qm
+%requires Util
+%requires FsUtil
+%requires QUnit
+%requires OpenApi3
 %requires json
 
 %exec-class OpenApi3TypeCacheLifetimeTest

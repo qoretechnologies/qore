@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class QlibRequiresByNameTest
+
+#! A module directive that requires an in-tree module by path
+hashdecl QlibRequiresByPathInfo {
+    #! the file, relative to the repository root
+    string file;
+    #! the line number
+    int line;
+    #! the directive
+    string directive;
+}
+
+#! Rejects directives that require a module of this repository's qlib by path
+/** A module required by path is loaded from its source, which bypasses the precompiled qmod and parses the module
+    again in every test; the qlib modules are required by name, after
+    <tt>%prepend-module-path "${SCRIPT_DIR}/.../qlib"</tt> so that a test run from the source tree uses the in-tree
+    modules, as run_tests.sh and CI do with \c QORE_MODULE_DIR.
+
+    A file whose purpose needs a module form loaded by path, such as a test of a module loaded from its source and
+    from its qmod, says why in a comment starting with <tt>qlib-requires-by-path:</tt>; its directives are allowed.
+*/
+class QlibRequiresByNameTest inherits QUnit::Test {
+    public {
+        #! the directories scanned, relative to the repository root
+        const ScanDirs = ("examples", "modules", "qlib", "bin", "doxygen");
+
+        #! the extensions of the files scanned
+        const Extensions = {
+            "qtest": True,
+            "q": True,
+            "qc": True,
+            "qm": True,
+            "qr": True,
+            "ql": True,
+        };
+    }
+
+    private {
+        #! the repository root
+        string root = normalize_dir(get_script_dir() + "/../../../..");
+    }
+
+    constructor() : Test("qlib modules are required by name", "1.0") {
+        addTestCase("the scanner finds directives requiring qlib modules by path", \scannerTest());
+        addTestCase("no source requires a qlib module by path", \repositoryTest());
+        set_return_value(main());
+    }
+
+    scannerTest() {
+        string dir = root + "/examples/test/qlib/Example";
+        list<string> lines = (
+            "%requires ../../../../qlib/QUnit.qm",
+            "%requires(reexport) ../../../../qlib/DataProvider",
+            "%try-module ../../../../qlib/SqlUtil/SqlUtil.qmod",
+            "  %requires ../../../../qlib/Util.qmod",
+            "%requires QUnit",
+            "%requires ./LocalHelper.qm",
+            "%requires ../other/qlib/Foreign.qm",
+            "# %requires ../../../../qlib/Commented.qm",
+            "%prepend-module-path \"${SCRIPT_DIR}/../../../../qlib\"",
+        );
+        assertEq((1, 2, 3, 4), map $1.line, scanLines(dir, "examples/test/qlib/Example/x.qtest", lines));
+        assertEq("%requires ../../../../qlib/QUnit.qm",
+            scanLines(dir, "examples/test/qlib/Example/x.qtest", lines)[0].directive);
+        # a file that says why it needs the paths is allowed them
+        assertEq((), scanLines(dir, "examples/test/qlib/Example/x.qtest",
+            ("# qlib-requires-by-path: tests both module forms",) + lines));
+    }
+
+    repositoryTest() {
+        list<hash<QlibRequiresByPathInfo>> found = ();
+        foreach string dir in (ScanDirs) {
+            if (is_dir(root + "/" + dir)) {
+                found += scanDir(dir);
+            }
+        }
+        assertEq((), map sprintf("%s:%d: %s", $1.file, $1.line, $1.directive), found);
+    }
+
+    #! Scans the files below a directory relative to the repository root
+    private list<hash<QlibRequiresByPathInfo>> scanDir(string rel) {
+        list<hash<QlibRequiresByPathInfo>> rv = ();
+        string path = root + "/" + rel;
+        Dir d();
+        d.chdir(path);
+        foreach string name in (d.listDirs() ?? ()) {
+            # build trees, dependencies and VCS data hold no sources of the repository
+            if (name =~ /^build/ || name == "node_modules" || name =~ /^\./) {
+                continue;
+            }
+            rv += scanDir(rel + "/" + name);
+        }
+        foreach string name in (d.listFiles() ?? ()) {
+            *string ext = (name =~ x/\.([^.]+)$/)[0];
+            if (!exists ext || !Extensions{ext}) {
+                continue;
+            }
+            rv += scanLines(path, rel + "/" + name, ReadOnlyFile::readTextFile(path + "/" + name).split("\n"));
+        }
+        return rv;
+    }
+
+    #! Returns the directives of a file's lines that require a module of the repository's qlib by path
+    private list<hash<QlibRequiresByPathInfo>> scanLines(string dir, string file, list<string> lines) {
+        list<hash<QlibRequiresByPathInfo>> rv = ();
+        string qlib = root + "/qlib";
+        foreach string line in (lines) {
+            if (line =~ /^\s*#\s*qlib-requires-by-path:\s*\S/) {
+                return ();
+            }
+        }
+        foreach string line in (lines) {
+            *list<*string> m = (line =~ x/^\s*%(requires|try-module|try-reexport-module)(\([a-z]+\))?\s+(\S+)/);
+            if (!m) {
+                continue;
+            }
+            string spec = m[2];
+            if (spec !~ /\// || spec =~ /^\$/) {
+                continue;
+            }
+            string target = normalize_dir(spec =~ /^\// ? spec : dir + "/" + spec);
+            if (target.find(qlib + "/") == 0) {
+                rv += <QlibRequiresByPathInfo>{
+                    "file": file,
+                    "line": $# + 1,
+                    "directive": trim(line),
+                };
+            }
+        }
+        return rv;
+    }
+}

@@ -7,9 +7,9 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QoreRagUtils
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%requires QoreRagUtils
+%requires Util
+%requires QUnit
 
 %exec-class RagPipelineTest
 

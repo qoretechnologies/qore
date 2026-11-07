@@ -10,8 +10,8 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/RestSchemaActions
+%requires DataProvider
+%requires RestSchemaActions
 
 #! Gives the types and fields reachable from a set of roots a digest of their structure
 /** A type graph shares subtypes and is cyclic, and which objects it shares depends on the order its types were

@@ -35,12 +35,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpClientIo
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
 %requires ../../TestCertificates.qm
 
 %exec-class HttpClientIoAlpnFallbackTest

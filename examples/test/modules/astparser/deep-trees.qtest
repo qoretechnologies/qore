@@ -3,8 +3,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %requires astparser
 
 %exec-class DeepTreesTest

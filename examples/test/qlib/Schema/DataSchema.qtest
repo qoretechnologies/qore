@@ -4,11 +4,11 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Schema/Schema.qmod
-%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires Schema
+%requires SqlUtil
 %requires json
 
-%requires ../../../../qlib/QUnit.qmod
+%requires QUnit
 
 %exec-class DataSchemaTest
 

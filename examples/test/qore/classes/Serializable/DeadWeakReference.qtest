@@ -3,7 +3,7 @@
 %modern
 %allow-weak-references
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires ../../../../../qlib/QUnit.qm
+%requires QUnit
 %exec-class DeadWeakReferenceTest
 
 #! The object that a holder refers to weakly

@@ -12,8 +12,8 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 %exec-class TzifZoneFilesTest
 
 #! a local time type of a synthetic TZif file

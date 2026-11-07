@@ -5,8 +5,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
+%requires QUnit
+%requires Logger
 
 %exec-class AsyncIoThreadAffinityTest
 

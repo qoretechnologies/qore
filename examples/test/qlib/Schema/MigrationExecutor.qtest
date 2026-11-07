@@ -4,9 +4,9 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Schema/Schema.qmod
-%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
-%requires ../../../../qlib/QUnit.qmod
+%requires Schema
+%requires SqlUtil
+%requires QUnit
 
 %exec-class MigrationExecutorTest
 

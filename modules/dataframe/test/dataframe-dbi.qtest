@@ -9,8 +9,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
 
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/Util.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires Util
 
 %try-module dataframe
 %define NoDataFrame

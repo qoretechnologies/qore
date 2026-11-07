@@ -6,12 +6,12 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/GroqDataProvider
+%requires Util
+%requires QUnit
+%requires Logger
+%requires ConnectionProvider
+%requires DataProvider
+%requires GroqDataProvider
 
 %exec-class GroqDataProviderTest
 

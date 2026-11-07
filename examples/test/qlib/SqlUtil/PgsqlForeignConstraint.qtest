@@ -2,9 +2,9 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/PgsqlSqlUtilBase.qm
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
 %exec-class PgsqlForeignConstraintTest
 
 class PgsqlForeignConstraintTest inherits QUnit::Test {

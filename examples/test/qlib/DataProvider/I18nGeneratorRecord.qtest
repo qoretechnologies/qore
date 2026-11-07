@@ -24,9 +24,9 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires Util
+%requires FsUtil
 %requires json
 
 %exec-class I18nGeneratorRecordTest

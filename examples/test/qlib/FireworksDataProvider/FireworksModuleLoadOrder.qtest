@@ -4,10 +4,10 @@
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
+%requires QUnit
+%requires FsUtil
 # Exa loads GenericRest's public AppName before Fireworks is parsed.
-%requires ../../../../qlib/ExaDataProvider
+%requires ExaDataProvider
 
 %exec-class FireworksModuleLoadOrderTest
 

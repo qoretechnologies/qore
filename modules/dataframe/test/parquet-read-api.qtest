@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: MIT
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/Util.qm
+%requires QUnit
+%requires Util
 %requires dataframe
 %exec-class ParquetReadApiTest
 

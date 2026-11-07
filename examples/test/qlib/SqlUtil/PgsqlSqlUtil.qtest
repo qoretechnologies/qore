@@ -4,14 +4,14 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Util.qmod
-%requires ../../../../qlib/Logger.qmod
-%requires ../../../../qlib/DataProvider/DataProvider.qmod
-%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
-%requires ../../../../qlib/PgsqlSqlUtilBase.qmod
-%requires ../../../../qlib/PgsqlSqlUtil.qmod
-%requires ../../../../qlib/SchemaReverse.qmod
-%requires ../../../../qlib/Schema/Schema.qmod
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires PgsqlSqlUtil
+%requires SchemaReverse
+%requires Schema
 
 %requires yaml
 

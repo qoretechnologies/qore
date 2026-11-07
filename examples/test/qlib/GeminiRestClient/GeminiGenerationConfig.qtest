@@ -3,10 +3,10 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/GeminiBodyShape.qm
-%requires ../../../../qlib/GeminiRestClient.qm
-%requires ../../../../qlib/VertexAiRestClient.qm
+%requires QUnit
+%requires GeminiBodyShape
+%requires GeminiRestClient
+%requires VertexAiRestClient
 %exec-class GeminiGenerationConfigTest
 
 class CaptureGenerationRest inherits RestClientIo::RestClientIo {
