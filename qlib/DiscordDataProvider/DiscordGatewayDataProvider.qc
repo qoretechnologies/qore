@@ -94,12 +94,14 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
     #! Creates the object from a DiscordWebSocketClient
     constructor(DiscordWebSocketClient::DiscordWebSocketClient ws) {
         self.ws = ws;
+        ws.registerObserver(self);
     }
 
     #! Creates the object from a DiscordWebSocketConnection
     constructor(DiscordWebSocketClient::DiscordWebSocketConnection conn) {
         self.conn = conn;
         self.ws = conn.get();
+        ws.registerObserver(self);
     }
 
     #! Deletes the object
@@ -141,6 +143,9 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
                     notifyObservers(EVENT_MESSAGE_CREATE, msg."data");
                     break;
             }
+        } else if (event_id == EVENT_WS_CONNECTED || event_id == EVENT_WS_CLOSED) {
+            # the connection and disconnection events declared in the provider info
+            notifyObservers(event_id, msg);
         }
     }
 

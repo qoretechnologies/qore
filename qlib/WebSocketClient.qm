@@ -237,9 +237,10 @@ ws.send("Hello from HTTP/3!");
     made on the thread that processes the frames of the connection (e.g. in the raw frame callback) does not wait for
     an action in progress, which may need that thread to finish its close handshake: it runs at once.  Two
     exceptions to the call order of @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()": when it is
-    called on such a thread while another action is in progress, or inside an action of the calling thread (e.g. in a callback run by a connect), it
-    returns at once and its background connect waits for its turn after the action in progress, so a call made after
-    it returned may run before its connect.
+    called on such a thread while another action is in progress, or inside an action of the calling thread (e.g. in a
+    subclass's explicitDisconnect() or in code run with runInReconnectAction(); the open, message and closing
+    callbacks run outside of any action), it returns at once and its background connect waits for its turn after the
+    action in progress, so a call made after it returned may run before its connect.
 
     These calls never wait for the end of a connection that the client processes on its own (when the server closes
     the connection or it is lost), nor for any callback: a connection is taken from the client in one step when it
@@ -1460,6 +1461,12 @@ ws.connect();
     WebSocketConnectPollOperation startPollConnect(*hash<auto> opts) {
         opts = addAcceptHeader(opts);
 
+        # a connection published by a connect that then failed is released without the lock, after the connections
+        # it replaced
+        *hash<WscAsyncIoResources> unstarted;
+        on_error if (unstarted) {
+            releaseUnstartedConnection(unstarted);
+        }
         # the connections replaced are reported closed after the action, without the lock
         list<hash<WscAsyncIoResources>> replaced = ();
         on_exit releaseAndNotifyClosed(replaced);
@@ -1480,6 +1487,12 @@ ws.connect();
             # Do the full HCIO connect (blocking — the caller drives the poll loop
             # but the actual I/O is controller-driven via HCIO)
             result = connectUnlocked(opts.hdr);
+            # registered before the connection is published: an exception raised once it is published, also by an
+            # override of publishConnectionUnlocked(), takes it again
+            int seq0 = conn_seq;
+            on_error if (!unstarted && conn && conn.seq > seq0) {
+                unstarted = takeUnstartedConnectionUnlocked(conn);
+            }
             # the connection is the client's from here on; startEventLoop() starts its async I/O
             publishConnectionUnlocked();
         }
@@ -1495,8 +1508,13 @@ ws.connect();
         the handshake completes.  A call made after this method returned runs after the connect, for example a
         @ref disconnect() closes the connection made here, except when this method is called on the thread that
         processes a connection's frames while another action is in progress, or inside an action of the calling thread
-        (e.g. in a callback run by a connect): then it returns at once, and its background connect waits for its turn
-        after the action in progress, so a call made after it returned may run before the connect.
+        (e.g. in a subclass's explicitDisconnect() or in code run with runInReconnectAction(); the open, message and
+        closing callbacks run outside of any action): then it returns at once, and its background connect waits for its
+        turn after the action in progress, so a call made after it returned may run before the connect.
+
+        The destructor does not wait for the background connect: if the client is destroyed while it runs, the error
+        given to \a ready_queue can be \c OBJECT-ALREADY-DELETED; destroying the client while another thread uses
+        it is an error of the caller.
 
         @param opts optional connection options; the \c hdr key can provide additional headers
         @param ready_queue optional Queue that receives the connect result hash when the
@@ -1751,6 +1769,20 @@ ws.connect();
         @ref websocketclient_lifecycle
     */
     bool reconnect() {
+        return reconnectIntern();
+    }
+
+    #! Reconnects the given connection, or the current one
+    /** @param cid if given, the reconnect is made only if the connection with this ID is still the client's when it is
+        this call's turn (checked in the action), e.g. for a reconnect triggered by a timer or a thread of that
+        connection, which must neither close a newer connection nor resurrect one closed by an explicit disconnect
+
+        @return as for @ref reconnect(); @ref False also if \a cid is given and that connection is no longer the
+        client's
+
+        @since WebSocketClient 2.5
+    */
+    private bool reconnectIntern(*int cid) {
         bool need_start = False;
         *hash<WscAsyncIoResources> res;
 
@@ -1763,6 +1795,12 @@ ws.connect();
 
             acquireActionUnlocked(getActionTimeout());
             on_exit releaseActionUnlocked();
+
+            if (exists cid && (!conn || conn.cid != cid)) {
+                logInfo("reconnect for connection %d not made: the client's connection is %d", cid,
+                    conn ? conn.cid : -1);
+                return False;
+            }
 
             self.reconnect_stopping = False;
 
@@ -1982,10 +2020,13 @@ ws.connect();
                 releaseFailedConnectUnlocked();
             }
             h = connectUnlocked(opts.hdr, \info, reconnecting);
-            c = publishConnectionUnlocked();
-            on_error {
-                unstarted = takeUnstartedConnectionUnlocked(c);
+            # registered before the connection is published: an exception raised once it is published, also by an
+            # override of publishConnectionUnlocked() after the base method published it, takes it again
+            int seq0 = conn_seq;
+            on_error if (!unstarted && conn && conn.seq > seq0) {
+                unstarted = takeUnstartedConnectionUnlocked(conn);
             }
+            c = publishConnectionUnlocked();
 
             startAsyncIo();
             updateTid(-1);

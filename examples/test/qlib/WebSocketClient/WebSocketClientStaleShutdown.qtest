@@ -35,6 +35,7 @@
 %requires WebSocketHandler
 %requires WebSocketClient
 %requires DiscordWebSocketClient
+%requires DiscordDataProvider
 %requires json
 %requires ../../TestCertificates.qm
 
@@ -195,6 +196,8 @@ class LifecycleWsClient inherits WebSocketClient {
 
         #! the TID of the thread that last waited for a close handshake
         int handshake_tid = 0;
+        #! gets the TID of each thread that waits for a close handshake
+        Queue handshake_tids();
         #! hold the next close handshake wait until release_close_handshake is released
         bool hold_handshake = False;
         Counter release_close_handshake(1);
@@ -204,6 +207,8 @@ class LifecycleWsClient inherits WebSocketClient {
         Counter open_counter(1);
         #! wait in startAsyncIo(), after the operation was submitted, until the connection is reported open, then fail
         bool fail_after_open = False;
+        #! fail in publishConnectionUnlocked() after the base method published the connection
+        bool fail_publish = False;
     }
 
     constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
@@ -324,6 +329,7 @@ class LifecycleWsClient inherits WebSocketClient {
 
     private waitCloseHandshake(hash<WscAsyncIoResources> res) {
         handshake_tid = gettid();
+        handshake_tids.push(gettid());
         if (report_handshake_wait) {
             report_handshake_wait = False;
             events.push("handshake-wait");
@@ -353,13 +359,7 @@ class LifecycleWsClient inherits WebSocketClient {
             # local references: the object may be destroyed while this thread waits
             Queue q = events;
             Counter c = release_opened;
-            bool on_task;
-            {
-                AutoLock al(delivery_mutex);
-                on_task = delivery_tids{gettid()} ? True : False;
-            }
-            # a delivery task that makes the open report is waited for by the destructor
-            q.push(on_task ? "opened-held:delivery" : "opened-held");
+            q.push("opened-held");
             c.waitForZero(HandoffTimeout);
         }
     }
@@ -507,6 +507,15 @@ class LifecycleWsClient inherits WebSocketClient {
         return rv;
     }
 
+    private WscConnection publishConnectionUnlocked() {
+        WscConnection c = WebSocketClient::publishConnectionUnlocked();
+        if (fail_publish) {
+            fail_publish = False;
+            throw "TEST-PUBLISH-ERROR", "the connect fails once its connection was published";
+        }
+        return c;
+    }
+
     private startAsyncIo() {
         if (fail_connect_at == "start") {
             remove fail_connect_at;
@@ -618,6 +627,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 proto);
             addTestCase(proto + ": action timeout in the reconnect preamble", \reconnectPreambleActionTimeoutTest(),
                 proto);
+            addTestCase(proto + ": destructor reports a reconnect's connection open",
+                \destructorReportsReconnectOpenTest(), proto);
             addTestCase(proto + ": destructor while a reconnect connects", \destructorDuringReconnectConnectTest(),
                 proto);
             addTestCase(proto + ": connect waiting for an action times out", \actionTimeoutTest(), (proto, "connect"));
@@ -665,6 +676,26 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             \discordWatchdogFailedConnectTest());
         addTestCase("Discord: an older connection's close during a handshake keeps the new HELLO watchdog",
             \discordWatchdogCloseDuringHandshakeTest());
+        addTestCase("a connect failing once its connection was published leaves no connection",
+            \publishFailsTest());
+        addTestCase("a poll connect failing once its connection was published leaves no connection",
+            \pollPublishFailsTest());
+        addTestCase("Discord: a HELLO watchdog that cannot be armed does not fail the connect",
+            \discordArmFailsTest());
+        addTestCase("Discord: a connect that publishes and fails cancels its HELLO watchdog",
+            \discordPublishedConnectFailsTest());
+        addTestCase("Discord: a forced reconnect does not replace a newer connection",
+            \discordForcedReconnectNewerConnectionTest());
+        addTestCase("Discord: a forced reconnect does not reopen a disconnected client",
+            \discordForcedReconnectAfterDisconnectTest());
+        addTestCase("Discord: a HELLO watchdog timer of an earlier generation does nothing",
+            \discordStaleHelloFireTest());
+        addTestCase("Discord: a RESUME watchdog timer of an earlier generation does nothing",
+            \discordStaleResumeFireTest());
+        addTestCase("Discord: a RESUME watchdog is canceled only for its connection", \discordResumeKeyedTest());
+        addTestCase("Discord: a heartbeat whose zombie reconnect is not made is cleared",
+            \discordZombieHandoffFailsTest());
+        addTestCase("Discord: EVENT_WS_CLOSED and the data provider's connection events", \discordClosedEventTest());
         foreach string proto in ("h2", "h3") {
             addTestCase(proto + ": raw callback during the initial drain", \rawCallbackInitialDrainTest(), proto);
             addTestCase(proto + ": raw callback exception during the initial drain",
@@ -758,9 +789,14 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! gets the given events, in any order
     private getEvents(LifecycleWsClient wsc, list<string> expected) {
+        getEvents(wsc.events, expected);
+    }
+
+    #! gets the expected events from the queue, in any order
+    private getEvents(Queue events, list<string> expected) {
         hash<string, bool> want = map {$1: True}, expected;
         while (want) {
-            string ev = wsc.events.get(LifecycleWsClient::HandoffTimeout);
+            string ev = events.get(LifecycleWsClient::HandoffTimeout);
             assertTrue(want{ev}, sprintf("expected one of %y, got %y", keys want, ev));
             remove want{ev};
         }
@@ -1463,8 +1499,18 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         LifecycleWsClient c = remove ctx.wsc;
         Counter release = c.release_handshake;
         Counter release_opened = c.release_opened;
+        Counter release_destructor = c.release_close_handshake;
         Queue started = c.destructor_started;
         Queue events = c.events;
+        Queue opened_tids = c.opened_tids;
+        Queue handshake_tids = c.handshake_tids;
+        # the destructor is held in the close handshake wait of the connection it takes
+        c.hold_handshake = True;
+        c.report_handshake_wait = True;
+        on_exit map $1.getCount() ? $1.dec() : NOTHING, (release, release_opened, release_destructor);
+        # the records of the first connection
+        handshake_tids.clear();
+        opened_tids.clear();
         Queue deleted();
         background sub () {
             delete c;
@@ -1472,22 +1518,61 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         }();
         assertTrue(started.get(LifecycleWsClient::HandoffTimeout), "the destructor started");
         # the destructor waits for the client's lock, held by the connect; once the connect published its connection,
-        # the destructor closes it and reports it closed, while the reconnect is held in its connect notification
+        # the destructor takes it and waits for its close handshake, while the reconnect thread reports it open
         release.dec();
-        string held = events.get(LifecycleWsClient::HandoffTimeout);
-        if (held == "opened-held:delivery") {
-            # a delivery task of the new connection made its open report first; the destructor waits for the
-            # delivery tasks, so the report is released first
-            release_opened.dec();
-            assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
-            assertEq(2, ctx.closed.getCount(), "both connections are reported closed once");
-        } else {
-            assertEq("opened-held", held);
-            assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
-            assertEq(2, ctx.closed.getCount(), "both connections are reported closed once");
-            release_opened.dec();
-        }
+        getEvents(events, ("handshake-wait", "opened-held"));
+        int destructor_tid = handshake_tids.get(LifecycleWsClient::HandoffTimeout);
+        int opener_tid = opened_tids.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(opener_tid != destructor_tid, "the reconnect thread reports the connection open");
+        # the destructor reports the connection closed while the open report runs, without waiting for it
+        release_destructor.dec();
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+        assertEq(2, ctx.closed.getCount(), "both connections are reported closed once");
+        release_opened.dec();
         assertEq("reconnect-done", events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(2, ctx.closed.getCount(), "no connection is reported closed twice");
+    }
+
+    #! The client is destroyed while the reconnect thread, having published its connection, has not reported it open
+    #! yet: the destructor, which takes the connection, reports it open before it reports it closed
+    destructorReportsReconnectOpenTest(string proto) {
+        LifecycleCtx ctx = makeCtx(proto, {"reconnect": True});
+        connectChecked(ctx, proto);
+        ctx.wsc.hold_reconnect_handshake = True;
+        ctx.wsc.hold_before_open = True;
+        ctx.wsc.send("bye");
+        assertEq("reconnect-handshake", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
+        LifecycleWsClient c = remove ctx.wsc;
+        Counter release = c.release_handshake;
+        Counter release_before_open = c.release_before_open;
+        Queue started = c.destructor_started;
+        Queue events = c.events;
+        Queue opened_tids = c.opened_tids;
+        Queue opened_cids = c.opened_cids;
+        Queue handshake_tids = c.handshake_tids;
+        on_exit map $1.getCount() ? $1.dec() : NOTHING, (release, release_before_open);
+        # the first connection was reported open by the connecting thread
+        opened_tids.clear();
+        opened_cids.clear();
+        handshake_tids.clear();
+        Queue deleted();
+        background sub () {
+            delete c;
+            deleted.push(True);
+        }();
+        assertTrue(started.get(LifecycleWsClient::HandoffTimeout), "the destructor started");
+        release.dec();
+        # the reconnect thread published its connection and is held before it reports it open
+        assertEq("before-open", events.get(LifecycleWsClient::HandoffTimeout));
+        assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
+        int destructor_tid = handshake_tids.get(LifecycleWsClient::HandoffTimeout);
+        assertEq(destructor_tid, opened_tids.get(LifecycleWsClient::HandoffTimeout),
+            "the destructor reports the connection open");
+        assertEq(1, opened_cids.size(), "once");
+        assertEq(2, ctx.closed.getCount(), "both connections are reported closed once");
+        release_before_open.dec();
+        assertEq("reconnect-done", events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(0, opened_tids.size(), "the reconnect thread does not report it open again");
         assertEq(2, ctx.closed.getCount(), "no connection is reported closed twice");
     }
 
@@ -2198,6 +2283,251 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq(d.getCurrentConnectionId(), st.cid, "for the new connection");
         d.disconnect();
     }
+
+    #! A connect that fails after its connection was published (e.g. by an override of publishConnectionUnlocked())
+    #! takes the connection again: the client has no connection, nothing is reported, and the next connect works
+    publishFailsTest() {
+        LifecycleCtx ctx = makeCtx("h1");
+        ctx.wsc.fail_publish = True;
+        assertThrows("TEST-PUBLISH-ERROR", \ctx.wsc.connect());
+        assertEq(-1, ctx.wsc.getCurrentConnectionId(), "the client has no connection");
+        assertFalse(ctx.wsc.isOpen());
+        assertEq(0, ctx.wsc.opened_cids.size(), "nothing is reported open");
+        assertEq(0, ctx.closed.getCount(), "nothing is reported closed");
+        ctx.wsc.connect();
+        checkCurrentConnection(ctx, 0);
+    }
+
+    #! As publishFailsTest() for startPollConnect()
+    pollPublishFailsTest() {
+        LifecycleCtx ctx = makeCtx("h1");
+        ctx.wsc.fail_publish = True;
+        assertThrows("TEST-PUBLISH-ERROR", \ctx.wsc.startPollConnect());
+        assertEq(-1, ctx.wsc.getCurrentConnectionId(), "the client has no connection");
+        assertFalse(ctx.wsc.isOpen());
+        assertEq(0, ctx.wsc.opened_cids.size(), "nothing is reported open");
+        assertEq(0, ctx.closed.getCount(), "nothing is reported closed");
+        ctx.wsc.connect();
+        checkCurrentConnection(ctx, 0);
+    }
+
+    #! A HELLO watchdog that cannot be armed is logged; the connect succeeds
+    discordArmFailsTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.fail_arm = True;
+        d.connect();
+        assertTrue(d.isOpen(), "the connect succeeded");
+        assertEq(0, d.wdState().timer, "no watchdog is armed");
+        d.disconnect();
+    }
+
+    #! A connect whose connection was published (arming its watchdog) and whose start then fails cancels the watchdog
+    #! of that connection, which is no longer the client's
+    discordPublishedConnectFailsTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.fail_start = True;
+        assertThrows("TEST-CONNECT-ERROR", \d.connect());
+        assertEq(-1, d.getCurrentConnectionId());
+        hash<auto> st = d.wdState();
+        assertTrue(st.cid >= 0, "the watchdog was armed for the published connection");
+        assertEq(0, st.timer, "and canceled when the connect failed");
+    }
+
+    #! A reconnect forced for a connection that an explicit connect replaced while it waited is not made
+    discordForcedReconnectNewerConnectionTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.connect();
+        int cid_a = d.getCurrentConnectionId();
+        # an explicit connect holds the action and the client's lock in its handshake
+        d.hold_handshake = True;
+        Queue xq();
+        background sub () {
+            try {
+                d.connect();
+                xq.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                xq.push(ex.err);
+            }
+        }();
+        assertEq("handshake-held", d.events.get(LifecycleWsClient::HandoffTimeout));
+        # the heartbeat or a watchdog of connection A forces a reconnect, which waits for the connect
+        d.triggerZombieForTest(cid_a);
+        d.release_handshake.dec();
+        assertEq("ok", xq.get(LifecycleWsClient::HandoffTimeout));
+        int cid_b = d.getCurrentConnectionId();
+        assertEq("reconnect:False", d.events.get(LifecycleWsClient::HandoffTimeout), "no reconnect is made");
+        assertEq(cid_b, d.getCurrentConnectionId(), "the new connection is kept");
+        assertTrue(d.isOpen());
+        d.disconnect();
+    }
+
+    #! A reconnect forced for a connection that an explicit disconnect, ahead of it, closed is not made
+    discordForcedReconnectAfterDisconnectTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.connect();
+        int cid_a = d.getCurrentConnectionId();
+        # another thread holds the action without the lock
+        d.holdActionInBackground();
+        assertEq("action-held", d.events.get(LifecycleWsClient::HandoffTimeout));
+        d.report_action_wait = True;
+        # a disconnect waits for the action first, then the forced reconnect of connection A
+        background sub () {
+            try {
+                d.disconnect();
+                d.events.push("disconnected");
+            } catch (hash<ExceptionInfo> ex) {
+                d.events.push(ex.err);
+            }
+        }();
+        assertEq("action-wait", d.events.get(LifecycleWsClient::HandoffTimeout));
+        d.triggerZombieForTest(cid_a);
+        assertEq("action-wait", d.events.get(LifecycleWsClient::HandoffTimeout));
+        d.report_action_wait = False;
+        d.release_action.dec();
+        getEvents(d.events, ("disconnected", "reconnect:False"));
+        assertFalse(d.isOpen(), "the client stays disconnected");
+        assertEq(-1, d.getCurrentConnectionId());
+    }
+
+    #! A HELLO watchdog timer whose callback runs after the watchdog was re-armed for a newer connection does nothing
+    discordStaleHelloFireTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.record_zombies_only = True;
+        d.connect();
+        int gen_a = d.wdState().gen;
+        d.connect();
+        hash<auto> st = d.wdState();
+        assertTrue(st.gen != gen_a, "re-armed for the new connection");
+        # the timer of connection A fired; its callback runs now
+        d.fireHelloForTest(gen_a);
+        assertEq(0, d.zombies.size(), "no reconnect is forced");
+        hash<auto> st1 = d.wdState();
+        assertEq(st.timer, st1.timer, "the new connection's watchdog stays armed");
+        assertEq(d.getCurrentConnectionId(), st1.cid);
+        # the current timer's callback acts
+        d.fireHelloForTest(st.gen);
+        assertEq(d.getCurrentConnectionId(), d.zombies.get(LifecycleWsClient::HandoffTimeout),
+            "the current watchdog forces a reconnect of its connection");
+        d.disconnect();
+    }
+
+    #! As discordStaleHelloFireTest() for the RESUME watchdog
+    discordStaleResumeFireTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.record_zombies_only = True;
+        d.connect();
+        int cid = d.getCurrentConnectionId();
+        d.armResumeForTest(cid);
+        int gen_a = d.resumeState().gen;
+        d.armResumeForTest(cid);
+        hash<auto> st = d.resumeState();
+        assertTrue(st.gen != gen_a);
+        d.fireResumeForTest(gen_a);
+        assertEq(0, d.zombies.size(), "no reconnect is forced");
+        assertEq(st.timer, d.resumeState().timer, "the watchdog stays armed");
+        d.fireResumeForTest(st.gen);
+        assertEq(cid, d.zombies.get(LifecycleWsClient::HandoffTimeout), "the current watchdog forces a reconnect");
+        d.disconnect();
+    }
+
+    #! The RESUME watchdog is canceled by the events and the close of its own connection only
+    discordResumeKeyedTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        d.connect();
+        int cid = d.getCurrentConnectionId();
+        d.armResumeForTest(cid);
+        d.cancelResumeForTest(cid + 1000);
+        assertTrue(d.resumeState().timer != 0, "not canceled for another connection");
+        assertEq(cid, d.resumeState().cid);
+        d.cancelResumeForTest(cid);
+        assertEq(0, d.resumeState().timer, "canceled for its connection");
+        d.disconnect();
+    }
+
+    #! A heartbeat that detected a zombie connection whose reconnect is not made is cleared once its thread ended, so
+    #! a new connection starts its own
+    discordZombieHandoffFailsTest() {
+        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+            delete d;
+        }
+        hash<auto> hdr = {"X-Discord": "1", "X-Hbi": "100"};
+        d.force_zombie = True;
+        d.fail_reconnect = True;
+        d.connect({"hdr": hdr});
+        int cid_a = d.getCurrentConnectionId();
+        assertEq("hb-started:" + cid_a, d.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq("handoff-failed", d.events.get(LifecycleWsClient::HandoffTimeout));
+        assertEq(-1, d.hbState().cid, "the heartbeat record is cleared");
+        assertNothing(d.getInfo().heartbeat_tid);
+        d.connect({"hdr": hdr});
+        assertEq("hb-started:" + d.getCurrentConnectionId(), d.events.get(LifecycleWsClient::HandoffTimeout),
+            "the new connection starts its heartbeat");
+        d.disconnect();
+    }
+
+    #! A Discord client raises EVENT_WS_CLOSED, and its gateway data provider its connection and disconnection
+    #! events
+    discordClosedEventTest() {
+        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        on_exit {
+            d.releaseAll();
+        }
+        EventRecorder client_events();
+        d.registerObserver(client_events);
+        DiscordGatewayDataProvider prov(d);
+        on_exit delete prov;
+        EventRecorder prov_events();
+        prov.registerObserver(prov_events);
+        # connects
+        prov.observersReady();
+        int cid = d.getCurrentConnectionId();
+        assertTrue(cid >= 0);
+        d.disconnect();
+        hash<auto> info = prov.getInfo();
+        hash<string, hash<auto>> seen = {};
+        while (!seen{EVENT_WS_CLOSED}) {
+            hash<auto> ev = client_events.q.get(LifecycleWsClient::HandoffTimeout);
+            seen{ev.id} = ev.data;
+        }
+        assertEq(cid, seen{EVENT_WS_CLOSED}.cid, "EVENT_WS_CLOSED carries the closed connection's ID");
+        assertEq(cid, seen{EVENT_WS_CONNECTED}.cid);
+        list<string> prov_ids = ();
+        while (prov_ids.size() < 2) {
+            prov_ids += prov_events.q.get(LifecycleWsClient::HandoffTimeout).id;
+        }
+        assertEq((info.connection_event, info.disconnection_event), prov_ids,
+            "the provider raises its connection and disconnection events");
+    }
 }
 
 #! A client with serialization whose connect report waits until the connection was reported closed
@@ -2362,6 +2692,10 @@ class HbDiscord inherits DiscordWebSocketClient {
         Counter release_closing(1);
         #! the TID of the thread reporting a close
         int closing_tid = 0;
+        #! the next zombie check finds a zombie
+        bool force_zombie = False;
+        #! forced reconnects are not made
+        bool fail_reconnect = False;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
@@ -2402,6 +2736,27 @@ class HbDiscord inherits DiscordWebSocketClient {
         events.push("hb-started:" + hb.cid);
     }
 
+    private bool heartbeatZombieCheck() {
+        if (force_zombie) {
+            force_zombie = False;
+            return True;
+        }
+        return DiscordWebSocketClient::heartbeatZombieCheck();
+    }
+
+    private bool reconnectIntern(*int cid) {
+        if (fail_reconnect) {
+            fail_reconnect = False;
+            return False;
+        }
+        return DiscordWebSocketClient::reconnectIntern(cid);
+    }
+
+    private heartbeatHandoffFailed(DiscordHeartbeat h) {
+        DiscordWebSocketClient::heartbeatHandoffFailed(h);
+        events.push("handoff-failed");
+    }
+
     hash<auto> hbState() {
         AutoLock al(heartbeat_lock);
         return {"cid": hb ? hb.cid : -1, "running": hb ? hb.running.getCount() : 0, "interval": hb ? hb.interval : 0};
@@ -2420,13 +2775,26 @@ class WdDiscord inherits DiscordWebSocketClient {
         Counter release_closing(1);
         bool hold_explicit = False;
         Counter release_explicit(1);
+        #! fail the next HELLO watchdog arm
+        bool fail_arm = False;
+        #! fail the next start of a connection's async I/O
+        bool fail_start = False;
+        #! report a thread that waits for the action
+        bool report_action_wait = False;
+        #! released to end holdActionInBackground()
+        Counter release_action(1);
+        #! gets the connection ID of each forced reconnect
+        Queue zombies();
+        #! forced reconnects are only recorded, not made
+        bool record_zombies_only = False;
     }
 
     constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
     }
 
     releaseAll() {
-        map $1.getCount() ? $1.dec() : NOTHING, (release_handshake, release_reest, release_closing, release_explicit);
+        map $1.getCount() ? $1.dec() : NOTHING, (release_handshake, release_reest, release_closing, release_explicit,
+            release_action);
     }
 
     private explicitDisconnect() {
@@ -2480,6 +2848,101 @@ class WdDiscord inherits DiscordWebSocketClient {
 
     hash<auto> wdState() {
         AutoLock al(hello_watchdog_lock);
-        return {"hello_received": hello_received, "timer": hello_watchdog_timer, "cid": hello_watchdog_cid};
+        return {"hello_received": hello_received, "timer": hello_watchdog_timer, "cid": hello_watchdog_cid,
+            "gen": hello_watchdog_gen};
+    }
+
+    hash<auto> resumeState() {
+        AutoLock al(resume_watchdog_lock);
+        return {"completed": resume_completed, "timer": resume_watchdog_timer, "cid": resume_watchdog_cid,
+            "gen": resume_watchdog_gen};
+    }
+
+    private armHelloWatchdog(int cid = -1) {
+        if (fail_arm) {
+            fail_arm = False;
+            throw "ASYNC-IO-ERROR", "the controller is shutting down";
+        }
+        DiscordWebSocketClient::armHelloWatchdog(cid);
+    }
+
+    private startAsyncIo() {
+        if (fail_start) {
+            fail_start = False;
+            throw "TEST-CONNECT-ERROR", "the connect fails when the async I/O is started";
+        }
+        DiscordWebSocketClient::startAsyncIo();
+    }
+
+    private acquireActionUnlocked(timeout to) {
+        if (report_action_wait && action_tid && action_tid != gettid()) {
+            events.push("action-wait");
+        }
+        DiscordWebSocketClient::acquireActionUnlocked(to);
+    }
+
+    #! holds the action in another thread, without the client's lock, until release_action is released
+    holdActionInBackground() {
+        background holdAction();
+    }
+
+    private holdAction() {
+        {
+            AutoLock al(m);
+            acquireActionUnlocked(LifecycleWsClient::HandoffTimeout);
+        }
+        on_exit {
+            AutoLock al(m);
+            releaseActionUnlocked();
+        }
+        events.push("action-held");
+        release_action.waitForZero(LifecycleWsClient::HandoffTimeout);
+    }
+
+    private bool reconnectIntern(*int cid) {
+        bool rv = DiscordWebSocketClient::reconnectIntern(cid);
+        # forced reconnects only
+        if (exists cid) {
+            events.push("reconnect:" + (rv ? "True" : "False"));
+        }
+        return rv;
+    }
+
+    private triggerZombieReconnect(int cid = -1, *DiscordHeartbeat h) {
+        zombies.push(cid);
+        if (!record_zombies_only) {
+            DiscordWebSocketClient::triggerZombieReconnect(cid, h);
+        }
+    }
+
+    triggerZombieForTest(int cid) {
+        DiscordWebSocketClient::triggerZombieReconnect(cid);
+    }
+
+    fireHelloForTest(int gen) {
+        helloWatchdogFired(gen);
+    }
+
+    armResumeForTest(int cid) {
+        armResumeWatchdog(cid);
+    }
+
+    cancelResumeForTest(int cid) {
+        cancelResumeWatchdog(cid);
+    }
+
+    fireResumeForTest(int gen) {
+        resumeWatchdogFired(gen);
+    }
+}
+
+#! Records the events it gets
+class EventRecorder inherits DataProvider::Observer {
+    public {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push({"id": event_id, "data": data_});
     }
 }

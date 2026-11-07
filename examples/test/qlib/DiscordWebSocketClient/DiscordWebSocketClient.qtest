@@ -129,7 +129,7 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         depending on a running AsyncIoController in unit tests
     */
     armResumeWatchdogForTest() {
-        resume_completed = False;
+        armResumeWatchdog();
     }
 
     #! suppresses the real heartbeat thread (no network, no controller in unit tests)
@@ -143,20 +143,21 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
         started_heartbeat_thread = True;
     }
 
-    #! production armResumeWatchdog() uses AsyncSocketIo::getGlobalAsyncIoController()
-    /** which is not available in plain unit tests; override to preserve only
-        the observable state change (resume_completed = False) so handleHello()
-        can be exercised end-to-end and tests can still assert the contract via
-        testResumeWatchdogActive()
+    #! production armResumeWatchdog() starts a timer of AsyncSocketIo::getGlobalAsyncIoController()
+    /** override to preserve only the observable state change (resume_completed = False, and the connection it was
+        armed for) so handleHello() can be exercised end-to-end without a timer; the real cancelResumeWatchdog() runs,
+        and touches no controller since no timer is armed
     */
-    private armResumeWatchdog() {
+    private armResumeWatchdog(int cid = -1) {
+        AutoLock al(resume_watchdog_lock);
         resume_completed = False;
+        resume_watchdog_cid = cid;
     }
 
-    #! mirror the override above for cancel — keep the state machine consistent
-    private cancelResumeWatchdog() {
-        resume_completed = True;
-        resume_miss_count = 0;
+    #! returns the connection ID the RESUME watchdog was armed for
+    int getResumeWatchdogCidForTest() {
+        AutoLock al(resume_watchdog_lock);
+        return resume_watchdog_cid;
     }
 }
 
@@ -183,6 +184,8 @@ public class Main inherits QUnit::Test {
     constructor() : Test("DiscordWebSocketClientTest", "1.0") {
         addTestCase("discord tests", \discordTests());
         addTestCase("heartbeat request tests", \heartbeatRequestTests());
+        addTestCase("heartbeat ACK of another connection", \foreignAckTests());
+        addTestCase("RESUME watchdog keyed by connection", \resumeWatchdogKeyTests());
         addTestCase("heartbeat zombie detection tests", \zombieDetectionTests());
         addTestCase("resume watchdog tests", \resumeWatchdogTests());
         addTestCase("hello identify/resume decision tests", \helloIdentifyResumeTests());
@@ -239,6 +242,45 @@ public class Main inherits QUnit::Test {
         c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
         assertEq(8, c.getHeartbeatCidForTest());
         assertTrue(c.started_heartbeat_thread);
+    }
+
+    #! the ACK of another connection does not acknowledge the heartbeat of the client's connection
+    foreignAckTests() {
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+        c.setConnectionIdForTest(7);
+        c.setHeartbeatForTest(7);
+        # a heartbeat is sent: an ACK is due
+        assertFalse(c.testHeartbeatZombieCheck());
+        # an ACK of connection 6 arrives
+        c.event_cid = 6;
+        c.testHandleEventData({"op": 11});
+        assertTrue(c.testHeartbeatZombieCheck(), "the ACK of another connection is ignored");
+        # an ACK of connection 7 arrives
+        c.event_cid = 7;
+        c.testHandleEventData({"op": 11});
+        assertFalse(c.testHeartbeatZombieCheck(), "the ACK of the heartbeat's connection is taken");
+    }
+
+    #! the RESUME watchdog is armed for the connection that sent RESUME and canceled only by its events
+    resumeWatchdogKeyTests() {
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+        c.setConnectionIdForTest(5);
+        c.setSessionStateForTest("session-xyz", 99);
+        c.testHandleEventData({"op": 10, "d": {"heartbeat_interval": 41250}});
+        assertEq(6, c.sent[0].op, "RESUME sent");
+        assertEq(5, c.getResumeWatchdogCidForTest(), "armed for connection 5");
+        assertTrue(c.testResumeWatchdogActive());
+        # a DISPATCH of connection 4 does not cancel it
+        c.event_cid = 4;
+        c.testHandleEventData({"op": 0, "t": "RESUMED", "s": 100, "d": {}});
+        assertTrue(c.testResumeWatchdogActive(), "a DISPATCH of another connection does not cancel it");
+        # the close of connection 4 does not cancel it
+        c.testClosingConnection(4);
+        assertTrue(c.testResumeWatchdogActive(), "the close of another connection does not cancel it");
+        # a DISPATCH of connection 5 cancels it
+        c.event_cid = 5;
+        c.testHandleEventData({"op": 0, "t": "RESUMED", "s": 101, "d": {}});
+        assertFalse(c.testResumeWatchdogActive(), "a DISPATCH of its connection cancels it");
     }
 
     discordTests() {

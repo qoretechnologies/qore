@@ -139,6 +139,12 @@ module DiscordDataProvider {
     @section Discorddataprovider_relnotes Release Notes
 
     @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    - @ref DiscordDataProvider::DiscordGatewayDataProvider "DiscordGatewayDataProvider" raises its connection and
+      disconnection events (@ref WebSocketClient::EVENT_WS_CONNECTED and @ref WebSocketClient::EVENT_WS_CLOSED) to its
+      observers, as declared in its provider info; created from a
+      @ref DiscordWebSocketClient::DiscordWebSocketClient "DiscordWebSocketClient" or a
+      @ref DiscordWebSocketClient::DiscordWebSocketConnection "DiscordWebSocketConnection", it now observes the client
+      too, so it raises its events in that case as well
     - API calls are made with an asynchronous @ref DiscordRestClient::DiscordRestClientIo "DiscordRestClientIo"
       from the connection's \c getAsync() or created from the options; a synchronous
       @ref DiscordRestClient::DiscordRestClient "DiscordRestClient" passed to the data provider, directly or in the
