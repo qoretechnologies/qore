@@ -39,6 +39,11 @@ class StaleEchoWsConnection inherits WebSocketConnection {
     }
 
     gotMessage(string msg) {
+        if (msg == "bye") {
+            # the server closes the connection
+            stop();
+            return;
+        }
         send("ECHO:" + msg);
     }
 }
@@ -68,6 +73,8 @@ class StaleShutdownWsClient inherits WebSocketClient {
         Counter release_close(1);
         #! hold the delivery task after it has closed the connection's socket in the teardown
         bool hold_close = False;
+        #! hold the delivery task after it has taken the connection's resources in the teardown
+        bool hold_release = False;
     }
 
     private {
@@ -85,6 +92,29 @@ class StaleShutdownWsClient inherits WebSocketClient {
         self.hold_close = hold_close;
         armed = True;
         gate_stop = True;
+    }
+
+    #! holds the teardown of the current connection after it has taken the connection's resources
+    /** the delivery task that delivers the "closed" message is not held there
+    */
+    armTeardown() {
+        hold_release = True;
+        release.dec();
+        armed = True;
+    }
+
+    #! connects in a new thread, which reports "connected" or the connect error
+    connectInBackground() {
+        background connectAndReport();
+    }
+
+    private connectAndReport() {
+        try {
+            connect();
+            events.push("connected");
+        } catch (hash<ExceptionInfo> ex) {
+            events.push(sprintf("connect error: %s: %s", ex.err, ex.desc));
+        }
     }
 
     #! starts a thread that reports "done" when the held delivery task has ended
@@ -120,6 +150,22 @@ class StaleShutdownWsClient inherits WebSocketClient {
         WebSocketClient::stopAsyncIo();
     }
 
+    private releaseAsyncIo(hash<WscAsyncIoResources> res) {
+        if (hold_release && hold_tid && gettid() == hold_tid) {
+            hold_release = False;
+            events.push("detached");
+            release_close.waitForZero(HandoffTimeout);
+        }
+        WebSocketClient::releaseAsyncIo(res);
+    }
+
+    private waitAsyncTeardownUnlocked() {
+        if (async_teardown_tid && async_teardown_tid != gettid()) {
+            events.push("connect-waiting");
+        }
+        WebSocketClient::waitAsyncTeardownUnlocked();
+    }
+
     private shutdownAndCloseUnlocked() {
         WebSocketClient::shutdownAndCloseUnlocked();
         # the teardown has released the connection's resources and checks next, with the client's lock held, if
@@ -142,6 +188,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     constructor() : Test("WebSocketClientStaleShutdownTest", "1.0") {
         addTestCase("stale teardown after the next connect", \staleTeardownAfterConnectTest());
         addTestCase("stale teardown across the next connect", \staleTeardownAcrossConnectTest());
+        addTestCase("connect during the teardown of a connection closed by the server",
+            \connectDuringTeardownTest());
+        addTestCase("connect in the closing callback", \connectInClosingCallbackTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -167,6 +216,122 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! after the second connect
     staleTeardownAcrossConnectTest() {
         runTest(True);
+    }
+
+    #! A connect() made while the teardown of a connection closed by the server is in progress
+    /** The connect waits until the teardown has ended, so the closed connection is reported closed once, and the
+        teardown leaves the new connection alone.
+    */
+    connectDuringTeardownTest() {
+        Queue msgs();
+        Counter closed_count();
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            } else {
+                closed_count.inc();
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        on_exit {
+            # never leave the delivery task held; only this thread releases it
+            if (wsc.release_close.getCount()) {
+                wsc.release_close.dec();
+            }
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the first connection is open");
+        wsc.armTeardown();
+        # the server closes the connection; its teardown is held after taking the connection's resources
+        wsc.send("bye");
+        assertEq("detached", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+
+        wsc.connectInBackground();
+        string ev = wsc.events.get(StaleShutdownWsClient::HandoffTimeout);
+        # the connect waits for the end of the teardown; when it does not wait, it has connected already
+        if (ev != "connected") {
+            assertEq("connect-waiting", ev);
+        }
+        wsc.release_close.dec();
+        wsc.watchDone();
+        hash<string, bool> seen = {ev: True};
+        while (!seen.connected || !seen.done) {
+            ev = wsc.events.get(StaleShutdownWsClient::HandoffTimeout);
+            assertTrue(ev == "connected" || ev == "done", sprintf("unexpected event %y", ev));
+            seen{ev} = True;
+        }
+
+        checkSecondConnection(wsc, msgs, closed_count);
+    }
+
+    #! A connect() made in the closing callback of a connection closed by the server
+    /** The teardown that called the callback leaves the new connection alone.
+    */
+    connectInClosingCallbackTest() {
+        Queue msgs();
+        Counter closed_count();
+        Queue errors();
+        *StaleShutdownWsClient client;
+        bool reconnected;
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+                return;
+            }
+            closed_count.inc();
+            if (!reconnected) {
+                reconnected = True;
+                try {
+                    client.connect();
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(sprintf("%s: %s", ex.err, ex.desc));
+                }
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        client = wsc;
+        on_exit {
+            remove client;
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the first connection is open");
+        # the teardown of the next "closed" message is watched, but not held
+        wsc.armTeardown();
+        wsc.release_close.dec();
+        # the server closes the connection; the closing callback connects again
+        wsc.send("bye");
+        assertEq("detached", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        wsc.watchDone();
+        assertEq("done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        assertEq(0, errors.size(), "the connect in the closing callback succeeds");
+
+        checkSecondConnection(wsc, msgs, closed_count);
+    }
+
+    #! checks that the client's second connection is open, works, and is closed with disconnect()
+    private checkSecondConnection(StaleShutdownWsClient wsc, Queue msgs, Counter closed_count) {
+        assertTrue(wsc.isOpen(), "the second connection is open");
+        assertEq(1, closed_count.getCount(), "the first connection is reported closed once");
+        wsc.send("one");
+        assertEq("ECHO:one", msgs.get(StaleShutdownWsClient::HandoffTimeout));
+        wsc.disconnect();
+        assertFalse(wsc.isOpen(), "the second connection is closed");
+        assertEq(2, closed_count.getCount(), "the second connection is reported closed");
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the third connection is open");
+        wsc.disconnect();
     }
 
     private runTest(bool across) {

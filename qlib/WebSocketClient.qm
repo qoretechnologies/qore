@@ -262,11 +262,14 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
-    - fixed a race where the end of a connection closed with
-      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" could be processed after the client had
-      connected again and then closed the new connection, or left it open but unknown to the client, so that the next
+    - fixed a race where the end of a connection, closed with
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" or by the server, could be processed after
+      the client had connected again, also from the closing callback, and then closed the new connection, or left it
+      open but unknown to the client, so that the next
       @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" did not close it and the next
-      @ref WebSocketClient::WebSocketClient::connect() "connect()" failed with \c HTTPCLIENT-CAPACITY-ERROR
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" failed with \c HTTPCLIENT-CAPACITY-ERROR; a
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" made while the end of a connection is processed
+      now waits until the closed connection has been reported closed
     - fixed the @ref WebSocketClient::WebSocketClient "WebSocketClient" constructor to accept a \c headers option
       whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, with the \c token or
       \c cookie option; adding the \c Authorization or \c Cookie header raised \c RUNTIME-TYPE-ERROR
@@ -471,8 +474,13 @@ public const WsSchemes = {
     },
 };
 
-#! the async I/O resources of a connection taken from a WebSocketClient; see WebSocketClient::detachAsyncIo()
-hashdecl WscAsyncIoResources {
+#! the async I/O resources of a connection taken from a WebSocketClient
+/** Used by the private teardown methods of @ref WebSocketClient::WebSocketClient "WebSocketClient", which subclasses
+    can override.
+
+    @since WebSocketClient 2.5
+*/
+public hashdecl WscAsyncIoResources {
     #! the poll operation of the connection
     *object op;
     #! the owner of the connection's operations in the async I/O controller
@@ -687,6 +695,19 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             increases makes the wait robust to sentinel reuse.
         */
         int tid_generation = 0;
+
+        #! Monotonic connection generation; incremented by each updateTid() call, when a connection starts
+        /** A teardown run by handleAsyncShutdown() leaves the client's state alone when a connection was started
+            after it took the resources of its own connection, e.g. by a \c connect() made in the closing callback.
+        */
+        int conn_generation = 0;
+
+        #! TID of the delivery task running handleAsyncShutdown() from when it took the connection's resources
+        /** 0 when no teardown is in progress.  connect() and startPollConnect() wait until the teardown has ended
+            before they start a new connection, so that the closed connection is reported closed before the new one
+            starts; see waitAsyncTeardownUnlocked().
+        */
+        int async_teardown_tid = 0;
 
         #! Unique websocket connection ID; -1 when not connected
         int cid = -1;
@@ -1216,6 +1237,7 @@ ws.connect();
         m.lock();
         on_exit m.unlock();
 
+        waitAsyncTeardownUnlocked();
         if (isOpenUnlocked()) {
             disconnectUnlocked();
         }
@@ -1647,6 +1669,7 @@ ws.connect();
             self.stop = 0;
         }
 
+        waitAsyncTeardownUnlocked();
         if (isOpenUnlocked()) {
             disconnectUnlocked();
         }
@@ -2411,6 +2434,8 @@ ws.setEventQueue();
 
     private updateTid(int tid) {
         self.tid = tid;
+        # a connection starts: a teardown in progress belongs to an earlier connection
+        ++conn_generation;
     }
 
     #! Clears the tid and stop variables and wakes up any waiting threads
@@ -2421,8 +2446,25 @@ ws.setEventQueue();
         # advance the teardown generation so waitTidCleared() observes this
         # teardown even if the tid sentinel is immediately reused by a reconnect
         ++tid_generation;
+        async_teardown_tid = 0;
         if (tid_waiting) {
             tid_cond.broadcast();
+        }
+    }
+
+    #! Waits until a teardown run by handleAsyncShutdown() on another thread has ended; must be called with \c m held
+    /** handleAsyncShutdown() releases the lock while it closes the connection and while it calls the closing
+        callback; a connection started meanwhile would otherwise be started before the closed connection is reported
+        closed.  No wait is made on the thread running the teardown, e.g. for a \c connect() made in the closing
+        callback.
+
+        @since WebSocketClient 2.5
+    */
+    private waitAsyncTeardownUnlocked() {
+        while (async_teardown_tid && async_teardown_tid != gettid()) {
+            ++tid_waiting;
+            on_exit --tid_waiting;
+            tid_cond.wait(m);
         }
     }
 
@@ -2873,8 +2915,14 @@ ws.setEventQueue();
         alone; tearing it down, or clearing its state without closing it, made the next @ref disconnect() do nothing
         and the next @ref connect() fail with \c HTTPCLIENT-CAPACITY-ERROR, as the leaked connection's stream still
         held the only connection of the client's connection manager.  The connection is identified by its poll
-        operation and by the teardown generation (\c tid_generation), not by \c tid, which is the same sentinel
-        (-1) for every async connection.
+        operation and by the teardown and connection generations (\c tid_generation, \c conn_generation), not by
+        \c tid, which is the same sentinel (-1) for every async connection.
+
+        While the teardown runs without the lock, @ref connect() and @ref startPollConnect() wait for its end (see
+        waitAsyncTeardownUnlocked()), so the closed connection is reported closed before a new connection starts.  A
+        connection started meanwhile without waiting, by a @ref connect() in the closing callback or by an async
+        connect completing on an I/O thread, is left alone: the closed connection is still reported closed, but the
+        client's state is not changed afterwards.
 
         @param op the poll operation that delivered the terminal message
 
@@ -2892,6 +2940,7 @@ ws.setEventQueue();
         hash<WscAsyncIoResources> res;
         *Socket wake_socket;
         int gen;
+        int cgen;
         {
             m.lock();
             on_exit m.unlock();
@@ -2899,9 +2948,24 @@ ws.setEventQueue();
                 return;
             }
             gen = tid_generation;
+            cgen = conn_generation;
+            # connect() waits for the end of the teardown from here on; see waitAsyncTeardownUnlocked()
+            async_teardown_tid = gettid();
             res = detachAsyncIo();
             # with HTTP/1.1, the socket taken from the connection after the upgrade; see shutdownAndCloseUnlocked()
             wake_socket = remove async_wake_socket;
+        }
+        # end the teardown on every exit; clearTid() ends it when the connection is torn down normally
+        on_exit {
+            if (self) {
+                AutoLock al(m);
+                if (async_teardown_tid == gettid()) {
+                    async_teardown_tid = 0;
+                    if (tid_waiting) {
+                        tid_cond.broadcast();
+                    }
+                }
+            }
         }
 
         # Stop the I/O controller and shut down the connection without the lock
@@ -2923,6 +2987,8 @@ ws.setEventQueue();
                 # the connection was torn down by another thread, which also reset delivery_active
                 return;
             }
+            # when a connection was started meanwhile, the closed connection is still reported closed below, but the
+            # client's state, which belongs to the new connection, is left alone afterwards.
             # Set the shutdown TID before calling closingConnection() so that if the callback
             # drops the last user reference and triggers the destructor on THIS thread,
             # disconnectUnlocked() can detect the self-deadlock and skip waitTidCleared()
@@ -2960,8 +3026,8 @@ ws.setEventQueue();
             }
 
             # Check again: disconnectUnlocked() may have torn the connection down while we were in
-            # closingConnection(), and the client may even have connected again meanwhile
-            if (tid_generation != gen) {
+            # closingConnection(), and the closing callback may have started a new connection
+            if (asyncTeardownSupersededUnlocked(gen, cgen)) {
                 return;
             }
 
@@ -3014,6 +3080,39 @@ ws.setEventQueue();
                 }
             }
         }
+    }
+
+    #! Returns @ref True if the connection torn down by handleAsyncShutdown() is no longer the client's; must be called with \c m held
+    /** The connection is no longer the client's when another thread tore it down meanwhile (clearTid() was called),
+        or when a new connection was started meanwhile (updateTid() was called), e.g. by a \c connect() in the
+        closing callback or by an async connect completing on an I/O thread.  The client's state then belongs to the
+        new connection and is left alone.
+
+        When a new connection was started without the old one being torn down by another thread, nothing else reset
+        \c delivery_active, which the calling delivery task still holds: it is released here, and a delivery task
+        is scheduled for the messages the new connection may already have received.
+
+        @param gen the teardown generation when the connection's resources were taken
+        @param cgen the connection generation when the connection's resources were taken
+
+        @return @ref True if the teardown must end without changing the client's state
+
+        @since WebSocketClient 2.5
+    */
+    private bool asyncTeardownSupersededUnlocked(int gen, int cgen) {
+        if (tid_generation != gen) {
+            # the thread that tore the connection down also reset delivery_active
+            return True;
+        }
+        if (conn_generation != cgen) {
+            {
+                AutoLock al(delivery_mutex);
+                delivery_active = False;
+            }
+            scheduleDelivery();
+            return True;
+        }
+        return False;
     }
 
     #! Processes a message received from the async poll operation
