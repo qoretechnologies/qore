@@ -5061,7 +5061,8 @@ public class HttpAsyncSocketIoController {
 
     #! Logs a message
     private log(int level, string fmt) {
-        if (logger) {
+        # the message is formatted only if it is logged: this is called several times for every request
+        if (logger && logger.isEnabledFor(level)) {
             # use "%s" wrapper so the already-formatted message is treated as a
             # literal — re-passing it as Logger::log()'s format string would
             # re-interpret any embedded "%XY" (e.g. URL-encoded "%2F") and

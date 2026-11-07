@@ -1082,6 +1082,7 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             completeAbandonedLocked(cmd);
             break;
         }
+        case IoCommand::CancelAndCloseSocket:
         case IoCommand::CloseSocket: {
             // the socket is closed before its waiter is signaled, as when the command is processed
             if (cmd.close_sock) {
@@ -3384,7 +3385,17 @@ void AsyncIoControllerPriv::completePendingSocketCancel(IoThreadContext& t,
 
     std::vector<AsyncOpCompletion*> completions;
     completions.swap(pit->second.completions);
+    std::vector<IoThreadContext::PendingSocketCancel::PendingClose> closes;
+    closes.swap(pit->second.closes);
     t.pending_socket_cancels.erase(pit);
+
+    // the last worker continuePoll() of the socket has returned: the sockets of the commands that waited for it are
+    // closed before their waiters are signaled; wakeSocketAfterClose() takes m, so this is done before it is held
+    for (auto& pc : closes) {
+        pc.sock->closeIo(xsink);
+        wakeSocketAfterClose(pc.sock_hash, pc.sock);
+        pc.sock->deref(xsink);
+    }
 
     AutoLocker al(m);
     for (AsyncOpCompletion* completion : completions) {
@@ -3538,6 +3549,14 @@ bool AsyncIoControllerPriv::cancelAndClose(AbstractPollableIoObjectBase* sock,
     }
     std::string sock_hash = getSocketHash(sock);
     std::vector<int> targets = getSocketThreadIndexes(sock, sock_hash);
+    if (!on_async_io_thread && targets.size() == 1) {
+        // one command cancels and closes (see close())
+        int rc = 0;
+        int cancelled = 0;
+        if (cancelAndCloseOnThread(sock, sock_hash, targets[0], xsink, rc, &cancelled)) {
+            return cancelled > 0;
+        }
+    }
     int count = cancelBySocketHash(sock_hash, xsink, &targets);
     if (*xsink) {
         return count > 0;
@@ -3552,11 +3571,69 @@ int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSi
     }
     std::string sock_hash = getSocketHash(sock);
     std::vector<int> targets = getSocketThreadIndexes(sock, sock_hash);
+    if (!on_async_io_thread && targets.size() == 1) {
+        // one I/O thread can run operations of the socket, and it is also the thread that closes it: one command
+        // cancels and closes
+        int rc = 0;
+        if (cancelAndCloseOnThread(sock, sock_hash, targets[0], xsink, rc)) {
+            return rc;
+        }
+    }
     cancelBySocketHash(sock_hash, xsink, &targets);
     if (*xsink) {
         return -1;
     }
     return closeSocketOnController(sock, sock_hash, xsink);
+}
+
+bool AsyncIoControllerPriv::cancelAndCloseOnThread(AbstractPollableIoObjectBase* sock, const std::string& sock_hash,
+        int thread_idx, ExceptionSink* xsink, int& rc, int* cancelled) {
+    IoThreadContext* target = nullptr;
+    AsyncOpCompletion* completion = nullptr;
+    {
+        AutoLocker al(m);
+        if (shutting_down || qore_shutdown.load(std::memory_order_relaxed) || thread_idx < 0
+                || static_cast<size_t>(thread_idx) >= io_threads.size()) {
+            // teardown has its own handling in cancelBySocketHash() and closeSocketOnController()
+            return false;
+        }
+
+        target = io_threads[thread_idx].get();
+        if (!target->running.load(std::memory_order_acquire) || target->exiting || !target->tid) {
+            startIntern(xsink);
+            if (*xsink) {
+                rc = -1;
+                return true;
+            }
+            target = io_threads[thread_idx].get();
+        }
+
+        completion = new AsyncOpCompletion(1);
+        Command cmd;
+        cmd.cmd = IoCommand::CancelAndCloseSocket;
+        cmd.sock_hash = sock_hash;
+        sock->ref();
+        cmd.close_sock = sock;
+        completion->ROreference();
+        cmd.completion = completion;
+        target->cmdq.push(std::move(cmd));
+        ++submit_seq;
+        ++target->submit_seq;
+    }
+
+    target->notifier->notify();
+
+    {
+        AutoLocker al(m);
+        completion->waitForCompletion(m);
+        if (cancelled) {
+            *cancelled = completion->cancel_count.load(std::memory_order_relaxed);
+        }
+    }
+    completion->deref();
+
+    rc = *xsink ? -1 : 0;
+    return true;
 }
 
 int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase* sock,
@@ -6857,6 +6934,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     std::vector<Command> abandoned_cmds;
     std::vector<AsyncIoDeferredRelease> exit_timer_refs;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
+    // sockets that waited for a barrier and the completions waiting for them: closed and signaled after the lock is
+    // released, as closing a socket can run its destructor and other code that must not run under the controller lock
+    std::vector<IoThreadContext::PendingSocketCancel::PendingClose> exit_closes;
+    std::vector<AsyncOpCompletion*> exit_completions;
     std::map<std::pair<uint64_t, int>, std::shared_ptr<void>> exit_extra_holds;
     bool restart_after_exit = false;
     {
@@ -6949,9 +7030,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.pending_aborts.clear();
         t.pending_abort_cancel_hash.clear();
         for (auto& [sock_hash, pending] : t.pending_socket_cancels) {
+            // a socket that waited for the barrier is closed all the same: its waiter expects it closed
+            for (auto& pc : pending.closes) {
+                exit_closes.push_back(pc);
+            }
             for (AsyncOpCompletion* completion : pending.completions) {
-                completion->completeOne();
-                completion->deref();
+                exit_completions.push_back(completion);
             }
         }
         t.pending_socket_cancels.clear();
@@ -7002,6 +7086,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         pending_cmd.completion = nullptr;
                     }
                 } else if (pending_cmd.cmd == IoCommand::CancelSocket
+                        || pending_cmd.cmd == IoCommand::CancelAndCloseSocket
                         || pending_cmd.cmd == IoCommand::CloseSocket) {
                     abandoned_cmds.push_back(std::move(pending_cmd));
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
@@ -7073,6 +7158,19 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     }
     for (auto& refs : exit_timer_refs) {
         releaseOffIoThread(refs, xsink);
+    }
+    // the closes come first: the completions are what a waiter for the closed sockets wakes on
+    for (auto& pc : exit_closes) {
+        pc.sock->closeIo(xsink);
+        pc.sock->deref(xsink);
+    }
+    // completeOne() needs m: its waiter reads the completion state under m, so a signal without m can be missed
+    if (!exit_completions.empty()) {
+        AutoLocker al(m);
+        for (AsyncOpCompletion* completion : exit_completions) {
+            completion->completeOne();
+            completion->deref();
+        }
     }
     exit_holds.clear();
     exit_extra_holds.clear();
@@ -7285,6 +7383,31 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         AutoLocker al(m);
                         completion->completeOne();
                         completion->deref();
+                    }
+                    break;
+                }
+
+                case IoCommand::CancelAndCloseSocket: {
+                    AsyncOpCompletion* completion = cmd.completion;
+                    cmd.completion = nullptr;
+                    AbstractPollableIoObjectBase* close_sock = cmd.close_sock;
+                    cmd.close_sock = nullptr;
+                    cancelSocketInContext(t, cmd.sock_hash, completion, xsink);
+
+                    if (completion) {
+                        // no worker continuePoll() of the socket is running, so nothing waits: close it now
+                        if (close_sock) {
+                            close_sock->closeIo(xsink);
+                            wakeSocketAfterClose(cmd.sock_hash, close_sock);
+                            close_sock->deref(xsink);
+                        }
+                        AutoLocker al(m);
+                        completion->completeOne();
+                        completion->deref();
+                    } else if (close_sock) {
+                        // the cancel waits for worker continuePoll() calls to return: the completion is parked
+                        // with the barrier, and so is the close, which completePendingSocketCancel() runs
+                        t.pending_socket_cancels[cmd.sock_hash].closes.push_back({cmd.sock_hash, close_sock});
                     }
                     break;
                 }

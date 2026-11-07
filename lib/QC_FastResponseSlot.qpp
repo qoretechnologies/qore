@@ -35,9 +35,9 @@
 //! A response that the HTTP server's fast routes serve and that Qore code replaces
 /** A FastResponseSlot holds one complete response (status, headers and body), serialized when it is set, which a
     @ref Qore::HttpFastRoutes "fast route" serves on the async I/O thread.  Qore code in any thread replaces the
-    response as a whole with @ref set(); the I/O thread takes a reference to the current one for each request, so
-    neither side waits for more than the exchange of a pointer.  Use it for a body that changes, such as a cached
-    metrics snapshot or a status document.
+    response as a whole with @ref set(); the I/O thread takes a reference to the current one for each request without
+    a lock, so it never waits for a thread that calls @ref set() (threads that call @ref set() wait only for each
+    other).  Use it for a body that changes, such as a cached metrics snapshot or a status document.
 
     A slot can have a maximum age.  When the response has not been set for that long, or was never set, the route
     does not answer: the request takes the normal path, where the handler decides.  That matters for readiness and

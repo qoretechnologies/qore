@@ -3875,6 +3875,36 @@ public class AbstractHttpRequestHandler {
         static responses). WARNING: long-running handlers will stall the
         async callback dispatcher worker handling completed HTTP requests.
 
+        A request answered inline needs about a quarter of the CPU of one that goes to the handler pool (measured
+        with a trivial response: about 1.9 million user-space instructions of server CPU per request instead of
+        about 7.8 million, on a Linux x86_64 release build), because there is no hand-off to a handler pool thread
+        and no request context, authentication or logging.  See @ref httpserver_dispatch for when to use it and
+        for the cheaper fast routes.
+
+        @par Example:
+        @code{.py}
+class HealthHandler inherits AbstractHttpRequestHandler {
+    # every request for this handler's path is answered inline: the response is built from nothing but constants
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": make_json({"status": "up"}), "hdr": {"Content-Type": MimeTypeJson}};
+    }
+
+    # called for the requests that do not qualify for the inline path (a request with a body, HTTP/2, ...)
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return handleInlineRequest(cx, hdr, body);
+    }
+}
+
+hs.setHandler("health", "/health", NOTHING, new HealthHandler());
+        @endcode
+
+        See examples/fast-routes.qr for a complete program that serves a request as a fast route, inline and with an
+        ordinary handler.
+
         @param cx connection context with peer info
         @param hdr parsed HTTP headers
         @return True to handle on the callback dispatcher worker, False (default) to use thread pool

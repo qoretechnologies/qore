@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# The server logs the response of every request once: a response that is sent by the code that takes it from the
+# handler's response, a Server-Sent Events stream, and a WebSocket upgrade (which are sent by the code that sets them up
+# and not by the code that sends the other captured responses) alike.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../.."
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires DataProvider
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires AsyncSocketIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires WebSocketUtil
+%requires WebSocketHandler
+
+%exec-class HttpServerResponseLogTest
+
+#! a logger appender that keeps the messages that it is given
+class CaptureAppender inherits LoggerAppenderWithLayout {
+    private {
+        Mutex lck();
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            messages += params;
+        }
+    }
+
+    #! returns the messages logged so far
+    list<string> get() {
+        AutoLock al(lck);
+        return messages;
+    }
+}
+
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "plain", "hdr": {"Content-Type": MimeTypeText}};
+    }
+}
+
+class LogSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"heartbeat": 0}) {
+    }
+}
+
+class LogWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler h) : WebSocketConnection(h) {
+    }
+}
+
+class LogWsHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new LogWsConnection(self);
+    }
+}
+
+class HttpServerResponseLogTest inherits QUnit::Test {
+    constructor() : Test("HttpServerResponseLogTest", "1.0", \ARGV) {
+        addTestCase("a plain response is logged once", \testPlain());
+        addTestCase("an event stream is logged once", \testSse());
+        addTestCase("a WebSocket upgrade is logged once", \testWebSocket());
+        set_return_value(main());
+    }
+
+    #! starts a server whose default handler is the given one; the messages are kept in the appender
+    private hash<auto> startServer(AbstractHttpRequestHandler handler) {
+        Logger logger("response-log-test", LoggerLevel::getLevelInfo());
+        CaptureAppender appender();
+        logger.addAppender(appender);
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        return {"server": server, "port": port, "appender": appender};
+    }
+
+    private static int count(list<string> messages, string pattern) {
+        return elements (select messages, regex($1, pattern));
+    }
+
+    #! sends the request and returns the header of the response
+    private hash<auto> sendRequest(Socket s, string request) {
+        s.send(request);
+        return s.readHTTPHeader(30s);
+    }
+
+    testPlain() {
+        hash<auto> sh = startServer(new PlainHandler());
+        on_exit sh.server.stop();
+        Socket s();
+        s.connect("127.0.0.1:" + sh.port, 30s);
+        on_exit s.close();
+        hash<auto> hdr = sendRequest(s, "GET /x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        assertEq(200, hdr.status_code);
+        s.recv(int(hdr."content-length"), 30s);
+        list<string> messages = sh.appender.get();
+        assertEq(1, count(messages, "HTTP/1\\.1 200 OK handler: \"handler\""), messages.join("\n"));
+    }
+
+    testSse() {
+        hash<auto> sh = startServer(new LogSseHandler());
+        on_exit sh.server.stop();
+        Socket s();
+        s.connect("127.0.0.1:" + sh.port, 30s);
+        on_exit s.close();
+        hash<auto> hdr = sendRequest(s, "GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        assertEq(200, hdr.status_code);
+        list<string> messages = sh.appender.get();
+        assertEq(1, count(messages, "HTTP/1\\.1 200 OK handler: \"handler\".*text/event-stream"), messages.join("\n"));
+    }
+
+    testWebSocket() {
+        hash<auto> sh = startServer(new LogWsHandler());
+        on_exit sh.server.stop();
+        Socket s();
+        s.connect("127.0.0.1:" + sh.port, 30s);
+        on_exit s.close();
+        hash<auto> hdr = sendRequest(s, sprintf("GET / HTTP/1.1\r\nHost: localhost:%d\r\nUpgrade: websocket\r\n"
+            "Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n",
+            sh.port));
+        assertEq(101, hdr.status_code);
+        list<string> messages = sh.appender.get();
+        assertEq(1, count(messages, "HTTP/1\\.1 101 "), messages.join("\n"));
+    }
+}

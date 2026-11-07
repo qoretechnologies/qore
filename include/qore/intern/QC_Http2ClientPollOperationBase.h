@@ -250,7 +250,9 @@ public:
             && h2_confirmed.load(std::memory_order_acquire);
     }
 
+    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
     DLLLOCAL bool hasError() const {
+        AutoLocker al(stream_lock);
         return error_info != nullptr;
     }
 

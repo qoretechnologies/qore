@@ -3116,17 +3116,22 @@ static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOpe
     }
 
     bool config_action = poller->isConfigAction();
+    // the SSL actions reconfigure the live SSL object, so a thread that is not on an I/O execution path (where the
+    // socket is not being driven by the controller) leaves them to the controller (they still skip the ownership
+    // guard below, as every config action does)
+    bool inline_config = config_action && (poller->isThreadSafeConfigAction() || SocketSyncPoll::onIoExecutionPath());
 
     // Config actions never block: each completes in a single continuePoll() call -- one
-    // setsockopt()/getsockopt() or private-data update -- and never waits for socket
-    // readiness, which is why they skip the async I/O guard taken below.  Driving one
-    // inline therefore does exactly what the controller would do minus the cross-thread
-    // hop, so the sync config APIs stay usable from async I/O execution paths instead of
-    // tripping assertNotOnIoThread() in qore_socket_object_exec_poll_operation().
+    // setsockopt()/getsockopt() or private-data update, all under the socket's mutex, which is the lock every
+    // operation of the controller on this socket takes too -- and never waits for socket readiness, which is why
+    // they skip the async I/O guard taken below.  Driving one inline therefore does exactly what the controller
+    // would do minus the cross-thread hop (two thread switches), on any thread: that also keeps the sync config
+    // APIs usable from async I/O execution paths instead of tripping assertNotOnIoThread() in
+    // qore_socket_object_exec_poll_operation().
     //
     // This must live here rather than in each caller: libqore owns socket safety, so no
     // Qore-level or module-level caller has to know which thread it is running on.
-    if (config_action && SocketSyncPoll::onIoExecutionPath()) {
+    if (inline_config) {
         // config actions always return nullptr from continuePoll(); hold it anyway
         ReferenceHolder<QoreHashNode> unused(poller->continuePoll(xsink), xsink);
         return *xsink ? -1 : poller->getRc();
@@ -3235,12 +3240,28 @@ static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
         QoreSocketObjectAddressInfoPollOperation::Action action, bool host_lookup, const char* owner_name,
         const char* err, ExceptionSink* xsink) {
     s->ref();
-    QoreSocketObjectAddressInfoPollOperation* poller = new QoreSocketObjectAddressInfoPollOperation(s, action,
-        host_lookup);
+    ReferenceHolder<QoreSocketObjectAddressInfoPollOperation> poller(
+        new QoreSocketObjectAddressInfoPollOperation(s, action, host_lookup), xsink);
 
+    if (!host_lookup) {
+        // without a host lookup the operation reads the addresses with getpeername() or getsockname() under the
+        // socket's mutex in its first continuePoll() and is done, so there is no hop to the controller's I/O thread
+        // (two thread switches) and no need for the Qore objects that submit it; with a lookup the operation waits
+        // for the resolver and runs on the controller
+        ReferenceHolder<QoreHashNode> unused(poller->continuePoll(xsink), xsink);
+        assert(*xsink || poller->goalReached());
+        if (*xsink) {
+            return nullptr;
+        }
+        ValueHolder output(poller->getOutput(), xsink);
+        return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, err, xsink);
+    }
+
+    // the operation object takes over the reference to the poller
+    QoreSocketObjectAddressInfoPollOperation* p = poller.release();
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, poller, "done", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, p, "done", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -3251,7 +3272,7 @@ static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
         return nullptr;
     }
 
-    ValueHolder output(poller->getOutput(), xsink);
+    ValueHolder output(p->getOutput(), xsink);
     return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, err, xsink);
 }
 

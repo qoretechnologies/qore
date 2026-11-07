@@ -54,6 +54,8 @@
 #include <utility>
 #include <vector>
 
+#include <qore/intern/HttpFastPublished.h>
+
 //! The reasons a request is not answered by a fast route (the request then takes the normal path)
 /** See design/http-server-fast-routes.md.
 */
@@ -124,7 +126,8 @@ public:
             std::string& err);
 
     //! Returns the serialized response with the \c Date of the given second
-    /** The copy is cached; it is built again when the second changes.
+    /** The copy is cached for each thread that serves the response (a thread never waits for another one, and a
+        thread builds a copy once per second and variant); it is built again when the second changes.
 
         @param epoch_s the time, in seconds since the epoch
         @param close if true, the response has \c Connection: close, for a request that asked for the connection to be
@@ -181,20 +184,12 @@ private:
     size_t head_size = 0;
     int64_t created_us = 0;
 
-    mutable std::mutex cache_lock;
-    //! A serialized response for a variant: whether it closes the connection, and the extra headers
-    struct WireEntry {
-        std::shared_ptr<const HttpFastExtraHeaders> extra;
-        bool close = false;
-        bool head = false;
-        int64_t second = -1;
-        std::shared_ptr<const std::string> wire;
-    };
-    //! the most variants that are cached for a response; a listener has one set of extra headers, so a handful covers
-    //! a server, and a response that sees more replaces the entries in turn
-    static constexpr size_t MaxWireEntries = 8;
-    mutable std::vector<WireEntry> wires;
-    mutable size_t wire_next = 0;
+    //! identifies the response in the per-thread caches of serialized responses; never reused
+    uint64_t id = 0;
+
+    //! Serializes the response for a variant
+    DLLLOCAL std::shared_ptr<const std::string> buildWire(int64_t epoch_s, bool close,
+            const std::shared_ptr<const HttpFastExtraHeaders>& extra, bool head) const;
 };
 
 //! The parts of a request that decide whether a fast route answers it
@@ -306,27 +301,27 @@ enum class HttpFastOp {
 
 //! A response that code outside the I/O threads publishes and a route serves
 /** The holder keeps one immutable serialized response.  Qore code (on any thread) replaces it as a whole with set(); the
-    I/O thread takes a reference to the current one with get().  The lock covers only the copy or the exchange of a
-    shared pointer, never an allocation, a serialization or the destruction of a response, so neither side can wait
-    for more than that.  A slot can have a maximum age: when the response has not been set for that long, or was never
-    set, get() returns nothing and the request takes the normal path, so that the handler decides when the code that
-    should keep the slot current has stopped.
+    I/O thread takes a reference to the current one with get(), which takes no lock (see HttpFastPublished), so
+    neither side can wait for the other.  A slot can have a maximum age: when the response has not been set for that
+    long, or was never set, get() returns nothing and the request takes the normal path, so that the handler decides
+    when the code that should keep the slot current has stopped.
 */
 class HttpFastSlot {
 public:
     //! Creates an empty slot
     /** @param max_age_us the age in microseconds after which the response is stale; 0 for never
     */
-    DLLLOCAL explicit HttpFastSlot(int64_t max_age_us) : max_age_us(max_age_us) {
+    DLLLOCAL explicit HttpFastSlot(int64_t max_age_us) : value(std::make_shared<const Value>()),
+            max_age_us(max_age_us) {
     }
 
     //! Replaces the response
     DLLLOCAL void set(std::shared_ptr<const HttpFastResponse> response);
 
-    //! Returns the current response, or nullptr if there is none or it is stale
+    //! Returns the current response, or nullptr if there is none or it is stale; takes no lock (for the I/O threads)
     DLLLOCAL std::shared_ptr<const HttpFastResponse> get() const;
 
-    //! Returns the age of the response in microseconds, or -1 if none was set
+    //! Returns the age of the response in microseconds, or -1 if none was set (for threads that are not I/O threads)
     DLLLOCAL int64_t getAgeUs() const;
 
     //! Returns the maximum age in microseconds; 0 for none
@@ -335,9 +330,13 @@ public:
     }
 
 private:
-    mutable std::mutex lock;
-    std::shared_ptr<const HttpFastResponse> response;
-    int64_t set_us = 0;
+    //! the response and the time it was set, published as a whole
+    struct Value {
+        std::shared_ptr<const HttpFastResponse> response;
+        int64_t set_us = 0;
+    };
+
+    HttpFastPublished<const Value> value;
     const int64_t max_age_us;
 };
 
@@ -435,8 +434,8 @@ public:
 //! The fast routes of a listener
 /** A listener's table is shared by the connections accepted from it, so a change of the routes reaches the connections
     that are already open.  The table itself is an immutable snapshot that is replaced as a whole: the I/O thread
-    takes a reference to the current snapshot (one short lock, no waiting for anything else) and then reads it
-    without any lock.
+    takes a reference to the current snapshot without a lock (see HttpFastPublished) and then reads it without any
+    lock.  A change builds the new table outside the I/O threads' way: only other changes wait for it.
 */
 class HttpFastRoutes {
 public:
@@ -492,21 +491,24 @@ public:
 private:
     typedef std::unordered_map<std::string, std::shared_ptr<HttpFastRoute>> table_t;
 
+    //! The current table, without a lock (for the I/O threads)
     DLLLOCAL std::shared_ptr<const table_t> snapshot() const;
+
+    //! The current table with the mutex of the writers (for threads that are not I/O threads)
+    DLLLOCAL std::shared_ptr<const table_t> snapshotLocked() const;
 
     //! Selects the response for a request; the shared part of match() and matchH2()
     DLLLOCAL std::shared_ptr<const HttpFastResponse> chooseRoute(const HttpFastRequestView& req,
             HttpFastFallback& fallback, bool* close_after, bool h2);
 
-    mutable std::mutex lock;
-    std::shared_ptr<const table_t> table = std::make_shared<const table_t>();
+    HttpFastPublished<const table_t> table{std::make_shared<const table_t>()};
     std::array<std::atomic<uint64_t>, static_cast<size_t>(HttpFastFallback::Count)> fallbacks{};
 };
 
 //! The fast routes and the extra response headers of a listener, shared by the listener and the sockets accepted from it
 /** The listener and every connection accepted from it (and every QUIC session of a listener) refer to one context, so
     that routes or extra headers that are set after a connection was accepted apply to it.  A request reads both with
-    one short lock (a copy of two shared pointers).
+    no lock (a copy of two shared pointers of an immutable pair; see HttpFastPublished).
 */
 class HttpFastContext {
 public:
@@ -515,24 +517,37 @@ public:
         std::shared_ptr<const HttpFastExtraHeaders> extra;
     };
 
-    DLLLOCAL Snapshot get() const {
-        std::lock_guard<std::mutex> lg(lock);
-        return snapshot;
+    DLLLOCAL HttpFastContext() : published(std::make_shared<const Snapshot>()) {
+    }
+
+    //! Returns the routes and the extra headers, without a lock (for the I/O threads)
+    DLLLOCAL Snapshot get() const noexcept {
+        return *published.get();
+    }
+
+    //! Returns the routes and the extra headers with the mutex of the writers (for threads that are not I/O threads)
+    DLLLOCAL Snapshot getLocked() const {
+        return *published.getLocked();
     }
 
     DLLLOCAL void setRoutes(std::shared_ptr<HttpFastRoutes> routes) {
-        std::lock_guard<std::mutex> lg(lock);
-        snapshot.routes = std::move(routes);
+        published.update([&routes](const std::shared_ptr<const Snapshot>& cur) {
+            auto next = std::make_shared<Snapshot>(*cur);
+            next->routes = routes;
+            return std::shared_ptr<const Snapshot>(std::move(next));
+        });
     }
 
     DLLLOCAL void setExtraHeaders(std::shared_ptr<const HttpFastExtraHeaders> extra) {
-        std::lock_guard<std::mutex> lg(lock);
-        snapshot.extra = std::move(extra);
+        published.update([&extra](const std::shared_ptr<const Snapshot>& cur) {
+            auto next = std::make_shared<Snapshot>(*cur);
+            next->extra = extra;
+            return std::shared_ptr<const Snapshot>(std::move(next));
+        });
     }
 
 private:
-    mutable std::mutex lock;
-    Snapshot snapshot;
+    HttpFastPublished<const Snapshot> published;
 };
 
 #endif

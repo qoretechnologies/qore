@@ -40,6 +40,7 @@
 #include <qore/InputStream.h>
 #include "qore/intern/QoreHttpHeaderPairs.h"
 
+#include <atomic>
 #include <cctype>
 #include <functional>
 #include <map>
@@ -252,10 +253,10 @@ public:
     DLLLOCAL bool isServer() const { return is_server; }
 
     //! Sets the maximum request body size for new streams (0 = unlimited)
-    DLLLOCAL void setMaxRequestBodySize(int64 size) { max_request_body_size = size; }
+    DLLLOCAL void setMaxRequestBodySize(int64 size) { max_request_body_size.store(size, std::memory_order_relaxed); }
 
     //! Returns the maximum request body size
-    DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
+    DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size.load(std::memory_order_relaxed); }
 
     //! Queue and flush the connection preface using non-blocking I/O
     /** Idempotently queues the initial SETTINGS frame and then flushes pending
@@ -1035,7 +1036,7 @@ private:
     bool connection_preface_submitted = false;
 
     //! Maximum request body size in bytes (0 = unlimited), propagated to new streams
-    int64 max_request_body_size = 0;
+    std::atomic<int64> max_request_body_size {0};
 
     // GOAWAY state
     bool goaway_received = false;

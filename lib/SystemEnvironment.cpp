@@ -227,6 +227,14 @@ public:
     }
 
     void child() noexcept override {
+#if defined(__SANITIZE_THREAD__)
+        // ThreadSanitizer copies its model of the environment lock into the child, where the forking thread holds it
+        // exclusively (the hold of prepare()), and does not see the lock being reset below; the thread does hold it
+        // there, so it releases it, which brings the model to the state of the lock that the reset gives
+        if (acquired) {
+            (void)pthread_rwlock_unlock(&qore_env_lock);
+        }
+#endif
         acquired = false;
         restore(qore_env_lock, qore_env_lock_depth);
         restore(qore_env_change_lock, qore_env_change_depth);

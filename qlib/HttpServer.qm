@@ -95,6 +95,33 @@ module HttpServer {
     - <a href="https://docs.qore.org/modules/xml/current/SoapHandler/html/index.html#soaphandlerintro">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
+    @section httpserver_dispatch Choosing How a Request Is Dispatched
+
+    A request reaches a handler in one of three ways, from the most general to the cheapest:
+
+    |!Way|!What it does|!What it skips|!Cost of a trivial response
+    |a handler's \c handleRequest()|runs on a handler pool thread with the full request context, authentication, logging, \
+        request body handling and streaming|nothing|the baseline (about 7.8 million user-space instructions of server CPU \
+        per request on a Linux x86_64 release build)
+    |an inline handler (@ref HttpServer::AbstractHttpRequestHandler::canHandleInline() "canHandleInline()" returns \
+        @ref True "True")|runs on the async callback dispatcher worker, in the thread that read the request headers|the \
+        hand-off to the handler pool, the request context, authentication and logging|about a quarter of the baseline \
+        (about 1.9 million instructions)
+    |a fast route (@ref HttpServer::HttpServer::addFastRoute() "addFastRoute()")|is answered on the async I/O thread \
+        without calling Qore code|every handler, and so authentication, logging and request preprocessing|a few \
+        microseconds of server CPU per request
+
+    The example program <tt>examples/fast-routes.qr</tt> serves one request each of the three ways.
+
+    Use the first for everything that needs the request, the context or authentication, that reads a request body, that
+    streams, or that can block.  Use the second for a handler that only builds a response in memory from the request
+    headers, never blocks and never waits (a health or readiness check, a static response, a redirect): a handler
+    that waits stalls the callback dispatcher worker for every other connection while it waits.  An inline handler
+    gets only the connection's peer information in its context, receives no request body (a request with a body takes
+    the normal path), and must return its message body as a string or binary value.  Use the third for a path whose
+    answer depends on nothing but a few values that the program updates (see
+    @ref HttpServer::HttpServer::addFastRoute() "addFastRoute()").
+
     @section httpserver_after_send Running Code After the Response Has Been Sent
 
     A handler returns its response; the server sends it afterwards.  To run code once the response has been sent,
@@ -3113,7 +3140,11 @@ ready.set(1);
 
         @throw HTTP-FAST-ROUTE-ERROR the route is not valid
 
-        @see @ref Qore::FastCell "FastCell"
+        @see
+        - @ref Qore::FastCell "FastCell"
+        - @ref Qore::FastResponseSlot "FastResponseSlot"
+        - examples/fast-routes.qr: a program that serves a readiness check, a status document and a health check, as
+          fast routes, as an inline handler and with an ordinary handler
 
         @since HttpServer 1.7
     */
@@ -3122,9 +3153,19 @@ ready.set(1);
     }
 
     #! Removes a fast route
-    /** @param path the path of the route
+    /** Requests for the path take the normal path (the handler) from then on.
+
+        @param path the path of the route
 
         @return @ref True if there was a route for the path
+
+        @par Example:
+        @code{.py}
+# stop answering /ready from the fast path while the application restarts its checks
+if (hs.removeFastRoute("/ready")) {
+    printf("the route was removed\n");
+}
+        @endcode
 
         @since HttpServer 1.7
     */
@@ -3134,7 +3175,18 @@ ready.set(1);
     }
 
     #! Returns the number of requests that each fast route answered, and why the other requests took the normal path
-    /** @return a hash with the keys \c routes and \c fallbacks; see @ref Qore::HttpFastRoutes::getInfo()
+    /** The counters show how many requests bypass the handler chain (and so its logging and authentication), and why a
+        request that was expected to be answered by a route was not: for example \c stale when the cell or the slot of
+        a route had not been updated for longer than its maximum age.
+
+        @return a hash with the keys \c routes and \c fallbacks; see @ref Qore::HttpFastRoutes::getInfo()
+
+        @par Example:
+        @code{.py}
+hash<auto> info = hs.getFastRouteInfo();
+printf("/ready answered %d requests; %d took the normal path because a cell was stale\n",
+    info.routes."/ready" ?? 0, info.fallbacks.stale);
+        @endcode
 
         @since HttpServer 1.7
     */
@@ -5471,7 +5523,8 @@ ready.set(1);
                 "listener": listener,
                 "after_send": after_send,
             };
-            listener.logResponse(cx, rv);
+            # the response is logged by the code that sends it (translateToRequestResult(), sendResponseSync(),
+            # sendMultiplexedResponse(), sendMultiplexedStreamingResponseInline()); logging it here logged it twice
             return;
         }
 
@@ -5544,7 +5597,11 @@ ready.set(1);
             "listener": listener,
             "after_send": after_send,
         };
-        listener.logResponse(cx, rv);
+        # the response is logged by the code that sends it, as above; an event stream and a protocol upgrade are sent by
+        # sendReply() itself, which does not log them
+        if (rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse) {
+            listener.logResponse(cx, rv);
+        }
     }
     #! @endcond
 }
@@ -6503,6 +6560,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     log(string fmt, ...) {
+        # this is called several times for every request: the message is built only if the logger logs it
+        if (logger && !logger.isEnabledFor(LoggerLevel::INFO)) {
+            return;
+        }
         softlist<auto> args = fmt;
         if (argv) {
             args += argv;
@@ -8555,7 +8616,8 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
 
     #! Logs a message
     private log(int level, string fmt) {
-        if (logger) {
+        # the message is formatted only if it is logged: this is called several times for every request
+        if (logger && logger.isEnabledFor(level)) {
             # use "%s" wrapper so the already-formatted message is treated as a
             # literal — re-passing it as Logger::log()'s format string would
             # re-interpret any embedded "%XY" (e.g. URL-encoded "%2F") and

@@ -2,7 +2,8 @@
 
 %modern
 
-# usage: hs-client.qr <keepalive 0|1> <requests>; prints microseconds per request, then asks the server to quit
+# usage: hs-client.qr <keepalive 0|1> <requests> [<quit 0|1>]; prints microseconds per request, then asks the server to
+# quit unless the third argument is 0 (several clients can run at once; one of them quits the server)
 const Port = 38765;
 bool keepalive = ARGV[0] == "1";
 int n = ARGV[1].toInt();
@@ -23,5 +24,7 @@ for (int i = 0; i < n; ++i) {
 }
 int us = (now_us() - start).durationMicroseconds();
 printf("client_us_per_req=%d\n", us / n);
-c.get("/quit");
+if (ARGV[2] != "0") {
+    c.get("/quit");
+}
 c.disconnect();

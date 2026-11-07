@@ -757,7 +757,8 @@ public:
                 return true;
             }
         }
-        return priv->h2_session && (priv->h2_session->hasStreamData() || priv->h2_session->wantWrite());
+        Http2SessionPtr session = priv->h2_session.get();
+        return session && (session->hasStreamData() || session->wantWrite());
     }
 
 private:
@@ -802,7 +803,8 @@ public:
         }
 
         int32_t h2_active_stream_id = priv->getH2ActiveStreamId();
-        if (priv->h2_session && priv->h2_session->isServer() && h2_active_stream_id > 0
+        Http2SessionPtr h2_session = priv->h2_session.get();
+        if (h2_session && h2_session->isServer() && h2_active_stream_id > 0
                 && !priv->h2_receiving_frames) {
             xsink->raiseException("SOCKET-H2-SYNC-ERROR",
                 "Socket::isDataAvailable() is not supported on an HTTP/2-active "
@@ -1410,8 +1412,8 @@ private:
                 qore_socket_private* priv = qore_socket_private::get(*sock);
                 priv->max_http2_body_size.store(value, std::memory_order_relaxed);
                 AutoLocker al(priv->h2_session_lock);
-                if (priv->h2_session) {
-                    priv->h2_session->setMaxRequestBodySize(value);
+                if (Http2SessionPtr session = priv->h2_session.get()) {
+                    session->setMaxRequestBodySize(value);
                 }
                 rc = 0;
                 break;
@@ -1463,6 +1465,21 @@ public:
             || action == Action::GetAcceptAllCertificates
             || action == Action::CaptureRemoteCertificates
             || action == Action::SetHttp2MaxRequestBodySize;
+    }
+
+
+    //! Returns true if the action can run on any thread while the controller works on the socket
+    /** These actions are one system call (setsockopt()/getsockopt()/getsockname()) or a store to an atomic, so they
+        need no serialization with the operations of the controller; the SSL actions reconfigure the live SSL object
+        and must be serialized with them.
+    */
+    DLLLOCAL bool isThreadSafeConfigAction() const {
+        return isConfigAction()
+            && action != Action::SetSslVerifyMode
+            && action != Action::GetSslVerifyMode
+            && action != Action::SetAcceptAllCertificates
+            && action != Action::GetAcceptAllCertificates
+            && action != Action::CaptureRemoteCertificates;
     }
 
 private:
@@ -3208,7 +3225,8 @@ public:
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
-        Http2Session* h2 = priv->h2_session.get();
+        Http2SessionPtr h2_ref = priv->h2_session.get();
+        Http2Session* h2 = h2_ref.get();
         if (!h2) {
             xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
             output = -1;
@@ -3371,7 +3389,8 @@ public:
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
-        Http2Session* h2 = priv->h2_session.get();
+        Http2SessionPtr h2_ref = priv->h2_session.get();
+        Http2Session* h2 = h2_ref.get();
         if (!h2) {
             xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
             done = true;
@@ -3430,7 +3449,8 @@ public:
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
-        Http2Session* h2 = priv->h2_session.get();
+        Http2SessionPtr h2_ref = priv->h2_session.get();
+        Http2Session* h2 = h2_ref.get();
         if (!h2) {
             output = true;
         } else if (action == Action::Closed) {
@@ -4291,17 +4311,21 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
     }
 
     bool config_action = poller->isConfigAction();
+    // the SSL actions reconfigure the live SSL object: a thread that is not on an I/O execution path leaves them to
+    // the controller (they still skip the ownership guard below, as every config action does)
+    bool inline_config = config_action && (poller->isThreadSafeConfigAction() || SocketSyncPoll::onIoExecutionPath());
 
     // Config actions never block: each completes in a single continuePoll() call -- one
-    // setsockopt()/getsockopt() or private-data update -- and never waits for socket
-    // readiness, which is why they skip the async I/O guard taken below.  Driving one
-    // inline therefore does exactly what the controller would do minus the cross-thread
-    // hop, so the sync config APIs stay usable from async I/O execution paths instead of
-    // tripping assertNotOnIoThread() in qore_socket_exec_poll_operation().
+    // setsockopt()/getsockopt() or private-data update, all under the socket's mutex, which is the lock every
+    // operation of the controller on this socket takes too -- and never waits for socket readiness, which is why
+    // they skip the async I/O guard taken below.  Driving one inline therefore does exactly what the controller
+    // would do minus the cross-thread hop (two thread switches), on any thread: that also keeps the sync config
+    // APIs usable from async I/O execution paths instead of tripping assertNotOnIoThread() in
+    // qore_socket_exec_poll_operation().
     //
     // Mirrors qore_socket_object_exec_setup(); libqore owns socket safety, so no caller
     // has to know which thread it is running on.
-    if (config_action && SocketSyncPoll::onIoExecutionPath()) {
+    if (inline_config) {
         // config actions always return nullptr from continuePoll(); hold it anyway
         ReferenceHolder<QoreHashNode> unused(poller->continuePoll(xsink), xsink);
         if (*xsink) {
@@ -16137,6 +16161,15 @@ bool SocketSetupPollOperation::isConfigAction() const {
         || action == Action::SetHttp2MaxRequestBodySize;
 }
 
+bool SocketSetupPollOperation::isThreadSafeConfigAction() const {
+    return isConfigAction()
+        && action != Action::SetSslVerifyMode
+        && action != Action::GetSslVerifyMode
+        && action != Action::SetAcceptAllCertificates
+        && action != Action::GetAcceptAllCertificates
+        && action != Action::CaptureRemoteCertificates;
+}
+
 void SocketSetupPollOperation::init(ExceptionSink* xsink, bool defer_init) {
     if (defer_init) {
         controller_deferred_tid = q_gettid();
@@ -16277,8 +16310,8 @@ QoreHashNode* SocketSetupPollOperation::continuePollIntern(ExceptionSink* xsink)
             qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
             sp->max_http2_body_size.store(value, std::memory_order_relaxed);
             AutoLocker hal(sp->h2_session_lock);
-            if (sp->h2_session) {
-                sp->h2_session->setMaxRequestBodySize(value);
+            if (Http2SessionPtr session = sp->h2_session.get()) {
+                session->setMaxRequestBodySize(value);
             }
             rc = 0;
             break;
@@ -16386,7 +16419,8 @@ QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsin
     }
 
     int32_t h2_active_stream_id = sp->getH2ActiveStreamId();
-    if (sp->h2_session && sp->h2_session->isServer() && h2_active_stream_id > 0 && !sp->h2_receiving_frames) {
+    Http2SessionPtr h2_session_ref = sp->h2_session.get();
+    if (h2_session_ref && h2_session_ref->isServer() && h2_active_stream_id > 0 && !sp->h2_receiving_frames) {
         xsink->raiseException("SOCKET-H2-SYNC-ERROR",
             "Socket::isDataAvailable() is not supported on an HTTP/2-active "
             "server socket; use HttpServerAsyncIo + register_body_queue "
@@ -20097,7 +20131,8 @@ int SocketHttp2SendResponsePollOperation::initLocked(ExceptionSink* xsink) {
     }
     initialized = true;
 
-    Http2Session* session = sock->priv->socket->priv->h2_session.get();
+    Http2SessionPtr session_ref = sock->priv->socket->priv->h2_session.get();
+    Http2Session* session = session_ref.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; startPollSendHttp2Response() must be "
             "called after startPollReadHttp2Request() completes on an active HTTP/2 connection");
@@ -20295,7 +20330,8 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
     AutoLocker al(sock->priv->m);
 
     // Get HTTP/2 session from socket
-    Http2Session* session = sock->priv->socket->priv->h2_session.get();
+    Http2SessionPtr session_ref = sock->priv->socket->priv->h2_session.get();
+    Http2Session* session = session_ref.get();
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; "
             "startPollSendHttp2StreamingResponse() must be called after "

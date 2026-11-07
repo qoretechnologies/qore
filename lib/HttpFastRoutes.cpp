@@ -38,6 +38,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <unordered_map>
 
 namespace {
 
@@ -153,6 +154,9 @@ std::shared_ptr<const HttpFastExtraHeaders> HttpFastExtraHeaders::create(
     return rv;
 }
 
+// identifies a response in the per-thread caches of serialized responses (see getWire()); never reused
+static std::atomic<uint64_t> next_response_id{1};
+
 std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
         const std::vector<std::pair<std::string, std::string>>& headers, const std::string& body, std::string& err) {
     const char* reason = nullptr;
@@ -230,6 +234,7 @@ std::shared_ptr<const HttpFastResponse> HttpFastResponse::create(int code,
     rv->head_suffix = std::move(suffix);
     rv->body = body;
     rv->head_size = head_size;
+    rv->id = next_response_id.fetch_add(1, std::memory_order_relaxed);
     rv->created_us = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     return rv;
@@ -241,39 +246,27 @@ int64_t HttpFastCell::nowUs() {
 }
 
 void HttpFastSlot::set(std::shared_ptr<const HttpFastResponse> new_response) {
-    int64_t now = HttpFastCell::monotonicUs();
-    {
-        std::lock_guard<std::mutex> l(lock);
-        // the previous response is destroyed after the lock is released
-        response.swap(new_response);
-        set_us = now;
-    }
+    auto next = std::make_shared<Value>();
+    next->response = std::move(new_response);
+    next->set_us = HttpFastCell::monotonicUs();
+    // the previous response is destroyed by this thread, not by a reader
+    value.set(std::move(next));
 }
 
 std::shared_ptr<const HttpFastResponse> HttpFastSlot::get() const {
-    std::shared_ptr<const HttpFastResponse> rv;
-    int64_t when;
-    {
-        std::lock_guard<std::mutex> l(lock);
-        rv = response;
-        when = set_us;
-    }
-    if (rv && max_age_us && HttpFastCell::monotonicUs() - when > max_age_us) {
+    std::shared_ptr<const Value> v = value.get();
+    if (v->response && max_age_us && HttpFastCell::monotonicUs() - v->set_us > max_age_us) {
         return nullptr;
     }
-    return rv;
+    return v->response;
 }
 
 int64_t HttpFastSlot::getAgeUs() const {
-    int64_t when;
-    {
-        std::lock_guard<std::mutex> l(lock);
-        if (!response) {
-            return -1;
-        }
-        when = set_us;
+    std::shared_ptr<const Value> v = value.getLocked();
+    if (!v->response) {
+        return -1;
     }
-    return HttpFastCell::monotonicUs() - when;
+    return HttpFastCell::monotonicUs() - v->set_us;
 }
 
 std::shared_ptr<const HttpFastRouteSpec> HttpFastRouteSpec::create(std::vector<HttpFastRule> rules,
@@ -386,21 +379,73 @@ std::vector<std::pair<std::string, std::string>> HttpFastResponse::getH2Headers(
     return rv;
 }
 
+namespace {
+// The serialized responses that a thread has built.  Each thread that serves fast routes keeps its own, so a request
+// takes no lock and never waits for another thread that builds the serialized response for a new second: the threads
+// build their own copy, once per second, a variant and a response.  A serialized response holds the Date header, so it
+// is valid only within its second: the cache is emptied when the second changes, which also releases the entries of
+// responses that are gone, and it holds at most MaxWireCacheEntries responses of MaxWireCacheBytes bytes together; a
+// response that does not fit is built for each request, as correct as a cached one.
+constexpr size_t MaxWireCacheEntries = 1024;
+constexpr size_t MaxWireCacheBytes = 4 * 1024 * 1024;
+
+struct WireCacheKey {
+    uint64_t response_id;
+    bool close;
+    bool head;
+    const HttpFastExtraHeaders* extra;   // by identity; the entry holds the object, so the address is not reused
+
+    bool operator==(const WireCacheKey& o) const {
+        return response_id == o.response_id && close == o.close && head == o.head && extra == o.extra;
+    }
+};
+
+struct WireCacheKeyHash {
+    size_t operator()(const WireCacheKey& k) const {
+        size_t h = std::hash<uint64_t>()(k.response_id);
+        h = h * 31 + (k.close ? 1 : 0) + (k.head ? 2 : 0);
+        return h * 31 + std::hash<const void*>()(k.extra);
+    }
+};
+
+struct WireCacheEntry {
+    std::shared_ptr<const HttpFastExtraHeaders> extra;
+    std::shared_ptr<const std::string> wire;
+};
+
+struct WireCache {
+    int64_t second = -1;
+    size_t bytes = 0;
+    std::unordered_map<WireCacheKey, WireCacheEntry, WireCacheKeyHash> entries;
+};
+}
+
 std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bool close,
         const std::shared_ptr<const HttpFastExtraHeaders>& extra, bool head) const {
-    std::lock_guard<std::mutex> lg(cache_lock);
-    // the variant: a handful at most (a listener has one set of extra headers), found by identity
-    WireEntry* entry = nullptr;
-    for (WireEntry& e : wires) {
-        if (e.close == close && e.head == head && e.extra == extra) {
-            if (e.second == epoch_s) {
-                return e.wire;
-            }
-            entry = &e;
-            break;
-        }
+    static thread_local WireCache cache;
+    if (cache.second != epoch_s) {
+        cache.entries.clear();
+        cache.bytes = 0;
+        cache.second = epoch_s;
     }
 
+    // the variant is found by identity of the extra headers (a listener has one set of them)
+    WireCacheKey key{id, close, head, extra.get()};
+    auto it = cache.entries.find(key);
+    if (it != cache.entries.end()) {
+        return it->second.wire;
+    }
+
+    std::shared_ptr<const std::string> wire = buildWire(epoch_s, close, extra, head);
+    if (cache.entries.size() < MaxWireCacheEntries && cache.bytes + wire->size() <= MaxWireCacheBytes) {
+        cache.bytes += wire->size();
+        cache.entries.emplace(key, WireCacheEntry{extra, wire});
+    }
+    return wire;
+}
+
+std::shared_ptr<const std::string> HttpFastResponse::buildWire(int64_t epoch_s, bool close,
+        const std::shared_ptr<const HttpFastExtraHeaders>& extra, bool head) const {
     auto wire = std::make_shared<std::string>();
     wire->reserve(head_size + body.size() + (extra ? 64 : 0));
     *wire += head_prefix;
@@ -437,26 +482,15 @@ std::shared_ptr<const std::string> HttpFastResponse::getWire(int64_t epoch_s, bo
         *wire += body;
     }
 
-    if (!entry) {
-        if (wires.size() < MaxWireEntries) {
-            wires.emplace_back();
-            entry = &wires.back();
-        } else {
-            // more variants than are cached: the oldest entry is replaced
-            entry = &wires[wire_next++ % MaxWireEntries];
-        }
-        entry->extra = extra;
-        entry->close = close;
-        entry->head = head;
-    }
-    entry->second = epoch_s;
-    entry->wire = std::move(wire);
-    return entry->wire;
+    return wire;
 }
 
 std::shared_ptr<const HttpFastRoutes::table_t> HttpFastRoutes::snapshot() const {
-    std::lock_guard<std::mutex> lg(lock);
-    return table;
+    return table.get();
+}
+
+std::shared_ptr<const HttpFastRoutes::table_t> HttpFastRoutes::snapshotLocked() const {
+    return table.getLocked();
 }
 
 bool HttpFastRoutes::add(const std::string& path, std::shared_ptr<const HttpFastRouteSpec> spec,
@@ -482,34 +516,40 @@ bool HttpFastRoutes::add(const std::string& path, std::shared_ptr<const HttpFast
         return false;
     }
 
-    std::lock_guard<std::mutex> lg(lock);
-    auto next = std::make_shared<table_t>(*table);
-    auto route = std::make_shared<HttpFastRoute>(path, std::move(spec));
-    auto it = next->find(path);
-    if (it != next->end()) {
-        // the hit count carries over to the new response
-        route->hits.store(it->second->hits.load(std::memory_order_relaxed), std::memory_order_relaxed);
-        it->second = std::move(route);
-    } else {
-        next->emplace(path, std::move(route));
-    }
-    table = std::move(next);
+    // the new table is built from the current one while only other changes wait; the I/O threads read the table that
+    // they have, and take the new one at their next request
+    table.update([&path, &spec](const std::shared_ptr<const table_t>& cur) {
+        auto next = std::make_shared<table_t>(*cur);
+        auto route = std::make_shared<HttpFastRoute>(path, spec);
+        auto it = next->find(path);
+        if (it != next->end()) {
+            // the hit count carries over to the new response
+            route->hits.store(it->second->hits.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            it->second = std::move(route);
+        } else {
+            next->emplace(path, std::move(route));
+        }
+        return std::shared_ptr<const table_t>(std::move(next));
+    });
     return true;
 }
 
 bool HttpFastRoutes::remove(const std::string& path) {
-    std::lock_guard<std::mutex> lg(lock);
-    if (!table->count(path)) {
-        return false;
-    }
-    auto next = std::make_shared<table_t>(*table);
-    next->erase(path);
-    table = std::move(next);
-    return true;
+    bool removed = false;
+    table.update([&path, &removed](const std::shared_ptr<const table_t>& cur) {
+        if (!cur->count(path)) {
+            return cur;
+        }
+        auto next = std::make_shared<table_t>(*cur);
+        next->erase(path);
+        removed = true;
+        return std::shared_ptr<const table_t>(std::move(next));
+    });
+    return removed;
 }
 
 size_t HttpFastRoutes::size() const {
-    return snapshot()->size();
+    return snapshotLocked()->size();
 }
 
 std::shared_ptr<const HttpFastResponse> HttpFastRoutes::chooseRoute(const HttpFastRequestView& req,
@@ -611,7 +651,7 @@ std::shared_ptr<const HttpFastResponse> HttpFastRoutes::matchH2(const HttpFastRe
 
 std::vector<std::pair<std::string, uint64_t>> HttpFastRoutes::getRouteHits() const {
     std::vector<std::pair<std::string, uint64_t>> rv;
-    std::shared_ptr<const table_t> snap = snapshot();
+    std::shared_ptr<const table_t> snap = snapshotLocked();
     rv.reserve(snap->size());
     for (const auto& [path, route] : *snap) {
         rv.emplace_back(path, route->hits.load(std::memory_order_relaxed));

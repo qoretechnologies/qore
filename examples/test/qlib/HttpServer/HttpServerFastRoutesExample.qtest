@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class HttpServerFastRoutesExampleTest
+
+#! Runs the example program examples/fast-routes.qr in its self-test mode
+/** The example shows the fast handler building blocks of the HttpServer module (fast routes with a FastCell and a
+    FastResponseSlot, an inline handler and an ordinary handler).  Its self-test serves on a free port, requests every
+    route, checks the answers and the route counters, and checks that the heartbeat ends when the program is told to
+    exit, so that the example cannot stop working unnoticed.
+*/
+class HttpServerFastRoutesExampleTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerFastRoutesExampleTest", "1.0", \ARGV) {
+        addTestCase("the example program's self-test", \testSelfTest());
+        set_return_value(main());
+    }
+
+    testSelfTest() {
+        string root = get_script_dir() + "/../../../..";
+        string example = root + "/examples/fast-routes.qr";
+        if (!is_file(example)) {
+            testSkip("the example program is not available");
+            return;
+        }
+        string qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        # the example uses the modules of this source tree, not the installed ones; the module directories that the
+        # test run was given stay in the path after it, as they hold the binary modules (json, yaml, ...) of a build
+        # that is not installed
+        string module_dir = root + "/qlib";
+        if (ENV.QORE_MODULE_DIR) {
+            module_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        string cmd = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' --selftest 2>&1", replace(module_dir, "'", "'\\''"),
+            replace(qore_exe, "'", "'\\''"), replace(example, "'", "'\\''"));
+        int rc;
+        string output = backquote(cmd, \rc);
+        assertEq(0, rc, output);
+        assertTrue(output =~ /^PASS: /m, output);
+    }
+}

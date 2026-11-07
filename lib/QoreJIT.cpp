@@ -34,6 +34,7 @@
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/qore_thread_intern.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -2004,6 +2005,8 @@ void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
         // even when other Programs' work remains in the queue.
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         bg_in_progress = nullptr;
+        bg_in_progress_pgms.clear();
+        bg_in_progress_any_pgm = false;
     }
     // Always notify: both the shutdown waiter (queue empty && active_work == 0)
     // and per-Program waiters (in-progress no longer references their Program)
@@ -2043,6 +2046,9 @@ void QoreJIT::bgCompileThreadLoop() {
             // atomically with the pop and cannot race past an in-flight compile of
             // its Program.  Cleared in finishBgCompileWork() on every exit path.
             bg_in_progress = &work;
+            bg_in_progress_pgms.clear();
+            bg_in_progress_any_pgm = false;
+            collectWorkPgms(work, bg_in_progress_pgms, bg_in_progress_any_pgm);
         }
 
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
@@ -2294,6 +2300,24 @@ void QoreJIT::waitForBgCompileQueue() {
     });
 }
 
+void QoreJIT::collectWorkPgms(const BgCompileWork& work, std::vector<const QoreProgram*>& pgms, bool& any_pgm) {
+    // a null ir_func->pgm is treated as referring to any Program; see workReferencesPgm()
+    auto add = [&pgms, &any_pgm](const QoreIRFunction* f) {
+        if (!f) {
+            return;
+        }
+        if (!f->pgm) {
+            any_pgm = true;
+        } else if (std::find(pgms.begin(), pgms.end(), f->pgm) == pgms.end()) {
+            pgms.push_back(f->pgm);
+        }
+    };
+    add(work.ir_func);
+    for (const auto& callee : work.callees) {
+        add(callee.ir_func);
+    }
+}
+
 bool QoreJIT::workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm) {
     // A null ir_func->pgm means the owning Program of this work item is unknown (e.g. closure IR
     // funcs created without a pgm binding). Such items must be treated as referencing ANY program
@@ -2340,7 +2364,10 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
         // bg thread clears bg_in_progress under bg_queue_mutex and notifies, and
         // it does not hold bg_queue_mutex while compiling, so this cannot deadlock.
         bg_queue_empty_cv.wait(lock, [this, pgm]() {
-            return !bg_in_progress || !workReferencesPgm(*bg_in_progress, pgm);
+            // the copy taken at the claim is used: the item itself can have been released already
+            return !bg_in_progress || !(bg_in_progress_any_pgm
+                || std::find(bg_in_progress_pgms.begin(), bg_in_progress_pgms.end(), pgm)
+                    != bg_in_progress_pgms.end());
         });
     }
     // Release refs (which may destroy the now-orphaned variants) outside the lock.
@@ -2453,6 +2480,8 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     bg_thread_running.store(false, std::memory_order_relaxed);
     bg_compile_thread.abandonAfterFork();
     bg_in_progress = nullptr;
+    bg_in_progress_pgms.clear();
+    bg_in_progress_any_pgm = false;
     // only the queued work is pending in the child
     bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);
 }

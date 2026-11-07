@@ -78,6 +78,26 @@
   a `QoreValue` holds its node pointer with a tag in the high 16 bits, which valgrind's leak scan does not recognize
   as a pointer.  A script whose leak report should mean something must end normally.
 
+## Running Tests Under ThreadSanitizer
+- Configure a build with `-fsanitize=thread` in the C, C++ and linker flags (a Debug build in its own directory, for
+  example `build-tsan/`), build the `qore` target, and run with
+  `LD_LIBRARY_PATH=build-tsan TSAN_OPTIONS="suppressions=test/cpp/tsan.supp die_after_fork=0 report_thread_leaks=0 log_path=<file>" build-tsan/qore -b ...`
+  (`QORE_BINARY=build-tsan/qore ./run_tests.sh -d <subdir>` with the same environment).  Build the `qcc` target
+  too: the tests that compile a program use the `qcc` next to `qore`, and fall back to an installed one, which crashes
+  with a TSan libqore.
+- `die_after_fork=0` is needed because TSan ends a forked child that starts a thread (the fork tests in
+  `AsyncIoController/asyncio_unit_tests.qtest` do); TSan then exits with code 66 in the child, which a test reports as
+  a failure.  `report_thread_leaks=0` is needed because a thread that the parent joined looks unjoined in the child.
+- `test/cpp/tsan.supp` suppresses the reports in the libraries that are not built with TSan and that libqore loads
+  (OpenSSL, whose atomic reference counts TSan cannot see; the JVM and Node.js/V8 of the jni and JavaScript modules).
+  A report in the code of libqore or of this repository's modules is never suppressed there; fix it.
+- A TSan report makes the process exit with code 66, so a test whose output has no failure can still fail under TSan.
+- Some tests cannot run under TSan whatever the code does, and fail without a report from it: `misc/hashdecl.qtest` and
+  `misc/deep-release.qtest` recurse past TSan's limit of 64K nested calls (it crashes in `__tsan::CurrentStackId`);
+  `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` and
+  `misc/module-loader/concurrent-module-program-merge.qtest` do so much work in Qore code that they exceed the 300
+  second limit of `run_tests.sh` at TSan's slowdown.
+
 ## Commit & Pull Request Guidelines
 - Commit messages use a short type prefix such as `fix:`, `feat:`, or `refactor:` in a present-tense summary.
 - Use `Revert` for rollbacks and `Merge` when bringing in upstream branches.

@@ -25,6 +25,15 @@ class QuickHandler inherits AbstractHttpRequestHandler {
         return makeResponse(200, "ok", {"Content-Type": "text/plain"});
     }
 
+    #! with HTTP_BENCH_INLINE=1 the handler opts in to inline dispatch on the async callback dispatcher worker
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return ENV.HTTP_BENCH_INLINE == "1" && !hdr.path.endsWith("quit");
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+
     waitForQuit() {
         quit.waitForZero();
     }
@@ -37,6 +46,10 @@ server.setHandler("handler", "", NOTHING, handler);
 server.setDefaultHandler("handler", handler);
 server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": Port});
 server.waitForAsyncIo();
+# with HTTP_BENCH_FAST=1 "GET /" is a fast route: the async I/O thread answers it without calling Qore code
+if (ENV.HTTP_BENCH_FAST == "1") {
+    server.addFastRoute("/", {"public": True, "response": {"code": 200, "body": "ok", "content_type": "text/plain"}});
+}
 printf("ready\n");
 stdout.sync();
 handler.waitForQuit();

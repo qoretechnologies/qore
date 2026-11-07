@@ -75,3 +75,58 @@ all within 0.2%; independent of the load of the host):
 |---|---|---|
 | before | 8.74 M | 10.83 M |
 | `getContentEncodingPreferences()` cached by header value | 7.75 M (-11%) | 9.84 M (-9%) |
+
+## Calls that no longer go to the I/O thread
+
+Single-threaded `Socket` accept/recv/send/close loop (`socket-loop.qr`, 1500 requests), release build, 8 I/O threads,
+the same binary with each change switched off by a temporary switch.  User-space instructions of the process do not
+depend on the load of the host; microseconds per request do (three interleaved repetitions on a loaded host).
+
+| Configuration | User instructions | `futex` calls per request | us per request |
+|---|---|---|---|
+| neither change | 2.295 G | 211 | 285 to 335 (mean 309) |
+| config actions and address information run in the calling thread | 2.114 G (-7.9%) | 191 | within the noise |
+| one command cancels and closes | 2.229 G (-2.9%) | 182 | within the noise |
+| both | 2.036 G (-11%) | 157 (-26%) | 229 to 274 (mean 251, -19%) |
+
+## Ordinary and inline dispatch of a handler
+
+`http-server.qr` with `HTTP_BENCH_INLINE=1` opts its handler in to inline dispatch (`canHandleInline()`): the
+request is answered on the async callback dispatcher worker, with no hand-off to the handler pool and without the
+context setup, authentication and logging of `processNativeRequest()`.  User-space instructions of the server process
+per request, the same trivial response (`instructions-http.sh`, 800 requests, two runs each, within 0.1%):
+
+| | Ordinary dispatch | Inline dispatch |
+|---|---|---|
+| keep-alive | 7.77 M | 1.87 M (-76%) |
+| new connection per request | 9.85 M | 3.95 M (-60%) |
+
+So about 5.9 M of the 7.8 M instructions of an ordinary request are the handler-pool hand-off, the context setup, and
+the request and reply code measured above, not the I/O or the handler.  A handler that can opt in (it needs no
+request context, authentication or logging, and does not block) is four times cheaper than the same handler
+dispatched normally; a route registered with `addFastRoute()` is cheaper still (about 8 us of server CPU per request,
+`design/http-server-fast-routes.md`).
+
+## Locks on the fast-route path
+
+Before the change the I/O thread took five short mutexes for every fast-route request (the socket's context pointer, the
+context, the route table, a slot, and the per-response cache of the serialized response, which also built a string under
+its lock once a second), and a change of the routes copied the whole table under the lock the I/O threads take.  Now the
+state is published with hazard pointers (`HttpFastPublished`) and the serialized responses are cached per thread, so the
+I/O thread takes no lock (`design/http-server-fast-routes.md`, "Publishing state without a lock").
+
+Method: `HTTP_BENCH_FAST=1 design/benchmarks/5587/run-http.sh ...` serves `GET /` from a fast route; `loadgen.c` (build with
+`gcc -O2 -pthread -o loadgen loadgen.c`; `loadgen <port> <threads> <requests per thread>`) sends keep-alive requests from
+many threads, far more load than the Qore client can.  The same `qore` executable ran with the `libqore` from before the
+change and with the new one (the executable has a `RUNPATH`, so `LD_LIBRARY_PATH` selects the library).  The futex waits
+of the server process are counted with `strace -f -e trace=futex` over the requests (the traced run is slower).
+
+|!Measure|!Before|!After
+|futex waits per 64,000 requests, 4 and 8 I/O threads (three runs each, interleaved)|749 to 1130 (mean about 900)|302 to 405 (mean about 350)
+|requests per second, 16 load threads, no tracing (three runs each; the host was loaded, so about 15% noise)|4 I/O threads: 396,000; 8: 612,000|4 I/O threads: 414,000; 8: 573,000
+|user-space instructions of the server per request|about 14,060|about 14,020
+
+The remaining waits are not from this path (the accept of the 16 connections and other threads).  The throughput did not
+change within the noise, as the old mutexes were short and uncontended; the change makes the guarantee that an I/O thread
+does not wait for a thread that changes the routes, and removes the table copy under the I/O threads' lock.
+

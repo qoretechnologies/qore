@@ -599,12 +599,12 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
     // enable 0-RTT for reconnections with cached session tickets.
     // Pass client cert/pk for mTLS if configured on the socket.
-    quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(), port_,
+    setSession(QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(), port_,
         reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
         reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
         sock->priv->socket->priv->ssl_verify_mode,
         /*enable_0rtt=*/true,
-        sock->priv->cert, sock->priv->pk);
+        sock->priv->cert, sock->priv->pk));
     if (*xsink || !quic_session) {
         sock->priv->clearNonBlock();
         set_non_block = false;
@@ -1414,7 +1414,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 return nullptr;
 
             default:
-                xsink->raiseException("QUIC-POLL-ERROR", "invalid poll state: %d", static_cast<int>(qcs_state));
+                xsink->raiseException("QUIC-POLL-ERROR", "invalid poll state: %d", static_cast<int>(qcs_state.load()));
                 return nullptr;
         }
     }
@@ -2451,7 +2451,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
             }
 
             default:
-                xsink->raiseException("QUIC-POLL-ERROR", "invalid server poll state: %d", static_cast<int>(qcs_state));
+                xsink->raiseException("QUIC-POLL-ERROR", "invalid server poll state: %d", static_cast<int>(qcs_state.load()));
                 return nullptr;
         }
     }
@@ -2784,7 +2784,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 return nullptr;
 
             default:
-                xsink->raiseException("QUIC-POLL-ERROR", "invalid send response poll state: %d", static_cast<int>(qcs_state));
+                xsink->raiseException("QUIC-POLL-ERROR", "invalid send response poll state: %d", static_cast<int>(qcs_state.load()));
                 return nullptr;
         }
     }

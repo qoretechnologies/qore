@@ -421,6 +421,15 @@ thread than the other operations on its socket.
   `Socket` accept/recv/send/close loop spent most of its CPU in the I/O threads, none of which had work for the
   socket (measured: about 40% less CPU per request on a Linux x86_64 release build with 8 I/O threads).
   `cancelBySocketHash()` without targets still asks every thread, for a caller that has only the hash.
+- **A close that is not called on an I/O thread, for a socket with one candidate thread** (the thread recorded in
+  `sock_to_thread` is also the thread of the route key, or there is no record), is one command,
+  `CancelAndCloseSocket`, to that thread (`AsyncIoControllerPriv::cancelAndCloseOnThread()`), with one wait.  It used
+  to be a cancel command with a wait for its barrier and then a `CloseSocket` command with a second wait.  The thread
+  cancels the socket's operations and, when no worker `continuePoll()` of them is still running, closes the socket at
+  once.  Otherwise the close is parked with the barrier (`PendingSocketCancel::closes`) and `completePendingSocketCancel()`
+  runs it when the last of those calls has returned, so a descriptor is never closed under a running worker, as with the
+  two commands.  A socket with two candidate threads, a close during teardown, and a close from an I/O thread keep the
+  two steps.
 
 ### Timeout Heap
 
@@ -1513,11 +1522,21 @@ Representative bridges:
   to the caller until TLS negotiation has completed.
   `QoreSocket::acceptAndReplace()` also accepts and swaps the accepted descriptor
   into the target socket in one controller operation.
-  Immediate setup/lifecycle calls such as `bind*()`, `listen()`, `shutdown()`, and
-  `close()` use controller-backed execution.  Close first runs a socket-scoped
-  controller cancel that waits for any deferred worker `continuePoll()` aborts, then
-  submits a controller-side close command; direct helpers remain direct only after
+  Lifecycle calls such as `bind*()`, `listen()`, `shutdown()`, and `close()` use
+  controller-backed execution.  Close runs a socket-scoped controller cancel that waits
+  for any deferred worker `continuePoll()` aborts and then closes the descriptor on the
+  socket's I/O thread (one command when the socket has one candidate thread; see
+  [I/O Thread Routing](#io-thread-routing)); direct helpers remain direct only after
   ownership has moved to the I/O thread.
+  Calls that only read or set an option of the socket (the *config actions* of
+  `SocketSetupPollOperation`: `setNoDelay()`, `getNoDelay()`, the timeouts, `getPort()`,
+  the maximum body sizes, the SSL verify mode, ...) and `getPeerInfo()` / `getSocketInfo()`
+  without a host lookup run in the calling thread.  Each is one `setsockopt()`,
+  `getsockopt()`, `getpeername()`, `getsockname()` or private-data update, finished in a
+  single `continuePoll()` call under the socket's mutex, which is the lock every operation
+  of the controller on the socket takes as well; so they need not hop to the I/O thread
+  (two thread switches per call, which for an accepted socket was `setAccept()` and
+  `setNoDelay()`).  A host lookup waits for the resolver and still runs on the controller.
   An operation can be submitted between the cancellation barrier and descriptor
   close. After closing the descriptor, the controller explicitly wakes matching
   operations on every live I/O context, as the thread of a socket's operations cannot

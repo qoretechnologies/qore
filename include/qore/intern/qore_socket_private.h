@@ -1263,6 +1263,68 @@ private:
 };
 
 
+//! Holds the HTTP/2 session of a socket: the reference is changed and copied under a lock, and the session is
+//! released outside it
+/** The session is replaced or cleared by the thread that owns the connection while other threads copy the reference
+    (for example, the I/O thread that closes the socket), and a plain @c std::shared_ptr is not safe for that.  The
+    lock is a leaf: nothing else is acquired while it is held.
+*/
+class H2SessionHolder {
+public:
+    //! Returns a reference to the session, or an empty pointer
+    DLLLOCAL Http2SessionPtr get() const {
+        std::lock_guard<std::mutex> lck(m);
+        return p;
+    }
+
+    DLLLOCAL operator Http2SessionPtr() const {
+        return get();
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        std::lock_guard<std::mutex> lck(m);
+        return (bool)p;
+    }
+
+    DLLLOCAL bool operator!() const {
+        return !static_cast<bool>(*this);
+    }
+
+    DLLLOCAL H2SessionHolder& operator=(Http2SessionPtr n) {
+        // the previous session is released after the lock
+        Http2SessionPtr old;
+        {
+            std::lock_guard<std::mutex> lck(m);
+            old.swap(p);
+            p = std::move(n);
+        }
+        return *this;
+    }
+
+    //! Releases the reference
+    DLLLOCAL void reset() {
+        Http2SessionPtr old;
+        {
+            std::lock_guard<std::mutex> lck(m);
+            old.swap(p);
+        }
+    }
+
+    //! Returns the reference and leaves the holder empty
+    DLLLOCAL Http2SessionPtr take() {
+        Http2SessionPtr old;
+        {
+            std::lock_guard<std::mutex> lck(m);
+            old.swap(p);
+        }
+        return old;
+    }
+
+private:
+    mutable std::mutex m;
+    Http2SessionPtr p;
+};
+
 struct qore_socket_private : public QoreReferenceCounter {
     friend class PrivateQoreSocketTimeoutHelper;
     friend class PrivateQoreSocketThroughputHelper;
@@ -1288,7 +1350,8 @@ struct qore_socket_private : public QoreReferenceCounter {
     // issue #3558: connection sequence to show when a connection has been reestablished
     int64 connection_id = 0;
 
-    const QoreEncoding* enc;
+    //! changed and read by any thread that uses the socket
+    std::atomic<const QoreEncoding*> enc;
 
     std::string socketname;
     // issue #3053: client target for SNI
@@ -1722,30 +1785,36 @@ struct qore_socket_private : public QoreReferenceCounter {
 
         @since %Qore 3.0
     */
-    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContext() const {
-        std::lock_guard<std::mutex> lg(fast_routes_lock);
-        return fast_ctx;
+    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContext() const noexcept {
+        return fast_ctx.get();
+    }
+
+    //! Returns the context with the mutex of the writers, for a thread that is not an I/O thread
+    DLLLOCAL std::shared_ptr<HttpFastContext> getFastContextLocked() const {
+        return fast_ctx.getLocked();
     }
 
     //! Returns the context, creating an empty one if there is none
     DLLLOCAL std::shared_ptr<HttpFastContext> getOrCreateFastContext() {
-        std::lock_guard<std::mutex> lg(fast_routes_lock);
-        if (!fast_ctx) {
-            fast_ctx = std::make_shared<HttpFastContext>();
+        std::shared_ptr<HttpFastContext> ctx = fast_ctx.getLocked();
+        if (ctx) {
+            return ctx;
         }
-        return fast_ctx;
+        fast_ctx.update([](const std::shared_ptr<HttpFastContext>& cur) {
+            return cur ? cur : std::make_shared<HttpFastContext>();
+        });
+        return fast_ctx.getLocked();
     }
 
     //! Makes this socket use the given context (the socket accepted from a listener shares the listener's)
     DLLLOCAL void setFastContext(std::shared_ptr<HttpFastContext> ctx) {
-        std::lock_guard<std::mutex> lg(fast_routes_lock);
-        fast_ctx = std::move(ctx);
+        fast_ctx.set(std::move(ctx));
     }
 
-    //! Returns the routes of the socket, or nullptr
+    //! Returns the routes of the socket, or nullptr (for a thread that is not an I/O thread)
     DLLLOCAL std::shared_ptr<HttpFastRoutes> getFastRoutes() const {
-        std::shared_ptr<HttpFastContext> ctx = getFastContext();
-        return ctx ? ctx->get().routes : nullptr;
+        std::shared_ptr<HttpFastContext> ctx = getFastContextLocked();
+        return ctx ? ctx->getLocked().routes : nullptr;
     }
 
     //! Sets the routes of the socket
@@ -1754,8 +1823,8 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
 private:
-    mutable std::mutex fast_routes_lock;
-    std::shared_ptr<HttpFastContext> fast_ctx;
+    //! the context is published as a whole: the I/O threads read it without a lock
+    HttpFastPublished<HttpFastContext> fast_ctx;
 
 public:
 
@@ -1800,7 +1869,10 @@ public:
         for subsequent operations on the same connection.
         Uses shared_ptr for thread-safe atomic reference counting.
     */
-    Http2SessionPtr h2_session;
+    /** The session is set and cleared by the thread that owns the connection and read by others (a close, a poll
+        operation), so the reference is held by a @ref H2SessionHolder
+    */
+    H2SessionHolder h2_session;
 
     //! Active HTTP/2 stream ID for WebSocket or other bidirectional streams
     /** When set to a positive value, send() and recv() operations will use
@@ -2068,7 +2140,8 @@ public:
         bool use_thread_map;
         {
             AutoLocker al(h2_session_lock);
-            use_thread_map = !h2_session || h2_session->isServer();
+            Http2SessionPtr session = h2_session.get();
+            use_thread_map = !session || session->isServer();
         }
         if (use_thread_map) {
             AutoLocker al(h2_active_stream_lock);
@@ -2082,7 +2155,8 @@ public:
         bool use_thread_map;
         {
             AutoLocker al(h2_session_lock);
-            use_thread_map = !h2_session || h2_session->isServer();
+            Http2SessionPtr session = h2_session.get();
+            use_thread_map = !session || session->isServer();
         }
         if (use_thread_map) {
             AutoLocker al(h2_active_stream_lock);
@@ -2467,7 +2541,7 @@ public:
             ssl_err_str = nullptr;
             old_remote_cert = remote_cert;
             remote_cert = nullptr;
-            old_h2_session = std::move(h2_session);
+            old_h2_session = h2_session.take();
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
@@ -2786,7 +2860,7 @@ public:
             //printd(1, "qore_socket_private::accept_internal() " QSD " bytes returned\n", size);
 
             if (rc >= 0 && source) {
-                QoreStringNode* addr = new QoreStringNode(enc);
+                QoreStringNode* addr = new QoreStringNode(enc.load());
                 addr->sprintf("UNIX socket: %s", socketname.c_str());
                 source->priv->setAddress(addr);
                 source->priv->setHostName("localhost");
@@ -4150,7 +4224,7 @@ public:
                     qore_http_media_type_param charset;
                     if (qore_find_http_media_type_param(t, "charset", charset) && !charset.value.empty()) {
                         enc = hdr_enc ? hdr_enc : QEM.findCreate(charset.value.c_str());
-                        senc = enc->getCode();
+                        senc = enc.load()->getCode();
                         //printd(5, "got encoding '%s' from request\n", senc);
 
                         if (info) {
@@ -4169,7 +4243,7 @@ public:
                     } else {
                         // a type that is not text is read in the assumed encoding, as before
                         enc = hdr_enc ? hdr_enc : assumed;
-                        senc = enc->getCode();
+                        senc = enc.load()->getCode();
                         if (info) {
                             info->setKeyValue("charset", new QoreStringNode(senc), nullptr);
                             info->setKeyValue("body-content-type", val->refSelf(), nullptr);
