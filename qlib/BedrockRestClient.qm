@@ -143,7 +143,8 @@ hash<ChatResponse> r = p.chat((
       \c cachePoint, so the request is cached up to it
     - usage counts the input read from and written to the prompt cache: the prompt and input counts are the whole
       input, with \c prompt_tokens_details.cached_tokens, \c cache_read_input_tokens and \c cache_write_input_tokens
-    - a reasoning effort asks the Claude models that take adaptive thinking for it at that effort
+    - a reasoning effort asks the Claude models that take adaptive thinking for it at that effort; \c minimal is
+      sent as \c low and \c none turns reasoning off, as Claude refuses both
     - Claude's reasoning (\c reasoningContent) is returned in
       @ref QoreLlmUtils::ChatResponse::reasoning_blocks "ChatResponse::reasoning_blocks", streamed or not, in the
       Anthropic Messages API's form, and replayed unchanged before an assistant turn's content, which a tool-result
@@ -951,6 +952,10 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         Opus 5.5 takes them, as measured for the lowest effort (@ref getClaudeReasoningOffFields()); the models that
         take adaptive thinking are the Claude 5 models and Claude Opus 4.6 to 4.8 and Claude Sonnet 4.6.
 
+        Claude takes the efforts \c low, \c medium, \c high, \c xhigh and \c max (measured on Bedrock on 2026-11-07
+        with \c eu.anthropic.claude-opus-5-5; \c minimal and \c none are refused with "unknown variant"): \c none is
+        reasoning turned off (@ref getClaudeReasoningOffFields()), and \c minimal is \c low, the least it takes.
+
         @param model_id the model ID or inference profile ID
         @param effort the reasoning effort
 
@@ -960,6 +965,12 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         string id = model_id.lwr();
         if (id !~ /^([a-z-]+\.)?anthropic\.claude-/) {
             return NOTHING;
+        }
+        if (effort == "none") {
+            return getClaudeReasoningOffFields(model_id);
+        }
+        if (effort == "minimal") {
+            effort = "low";
         }
         id = regex_subst(id, "^([a-z-]+\\.)?anthropic\\.", "");
         id = regex_subst(id, "-v[0-9]+(:[0-9]+)?$", "");

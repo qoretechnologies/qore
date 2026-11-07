@@ -678,6 +678,17 @@ public class BedrockTest inherits QUnit::Test {
                 opts);
             assertFalse(exists handler.last_body.additionalModelRequestFields, model);
         }
+        # an effort Claude refuses is mapped to the nearest it takes
+        newProvider("eu.anthropic.claude-opus-5-5").chat((<QoreLlmUtils::ChatMessage>{"role": "user",
+            "content": "ping"},), NOTHING, <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "minimal"});
+        assertEq({"thinking": {"type": "adaptive"}, "output_config": {"effort": "low"}},
+            handler.last_body.additionalModelRequestFields, "minimal is the least Claude takes");
+        assertEq(BedrockRestClient::BedrockLlmProvider::getClaudeReasoningOffFields("eu.anthropic.claude-opus-5-5"),
+            BedrockRestClient::BedrockLlmProvider::getClaudeReasoningEffortFields("eu.anthropic.claude-opus-5-5",
+                "none"), "none is reasoning turned off");
+        assertEq({"thinking": {"type": "between_tools"}},
+            BedrockRestClient::BedrockLlmProvider::getClaudeReasoningEffortFields("global.anthropic.claude-sonnet-5-5",
+                "none"));
         # turning reasoning off still wins
         newProvider("eu.anthropic.claude-opus-5-5").chat((<QoreLlmUtils::ChatMessage>{"role": "user",
             "content": "ping"},), NOTHING, <QoreLlmUtils::LlmRequestOptions>{"disable_reasoning": True});
