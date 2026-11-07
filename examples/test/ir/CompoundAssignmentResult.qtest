@@ -21,10 +21,10 @@
     for an lvalue with no value, so <tt>(v += <HD>{}).fullType()</tt> gave \c "hash<HD>" for an \c any or \c auto!
     variable.  The result is now read from the variable when it is used.
 
-    The other compound operators return the value they compute, except -=, which returns the lvalue's value as +=
-    does, and *= and /=, which return it when the lvalue or the operand holds a number: compiled code gave the
-    computed number for *= and /= on a \c softint local or thread_local variable with a number operand (ex:
-    \c 17.5 while the variable holds \c 17).
+    -=, *= and /= return the lvalue's value as well.  The AST interpreter's *= and /= returned the value they
+    computed with a float operand (\c softint v = 7; v *= 2.5 gave \c 17.5 while \c v holds \c 17), and compiled
+    code also with a number operand; the result of every compound assignment is now the value stored, as for an
+    assignment.
 
     The script applies += to \c any and \c auto! locals, globals, thread_local variables, members and static
     variables, with no value and with \c NULL, and -=, *= and /= to \c softint and \c *softint locals and
@@ -82,8 +82,8 @@ string sub others(auto o) {
 
 string sub t2(auto ignored, auto v) { return sprintf("%s:%y", v.type(), v); }
 
-# -= gives the value the variable holds, and so do *= and /= when the
-# operand is a number; with a float or int operand, *= and /= give the value they compute
+# -=, *= and /= give the value the variable holds, whatever the operand (the softint variable
+# stores 17.5 as 17)
 string sub softints(auto o) {
     softint l;
     *softint ol;
@@ -126,17 +126,17 @@ for (int i = 0; i < 3; ++i) {
             "0 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
             "0 list<int>: list list list list / list list | list list list list list list list list",
             "0number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
-            "0float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:float:17.5 *local*=:float:17.5 global*=:float:17.5 tl*=:float:17.5 member*=:float:17.5 static*=:float:17.5 local/=:float:2.8 *local/=:float:2.8 global/=:float:2.8 tl/=:float:2.8 member/=:float:2.8 static/=:float:2.8",
+            "0float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
             "0integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
             "1 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
             "1 list<int>: list list list list / list list | list list list list list list list list",
             "1number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
-            "1float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:float:17.5 *local*=:float:17.5 global*=:float:17.5 tl*=:float:17.5 member*=:float:17.5 static*=:float:17.5 local/=:float:2.8 *local/=:float:2.8 global/=:float:2.8 tl/=:float:2.8 member/=:float:2.8 static/=:float:2.8",
+            "1float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
             "1integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
             "2 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
             "2 list<int>: list list list list / list list | list list list list list list list list",
             "2number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
-            "2float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:float:17.5 *local*=:float:17.5 global*=:float:17.5 tl*=:float:17.5 member*=:float:17.5 static*=:float:17.5 local/=:float:2.8 *local/=:float:2.8 global/=:float:2.8 tl/=:float:2.8 member/=:float:2.8 static/=:float:2.8",
+            "2float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
             "2integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
         );
     }

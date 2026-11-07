@@ -22,11 +22,12 @@
     the lvalue afterwards, with their types, or the error raised.  A combination whose code does not parse without a
     warning (ex: a \c float operand of *= on an \c int lvalue) is left out; the \c auto operands cover it at runtime.
 
-    The expected output is the AST interpreter's, computed when the test runs (it has some 1600 lines); the pinned
-    lines check the AST interpreter's results that the compiled modes got wrong: *= and /= on a \c softint or
-    \c *softint local or thread_local variable with a number operand gave the computed number (ex: \c 17.5) instead of
-    the value the variable holds (\c 17), and +=, the controls, gave the value the variable holds.  The script runs in
-    every execution mode, on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+    The expected output is the AST interpreter's, computed when the test runs (it has some 1600 lines).  It is
+    checked first: every result must be the value that the lvalue holds afterwards, as for an assignment (x *= y gives
+    what x = x * y gives; the AST interpreter's *= and /= gave the computed float, ex: \c 17.5 for a \c softint
+    lvalue holding \c 17), and the pinned lines check results that the compiled modes got wrong (*= and /= on a
+    \c softint or \c *softint local or thread_local variable with a number operand) and controls.  The script runs
+    in every execution mode, on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
 */
 class CompoundAssignmentMatrixTest inherits ExecModeOutputTest {
     public {
@@ -73,7 +74,11 @@ class CompoundAssignmentMatrixTest inherits ExecModeOutputTest {
             "ref softint auto:2.5n *=: integer:17 integer:17",
             "global softint auto:2.5n *=: integer:17 integer:17",
             "local softint auto:2.5n +=: integer:9 integer:9",
-            "local softint auto:2.5 *=: float:17.5 integer:17",
+            "local softint auto:2.5 *=: integer:17 integer:17",
+            "local softint auto:2.5 /=: integer:2 integer:2",
+            "member softint auto:2.5 *=: integer:17 integer:17",
+            "hash softint auto:2.5 /=: integer:2 integer:2",
+            "ref *softint auto:2.5 *=: integer:17 integer:17",
             "local auto auto:2.5n *=: number:17.5 number:17.5",
             "local auto auto:2.5 /=: float:2.8 float:2.8",
             "local int int:2 <<=: integer:28 integer:28",
@@ -82,7 +87,23 @@ class CompoundAssignmentMatrixTest inherits ExecModeOutputTest {
 
     constructor() : ExecModeOutputTest("CompoundAssignmentMatrix", CompoundAssignmentMatrixTest::script(),
             ExecModeOutputTest::ast_output("CompoundAssignmentMatrix", CompoundAssignmentMatrixTest::script()),
-            "gives the result and value of every compound assignment that the AST interpreter gives", Pinned) {
+            "gives the result and value of every compound assignment that the AST interpreter gives", Pinned,
+            \CompoundAssignmentMatrixTest::resultIsValue()) {
+    }
+
+    #! returns the lines of the output whose result is not the value the lvalue holds afterwards
+    /** A compound assignment gives the value that it stores in the lvalue, as an assignment does (x *= y gives what
+        x = x * y gives), whatever the lvalue's type converts; lines with an error have no result
+    */
+    static list<string> resultIsValue(string output) {
+        list<string> rv = ();
+        foreach string line in (output.split("\n")) {
+            *list<*string> m = (line =~ x/^[^:]*:[^:]*: ([^ ]+) ([^ ]+)$/);
+            if (m && m[0] != m[1]) {
+                rv += line;
+            }
+        }
+        return rv;
     }
 
     #! returns the script, generated once

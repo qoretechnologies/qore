@@ -13357,14 +13357,24 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                 }
             } else if (arithmetic && (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT)) {
                 double rv = rhs.getAsFloat();
+                // the result is the value the lvalue holds afterwards, as in the AST interpreter (a softint lvalue
+                // stores 17.5 as 17)
                 switch (compound_op) {
-                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                    case LVCompoundOp::MulAssign:
+                        lvh.multiplyEqualsFloat(rv);
+                        if (!*xsink) {
+                            res = lvh.getReferencedValue();
+                        }
+                        break;
                     case LVCompoundOp::DivAssign:
                         if (rv == 0.0) {
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in floating-point expression");
                         } else {
-                            res = lvh.divideEqualsFloat(rv);
+                            lvh.divideEqualsFloat(rv);
+                            if (!*xsink) {
+                                res = lvh.getReferencedValue();
+                            }
                         }
                         break;
                     default: break;
@@ -13374,12 +13384,15 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                 switch (compound_op) {
                     case LVCompoundOp::MulAssign:
                         // a zero factor assigns 0, which the lvalue converts as an assignment does (ex: 0.0 for a
-                        // *float lvalue with no value), as in the AST interpreter
+                        // *float lvalue with no value), as in the AST interpreter; the result is the value the
+                        // lvalue holds afterwards
                         if (!lvh.getAsBigInt() || !rv) {
                             lvh.assign(0ll, "<*= operator>");
-                            res = 0ll;
                         } else {
-                            res = lvh.multiplyEqualsBigInt(rv);
+                            lvh.multiplyEqualsBigInt(rv);
+                        }
+                        if (!*xsink) {
+                            res = lvh.getReferencedValue();
                         }
                         break;
                     case LVCompoundOp::DivAssign:
@@ -13387,7 +13400,10 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
                             xsink->raiseException("DIVISION-BY-ZERO",
                                 "division by zero in integer expression");
                         } else {
-                            res = lvh.divideEqualsBigInt(rv);
+                            lvh.divideEqualsBigInt(rv);
+                            if (!*xsink) {
+                                res = lvh.getReferencedValue();
+                            }
                         }
                         break;
                     case LVCompoundOp::ModAssign:

@@ -31,6 +31,8 @@ class ExecModeOutputTest inherits QUnit::Test {
         string qcc_bin;
         #! lines that the expected output must hold
         list<string> pinned;
+        #! a check of the expected output: returns the lines that break a rule the output must follow
+        *code check;
     }
 
     #! creates the test; \a desc describes what every mode and the executable must give
@@ -40,8 +42,11 @@ class ExecModeOutputTest inherits QUnit::Test {
         @param desc what every mode and the executable must give
         @param pinned lines that the expected output must hold, for an expected output computed by running the AST
         interpreter, so that a wrong result of the AST interpreter itself fails the test
+        @param check a check of the expected output, taking the output and returning the lines that break a rule
+        that the output must follow (an empty list if none), for an expected output computed by running the AST
+        interpreter
     */
-    constructor(string name, string script, string expected, string desc, *list<string> pinned)
+    constructor(string name, string script, string expected, string desc, *list<string> pinned, *code check)
             : QUnit::Test(name, "1.0", \ARGV) {
         self.script = script;
         self.expected = expected;
@@ -57,6 +62,10 @@ class ExecModeOutputTest inherits QUnit::Test {
         self.pinned = pinned ?? ();
         if (self.pinned) {
             addTestCase("the AST interpreter's output holds the pinned results", \testPinned());
+        }
+        self.check = check;
+        if (check) {
+            addTestCase("the AST interpreter's output follows its rules", \testCheck());
         }
         addTestCase("every execution mode " + desc, \testModes());
         addTestCase("compiled executable " + desc, \testAot());
@@ -92,6 +101,10 @@ class ExecModeOutputTest inherits QUnit::Test {
         hash<string, bool> lines = map {$1: True}, expected.split("\n");
         list<string> missing = select pinned, !lines{$1};
         assertEq((), missing);
+    }
+
+    testCheck() {
+        assertEq((), check(expected));
     }
 
     testModes() {

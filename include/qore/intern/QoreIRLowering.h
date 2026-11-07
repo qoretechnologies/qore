@@ -185,18 +185,14 @@ public:
     QoreIRValue lowerConstant(const QoreValue& expr, std::string& error);
     QoreIRValue lowerVarRef(const QoreValue& expr, std::string& error);
     QoreIRValue lowerAssignment(const QoreValue& expr, std::string& error);
-    //! Returns the result of += or -= on a variable that is changed by loading it, computing its new value and
-    //! storing it
-    /** The result is the value the variable holds after the store, as in the AST interpreter, whose += and -=
-        operators return the lvalue's value: the variable's declared type can convert the computed value when it is
-        stored (ex: an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash), so the variable is read
-        again when the result is used.
-
-        The other compound operators of the AST interpreter return the value they compute, with one exception: *=
-        and /= return the lvalue's value when the lvalue or the operand holds a number.  Their lowerings return the
-        value they compute, and a variable for which the two can differ (one whose type accepts a number only by
-        converting it, such as \c softint) is changed through its lvalue path instead, which runs the AST
-        interpreter's operator (see lowerMultiplyEquals() and lowerDivideEquals()).
+    //! Returns the result of +=, -=, *= or /= on a variable that is changed by loading it, computing its new value
+    //! and storing it
+    /** The result is the value the variable holds after the store, as in the AST interpreter, whose +=, -=, *= and
+        /= operators return the lvalue's value: the variable's declared type can convert the computed value when it is
+        stored (ex: an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash, a \c softint variable
+        stores 17.5 as 17), so the variable is read again when the result is used.  The integer operators (%=, &=,
+        |=, ^=, <<=, >>=) apply only to lvalues that accept and return an integer, which store the integer computed
+        as it is, so their lowerings return the value they compute.
 
         @param needs_rv true if the result of the operator is used
         @param var the variable

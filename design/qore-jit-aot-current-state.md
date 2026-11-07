@@ -282,15 +282,13 @@ type, which can convert the value (an `any` or `auto!` variable stores a `hash<H
 plain `hash`, a `softint` variable stores 17.5 as 17), so the result of the operator must
 be what the AST operator returns:
 
-- `+=` and `-=` return the value the lvalue holds afterwards: when the result is used, the
-  variable is read again after the store (`QoreIRLowering::compoundAssignmentResult()`).
-- `*=` and `/=` return the value they compute, except when the lvalue or the operand holds
-  a number, where they return the value the lvalue holds. Whether the operand is a number
-  is known only at runtime, and with a float operand the AST operator returns the computed
-  float, so reading the variable back is not right in every case: a variable whose type
-  accepts a number only by converting it (`softint`) is changed through its lvalue path
-  whenever the operand can be a number (`qore_ir_multiplicative_assign_needs_lvalue()`).
-- The other operators return the value they compute.
+- `+=`, `-=`, `*=` and `/=` return the value the lvalue holds afterwards, as an assignment
+  does (`x *= y` gives what `x = x * y` gives): when the result is used, the variable is
+  read again after the store (`QoreIRLowering::compoundAssignmentResult()`), and the
+  lvalue path's helper (`qore_rt_apply_lvalue_compound()`) returns the lvalue's value.
+- The integer operators (`%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) apply only to lvalues that
+  accept and return an integer (`check_lvalue_int()`), which store the integer computed as
+  it is, so they return the value they compute.
 
 `examples/test/ir/CompoundAssignmentMatrix.qtest` checks every operator on every kind of
 lvalue, with typed and `auto` lvalues and operands, against the AST interpreter's output.

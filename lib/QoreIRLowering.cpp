@@ -8058,11 +8058,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
 QoreIRValue QoreIRLowering::compoundAssignmentResult(bool needs_rv, const VarRefNode* var,
         const QoreValue& left, QoreIRValue result, std::string& error, const char* context) {
     // the variable's type can convert the value that the operation computes when it is stored (ex: an any or auto!
-    // variable stores a hash<HD> as a plain hash, a softint variable stores 2.5 as 2), and the AST interpreter's += and
-    // -= operators return the value the lvalue holds afterwards (doPlusEqualsOnLValue() and
-    // doMinusEqualsOnLValue()), so the variable is read again; the other compound operators return the value they
-    // compute, as these AST operators do, and do not use this function (for *= and /=, which return the lvalue's
-    // value when a number is involved, see qore_ir_multiplicative_assign_needs_lvalue())
+    // variable stores a hash<HD> as a plain hash, a softint variable stores 2.5 as 2), and the AST interpreter's +=,
+    // -=, *= and /= operators return the value the lvalue holds afterwards (doPlusEqualsOnLValue(),
+    // doMinusEqualsOnLValue(), QoreMultiplyEqualsOperatorNode and QoreDivideEqualsOperatorNode), so the variable is
+    // read again; the integer operators (%=, &=, |=, ^=, <<=, >>=) only apply to lvalues that store the integer they
+    // compute as it is, so their result is the value they compute and they do not use this function
     if (!needs_rv) {
         return result;
     }
@@ -8510,28 +8510,6 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         "minus-equals result");
 }
 
-//! Returns true if *= or /= on a variable of the given type must change it through its lvalue path
-/** The AST interpreter's *= and /= give the value they compute, except when the lvalue or the operand holds a number:
-    then they give the value the lvalue holds afterwards (QoreMultiplyEqualsOperatorNode and
-    QoreDivideEqualsOperatorNode return LValueHelper::getReferencedValue()).  A variable whose type accepts a number
-    only by converting it (ex: \c softint, which stores 17.5 as 17) then holds another value than the one computed, and
-    whether the operand is a number is only known when the operator runs (ex: an \c auto operand), so such a variable
-    is changed through its lvalue path, which runs the AST interpreter's operator, whenever the operand can be a
-    number.  A variable that can hold a number stores it as it is, and a variable that cannot be assigned one fails in
-    both, so their load, compute and store lowering gives the AST interpreter's result.
-
-    @param ti the type of the variable
-    @param operand the operand of the operator
-*/
-static bool qore_ir_multiplicative_assign_needs_lvalue(const QoreTypeInfo* ti, const QoreValue& operand) {
-    if (!QoreTypeInfo::hasType(ti) || QoreTypeInfo::parseAcceptsReturns(ti, NT_NUMBER)
-            || QoreTypeInfo::parseAccepts(ti, numberTypeInfo) == QTI_NOT_EQUAL) {
-        return false;
-    }
-    const QoreTypeInfo* oti = operand.getTypeInfo();
-    return !QoreTypeInfo::hasType(oti) || QoreTypeInfo::parseReturns(oti, NT_NUMBER) != QTI_NOT_EQUAL;
-}
-
 QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node);
@@ -8546,14 +8524,12 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store produces wrong result types; see
-    // qore_ir_multiplicative_assign_needs_lvalue()
+    // Force lvalue path for types where load-compute-store produces wrong result types
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)
-                || qore_ir_multiplicative_assign_needs_lvalue(ti, op->getRight())) {
+                || QoreTypeInfo::isReference(ti)) {
             left_var = nullptr;
         }
     }
@@ -8646,7 +8622,8 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     if (!storeVarRef(left_var, result, error, "multiply-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "multiply-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string& error) {
@@ -8663,14 +8640,12 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
 
     const AbstractQoreNode* left_node = op->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
-    // Force lvalue path for types where load-compute-store produces wrong result types; see
-    // qore_ir_multiplicative_assign_needs_lvalue()
+    // Force lvalue path for types where load-compute-store produces wrong result types
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)
-                || qore_ir_multiplicative_assign_needs_lvalue(ti, op->getRight())) {
+                || QoreTypeInfo::isReference(ti)) {
             left_var = nullptr;
         }
     }
@@ -8754,7 +8729,8 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
     if (!storeVarRef(left_var, result, error, "divide-equals", &right_expr)) {
         return QoreIRValue();
     }
-    return result;
+    return compoundAssignmentResult(op->needsReturnValue(), left_var, op->getLeft(), result, error,
+        "divide-equals result");
 }
 
 QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string& error) {
