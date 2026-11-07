@@ -1,0 +1,777 @@
+#!/usr/bin/env python3
+"""Tests of the qmod build cache (tools/qore-qmod-cache.py, design/qmod-build-cache.md).
+
+- the keys: each input of the build context, of a module's base key and of its result key changes the key, and
+  nothing else does;
+- the parts the keys and checks are made of: the depfile parser (the module loader's rules), the environment
+  filter, the AOT module metadata reader, the optional module candidates, the audit sample;
+- the cache with CMake, make and a stand-in for qcc: a cold build stores every module, a warm build from an empty
+  build tree compiles none and writes the same files, a change to one module compiles only that module and the
+  modules that depend on it (transitively), a damaged entry, a new AOT runtime identity, a source that changes while
+  it is compiled and an optional module that becomes available are misses, "verify" fails for a supplied module that
+  was changed afterwards, and the audit fails the build when qcc does not write the same module again;
+- the cache with the real qcc and qore of a build tree (QORE_TEST_BUILD_DIR, as test-cmake.sh runs these tests):
+  the same cold, warm and changed builds, modules that are byte for byte those qcc writes, and the module loader
+  loading the modules the cache supplied without finding them out of date.
+
+Copyright (C) 2026 Qore Technologies, s.r.o.
+"""
+
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[3]
+TOOL = ROOT / "tools" / "qore-qmod-cache.py"
+CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
+
+
+def load_tool():
+    spec = importlib.util.spec_from_file_location("qore_qmod_cache", str(TOOL))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+qc = load_tool()
+
+
+def qami_record(name, deps=(), optional=()):
+    def s(v):
+        b = v.encode()
+        return struct.pack("<I", len(b)) + b
+    payload = s(name) + struct.pack("<I", len(deps)) + b"".join(s(d) for d in deps) \
+        + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
+    return b"QAMI" + struct.pack("<II", 1, len(payload)) + payload
+
+
+class DepfileTest(unittest.TestCase):
+    def test_rule(self):
+        target, deps = qc.parse_depfile_text("/b/M.qmod: /s/M.qm \\\n    /s/a\\ b.qc \\\n    /s/c.qc\n")
+        self.assertEqual("/b/M.qmod", target)
+        self.assertEqual(["/s/M.qm", "/s/a b.qc", "/s/c.qc"], deps)
+
+    def test_space_before_colon(self):
+        self.assertEqual(("/b/M.qmod", ["x"]), qc.parse_depfile_text("/b/M.qmod : x\n"))
+
+    def test_not_a_rule(self):
+        for text in ("", "no rule here\n", ": x\n", "a b: x\n", "a\\\nb: x\n"):
+            with self.assertRaises(qc.CacheError, msg=text):
+                qc.parse_depfile_text(text)
+
+
+class EnvironmentTest(unittest.TestCase):
+    def test_filter(self):
+        env = {"QORE_MODULE_DIR": "/m", "QCC_JOBS": "4", "TZ": "Europe/Prague", "CXX": "c++", "LANG": "C",
+               "QORE_TEST_OPTS": "-penable-debug", "QORE_DB_CONNSTR_MYSQL": "secret", "QORE_QMOD_CACHE_AUDIT": "1",
+               "QORE_SRC_DIR": "/src", "HOME": "/home/x", "CI_JOB_ID": "1", "PATH": "/bin"}
+        self.assertEqual([["CXX", "c++"], ["LANG", "C"], ["QCC_JOBS", "4"], ["QORE_MODULE_DIR", "/m"],
+                          ["TZ", "Europe/Prague"]], qc.key_environment(env))
+
+    def test_excluded_names_are_not_read(self):
+        """No libqore or qcc source names an environment variable that the key leaves out"""
+        sources = [ROOT / "qcc-main.cpp"]
+        for d in ("lib", "include"):
+            for dirpath, _, names in os.walk(ROOT / d):
+                sources += [Path(dirpath) / n for n in names if n.endswith((".cpp", ".h", ".qpp", ".ypp", ".lpp"))]
+        literals = set()
+        for p in sources:
+            literals.update(re.findall(r'"(Q(?:ORE|CC)_[A-Z0-9_]+)"', p.read_text(errors="replace")))
+        self.assertTrue(literals, "no environment variable literal found in the sources")
+        for name in literals:
+            self.assertNotIn(name, qc.ENV_EXCLUDED_NAMES)
+            self.assertFalse(name.startswith(qc.ENV_EXCLUDED_PREFIXES), name)
+
+
+class ModuleInfoTest(unittest.TestCase):
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        self.dir = Path(d.name)
+
+    def write(self, data):
+        p = self.dir / "M.qmod"
+        p.write_bytes(data)
+        return str(p)
+
+    def test_record(self):
+        # an ELF note header has the record's magic as its type; the note's name follows it, not a record
+        note = struct.pack("<III", 5, 100, 0x494d4151) + b"Qore\0\0\0\0"
+        p = self.write(b"\x7fELF junk" + note + qami_record("M", ["Util"], ["xml >= 1.3"]) + b"tail QAMI")
+        self.assertEqual((["Util"], ["xml >= 1.3"]), qc.read_module_info(p, "M"))
+
+    def test_no_or_two_records(self):
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(b"no metadata"), "M")
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(qami_record("Other")), "M")
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(qami_record("M") + qami_record("M")), "M")
+
+    def test_damaged_record(self):
+        rec = bytearray(qami_record("M", ["Util"]))
+        rec[8] += 1  # the payload size
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(rec) + b"\0" * 8), "M")
+
+    def test_spec_name(self):
+        self.assertEqual("xml", qc.module_spec_name("xml >= 1.3"))
+        self.assertEqual("Mod", qc.module_spec_name("Mod"))
+        self.assertEqual("a", qc.module_spec_name("a>1"))
+
+    def test_candidates(self):
+        a, b = self.dir / "a", self.dir / "b"
+        (b / "Opt").mkdir(parents=True)
+        a.mkdir()
+        self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b), str(self.dir / "missing")]))
+        (b / "Opt" / "Opt.qm").write_text("x")
+        (a / "Opt-api-2.0.qmod").write_text("y")
+        (a / "Optional.qm").write_text("z")
+        names = [os.path.relpath(p, self.dir) for p, _ in qc.module_candidates("Opt", [str(a), str(b)])]
+        self.assertEqual(["a/Opt-api-2.0.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
+
+
+class AuditSampleTest(unittest.TestCase):
+    def test_sample(self):
+        keys = ["%064x" % i for i in range(2000)]
+        self.assertFalse(any(qc.audit_selected(k, "") for k in keys))
+        self.assertFalse(any(qc.audit_selected(k, "0") for k in keys))
+        self.assertTrue(all(qc.audit_selected(k, "1") for k in keys))
+        half = sum(qc.audit_selected(k, "0.5:7") for k in keys)
+        self.assertTrue(800 < half < 1200, half)
+        self.assertEqual([qc.audit_selected(k, "0.1:3") for k in keys], [qc.audit_selected(k, "0.1:3") for k in keys])
+        self.assertNotEqual([qc.audit_selected(k, "0.1:3") for k in keys],
+                            [qc.audit_selected(k, "0.1:4") for k in keys])
+        with self.assertRaises(qc.CacheError):
+            qc.audit_selected(keys[0], "often")
+
+
+class KeyTest(unittest.TestCase):
+    """Each input of a key changes it; nothing else does"""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        self.dir = Path(d.name)
+        self.single = self.dir / "qlib" / "Single.qm"
+        self.single.parent.mkdir()
+        self.single.write_text("%modern\nmodule Single {}\n")
+        self.split = self.dir / "qlib" / "Split"
+        self.split.mkdir()
+        (self.split / "Split.qm").write_text("module Split {}\n")
+        (self.split / "A.qc").write_text("class A {}\n")
+        self.extra = self.dir / "extra.qc"
+        self.extra.write_text("x")
+
+    def key(self, root=None, context="c" * 64, argv=None, cwd="/b", env=None, extra=None):
+        return qc.base_key(context, argv or ["qcc", "-m", str(root or self.single), "-o", "/b/Single.qmod"], cwd,
+                           {"QORE_MODULE_DIR": "/m"} if env is None else env, str(root or self.single),
+                           [str(self.extra)] if extra is None else extra)
+
+    def test_base_key_inputs(self):
+        k = self.key()
+        self.assertEqual(k, self.key())
+        self.assertNotEqual(k, self.key(context="d" * 64))
+        self.assertNotEqual(k, self.key(argv=["qcc", "-O2", "-m", str(self.single), "-o", "/b/Single.qmod"]))
+        self.assertNotEqual(k, self.key(cwd="/other"))
+        self.assertNotEqual(k, self.key(env={"QORE_MODULE_DIR": "/n"}))
+        self.assertNotEqual(k, self.key(env={"QORE_MODULE_DIR": "/m", "QORE_AOT_OPT_LEVEL": "1"}))
+        self.assertNotEqual(k, self.key(env={"QORE_MODULE_DIR": "/m", "TZ": "UTC"}))
+        self.assertNotEqual(k, self.key(extra=[]))
+        # neither another environment variable nor a cache setting is an input
+        self.assertEqual(k, self.key(env={"QORE_MODULE_DIR": "/m", "HOME": "/x", "QORE_QMOD_CACHE_AUDIT": "1",
+                                          "QORE_TEST_OPTS": "-x", "QORE_DB_CONNSTR_PGSQL": "p"}))
+        self.single.write_text("%modern\nmodule Single { # changed\n}\n")
+        self.assertNotEqual(k, self.key())
+        k = self.key()
+        self.extra.write_text("y")
+        self.assertNotEqual(k, self.key())
+
+    def test_split_module_sources(self):
+        k = self.key(root=self.split)
+        (self.split / "A.qc").write_text("class A { int x; }\n")
+        k2 = self.key(root=self.split)
+        self.assertNotEqual(k, k2)
+        (self.split / "B.qc").write_text("class B {}\n")
+        k3 = self.key(root=self.split)
+        self.assertNotEqual(k2, k3)
+        (self.split / "schema.yaml").write_text("a: 1\n")
+        k4 = self.key(root=self.split)
+        self.assertNotEqual(k3, k4)
+        # a qmod linked into the module directory is the build's output, not an input
+        (self.split / "Split.qmod").symlink_to(self.dir / "nowhere.qmod")
+        (self.split / "Split.qmod.d").write_text("x")
+        self.assertEqual(k4, self.key(root=self.split))
+
+    def test_result_key_inputs(self):
+        deps = [{"path": "/s/M.qm", "kind": "own", "sha256": "a"},
+                {"path": "/s/U.qm", "kind": "module", "sha256": "b", "module_root": "/s/U.qm", "module_key": "k"}]
+        opt = [{"spec": "xml", "name": "xml", "candidates": []}]
+        k = qc.result_key("base", deps, opt)
+        self.assertEqual(k, qc.result_key("base", json.loads(json.dumps(deps)), opt))
+        self.assertNotEqual(k, qc.result_key("other", deps, opt))
+        changed = json.loads(json.dumps(deps))
+        changed[1]["module_key"] = "k2"
+        self.assertNotEqual(k, qc.result_key("base", changed, opt))
+        changed = json.loads(json.dumps(deps))
+        changed[0]["sha256"] = "c"
+        self.assertNotEqual(k, qc.result_key("base", changed, opt))
+        self.assertNotEqual(k, qc.result_key("base", deps[:1], opt))
+        self.assertNotEqual(k, qc.result_key("base", deps, []))
+        self.assertNotEqual(k, qc.result_key("base", deps, [{"spec": "xml", "name": "xml",
+                                                             "candidates": [["/m/xml-api-2.0.qmod", "d"]]}]))
+
+
+FAKE_QCC_VERSION = r'''import sys
+from pathlib import Path
+print("qcc (Qore Code Compiler) v1.0")
+print("Using Qore library v3.0.0")
+print("AOT runtime identity: " + (Path(__file__).parent / "identity.txt").read_text().strip())
+'''
+
+
+class ContextTest(unittest.TestCase):
+    """Each input of the build context changes its digest"""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        self.src, self.build = root / "src", root / "build"
+        for p, text in (("lib/QoreLib.cpp", "int x;\n"), ("lib/parser.ypp", "%%\n"), ("include/qore/Qore.h", "//\n"),
+                        ("qcc-main.cpp", "int main() {}\n"), ("CMakeLists.txt", "project(x)\n"),
+                        ("cmake/third-party-sources.cmake", "set(a 1)\n")):
+            (self.src / p).parent.mkdir(parents=True, exist_ok=True)
+            (self.src / p).write_text(text)
+        for p, text in (("include/qore/intern/unix-config.h", "#define A 1\n"),
+                        ("include/qore/intern/git-revision.h", '#define BUILD "1"\n'),
+                        ("CMakeFiles/libqore.dir/flags.make", "CXX_FLAGS = -O2\n"),
+                        ("CMakeFiles/qcc.dir/link.txt", "c++ -o qcc\n"),
+                        ("CMakeCache.txt", "CMAKE_BUILD_TYPE:STRING=release\nQORE_X:BOOL=ON\n"
+                                           "QORE_QMOD_CACHE_DIR:PATH=/c\nOTHER:STRING=1\nQORE_I:INTERNAL=1\n"),
+                        ("qcc-format.stamp", "format=1\n"), ("aot-link.conf", "cxx=c++\n"),
+                        ("identity.txt", "a" * 64 + "\n"), ("qcc.py", FAKE_QCC_VERSION)):
+            (self.build / p).parent.mkdir(parents=True, exist_ok=True)
+            (self.build / p).write_text(text)
+        self.qcc = self.build / "qcc"
+        self.qcc.write_text('#!/bin/sh\nexec "%s" "%s" "$@"\n' % (sys.executable, self.build / "qcc.py"))
+        self.qcc.chmod(0o755)
+
+    def digest(self):
+        return qc.compute_context(str(self.src), str(self.build), str(self.qcc),
+                                  [str(self.build / "qcc-format.stamp"), str(self.build / "aot-link.conf")])["digest"]
+
+    def check_changes(self, path, text):
+        before = self.digest()
+        old = path.read_text()
+        path.write_text(text)
+        after = self.digest()
+        path.write_text(old)
+        return before != after
+
+    def test_inputs(self):
+        k = self.digest()
+        self.assertEqual(k, self.digest())
+        for rel, text in (("lib/QoreLib.cpp", "int y;\n"), ("lib/parser.ypp", "%% x\n"),
+                          ("include/qore/Qore.h", "// x\n"), ("qcc-main.cpp", "int main() { return 1; }\n"),
+                          ("CMakeLists.txt", "project(y)\n"), ("cmake/third-party-sources.cmake", "set(a 2)\n")):
+            self.assertTrue(self.check_changes(self.src / rel, text), rel)
+        for rel, text in (("include/qore/intern/unix-config.h", "#define A 2\n"),
+                          ("CMakeFiles/libqore.dir/flags.make", "CXX_FLAGS = -O3\n"),
+                          ("CMakeFiles/qcc.dir/link.txt", "c++ -o qcc -lx\n"),
+                          ("CMakeCache.txt", "CMAKE_BUILD_TYPE:STRING=debug\nQORE_X:BOOL=ON\n"),
+                          ("CMakeCache.txt", "CMAKE_BUILD_TYPE:STRING=release\nQORE_X:BOOL=OFF\n"),
+                          ("qcc-format.stamp", "format=2\n"), ("aot-link.conf", "cxx=clang++\n"),
+                          ("identity.txt", "b" * 64 + "\n")):
+            self.assertTrue(self.check_changes(self.build / rel, text), rel)
+        # a new libqore source
+        (self.src / "lib" / "New.cpp").write_text("\n")
+        self.assertNotEqual(k, self.digest())
+        (self.src / "lib" / "New.cpp").unlink()
+        self.assertEqual(k, self.digest())
+
+    def test_not_inputs(self):
+        k = self.digest()
+        for rel, text in (("include/qore/intern/git-revision.h", '#define BUILD "2"\n'),
+                          ("CMakeCache.txt", "CMAKE_BUILD_TYPE:STRING=release\nQORE_X:BOOL=ON\n"
+                                             "QORE_QMOD_CACHE_DIR:PATH=/d\nOTHER:STRING=2\nQORE_I:INTERNAL=2\n")):
+            self.assertFalse(self.check_changes(self.build / rel, text), rel)
+        (self.src / "lib" / ".#QoreLib.cpp").write_text("editor lock\n")
+        self.assertEqual(k, self.digest())
+
+    def test_no_identity(self):
+        (self.build / "identity.txt").write_text("none\n")
+        with self.assertRaises(qc.CacheError):
+            self.digest()
+
+
+# A stand-in for qcc: "--version" prints the identity in identity.txt; "-m <module> -o <out> --depfile=<d>" writes
+# <out> (the identity, an AOT module metadata record and a digest of the module's sources), the depfile (the module's
+# own sources and those of the modules it %requires, as qcc lists them: direct dependencies only) and the source
+# fingerprints, and logs the module's name in compiles.log.  A "%try-module <name>" whose module is not in a
+# directory of QORE_MODULE_DIR is recorded as unavailable.  With nondeterministic.txt present, every module differs.
+FAKE_QCC = r'''import hashlib, os, re, struct, sys, time
+from pathlib import Path
+here = Path(__file__).parent
+args = sys.argv[1:]
+if "--version" in args:
+    print("AOT runtime identity: " + (here / "identity.txt").read_text().strip())
+    sys.exit(0)
+out = Path(args[args.index("-o") + 1])
+depfile = Path(next(a for a in args if a.startswith("--depfile=")).split("=", 1)[1])
+src = Path(args[args.index("-m") + 1])
+qlib = here / "qlib"
+def sources(p):
+    return sorted(p.glob("*.q[mc]")) if p.is_dir() else [p]
+def module_path(name):
+    for d in [qlib] + [Path(x) for x in os.environ.get("QORE_MODULE_DIR", "").split(":") if x]:
+        for p in (d / (name + ".qm"), d / name):
+            if p.exists():
+                return p
+    return None
+own = sources(src)
+text = "".join(p.read_text() for p in own)
+deps, optional = [], []
+for kind, name in re.findall(r"^%(requires|try-module) (\w+)", text, re.M):
+    p = module_path(name)
+    if p is None:
+        if kind == "requires":
+            sys.exit("module %s not found" % name)
+        optional.append(name)
+    else:
+        deps += sources(p)
+all_deps = own + deps
+lines = ["# qore AOT module source fingerprints 1"]
+for p in all_deps:
+    st = p.stat()
+    lines.append("%d %d %016x %s" % (st.st_size, st.st_mtime_ns, 0, p))
+def s(v):
+    b = v.encode()
+    return struct.pack("<I", len(b)) + b
+payload = s(out.stem) + struct.pack("<I", 0) + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
+digest = hashlib.sha256((text + "".join(p.read_text() for p in deps)).encode()).hexdigest()
+noise = str(time.time()) if (here / "nondeterministic.txt").exists() else ""
+tmp = out.with_name(out.name + ".tmp")
+tmp.write_bytes(b"FAKEQMOD " + (here / "identity.txt").read_text().strip().encode() + b" " + digest.encode()
+                + noise.encode() + b"\n" + b"QAMI" + struct.pack("<II", 1, len(payload)) + payload)
+tmp.replace(out)
+depfile.write_text("%s: \\\n    %s\n" % (out, " \\\n    ".join(str(p) for p in all_deps)))
+Path(str(out) + ".d.fingerprints").write_text("\n".join(lines) + "\n")
+# a source that is written after qcc read it
+if (here / "slow.txt").exists():
+    time.sleep(0.05)
+    for p in own:
+        p.write_text(p.read_text() + "#\n")
+with open(here / "compiles.log", "a") as log:
+    log.write(out.stem + "\n")
+'''
+
+
+class CacheBuildTest(unittest.TestCase):
+    """The cache in a CMake build of four modules with a stand-in for qcc: Base; Mid, which requires Base; Top, a
+    module directory that requires Mid; and Other, which tries to load Opt"""
+
+    def setUp(self):
+        if not shutil.which(CMAKE):
+            self.skipTest("CMake is required")
+        if not shutil.which("make") and not shutil.which("gmake"):
+            self.skipTest("make is required for the Makefile generator")
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
+        self.addCleanup(d.cleanup)
+        self.root = Path(d.name)
+        self.source, self.build, self.cache = self.root / "source", self.root / "build", self.root / "cache"
+        self.extra_dir = self.root / "extra-modules"
+        self.extra_dir.mkdir()
+        q = self.source / "qlib"
+        (q / "Top").mkdir(parents=True)
+        (q / "Base.qm").write_text("module Base {}\n")
+        (q / "Mid.qm").write_text("%requires Base\nmodule Mid {}\n")
+        (q / "Top" / "Top.qm").write_text("%requires Mid\nmodule Top {}\n")
+        (q / "Top" / "Part.qc").write_text("class Part {}\n")
+        (q / "Other.qm").write_text("%try-module Opt\nmodule Other {}\n")
+        (self.source / "qcc.py").write_text(FAKE_QCC)
+        (self.source / "identity.txt").write_text("1" * 64 + "\n")
+        qcc = self.source / "qcc"
+        qcc.write_text('#!/bin/sh\nexec "%s" "%s" "$@"\n' % (sys.executable, self.source / "qcc.py"))
+        qcc.chmod(0o755)
+        (self.source / "qcc-format.stamp").write_text("format\n")
+        (self.source / "CMakeLists.txt").write_text('''cmake_minimum_required(VERSION 3.14...3.31)
+project(QmodCache NONE)
+include("{root}/cmake/QoreMacros.cmake")
+set(QORE_BUILD_AOT_MODULES ON)
+set(QORE_QCC_EXECUTABLE "{qcc}")
+set(QCC_FORMAT_STAMP "${{CMAKE_SOURCE_DIR}}/qcc-format.stamp")
+set(QORE_AOT_LINK_SOURCE_MODULES OFF)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+set(QORE_USER_MODULES_DIR share/qore-modules)
+set(QORE_QMOD_CACHE_TOOL "{tool}")
+set(QORE_QM_METADATA_ENV "QORE_MODULE_DIR={extra}")
+foreach(target qore docs docs-lang docs-lib)
+    add_custom_target(${{target}})
+endforeach()
+QORE_QMOD_CACHE_SETUP("{extra}")
+qore_user_module("qlib/Base.qm")
+qore_user_module("qlib/Mid.qm")
+qore_user_module("qlib/Top")
+qore_user_module("qlib/Other.qm")
+QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
+'''.format(root=ROOT.as_posix(), qcc=qcc.as_posix(), tool=TOOL.as_posix(), extra=self.extra_dir.as_posix()))
+
+    def qmod(self, name):
+        return self.build / "qlib-qmod" / (name + ".qmod" if name != "Top" else "Top/Top.qmod")
+
+    def compiles(self):
+        log = self.source / "compiles.log"
+        return log.read_text().splitlines() if log.exists() else []
+
+    def build_all(self, fresh=True, env=None, expect_rc=0):
+        """Builds every module (in a new build tree with @p fresh) and returns the modules qcc compiled"""
+        if fresh:
+            shutil.rmtree(self.build, ignore_errors=True)
+            res = subprocess.run([CMAKE, "-G", "Unix Makefiles", "-S", str(self.source), "-B", str(self.build),
+                                  "-DQORE_QMOD_CACHE_DIR=%s" % self.cache, "-DPython3_EXECUTABLE=%s" % sys.executable],
+                                 capture_output=True, text=True, timeout=120)
+            self.assertEqual(0, res.returncode, res.stdout + res.stderr)
+        before = len(self.compiles())
+        full_env = dict(os.environ)
+        for name in [n for n in full_env if n.startswith("QORE_QMOD_CACHE_")]:
+            del full_env[name]
+        full_env.update(env or {})
+        res = subprocess.run([CMAKE, "--build", str(self.build)], capture_output=True, text=True, timeout=300,
+                             env=full_env)
+        self.output = res.stdout + res.stderr
+        if expect_rc is None:
+            self.assertNotEqual(0, res.returncode, self.output)
+        else:
+            self.assertEqual(expect_rc, res.returncode, self.output)
+        return sorted(self.compiles()[before:])
+
+    def origins(self):
+        rv = {}
+        for name in ("Base", "Mid", "Top", "Other"):
+            with open(str(self.qmod(name)) + qc.SIDECAR_SUFFIX) as f:
+                rv[name] = json.load(f)["origin"]
+        return rv
+
+    def snapshot(self):
+        rv = {}
+        for name in ("Base", "Mid", "Top", "Other"):
+            for suffix in qc.STORED_SUFFIXES:
+                rv[name + suffix] = Path(str(self.qmod(name)) + suffix).read_bytes()
+        return rv
+
+    def verify(self):
+        return subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build), "--qcc",
+                               str(self.source / "qcc"), "--require-sidecars"], capture_output=True, text=True,
+                              timeout=60)
+
+    def entries(self):
+        return sorted((self.cache / qc.SCHEMA / "entries").glob("*/*.json"))
+
+    def test_cold_warm_and_changed(self):
+        all_modules = ["Base", "Mid", "Other", "Top"]
+        self.assertEqual(all_modules, self.build_all())
+        self.assertEqual({"Base": "miss", "Mid": "miss", "Top": "miss", "Other": "miss"}, self.origins())
+        self.assertEqual(4, len(self.entries()))
+        cold = self.snapshot()
+        self.assertEqual(0, self.verify().returncode)
+
+        # a new build tree: every module comes from the cache, with the same files
+        self.assertEqual([], self.build_all())
+        self.assertEqual({"Base": "hit", "Mid": "hit", "Top": "hit", "Other": "hit"}, self.origins())
+        self.assertEqual(cold, self.snapshot())
+        res = self.verify()
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertIn("4 supplied by the cache", res.stderr)
+        # the build tree is current: nothing runs
+        self.assertEqual([], self.build_all(fresh=False))
+
+        # a change to Mid compiles Mid and Top, which requires it, and nothing else
+        mid = self.source / "qlib" / "Mid.qm"
+        mid.write_text(mid.read_text() + "# changed\n")
+        self.assertEqual(["Mid", "Top"], self.build_all())
+        self.assertEqual({"Base": "hit", "Mid": "miss", "Top": "miss", "Other": "hit"}, self.origins())
+        # the same in an incremental build of the tree
+        mid.write_text(mid.read_text() + "# again\n")
+        self.assertEqual(["Mid", "Top"], self.build_all(fresh=False))
+
+        # Base changes: Top requires Base only through Mid, and is compiled again too
+        base = self.source / "qlib" / "Base.qm"
+        base.write_text(base.read_text() + "# changed\n")
+        self.assertEqual(["Base", "Mid", "Top"], self.build_all())
+        self.assertEqual({"Base": "miss", "Mid": "miss", "Top": "miss", "Other": "hit"}, self.origins())
+
+        # a source file of the module directory
+        (self.source / "qlib" / "Top" / "Part.qc").write_text("class Part { int x; }\n")
+        self.assertEqual(["Top"], self.build_all())
+        # a new file in the module directory
+        (self.source / "qlib" / "Top" / "New.qc").write_text("class New {}\n")
+        self.assertEqual(["Top"], self.build_all())
+
+        # the earlier sources again: the entries stored for them are used
+        base.write_text("module Base {}\n")
+        mid.write_text("%requires Base\nmodule Mid {}\n")
+        (self.source / "qlib" / "Top" / "Part.qc").write_text("class Part {}\n")
+        (self.source / "qlib" / "Top" / "New.qc").unlink()
+        self.assertEqual([], self.build_all())
+        self.assertEqual(cold, self.snapshot())
+
+        # another AOT runtime identity changes the build context: every module is compiled
+        (self.source / "identity.txt").write_text("2" * 64 + "\n")
+        self.assertEqual(all_modules, self.build_all())
+
+    def test_damaged_entry_is_a_miss(self):
+        self.build_all()
+        stored = self.cache / qc.SCHEMA / "objects"
+        for obj in stored.iterdir():
+            qmod = obj / "qmod"
+            qmod.write_bytes(qmod.read_bytes() + b"x")
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        self.assertIn("damaged", self.output)
+        # the damaged entries were replaced
+        self.assertEqual([], self.build_all())
+
+    def test_optional_module_becomes_available(self):
+        self.build_all()
+        self.assertEqual([], self.build_all())
+        # the module Other tried to load is available now: Other is compiled again; its new dependency is a module
+        # source from outside the build, whose own dependencies are unknown, so it is not stored
+        (self.extra_dir / "Opt.qm").write_text("module Opt {}\n")
+        self.assertEqual(["Other"], self.build_all())
+        self.assertEqual("uncacheable", self.origins()["Other"])
+        self.assertEqual(["Other"], self.build_all())
+        (self.extra_dir / "Opt.qm").unlink()
+        self.assertEqual([], self.build_all())
+
+    def test_source_changed_during_compile_is_not_stored(self):
+        (self.source / "slow.txt").write_text("1")
+        self.build_all()
+        self.assertEqual(0, len(self.entries()))
+        self.assertIn("changed while the module was compiled", self.output)
+        (self.source / "slow.txt").unlink()
+
+    def test_verify_finds_changed_modules(self):
+        self.build_all()
+        self.build_all()
+        self.assertEqual(0, self.verify().returncode)
+        # a supplied module that was replaced afterwards
+        qmod = self.qmod("Mid")
+        data = qmod.read_bytes()
+        qmod.write_bytes(data.replace(b"FAKEQMOD", b"OTHERMOD"))
+        res = self.verify()
+        self.assertEqual(1, res.returncode)
+        self.assertIn("not the module the cache supplied", res.stderr)
+        qmod.write_bytes(data)
+        # a module without the build's identity
+        qmod.write_bytes(data.replace(b"1" * 64, b"3" * 64))
+        res = self.verify()
+        self.assertEqual(1, res.returncode)
+        self.assertIn("AOT runtime identity", res.stderr)
+        qmod.write_bytes(data)
+        # a dependency changed after the module was supplied
+        base = self.source / "qlib" / "Base.qm"
+        base.write_text(base.read_text() + "#\n")
+        res = self.verify()
+        self.assertEqual(1, res.returncode)
+        self.assertIn("has changed since the module was supplied", res.stderr)
+        base.write_text(base.read_text()[:-2])
+        self.assertEqual(0, self.verify().returncode)
+        # qcc reports another identity than the one the modules were built for
+        (self.source / "identity.txt").write_text("4" * 64 + "\n")
+        res = self.verify()
+        self.assertEqual(1, res.returncode)
+        self.assertIn("identities of the build differ", res.stderr)
+
+    def test_audit(self):
+        self.build_all()
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "1"}))
+        self.assertEqual(4, self.output.count("audited: qcc wrote the same module"))
+        self.assertEqual({"Base": "hit", "Mid": "hit", "Top": "hit", "Other": "hit"}, self.origins())
+        # qcc writes another module: the audit fails the build
+        (self.source / "nondeterministic.txt").write_text("1")
+        self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "1"}, expect_rc=None)
+        self.assertIn("AUDIT FAILED", self.output)
+        # a sample of none audits nothing
+        self.assertEqual([], self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "0"}))
+
+    def test_disabled_and_readonly(self):
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env={"QORE_QMOD_CACHE_READONLY": "1"}))
+        self.assertEqual(0, len(self.entries()))
+        self.build_all()
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all(env={"QORE_QMOD_CACHE_DISABLE": "1"}))
+
+    def test_prune(self):
+        self.build_all()
+        mid = self.source / "qlib" / "Mid.qm"
+        mid.write_text(mid.read_text() + "# changed\n")
+        self.build_all()
+        self.assertEqual(6, len(self.entries()))
+        res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--keep-build",
+                              str(self.build)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertEqual(4, len(self.entries()))
+        self.assertEqual(4, len(list((self.cache / qc.SCHEMA / "objects").iterdir())))
+        self.assertEqual([], self.build_all())
+        res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--max-size", "0"],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertEqual(0, len(self.entries()))
+
+
+def find_build_dir():
+    d = os.environ.get("QORE_TEST_BUILD_DIR")
+    if d and (Path(d) / "qcc").is_file() and (Path(d) / "qore").is_file():
+        return Path(d)
+    return None
+
+
+class RealQccTest(unittest.TestCase):
+    """The cache with the qcc and qore of a build tree: three modules compiled for real"""
+
+    def setUp(self):
+        self.qore_build = find_build_dir()
+        if not self.qore_build:
+            self.skipTest("QORE_TEST_BUILD_DIR must name a Qore build tree with qcc and qore")
+        if not shutil.which(CMAKE):
+            self.skipTest("CMake is required")
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-real-")
+        self.addCleanup(d.cleanup)
+        self.root = Path(d.name)
+        self.source, self.build, self.cache = self.root / "source", self.root / "build", self.root / "cache"
+        q = self.source / "qlib"
+        q.mkdir(parents=True)
+        (q / "CacheBase.qm").write_text('''%modern
+module CacheBase {
+    version = "1.0";
+    desc = "qmod cache test";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+public namespace CacheBase {
+    public class Value {
+        public { int v = 1; }
+    }
+    public int base_value() { return 1; }
+}
+''')
+        (q / "CacheMid.qm").write_text('''%modern
+%requires CacheBase
+module CacheMid {
+    version = "1.0";
+    desc = "qmod cache test";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+public namespace CacheMid {
+    public int mid_value() { return CacheBase::base_value() + 1; }
+}
+''')
+        (q / "CacheOther.qm").write_text('''%modern
+module CacheOther {
+    version = "1.0";
+    desc = "qmod cache test";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+public namespace CacheOther {
+    public string other_value() { return "other"; }
+}
+''')
+        b = self.qore_build
+        libpath = "LD_LIBRARY_PATH=%s" % b if sys.platform != "darwin" else "DYLD_LIBRARY_PATH=%s" % b
+        (self.source / "CMakeLists.txt").write_text('''cmake_minimum_required(VERSION 3.14...3.31)
+project(QmodCacheReal NONE)
+include("{root}/cmake/QoreMacros.cmake")
+set(QORE_BUILD_AOT_MODULES ON)
+set(QORE_QCC_EXECUTABLE "{b}/qcc")
+set(QCC_FORMAT_STAMP "{b}/qcc-format.stamp")
+set(QORE_AOT_LINK_SOURCE_MODULES OFF)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+set(QORE_USER_MODULES_DIR share/qore-modules)
+set(QORE_QMOD_CACHE_TOOL "{tool}")
+set(QORE_QM_METADATA_ENV "QORE_MODULE_DIR=${{CMAKE_SOURCE_DIR}}/qlib:${{CMAKE_BINARY_DIR}}/qlib-qmod"
+    "QORE_MODULE_DIR_ONLY=1" "QORE_INCLUDE_DIR=" "{libpath}")
+foreach(target qore docs docs-lang docs-lib)
+    add_custom_target(${{target}})
+endforeach()
+QORE_QMOD_CACHE_SETUP()
+qore_user_module("qlib/CacheBase.qm")
+qore_user_module("qlib/CacheMid.qm")
+qore_user_module("qlib/CacheOther.qm")
+QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
+'''.format(root=ROOT.as_posix(), b=b.as_posix(), tool=TOOL.as_posix(), libpath=libpath))
+
+    def build_all(self, env=None):
+        shutil.rmtree(self.build, ignore_errors=True)
+        res = subprocess.run([CMAKE, "-S", str(self.source), "-B", str(self.build),
+                              "-DQORE_QMOD_CACHE_DIR=%s" % self.cache, "-DPython3_EXECUTABLE=%s" % sys.executable],
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, res.returncode, res.stdout + res.stderr)
+        full_env = dict(os.environ)
+        for name in [n for n in full_env if n.startswith("QORE_QMOD_CACHE_")]:
+            del full_env[name]
+        full_env.update(env or {})
+        res = subprocess.run([CMAKE, "--build", str(self.build)], capture_output=True, text=True, timeout=600,
+                             env=full_env)
+        self.output = res.stdout + res.stderr
+        self.assertEqual(0, res.returncode, self.output)
+        rv = {}
+        for name in ("CacheBase", "CacheMid", "CacheOther"):
+            with open(str(self.build / "qlib-qmod" / (name + ".qmod")) + qc.SIDECAR_SUFFIX) as f:
+                rv[name] = json.load(f)["origin"]
+        return rv
+
+    def qmods(self):
+        return {n: (self.build / "qlib-qmod" / (n + ".qmod")).read_bytes()
+                for n in ("CacheBase", "CacheMid", "CacheOther")}
+
+    def load(self, name, expr):
+        """Loads a module with the build's qore from the build tree's qlib-qmod, as the in-tree tests do"""
+        env = dict(os.environ)
+        env["QORE_MODULE_DIR"] = "%s:%s" % (self.build / "qlib-qmod", self.source / "qlib")
+        env["QORE_MODULE_DIR_ONLY"] = "1"
+        env["LD_LIBRARY_PATH" if sys.platform != "darwin" else "DYLD_LIBRARY_PATH"] = str(self.qore_build)
+        return subprocess.run([str(self.qore_build / "qore"), "-l", name, "-X", expr], capture_output=True,
+                              text=True, timeout=120, env=env)
+
+    def test_real_modules(self):
+        miss = {"CacheBase": "miss", "CacheMid": "miss", "CacheOther": "miss"}
+        hit = {"CacheBase": "hit", "CacheMid": "hit", "CacheOther": "hit"}
+        self.assertEqual(miss, self.build_all())
+        cold = self.qmods()
+        self.assertEqual(hit, self.build_all())
+        # byte for byte what qcc wrote
+        self.assertEqual(cold, self.qmods())
+        res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(self.build)],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, res.returncode, res.stderr)
+        # the module loader uses the supplied modules: they are not out of date with their sources
+        res = self.load("CacheMid", "CacheMid::mid_value()")
+        self.assertEqual(0, res.returncode, res.stdout + res.stderr)
+        self.assertEqual("2", res.stdout.strip())
+        self.assertNotIn("out of date", res.stderr)
+        self.assertEqual("", res.stderr.strip())
+        # qcc writes the same module again
+        self.assertEqual(hit, self.build_all(env={"QORE_QMOD_CACHE_AUDIT": "1"}))
+        self.assertEqual(3, self.output.count("audited: qcc wrote the same module"))
+
+        # a change to CacheBase compiles it and CacheMid, which requires it
+        base = self.source / "qlib" / "CacheBase.qm"
+        base.write_text(base.read_text().replace("return 1;", "return 10;"))
+        self.assertEqual({"CacheBase": "miss", "CacheMid": "miss", "CacheOther": "hit"}, self.build_all())
+        res = self.load("CacheMid", "CacheMid::mid_value()")
+        self.assertEqual(0, res.returncode, res.stdout + res.stderr)
+        self.assertEqual("11", res.stdout.strip())
+        self.assertNotIn("out of date", res.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

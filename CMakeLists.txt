@@ -3637,6 +3637,15 @@ unset(_qore_aot_probe_modules)
 unset(_qore_aot_probe_content)
 unset(_qore_exe)
 
+# The qmod build cache (design/qmod-build-cache.md): with QORE_QMOD_CACHE_DIR set, every qmod of this tree is looked up
+# in a content-addressed cache in that directory before qcc compiles it, and what qcc writes is stored there; the
+# loader's standard module directories are where an optional module that was unavailable could appear.  Empty (the
+# default): no cache, and the qmod rules are unchanged.
+set(QORE_QMOD_CACHE_DIR "" CACHE PATH "Directory of the qmod build cache (empty: no cache)")
+if (QORE_BUILD_AOT_MODULES)
+    QORE_QMOD_CACHE_SETUP(${MODULE_VER_DIR} ${USER_MODULE_VER_DIR} ${MODULE_DIR} ${USER_MODULE_DIR})
+endif()
+
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm")
 qore_user_module("qlib/DebugUtil.qm")
