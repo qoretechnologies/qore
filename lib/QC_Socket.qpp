@@ -2013,6 +2013,10 @@ hashdecl Qore::SocketPollInfo {
         main pollable object.  When any extra fd becomes ready, the operation's continuePoll() is called.  Used for
         InputStream and OutputStream fds during streaming operations.
 
+        A regular file is always ready; the I/O controller does not wait for one in \c extra_fds, as it would run the
+        operation at once every time it waits: the operation uses the file when it runs for its main object or another
+        descriptor.  @ref Qore::Socket::poll() "Socket::poll()" reports one ready at once.
+
         @since %Qore 3.0
     */
     *list<hash<ExtraPollFdInfo>> extra_fds;

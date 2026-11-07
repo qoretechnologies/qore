@@ -47,6 +47,7 @@
 #include <openssl/ssl.h>
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #include <atomic>
 #include <cassert>
@@ -1245,11 +1246,18 @@ public:
         bool is_pollable = false;
         bool need_reassign = true;
         bool eof = false;
+        //! A regular file, which is always ready: it is not waited for (see getExtraFds()), as in Http2Session
+        bool is_regular_file = false;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
             : input_stream(is), stream_fd(is->supportsNonBlockingIo() ? is->getPollableDescriptor() : -1),
-              is_pollable(stream_fd >= 0) {}
+              is_pollable(stream_fd >= 0) {
+            if (is_pollable) {
+                struct stat st;
+                is_regular_file = !fstat(stream_fd, &st) && S_ISREG(st.st_mode);
+            }
+        }
     };
 
     //! Store an InputStream for a stream (I/O thread will read from it)

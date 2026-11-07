@@ -5926,7 +5926,9 @@ void QuicSession::cleanupStreamInputStreams(ExceptionSink* xsink) {
 void QuicSession::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [stream_id, info] : stream_input_streams_) {
-        if (!info.eof && info.is_pollable && info.stream_fd >= 0) {
+        // a regular file is always ready, so waiting for it would wake the operation at once while the stream cannot
+        // send; it is read when the operation runs, as a stream that is not pollable (see processStreamInputStreams())
+        if (!info.eof && info.is_pollable && info.stream_fd >= 0 && !info.is_regular_file) {
             extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
         }
     }

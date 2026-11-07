@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class EventLoopRegularFileTest
+
+#! An EventLoop reports a regular file ready once when it is added, and a closed file once with an error
+/** The system cannot wait for a regular file, which poll(2) reports always ready.  The loop reported one at every poll,
+    so a loop that polled with a regular file in it never waited, and a closed file was reported with an error at every
+    poll, also after its number had been given to another file.
+*/
+class EventLoopRegularFileTest inherits QUnit::Test {
+    constructor() : QUnit::Test("EventLoopRegularFile", "1.0") {
+        addTestCase("a regular file is reported once when it is added", \readyTest());
+        addTestCase("a closed file is reported once with an error", \closedTest());
+        addTestCase("a file whose number has another file is reported once with an error", \reusedTest());
+        set_return_value(main());
+    }
+
+    readyTest() {
+        TmpFile tmp("qore-EventLoop-");
+        tmp.file.write("data");
+        EventLoop loop();
+        loop.add(tmp.file, SOCK_POLLIN | SOCK_POLLOUT);
+        *list<hash<EventPollInfo>> ev = loop.poll(0);
+        assertEq(1, ev.size(), "the file is reported when it is added");
+        assertEq(SOCK_POLLIN | SOCK_POLLOUT, ev[0].events, "for its events, at its end too");
+        assertTrue(ev[0].socket == tmp.file, "with its object");
+        assertNothing(loop.poll(0), "it is not reported again by itself");
+        # a poll with a timeout waits: the file does not make it return at once
+        assertNothing(loop.poll(1ms), "a poll with a timeout times out");
+        loop.del(tmp.file);
+        loop.add(tmp.file, SOCK_POLLIN);
+        ev = loop.poll(0);
+        assertEq(1, ev.size(), "the file is reported again when it is added again");
+        assertEq(SOCK_POLLIN, ev[0].events, "for its new events");
+        loop.del(tmp.file);
+        assertNothing(loop.poll(0), "a removed file is not reported");
+    }
+
+    closedTest() {
+        TmpFile tmp("qore-EventLoop-");
+        EventLoop loop();
+        ReadOnlyFile f(tmp.path);
+        loop.add(f, SOCK_POLLIN);
+        f.close();
+        *list<hash<EventPollInfo>> ev = loop.poll(0);
+        assertEq(1, ev.size(), "the closed file is reported");
+        assertEq(SOCK_POLLERR, ev[0].events & SOCK_POLLERR, "with an error");
+        assertNothing(loop.poll(0), "it is not reported again");
+    }
+
+    reusedTest() {
+        TmpFile tmp("qore-EventLoop-");
+        TmpFile other("qore-EventLoop-other-");
+        EventLoop loop();
+        ReadOnlyFile f(tmp.path);
+        int fd = f.getPollableDescriptor();
+        loop.add(f, SOCK_POLLIN);
+        f.close();
+        # the lowest free number is given to the next file opened
+        ReadOnlyFile g(other.path);
+        on_exit g.close();
+        if (g.getPollableDescriptor() != fd) {
+            testSkip("the number of the closed file was not given to the next file");
+        }
+        *list<hash<EventPollInfo>> ev = loop.poll(0);
+        assertEq(1, ev.size(), "the file whose number has another file is reported");
+        assertTrue(ev[0].socket == f, "as the registered object");
+        assertEq(SOCK_POLLERR, ev[0].events & SOCK_POLLERR, "with an error");
+        assertNothing(loop.poll(0), "it is not reported again, and the other file is not reported");
+    }
+}

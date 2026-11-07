@@ -8397,6 +8397,13 @@ void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t
                 t.registered_events[sock_hash] = union_events;
                 fd_changed = true;
             }
+            // an operation that waits again for its object, which is a regular file (a File), has consumed its
+            // readiness, for example by reading from it: the file is reported ready again (see
+            // QoreEventLoop::always_ready_count); an extra descriptor is not, as an operation waits for one again
+            // without reading it while it waits for its object
+            if (curr_fd >= 0 && union_events) {
+                t.loop->rearmAlwaysReady(curr_fd);
+            }
             s->deref(xsink);
         }
         if (!fd_changed) {
@@ -8739,6 +8746,16 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
     // set to avoid erasing from new_fds during iteration (undefined behavior with unordered_set)
     std::vector<int> failed_fds;
     for (auto& [fd, ev_flags] : new_fd_events) {
+        if (!prev_fds.count(fd)) {
+            // a regular file is always ready (see QoreEventLoop::always_ready_count): waiting for one would run the
+            // operation at once whenever it waits, also while it cannot use the file (a stream that cannot send);
+            // it is not waited for, and the operation uses it when it runs for its object or its other descriptors
+            struct stat st;
+            if (!fstat(fd, &st) && S_ISREG(st.st_mode)) {
+                failed_fds.push_back(fd);
+                continue;
+            }
+        }
         // an owned descriptor (a connection attempt, a c-ares socket) is held open while it is registered: the hold
         // is taken before the descriptor is registered and released when the registration is removed
         // (removeExtraFdRegistration())
@@ -8751,8 +8768,10 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         t.extra_fd_to_key_events[fd][op_id] = ev_flags;
         t.loop->addRegistration(fd, extraRegKey(op_id), ev_flags, socket, xsink);
         if (*xsink) {
-            // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
-            // The I/O loop still drives streaming via POLLOUT on the socket fd
+            // Non-fatal: the event loop refuses a descriptor that the system cannot wait for and that is not a
+            // regular file (a directory, a character device without polling, or a stale registration whose number
+            // now has such a file); a regular file is always ready (see QoreEventLoop::always_ready_count).  The I/O
+            // loop still drives streaming via POLLOUT on the socket fd
             printd(2, "updateExtraFds() failed to update fd %d in event loop; skipping\n", fd);
             xsink->clear();
             // the operation does not wait for the descriptor: a registration of the operation's that the event loop
