@@ -104,6 +104,27 @@ result = repl.eval("    print('hello');");
 result = repl.eval("}");  # Now complete, executes
     @endcode
 
+    @subsection qorerepl_save Saving and Loading Code
+
+    Use @c /save followed by a filename to export the session's entered Qore code.
+    Missing statement terminators are added using the same rules as evaluation;
+    existing terminators and block definitions are preserved. REPL commands such
+    as @c /vars and @c /save are omitted. The interactive history stays unchanged.
+    Load the exported file with @c /load followed by its filename in a fresh session.
+
+    @code{.py}
+QoreRepl original({"history_file": ""});
+original.eval("our int answer = 40 + 2");
+original.eval("/save session.q");
+QoreRepl restored({"history_file": ""});
+restored.eval("/load session.q");
+*hash<auto> result = restored.eval("answer");  # result.value is 42
+    @endcode
+
+    Saving exports entered code, including unsuccessful evaluations; it is not a
+    serialized program-state snapshot. Loading executes that code again, so external
+    side effects and invalid input retain their ordinary execution semantics.
+
     @subsection qorerepl_websocket WebSocket Server Example
 
     The module includes built-in WebSocket server support. Simply add the handler to an HttpServer:

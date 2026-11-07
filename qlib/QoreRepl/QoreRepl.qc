@@ -1588,7 +1588,8 @@ if (!exists result) {
             foreach string cmd in (history) {
                 # Skip commands starting with / (they're REPL commands, not Qore code)
                 if (cmd !~ /^\//) {
-                    f.write(cmd + "\n");
+                    # Match evaluation: interactive input may omit the statement terminator.
+                    f.write(ensureTerminated(cmd) + "\n");
                 }
             }
             return {"value": sprintf("Session saved to: %s", filename)};
