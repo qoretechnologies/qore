@@ -43,8 +43,6 @@
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/ql_debug.h"
 
-#include <cerrno>
-
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -667,13 +665,23 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
     assert(current_op);
     assert(!send_op);
 
-    // Create the response read first: if it fails, the request send operation is still on current_op and
-    // req_state is still SENDING, so the state machine is left exactly as it was found.
+    // Create the response read first: if it fails (the socket was closed), the error is reported with setError(),
+    // which notifies the pending stream and marks the connection closed.
     sock_obj->ref();
-    SocketPollOperationBase* read_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
-    if (*xsink) {
-        read_op->deref(xsink);
-        return nullptr;
+    SocketPollOperationBase* read_op;
+    {
+        ExceptionSink read_xsink;
+        read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        if (read_xsink) {
+            read_op->deref(&read_xsink);
+            QoreStringValueHelper err_str(read_xsink.getExceptionErr());
+            QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
+            std::string err(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR");
+            std::string desc(*desc_str ? desc_str->c_str() : "the response read could not be started");
+            read_xsink.clear();
+            setError(err.c_str(), desc.c_str(), xsink);
+            return nullptr;
+        }
     }
     read_op->setSelf(*self);
 
@@ -724,6 +732,20 @@ QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsin
         return info.release();
     }
 
+#ifdef DEBUG
+    // tests make the next write of the send side fail after the receive side found nothing on this cycle
+    if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+        bool have_data = send_op != nullptr;
+        if (!have_data && send_state != SendState::ABANDONED) {
+            AutoLocker al(stream_lock);
+            have_data = !send_body_queue.empty();
+        }
+        if (have_data) {
+            hook(QoreDbgHttp1SendEvent::BeforeSendSide, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+        }
+    }
+#endif
+
     // 2) Make progress on the request-body send side.
     int send_events = driveSendSide(xsink);
     if (send_events < 0) {
@@ -754,20 +776,31 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                 const char* err = *err_str ? err_str->c_str() : "HTTP1-SEND-ERROR";
                 const char* desc = *desc_str ? desc_str->c_str() : "streaming request-body send failed";
 
-                // The peer closed or reset the connection while the rest of a buffered request was going out.  It
-                // read the header block, so it may have answered the request before it stopped reading, and the
-                // answer can be in the receive buffer although the receive side found nothing on this cycle: it
-                // ran first, and the response and the reset arrived after it.  The connection is gone, so the
-                // read on the next cycle returns at once: the response, or EOF, in which case the send error is
-                // reported.
-                if (send_buffered_body && sendFailedOnPeerClose(poll_xsink)) {
+                // The peer closed or reset the connection while the request body - buffered or streamed - was
+                // going out.  It read the header block, so it may have answered the request before it stopped
+                // reading, and the answer can be in the receive buffer although the receive side found nothing on
+                // this cycle: it ran first, and the response and the reset arrived after it.  The connection is
+                // gone, so the read on the next cycle returns at once: the response, or EOF, in which case the send
+                // error is reported.  A send that a local cancel or close interrupted is reported as it is, which
+                // leaves the cancel's or close's own error in place.
+                if (sendFailureReadsResponse(poll_xsink, true)) {
                     std::string saved_err(err);
                     std::string saved_desc(desc);
                     poll_xsink.clear();
-                    ASYNC_IO_TRACE("H1 driveSendSide: the buffered request body send failed (%s: %s) - reading "
-                        "the response the peer may have sent fd=%d\n", saved_err.c_str(), saved_desc.c_str(),
+                    ASYNC_IO_TRACE("H1 driveSendSide: the request body send failed (%s: %s) - reading the response "
+                        "the peer may have sent fd=%d\n", saved_err.c_str(), saved_desc.c_str(),
                         sock_obj ? sock_obj->getSocket() : -1);
-                    abandonFailedBufferedSend(saved_err, saved_desc, xsink);
+#ifdef DEBUG
+                    if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+                        hook(QoreDbgHttp1SendEvent::RecoveryStart, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+                    }
+#endif
+                    abandonFailedSend(saved_err, saved_desc, xsink);
+#ifdef DEBUG
+                    if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+                        hook(QoreDbgHttp1SendEvent::RecoveryRead, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+                    }
+#endif
                     return 0;
                 }
 
@@ -898,11 +931,25 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     assert(current_op);
     assert(!send_op);
 
+#ifdef DEBUG
+    if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+        hook(QoreDbgHttp1SendEvent::RecoveryStart, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+    }
+#endif
+
     sock_obj->ref();
-    SocketPollOperationBase* read_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
-    if (*xsink) {
-        read_op->deref(xsink);
-        return nullptr;
+    SocketPollOperationBase* read_op;
+    {
+        // the read cannot be started (the socket was closed): the send error is reported through setError(), so
+        // the pending stream is notified and the connection is marked closed
+        ExceptionSink read_xsink;
+        read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        if (read_xsink) {
+            read_op->deref(&read_xsink);
+            read_xsink.clear();
+            setError(err.c_str(), desc.c_str(), xsink);
+            return nullptr;
+        }
     }
     read_op->setSelf(*self);
 
@@ -914,11 +961,43 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     releaseCurrentOp(xsink);
     current_op = read_op;
     req_state = ReqState::RECV_HEADER;
-    abandonFailedBufferedSend(err, desc, xsink);
+    abandonFailedSend(err, desc, xsink);
+#ifdef DEBUG
+    if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+        hook(QoreDbgHttp1SendEvent::RecoveryRead, sock_obj ? sock_obj->getSocket() : -1, nullptr);
+    }
+#endif
     return handleFullDuplex(xsink);
 }
 
-void Http1ClientPollOperationPriv::abandonFailedBufferedSend(const std::string& err, const std::string& desc,
+bool Http1ClientPollOperationPriv::sendFailureReadsResponse(ExceptionSink& send_xsink, bool header_written) const {
+    // a cancel or a close shut the socket down: the send did not fail because of the peer
+    if (closedLocally()) {
+        return false;
+    }
+    if (header_written) {
+        return true;
+    }
+    if (!sendFailedOnPeerClose(send_xsink)) {
+        return false;
+    }
+    // on a reused connection, data waiting before the request header block verifiably reached the server can be a
+    // response that the server sent on its own as it closed the idle connection; the send error is the retryable
+    // connection failure instead (next_stream_id counts the requests submitted on this connection; submitRequest()
+    // writes it in the caller's thread under stream_lock)
+    AutoLocker al(stream_lock);
+    return next_stream_id <= 1;
+}
+
+bool Http1ClientPollOperationPriv::closedLocally() const {
+    if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
+        return true;
+    }
+    AutoLocker al(stream_lock);
+    return error_info != nullptr;
+}
+
+void Http1ClientPollOperationPriv::abandonFailedSend(const std::string& err, const std::string& desc,
         ExceptionSink* xsink) {
     releaseSendOp(xsink);
     send_state = SendState::ABANDONED;
@@ -935,12 +1014,7 @@ bool Http1ClientPollOperationPriv::sendFailedOnPeerClose(ExceptionSink& send_xsi
     if (arg.getType() != NT_INT) {
         return false;
     }
-    int64 en = arg.getAsBigInt();
-    return en == ECONNRESET || en == EPIPE
-#ifdef ECONNABORTED
-        || en == ECONNABORTED
-#endif
-        ;
+    return qore_socket_errno_is_peer_close(arg.getAsBigInt());
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsink) {
@@ -1291,11 +1365,14 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         // bytes it had already transmitted, so a send that wrote the header block and part of the body in its first
         // write can fail having counted nothing.  The connection is gone in that case, so reading costs nothing: the
         // read returns at once, with the response or with EOF, and then the send error is reported.
-        if (!streaming_send_io && send_state == SendState::INACTIVE && req_state == ReqState::SENDING
-                && request_header_len) {
+        //
+        // This holds for a streamed (chunked) request as well, whose first write is its header block.  The response
+        // is not read after a local cancel or close, or on a reused connection before the header block verifiably
+        // went out; see sendFailureReadsResponse().
+        if (send_state == SendState::INACTIVE && req_state == ReqState::SENDING && request_header_len) {
             assert(dynamic_cast<SocketSendPollOperation*>(current_op));
-            if (static_cast<SocketSendPollOperation*>(current_op)->getBytesSent() >= request_header_len
-                    || sendFailedOnPeerClose(poll_xsink)) {
+            if (sendFailureReadsResponse(poll_xsink,
+                    static_cast<SocketSendPollOperation*>(current_op)->getBytesSent() >= request_header_len)) {
                 std::string saved_err(err);
                 std::string saved_desc(desc);
                 poll_xsink.clear();
@@ -1689,6 +1766,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         {
             AutoLocker al(stream_lock);
             method = active_method;
+        }
+
+        // A final response has started (100 Continue is only a promise of one, see below): a failure from here on is
+        // a failure of the response, such as a body cut short, and is reported as such rather than as the send error
+        // the response may have followed
+        if (response_status_code != 100) {
+            send_failure_pending = false;
         }
 
         // 101 Switching Protocols: the HTTP framing layer is done;
@@ -2796,22 +2880,32 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
 
 void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, const QoreHashNode* extra,
         ExceptionSink* xsink, QoreValue arg) {
-    // the response that was read after a failed send did not arrive: the send error is the real one
-    // (copied, as the members can be reassigned by the time the strings are used below)
-    std::string saved_err, saved_desc;
+    // the response that was read after a failed send did not arrive: the send error is the real one; the members are
+    // used only by the I/O thread (this one), and they are moved out, as nothing uses them after this
     if (send_failure_pending) {
         send_failure_pending = false;
-        saved_err.swap(send_failure_err);
-        saved_desc.swap(send_failure_desc);
-        err = saved_err.c_str();
-        desc = saved_desc.c_str();
+        std::string saved_err(std::move(send_failure_err));
+        std::string saved_desc(std::move(send_failure_desc));
+        send_failure_err.clear();
+        send_failure_desc.clear();
         // the argument and extra information belong to the error that is replaced
-        arg = QoreValue();
-        extra = nullptr;
+        publishError(saved_err.c_str(), saved_desc.c_str(), nullptr, xsink);
+        return;
     }
+    publishError(err, desc, extra, xsink, arg);
+}
+
+void Http1ClientPollOperationPriv::publishError(const char* err, const char* desc, const QoreHashNode* extra,
+        ExceptionSink* xsink, QoreValue arg) {
+#ifdef DEBUG
+    bool published = false;
+#endif
     {
         AutoLocker al(stream_lock);
         if (!error_info) {
+#ifdef DEBUG
+            published = true;
+#endif
             error_info = new QoreHashNode(autoTypeInfo);
             error_info->setKeyValue("err", new QoreStringNode(err), xsink);
             error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
@@ -2826,6 +2920,13 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc, c
             }
         }
     }
+#ifdef DEBUG
+    if (published) {
+        if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+            hook(QoreDbgHttp1SendEvent::ErrorPublished, sock_obj ? sock_obj->getSocket() : -1, err);
+        }
+    }
+#endif
     h1_state.store(H1State::CLOSED, std::memory_order_release);
     // Close the socket to release the fd and transition from CLOSE-WAIT to CLOSED.
     // Without this, dead sockets accumulate when the remote closes the connection
@@ -3212,9 +3313,11 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
     // full rationale.  setError() cannot settle this action itself: it was taken
     // out of stream_action under the lock above, so notifyPendingStreams() finds
     // nothing to notify and this remains the only report of the cancellation.
+    // This runs in the caller's thread, so the error is published as it is: the error of a send that failed
+    // (send_failure_pending) belongs to the I/O thread, and the cancel is what the operation reports.
     if (in_flight) {
         printd(5, "Http1ClientPollOperationPriv::cancelStream() in-flight - closing connection\n");
-        setError("HTTP1-CANCELLED", "connection closed due to in-flight cancellation", xsink);
+        publishError("HTTP1-CANCELLED", "connection closed due to in-flight cancellation", nullptr, xsink);
     }
 
     if (action) {

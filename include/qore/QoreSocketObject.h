@@ -117,6 +117,14 @@ public:
     */
     DLLLOCAL void dbgCloseAtNextSslIo();
 
+    //! Debug-only: makes the next close of the socket reset the connection at once
+    /** Called via the @c dbg_reset_socket() debug builtin in @ref lib/ql_debug.cpp, so a test peer can reset a
+        connection deterministically on every platform; see qore_socket_private::dbg_abortive_close.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void dbgResetOnClose();
+
     //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
     /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that
         a long-lived session does not keep records for the streams it has finished.

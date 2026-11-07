@@ -119,9 +119,9 @@ public:
         IDLE,       //!< full-duplex active, no send in flight, awaiting queued data
         SENDING,    //!< a request-body chunk (or the final terminator) is being sent
         DONE,       //!< the request body is fully sent
-        //! the send of a buffered request failed and was given up; the response is still read
+        //! the send of the request body failed and was given up; the response is still read
         /** Nothing more is sent, and since the request is incomplete, the connection is closed after the response;
-            see Http1ClientPollOperationPriv::abandonFailedBufferedSend().
+            see Http1ClientPollOperationPriv::abandonFailedSend().
 
             @since %Qore 3.0
         */
@@ -518,12 +518,18 @@ private:
     */
     size_t request_header_len = 0;
 
-    //! True while the response is read after the send of a buffered request failed
+    //! True while the response is read after the send of the request failed, until a final response header arrives
     /** The request header block had reached the wire when the write failed, or may have, so the peer may have
         answered it (a fault such as 413, say) before it stopped reading and reset the connection.  The response, if
         there is one, is delivered as it is when the request body is abandoned in the same way; when there is none,
         the error that setError() reports is the send error saved in @ref send_failure_err and
-        @ref send_failure_desc, not the receive error that follows it.  I/O thread only.
+        @ref send_failure_desc, not the receive error that follows it.  Once a final response header has been
+        received, the response has started, and a failure after it is a failure of the response: the flag is cleared
+        then (handleRecvHeader()), and a truncated response is reported as such.
+
+        I/O thread only: these three members are read and written only by the thread that drives continuePoll().
+        cancelStream(), which runs in the caller's thread, publishes its error with publishError(), which does not
+        touch them.
 
         @since %Qore 3.0
     */
@@ -762,14 +768,14 @@ private:
     */
     DLLLOCAL QoreHashNode* awaitBufferedSend(ExceptionSink* xsink);
 
-    //! Reads the response after the first send of a buffered request failed
-    /** Called from handleSending() when the request header block had been written, or when the write failed
-        because the peer closed or reset the connection (see sendFailedOnPeerClose()), in which case the header block
-        may have reached the peer even though the write reported no progress.  The peer may have answered the request
-        before it read the rest and then closed or reset the connection, which is what made the write fail; the
-        answer is delivered instead of the write error.  When there is no answer, the error reported is the send
-        error (see @ref send_failure_pending).  The request is abandoned (see abandonFailedBufferedSend()), so the
-        connection is closed afterwards.
+    //! Reads the response after the first send of the request failed
+    /** Called from handleSending() when sendFailureReadsResponse() says the peer may have answered the request.
+        The peer may have answered the request before it read the rest and then closed or reset the connection,
+        which is what made the write fail; the answer is delivered instead of the write error.  When there is no
+        answer, the error reported is the send error (see @ref send_failure_pending).  The request is abandoned (see
+        abandonFailedSend()), so the connection is closed afterwards.
+
+        If the response read cannot be started, the send error is reported with setError().
 
         @param err the error code of the failed send
         @param desc the error description of the failed send
@@ -780,9 +786,11 @@ private:
     DLLLOCAL QoreHashNode* recoverResponseAfterSendFailure(const std::string& err, const std::string& desc,
         ExceptionSink* xsink);
 
-    //! Gives up the send of a buffered request that failed, so that the response can still be read
+    //! Gives up the send of a request body that failed, so that the response can still be read
     /** Releases the send operation, enters @ref SendState::ABANDONED and saves the send error, which setError()
-        reports if no response arrives (see @ref send_failure_pending).  The response read is left as it is.
+        reports if no response arrives (see @ref send_failure_pending).  The response read is left as it is.  For a
+        streaming send, data that the application pushes afterwards is discarded with the queue when the exchange
+        ends (resetSendState()).
 
         @param err the error code of the failed send
         @param desc the error description of the failed send
@@ -790,7 +798,37 @@ private:
 
         @since %Qore 3.0
     */
-    DLLLOCAL void abandonFailedBufferedSend(const std::string& err, const std::string& desc, ExceptionSink* xsink);
+    DLLLOCAL void abandonFailedSend(const std::string& err, const std::string& desc, ExceptionSink* xsink);
+
+    //! Returns true if the response is read after a failed send of the request instead of reporting the send error
+    /** The response is read if the send failed after the request header block had reached the wire, or if it may
+        have: the peer may have answered the request.  It is not read:
+        - if the operation was closed or failed locally (closedLocally()): a cancel or a close shuts the socket down,
+          which also makes a write fail with \c EPIPE, and the error that the cancel or close published is the one
+          reported;
+        - if the header block was not verifiably written and the send did not fail because the peer closed or reset
+          the connection (sendFailedOnPeerClose()): the peer cannot have answered;
+        - if the header block was not verifiably written on a connection that served a request before: data
+          waiting there can be a response that the server sent on its own before it closed the idle connection (a
+          \c 408, say), and a failed send on a reused connection is the retryable connection failure that the
+          connection manager repeats on a new connection.  A BSD-derived stack (macOS) does not report the bytes of a
+          write that a reset interrupted, so a request whose header block did reach the server is also repeated:
+          the server's answer then arrives on the new connection.
+
+        @param send_xsink the exception raised by the failed send
+        @param header_written true if the request header block is known to have been written in full
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool sendFailureReadsResponse(ExceptionSink& send_xsink, bool header_written) const;
+
+    //! Returns true if the operation was closed or published an error, as a cancel or an abort does
+    /** A cancel publishes its error and an abort closes the operation before the socket is shut down, so a send that
+        then fails was interrupted locally and not by the peer.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool closedLocally() const;
 
     //! Returns true if a failed write means that the peer closed or reset the connection
     /** The connection is gone, so a read after the failure returns at once with whatever the peer sent before it
@@ -804,7 +842,8 @@ private:
         @param send_xsink the exception raised by the failed send
 
         @return true if the exception carries the errno of a connection closed or reset by the peer (@c ECONNRESET,
-        @c EPIPE or @c ECONNABORTED)
+        @c EPIPE or @c ECONNABORTED); a TLS write that fails this way raises \c SOCKET-SSL-ERROR with the errno as
+        its argument, like a plain write's \c SOCKET-SEND-ERROR
 
         @since %Qore 3.0
     */
@@ -878,14 +917,32 @@ private:
 
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink, QoreValue arg = QoreValue());
 
-    //! Sets the error of the operation with additional keys for the error information hash
-    /** @param err the error code
+    //! Sets the error of the operation with additional keys for the error information hash; I/O thread only
+    /** While the response is read after a failed send (@ref send_failure_pending), the send error is reported
+        instead of the given one; see publishError() for the error itself.
+
+        @param err the error code
         @param desc the error description
         @param extra additional keys for the error information hash; the keys are copied
         @param xsink for Qore-language exceptions
         @param arg the underlying exception argument, referenced into the error information hash when present
     */
     DLLLOCAL void setError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink,
+        QoreValue arg = QoreValue());
+
+    //! Publishes the error of the operation, closes it and notifies the pending stream; any thread
+    /** The first error published is the one the operation keeps.  Unlike setError(), it never substitutes the error
+        of a failed send, so cancelStream() can call it from the caller's thread.
+
+        @param err the error code
+        @param desc the error description
+        @param extra additional keys for the error information hash; the keys are copied
+        @param xsink for Qore-language exceptions
+        @param arg the underlying exception argument, referenced into the error information hash when present
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void publishError(const char* err, const char* desc, const QoreHashNode* extra, ExceptionSink* xsink,
         QoreValue arg = QoreValue());
 
     //! Fails the response if a response body of the given size exceeds the maximum response body size

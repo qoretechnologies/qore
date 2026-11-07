@@ -13359,6 +13359,29 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     return QoreValue();
 }
 
+//! Debug-only: closes a socket so that its connection is reset at once
+/** The close sets \c SO_LINGER with a zero timeout and skips the TLS close_notify alert and the shutdown that a close
+    makes first, which on macOS discards unread data and ends the connection with a FIN.  Tests use it to have a peer
+    reset a connection deterministically.  DEBUG builds only.
+*/
+static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_reset_socket() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    sock->dbgResetOnClose();
+    sock->close();
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -15934,6 +15957,456 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
     return true;
 }
 
+std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
+std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
+
+namespace {
+//! the state of the HTTP/1 client send-failure test hooks
+/** The hooks follow one connection: the descriptor of the first one that reaches an armed hook.  They record the
+    first error that its poll operation publishes and the number of times it decided to read the response after a
+    failed send, and each armed point is one-shot.
+
+    A hook that blocks holds an I/O thread of the controller, and a Qore socket operation of the test that the
+    controller schedules on that thread would wait for it; so while a hook holds the I/O thread, the peer's answer and
+    reset are made by the hook itself, with system calls on the peer's descriptor (see dbg_http1_answer_and_reset()).
+*/
+struct Http1SendFailure {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the descriptor of the connection followed, -1 until a hook point is reached
+    int fd = -1;
+    //! the number of times the response was read after a failed send on the connection
+    int64 recoveries = 0;
+    //! true once the operation of the connection published an error, which is then in @ref error
+    bool published = false;
+    std::string error;
+    //! armed by dbg_hold_http1_send_failure_recovery(): decremented when the hold starts
+    Counter* hold_recovery = nullptr;
+    //! armed by dbg_fail_http1_send_side(): decremented once the peer has answered and reset the connection
+    Counter* send_side = nullptr;
+    //! the number of times the send side is reached with data to send before dbg_fail_http1_send_side() acts
+    int64 send_side_skip = 0;
+    //! armed by dbg_hold_http1_socket_send(): decremented when the write is reached (and the peer has answered)
+    Counter* socket_send = nullptr;
+    //! the port of the peer of the socket that dbg_hold_http1_socket_send() holds
+    int socket_send_port = 0;
+    //! the peer's socket that a hook answers and resets, with a reference of its own, or nullptr
+    QoreSocketObject* peer = nullptr;
+    //! the response the peer answers with
+    std::string response;
+    //! incremented by dbg_http1_send_failure_result(), which releases a hold waiting for an error that did not come
+    int64 generation = 0;
+};
+
+Http1SendFailure http1_send_failure;
+
+//! decrements a Counter that a hook took over, with no lock held
+void dbg_http1_send_failure_dec(Counter* c) {
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> holder(c, &xsink);
+    c->dec(&xsink);
+    if (xsink) {
+        printd(0, "dbg HTTP/1 send failure hook: Counter::dec() raised an exception\n");
+        xsink.clear();
+    }
+}
+
+//! blocks until the connection on \a fd is shut down or reset; no timer is involved
+void dbg_http1_wait_hangup(int fd) {
+#ifdef DARWIN
+    // poll() on macOS reports nothing for a descriptor polled with no events, so the end of the connection is
+    // waited for with an edge-triggered read filter, which fires once for each change - data arriving, which does
+    // not end the wait, and the end of the connection, which sets EV_EOF
+    int kq = kqueue();
+    if (kq < 0) {
+        return;
+    }
+    ON_BLOCK_EXIT([kq] () { ::close(kq); });
+    struct kevent kev;
+    EV_SET(&kev, fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, nullptr);
+    if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
+        return;
+    }
+    while (true) {
+        struct kevent out;
+        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
+            return;
+        }
+    }
+#else
+    // poll() reports POLLHUP and POLLERR whatever the events requested, so nothing else wakes it
+    while (true) {
+        pollfd pfd = {fd, 0, 0};
+        int rc = ::poll(&pfd, 1, -1);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc < 0 || (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
+            return;
+        }
+    }
+#endif
+}
+
+//! writes \a response on the peer's descriptor \a pfd and resets the connection, with system calls only
+/** The connection is reset by closing its last descriptor with \c SO_LINGER and a zero timeout; the descriptor
+    number is first taken over by a new, unconnected socket (dup2()), so the peer's Socket object keeps a valid
+    descriptor, which it closes later without touching the connection or another socket.
+*/
+void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
+    size_t off = 0;
+    while (off < response.size()) {
+        ssize_t rc = ::send(pfd, response.data() + off, response.size() - off,
+#ifdef MSG_NOSIGNAL
+            MSG_NOSIGNAL
+#else
+            0
+#endif
+            );
+        if (rc > 0) {
+            off += rc;
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        if (rc < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            // the response is small, so the peer's socket buffer takes it as soon as it has room
+            pollfd p = {pfd, POLLOUT, 0};
+            ::poll(&p, 1, -1);
+            continue;
+        }
+        break;
+    }
+    struct linger l;
+    l.l_onoff = 1;
+    l.l_linger = 0;
+    setsockopt(pfd, SOL_SOCKET, SO_LINGER, &l, sizeof l);
+    int replacement = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (replacement >= 0) {
+        ::dup2(replacement, pfd);
+        ::close(replacement);
+    }
+}
+
+//! returns the port of the peer of the socket \a fd, 0 if it has none
+int dbg_http1_peer_port(int fd) {
+    sockaddr_storage addr;
+    socklen_t len = sizeof addr;
+    if (getpeername(fd, reinterpret_cast<sockaddr*>(&addr), &len)) {
+        return 0;
+    }
+    if (addr.ss_family == AF_INET) {
+        return ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
+    }
+    if (addr.ss_family == AF_INET6) {
+        return ntohs(reinterpret_cast<sockaddr_in6*>(&addr)->sin6_port);
+    }
+    return 0;
+}
+
+//! returns the bytes of a string or binary argument
+std::string dbg_http1_bytes_arg(const QoreListNode* params, size_t i) {
+    QoreValue v = get_param_value(params, i);
+    if (v.getType() == NT_BINARY) {
+        const BinaryNode* b = v.get<const BinaryNode>();
+        return std::string(static_cast<const char*>(b->getPtr()), b->size());
+    }
+    if (v.getType() == NT_STRING) {
+        const QoreStringNode* str = v.get<const QoreStringNode>();
+        return std::string(str->c_str(), str->size());
+    }
+    return std::string();
+}
+
+//! takes the peer whose connection a hook answers and resets from the state (lock held)
+void dbg_http1_take_peer(Http1SendFailure& h, int& pfd, std::string& response, QoreSocketObject*& peer) {
+    peer = h.peer;
+    h.peer = nullptr;
+    pfd = peer ? peer->getSocket() : -1;
+    response.swap(h.response);
+}
+
+void dbg_http1_send_hook(QoreDbgHttp1SendEvent event, int fd, const char* err) {
+    Http1SendFailure& h = http1_send_failure;
+    Counter* c = nullptr;
+    int64 generation = 0;
+    int pfd = -1;
+    std::string response;
+    QoreSocketObject* peer = nullptr;
+    {
+        std::unique_lock<std::mutex> l(h.m);
+        switch (event) {
+            case QoreDbgHttp1SendEvent::ErrorPublished:
+                if (fd >= 0 && fd == h.fd && !h.published) {
+                    h.published = true;
+                    h.error = err ? err : "";
+                    h.cond.notify_all();
+                }
+                return;
+
+            case QoreDbgHttp1SendEvent::RecoveryStart:
+                if (h.fd < 0 && h.hold_recovery) {
+                    h.fd = fd;
+                }
+                if (fd >= 0 && fd == h.fd) {
+                    ++h.recoveries;
+                }
+                return;
+
+            case QoreDbgHttp1SendEvent::RecoveryRead:
+                if (!h.hold_recovery || fd < 0 || fd != h.fd) {
+                    return;
+                }
+                c = h.hold_recovery;
+                h.hold_recovery = nullptr;
+                generation = h.generation;
+                break;
+
+            case QoreDbgHttp1SendEvent::BeforeSendSide:
+                if (!h.send_side || fd < 0 || (h.fd >= 0 && fd != h.fd)) {
+                    return;
+                }
+                h.fd = fd;
+                if (h.send_side_skip > 0) {
+                    --h.send_side_skip;
+                    return;
+                }
+                c = h.send_side;
+                h.send_side = nullptr;
+                dbg_http1_take_peer(h, pfd, response, peer);
+                break;
+        }
+    }
+    if (event == QoreDbgHttp1SendEvent::RecoveryRead) {
+        dbg_http1_send_failure_dec(c);
+        // held until the operation publishes an error, as a cancel from another thread does
+        std::unique_lock<std::mutex> l(h.m);
+        h.cond.wait(l, [&h, generation] () { return h.published || h.generation != generation; });
+        return;
+    }
+    // the peer answers and resets the connection now, after the receive side found nothing, so the next write fails
+    if (pfd >= 0) {
+        dbg_http1_answer_and_reset(pfd, response);
+    }
+    dbg_http1_wait_hangup(fd);
+    dbg_http1_send_failure_dec(c);
+    if (peer) {
+        peer->deref();
+    }
+}
+
+void dbg_http1_socket_send_hook(int fd) {
+    Http1SendFailure& h = http1_send_failure;
+    Counter* c;
+    int pfd = -1;
+    std::string response;
+    QoreSocketObject* peer = nullptr;
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.socket_send || fd < 0 || dbg_http1_peer_port(fd) != h.socket_send_port) {
+            return;
+        }
+        h.fd = fd;
+        c = h.socket_send;
+        h.socket_send = nullptr;
+        qore_dbg_socket_send_hook.store(nullptr);
+        dbg_http1_take_peer(h, pfd, response, peer);
+    }
+    if (pfd >= 0) {
+        // the peer answers and resets the connection before the write is made
+        dbg_http1_answer_and_reset(pfd, response);
+    }
+    dbg_http1_send_failure_dec(c);
+    // without a peer, the test cancels the request, which shuts the connection down
+    dbg_http1_wait_hangup(fd);
+    if (peer) {
+        peer->deref();
+    }
+}
+
+//! arms one point of the send-failure hooks; the Counter and the peer's socket are taken over
+void dbg_http1_send_failure_arm(Counter*& slot, Counter* c, QoreSocketObject* peer, const std::string& response,
+        const char* name, ExceptionSink* xsink) {
+    Http1SendFailure& h = http1_send_failure;
+    std::lock_guard<std::mutex> l(h.m);
+    if (slot || (peer && h.peer)) {
+        c->deref(xsink);
+        if (peer) {
+            peer->deref();
+        }
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "%s() is already armed", name);
+        return;
+    }
+    slot = c;
+    if (peer) {
+        h.peer = peer;
+        h.response = response;
+    }
+    qore_dbg_http1_send_hook.store(dbg_http1_send_hook);
+}
+
+//! returns a reference to the plain (not TLS) socket in argument \a i, or nullptr if the argument is missing
+QoreSocketObject* dbg_http1_peer_arg(const QoreListNode* params, size_t i, const char* name, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, i).get<const QoreObject>();
+    if (!obj) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreSocketObject> sock(reinterpret_cast<QoreSocketObject*>(
+        const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)), xsink);
+    if (*xsink || !sock) {
+        return nullptr;
+    }
+    if (sock->isSecure()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "%s(): the peer's socket must not use TLS: its answer is written "
+            "with system calls", name);
+        return nullptr;
+    }
+    return sock.release();
+}
+}
+
+//! holds the I/O thread when the next HTTP/1 client request starts to read the response after a failed send
+/** The I/O thread is held until the poll operation publishes an error, as a cancel from the caller's thread does;
+    see dbg_http1_send_failure_result() for what is recorded.
+
+    @param held decremented when the hold starts
+
+    @throw DBG-ARGUMENT-ERROR the hold is already armed
+*/
+static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Counter* c = get_counter_arg(params, 0, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    dbg_http1_send_failure_arm(http1_send_failure.hold_recovery, c, nullptr, std::string(),
+        "dbg_hold_http1_send_failure_recovery", xsink);
+    return QoreValue();
+}
+
+//! makes the next write of the request body send side of an HTTP/1 client request fail
+/** Once armed, the I/O thread stops when it is about to drive the send side after the receive side, with data to
+    send: the peer's socket is made to answer with \a response and reset the connection, with system calls, and the
+    I/O thread waits, with no timer, until the reset has arrived, so the write that follows fails although the
+    receive side found nothing on that cycle.
+
+    @param reached decremented once the peer has answered and the reset has arrived
+    @param peer the peer's (plain) socket of the connection; it must not be used by the test afterwards, except to
+    close it
+    @param response the raw response the peer answers with
+    @param skip the number of times the send side is reached with data to send and driven as usual first
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed, or the peer's socket uses TLS
+*/
+static QoreValue f_dbg_fail_http1_send_side(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreSocketObject> peer(dbg_http1_peer_arg(params, 1, "dbg_fail_http1_send_side", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!peer) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_fail_http1_send_side() requires the peer's Socket");
+        return QoreValue();
+    }
+    Counter* c = get_counter_arg(params, 0, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        std::lock_guard<std::mutex> l(http1_send_failure.m);
+        http1_send_failure.send_side_skip = get_param_value(params, 3).getAsBigInt();
+    }
+    dbg_http1_send_failure_arm(http1_send_failure.send_side, c, peer.release(), dbg_http1_bytes_arg(params, 2),
+        "dbg_fail_http1_send_side", xsink);
+    return QoreValue();
+}
+
+//! holds the next write of a socket connected to the given port until the connection is shut down or reset
+/** The write is held in SocketSendPollOperation::continuePoll(), with the socket's lock held, so a concurrent close
+    of the socket can shut the connection down but not release the descriptor before the write is made.  With a
+    peer, the peer's socket answers with \a response and resets the connection first, with system calls; without
+    one, the test shuts the connection down itself, such as by cancelling the request.
+
+    @param port the port of the peer of the socket whose write is held
+    @param reached decremented when the write is reached (once the peer has answered, if it is given)
+    @param peer the peer's (plain) socket of the connection, if the peer answers and resets the connection; it must
+    not be used by the test afterwards, except to close it
+    @param response the raw response the peer answers with
+
+    @throw DBG-ARGUMENT-ERROR the hook is already armed, or the peer's socket uses TLS
+*/
+static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreSocketObject> peer(dbg_http1_peer_arg(params, 2, "dbg_hold_http1_socket_send", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    int port = (int)get_param_value(params, 0).getAsBigInt();
+    Counter* c = get_counter_arg(params, 1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        std::lock_guard<std::mutex> l(http1_send_failure.m);
+        http1_send_failure.socket_send_port = port;
+    }
+    dbg_http1_send_failure_arm(http1_send_failure.socket_send, c, peer.release(), dbg_http1_bytes_arg(params, 3),
+        "dbg_hold_http1_socket_send", xsink);
+    if (!*xsink) {
+        qore_dbg_socket_send_hook.store(dbg_http1_socket_send_hook);
+    }
+    return QoreValue();
+}
+
+//! returns what the HTTP/1 client send-failure hooks recorded for the connection they followed, and disarms them
+/** @return a hash with the keys \c recoveries (the number of times the response was read after a failed send) and
+    \c error (the code of the first error the poll operation published, if any)
+*/
+static QoreValue f_dbg_http1_send_failure_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    Http1SendFailure& h = http1_send_failure;
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    std::vector<Counter*> armed;
+    QoreSocketObject* peer;
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        qore_dbg_http1_send_hook.store(nullptr);
+        qore_dbg_socket_send_hook.store(nullptr);
+        rv->setKeyValue("recoveries", h.recoveries, xsink);
+        if (h.published) {
+            rv->setKeyValue("error", new QoreStringNode(h.error), xsink);
+        }
+        for (Counter** slot : {&h.hold_recovery, &h.send_side, &h.socket_send}) {
+            if (*slot) {
+                armed.push_back(*slot);
+                *slot = nullptr;
+            }
+        }
+        peer = h.peer;
+        h.peer = nullptr;
+        h.response.clear();
+        h.fd = -1;
+        h.recoveries = 0;
+        h.published = false;
+        h.error.clear();
+        h.socket_send_port = 0;
+        h.send_side_skip = 0;
+        // a hold waiting for an error that will not come is released
+        ++h.generation;
+        h.cond.notify_all();
+    }
+    for (Counter* c : armed) {
+        c->deref(xsink);
+    }
+    if (peer) {
+        peer->deref();
+    }
+    return rv.release();
+}
+
 std::atomic<qore_dbg_conn_close_release_hook_t> qore_dbg_conn_close_release_hook{nullptr};
 
 namespace {
@@ -16555,6 +17028,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_reset_socket", f_dbg_reset_socket, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 2,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",
@@ -16680,6 +17155,18 @@ void init_debug_functions(QoreNamespace& qns) {
         softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "clean");
     qns.addBuiltinVariant("dbg_release_http1_connection_close", f_dbg_release_http1_connection_close,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
+    qns.addBuiltinVariant("dbg_hold_http1_send_failure_recovery", f_dbg_hold_http1_send_failure_recovery,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held");
+    qns.addBuiltinVariant("dbg_fail_http1_send_side", f_dbg_fail_http1_send_side, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 4, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached", QC_SOCKET->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response", softBigIntOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "skip");
+    qns.addBuiltinVariant("dbg_hold_http1_socket_send", f_dbg_hold_http1_socket_send, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "response");
+    qns.addBuiltinVariant("dbg_http1_send_failure_result", f_dbg_http1_send_failure_result, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "host",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "released");

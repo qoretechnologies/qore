@@ -9426,6 +9426,14 @@ int SocketConnectLayeredSslPollState::continuePoll(ExceptionSink* xsink) {
     return ssl->startConnect(xsink);
 }
 
+bool qore_socket_errno_is_peer_close(int64 en) {
+    return en == ECONNRESET || en == EPIPE
+#ifdef ECONNABORTED
+        || en == ECONNABORTED
+#endif
+        ;
+}
+
 SocketSendPollState::SocketSendPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data,
         size_t size) : sock(sock), data(data), size(size) {
 }
@@ -11330,7 +11338,13 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
-            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+            // A write that fails because the peer closed or reset the connection leaves the socket open, as a plain
+            // socket's does: what the peer sent before it closed - an early HTTP response, say - is still in the
+            // receive buffer and can be read.  OpenSSL puts no TLS alert on the connection for a failed write of the
+            // transport, so its read side stays usable.
+            bool keep_open = action == WRITE && qore_socket_errno_is_peer_close(transportErrno());
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE,
+                    keep_open ? SslCall::Write : SslCall::Transport)) {
                 if (!rc) {
                     xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported " \
                         "an EOF condition that violates the SSL protocol while calling %s()", mname,
@@ -11343,23 +11357,26 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                         "error code %d in %s() but the error queue is empty", mname, rc, get_action_method(action));
                 }
             }
-            // close the local socket unconditionally
+            // close the local socket, except after a write that the peer's close or reset made fail (see above)
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
-            if (!qs.h2_session) {
+            if (!qs.h2_session && !keep_open) {
                 qore_socket_close_private_from_controller(&qs);
             }
             // in case there is no exception when reading, the remote end closed the connection
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
+            // a write that fails because of the transport leaves the socket open, as for SSL_ERROR_SYSCALL above
+            bool keep_open = action == WRITE && qore_socket_errno_is_peer_close(transportErrno());
             // must call sslError() before closing; close_internal() derefs ssl, which would
             // bring refs down to 1, violating sslError()'s assert(refs > 1) invariant
-            if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE,
+                    keep_open ? SslCall::Write : SslCall::Transport)) {
                 xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
                     "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             }
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
-            if (!qs.h2_session) {
+            if (!qs.h2_session && !keep_open) {
                 qore_socket_close_private_from_controller(&qs);
             }
             rc = QSE_SSL_ERR;
@@ -11399,6 +11416,15 @@ DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
     if (set) {
         sock.set_non_blocking(false, xsink);
     }
+}
+
+int SSLSocketHelper::transportErrno() {
+    // peeked, not taken: sslError() reports the queue
+    unsigned long e = ERR_peek_error();
+    if (e && ERR_GET_LIB(e) == ERR_LIB_SYS) {
+        return ERR_GET_REASON(e);
+    }
+    return sock_get_error();
 }
 
 // returns true if an error was raised or the connection was closed, false if not
@@ -11458,7 +11484,9 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
         // NOTE: For HTTP/2 connections, don't auto-close here.  This could be a timeout or the end
         // of a read operation, not necessarily a connection close.  Let the HTTP/2 layer handle
         // connection lifecycle.
-        if (!qs.h2_session) {
+        // A write that failed because the peer closed or reset the connection (SslCall::Write) leaves the socket
+        // open, so that what the peer sent before it closed can still be read; see doNonBlockingIo().
+        if (!qs.h2_session && call != SslCall::Write) {
             qore_socket_close_private_from_controller(&qs);
         }
         if (always_error) {
@@ -11480,8 +11508,12 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
             // leaves it at 0, so this adds ECONNRESET and friends without inventing a cause
             if (sockerr) {
                 errstr->sprintf(" (last socket error %d: %s)", sockerr, strerror(sockerr));
+                // the errno is the argument, as for a plain socket's SOCKET-SEND-ERROR, so that callers can tell a
+                // connection the peer closed or reset from other failures without parsing the description
+                xsink->raiseExceptionArg("SOCKET-SSL-ERROR", static_cast<int64>(sockerr), errstr.release());
+            } else {
+                xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
             }
-            xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
         }
     } else {
         char buf[121];
@@ -11501,17 +11533,22 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, unsigned long e, i
             ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
             arg->setKeyValue("ssl_verify_error", static_cast<int64>(SSL_get_verify_result(ssl)), xsink);
             xsink->raiseExceptionArg("SOCKET-SSL-ERROR", arg.release(), errstr.release());
+        } else if (ERR_GET_LIB(e) == ERR_LIB_SYS) {
+            // a system call failed under OpenSSL - the transport write or read - and the reason is its errno: it is
+            // the argument, as for a plain socket's SOCKET-SEND-ERROR
+            xsink->raiseExceptionArg("SOCKET-SSL-ERROR", static_cast<int64>(ERR_GET_REASON(e)), errstr.release());
         } else {
             xsink->raiseException("SOCKET-SSL-ERROR", errstr.release());
         }
         // There used to be a connection-reset close here, guarded by
         // "e == SSL_ERROR_SYSCALL && sock_get_error() == ECONNRESET".  It could never run: `e` is
         // a packed ERR_get_error() code in this branch while SSL_ERROR_SYSCALL (5) belongs to the
-        // SSL_get_error() enum, and a packed ERR code is never 5.  It is not resurrected here
-        // because errno is only meaningful for a transport failure, and a transport failure
-        // leaves the OpenSSL error queue empty and is therefore handled above — where the socket
-        // is closed unconditionally.  Reaching this branch means OpenSSL reported a real protocol
-        // error, so any errno left over from an earlier call says nothing about this connection.
+        // SSL_get_error() enum, and a packed ERR code is never 5.  It is not resurrected here:
+        // closing the socket is the caller's decision (doNonBlockingIo() closes it, except after a
+        // write that the peer's close or reset made fail).  A failed transport call either leaves
+        // the OpenSSL error queue empty, handled above, or queues an ERR_LIB_SYS entry carrying
+        // its errno (OpenSSL 3), reported above with the errno as the argument; any other entry is
+        // a real protocol error, so an errno left over from an earlier call says nothing about it.
         (void)sockerr;
     }
 }
@@ -16564,6 +16601,13 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
     if (!poll_state) {
         return nullptr;
     }
+
+#ifdef DEBUG
+    // tests hold the write here, with the socket's lock held, until the connection is shut down or reset
+    if (qore_dbg_socket_send_hook_t hook = qore_dbg_socket_send_hook.load()) {
+        hook(sock->priv->socket->getSocket());
+    }
+#endif
 
     // see if we are able to continue
     int rc = poll_state->continuePoll(xsink);

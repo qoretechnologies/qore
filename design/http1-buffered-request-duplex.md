@@ -74,14 +74,37 @@ once (an early `413`, say) can reset the connection while the client is still in
 buffered request, before the socket has ever reported that it would block.  The next write of the body then fails
 with `EPIPE` or `ECONNRESET`, and that happens before any handover.
 
-`handleSending()` therefore treats a failed send of a buffered request as "the peer may have answered" when the
-header block has reached the wire (`SocketSendPollOperation::getBytesSent()` keeps the count of bytes written
-before a failure, and it is at least `request_header_len`), **or** when the write failed because the peer closed or
-reset the connection (`sendFailedOnPeerClose()`: the exception's errno is `ECONNRESET`, `EPIPE` or `ECONNABORTED`).
+`handleSending()` therefore decides, with `sendFailureReadsResponse()`, whether a failed first send of a request
+means "the peer may have answered".  It reads the response when:
+
+- the header block verifiably reached the wire (`SocketSendPollOperation::getBytesSent()` keeps the count of bytes
+  written before a failure, and it is at least `request_header_len`), or
+- the write failed because the peer closed or reset the connection (`sendFailedOnPeerClose()`: the exception's
+  errno is `ECONNRESET`, `EPIPE` or `ECONNABORTED`, see `qore_socket_errno_is_peer_close()`) on the first request of
+  the connection.
+
+It does not read the response, and reports the send error as it is, when:
+
+- the operation was closed or published an error (`closedLocally()`).  A cancel (`cancelStream()`) publishes its
+  error, and an abort marks the operation closed, before the socket is shut down; the shutdown makes a write in
+  progress fail with `EPIPE`, which must not be taken for a peer reset.  The error that the cancel or abort
+  published stays the one reported (the first published error wins).
+- the header block was not verifiably written on a connection that served a request before (`next_stream_id > 1`).
+  A server that closes an idle keep-alive connection may send a response of its own first (a `408`); arriving
+  before the request was on the wire, it is not this request's answer.  The send error there is reported as for
+  any failed write on a reused connection: it is the connection failure that the qlib `HttpClientConnectionManager`
+  repeats the request for on a new connection (`isConnectionErrorStatic()`); the `HTTPClient` class raises it (its
+  manager, `QoreHttpClientConnectionManagerBase`, repeats an idempotent request only for the errors of
+  `isConnectionClosedError()`).  On macOS the byte count can be short (below), so the error is also reported for a
+  request whose header block did reach the server; a repeated request gets the server's answer on the new
+  connection, where the first-request rule delivers it.  Reporting the connection failure is preferred to returning
+  a response that may belong to no request.
+
 `recoverResponseAfterSendFailure()` abandons the request (`SendState::ABANDONED`, see below) and reads the
 response: if one has arrived it is delivered and the connection is closed; if not, the error reported is the
-original send error (`send_failure_pending`), not the receive error that follows it.  Any other send failure before
-the headers are out is reported as it was.
+original send error (`send_failure_pending`), not the receive error that follows it.  If the response read cannot
+even be started (the socket is closed), the send error is reported with `setError()`, so the pending stream is
+notified and the connection marked closed.
 
 The byte count alone is not enough, because it can be short after a reset.  A BSD-derived stack (macOS) fails a
 `send()` that a reset interrupts and discards the count of the bytes that call had already transmitted (XNU
@@ -96,14 +119,62 @@ can never wait for a response that is not coming.  A peer that answers before it
 
 The same holds after the handover.  `handleFullDuplex()` drives the receive side before the send side, but the
 response and the reset can arrive between the two: the receive side finds nothing, and the write of the rest of the
-body fails.  `driveSendSide()` then gives the buffered send up with `abandonFailedBufferedSend()` instead of failing
-the request, and the read on the next cycle returns the response, or EOF and the send error.  In
-`SendState::ABANDONED` nothing more is sent and, since the request is incomplete, the connection is closed after
+body fails.  `driveSendSide()` then gives the send up with `abandonFailedSend()` instead of failing the request
+(again unless `closedLocally()`), and the read on the next cycle returns the response, or EOF and the send error.
+In `SendState::ABANDONED` nothing more is sent and, since the request is incomplete, the connection is closed after
 the response, as with `abandonBufferedSendAndDeliver()`.
+
+### Streamed request bodies
+
+A streamed (chunked) request - `sendWithSendCallback()`, `sendChunked()` with an `InputStream`, the
+`pushSendData()` API - follows the same rules: its first write is its header block, so `handleSending()` applies
+the rule above to it, and `driveSendSide()` applies it to the write of a chunk or of the final chunk.  Once the send
+is abandoned, the chunks the application still pushes are queued and discarded with the queue when the exchange
+ends (`resetSendState()`); the application's wait for the response then returns the response.
+
+### TLS
+
+Over TLS, a failed write raised `SOCKET-SSL-ERROR` without an errno, and `doNonBlockingIo()` closed the socket,
+discarding the response in the kernel's receive buffer.  OpenSSL 3 queues the errno of a failed transport call as
+an `ERR_LIB_SYS` entry; `handleErrorIntern()` now raises it as the exception argument (also for the empty-queue case
+with a socket errno), and `doNonBlockingIo()` leaves the socket open after a write that failed with a peer-close
+errno (`SslCall::Write`).  OpenSSL raises no alert for a failed transport write, so the read side stays usable:
+`SSL_read()` returns the response records, then the peer's `close_notify` (end of data) or the reset (an error,
+reported as a truncated response if a response had started, else as the send error).  The socket is closed by its
+owner afterwards, as a plain socket's is.
+
+### A response that has started
+
+`send_failure_pending` is cleared as soon as a final response header arrives (`handleRecvHeader()`; a
+`100 Continue` is only a promise of a response).  From then on a failure is the response's: a body cut short by the
+reset is reported as the truncated response (`SOCKET-CLOSED` and the like), not as the send error, whether the
+response is buffered or streamed to the caller.
+
+### Thread confinement
+
+`send_failure_pending`, `send_failure_err` and `send_failure_desc` belong to the I/O thread (the thread driving
+`continuePoll()`).  `setError()`, which substitutes the send error, runs only there; `cancelStream()` runs in the
+caller's thread and publishes its error with `publishError()`, which never touches those members.
+
+### Tests
 
 How early the peer's close arrives depends on how fast the peer's own socket close completes, which is why a
 change to the cost of `Socket` close (see `async-socket-io.md`) moves this race.  `repeatedEarlyFaultTest` in
-`HttpClientBufferedDuplex.qtest` repeats the race; the `EarlyAnswerPeer` cases force the failed write deterministically: the request header block is larger than the socket buffers and the peer answers after reading 1 KiB of it, then resets the connection (with or without a FIN first), so the write fails before the header block is out on every platform.
+`HttpClientBufferedDuplex.qtest` repeats the race; the `EarlyAnswerPeer` cases force the failed write
+deterministically: the request header block is larger than the socket buffers and the peer answers after reading
+1 KiB of it, then resets the connection (with or without a FIN first), so the write fails before the header block
+is out on every platform.  `HttpClientEarlyResponse.qtest` covers TLS, streamed bodies, truncated responses,
+cancels and reused connections, using debug hooks (`ql_debug.cpp`, DEBUG builds only) to force each interleaving
+without timers:
+
+- `dbg_fail_http1_send_side()` stops the I/O thread between the receive side and the send side
+  (`QoreDbgHttp1SendEvent::BeforeSendSide`), lets the peer answer and reset, and waits for `POLLHUP`/`POLLERR`
+  (`poll()` with no events requested, no timeout), so the write that follows fails;
+- `dbg_hold_http1_send_failure_recovery()` holds the I/O thread where it starts to read the response after a failed
+  send until the operation publishes an error, as a cancel from the caller's thread does;
+- `dbg_hold_http1_socket_send()` holds a write in `SocketSendPollOperation::continuePoll()`, with the socket's lock
+  held, until the connection is shut down or reset, so a cancel's shutdown or a peer's reset lands before the write;
+- `dbg_http1_send_failure_result()` returns the number of recoveries and the first published error.
 
 Only a response that is on the wire before the peer's reset can be delivered: a peer that closes with request data
 unread resets the connection, and the reset discards whatever the peer has not yet transmitted.  A client that is

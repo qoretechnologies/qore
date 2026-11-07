@@ -1580,6 +1580,25 @@ struct qore_socket_private : public QoreReferenceCounter {
     //! Debug-only: true while @ref dbg_before_ssl_io is set, so the I/O calls of other sockets do not lock
     std::atomic<bool> dbg_before_ssl_io_set{false};
 
+    //! Debug-only: when set, closing the socket resets the connection at once (\c SO_LINGER with a zero timeout)
+    /** The TLS close_notify alert and the shutdown that a close makes first are skipped: the shutdown of the read
+        side discards unread data on macOS, so the close would end the connection with a FIN instead of a reset.
+        Tests use it to have a peer reset a connection deterministically; set by dbg_reset_socket().
+    */
+    std::atomic<bool> dbg_abortive_close{false};
+
+    //! Debug-only: prepares an abortive close if one was requested; returns true if so (close_m held)
+    DLLLOCAL bool dbgAbortiveCloseLocked() {
+        if (!dbg_abortive_close.load(std::memory_order_acquire)) {
+            return false;
+        }
+        struct linger l;
+        l.l_onoff = 1;
+        l.l_linger = 0;
+        setsockopt(sock, SOL_SOCKET, SO_LINGER, reinterpret_cast<const char*>(&l), sizeof l);
+        return true;
+    }
+
     //! Debug-only: sets the hook run once at the start of the next SSL I/O call on the socket
     DLLLOCAL void dbgSetBeforeSslIo(std::function<void()> hook) {
         std::lock_guard<std::mutex> g(dbg_close_lock_m);
@@ -2333,6 +2352,11 @@ public:
         // connection that no call is using sends its close_notify alert first.
         CloseLockHelper cl(*this);
         if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+            if (dbgAbortiveCloseLocked()) {
+                return;
+            }
+#endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
         }
@@ -2542,16 +2566,21 @@ public:
                 // EVP_CIPHER_CTX_get0_cipher under H2 teardown load, CI jobs 170545, 170659).  The other threads
                 // take their references with this lock held, so none can start an SSL call while it runs.  A
                 // connection that another thread uses is closed without the alert, which could not be sent then.
-                sendTlsCloseNotifyLocked();
+#ifdef DEBUG
+                if (!dbgAbortiveCloseLocked())
+#endif
+                {
+                    sendTlsCloseNotifyLocked();
 
-                // Cancel any in-flight I/O on this socket: a TCP-level shutdown(SHUT_RDWR) makes an I/O call in
-                // progress on another thread fail and return.  It does not wait for that call to return, so the
-                // call can still be using the descriptor and the TLS connection: both are released by the call's
-                // IoUseHelper when it is still in progress (see SharedDescriptor and getSsl()).
-                //
-                // Ignore errors from the shutdown syscall: already-shutdown sockets
-                // return ENOTCONN, and we only need best-effort cancellation here.
-                ::shutdown(sock, SHUTDOWN_ARG);
+                    // Cancel any in-flight I/O on this socket: a TCP-level shutdown(SHUT_RDWR) makes an I/O call in
+                    // progress on another thread fail and return.  It does not wait for that call to return, so the
+                    // call can still be using the descriptor and the TLS connection: both are released by the call's
+                    // IoUseHelper when it is still in progress (see SharedDescriptor and getSsl()).
+                    //
+                    // Ignore errors from the shutdown syscall: already-shutdown sockets
+                    // return ENOTCONN, and we only need best-effort cancellation here.
+                    ::shutdown(sock, SHUTDOWN_ARG);
+                }
 
                 // release the TLS connection, if any; releasing it runs no Qore code
                 if (SSLSocketHelper* old_ssl = ssl.load(std::memory_order_relaxed)) {
@@ -3219,6 +3248,10 @@ public:
 
     DLLLOCAL void resetCloseInterrupt() {
         pre_close_interrupt_fired.store(false, std::memory_order_release);
+#ifdef DEBUG
+        // a reset requested for the previous connection does not apply to the new one
+        dbg_abortive_close.store(false, std::memory_order_release);
+#endif
     }
 
     //! Sets the destination that the next connection, which is made to a proxy, is made for
