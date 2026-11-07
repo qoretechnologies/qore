@@ -541,7 +541,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
     def test_damaged_entry_is_a_miss(self):
         self.build_all()
         stored = self.cache / qc.SCHEMA / "objects"
-        for obj in stored.iterdir():
+        for obj in [p for p in stored.iterdir() if p.is_dir()]:
             qmod = obj / "qmod"
             qmod.write_bytes(qmod.read_bytes() + b"x")
         self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
@@ -652,12 +652,210 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
                               str(self.build)], capture_output=True, text=True, timeout=60)
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertEqual(4, len(self.entries()))
-        self.assertEqual(4, len(list((self.cache / qc.SCHEMA / "objects").iterdir())))
+        self.assertEqual(4, len([p for p in (self.cache / qc.SCHEMA / "objects").iterdir() if p.is_dir()]))
         self.assertEqual([], self.build_all())
         res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache), "--max-size", "0"],
                              capture_output=True, text=True, timeout=60)
         self.assertEqual(0, res.returncode, res.stderr)
         self.assertEqual(0, len(self.entries()))
+
+    def prune(self, *args):
+        res = subprocess.run([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache)] + list(args),
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, res.returncode, res.stdout + res.stderr)
+        return res.stdout
+
+    def keys(self):
+        """The cache key of each module of the build tree"""
+        rv = {}
+        for name in ("Base", "Mid", "Top", "Other"):
+            with open(str(self.qmod(name)) + qc.SIDECAR_SUFFIX) as f:
+                rv[name] = json.load(f)["key"]
+        return rv
+
+    def entry_keys(self):
+        return sorted(p.stem for p in self.entries())
+
+    def set_last_use(self, key, when):
+        cache = qc.Cache(str(self.cache))
+        for p in [Path(cache.lock_path(key))] + [e for e in self.entries() if e.stem == key]:
+            os.utime(str(p), (when, when))
+
+    def test_lru_and_age(self):
+        self.build_all()
+        keys = self.keys()
+        now = time.time()
+        # Top was used last 4000 s ago, Mid 3000 s, Base 2000 s, Other 1000 s
+        for i, name in enumerate(("Other", "Base", "Mid", "Top")):
+            self.set_last_use(keys[name], now - 1000 * (i + 1))
+        # a hit makes an entry the most recently used one: Top
+        shutil.rmtree(str(self.build))
+        self.build_all()
+        cache = qc.Cache(str(self.cache))
+        self.assertGreater(os.stat(cache.lock_path(keys["Top"])).st_mtime, now - 60)
+        for i, name in enumerate(("Other", "Base", "Mid")):
+            self.set_last_use(keys[name], now - 1000 * (i + 1))
+        self.set_last_use(keys["Top"], now)
+        # the cap leaves room for two entries: the two least recently used ones go (Mid, then Base)
+        entries = {e[2]: e for e in qc.cache_entries(cache)}
+        total = qc.dir_size(cache.root)
+        cap = total - entries[keys["Mid"]][3] - entries[keys["Base"]][3] + 1
+        out = self.prune("--max-size", str(cap / 1048576.0))
+        self.assertIn("2 size", out)
+        self.assertEqual(sorted([keys["Other"], keys["Top"]]), self.entry_keys())
+        # an entry unused for longer than the maximum age goes
+        self.set_last_use(keys["Other"], now - 8 * 86400)
+        out = self.prune("--max-age-days", "7")
+        self.assertIn("1 age", out)
+        self.assertEqual([keys["Top"]], self.entry_keys())
+        # nothing else
+        self.prune("--max-age-days", "7", "--max-size", "1000")
+        self.assertEqual([keys["Top"]], self.entry_keys())
+
+    def test_prune_never_removes_an_entry_being_read(self):
+        import fcntl
+        self.build_all()
+        keys = self.keys()
+        cache = qc.Cache(str(self.cache))
+        # a job reading Mid's entry holds a shared lock on it
+        fd = os.open(cache.lock_path(keys["Mid"]), os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH)
+            out = self.prune("--max-size", "0")
+            self.assertIn("1 skipped (in use)", out)
+            self.assertEqual([keys["Mid"]], self.entry_keys())
+            self.assertTrue(os.path.isdir(cache.object_dir(keys["Mid"])))
+        finally:
+            os.close(fd)
+        out = self.prune("--max-size", "0")
+        self.assertEqual([], self.entry_keys())
+        self.assertNotIn("in use", out)
+
+    def test_one_pruner_at_a_time(self):
+        import fcntl
+        self.build_all()
+        cache = qc.Cache(str(self.cache))
+        fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            out = self.prune("--max-size", "0")
+            self.assertIn("another job is pruning the cache", out)
+            self.assertEqual(4, len(self.entries()))
+        finally:
+            os.close(fd)
+        self.prune("--max-size", "0")
+        self.assertEqual(0, len(self.entries()))
+
+    def test_hits_from_a_cache_that_cannot_be_written(self):
+        self.build_all()
+        cold = self.snapshot()
+        modes = {}
+        for dirpath, dirnames, filenames in os.walk(str(self.cache)):
+            for n in dirnames + filenames:
+                p = os.path.join(dirpath, n)
+                modes[p] = os.stat(p).st_mode
+        modes[str(self.cache)] = os.stat(str(self.cache)).st_mode
+        try:
+            for p, m in modes.items():
+                os.chmod(p, m & ~0o222)
+            if os.access(str(self.cache), os.W_OK):
+                self.skipTest("the cache directory stays writable (running as root)")
+            self.assertEqual([], self.build_all())
+            self.assertEqual({"Base": "hit", "Mid": "hit", "Top": "hit", "Other": "hit"}, self.origins())
+            self.assertEqual(cold, self.snapshot())
+        finally:
+            for p, m in sorted(modes.items()):
+                os.chmod(p, m)
+
+    def test_stats_line(self):
+        self.build_all()
+        out = self.prune("--build-dir", str(self.build), "--job", "build-x", "--max-size", "1000")
+        self.assertRegex(out, r"^qmod-cache: job build-x: modules: miss 4; cache .*: [0-9.]+ MiB before pruning, "
+                              r"[0-9.]+ MiB after\n$")
+
+    def test_concurrent_jobs_share_the_cache(self):
+        """Builds of four trees and a pruner run at once on one cache: every build succeeds and its modules pass the
+        guard, whatever the pruner removed while they ran"""
+        self.build_all()
+        trees = []
+        for i in range(4):
+            src = self.root / ("source%d" % i)
+            shutil.copytree(str(self.source), str(src), symlinks=True)
+            build = self.root / ("build%d" % i)
+            res = subprocess.run([CMAKE, "-G", "Unix Makefiles", "-S", str(src), "-B", str(build),
+                                  "-DQORE_QMOD_CACHE_DIR=%s" % self.cache, "-DPython3_EXECUTABLE=%s" % sys.executable],
+                                 capture_output=True, text=True, timeout=120)
+            self.assertEqual(0, res.returncode, res.stdout + res.stderr)
+            trees.append((src, build))
+        env = dict(os.environ)
+        for name in [n for n in env if n.startswith("QORE_QMOD_CACHE_")]:
+            del env[name]
+        for rnd in range(3):
+            builds = []
+            for src, build in trees:
+                for q in (build / "qlib-qmod").rglob("*.qmod"):
+                    q.unlink()
+                builds.append(subprocess.Popen([CMAKE, "--build", str(build), "-j4"], stdout=subprocess.PIPE,
+                                               stderr=subprocess.STDOUT, env=env))
+            pruners = [subprocess.Popen([sys.executable, str(TOOL), "prune", "--cache-dir", str(self.cache),
+                                         "--max-size", "0"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                       for _ in range(3)]
+            for p in builds + pruners:
+                out = p.communicate(timeout=300)[0].decode()
+                self.assertEqual(0, p.returncode, out)
+                self.assertNotIn("Traceback", out)
+            for src, build in trees:
+                res = subprocess.run([sys.executable, str(TOOL), "verify", "--build-dir", str(build), "--qcc",
+                                      str(src / "qcc"), "--require-sidecars"], capture_output=True, text=True,
+                                     timeout=60)
+                self.assertEqual(0, res.returncode, res.stderr)
+        # what the pruners left is consistent: every entry has its object
+        cache = qc.Cache(str(self.cache))
+        for _, p, key, _ in qc.cache_entries(cache):
+            self.assertTrue(os.path.isdir(cache.object_dir(key)), p)
+
+
+class CiScriptTest(unittest.TestCase):
+    """test/docker_test/qmod-cache.sh: the cache directory of a job, and a build without the cache"""
+
+    SCRIPT = ROOT / "examples" / "test" / "docker_test" / "qmod-cache.sh"
+
+    def run_sh(self, cmd, **env):
+        full = {k: v for k, v in os.environ.items() if not k.startswith(("QORE_QMOD_CACHE", "CI_"))}
+        full.update(env)
+        res = subprocess.run(["sh", "-c", '. "%s"; %s' % (self.SCRIPT, cmd)], capture_output=True, text=True,
+                             env=full, timeout=60)
+        return res
+
+    def test_job_dir(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-ci-")
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        # not set, or not mounted: no argument, and a message why
+        res = self.run_sh("qore_qmod_cache_cmake_args")
+        self.assertEqual("", res.stdout)
+        self.assertIn("QORE_QMOD_CACHE_DIR is not set", res.stderr)
+        res = self.run_sh("qore_qmod_cache_cmake_args", QORE_QMOD_CACHE_DIR=str(root / "missing"))
+        self.assertEqual("", res.stdout)
+        self.assertIn("is not mounted", res.stderr)
+        # mounted: the directory of the job's name
+        mount = root / "mount"
+        mount.mkdir()
+        res = self.run_sh("qore_qmod_cache_cmake_args", QORE_QMOD_CACHE_DIR=str(mount), CI_JOB_NAME="build-x 1")
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s/build-x_1\n" % mount, res.stdout)
+        self.assertTrue((mount / "build-x_1").is_dir())
+        # a mount path with spaces: through a link in the project directory
+        spaced = root / "My Shared Files"
+        spaced.mkdir()
+        project = root / "project"
+        project.mkdir()
+        res = self.run_sh("qore_qmod_cache_cmake_args", QORE_QMOD_CACHE_DIR=str(spaced), CI_JOB_NAME="test-macos",
+                          CI_PROJECT_DIR=str(project))
+        self.assertEqual("-DQORE_QMOD_CACHE_DIR=%s/.qmod-cache\n" % project, res.stdout)
+        self.assertEqual(str(spaced / "test-macos"), os.readlink(str(project / ".qmod-cache")))
+        # finishing without the cache does nothing
+        res = self.run_sh('qore_qmod_cache_finish /nowhere /nowhere && echo done')
+        self.assertEqual("done\n", res.stdout)
 
 
 def find_build_dir():

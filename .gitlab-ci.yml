@@ -115,23 +115,20 @@ check-fast-routes-core-sanitizers:
     - . test/docker_test/tree-tested-skip.sh
     - test/cpp/run-sanitizers.sh
 
-# The qmod build cache (design/qmod-build-cache.md): every job that builds Qore keeps the AOT modules it compiled in a
-# GitLab cache, keyed by the job and the branch, falling back to the develop branch's cache, and reuses a module only
-# when everything that can change what qcc writes is unchanged; test/docker_test/qmod-cache.sh fails the job when a
-# module the cache supplied is not what it verified, and prunes the cache to the modules of the build.  A sample of the
-# modules the cache supplies is compiled again and must be byte for byte the same (QORE_QMOD_CACHE_AUDIT; 1 audits
-# every one).  QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores nothing.
+# The qmod build cache (design/qmod-build-cache.md): every job that builds Qore reuses the AOT modules that earlier
+# jobs compiled, from a directory of the host that its runner mounts into the job and names in QORE_QMOD_CACHE_DIR (the
+# runner sets it; without it, or when the directory is not mounted, the build runs without the cache).  A module is
+# reused only when everything that can change what qcc writes is unchanged; test/docker_test/qmod-cache.sh fails the
+# job when a module the cache supplied is not what it verified, prunes the cache after every job (entries unused for
+# QORE_QMOD_CACHE_MAX_AGE_DAYS days, then the least recently used ones above QORE_QMOD_CACHE_MAX_SIZE_MB MiB per job
+# name) and prints the hits, misses and the cache size before and after pruning.  A sample of the modules the cache
+# supplies is compiled again and must be byte for byte the same (QORE_QMOD_CACHE_AUDIT; 1 audits every one).
+# QORE_QMOD_CACHE_DISABLE=1 compiles every module and stores nothing.
 .qmod-cache:
   variables:
-    QORE_QMOD_CACHE_DIR: "${CI_PROJECT_DIR}/.qmod-cache"
     QORE_QMOD_CACHE_AUDIT: "0.03:${CI_PIPELINE_ID}"
-  cache:
-    key: "qmod-${CI_JOB_NAME}-${CI_COMMIT_REF_SLUG}"
-    fallback_keys:
-      - "qmod-${CI_JOB_NAME}-develop"
-    paths:
-      - .qmod-cache/
-    when: on_success
+    QORE_QMOD_CACHE_MAX_SIZE_MB: "3072"
+    QORE_QMOD_CACHE_MAX_AGE_DAYS: "7"
 
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:

@@ -14,7 +14,7 @@ Relevant code:
 - `cmake/QoreMacros.cmake`: `QORE_QMOD_CACHE_SETUP()` (the context target and the launcher) and
   `QORE_USER_MODULE_AOT_RULES()` (puts the launcher before the qcc command of each module)
 - `CMakeLists.txt`: the `QORE_QMOD_CACHE_DIR` option
-- `test/docker_test/qmod-cache.sh`: the CI steps after a build (guard, statistics, pruning)
+- `test/docker_test/qmod-cache.sh`: the CI steps (the job's cache directory, the guard, pruning, statistics)
 - `examples/test/cmake/test_qmod_cache.py`: the tests
 
 Related: [AOT Modules of a Build Tree and Their Sources](aot-linked-module-sources.md) (the loader's staleness
@@ -164,15 +164,37 @@ way no hit can be trusted, so the build fails.  CI audits a small sample in ever
 
 `<dir>/qore-qmod-cache-1/entries/<base key>/<result key>.json` and `<dir>/qore-qmod-cache-1/objects/<result key>/`
 (`qmod`, `qmod.d`, `qmod.d.fingerprints`).  An object is written to a temporary directory and renamed into place,
-an entry with a temporary file renamed over it, so concurrent builds (`make -j`, several jobs on one cache) never see
-a partial entry; the first object stored for a key wins.  At most 8 entries are kept under one base key.  A hit does
-not write to the cache directory, so a CI cache whose content a build did not change need not be uploaded again.
+an entry with a temporary file renamed over it, so concurrent builds (`make -j`, several jobs sharing a host
+directory) never see a partial entry; the first object stored for a key wins.  At most 8 entries are kept under one
+base key.
 
-`prune --keep-build <build>` keeps the entries that the modules of a build tree came from or were stored as;
-`--unused-since` removes the entries stored before a time; `--max-size` removes the oldest while the cache is larger.
+### Concurrent jobs and pruning
+
+Several jobs can share the directory.  Each object has a lock file, `objects/<result key>.lock` (`flock(2)`):
+
+- a job holds a shared lock on an entry while it reads it (a hit) or stores it;
+- an entry is removed only under an exclusive lock taken without waiting, so an entry that a job is reading is skipped,
+  never removed; the entry and its object are renamed into `trash/` and then deleted, and the lock file is removed
+  while the lock is held: a reader that was waiting for it finds no object and compiles the module;
+- the lock file's modification time is the entry's last use: it is set when the entry is stored and on every hit
+  when the cache can be written (a hit from a cache that cannot be written, or with `QORE_QMOD_CACHE_READONLY=1`,
+  still succeeds and records nothing);
+- one job prunes at a time (`prune.lock`, taken without waiting: a job that finds another one pruning skips its own
+  prune and says so).
+
+Without working locks (a file system that does not propagate them), a removal can race a reader; the reader's checks
+(each stored file's digest before the copy, the module and depfile digests after it) then make the module a miss, so
+the cost is a compile, never a wrong module.
+
+`prune` removes, in this order: orphans older than an hour (an object without an entry, an entry without an object,
+an interrupted store or removal; a younger one can be a store in progress), the entries not used for
+`--max-age-days`, with `--keep-build <build>` the entries that no module of that build tree came from or was stored
+as, and then the least recently used entries while the cache is larger than `--max-size` MiB.  It prints one line:
+the hits and misses of `--build-dir`, and the size of the cache before and after pruning, with what it removed and the
+entries it skipped because a job was reading them.
 
 Each qmod gets a sidecar `<qmod>.qmod-cache.json` (`hit`, `miss` or `uncacheable`, the key, and for a hit the entry),
-which `verify`, `stats` and `prune --keep-build` read.
+which `verify`, `stats` and `prune` read.
 
 ## Environment of `exec`
 
@@ -183,15 +205,18 @@ which `verify`, `stats` and `prune --keep-build` read.
 
 ## CI
 
-Each Linux build job and the macOS job keep `.qmod-cache/` in a GitLab cache keyed by the job name and the branch,
-falling back to the develop branch's cache; `QORE_QMOD_CACHE_DIR` points at it.  After the build,
-`test/docker_test/qmod-cache.sh` runs the guard, prints the hits and misses and the cache size, and prunes the cache
-to the entries of this build, so the cache holds one build's modules.
+The cache of the CI jobs is a directory of the host that the runner mounts into every job: a directory of professor
+mounted into the macOS VM, and a directory of each Kubernetes node mounted into the build pods.  The runner names it
+in `QORE_QMOD_CACHE_DIR`; `test/docker_test/qmod-cache.sh` uses the directory of the job's name in it, which the jobs
+of that name share (on a node, the jobs of other names and platforms have their own), and builds without the cache
+when the variable is not set or the directory is not mounted or cannot be written.  After every build it runs the
+guard and prunes the job's cache directory (`QORE_QMOD_CACHE_MAX_AGE_DAYS`, default 7, and `QORE_QMOD_CACHE_MAX_SIZE_MB`,
+default 3072, set in `.gitlab-ci.yml`), and prints the statistics line.
 
-The GitLab cache needs a distributed cache (S3 or another object store) in the runners' configuration: without one,
-the Kubernetes executor keeps a cache in the job's pod and the macOS job in its VM, and both are gone after the job.
-Branches can fall back to the develop branch's cache only when the project does not use separate caches for
-protected branches (Settings, CI/CD, General pipelines).
+A host directory costs no network transfer and no object store, and keeps the cache across branches and pipelines;
+on Kubernetes a node only has the modules of the jobs that ran on it, so the hit rate depends on how jobs land on
+nodes (the statistics line of each job shows it).  The runner configuration that mounts the directories is described
+in the change that introduced it (it is not part of this repository).
 
 ## Measurements
 

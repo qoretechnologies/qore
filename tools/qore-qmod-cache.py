@@ -48,6 +48,7 @@ Environment (read by "exec"; never part of a key):
 """
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -790,15 +791,29 @@ def contains_identity(path, identity):
 # the cache directory
 
 class Cache:
-    """The cache directory: <dir>/<SCHEMA>/entries/<base key>/<result key>.json and objects/<result key>/"""
+    """The cache directory: <dir>/<SCHEMA>/entries/<base key>/<result key>.json and objects/<result key>/
+
+    Several jobs can share the directory (a host directory mounted into each job).  Each object has a lock file,
+    objects/<result key>.lock:
+    - a job that reads or stores an entry holds a shared lock on it while it does;
+    - an entry is removed only under an exclusive lock taken without waiting: an entry that a job is reading is
+      skipped, never removed; the entry and its object are renamed out of the cache, into trash/, before they are
+      deleted, so a reader never sees a partial one;
+    - the lock file's modification time is the entry's last use: set when it is stored and on every hit (when the
+      cache is writable; a hit from a cache that cannot be written still succeeds), and the least recently used
+      entries are pruned first.
+    Only one job prunes at a time (prune.lock, taken without waiting: a job finding another job pruning skips its
+    own prune).
+    """
 
     def __init__(self, directory):
         self.root = os.path.join(os.path.abspath(directory), SCHEMA)
         self.entries = os.path.join(self.root, "entries")
         self.objects = os.path.join(self.root, "objects")
+        self.trash = os.path.join(self.root, "trash")
 
     def candidates(self, base):
-        """Returns the entries stored under a base key, most recently used first"""
+        """Returns the entries stored under a base key, most recently stored first"""
         d = os.path.join(self.entries, base)
         try:
             names = [n for n in os.listdir(d) if n.endswith(".json")]
@@ -819,33 +834,98 @@ class Cache:
     def object_dir(self, key):
         return os.path.join(self.objects, key)
 
-    def remove(self, entry_path, key):
+    def lock_path(self, key):
+        return os.path.join(self.objects, key + ".lock")
+
+    def open_lock(self, key, create=True):
+        """Opens the lock file of an entry; returns None if it cannot be opened (a cache that cannot be written)"""
+        path = self.lock_path(key)
+        if create:
+            try:
+                os.makedirs(self.objects, exist_ok=True)
+                return os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
+            except OSError:
+                pass
         try:
-            os.unlink(entry_path)
+            return os.open(path, os.O_RDONLY)
         except OSError:
+            return None
+
+    def mark_used(self, fd):
+        """Sets the last use of the entry whose lock file is open on @p fd to now; best effort"""
+        if fd is None:
+            return
+        try:
+            os.utime(fd)
+        except (OSError, NotImplementedError):
             pass
-        shutil.rmtree(self.object_dir(key), ignore_errors=True)
+
+    def remove(self, entry_path, key):
+        """Removes an entry and its object unless a job is reading it; returns False if it is in use"""
+        fd = self.open_lock(key)
+        if fd is None:
+            return False
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return False
+            os.makedirs(self.trash, exist_ok=True)
+            tag = "%s.%d.%d" % (key, os.getpid(), int(time.time() * 1e6))
+            moved = []
+            for src, dst in ((entry_path, os.path.join(self.trash, tag + ".json")),
+                             (self.object_dir(key), os.path.join(self.trash, tag))):
+                try:
+                    os.rename(src, dst)
+                    moved.append(dst)
+                except FileNotFoundError:
+                    pass
+            # while the lock is held: a reader that opened the file before waits for it and then finds no object
+            try:
+                os.unlink(self.lock_path(key))
+            except OSError:
+                pass
+        finally:
+            os.close(fd)
+        for p in moved:
+            if os.path.isdir(p):
+                shutil.rmtree(p, ignore_errors=True)
+            else:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+        return True
 
     def store(self, base, key, entry, files):
         """Stores the files of a compiled module; another build that stores the same key first wins"""
-        obj = self.object_dir(key)
-        os.makedirs(self.objects, exist_ok=True)
-        if not os.path.isdir(obj):
-            tmp = tempfile.mkdtemp(prefix=".tmp.", dir=self.objects)
-            try:
-                for suffix, src in files.items():
-                    shutil.copyfile(src, os.path.join(tmp, "qmod" + suffix))
+        fd = self.open_lock(key)
+        if fd is None:
+            raise OSError("cannot create the lock file of entry %s" % key)
+        try:
+            # shared: a store does not conflict with a reader, but an entry being stored is not pruned
+            fcntl.flock(fd, fcntl.LOCK_SH)
+            obj = self.object_dir(key)
+            if not os.path.isdir(obj):
+                tmp = tempfile.mkdtemp(prefix=".tmp.", dir=self.objects)
                 try:
-                    os.rename(tmp, obj)
-                except OSError:
-                    if not os.path.isdir(obj):
-                        raise
-            finally:
-                shutil.rmtree(tmp, ignore_errors=True)
-        d = os.path.join(self.entries, base)
-        os.makedirs(d, exist_ok=True)
-        atomic_write(os.path.join(d, key + ".json"), (json.dumps(entry, sort_keys=True, indent=1) + "\n").encode())
-        # keep the most recently used entries of the base key
+                    for suffix, src in files.items():
+                        shutil.copyfile(src, os.path.join(tmp, "qmod" + suffix))
+                    try:
+                        os.rename(tmp, obj)
+                    except OSError:
+                        if not os.path.isdir(obj):
+                            raise
+                finally:
+                    shutil.rmtree(tmp, ignore_errors=True)
+            d = os.path.join(self.entries, base)
+            os.makedirs(d, exist_ok=True)
+            atomic_write(os.path.join(d, key + ".json"),
+                         (json.dumps(entry, sort_keys=True, indent=1) + "\n").encode())
+            self.mark_used(fd)
+        finally:
+            os.close(fd)
+        # keep the most recently stored entries of the base key
         cands = self.candidates(base)
         for p, e in cands[MAX_ENTRIES_PER_BASE:]:
             self.remove(p, e.get("key", ""))
@@ -907,6 +987,8 @@ class Module:
             raise CacheError("the build context '%s' has another schema" % args.context)
         self.identity = self.context["identity"]
         self.default_dirs = args.default_module_dir
+        # a cache that this job does not write: no store, no last-use mark, no removal
+        self.readonly = env.get("QORE_QMOD_CACHE_READONLY") in ("1", "true", "yes")
         self.base = base_key(self.context["digest"], self.argv, self.cwd, env, self.source_root, self.extra)
 
     def files(self):
@@ -942,31 +1024,51 @@ class Module:
                 continue
             if result_key(self.base, entry["deps"], entry["optional"], entry["resolution"]) != key:
                 reason = "entry key mismatch"
-                cache.remove(path, key)
+                if not self.readonly:
+                    cache.remove(path, key)
                 continue
             obj = cache.object_dir(key)
+            # held while the entry is read, so that no job prunes it meanwhile
+            fd = cache.open_lock(key, create=not self.readonly)
+            damaged = None
             try:
-                for suffix in STORED_SUFFIXES:
-                    if sha256_file(os.path.join(obj, "qmod" + suffix)) != entry["files"][suffix or "qmod"]:
-                        raise CacheError("stored file 'qmod%s' is damaged" % suffix)
-                if not contains_identity(os.path.join(obj, "qmod"), self.identity):
-                    raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
-                target, _ = read_depfile(os.path.join(obj, "qmod.d"))
-                if os.path.abspath(target) != self.out:
-                    raise CacheError("stored dependency file names '%s'" % target)
-            except (OSError, CacheError) as e:
-                reason = str(e)
-                cache.remove(path, key)
-                continue
-            # the dependency file and fingerprints first, the module last, each renamed into place, the module with
-            # the mode qcc gave it
-            for suffix in (".d", ".d.fingerprints", ""):
-                atomic_copy(os.path.join(obj, "qmod" + suffix), self.out + suffix,
-                            None if suffix else int(entry["mode"]) & 0o777)
-            for suffix, digest in (("", entry["files"]["qmod"]), (".d", entry["files"][".d"])):
-                if sha256_file(self.out + suffix) != digest:
-                    raise CacheError("restored file '%s' differs from the cache" % (self.out + suffix))
-            return entry, None
+                if fd is not None:
+                    fcntl.flock(fd, fcntl.LOCK_SH)
+                try:
+                    if not os.path.isdir(obj):
+                        # removed since it was listed
+                        raise FileNotFoundError(obj)
+                    for suffix in STORED_SUFFIXES:
+                        if sha256_file(os.path.join(obj, "qmod" + suffix)) != entry["files"][suffix or "qmod"]:
+                            raise CacheError("stored file 'qmod%s' is damaged" % suffix)
+                    if not contains_identity(os.path.join(obj, "qmod"), self.identity):
+                        raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
+                    target, _ = read_depfile(os.path.join(obj, "qmod.d"))
+                    if os.path.abspath(target) != self.out:
+                        raise CacheError("stored dependency file names '%s'" % target)
+                except FileNotFoundError:
+                    reason = "entry removed"
+                    continue
+                except (OSError, CacheError) as e:
+                    reason = damaged = str(e)
+                    continue
+                # the dependency file and fingerprints first, the module last, each renamed into place, the module
+                # with the mode qcc gave it
+                for suffix in (".d", ".d.fingerprints", ""):
+                    atomic_copy(os.path.join(obj, "qmod" + suffix), self.out + suffix,
+                                None if suffix else int(entry["mode"]) & 0o777)
+                for suffix, digest in (("", entry["files"]["qmod"]), (".d", entry["files"][".d"])):
+                    if sha256_file(self.out + suffix) != digest:
+                        raise CacheError("restored file '%s' differs from the cache" % (self.out + suffix))
+                if not self.readonly:
+                    cache.mark_used(fd)
+                return entry, None
+            finally:
+                if fd is not None:
+                    os.close(fd)
+                # a damaged entry is removed once it is no longer read
+                if damaged and not self.readonly:
+                    cache.remove(path, key)
         return None, reason
 
     def run_qcc(self, argv=None):
@@ -1268,25 +1370,18 @@ def cmd_stats(args):
     return 0
 
 
-def cmd_prune(args):
-    """Removes cache entries: with --keep-build, those that no module of the build tree was supplied from or stored
-    as; with --unused-since, those stored before a time (seconds since the epoch, or the modification time of a
-    file); then, with --max-size, the oldest ones while the cache is larger than that many MiB"""
-    cache = Cache(args.cache_dir)
-    since = None
-    if args.unused_since:
-        if re.match(r"^[0-9]+(\.[0-9]+)?$", args.unused_since):
-            since = float(args.unused_since)
-        else:
-            since = os.stat(args.unused_since).st_mtime
-    keep_keys = None
-    if args.keep_build:
-        _, keep_keys = build_counts_and_keys(args.keep_build)
-    entries = []
+#: how old an orphan (an object without an entry, an entry without an object, an interrupted store or removal) must
+#: be before a prune removes it: a younger one can belong to a store in progress in another job
+ORPHAN_AGE = 3600
+
+
+def cache_entries(cache):
+    """Returns [last use, entry path, key, size] of every entry of the cache"""
+    rv = []
     try:
         bases = os.listdir(cache.entries)
     except OSError:
-        bases = []
+        return rv
     for base in bases:
         d = os.path.join(cache.entries, base)
         try:
@@ -1294,44 +1389,154 @@ def cmd_prune(args):
         except OSError:
             continue
         for n in names:
-            p = os.path.join(d, n)
             if not n.endswith(".json"):
                 continue
+            p = os.path.join(d, n)
+            key = n[:-5]
             try:
-                entries.append([os.stat(p).st_mtime, p, n[:-5]])
+                used = os.stat(p).st_mtime
+            except OSError:
+                continue
+            try:
+                used = max(used, os.stat(cache.lock_path(key)).st_mtime)
             except OSError:
                 pass
+            size = dir_size(cache.object_dir(key))
+            try:
+                size += os.stat(p).st_size
+            except OSError:
+                pass
+            rv.append([used, p, key, size])
+    return rv
+
+
+def remove_orphans(cache, now):
+    """Removes what no entry references and that is older than ORPHAN_AGE"""
+    def old(path):
+        try:
+            return now - os.lstat(path).st_mtime > ORPHAN_AGE
+        except OSError:
+            return False
+    keys = set(k for _, _, k, _ in cache_entries(cache))
     removed = 0
-    keep = []
-    for mtime, p, key in entries:
-        if (keep_keys is not None and key not in keep_keys) or (since is not None and mtime < since):
-            cache.remove(p, key)
-            removed += 1
-        else:
-            keep.append([mtime, p, key])
-    referenced = set(k for _, _, k in keep)
-    # objects without an entry (an interrupted store, a removed entry)
     try:
-        for n in os.listdir(cache.objects):
-            if n not in referenced:
-                shutil.rmtree(os.path.join(cache.objects, n), ignore_errors=True)
+        names = os.listdir(cache.objects)
+    except OSError:
+        names = []
+    for n in names:
+        p = os.path.join(cache.objects, n)
+        key = n[:-5] if n.endswith(".lock") else n
+        if key in keys or not old(p):
+            continue
+        if n.startswith(".tmp.") or not n.endswith(".lock"):
+            # an interrupted store, or an object without an entry: taken out under its lock like an entry
+            if n.startswith(".tmp."):
+                shutil.rmtree(p, ignore_errors=True)
+                removed += 1
+            elif cache.remove(os.path.join(cache.entries, "-", key + ".json"), key):
+                removed += 1
+        elif not os.path.isdir(cache.object_dir(key)):
+            # a lock file without an object
+            fd = cache.open_lock(key, create=False)
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    if not os.path.isdir(cache.object_dir(key)):
+                        os.unlink(p)
+                except OSError:
+                    pass
+                finally:
+                    os.close(fd)
+    # entries without an object
+    for used, p, key, _ in cache_entries(cache):
+        if not os.path.isdir(cache.object_dir(key)) and now - used > ORPHAN_AGE:
+            if cache.remove(p, key):
+                removed += 1
+    # the leftovers of interrupted removals
+    try:
+        for n in os.listdir(cache.trash):
+            p = os.path.join(cache.trash, n)
+            if old(p):
+                if os.path.isdir(p):
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    os.unlink(p)
     except OSError:
         pass
-    if args.max_size is not None:
-        limit = args.max_size * 1048576
-        keep.sort()
-        size = dir_size(cache.root)
-        while keep and size > limit:
-            _, p, key = keep.pop(0)
-            size -= dir_size(cache.object_dir(key))
-            cache.remove(p, key)
-            removed += 1
-    for base in bases:
+    return removed
+
+
+def cmd_prune(args):
+    """Prunes the cache and prints one line with the hits and misses of a build and the size of the cache before and
+    after: entries not used for --max-age-days are removed, then, with --keep-build, those that no module of the build
+    tree came from or was stored as, then the least recently used ones while the cache is larger than --max-size MiB;
+    an entry that a job is reading is never removed"""
+    cache = Cache(args.cache_dir)
+    now = time.time()
+    counts = {}
+    keep_keys = None
+    if args.build_dir:
+        counts, _ = build_counts_and_keys(args.build_dir)
+    if args.keep_build:
+        _, keep_keys = build_counts_and_keys(args.keep_build)
+    before = dir_size(cache.root)
+    stats = {"age": 0, "build": 0, "size": 0, "orphans": 0, "in use": 0}
+    note = ""
+    os.makedirs(cache.root, exist_ok=True)
+    lock_fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT, 0o666)
+    try:
         try:
-            os.rmdir(os.path.join(cache.entries, base))
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
-            pass
-    print("qmod-cache: pruned %d entries; %.1f MiB left" % (removed, dir_size(cache.root) / 1048576.0))
+            note = "; another job is pruning the cache"
+        if not note:
+            stats["orphans"] = remove_orphans(cache, now)
+            entries = cache_entries(cache)
+            keep = []
+            # the entries that a job is reading, which are left for a later prune
+            busy = set()
+            for e in entries:
+                used, p, key, _ = e
+                if args.max_age_days is not None and now - used > args.max_age_days * 86400:
+                    reason = "age"
+                elif keep_keys is not None and key not in keep_keys:
+                    reason = "build"
+                else:
+                    keep.append(e)
+                    continue
+                if cache.remove(p, key):
+                    stats[reason] += 1
+                else:
+                    busy.add(key)
+            if args.max_size is not None:
+                limit = args.max_size * 1048576
+                size = dir_size(cache.root)
+                # the least recently used first
+                keep.sort(key=lambda e: e[0])
+                for used, p, key, esize in keep:
+                    if size <= limit:
+                        break
+                    if cache.remove(p, key):
+                        stats["size"] += 1
+                        size -= esize
+                    else:
+                        busy.add(key)
+            stats["in use"] = len(busy)
+            for base in os.listdir(cache.entries) if os.path.isdir(cache.entries) else []:
+                try:
+                    os.rmdir(os.path.join(cache.entries, base))
+                except OSError:
+                    pass
+    finally:
+        os.close(lock_fd)
+    after = dir_size(cache.root)
+    removed = ", ".join("%d %s" % (v, k if k != "in use" else "skipped (in use)") for k, v in stats.items() if v)
+    line = "qmod-cache: %smodules: %s; cache %s: %.1f MiB before pruning, %.1f MiB after%s%s" % (
+        "job %s: " % args.job if args.job else "",
+        ", ".join("%s %d" % (k, v) for k, v in sorted(counts.items())) or "none",
+        cache.root, before / 1048576.0, after / 1048576.0,
+        " (removed: %s)" % removed if removed else "", note)
+    print(line)
     return 0
 
 
@@ -1363,9 +1568,11 @@ def main(argv=None):
     s.add_argument("--build-dir")
     r = sub.add_parser("prune", help="remove old cache entries")
     r.add_argument("--cache-dir", required=True)
-    r.add_argument("--unused-since")
+    r.add_argument("--max-age-days", type=float, help="remove the entries not used for this many days")
     r.add_argument("--keep-build", help="keep only the entries that the modules of this build tree came from")
-    r.add_argument("--max-size", type=float)
+    r.add_argument("--max-size", type=float, help="remove the least recently used entries above this many MiB")
+    r.add_argument("--build-dir", help="the build tree whose hits and misses are printed")
+    r.add_argument("--job", help="the name of the job, for the statistics line")
     args = p.parse_args(argv)
     if args.command == "exec" and args.qcc_argv and args.qcc_argv[0] == "--":
         args.qcc_argv = args.qcc_argv[1:]
