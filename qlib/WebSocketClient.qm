@@ -262,6 +262,11 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - fixed a race where the end of a connection closed with
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" could be processed after the client had
+      connected again and then closed the new connection, or left it open but unknown to the client, so that the next
+      @ref WebSocketClient::WebSocketClient::disconnect() "disconnect()" did not close it and the next
+      @ref WebSocketClient::WebSocketClient::connect() "connect()" failed with \c HTTPCLIENT-CAPACITY-ERROR
     - fixed the @ref WebSocketClient::WebSocketClient "WebSocketClient" constructor to accept a \c headers option
       whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>, with the \c token or
       \c cookie option; adding the \c Authorization or \c Cookie header raised \c RUNTIME-TYPE-ERROR
@@ -465,6 +470,18 @@ public const WsSchemes = {
         "ssl": True,
     },
 };
+
+#! the async I/O resources of a connection taken from a WebSocketClient; see WebSocketClient::detachAsyncIo()
+hashdecl WscAsyncIoResources {
+    #! the poll operation of the connection
+    *object op;
+    #! the owner of the connection's operations in the async I/O controller
+    *string owner;
+    #! the HttpClientIo connection manager of the connection
+    *HttpClientIo::HttpClientConnectionManager mgr;
+    #! the HttpClientIo stream of the connection
+    *HttpClientIo::HttpClientStreamHandle stream;
+}
 
 /** @defgroup WSClientRawCallbackReturnCodes WebSocketClient Raw Callback Return Codes
 */
@@ -2535,21 +2552,28 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.4
     */
     private stopAsyncIo() {
-        # stopAsyncIo() can run concurrently: handleAsyncShutdown() calls it
-        # from a delivery-task thread (deliberately without the lock — see the
-        # lock-ordering notes there), while disconnectUnlocked() calls it with
-        # the lock held.  Take each resource member atomically (object member
-        # removal is atomic) so exactly one caller acts on each resource;
-        # check-then-use on the members raced with the other caller's `remove`
-        # (observed as PSEUDO-METHOD-DOES-NOT-EXIST <nothing>::clearCallbacks()
-        # in the GraphQLHandler subscription robustness test).
+        releaseAsyncIo(detachAsyncIo());
+    }
+
+    #! Takes the async I/O resources of the current connection from the client
+    /** Each resource member is taken atomically (object member removal is atomic), so when two threads take them
+        concurrently, each resource is released by exactly one of them; check-then-use on the members raced with
+        the other caller's \c remove (observed as <tt>PSEUDO-METHOD-DOES-NOT-EXIST <nothing>::clearCallbacks()</tt>
+        in the GraphQLHandler subscription robustness test).  handleAsyncShutdown() calls it with \c m held, so that
+        it takes the resources of the connection it tears down and never those of a later connection.
+
+        The poll operation's callbacks are cleared before it is canceled in releaseAsyncIo(): cancelByOwner()
+        dispatches its completion asynchronously to a worker, which would reference a destroyed closure otherwise.
+
+        @return the resources taken, to be released with releaseAsyncIo()
+
+        @since WebSocketClient 2.5
+    */
+    private hash<WscAsyncIoResources> detachAsyncIo() {
+        hash<WscAsyncIoResources> res();
         *object op = remove poll_op;
         # a thread waiting for the operation to end keeps its own reference to the Queue
         remove async_state_queue;
-
-        # Clear the delivery callback BEFORE cancelling — cancelByOwner dispatches
-        # onComplete asynchronously to a worker, which would reference a destroyed
-        # closure if we don't clear it first
         if (op) {
             op.clearCallbacks();
             # Capture the close cause before releasing the poll op so
@@ -2560,14 +2584,31 @@ ws.setEventQueue();
                     async_close_cause = cause;
                 }
             } catch () {}
+            res.op = op;
         }
-        # async_owner is not cleared here, so both concurrent callers may cancel;
-        # cancelByOwner() is idempotent
-        if (async_owner) {
+        # async_owner is not cleared here, so concurrent callers may both cancel; cancelByOwner() is idempotent
+        if (async_owner.val()) {
+            res.owner = async_owner;
+        }
+        res.mgr = remove hcio_mgr;
+        res.stream = remove hcio_stream;
+        return res;
+    }
+
+    #! Releases the async I/O resources taken from the client with detachAsyncIo()
+    /** Cancels the connection's I/O operations in the async I/O controller and closes its HttpClientIo connection
+        manager.  Can be called without \c m held.
+
+        @param res the resources returned by detachAsyncIo()
+
+        @since WebSocketClient 2.5
+    */
+    private releaseAsyncIo(hash<WscAsyncIoResources> res) {
+        if (res.owner) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller =
                     AsyncSocketIo::getGlobalAsyncIoController();
-                controller.cancelByOwner(async_owner);
+                controller.cancelByOwner(res.owner);
             } catch (hash<ExceptionInfo> ex) {
                 logDebug("async I/O cancel error: %s: %s", ex.err, ex.desc);
             }
@@ -2576,14 +2617,12 @@ ws.setEventQueue();
         # Clean up HttpClientIo resources — shut down the connection manager
         # so its pooled connections are removed from the async I/O controller's
         # cache, preventing cache leaks across test runs
-        *HttpClientIo::HttpClientConnectionManager mgr = remove hcio_mgr;
-        if (mgr) {
+        if (res.mgr) {
             try {
-                mgr.closeAll();
+                res.mgr.closeAll();
             } catch () {
             }
         }
-        remove hcio_stream;
     }
 
     #! Wakes the async I/O controller to process pending operations
@@ -2722,6 +2761,8 @@ ws.setEventQueue();
             }
         }
 
+        # the poll operation of the connection whose messages this task delivers
+        *object delivery_op;
         while (True) {
             # Check if the object is being destroyed; closures capture self with
             # a weak reference, so the destructor can run while this thread is active.
@@ -2760,6 +2801,14 @@ ws.setEventQueue();
                     }
                     return;
                 }
+                # a task delivers the messages of one connection only: when its connection was torn down (e.g. by
+                # disconnect(), which also reset delivery_active) and the client has connected again meanwhile, the
+                # new connection's messages are delivered by the new connection's own task
+                if (!delivery_op) {
+                    delivery_op = op;
+                } else if (op != delivery_op) {
+                    return;
+                }
                 *hash<auto> msg = op.getReceivedMessage();
                 if (!msg) {
                     break;
@@ -2774,7 +2823,7 @@ ws.setEventQueue();
                         # operation, preventing any further callbacks.
                         # handleAsyncShutdown() clears delivery_active BEFORE calling clearTid()
                         # so the flag is cleared while the object is still alive.
-                        handleAsyncShutdown();
+                        handleAsyncShutdown(op);
                         return;
                     }
                 } catch (hash<ExceptionInfo> ex) {
@@ -2818,29 +2867,60 @@ ws.setEventQueue();
         or an unrecoverable error occurs. Stops the I/O controller, closes the socket, signals
         any waiting disconnect() callers, and initiates reconnection if configured.
 
+        Tears down only the connection that \a op belongs to: when that connection was already torn down by another
+        thread, e.g. by @ref disconnect(), which can return before the delivery task that holds the connection's
+        last message has run, nothing is done.  The client may already have a new connection then, which is left
+        alone; tearing it down, or clearing its state without closing it, made the next @ref disconnect() do nothing
+        and the next @ref connect() fail with \c HTTPCLIENT-CAPACITY-ERROR, as the leaked connection's stream still
+        held the only connection of the client's connection manager.  The connection is identified by its poll
+        operation and by the teardown generation (\c tid_generation), not by \c tid, which is the same sentinel
+        (-1) for every async connection.
+
+        @param op the poll operation that delivered the terminal message
+
         @since WebSocketClient 2.4
     */
-    private handleAsyncShutdown() {
+    private handleAsyncShutdown(object op) {
         if (!self) {
             return;
         }
 
-        stopAsyncIo();
-
-        # Shut down the connection
-        shutdownAndCloseUnlocked();
-
-        # Check if disconnectUnlocked() already handled the cleanup (cleared tid).
-        # If so, skip closingConnection() and clearTid() to avoid double cleanup.
+        # Take the connection's resources with the lock held, and only if the operation still belongs to the
+        # client's connection; otherwise the connection was torn down already (by disconnectUnlocked(), reconnect()
+        # or the destructor, which also reset delivery_active and called clearTid()), and its delivery_active
+        # flag may already belong to the client's next connection
+        hash<WscAsyncIoResources> res;
+        *Socket wake_socket;
+        int gen;
         {
             m.lock();
             on_exit m.unlock();
-            if (tid != -1) {
-                # tid was already cleared by disconnectUnlocked(); skip cleanup
-                {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
-                }
+            if (poll_op != op) {
+                return;
+            }
+            gen = tid_generation;
+            res = detachAsyncIo();
+            # with HTTP/1.1, the socket taken from the connection after the upgrade; see shutdownAndCloseUnlocked()
+            wake_socket = remove async_wake_socket;
+        }
+
+        # Stop the I/O controller and shut down the connection without the lock
+        releaseAsyncIo(res);
+        if (wake_socket) {
+            try {
+                wake_socket.shutdown();
+                wake_socket.close();
+            } catch () {
+            }
+        }
+
+        # Check if disconnectUnlocked() already handled the cleanup (called clearTid()) meanwhile; then skip
+        # closingConnection() and clearTid() to avoid double cleanup
+        {
+            m.lock();
+            on_exit m.unlock();
+            if (tid_generation != gen) {
+                # the connection was torn down by another thread, which also reset delivery_active
                 return;
             }
             # Set the shutdown TID before calling closingConnection() so that if the callback
@@ -2879,13 +2959,9 @@ ws.setEventQueue();
                 async_shutdown_tid = -2;
             }
 
-            # Check again: disconnectUnlocked() may have cleared tid while we were
-            # in closingConnection()
-            if (tid != -1) {
-                {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
-                }
+            # Check again: disconnectUnlocked() may have torn the connection down while we were in
+            # closingConnection(), and the client may even have connected again meanwhile
+            if (tid_generation != gen) {
                 return;
             }
 

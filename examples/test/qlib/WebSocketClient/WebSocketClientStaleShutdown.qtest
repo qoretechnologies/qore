@@ -1,0 +1,252 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Regression tests: the teardown of a WebSocketClient connection that a delivery task runs after the connection was
+# already closed with disconnect() must leave the client's next connection alone.
+#
+# A delivery task that holds the "closed" message of a connection runs handleAsyncShutdown() after disconnect() has
+# torn that connection down; when the client has connected again meanwhile, the stale teardown used to tear down the
+# new connection (mode "after connect"), or to clear the new connection's state without closing it (mode "across
+# connect"), so that the next disconnect() did nothing and the next connect() failed with HTTPCLIENT-CAPACITY-ERROR
+# (all 1 connections to the server have reached the concurrent stream limit), as the open stream of the leaked
+# connection still held the only connection of the client's connection manager.
+#
+# The delivery task is held with lock handoffs in a subclass, so the interleavings are reproduced without timing.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class WebSocketClientStaleShutdownTest
+
+class StaleEchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+}
+
+class StaleEchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new StaleEchoWsConnection(self);
+    }
+}
+
+#! A client whose delivery task can be held while it delivers the "closed" message of a connection
+class StaleShutdownWsClient inherits WebSocketClient {
+    public {
+        #! bound of every handoff wait; only reached if the client does not run the expected step
+        const HandoffTimeout = 30s;
+
+        #! the TID of the held delivery task
+        int hold_tid = 0;
+
+        #! released when the delivery task holds the "closed" message
+        Counter held(1);
+        #! released by the test to let the delivery task go on
+        Counter release(1);
+        #! events of the held delivery task after its release: "closed-socket" and "done"
+        Queue events();
+        #! released by the test to let the delivery task go on after "closed-socket"
+        Counter release_close(1);
+        #! hold the delivery task after it has closed the connection's socket in the teardown
+        bool hold_close = False;
+    }
+
+    private {
+        #! hold the next "closed" message
+        bool armed = False;
+        #! let the next teardown made by another thread wait until the delivery task holds the "closed" message
+        bool gate_stop = False;
+    }
+
+    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
+    }
+
+    #! holds the "closed" message of the current connection when disconnect() is called next
+    arm(bool hold_close) {
+        self.hold_close = hold_close;
+        armed = True;
+        gate_stop = True;
+    }
+
+    #! starts a thread that reports "done" when the held delivery task has ended
+    watchDone() {
+        Queue q = events;
+        Counter c = delivery_thread_counter;
+        background sub () {
+            if (c.waitForZero(HandoffTimeout)) {
+                q.push("timeout");
+            } else {
+                q.push("done");
+            }
+        }();
+    }
+
+    private int processAsyncMessage(hash<auto> msg) {
+        if (msg.type == "closed" && armed) {
+            armed = False;
+            hold_tid = gettid();
+            held.dec();
+            release.waitForZero(HandoffTimeout);
+        }
+        return WebSocketClient::processAsyncMessage(msg);
+    }
+
+    private stopAsyncIo() {
+        # the teardown made by disconnect() waits until the delivery task holds the "closed" message, which it can
+        # read only while the connection's poll operation is set
+        if (gate_stop && gettid() != hold_tid) {
+            gate_stop = False;
+            held.waitForZero(HandoffTimeout);
+        }
+        WebSocketClient::stopAsyncIo();
+    }
+
+    private shutdownAndCloseUnlocked() {
+        WebSocketClient::shutdownAndCloseUnlocked();
+        # the teardown has released the connection's resources and checks next, with the client's lock held, if
+        # the connection it tears down is still the client's connection
+        if (hold_close && hold_tid && gettid() == hold_tid) {
+            hold_close = False;
+            events.push("closed-socket");
+            release_close.waitForZero(HandoffTimeout);
+        }
+    }
+}
+
+class WebSocketClientStaleShutdownTest inherits QUnit::Test {
+    public {
+        HttpServer server;
+        hash<auto> linfo;
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketClientStaleShutdownTest", "1.0") {
+        addTestCase("stale teardown after the next connect", \staleTeardownAfterConnectTest());
+        addTestCase("stale teardown across the next connect", \staleTeardownAcrossConnectTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server.setDefaultHandler("ws-handler", new StaleEchoWsHandler());
+        linfo = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+
+        set_return_value(main());
+
+        server.stop();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    #! The held delivery task runs the whole teardown of the first connection after the second connect
+    staleTeardownAfterConnectTest() {
+        runTest(False);
+    }
+
+    #! The held delivery task starts the teardown of the first connection before the second connect and ends it
+    #! after the second connect
+    staleTeardownAcrossConnectTest() {
+        runTest(True);
+    }
+
+    private runTest(bool across) {
+        Queue msgs();
+        Counter closed_count();
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            } else {
+                closed_count.inc();
+            }
+        };
+        StaleShutdownWsClient wsc(cb, {"url": "ws://localhost:" + linfo.port, "logger": logger});
+        on_exit {
+            # never leave the delivery task held; only this thread releases it
+            if (wsc.release.getCount()) {
+                wsc.release.dec();
+            }
+            if (wsc.release_close.getCount()) {
+                wsc.release_close.dec();
+            }
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+            delete wsc;
+        }
+
+        # first connection
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the first connection is open");
+        wsc.arm(across);
+        wsc.disconnect();
+        # disconnect() returned with the "closed" message of the first connection held in the delivery task
+        assertEq(0, wsc.held.waitForZero(1ms), "the delivery task holds the closed message");
+        assertFalse(wsc.isOpen(), "the first connection is closed");
+        assertEq(1, closed_count.getCount(), "the first connection is reported closed once");
+
+        if (across) {
+            # let the delivery task start the teardown of the first connection
+            wsc.release.dec();
+            wsc.watchDone();
+            string ev = wsc.events.get(StaleShutdownWsClient::HandoffTimeout);
+            if (ev == "closed-socket") {
+                # the delivery task is held in the teardown: connect while it is held
+                wsc.connect();
+                assertTrue(wsc.isOpen(), "the second connection is open");
+                wsc.release_close.dec();
+                assertEq("done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+            } else {
+                # the delivery task left the closed connection alone
+                assertEq("done", ev);
+                wsc.connect();
+            }
+        } else {
+            # connect while the delivery task holds the closed message, then let it go on
+            wsc.connect();
+            assertTrue(wsc.isOpen(), "the second connection is open");
+            wsc.release.dec();
+            wsc.watchDone();
+            assertEq("done", wsc.events.get(StaleShutdownWsClient::HandoffTimeout));
+        }
+
+        # the teardown of the first connection left the second one alone
+        assertTrue(wsc.isOpen(), "the second connection is still open");
+        assertEq(1, closed_count.getCount(), "the second connection is not reported closed");
+        wsc.send("one");
+        assertEq("ECHO:one", msgs.get(StaleShutdownWsClient::HandoffTimeout));
+
+        # disconnect() closes the second connection
+        wsc.disconnect();
+        assertFalse(wsc.isOpen(), "the second connection is closed");
+        assertEq(2, closed_count.getCount(), "the second connection is reported closed");
+
+        # and the client connects again
+        wsc.connect();
+        assertTrue(wsc.isOpen(), "the third connection is open");
+        wsc.send("two");
+        assertEq("ECHO:two", msgs.get(StaleShutdownWsClient::HandoffTimeout));
+        wsc.disconnect();
+        assertEq(3, closed_count.getCount(), "the third connection is reported closed");
+    }
+}
