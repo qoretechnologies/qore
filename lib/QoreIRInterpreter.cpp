@@ -1529,6 +1529,12 @@ static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
     cleanup.clear();
 }
 
+//! Returns true if a local variable of the given type can hold a reference (reference r = \x;), whose value is that
+//! of the referenced lvalue
+static bool qore_ir_type_may_hold_reference(const QoreTypeInfo* ti) {
+    return !QoreTypeInfo::hasType(ti) || QoreTypeInfo::isReference(ti);
+}
+
 static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals,
         std::vector<const LocalVar*>& locals_ordered,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
@@ -8649,13 +8655,20 @@ next_instruction:
                         // loop lowering emits DiscardTemps per iteration to drop the
                         // out slot's refSelf'd temp ref.
                         bool is_weak_ref_local = false;
-                        if (!needs_deref && val.hasNode()) {
+                        // a local holding a reference (reference r = \x;) is read as the value of the referenced
+                        // lvalue, which can change without a store to this local (x = 10;), so that value is never
+                        // cached: every load reads it through the reference, as the AST interpreter does
+                        bool is_reference_local = false;
+                        if ((!needs_deref && val.hasNode())
+                                || qore_ir_type_may_hold_reference(local_inst->local->getTypeInfo())) {
                             LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                             if (lvv) {
                                 qore_type_t raw_type = lvv->val.getType();
                                 if (raw_type == NT_WEAKREF || raw_type == NT_WEAKREF_HASH
                                         || raw_type == NT_WEAKREF_LIST) {
                                     is_weak_ref_local = true;
+                                } else if (raw_type == NT_REFERENCE) {
+                                    is_reference_local = true;
                                 }
                             }
                         }
@@ -8676,7 +8689,7 @@ next_instruction:
                         // Store in slot cache for fast access on next load (unless weak-ref)
                         if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                             locals_slot_cache.storage(sid).discard(xsink);
-                            if (is_weak_ref_local) {
+                            if (is_weak_ref_local || is_reference_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
                                 locals_slot_cache.storage(sid) = QoreValue();

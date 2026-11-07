@@ -1437,6 +1437,11 @@
     - a reference to an undeclared member of a class with a public member declaration raised two parse exceptions
       when types are required (as with @ref modern "%modern"): the illegal access and the missing type information;
       only the illegal access is now reported
+    - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter, a
+      local variable holding a reference (ex: <tt>reference r = \x;</tt> or a \c reference<T> parameter) kept
+      reading as the first value read after the referenced lvalue changed without an assignment to the variable (ex:
+      <tt>int x = 2; reference r = \x; int a = r; x = 10;</tt> then \c r read as \c 2); it now reads as the
+      referenced lvalue, as with the AST interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c *= and \c /= on a \c softint or
       \c *softint local or \c thread_local variable with an operand holding a number gave the number computed
       instead of the value the variable holds (ex: <tt>softint v = 7; auto n = 2.5n;</tt> then <tt>(v *= n)</tt>
