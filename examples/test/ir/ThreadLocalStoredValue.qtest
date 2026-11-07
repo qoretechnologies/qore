@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ThreadLocalStoredValueTest
+
+#! Regression test: a thread_local variable read after a store gives the value the variable holds
+/** A variable converts the value assigned to it as its declared type requires: a \c softint variable stores \c "5"
+    as \c 5, and an \c any or \c auto! variable stores a \c hash<HD> as a plain \c hash and a \c list<int> as a plain
+    \c list.  The IR interpreter kept the value given to a thread_local variable in a copy in the frame, and read that
+    copy instead of the variable until the next call, so the code after the store saw the value before the
+    conversion (\c "5", \c hash<HD>), the result of the assignment was that value too, and a rejected assignment
+    (\c RUNTIME-TYPE-ERROR) seemed to have stored its value.  The copy now holds the value the variable holds after
+    the store, and a rejected assignment leaves no copy.
+
+    The script runs plain and compound assignments on \c softint, \c any, \c auto! and \c int thread_local variables,
+    and takes the results of assignments to them and to global variables, three times each, so that every tier runs
+    them (see ExecModeOutputTest).
+*/
+class ThreadLocalStoredValueTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+hashdecl HD { int a = 1; }
+thread_local softint ts;
+thread_local any ta;
+thread_local auto! tb;
+thread_local int ti;
+softint gs;
+any ga;
+
+# a thread_local variable read in the frame that stored it, with no call in between
+string sub plain() {
+    ts = "5";
+    string a = ts.type();
+    ta = <HD>{};
+    string b = ta.fullType();
+    tb = cast<list<int>>((1, 2));
+    string c = tb.fullType();
+    return sprintf("%s %s %s", a, b, c);
+}
+
+# the result of an assignment is the value the variable holds
+string sub result() {
+    return sprintf("%s %s %s %s %s", (ts = "6").type(), (ta = <HD>{}).fullType(), (tb = <HD>{}).fullType(),
+        (gs = "7").type(), (ga = <HD>{}).fullType());
+}
+
+# compound assignments store the value as an assignment does
+string sub compound() {
+    ts = 1;
+    ts += "5";
+    string a = sprintf("%s:%y", ts.type(), ts);
+    ta = NULL;
+    ta += <HD>{};
+    string b = ta.fullType();
+    tb = NULL;
+    tb += cast<list<int>>((1, 2));
+    string c = tb.fullType();
+    return sprintf("%s %s %s", a, b, c);
+}
+
+# a rejected assignment leaves the variable unchanged
+string sub rejected(auto v) {
+    ti = 1;
+    try {
+        ti = v;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s %y", ex.err, ti);
+    }
+    return sprintf("assigned %y", ti);
+}
+
+for (int i = 0; i < 3; ++i) {
+    printf("%d %s | %s | %s | %s\n", i, plain(), result(), compound(), rejected("x"));
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 integer hash list | integer hash hash integer hash | integer:6 hash list | RUNTIME-TYPE-ERROR 1",
+            "1 integer hash list | integer hash hash integer hash | integer:6 hash list | RUNTIME-TYPE-ERROR 1",
+            "2 integer hash list | integer hash hash integer hash | integer:6 hash list | RUNTIME-TYPE-ERROR 1",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ThreadLocalStoredValue", Script, (map $1 + "\n", Expected).join(""),
+            "reads the value a thread_local variable holds") {
+    }
+}

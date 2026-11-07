@@ -1428,6 +1428,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - in the IR and tiered execution modes, a \c thread_local variable read after an assignment in the same function
+      gave the value assigned instead of the value the variable holds (ex: <tt>thread_local softint t; t = "5";</tt>
+      then <tt>t.type()</tt> gave \c "string"), and so did the result of the assignment; a rejected assignment
+      seemed to have changed the variable; the variable's value is now given, as with the AST interpreter
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c ++ and \c -- on a value of a hash typed
       with float or number values (ex: <tt>hash<string, float> h = {"v": 2.5}; ++h.v</tt>) gave an integer and
       stored a truncated value; they now give the same results as the AST interpreter (\c 3.5 in the example)

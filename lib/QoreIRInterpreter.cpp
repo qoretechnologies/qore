@@ -1554,6 +1554,17 @@ static void storeValue(std::unordered_map<const void*, QoreValue>& values, const
     values[key] = stored;
 }
 
+//! Removes the cached value of a variable, if any
+static void eraseStoredValue(std::unordered_map<const void*, QoreValue>& values, const void* key,
+        ExceptionSink* xsink) {
+    auto it = values.find(key);
+    if (it != values.end()) {
+        QoreValue old = it->second;
+        values.erase(it);
+        old.discard(xsink);
+    }
+}
+
 static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals,
         std::vector<const LocalVar*>& locals_ordered,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
@@ -1793,18 +1804,29 @@ static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, Except
     helper.assign(value);
 }
 
-// Write-through for global variable stores: writes the value to the actual
-// global Var so that changes are visible outside the IR interpreter.
-static void assignGlobalVarValue(Var* var, const QoreValue& value, ExceptionSink* xsink) {
+// Write-through for global and thread-local variable stores: writes the value to the actual Var so that changes are
+// visible outside the IR interpreter.
+//! Assigns a value to a global or thread-local variable and returns the value that the variable then holds
+/** The variable converts the value as an assignment does (ex: a \c softint variable stores \c "5" as \c 5, an
+    \c any variable stores a \c hash<HD> as a plain \c hash), so the value it holds can differ from the value given;
+    code that keeps a copy of the variable's value or gives the assignment's result must use the value returned.
+
+    @return the value the variable holds, with a reference for the caller, or no value if the assignment raised an
+    exception
+*/
+static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, ExceptionSink* xsink) {
     if (!var) {
-        return;
+        return QoreValue();
     }
     LValueHelper helper(xsink);
     if (var->getLValue(helper, false)) {
-        return;
+        return QoreValue();
     }
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
-    helper.assign(stored);
+    if (helper.assign(stored)) {
+        return QoreValue();
+    }
+    return helper.getReferencedValue();
 }
 
 static void assignObjectMemberValue(QoreObject* obj, const char* key, const QoreValue& value,
@@ -11602,17 +11624,18 @@ load_local_done:
                     }
                 }
 
-                // the value is only stored in the variable: other threads can change it, so the frame keeps no copy
-                assignGlobalVarValue(var_inst->var, val, xsink);
-                if (var_inst->result.isValid()) {
-                    QoreValue res = val.needsRef() ? val.refSelf() : val;
+                // the value is only stored in the variable: other threads can change it, so the frame keeps no copy;
+                // the result of the assignment is the value the variable holds, which the variable's type can have
+                // converted (see assignGlobalVarValueStored())
+                ValueHolder stored(assignGlobalVarValueStored(var_inst->var, val, xsink), xsink);
+                if (var_inst->result.isValid() && !(xsink && *xsink)) {
+                    QoreValue res = stored.release();
                     setValueSlot(values, var_inst->result.id, res, xsink);
                     if (res.needsRef()) {
                         cleanup.push_back(var_inst->result.id);
                     }
                 }
-                // Drop the initial ownership ref from weak node creation;
-                // storeValue() and assignGlobalVarValue() each took their own ref
+                // Drop the initial ownership ref from weak node creation; assignGlobalVarValueStored() took its own
                 if (converted) {
                     val.discard(xsink);
                 }
@@ -11677,18 +11700,26 @@ load_local_done:
                     }
                 }
 
-                storeValue(threadlocals, var_inst->var, val, xsink);
-                // Write-through: update the actual thread-local variable.
-                assignGlobalVarValue(var_inst->var, val, xsink);
-                if (var_inst->result.isValid()) {
-                    QoreValue res = val.needsRef() ? val.refSelf() : val;
-                    setValueSlot(values, var_inst->result.id, res, xsink);
-                    if (res.needsRef()) {
-                        cleanup.push_back(var_inst->result.id);
+                // Write-through: update the actual thread-local variable.  The frame caches the value the variable
+                // then holds, not the value given: the variable's type can convert it (ex: a softint variable stores
+                // "5" as 5, an any variable stores a hash<HD> as a plain hash; see assignGlobalVarValueStored()), and
+                // LoadThreadLocal reads the cache instead of the variable.  A rejected assignment leaves the variable
+                // unchanged, and the cache keeps no value for it, so that it is read from the variable.
+                ValueHolder stored(assignGlobalVarValueStored(var_inst->var, val, xsink), xsink);
+                if (xsink && *xsink) {
+                    eraseStoredValue(threadlocals, var_inst->var, xsink);
+                } else {
+                    storeValue(threadlocals, var_inst->var, *stored, xsink);
+                    if (var_inst->result.isValid()) {
+                        QoreValue res = stored.release();
+                        setValueSlot(values, var_inst->result.id, res, xsink);
+                        if (res.needsRef()) {
+                            cleanup.push_back(var_inst->result.id);
+                        }
                     }
                 }
-                // Drop the initial ownership ref from weak node creation;
-                // storeValue() and assignGlobalVarValue() each took their own ref
+                // Drop the initial ownership ref from weak node creation; storeValue() and
+                // assignGlobalVarValueStored() each took their own ref
                 if (converted) {
                     val.discard(xsink);
                 }
