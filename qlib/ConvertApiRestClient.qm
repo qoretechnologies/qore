@@ -1,0 +1,392 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ConvertApiRestClient.qm Qore user module for calling ConvertAPI REST API services
+
+/*  ConvertApiRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+# enable all warnings
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module ConvertApiRestClient {
+    version = "1.0";
+    desc = "User module for calling ConvertAPI REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("convertapi", ConvertApiRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ConvertApiRestClient Module
+
+    @tableofcontents
+
+    @section convertapirestclientintro ConvertApiRestClient Introduction
+
+    The %ConvertApiRestClient module provides an API for calling the
+    <a href="https://www.convertapi.com">ConvertAPI</a> file conversion REST API.
+
+    ConvertAPI converts files between more than 300 format pairs: office documents, spreadsheets and presentations
+    to and from PDF, web pages and HTML to PDF, PDF to images and office formats, images, e-books, CAD drawings,
+    e-mail messages and archives; it also provides PDF tools such as merge, split, compress, protect, OCR,
+    watermark and PDF/A conversion.
+
+    Every conversion is a \c POST request to <tt>convert/<i>from</i>/to/<i>to</i></tt>; the list of converters and
+    their parameters is available from the unauthenticated \c info endpoint.
+
+    To use this module, use \c "%requires ConvertApiRestClient" in your code.
+
+    All the public symbols in the module are defined in the ConvertApiRestClient namespace.
+
+    The main classes are:
+    - @ref ConvertApiRestClient::ConvertApiRestClient "ConvertApiRestClient":
+      this class provides the REST client API for communication with ConvertAPI; it handles authentication with an
+      API token sent as a bearer token
+    - @ref ConvertApiRestClient::ConvertApiRestClientIo "ConvertApiRestClientIo":
+      the same API using multiplexed HTTP connections
+    - @ref ConvertApiRestClient::ConvertApiRestConnection "ConvertApiRestConnection":
+      provides a connection object to ConvertAPI (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires ConvertApiRestClient
+
+ConvertApiRestClient convertapi({"apikey": ENV.CONVERTAPI_TOKEN});
+hash<auto> result = convertapi.post("convert/docx/to/pdf", {
+    "Parameters": (
+        {"Name": "File", "FileValue": {"Url": "https://cdn.convertapi.com/public/files/demo.docx"}},
+        {"Name": "StoreFile", "Value": True},
+    ),
+});
+printf("PDF URL: %s\n", result.body.Files[0].Url);
+    @endcode
+
+    @see @ref convertapidataproviderintro "ConvertApiDataProvider" for a data provider API for ConvertAPI
+
+    @section convertapirestclientrelnotes Release Notes
+
+    @subsection convertapirestclientv1_0 ConvertApiRestClient v1.0
+    - initial release
+*/
+
+#! the ConvertApiRestClient namespace contains all the objects in the ConvertApiRestClient module
+public namespace ConvertApiRestClient {
+
+#! Common base class for ConvertApiRestClient functionality
+public class ConvertApiRestClientBase {
+    public {
+        #! ConvertAPI API base URL
+        const DefaultApiUrl = "https://v2.convertapi.com";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ConvertAPI ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ConvertAPI ping path (account information - lightweight and requires valid credentials)
+        const DefaultPingPath = "user";
+
+        #! Default ConvertAPI ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    #! returns options for @ref ConvertApiRestClient::ConvertApiRestClient::constructor()
+    static hash<auto> getOptions(hash<auto> opts) {
+        # the options have values of different types, so the hash must not take the narrow type of the
+        # defaults, which would prevent adding values of other types
+        hash<auto!> rv = DefaultOptions + opts;
+        # the headers are set in an "auto!" local: a caller's headers option may be narrowed (e.g. hash<string, int>
+        # for {"X-Count": 1}), and adding a string header would throw
+        *hash<auto!> hdr = rv.headers;
+
+        # Set API URL (use default unless caller provided an override)
+        if (!rv.url) {
+            rv.url = DefaultApiUrl;
+        }
+
+        # Validate apikey is provided
+        if (!opts.apikey) {
+            throw "CONVERTAPI-ERROR", "missing required option 'apikey' (ConvertAPI API token)";
+        }
+
+        # Set the Authorization header from the apikey option; the header is always recomputed, so it replaces any
+        # Authorization header already present; the apikey option is kept in the returned hash (it is ignored by the
+        # base classes), so that the options saved in the base class can be used to create a copy of the object with
+        # copyWithUrl(); this method must return the same result when called with its own output
+        hdr.Authorization = "Bearer " + opts.apikey;
+
+        rv.headers = hdr;
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with ConvertAPI servers
+/** ConvertAPI uses a REST API authenticated with an API token sent as a bearer token in the \c Authorization
+    header.
+
+    @par API Information:
+    - Base URL: https://v2.convertapi.com
+    - API documentation: https://docs.convertapi.com
+    - Get an API token at: https://www.convertapi.com/a/authentication
+*/
+public class ConvertApiRestClient inherits RestClient::RestClient, ConvertApiRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+ConvertApiRestClient convertapi({"apikey": "your-api-token"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c apikey: the ConvertAPI API token (required)
+
+        If the \c url option is given, it takes precedence over the default API URL
+        (\c https://v2.convertapi.com).
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw CONVERTAPI-ERROR missing required option 'apikey'
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ConvertApiRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+}
+
+#! Class for ConvertAPI REST connections; returns @ref ConvertApiRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c apikey: the ConvertAPI API token
+
+    @see @ref ConvertApiRestClient::ConvertApiRestClient::constructor() for more information on the above options
+*/
+public class ConvertApiRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default ConvertAPI connection URL
+        const DefaultConnectionUrl = "convertapi://v2.convertapi.com";
+
+        #! Connection entry info
+        const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ConvertApiRestClient",
+            "ConvertApiRestConnection", "en", <ConnectionSchemeInfo>{
+            "display_name": "ConvertAPI REST Connection",
+            "short_desc": "A connection to the ConvertAPI file conversion REST API",
+            "desc": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\n"
+                "ConvertAPI converts files between more than 300 format pairs, including:\n"
+                "- Office documents, spreadsheets and presentations to and from PDF\n"
+                "- Web pages and HTML to PDF and images\n"
+                "- PDF to images, office formats, text and PDF/A\n"
+                "- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+            "cls": Class::forName("ConvertApiRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "convertapi": True,
+            },
+            "base_scheme_map": {
+                "https": "convertapi",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": connection_option_override(RestConnection::ConnectionScheme.options."data", {
+                    "default_value": ConvertApiRestClientBase::DefaultData,
+                }),
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Token",
+                    "short_desc": "ConvertAPI API token",
+                    "type": "string",
+                    "desc": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\n"
+                        "Create or copy an API token on the "
+                        "[Authentication page](https://www.convertapi.com/a/authentication) of your "
+                        "ConvertAPI account.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "ping_headers": connection_option_override(RestConnection::ConnectionScheme.options."ping_headers", {
+                    "default_value": ConvertApiRestClientBase::DefaultPingHeaders,
+                }),
+                "ping_method": connection_option_override(RestConnection::ConnectionScheme.options."ping_method", {
+                    "default_value": ConvertApiRestClientBase::DefaultPingMethod,
+                }),
+                "ping_path": connection_option_override(RestConnection::ConnectionScheme.options."ping_path", {
+                    "default_value": ConvertApiRestClientBase::DefaultPingPath,
+                }),
+            },
+            "required_options": "apikey",
+            "messages": (
+                <UiMessageInfo>{
+                    "presentation_id": "setup-1",
+                    "title": "How to Get Your API Token",
+                    "intent": "info",
+                    "content": "1. Sign up or log in at https://www.convertapi.com/a\n"
+                        "2. Open the **Authentication** page of your account\n"
+                        "3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n"
+                        "**Note:** each conversion consumes conversion credits; check your remaining balance "
+                        "in your ConvertAPI account.",
+                },
+            ),
+        });
+    }
+
+    #! creates the ConvertApiRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the ConvertApiRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(ConvertApiRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref ConvertApiRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "url": DefaultConnectionUrl,
+        };
+    }
+
+    #! returns \c "convertapi"
+    string getType() {
+        return "convertapi";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "ConvertApi";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the ConvertApiDataProvider and creates the data provider
+        # object dynamically
+        load_module("ConvertApiDataProvider");
+        return create_object("ConvertApiDataProvider", self);
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref ConvertApiRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref ConvertApiRestClient object
+    */
+    private ConvertApiRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ConvertApiRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since ConvertApiRestClient 1.0
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ConvertApiRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for the ConvertAPI REST API using multiplexed HTTP connections
+/** @see ConvertApiRestClient for more information
+*/
+public class ConvertApiRestClientIo inherits RestClientIo::RestClientIo, ConvertApiRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ConvertApiRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}
