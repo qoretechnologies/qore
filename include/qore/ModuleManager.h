@@ -186,8 +186,11 @@ public:
     ModuleManager(const ModuleManager&) = delete;
     ModuleManager& operator=(const ModuleManager&) = delete;
 
-    //! to add a single directory to the QORE_MODULE_DIR list, can only be called before the library initialization function qore_init()
-    /**
+    //! to add a single directory to the QORE_MODULE_DIR list
+    /** A directory added before the library initialization function qore_init() holds library code; one added
+        afterwards is searched for modules but does not.  The call is ignored for code that a sandbox governs or whose
+        parse options restrict a functional domain.
+
         @param dir the directory path to add to the list
     */
     DLLEXPORT static void addModuleDir(const char* dir);
@@ -198,8 +201,9 @@ public:
     */
     DLLEXPORT static void addAutoModuleDir(const char* dir);
 
-    //! to add a list of directories separated by ':' characters to the QORE_MODULE_DIR list, can only be called before the library initialization function qore_init()
-    /**
+    //! to add a list of directories separated by ':' characters to the QORE_MODULE_DIR list
+    /** see addModuleDir()
+
         @param strlist a list of directories separated by ':' characters to add to the QORE_MODULE_DIR list
     */
     DLLEXPORT static void addModuleDirList(const char* strlist);

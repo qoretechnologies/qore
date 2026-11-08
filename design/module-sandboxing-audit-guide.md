@@ -89,24 +89,47 @@ fixed when the library is initialized; `QoreModuleManager::isTrustedModulePath()
 does not look beyond the code that loads the module, so the initialization belongs to no sandbox, also when sandboxed
 or restricted code loads the module first, and what it creates (objects, callbacks, catalog and registry entries,
 threads) carries no tenant's sandbox. A Program entered during the initialization that has a sandbox manager of its
-own still governs its code. A source module's Program does not take the loading Program's manager, and the parse
-defines of a sandboxed loader do not apply to the module's source. Every later call into the module is governed by
-its caller.
+own still governs its code. A source module's Program does not take the loading Program's manager, nor what code that
+is not trusted chose (see below). Every later call into the module is governed by its caller.
 
 A module loaded by path, or through a Program's own `%prepend-module-path` / `%append-module-path`, is chosen by its
 caller: it is initialized under the loader's sandbox, and a source module's Program keeps the loader's manager.
 
-Feature names are process-wide (`QoreModuleManager::map`), so a module chosen by code that is not trusted (sandboxed,
-or with restricting runtime parse options) is fenced off in both orders (`QoreModuleManager::checkShadowingLoad()`):
+Code that is not trusted (`qore_caller_is_untrusted()`: sandboxed, or with restricting runtime parse options, or
+library code that such code loaded, while it is initialized) cannot change which modules are library code, nor which
+modules library code gets:
 
-- such code cannot load a module from outside the module path (by path, through its own module paths, or from
-  source) under the name of a module in the module path (`findTrustedModule()`: `name.qm`, `name.qmod`,
-  `name/name.qm`, `name-api-*.qmod` in each module path directory); the load raises `LOAD-MODULE-ERROR`;
-- a module that such code did load from outside the module path is recorded (`tenant_features`, recorded before the
-  load and removed again if it fails without registering the module), and a later request for its name from code
-  that is not sandboxed and not restricted, a reload included, raises `LOAD-MODULE-ERROR` in `loadModuleIntern()`.
+- the directories of library code are recorded once by `QoreModuleManager::init()` (`trusted_module_dirs`, as
+  configured and canonical, immutable and read without a lock); `isTrustedModulePath()` and `findTrustedModule()` read
+  only that record. A directory added later is searched but holds no library code, and such code cannot add one: an
+  unquoted `%append-module-path` is a parse error (`mayChangeModulePath()`), and `addModuleDir()` /
+  `addModuleDirList()` ignore it;
+- trust is decided once, and the module is loaded from the path that was checked (the canonical path unless the name
+  given is under a directory as configured); the decision is recorded on the module (`QoreAbstractModule::isTrusted()`,
+  through the thread-local load frame that `QoreModuleManager::addModule()` reads) and used by `addToProgramImpl()`;
+- the barrier records whether the loader is trusted and its sandbox; while library code that code that is not
+  trusted loaded is initialized, its loads are checked as that code's own, and a module that is not library code is
+  initialized under a lift (the barrier is set aside, so the module is governed by the loader's sandbox, and its
+  Program takes that sandbox, `inherit_module_sandbox_manager()`);
+- a library module's Program is marked (`qore_program_private::library_module`); one loaded by code that is not
+  trusted does not inherit that code's module path lists (source loaders, `inheritAOTModulePathLists()`), so its
+  `%requires`, `%try-module` and `%try-child-module` resolve through library code's own paths, and inherits only the
+  defines that the loading Program's host set (`source_defines` holds the others: `%define` in source and
+  `Program::define()` by code that is not trusted); such code cannot mark imports for re-export
+  (`Program::importClass()`, `Program::importHashDecl()`), so `inheritParseImports()` carries only the host's;
+- a library module that such code loads into a Program container of its own is not library code (the container's code
+  and defines shape it); a container load that is not private cannot have a library module's name.
 
-Other code that is not trusted still gets such a module by name, as before: module names are not per sandbox.
+Feature names are process-wide (`QoreModuleManager::map`), so a module that such code chose is fenced off in both
+orders (`QoreModuleManager::checkShadowingLoad()`):
+
+- such code cannot load a module from outside the directories of library code (by path, through its own module
+  paths, or from source) under the name of a library module (`findTrustedModule()`, which looks for every form that
+  the module search loads, with no pattern matching); the load raises `LOAD-MODULE-ERROR`;
+- a module that such code did load from outside them is marked when it is registered
+  (`QoreAbstractModule::isTenantChosen()`, with the loader's sandbox as `tenantOwner()`, a reference), and
+  `loadModuleIntern()` gives it only to code that is not trusted and has the same sandbox
+  (`mayUseTenantModule()`); a request from other code, a reload included, raises `LOAD-MODULE-ERROR`.
 
 What this means for an audit:
 
