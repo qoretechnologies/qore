@@ -269,7 +269,8 @@ class PingHandler inherits AbstractHttpRequestHandler {
 
 #! A polling ping that gives the test the connection to the token endpoint that it tracks, and that client
 class TestPingOp inherits RestClientIoPingPollOperation {
-    constructor(RestClient::RestConnection conn, hash<auto> ping_opts) : RestClientIoPingPollOperation(conn, ping_opts) {
+    constructor(RestClient::RestConnection conn, hash<auto> ping_opts)
+            : RestClientIoPingPollOperation(conn, ping_opts) {
     }
 
     #! Returns the connection to the OAuth2 token endpoint whose failure the ping tracks, if any
