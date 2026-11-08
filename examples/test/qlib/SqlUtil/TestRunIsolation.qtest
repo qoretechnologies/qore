@@ -91,15 +91,26 @@ class TestRunIsolationTest inherits QUnit::Test {
             out.open2(dir + "/out");
             fail("the holder ended before it held the lock: " + (out.read(-1) ?? ""));
         }
+        # the holder holds the lock: it is told to end, also when an assertion fails, so that it does not hold the
+        # lock after the test
+        bool released;
+        code release = sub () {
+            if (released) {
+                return;
+            }
+            released = True;
+            File d();
+            d.open2(done, O_WRONLY);
+            d.write("done\n");
+            d.close();
+        };
+        on_exit release();
         File f();
         f.open2(path, O_RDWR);
         # held exclusively by the other process: neither a shared nor an exclusive lock can be taken
         assertNeq(0, f.lock(F_RDLCK));
         assertNeq(0, f.lock(F_WRLCK));
-        File d();
-        d.open2(done, O_WRONLY);
-        d.write("done\n");
-        d.close();
+        release();
         # released when the other process ends
         f.lockBlocking(F_WRLCK);
         f.close();
