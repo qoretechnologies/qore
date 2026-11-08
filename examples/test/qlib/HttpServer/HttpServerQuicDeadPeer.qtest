@@ -370,16 +370,16 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Skips the calling test unless a real dead peer can be staged here
-    /** Every assertion in this file is bound to the QUIC idle timeout, which is
-        wall-clock: under valgrind's 20-50x slowdown a live peer cannot answer
-        keepalive PINGs inside a 10s idle window, so the transport would
-        (correctly) close healthy sessions and the results would be meaningless.
+    /** Every assertion in this file is bound to the QUIC idle timeout.  On the wall clock, under valgrind's 20-50x
+        slowdown a live peer cannot answer keepalive PINGs inside a 10s idle window, so the transport would
+        (correctly) close healthy sessions and the results would be meaningless; the QUIC test clock of a debug build
+        only advances when the connections have processed what they were sent, so the test runs under valgrind there.
     */
     private checkDeadPeerSupported() {
         if (!qore_exe.val()) {
             testSkip("no qore interpreter path available to spawn a client process");
         }
-        if (is_file("/proc/self/maps")) {
+        if (!virtual_clock && is_file("/proc/self/maps")) {
             *string maps = ReadOnlyFile::readTextFile("/proc/self/maps");
             if (maps =~ /valgrind|vgpreload/) {
                 testSkip("QUIC idle timeouts are wall-clock; incompatible with valgrind");

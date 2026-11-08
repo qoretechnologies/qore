@@ -565,7 +565,9 @@ void qore_quic_test_note_received(int fd, int count) {
     qore_quic_test_note_receive_fd()); \a fds gets those that are still to receive datagrams sent to them.  The
     datagrams sent to an address that no socket of the process has (one in another process, or a socket that was
     closed) are not waited for, and are forgotten.  Datagrams received beyond those counted as sent (sent before the
-    test clock was used) are not counted against later ones.
+    datagrams were counted) are not counted against later ones; a datagram is counted as sent before it is sent (see
+    sendQuicPacketsBatch()), so that one that its receiver reads before the sender has returned is not taken for
+    one of them, which left a datagram counted as sent and never as read.
 */
 static bool quic_test_undelivered_locked(std::vector<int>& fds) {
     // the addresses of the sockets of the process
@@ -631,7 +633,15 @@ static std::string quic_test_describe_undelivered() {
         if (!desc.empty()) {
             desc += "; ";
         }
-        QoreStringMaker item("%s:%d (fd %d): sent %lld, read %lld", addr, port, fd,
+        // whether the socket is a client's (connected) and has a datagram that no one has read, as when its
+        // connection no longer reads it
+        struct sockaddr_storage peer;
+        socklen_t peer_len = sizeof(peer);
+        bool connected = !getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &peer_len);
+        struct pollfd pfd = {fd, POLLIN, 0};
+        bool pending = ::poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN);
+        QoreStringMaker item("%s:%d (fd %d, %s, %s): sent %lld, read %lld", addr, port, fd,
+            connected ? "connected" : "not connected", pending ? "a datagram waits to be read" : "nothing to read",
             static_cast<long long>(i->second.sent), static_cast<long long>(i->second.received));
         desc += item.c_str();
     }

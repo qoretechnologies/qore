@@ -282,7 +282,8 @@ inline bool buildSendCmsg(const struct sockaddr* local_addr, socklen_t local_add
 /** @param fd the socket the datagrams were sent with
     @param addr the destination address, or nullptr for the peer of a connected socket
     @param addrlen the length of \a addr
-    @param count the number of datagrams sent
+    @param count the number of datagrams sent; datagrams are counted before they are sent, and a negative number
+    takes back those that were not sent
 */
 DLLLOCAL void qore_quic_test_note_sent(int fd, const struct sockaddr* addr, socklen_t addrlen, int count);
 
@@ -303,6 +304,15 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
 
     int total = batch.size();
     int offset = 0;
+#ifdef DEBUG
+    // the datagrams are counted as sent before they are sent: a receiver in another thread can read and count a
+    // datagram before this call returns, and a count of what was received above what was sent was taken for
+    // datagrams sent before they were counted (see qore_quic_test_advance_clock()); those not sent are taken back
+    // below
+    if (total > 0) {
+        qore_quic_test_note_sent(fd, addr, addrlen, total);
+    }
+#endif
 #ifdef __linux__
     // All large arrays are thread-local to avoid ~9KB of stack pressure per call.
     // This inline function is called from many sites; without thread_local, the
@@ -399,8 +409,8 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     }
 #endif
 #ifdef DEBUG
-    if (offset > 0) {
-        qore_quic_test_note_sent(fd, addr, addrlen, offset);
+    if (offset < total) {
+        qore_quic_test_note_sent(fd, addr, addrlen, offset - total);
     }
 #endif
     // Partial sends are expected under congestion; QUIC retransmission handles recovery.
