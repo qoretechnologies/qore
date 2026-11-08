@@ -6334,7 +6334,10 @@ int SSLSocketHelper::sysCallError(ExceptionSink* xsink, int rc, const char* mnam
 void SSLSocketHelper::sendCloseNotify(int fd) {
     // nothing to send: the alert or a fatal alert was sent already, or the handshake did not complete, in which case
     // SSL_shutdown() sends nothing either
-    if (!(SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN) && SSL_is_init_finished(ssl)) {
+    // after a write that the peer's close or reset made fail (SSL_ERROR_SYSCALL), OpenSSL forbids SSL_shutdown(): no
+    // alert is sent, and the session is not resumed (OpenSSL removes it from the cache when the connection is freed)
+    if (!write_failed.load(std::memory_order_acquire) && !(SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN)
+            && SSL_is_init_finished(ssl)) {
         // one attempt that cannot block: the write side is closed right after
 #ifdef _Q_WINDOWS
         u_long mode = 1;
@@ -11343,6 +11346,11 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             // receive buffer and can be read.  OpenSSL puts no TLS alert on the connection for a failed write of the
             // transport, so its read side stays usable.
             bool keep_open = action == WRITE && qore_socket_errno_is_peer_close(transportErrno());
+            if (keep_open) {
+                // the connection had a fatal error: no close_notify alert is sent when it is closed (see
+                // sendCloseNotify())
+                write_failed.store(true, std::memory_order_release);
+            }
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE,
                     keep_open ? SslCall::Write : SslCall::Transport)) {
                 if (!rc) {
@@ -11366,17 +11374,17 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
-            // a write that fails because of the transport leaves the socket open, as for SSL_ERROR_SYSCALL above
-            bool keep_open = action == WRITE && qore_socket_errno_is_peer_close(transportErrno());
+            // a protocol failure: the TLS session is unusable, so the socket is closed in every case (the errno is
+            // not meaningful for SSL_ERROR_SSL, which a transport failure does not produce; a failed write of the
+            // transport is SSL_ERROR_SYSCALL, above)
             // must call sslError() before closing; close_internal() derefs ssl, which would
             // bring refs down to 1, violating sslError()'s assert(refs > 1) invariant
-            if (!sslError(xsink, mname, get_action_method(action), action == WRITE,
-                    keep_open ? SslCall::Write : SslCall::Transport)) {
+            if (!sslError(xsink, mname, get_action_method(action), action == WRITE, SslCall::Transport)) {
                 xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
                     "openssl library reported a fatal I/O error while calling %s()", mname, get_action_method(action));
             }
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
-            if (!qs.h2_session && !keep_open) {
+            if (!qs.h2_session) {
                 qore_socket_close_private_from_controller(&qs);
             }
             rc = QSE_SSL_ERR;

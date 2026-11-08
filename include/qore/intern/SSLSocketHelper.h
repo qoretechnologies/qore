@@ -262,6 +262,15 @@ private:
     //! the TLS connection that carries this connection, if any; see setLayeredClient()
     SSLSocketHelper* outer = nullptr;
 
+    //! True once a write failed because the peer closed or reset the connection and the socket was kept open
+    /** OpenSSL forbids SSL_shutdown() after a fatal error (SSL_ERROR_SYSCALL), so sendCloseNotify() sends no
+        close_notify alert then; the session, which did not end with one, is removed from the session cache when the
+        connection is freed and is not resumed.
+
+        @since %Qore 3.0
+    */
+    std::atomic<bool> write_failed{false};
+
     //! ALPN protocols for client-side negotiation (wire format)
     std::vector<unsigned char> alpn_wire_format;
     //! ALPN protocols for server-side selection
