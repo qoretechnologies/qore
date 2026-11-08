@@ -74,6 +74,12 @@ disables signal handling (`-b`): a QUnit test then prints the call stacks of all
 its threads.  Once it has printed them or `QORE_TEST_STACK_DUMP_WAIT` seconds
 (default 30) have passed, the test is ended as before.
 
+`run_tests.sh` watches each test through an event FIFO in a directory of its
+own (made with `mktemp -d` in `TMPDIR`), so several runners can share a source
+tree.  If the watchdog cannot use its FIFO, it prints `WATCHDOG ERROR` and the
+test is run with a plain time limit; the test's own result is kept, but the run
+fails as a harness error, and the summary lists the test under "Harness errors".
+
 When running tests or tools that load the `jni` module in the same process as
 other native runtimes that use synchronous signals, such as V8 or Python, set up
 the JVM signal-chaining library in the environment before starting `qore`. On

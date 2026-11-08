@@ -612,6 +612,10 @@ if [ $TEST_COUNT -eq 0 ]; then
 fi
 PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
+# the tests whose watchdog failed (see run_with_watchdog()), and how many of them passed
+WATCHDOG_ERROR_TESTS=""
+WATCHDOG_ERROR_COUNT=0
+WATCHDOG_ERROR_PASSED_COUNT=0
 
 # Run single test with timeout (default 300s = 5 minutes).
 # A test that legitimately needs more time than the default declares its own budget with a
@@ -682,57 +686,155 @@ for opt in $QORE_TEST_OPTS; do
     esac
 done
 
-# Prints the next event from the event FIFO (open on fd 4) if one arrives within the given number of seconds
+# The events that the watchdog of a test reads from the event FIFO, one per line:
+# - "dumped": QUnit's SIGUSR1 handler has printed the call stacks of the test's threads (see qlib/QUnit.qm)
+# - "exit": the test has ended (run_with_watchdog())
+
+# Prints the events read from the event FIFO (open on fd 4), one per line as "event <event>", until one of the events
+# given after the number of seconds has been read or the time has passed; prints "eof" if the FIFO ends instead.
+# Returns 0 when an event given or the end of the FIFO has been read, and the status of the timeout command when the
+# time has passed: 124 (GNU and uutils timeout), or 143 when BusyBox timeout has ended the read with SIGTERM.  The
+# reader has the FIFO open for writing as well, so a FIFO never ends: what ends is a file that is not the FIFO.
 read_test_event() {
-    $TIMEOUT_CMD "$1" sh -c 'IFS= read -r event && echo "$event"' <&4 2>/dev/null
+    read_secs=$1
+    shift
+    $TIMEOUT_CMD $read_secs sh -c '
+        while IFS= read -r event; do
+            printf "event %s\n" "$event"
+            for end in "$@"; do
+                if [ "$event" = "$end" ]; then
+                    exit 0
+                fi
+            done
+        done
+        echo eof' sh "$@" <&4 2>/dev/null
 }
 
 # Runs a test (the arguments after the time limit) with its time limit; returns the test's exit code, or 124 if it
-# exceeded its time limit
+# exceeded its time limit.  Sets WATCHDOG_TEST_EXIT to the test's own exit code, WATCHDOG_TIMED_OUT to 1 if the
+# watchdog ended the test as it exceeded its time limit, and WATCHDOG_ERROR to 1 if the watchdog failed; both are 0
+# otherwise.  A watchdog that fails never ends a test for it, and never reports it as having exceeded its time limit;
+# the test's result is its own, and the run fails as a harness error (see WATCHDOG_ERROR_TESTS).
 run_with_watchdog() {
     limit=$1
     shift
+    WATCHDOG_TIMED_OUT=0
+    WATCHDOG_ERROR=0
     rm -f "$TEST_EVENT_FIFO"
-    if ! mkfifo "$TEST_EVENT_FIFO"; then
-        $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $limit "$@"
-        return $?
+    # The FIFO is opened for reading and writing, so that neither the writes below nor the test's block; a redirection
+    # of exec that fails ends the shell, so it is opened in a subshell first.  Descriptor 4 must be the FIFO: a read of
+    # any other file ends at once without an event, which the watchdog took for the time limit when the FIFO had been
+    # removed before it was opened, and the open had made a regular file.  /dev/fd/4 is this shell's descriptor where
+    # /dev/fd exists (bash also has it without); elsewhere the name is checked, which no other runner uses.
+    watchdog_fifo=0
+    if ! mkfifo "$TEST_EVENT_FIFO" || ! (exec 4<>"$TEST_EVENT_FIFO") 2>/dev/null; then
+        watchdog_fifo_error="cannot be made or opened"
+    else
+        exec 4<>"$TEST_EVENT_FIFO"
+        if [ -e /dev/fd/4 ]; then
+            if [ -p /dev/fd/4 ]; then
+                watchdog_fifo=1
+            fi
+        elif [ -p "$TEST_EVENT_FIFO" ]; then
+            watchdog_fifo=1
+        fi
+        if [ $watchdog_fifo -eq 0 ]; then
+            exec 4>&-
+            watchdog_fifo_error="was removed before it was opened, and the open made a file that is not a FIFO"
+        fi
     fi
-    # opened for reading and writing, so that neither the writes below nor the test's block
-    exec 4<>"$TEST_EVENT_FIFO"
+    # Without the FIFO, the time limit is kept by the timeout command
+    if [ $watchdog_fifo -eq 0 ]; then
+        rm -f "$TEST_EVENT_FIFO"
+        echo "*** WATCHDOG ERROR: the watchdog's event FIFO $TEST_EVENT_FIFO $watchdog_fifo_error:" \
+            "the test is run with a plain time limit ***"
+        WATCHDOG_ERROR=1
+        $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $limit "$@"
+        WATCHDOG_TEST_EXIT=$?
+        return $WATCHDOG_TEST_EXIT
+    fi
     QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
     test_pid=$!
+    # The watchdog reads the test's events until its time limit, and ends the test when the limit has passed.  Its exit
+    # status has bit 0 set if the limit has passed, and bit 1 if its read of the FIFO failed.
     (
-        event=`read_test_event $limit`
-        if [ "$event" = exit ]; then
-            exit 0
+        status=0
+
+        # Reads events into events (see read_test_event()); returns 0 if one of the events given after the number of
+        # seconds has been read, 1 if the time has passed, and 2 if the read ended otherwise, which it cannot, as
+        # descriptor 4 is the FIFO, which the reader also has open for writing
+        watchdog_wait() {
+            events=`read_test_event "$@"`
+            case $? in
+                0)
+                    case "$events" in
+                        eof|*"
+eof") ;;
+                        *) return 0 ;;
+                    esac
+                    ;;
+                124|143) return 1 ;;
+            esac
+            if [ $((status & 2)) -eq 0 ]; then
+                echo "*** WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event ***"
+                status=$((status | 2))
+            fi
+            return 2
+        }
+
+        # Returns 0 if the given event has been read
+        watchdog_got() {
+            case "
+$events
+" in
+                *"
+event $1
+"*) return 0 ;;
+            esac
+            return 1
+        }
+
+        watchdog_wait $limit exit
+        # the test has ended, or the read failed before the time limit: the test is not ended for that
+        if [ $? -ne 1 ]; then
+            exit $status
         fi
+        status=$((status | 1))
         if [ $TEST_SIGNALS_ENABLED -eq 1 ]; then
             echo "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
             kill -USR1 $test_pid 2>/dev/null
-            event=`read_test_event $TEST_STACK_DUMP_WAIT`
-            if [ "$event" = exit ]; then
-                exit 1
+            if watchdog_wait $TEST_STACK_DUMP_WAIT dumped exit && watchdog_got exit; then
+                exit $status
             fi
         fi
         kill -$TEST_TIMEOUT_SIGNAL $test_pid 2>/dev/null
-        event=`read_test_event 60`
-        if [ "$event" != exit ]; then
+        if ! watchdog_wait 60 exit; then
             kill -KILL $test_pid 2>/dev/null
         fi
-        exit 1
+        exit $status
     ) &
     watchdog_pid=$!
     wait $test_pid
-    test_rc=$?
+    WATCHDOG_TEST_EXIT=$?
     echo exit >&4
     wait $watchdog_pid
-    timed_out=$?
+    watchdog_rc=$?
     exec 4>&-
     rm -f "$TEST_EVENT_FIFO"
-    if [ $timed_out -ne 0 ]; then
+    case $watchdog_rc in
+        0) ;;
+        1) WATCHDOG_TIMED_OUT=1 ;;
+        2) WATCHDOG_ERROR=1 ;;
+        3) WATCHDOG_TIMED_OUT=1; WATCHDOG_ERROR=1 ;;
+        *)
+            WATCHDOG_ERROR=1
+            echo "*** WATCHDOG ERROR: the watchdog ended with exit code $watchdog_rc ***"
+            ;;
+    esac
+    if [ $WATCHDOG_TIMED_OUT -eq 1 ]; then
         return 124
     fi
-    return $test_rc
+    return $WATCHDOG_TEST_EXIT
 }
 
 # Run tests.
@@ -758,6 +860,10 @@ for test in $TESTS; do
     # find_test_survivors())
     TEST_PROCESS_MARK="$$.$i"
     TEST_ENV="env QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
+    # set by run_with_watchdog()
+    WATCHDOG_TEST_EXIT=""
+    WATCHDOG_TIMED_OUT=0
+    WATCHDOG_ERROR=0
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
             eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
@@ -807,9 +913,26 @@ EOF
         fi
     fi
 
+    # The watchdog failed: the test's result is its own, but the run fails as a harness error, so that the failure is
+    # not lost
+    if [ $WATCHDOG_ERROR -eq 1 ]; then
+        echo "*** WATCHDOG ERROR: run_tests.sh could not watch the test as it should (see above); the test's result" \
+            "is its own, but the run fails ***"
+        WATCHDOG_ERROR_TESTS="$WATCHDOG_ERROR_TESTS $test"
+        WATCHDOG_ERROR_COUNT=`expr $WATCHDOG_ERROR_COUNT + 1`
+        if [ $test_exit -eq 0 ]; then
+            WATCHDOG_ERROR_PASSED_COUNT=`expr $WATCHDOG_ERROR_PASSED_COUNT + 1`
+        fi
+    fi
+
     # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
     if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
-        echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
+        if [ $WATCHDOG_TIMED_OUT -eq 1 ] && [ "$WATCHDOG_TEST_EXIT" -gt 128 ]; then
+            echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit (it was ended by signal" \
+                "`expr $WATCHDOG_TEST_EXIT - 128`)"
+        else
+            echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
+        fi
         # the stacks of the threads of a test aborted by the timeout show where it hangs
         if [ -n "$TIMEOUT_SIGNAL_OPTS" ] && command -v gdb > /dev/null 2>&1; then
             find_test_core
@@ -908,9 +1031,11 @@ done
 
 
 # Print test summary.
+# A test whose watchdog failed fails the run as well, as a harness error
+RUN_FAILURE_COUNT=`expr $FAILED_TEST_COUNT + $WATCHDOG_ERROR_PASSED_COUNT`
 if [ $PRINT_TEXT -eq 1 ]; then
     TESTING_RESULT=""
-    if [ $FAILED_TEST_COUNT -eq 0 ]; then
+    if [ $RUN_FAILURE_COUNT -eq 0 ]; then
         TESTING_RESULT="Success."
     else
         TESTING_RESULT="Failure."
@@ -927,12 +1052,19 @@ if [ $PRINT_TEXT -eq 1 ]; then
         done
     fi
 
+    if [ $WATCHDOG_ERROR_COUNT -ne 0 ]; then
+        echo "Harness errors: the watchdog of $WATCHDOG_ERROR_COUNT tests failed (WATCHDOG ERROR in their output):"
+        for test in $WATCHDOG_ERROR_TESTS; do
+            echo $test
+        done
+    fi
+
     echo "*************************************"
 fi
 
-# the exit status is the number of failed tests; it has 8 bits, so 256 failed tests would exit with 0 as if every
-# test had passed
-if [ $FAILED_TEST_COUNT -gt 255 ]; then
+# the exit status is the number of failed tests, and of passed tests whose watchdog failed; it has 8 bits, so 256
+# failed tests would exit with 0 as if every test had passed
+if [ $RUN_FAILURE_COUNT -gt 255 ]; then
     exit 255
 fi
-exit $FAILED_TEST_COUNT
+exit $RUN_FAILURE_COUNT

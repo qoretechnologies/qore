@@ -13,6 +13,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 import os
 from pathlib import Path
+import re
 import resource
 import shutil
 import stat
@@ -102,6 +103,22 @@ class RunnerTree:
         return subprocess.run(["sh", "-c", script], cwd=self.root, env=self.env(RUN_TESTS=str(RUN_TESTS), **variables),
                               capture_output=True, text=True, timeout=timeout, preexec_fn=no_core_dumps)
 
+    def run(self, timeout=120, **variables):
+        """Runs the runner in the tree; returns its result, with its output in both streams in "output\""""
+        result = self.run_shell('exec sh "$RUN_TESTS"', timeout, **variables)
+        result.output = result.stdout + result.stderr
+        return result
+
+    def break_fifo(self):
+        """Makes the event FIFO of the runner fail: another runner removes it between this runner's mkfifo and its
+        open, as runners that shared their FIFO did; the open then makes a regular file"""
+        real = shutil.which("mkfifo")
+        self.write_script("mkfifo", f"""\
+            #!/bin/sh
+            '{real}' "$@" || exit
+            rm -f "$@"
+            """)
+
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
 class EventFifoTest(unittest.TestCase):
@@ -148,6 +165,141 @@ class EventFifoTest(unittest.TestCase):
                 self.assertFalse(directory.exists(), fifo)
             self.assertEqual([], sorted(p.name for p in tree.cores.iterdir()),
                              "the runners leave the core directory empty")
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+class FailedFifoTest(unittest.TestCase):
+    """A watchdog whose event FIFO fails reports it; it does not take it for the time limit"""
+
+    def test_a_fifo_that_is_gone_when_opened_is_a_watchdog_error_and_not_a_timeout(self):
+        # The open made a regular file, whose read ended at once, and the watchdog took that for the time limit: it
+        # reported the test as having exceeded its 600 s limit and sent it SIGUSR1 at once.  Now the runner sees that
+        # the file it opened is not a FIFO, reports it, and runs the test with the timeout command instead.
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            tree.break_fifo()
+            tree.add_test("passes.qtest", """\
+                # test-timeout: 60
+                import time
+                print("test started", flush=True)
+                time.sleep(2)
+                print("test ran to its end", flush=True)
+                """)
+            result = tree.run()
+            self.assertIn("test ran to its end", result.output)
+            self.assertIn("WATCHDOG ERROR: the watchdog's event FIFO", result.output)
+            self.assertIn("was removed before it was opened, and the open made a file that is not a FIFO: the test is"
+                          " run with a plain time limit", result.output)
+            self.assertNotIn("TIMEOUT", result.output)
+            self.assertNotIn("exceeded", result.output)
+            # the test passed, but the run fails as a harness error
+            self.assertRegex(result.output, r"Passed 1 out of +1 tests\. 0 tests failed\.")
+            self.assertIn("Harness errors: the watchdog of 1 tests failed", result.output)
+            self.assertIn("TESTING RESULT: Failure.", result.output)
+            self.assertEqual(1, result.returncode, result.output)
+
+    def test_a_test_is_still_ended_at_its_limit_when_the_fifo_has_failed(self):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            tree.break_fifo()
+            tree.add_test("hangs.qtest", """\
+                # test-timeout: 3
+                import time
+                time.sleep(2)
+                print("still running after 2 s", flush=True)
+                time.sleep(600)
+                """)
+            # a second test runs after it as usual
+            tree.add_test("passes.qtest", """\
+                print("second test ran", flush=True)
+                """)
+            result = tree.run()
+            self.assertIn("WATCHDOG ERROR: the watchdog's event FIFO", result.output)
+            self.assertIn("still running after 2 s", result.output)
+            self.assertIn("TIMEOUT: test exceeded 3s limit", result.output)
+            self.assertIn("second test ran", result.output)
+            self.assertRegex(result.output, r"Passed 1 out of +2 tests\. 1 tests failed\.")
+            self.assertIn("Harness errors: the watchdog of 2 tests failed", result.output)
+            self.assertEqual(2, result.returncode, result.output)
+
+
+def watchdog_functions():
+    """Returns the source of read_test_event() and run_with_watchdog() in the runner tested"""
+    source = RUN_TESTS.read_text()
+    functions = []
+    for name in ("read_test_event", "run_with_watchdog"):
+        match = re.search(r"^" + name + r"\(\) \{\n.*?^\}\n", source, re.S | re.M)
+        if match is None:
+            raise AssertionError(f"{name}() is not in {RUN_TESTS}")
+        functions.append(match.group(0))
+    return "".join(functions)
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+class WatchdogReadTest(unittest.TestCase):
+    """A read of the event FIFO that ends without an event, before the time limit, is a watchdog error
+
+    It cannot happen once the runner has made sure that its descriptor is the FIFO (see FailedFifoTest), so these
+    cases run the watchdog's functions from run_tests.sh, as the reproduction of the race did, with a read_test_event()
+    of their own.
+    """
+
+    def run_watchdog(self, read_test_event, command, limit=30, signals_enabled=1):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            timeout = "timeout" if shutil.which("timeout") else "gtimeout"
+            script = textwrap.dedent(f"""\
+                TIMEOUT_CMD={timeout}
+                TIMEOUT_SIGNAL_OPTS=""
+                TEST_STACK_DUMP_WAIT=30
+                TEST_TIMEOUT_SIGNAL=ABRT
+                TEST_SIGNALS_ENABLED={signals_enabled}
+                TEST_EVENT_FIFO="$PWD/events"
+                """) + watchdog_functions() + textwrap.dedent(read_test_event) + textwrap.dedent(f"""\
+                run_with_watchdog {limit} {command}
+                echo "run_with_watchdog: $? WATCHDOG_TEST_EXIT=$WATCHDOG_TEST_EXIT" \\
+                    "WATCHDOG_TIMED_OUT=$WATCHDOG_TIMED_OUT WATCHDOG_ERROR=$WATCHDOG_ERROR"
+                """)
+            result = subprocess.run(["sh", "-c", script], cwd=directory, capture_output=True, text=True, timeout=120,
+                                    preexec_fn=no_core_dumps)
+            result.output = result.stdout + result.stderr
+            return result
+
+    def test_a_read_that_ends_before_the_limit_is_a_watchdog_error_and_the_test_is_not_ended(self):
+        # a read of a file that ends, and a read that fails
+        for name, read in (("end of file", "echo eof"), ("failed read", "return 2")):
+            with self.subTest(read=name):
+                result = self.run_watchdog(f"""\
+                    read_test_event() {{
+                        {read}
+                    }}
+                    """, "sh -c 'sleep 2; echo test ran to its end'")
+                self.assertIn("WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event",
+                              result.output)
+                self.assertIn("test ran to its end", result.output)
+                self.assertNotIn("exceeded", result.output)
+                self.assertIn("run_with_watchdog: 0 WATCHDOG_TEST_EXIT=0 WATCHDOG_TIMED_OUT=0 WATCHDOG_ERROR=1",
+                              result.output)
+
+    def test_a_read_that_fails_after_the_limit_does_not_leave_the_test_running(self):
+        # the time limit passes once the test ignores SIGUSR1 (it reports that through a FIFO of its own), then the read
+        # for the call stacks fails: the test is ended at once, without waiting for the call stacks or for it to end
+        result = self.run_watchdog("""\
+            mkfifo ready
+            read_test_event() {
+                if [ ! -e limit-passed ]; then
+                    : > limit-passed
+                    read line < ready
+                    return 124
+                fi
+                echo eof
+            }
+            """, f"'{sys.executable}' -c 'import signal, time; signal.signal(signal.SIGUSR1, signal.SIG_IGN); "
+               "open(\"ready\", \"w\").write(\"ready\\n\"); time.sleep(60); print(\"test ran to its end\")'")
+        self.assertIn("the test exceeded its 30s limit", result.output)
+        self.assertIn("WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event", result.output)
+        self.assertNotIn("test ran to its end", result.output)
+        self.assertRegex(result.output, r"run_with_watchdog: 124 WATCHDOG_TEST_EXIT=134 WATCHDOG_TIMED_OUT=1 "
+                                        r"WATCHDOG_ERROR=1")
 
 
 if __name__ == "__main__":
