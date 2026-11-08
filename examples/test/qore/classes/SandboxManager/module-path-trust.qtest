@@ -184,6 +184,11 @@ public class Info {
 %else
         rv += \" host:False\";
 %endif
+%ifdef PO_BROKEN_SPRINTF
+        rv += \" po:True\";
+%else
+        rv += \" po:False\";
+%endif
         return rv;
     }
 }
@@ -228,6 +233,49 @@ public class Info {
     c.loadModule(\"DefProbe\");
     c.parse(\"string sub d() { return DefProbe::Info::defines(); }\", \"c\");
     return \"defines: \" + c.callFunction(\"d\");
+}
+";
+
+        #! code that is not trusted: a Program of its own, a child of its Program, with its parse options, loads a
+        #! library module; the loader's source defines ProbeLoaderDefine and ProbeHostDefine
+        const DefinesChild = "%define ProbeLoaderDefine
+%define ProbeHostDefine
+string sub run() {
+    Program c(PO_NEW_STYLE | PO_BROKEN_SPRINTF);
+    c.loadModule(\"DefProbe\");
+    c.parse(\"string sub d() { return DefProbe::Info::defines(); }\", \"c\");
+    return \"defines: \" + c.callFunction(\"d\");
+}
+";
+
+        #! a library module with a legacy %append-module-path directive, which extends the process-wide module path
+        const LibApp = "%modern
+%append-module-path @DIR@
+
+module LibApp {
+    version = \"1.0\";
+    desc = \"library module with a legacy module path directive\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace LibApp {
+public class C {
+    static string y() {
+        return \"ok\";
+    }
+}
+}
+";
+
+        #! code that is not trusted: loads LibApp first
+        const LibAppLoad = "string sub run() {
+    try {
+        load_module(\"LibApp\");
+        return \"libapp: \" + call_static_method(\"LibApp::C\", \"y\");
+    } catch (hash<ExceptionInfo> ex) {
+        return \"libapp: \" + ex.err + \": \" + ex.desc;
+    }
 }
 ";
 
@@ -441,6 +489,44 @@ switch (case_name) {
         break;
     }
 
+    # the loader loads a module by path (ARGV[3]) and then the library module arg; then trusted code uses arg
+    case \"preload\": {
+        Program p = loader(Funcs);
+        try {
+            p.callFunction(\"load\", ARGV[3]);
+            printf(\"preload: ok\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"preload: %s\\n\", err(ex));
+        }
+        try {
+            p.callFunction(\"load\", arg);
+            printf(\"load: ok\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"load: %s\\n\", err(ex));
+        }
+        if (arg == \"XHost\") {
+            printf(\"kid: %s\\n\", get_module_hash().XHost.\"child-modules\".XKid.status ?? \"none\");
+        } else {
+            printf(\"trusted sees: %s\\n\", trusted_get(arg, arg + \"::C\", \"y\"));
+        }
+        break;
+    }
+
+    # a module that restricted code with no sandbox loaded by path, requested by other restricted code
+    case \"restricted-share\": {
+        Program a = loader(Funcs);
+        a.callFunction(\"load\", arg);
+        Program b(PO_NEW_STYLE | PO_NO_FILESYSTEM, True);
+        b.parse(Funcs, \"b\");
+        try {
+            b.callFunction(\"load\", \"TenantMod\");
+            printf(\"other restricted: %s\\n\", b.callFunction(\"get\", \"TenantMod::Info\", \"who\"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"other restricted: %s\\n\", err(ex));
+        }
+        break;
+    }
+
     # code that is not trusted, from the file given by arg, with the parse options given by ARGV[3]; it has run()
     case \"custom\": {
         Program p = loader(ReadOnlyFile::readTextFile(arg) + Funcs, ARGV[3] ?? 0);
@@ -509,6 +595,20 @@ switch (case_name) {
         addTestCase("a library module in a private Program container of code that is not trusted",
             \containerPrivateTest());
         addTestCase("a library module injected by code that is not trusted", \containerInjectTest());
+        addTestCase("from source, a module that a sandbox loaded does not satisfy a library module's optional "
+            "dependency", \sourcePreloadTryModuleTest());
+        addTestCase("from source, a module that a sandbox loaded does not satisfy a library module's dependency",
+            \sourcePreloadRequiresTest());
+        addTestCase("a module that a sandbox loaded is not a library module's child module", \preloadChildTest());
+        addTestCase("AOT, a module that a sandbox loaded does not satisfy a library module's optional dependency",
+            \aotPreloadTryModuleTest());
+        addTestCase("AOT, a module that a sandbox loaded does not satisfy a library module's dependency",
+            \aotPreloadRequiresTest());
+        addTestCase("parse defines of a child Program of code that is not trusted", \definesChildTest());
+        addTestCase("a library module with a legacy module path directive loaded first by code that is not trusted",
+            \libraryAppendTest());
+        addTestCase("a module that restricted code with no sandbox loaded is not given to other restricted code",
+            \restrictedShareTest());
         set_return_value(main());
     }
 
@@ -678,7 +778,7 @@ switch (case_name) {
             write(d.trusted + "/DefProbe.qm", DefProbe);
             string out = run(d, "defines", how);
             # the loader's own define does not shape the library module; the host's does
-            assertEq("defines: loader:False host:True", line("defines:", out), how + ": " + out);
+            assertEq("defines: loader:False host:True po:False", line("defines:", out), how + ": " + out);
         }
     }
 
@@ -687,7 +787,7 @@ switch (case_name) {
             hash<auto> d = dirs();
             write(d.trusted + "/DefProbe.qm", DefProbe);
             string out = custom(d, how, DefinesTenant);
-            assertEq("defines: loader:False host:False", line("defines:", out), how + ": " + out);
+            assertEq("defines: loader:False host:False po:False", line("defines:", out), how + ": " + out);
         }
     }
 
@@ -716,6 +816,92 @@ switch (case_name) {
         assertEq("inject: none", line("inject:", out), out);
         assertRegex("^container: LOAD-MODULE-ERROR: cannot load module 'InjectProbe' into a Program container",
             line("container:", out), out);
+    }
+
+    sourcePreloadTryModuleTest() {
+        hash<auto> d = dirs();
+        write(d.trusted + "/XTry.qm", XTry);
+        write(d.other + "/YOpt.qm", reporting("YOpt", "ATTACKER"));
+        checkPreloadTry(run(d, "preload", "sandboxed", "XTry", d.other + "/YOpt.qm"));
+    }
+
+    sourcePreloadRequiresTest() {
+        hash<auto> d = dirs();
+        write(d.trusted + "/XLib.qm", XLib);
+        write(d.other + "/YDep.qm", reporting("YDep", "ATTACKER"));
+        checkPreloadRequires(run(d, "preload", "sandboxed", "XLib", d.other + "/YDep.qm"));
+    }
+
+    preloadChildTest() {
+        hash<auto> d = dirs();
+        write(d.trusted + "/XHost.qm", XHost);
+        write(d.other + "/XKid.qm", reporting("XKid", "ATTACKER"));
+        string out = run(d, "preload", "sandboxed", "XHost", d.other + "/XKid.qm");
+        assertEq("preload: ok", line("preload:", out), out);
+        assertEq("load: ok", line("load:", out), out);
+        assertTrue(line("kid:", out) != "kid: attached", out);
+    }
+
+    aotPreloadTryModuleTest() {
+        hash<auto> d = dirs();
+        if (!compile(d, "XTry", XTry)) {
+            return;
+        }
+        write(d.other + "/YOpt.qm", reporting("YOpt", "ATTACKER"));
+        checkPreloadTry(run(d, "preload", "sandboxed", "XTry", d.other + "/YOpt.qm"));
+    }
+
+    aotPreloadRequiresTest() {
+        hash<auto> d = dirs();
+        # compiled against a YDep that is then removed: the dependency is not installed
+        write(d.trusted + "/YDep.qm", plain("YDep", "REAL"));
+        if (!compile(d, "XLib", XLib)) {
+            return;
+        }
+        unlink(d.trusted + "/YDep.qm");
+        write(d.other + "/YDep.qm", reporting("YDep", "ATTACKER"));
+        checkPreloadRequires(run(d, "preload", "sandboxed", "XLib", d.other + "/YDep.qm"));
+    }
+
+    definesChildTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            write(d.trusted + "/DefProbe.qm", DefProbe);
+            string out = custom(d, how, DefinesChild);
+            assertEq("defines: loader:False host:False po:False", line("defines:", out), how + ": " + out);
+        }
+    }
+
+    libraryAppendTest() {
+        foreach string how in (("sandboxed", "restricted")) {
+            hash<auto> d = dirs();
+            write(d.trusted + "/LibApp.qm", replace(LibApp, "@DIR@", d.attacker));
+            string out = custom(d, how, LibAppLoad);
+            assertEq("libapp: ok", line("libapp:", out), how + ": " + out);
+        }
+    }
+
+    restrictedShareTest() {
+        hash<auto> d = dirs();
+        write(d.other + "/TenantMod.qm", plain("TenantMod", "tenant"));
+        string out = run(d, "restricted-share", "restricted", d.other + "/TenantMod.qm");
+        assertRegex("^other restricted: LOAD-MODULE-ERROR: cannot use module 'TenantMod'", line("other restricted:", out)
+            ?? "", out);
+    }
+
+    #! A library module whose optional dependency a sandbox loaded first: the library module does without it
+    private checkPreloadTry(string out) {
+        assertEq("preload: ok", line("preload:", out), out);
+        assertEq("load: ok", line("load:", out), out);
+        assertEq("trusted sees: absent", line("trusted sees:", out), out);
+    }
+
+    #! A library module whose dependency a sandbox loaded first: the dependency is missing for every user
+    private checkPreloadRequires(string out) {
+        assertEq("preload: ok", line("preload:", out), out);
+        assertRegex("cannot use module 'YDep'", line("load:", out) ?? "", out);
+        assertRegex("^trusted sees: LOAD-MODULE-ERROR: .*cannot use module 'YDep'", line("trusted sees:", out) ?? "",
+            out);
     }
 
     #! A module that library code loaded by path for a sandboxed loader

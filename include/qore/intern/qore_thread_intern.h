@@ -501,6 +501,15 @@ DLLLOCAL bool qore_caller_is_untrusted();
 */
 DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
 
+//! the Program ID returned when there is no Program
+#define QORE_NO_PROGRAM_ID (~(qore_program_id_t)0)
+
+//! Returns the ID of the Program of the code running on the current thread, for the modules that it chooses
+/** That is the Program of the code that loaded library code while it is initialized; QORE_NO_PROGRAM_ID if there
+    is none; see QoreAbstractModule::isTenantChosen()
+*/
+DLLLOCAL qore_program_id_t qore_caller_owner_program_id();
+
 //! Returns true while library code that code that is not trusted loaded is initialized on the current thread
 /** see QoreModuleInitSandboxBarrierHelper
 */

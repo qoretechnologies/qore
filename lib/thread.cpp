@@ -539,6 +539,8 @@ public:
         bool loader_untrusted;
         //! the sandbox of that code, if any; a reference
         QoreSandboxManager* loader_manager;
+        //! the ID of the Program of that code, or QORE_NO_PROGRAM_ID (see qore_caller_owner_program_id())
+        qore_program_id_t loader_pgm_id;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
 
@@ -3914,6 +3916,28 @@ QoreSandboxManager* qore_caller_sandbox_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+//! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
+static qore_program_id_t qore_current_program_id(ThreadData* td) {
+    QoreProgram* pgm = td->current_pgm ? td->current_pgm : td->call_program_context;
+    return pgm ? pgm->getProgramId() : QORE_NO_PROGRAM_ID;
+}
+
+qore_program_id_t qore_caller_owner_program_id() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return QORE_NO_PROGRAM_ID;
+    }
+    // library code that code that is not trusted loaded, while it is initialized, and a module that it loads under a
+    // lift: the Program of that code
+    if (!td->module_init_barriers.empty()) {
+        const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+        if (mib.lift || mib.loader_untrusted) {
+            return mib.loader_pgm_id;
+        }
+    }
+    return qore_current_program_id(td);
+}
+
 bool qore_module_init_untrusted_loader() {
     ThreadData* td = thread_data.get();
     if (!td || td->module_init_barriers.empty()) {
@@ -3953,7 +3977,8 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
         // without the barrier recorded, the module's initialization stays governed by the code that loads it
         try {
             td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-                td->sandbox_context, td->inherited_sandbox_context, false, untrusted, sm});
+                td->sandbox_context, td->inherited_sandbox_context, false, untrusted, sm,
+                untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID});
             pushed = true;
         } catch (std::bad_alloc&) {
             if (sm) {
@@ -3975,9 +4000,10 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
     if (sm) {
         sm->ref();
     }
+    const qore_program_id_t pgm_id = top.loader_pgm_id;
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-            td->sandbox_context, td->inherited_sandbox_context, true, true, sm});
+            td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id});
         pushed = true;
     } catch (std::bad_alloc&) {
         if (sm) {

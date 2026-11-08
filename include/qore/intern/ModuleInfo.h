@@ -286,6 +286,13 @@ public:
         return tenant_owner;
     }
 
+    //! returns the ID of the Program of the code that loaded a module for which isTenantChosen() is true
+    /** used when that code has no sandbox; QORE_NO_PROGRAM_ID if it has one or had no Program
+    */
+    DLLLOCAL qore_program_id_t tenantOwnerProgramId() const {
+        return tenant_owner_pgm_id;
+    }
+
     DLLLOCAL void addModuleReExport(const char* m) {
         rmod.push_back(m);
     }
@@ -409,6 +416,8 @@ protected:
     bool tenant_chosen = false;
     // the sandbox of that code, if any (a reference); see tenantOwner()
     QoreSandboxManager* tenant_owner = nullptr;
+    // the ID of the Program of that code if it has no sandbox; see tenantOwnerProgramId()
+    qore_program_id_t tenant_owner_pgm_id = ~(qore_program_id_t)0;
 
     bool priv : 1,
         injected : 1,
@@ -799,16 +808,20 @@ public:
         @param tenant_chosen set to true if the load is for such code and is allowed: the module is then recorded as
         chosen by that code when it is registered (see QoreAbstractModule::isTenantChosen())
         @param owner set to the sandbox of that code, if any, a reference that the caller owns
+        @param owner_pgm_id set to the ID of the Program of that code if it has no sandbox
         @param kind the kind of load: a load into a Program container of that code that is not private cannot have
         the name of a library module either; a private one has a name of its own
 
         @return 0 if the load is allowed, -1 if \c LOAD-MODULE-ERROR was raised
     */
     DLLLOCAL int checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature, bool trusted,
-            bool& tenant_chosen, QoreSandboxManager*& owner, qore_shadow_load_e kind = QSL_LOAD) const;
+            bool& tenant_chosen, QoreSandboxManager*& owner, qore_program_id_t& owner_pgm_id,
+            qore_shadow_load_e kind = QSL_LOAD) const;
 
     //! Returns true if the code running on the current thread may use a module that code that is not trusted chose
-    /** Only code that is not trusted, with the same sandbox as the code that loaded the module
+    /** Only code that is not trusted, with the same sandbox as the code that loaded the module, or, if that code has
+        no sandbox, in the same Program; never library code while it is initialized (see qore_module_init_library()),
+        nor while the child modules of a library module are attached
     */
     DLLLOCAL static bool mayUseTenantModule(const QoreAbstractModule& mi);
 

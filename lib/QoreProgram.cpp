@@ -541,6 +541,13 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // copy hook runs against a complete Program, as AbstractQoreProgramExternalData::copy()
     // documents
     copyExternalData();
+    // a Program that code that is not trusted creates has no host: none of its defines was set by one (its parse
+    // option defines included); the library modules that it loads have their own platform defines
+    if (qore_caller_is_untrusted()) {
+        for (const auto& i : dmap) {
+            source_defines.insert(i.first);
+        }
+    }
 }
 
 void qore_program_private::registerProgram() {
@@ -1542,10 +1549,11 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     if (lvl)
         sb.assignLocalVars(lvl);
 
-    // copy program defines to child program
+    // copy program defines to child program, with the record of those that the parent's host did not set
     for (auto& i : p_pgm->priv->dmap) {
         dmap[i.first] = i.second.refSelf();
     }
+    source_defines = p_pgm->priv->source_defines;
 
     // inherit parent's %prepend-module-path / %append-module-path lists so subprograms
     // see the same module search surface their parent established (design:
