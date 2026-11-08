@@ -38,6 +38,7 @@
 %requires TableauDataProvider
 %requires HttpServerUtil
 %requires HttpServer
+%requires ../../DnsTestServer.qm
 
 %exec-class TableauDataProviderTest
 
@@ -970,12 +971,34 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq(TableauDataProvider::MaxRetries + 1, rest.requests);
     }
 
-    #! A name that cannot be resolved is not retried
+    #! A name that does not exist is not retried; a failure of name resolution that can be temporary is retried
     nameResolutionTests() {
+        date orig_unit = DataProviderRetryUtil::getTransportRetryDelayUnit();
+        on_exit DataProviderRetryUtil::setTransportRetryDelayUnit(orig_unit);
+        # retries do not wait
+        DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
+
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # a local DNS server gives each answer without the network (see DnsTestServer)
+            DnsTestServer dns();
+            on_exit dns.stop();
+            string servers = call_function("dbg_cares_set_servers", dns.getServer());
+            on_exit call_function("dbg_cares_set_servers", servers);
+            checkNameResolution("nx.tableau-retry-test.", 1);
+            checkNameResolution("servfail.tableau-retry-test.", TableauDataProvider::MaxRetries + 1);
+        } else {
+            # a name that is never resolved (RFC 6761 section 6.4); the final dot makes the resolver look it up as it
+            # is, without the search domains of the host
+            checkNameResolution("tableau-retry-test.invalid.", 1);
+        }
+    }
+
+    #! Checks the requests made for a host name that cannot be resolved
+    private checkNameResolution(string host, int requests) {
         CountingTableauRestClientIo rest({
             "token_name": "pat-name",
             "token_secret": "pat-secret",
-            "url": "http://tableau-retry-test.invalid/api/3.27",
+            "url": "http://" + host + "/api/3.27",
         });
         AbstractDataProvider projects = new TableauDataProvider::TableauDataProvider({"tableaurestclient": rest})
             .getChildProviderEx("projects");
@@ -983,10 +1006,10 @@ public class TableauDataProviderTest inherits QUnit::Test {
             projects.searchRecords();
             assertTrue(False, "no exception");
         } catch (hash<ExceptionInfo> ex) {
-            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
-            assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, host);
+            assertEq(requests == 1, DataProviderRetryUtil::isNameResolutionError(ex), host);
         }
-        assertEq(1, rest.requests);
+        assertEq(requests, rest.requests, host);
     }
 
     #! Returns a counting client for a server that closes each connection at once

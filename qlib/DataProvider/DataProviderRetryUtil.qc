@@ -29,13 +29,14 @@ public namespace DataProvider {
     or reset connection, a timeout, a closed socket), usually after an increasing delay.  This class holds the parts
     of that policy that are the same for every provider:
 
-    - a name that cannot be resolved is not retried (@ref isNameResolutionError()): a lookup that failed would fail
-      again, and the backoff would only delay the error.  The synchronous \c RestClient raises the resolver's error
+    - a name that the resolver definitely cannot resolve is not retried (@ref isNameResolutionError()): a name that
+      does not exist, has no address or is not a valid name would give the same answer again, and the backoff would
+      only delay the error.  The synchronous \c RestClient raises the resolver's error
       (\c QOREADDRINFO-GETINFO-ERROR) as it is, while the asynchronous \c RestClientIo raises
       \c HTTPCLIENT-CONNECT-ERROR with the resolver's error in the exception argument; both are matched by their
-      error codes, never by the text of the description.  A resolver failure that might be temporary, such as a DNS
-      server that does not answer, is reported with the same error code and is not retried either, as with the
-      synchronous client
+      error codes and the resolver's status, never by the text of the description.  A resolver failure that can be
+      temporary, such as a DNS server that does not answer or fails (\c ETIMEOUT, \c ESERVFAIL), is retried like
+      any other transport error
     - code that only builds example data, and falls back to fake data when the request fails, makes a single
       attempt (@ref runWithoutRetries(), @ref retriesSuppressed())
     - the delays between transport retries are multiples of one configurable unit
@@ -75,6 +76,17 @@ public class DataProviderRetryUtil {
 
         #! The thread-local data key that holds the number of active @ref runWithoutRetries() calls
         const SuppressRetriesKey = "_DataProvider_DataProviderRetryUtil_suppress_retries";
+
+        #! The statuses of the resolver that are definite answers (see @ref isNameResolutionError())
+        /** The status is in the argument of a \c QOREADDRINFO-GETINFO-ERROR exception (<tt>arg.status</tt>):
+            the name does not exist (\c ENOTFOUND), has no address (\c ENODATA) or is not a valid name
+            (\c EBADNAME)
+        */
+        const DefiniteResolverStatuses = {
+            "ENOTFOUND": True,
+            "ENODATA": True,
+            "EBADNAME": True,
+        };
     }
 
     private:internal {
@@ -82,21 +94,25 @@ public class DataProviderRetryUtil {
         static int transport_retry_delay_unit_us = get_duration_microseconds(DefaultTransportRetryDelayUnit);
     }
 
-    #! Returns @ref True if the exception, its argument or a chained exception is a name resolution failure
-    /** A name resolution failure has an error code beginning with \c QOREADDRINFO- (such as
-        \c QOREADDRINFO-GETINFO-ERROR).  The exception itself is checked, then its argument if that is an error hash
-        (\c HTTPCLIENT-CONNECT-ERROR from \c RestClientIo and \c HttpClientIo carries the connection's error in its
-        argument), then the chained exceptions in \c next.
+    #! Returns @ref True if the exception, its argument or a chained exception is a definite name resolution failure
+    /** A definite name resolution failure is a \c QOREADDRINFO-GETINFO-ERROR exception whose argument gives a status
+        of the resolver in @ref DefiniteResolverStatuses: the name does not exist, has no address or is not a valid
+        name, which another lookup would answer again.  A failure that can be temporary (a DNS server that does not
+        answer or fails, a lookup that was canceled, a resolver that could not be initialized) is not one.  The
+        exception itself is checked, then its argument if that is an error hash (\c HTTPCLIENT-CONNECT-ERROR from
+        \c RestClientIo and \c HttpClientIo carries the connection's error in its argument), then the chained
+        exceptions in \c next.
 
         @param ex the exception or error hash to check; may be @ref nothing
 
-        @return @ref True if a name resolution failure is found
+        @return @ref True if a definite name resolution failure is found
 
         @since DataProvider 3.11
     */
     static bool isNameResolutionError(*hash<auto> ex) {
         while (ex) {
-            if (ex.err.typeCode() == NT_STRING && ex.err =~ /^QOREADDRINFO-/) {
+            if (ex.err == "QOREADDRINFO-GETINFO-ERROR" && ex.arg.typeCode() == NT_HASH
+                    && ex.arg.status.typeCode() == NT_STRING && DefiniteResolverStatuses{ex.arg.status}) {
                 return True;
             }
             if (ex.arg.typeCode() == NT_HASH && ex.arg.err.typeCode() == NT_STRING

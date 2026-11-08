@@ -730,7 +730,8 @@ $env:QORE_DATA_PROVIDERS="MyDataProvider;OtherDataProvider"
     refused connection or a timeout, usually after an increasing delay; a rate-limited request is retried after the
     time given by the server.  The parts of this policy that are the same for all of them are implemented by
     @ref DataProvider::DataProviderRetryUtil "DataProviderRetryUtil":
-    - a request that failed because the name of the server cannot be resolved is not retried
+    - a request that failed because the name of the server does not exist or has no address is not retried; a
+      failure of name resolution that can be temporary, such as a DNS server that does not answer, is retried
     - example data (for example @ref DataProvider::AbstractDataProvider::getExampleEventData() "getExampleEventData()"
       and @ref DataProvider::AbstractDataProvider::getExampleRecordData() "getExampleRecordData()") is requested
       once, without retries, and generated or fake example data is returned when the request fails
@@ -1653,8 +1654,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderRetryUtil "DataProviderRetryUtil", the retry policy shared by data
-      providers that retry failed requests: a request that failed because the name of the server cannot be
-      resolved is not retried, code that builds example data can make its requests without retries, and the
+      providers that retry failed requests: a request that failed because the name of the server does not exist
+      is not retried, code that builds example data can make its requests without retries, and the
       unit of the delays between transport retries can be set for all data providers with
       @ref DataProvider::DataProviderRetryUtil::setTransportRetryDelayUnit() "setTransportRetryDelayUnit()"
       (see @ref dataprovider_retries)

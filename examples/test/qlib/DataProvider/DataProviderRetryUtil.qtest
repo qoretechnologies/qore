@@ -29,6 +29,7 @@
 %requires DataProvider
 %requires RestClient
 %requires RestClientIo
+%requires ../../DnsTestServer.qm
 
 %exec-class DataProviderRetryUtilTest
 
@@ -122,8 +123,10 @@ class ClosingServer {
 
 public class DataProviderRetryUtilTest inherits QUnit::Test {
     private {
-        #! A name that is never resolved (RFC 6761 section 6.4)
-        const UnresolvableUrl = "http://data-provider-retry-util.invalid";
+        #! A name that is never resolved (RFC 6761 section 6.4); the final dot makes the resolver look it up as it is,
+        #! without the search domains of the host (with a wildcard search domain, a name with fewer dots than
+        #! \c ndots would be resolved in it)
+        const UnresolvableUrl = "http://data-provider-retry-util.invalid.";
 
         #! The transport errors retried in the tests
         const RetrySet = {
@@ -144,24 +147,43 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
     }
 
     nameResolutionErrors() {
-        # the error itself
-        assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR"}));
-        assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-CANCELLED"}));
+        # the error itself, for each definite answer of the resolver
+        foreach string status in (keys DataProviderRetryUtil::DefiniteResolverStatuses) {
+            assertTrue(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": status}}), status);
+        }
         # the connection error in the argument, as raised by HttpClientIo
         assertTrue(DataProviderRetryUtil::isNameResolutionError({
             "err": "HTTPCLIENT-CONNECT-ERROR",
-            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "desc": "Domain name not found"},
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "desc": "Domain name not found",
+                "arg": {"status": "ENOTFOUND"}},
         }));
         # an argument nested in an argument
         assertTrue(DataProviderRetryUtil::isNameResolutionError({
             "err": "PROVIDER-ERROR",
-            "arg": {"err": "HTTPCLIENT-CONNECT-ERROR", "arg": {"err": "QOREADDRINFO-GETINFO-ERROR"}},
+            "arg": {"err": "HTTPCLIENT-CONNECT-ERROR", "arg": {"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": "ENODATA"}}},
         }));
         # a chained exception
         assertTrue(DataProviderRetryUtil::isNameResolutionError({
             "err": "HTTPCLIENT-CONNECT-ERROR",
-            "next": {"err": "SOCKET-CONNECT-ERROR", "next": {"err": "QOREADDRINFO-GETINFO-ERROR"}},
+            "next": {"err": "SOCKET-CONNECT-ERROR", "next": {"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": "EBADNAME"}}},
         }));
+
+        # failures that can be temporary are not definite: a DNS server that did not answer or failed, a canceled
+        # lookup, a resolver that could not be initialized (no status)
+        foreach string status in ("ETIMEOUT", "ESERVFAIL", "EREFUSED", "ECONNREFUSED", "ENOMEM", "EUNKNOWN") {
+            assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
+                "arg": {"status": status}}), status);
+            assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "HTTPCLIENT-CONNECT-ERROR",
+                "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "arg": {"status": status}}}), status);
+        }
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR"}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-CANCELLED",
+            "arg": {"status": "ENOTFOUND"}}));
+        assertFalse(DataProviderRetryUtil::isNameResolutionError({"err": "QOREADDRINFO-GETINFO-ERROR",
+            "arg": "ENOTFOUND"}));
 
         # negative cases
         assertFalse(DataProviderRetryUtil::isNameResolutionError());
@@ -184,36 +206,55 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
     }
 
     realNameResolutionErrors() {
-        # the synchronous client raises the resolver's error as it is
-        hash<ExceptionInfo> ex = getError(sub () {
-            RestClient rest({"url": UnresolvableUrl}, True);
-            rest.get("/");
-        });
-        assertRegex("^QOREADDRINFO-", ex.err);
-        assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
-        assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}));
-
-        # the asynchronous client raises HTTPCLIENT-CONNECT-ERROR with the resolver's error in the argument
-        ex = getError(sub () {
-            RestClientIo rest({"url": UnresolvableUrl});
-            rest.restDoRequest("GET", "/");
-        });
-        assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
-        assertRegex("^QOREADDRINFO-", ex.arg.err);
-        assertTrue(DataProviderRetryUtil::isNameResolutionError(ex));
-        assertFalse(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # a local DNS server gives each answer without the network (see DnsTestServer)
+            DnsTestServer dns();
+            on_exit dns.stop();
+            string servers = call_function("dbg_cares_set_servers", dns.getServer());
+            on_exit call_function("dbg_cares_set_servers", servers);
+            # a name that does not exist is a definite answer, which is not retried
+            checkClientErrors("http://nx.retry-util-test.", True);
+            # a DNS server that failed can answer the next query: the failure is retried
+            checkClientErrors("http://servfail.retry-util-test.", False);
+        } else {
+            checkClientErrors(UnresolvableUrl, True);
+        }
 
         # a failed connection is not a name resolution failure and is retried
         ClosingServer server();
         on_exit server.stop();
         string url = sprintf("https://127.0.0.1:%d", server.getPort());
-        ex = getError(sub () {
+        hash<ExceptionInfo> ex = getError(sub () {
             RestClientIo rest({"url": url, "protocol": "h1"});
             rest.restDoRequest("GET", "/");
         });
         assertTrue(RetrySet{ex.err}, ex.err);
         assertFalse(DataProviderRetryUtil::isNameResolutionError(ex));
         assertTrue(DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet));
+    }
+
+    #! Checks the errors of the synchronous and asynchronous REST clients for a URL whose name cannot be resolved
+    /** @param definite True if the resolver's answer is definite, so the error is not retried
+    */
+    private checkClientErrors(string url, bool definite) {
+        # the synchronous client raises the resolver's error as it is
+        hash<ExceptionInfo> ex = getError(sub () {
+            RestClient rest({"url": url}, True);
+            rest.get("/");
+        });
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err, url);
+        assertEq(definite, DataProviderRetryUtil::isNameResolutionError(ex), url);
+        assertEq(!definite, DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet + {ex.err: True}), url);
+
+        # the asynchronous client raises HTTPCLIENT-CONNECT-ERROR with the resolver's error in the argument
+        ex = getError(sub () {
+            RestClientIo rest({"url": url});
+            rest.restDoRequest("GET", "/");
+        });
+        assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, url);
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.arg.err, url);
+        assertEq(definite, DataProviderRetryUtil::isNameResolutionError(ex), url);
+        assertEq(!definite, DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet), url);
     }
 
     retriableTransportErrors() {
@@ -224,7 +265,10 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         assertFalse(DataProviderRetryUtil::isRetriableTransportError({}, RetrySet));
         assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "SOCKET-CONNECT-ERROR"}, {}));
         assertFalse(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
-            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR"}}, RetrySet));
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "arg": {"status": "ENOTFOUND"}}}, RetrySet));
+        # a failure of name resolution that can be temporary is retried
+        assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
+            "arg": {"err": "QOREADDRINFO-GETINFO-ERROR", "arg": {"status": "ETIMEOUT"}}}, RetrySet));
         assertTrue(DataProviderRetryUtil::isRetriableTransportError({"err": "HTTPCLIENT-CONNECT-ERROR",
             "arg": {"err": "SOCKET-CONNECT-ERROR"}}, RetrySet));
         # no transport error is retried while retries are suppressed
