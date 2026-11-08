@@ -14398,7 +14398,8 @@ load_local_done:
                         }
                         {
                         LValueHelper lvh(xsink);
-                        if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
+                        // the remove or delete of the variable itself (see LValueHelper::navigatePath())
+                        if (lvh.navigatePath(path_copy.data(), path_copy.size(), true, path_copy.size() == 1)) {
                             if (*xsink) {
                                 // Real error during navigation — propagate
                                 return -1;

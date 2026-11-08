@@ -17,8 +17,11 @@
 /** The IR interpreter read a thread_local variable holding a reference (<tt>tl = \gx</tt>) as the reference itself:
     a local assigned its value read the referenced lvalue later, giving a value changed after the assignment (a debug
     library asserted on the reference stored in an IR-only local).  It is read as the AST interpreter reads it, as a
-    global variable is read.  The script runs twice, in every execution mode, on the IR tier of tiered execution and
-    as a qcc executable (see ExecModeOutputTest).
+    global variable is read.  The remove or delete of a global or thread_local variable holding a reference removes
+    the variable's own value, the reference, as Var::remove() does; the compiled modes removed the referenced value
+    (LValueHelper::navigatePath() followed the reference), so that the next <tt>tlr = \x</tt> assigned a reference to
+    an int variable.  The script runs twice, in every execution mode, on the IR tier of tiered execution and as a qcc
+    executable (see ExecModeOutputTest).
 */
 class ThreadLocalReferenceReadTest inherits ExecModeOutputTest {
     public {
@@ -39,6 +42,46 @@ f();
 # the variable keeps the reference: the next assignment assigns the referenced lvalue too
 gx = 7;
 f();
+# the remove or delete of a global or thread_local variable holding a reference removes the variable own value, the
+# reference, and leaves the referenced lvalue as it is; an assignment to the variable assigns the referenced lvalue
+thread_local auto tlr;
+our auto gr;
+sub rm() {
+    int x = 1;
+    tlr = \x;
+    auto v = remove tlr;
+    printf("remove tl: x=%y tlr=%y v=%y\n", x, tlr, v);
+    int y = 2;
+    gr = \y;
+    auto w = remove gr;
+    printf("remove gl: y=%y gr=%y w=%y\n", y, gr, w);
+    int q = 4;
+    tlr = \q;
+    delete tlr;
+    printf("delete tl: q=%y tlr=%y\n", q, tlr);
+    int g = 5;
+    gr = \g;
+    delete gr;
+    printf("delete gl: g=%y gr=%y\n", g, gr);
+    int z = 3;
+    auto r = \z;
+    auto u = remove r;
+    printf("remove local: z=%y r=%y u=%y\n", z, r, u);
+}
+sub tlref(int n) {
+    int x = 1;
+    tlr = \x;
+    for (int i = 0; i < n; ++i) {
+        int y = tlr;
+        tlr = y + 1;
+    }
+    printf("tlref x=%d\n", x);
+    remove tlr;
+}
+for (int i = 0; i < 2; ++i) {
+    rm();
+    tlref(3);
+}
 ';
 
         #! the AST interpreter's output
@@ -47,10 +90,22 @@ f();
             "gx: 11 tl: 11",
             "v: 7",
             "gx: 11 tl: 11",
+            "remove tl: x=1 tlr=null v=1",
+            "remove gl: y=2 gr=null w=2",
+            "delete tl: q=4 tlr=null",
+            "delete gl: g=5 gr=null",
+            "remove local: z=null r=null u=3",
+            "tlref x=4",
+            "remove tl: x=1 tlr=null v=1",
+            "remove gl: y=2 gr=null w=2",
+            "delete tl: q=4 tlr=null",
+            "delete gl: g=5 gr=null",
+            "remove local: z=null r=null u=3",
+            "tlref x=4",
         );
     }
 
     constructor() : ExecModeOutputTest("ThreadLocalReferenceRead", Script, (map $1 + "\n", Expected).join(""),
-            "reads and writes a reference held by a thread_local variable as the AST interpreter does") {
+            "reads, writes and removes a thread_local variable holding a reference as the AST interpreter does") {
     }
 }
