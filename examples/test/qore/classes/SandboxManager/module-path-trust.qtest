@@ -483,6 +483,22 @@ switch (case_name) {
         addTestCase("restricted code cannot extend the process-wide module path", \globalAppendRestrictedTest());
         addTestCase("a directory added to the process-wide module path holds no library code",
             \globalAppendUnsandboxedTest());
+        addTestCase("from source, a library module's dependencies do not resolve through the loader's module paths",
+            \sourceNestedRequiresTest());
+        addTestCase("from source, a library module's optional dependencies do not resolve through the loader's module "
+            "paths", \sourceNestedTryModuleTest());
+        addTestCase("from source, a library module's child modules do not resolve through the loader's module paths",
+            \sourceNestedChildTest());
+        addTestCase("from source, a module that library code loads by path is governed by the loader's sandbox",
+            \sourceNestedLoadTest());
+        addTestCase("AOT, a library module's dependencies do not resolve through the loader's module paths",
+            \aotNestedRequiresTest());
+        addTestCase("AOT, a library module's optional dependencies do not resolve through the loader's module paths",
+            \aotNestedTryModuleTest());
+        addTestCase("AOT, a library module's child modules do not resolve through the loader's module paths",
+            \aotNestedChildTest());
+        addTestCase("AOT, a module that library code loads by path is governed by the loader's sandbox",
+            \aotNestedLoadTest());
         addTestCase("a load through a link to a library module loads the library module's file", \canonicalTest());
         addTestCase("a module that a sandbox loads by path is not given to another sandbox", \crossTenantTest());
         set_return_value(main());
@@ -571,6 +587,20 @@ switch (case_name) {
             string out = run(d, "nested", how, "XLib:prepend");
             assertEq("load: ok", line("load:", out), how + ": " + out);
             assertEq("trusted sees: REAL", line("trusted sees:", out), how + ": " + out);
+        }
+    }
+
+    aotNestedTryModuleTest() {
+        hash<auto> d = dirs();
+        writeLibrary(d);
+        if (!compile(d, "XTry", XTry)) {
+            return;
+        }
+        write(d.attacker + "/YOpt.qm", reporting("YOpt", "ATTACKER"));
+        foreach string how in (("sandboxed", "restricted")) {
+            string out = run(d, "nested", how, "XTry:prepend");
+            assertEq("load: ok", line("load:", out), how + ": " + out);
+            assertEq("trusted sees: absent", line("trusted sees:", out), how + ": " + out);
         }
     }
 

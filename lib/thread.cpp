@@ -531,6 +531,14 @@ public:
         //! the continued-operation and inherited sandbox contexts when it was set; ignored while it is active
         const QoreSandboxContext* sandbox_context;
         const QoreSandboxContext* inherited_sandbox_context;
+        //! true for a lift: the initialization of a module that is not library code, loaded while library code that
+        //! code that is not trusted loaded is initialized; resolution then ignores the barriers below it, so the
+        //! module is governed by the sandbox of that code
+        bool lift;
+        //! true if the code that loaded the library module is not trusted (see qore_caller_is_untrusted())
+        bool loader_untrusted;
+        //! the sandbox of that code, if any; a reference
+        QoreSandboxManager* loader_manager;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
 
@@ -3722,8 +3730,9 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
         return nullptr;
     }
     // a module initialization barrier: nothing that the thread had when it was set is used
-    const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
-        ? nullptr : &td->module_init_barriers.back();
+    // under a lift, resolution ignores the barriers below it
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     // an operation continued for another thread is governed by the sandbox of the thread that started it; the
     // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
     const QoreSandboxContext* continued = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context;
@@ -3816,8 +3825,8 @@ static QoreSandboxManager* find_thread_provenance_ref(bool policy) {
     if (!td) {
         return nullptr;
     }
-    const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
-        ? nullptr : &td->module_init_barriers.back();
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     std::vector<QoreSandboxManager*> managers;
     for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
         if (policy && td->trusted_policy_depth && frame == td->trusted_policy_boundary) {
@@ -3876,28 +3885,106 @@ bool qore_caller_is_untrusted() {
     if (!!(td->runtime_po & restricting)) {
         return true;
     }
+    // library code that code that is not trusted loaded, while it is initialized
+    if (!td->module_init_barriers.empty()) {
+        const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+        if (!mib.lift && mib.loader_untrusted) {
+            return true;
+        }
+    }
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     return static_cast<bool>(governing);
 }
 
 QoreSandboxManager* qore_caller_sandbox_ref() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    // library code that code that is not trusted loaded, while it is initialized, has the sandbox of that code
+    if (!td->module_init_barriers.empty()) {
+        const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+        if (!mib.lift && mib.loader_untrusted) {
+            if (mib.loader_manager) {
+                mib.loader_manager->ref();
+            }
+            return mib.loader_manager;
+        }
+    }
     return find_thread_sandbox_manager_ref_intern();
 }
 
-QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
-    if (!active) {
-        return;
+bool qore_module_init_untrusted_loader() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->module_init_barriers.empty()) {
+        return false;
     }
+    const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    return !mib.lift && mib.loader_untrusted;
+}
+
+bool qore_module_init_library() {
+    ThreadData* td = thread_data.get();
+    return td && !td->module_init_barriers.empty() && !td->module_init_barriers.back().lift;
+}
+
+QoreSandboxManager* qore_module_init_lift_manager_ref() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->module_init_barriers.empty()) {
+        return nullptr;
+    }
+    const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    if (!mib.lift || !mib.loader_manager) {
+        return nullptr;
+    }
+    mib.loader_manager->ref();
+    return mib.loader_manager;
+}
+
+QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
     }
-    // without the barrier recorded, the module's initialization stays governed by the code that loads it
+    if (active) {
+        // the code that loads the library module, which nested loads are checked for (see qore_caller_is_untrusted())
+        const bool untrusted = qore_caller_is_untrusted();
+        QoreSandboxManager* sm = untrusted ? qore_caller_sandbox_ref() : nullptr;
+        // without the barrier recorded, the module's initialization stays governed by the code that loads it
+        try {
+            td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
+                td->sandbox_context, td->inherited_sandbox_context, false, untrusted, sm});
+            pushed = true;
+        } catch (std::bad_alloc&) {
+            if (sm) {
+                sm->deref(nullptr);
+            }
+        }
+        return;
+    }
+    // a module that is not library code, loaded while library code that code that is not trusted loaded is
+    // initialized: it is governed by the sandbox of that code
+    if (td->module_init_barriers.empty()) {
+        return;
+    }
+    const ThreadData::ModuleInitBarrier& top = td->module_init_barriers.back();
+    if (top.lift || !top.loader_untrusted) {
+        return;
+    }
+    QoreSandboxManager* sm = top.loader_manager;
+    if (sm) {
+        sm->ref();
+    }
     try {
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
-            td->sandbox_context, td->inherited_sandbox_context});
+            td->sandbox_context, td->inherited_sandbox_context, true, true, sm});
         pushed = true;
     } catch (std::bad_alloc&) {
+        if (sm) {
+            sm->deref(nullptr);
+        }
+        // without the lift, the module would be initialized as library code
+        failed_lift = true;
     }
 }
 
@@ -3907,7 +3994,11 @@ QoreModuleInitSandboxBarrierHelper::~QoreModuleInitSandboxBarrierHelper() {
     }
     ThreadData* td = thread_data.get();
     assert(td && !td->module_init_barriers.empty());
+    QoreSandboxManager* sm = td->module_init_barriers.back().loader_manager;
     td->module_init_barriers.pop_back();
+    if (sm) {
+        sm->deref(nullptr);
+    }
 }
 
 QoreModuleLifecycleBarrierHelper::QoreModuleLifecycleBarrierHelper() {

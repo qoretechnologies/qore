@@ -1343,6 +1343,12 @@ public:
     */
     bool exit_hooks_closed = false;
 
+    //! set for the Program of a module that is library code (see QoreModuleManager::isTrustedModulePath())
+    /** What such a Program has is library code's own (its parse defines, its module path directives) or was
+        filtered when it was created, so the library modules that it loads inherit it whoever loads it first
+    */
+    bool library_module = false;
+
     //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
         return dpgm.load(std::memory_order_relaxed) != nullptr;

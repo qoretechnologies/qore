@@ -501,6 +501,22 @@ DLLLOCAL bool qore_caller_is_untrusted();
 */
 DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
 
+//! Returns true while library code that code that is not trusted loaded is initialized on the current thread
+/** see QoreModuleInitSandboxBarrierHelper
+*/
+DLLLOCAL bool qore_module_init_untrusted_loader();
+
+//! Returns true while library code is initialized on the current thread, and no module that is not library code
+/** see QoreModuleInitSandboxBarrierHelper
+*/
+DLLLOCAL bool qore_module_init_library();
+
+//! Returns the sandbox that governs a module that is not library code, loaded while library code is initialized
+/** That is the sandbox of the code that loaded the library code, if it is not trusted; the caller owns the
+    reference returned; see QoreModuleInitSandboxBarrierHelper
+*/
+DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
+
 //! Runs the initialization of a module from a trusted module directory with no sandbox provenance
 /** While it exists, sandbox resolution for every purpose (interrupts, limits, policy and the provenance of what
     is created) does not look beyond the code that loads the module: not at the Programs that were current when it
@@ -516,12 +532,28 @@ DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
 */
 class QoreModuleInitSandboxBarrierHelper {
 public:
-    //! Establishes the barrier if \a active
+    //! Establishes the barrier for a module that is library code (\a active), or a lift for one that is not
+    /** The barrier records whether the code that loads the library module is trusted, and its sandbox: while the
+        module is initialized, that code is the caller of the loads that the initialization makes (see
+        qore_caller_is_untrusted() and qore_caller_sandbox_ref()), so a module that is not library code that it loads
+        is checked as a module that the code loads itself.  Such a module is initialized under a lift, which lets
+        sandbox resolution see the code that loaded the library module again, so the module is governed by the
+        sandbox of that code.
+
+        A lift that cannot be recorded makes failed() return true: the load must then fail, since the module would
+        be initialized as library code otherwise.
+    */
     DLLLOCAL QoreModuleInitSandboxBarrierHelper(bool active);
     DLLLOCAL ~QoreModuleInitSandboxBarrierHelper();
 
+    //! returns true if a lift was needed and could not be recorded
+    DLLLOCAL bool failed() const {
+        return failed_lift;
+    }
+
 private:
     bool pushed = false;
+    bool failed_lift = false;
 };
 
 //! Marks module code that runs for no application: a module's init or del closure

@@ -1509,9 +1509,13 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
         // an AOT module from the process-wide module path is library code: its initialization, which runs when it is
         // first applied to a Program, belongs to no sandbox (see QoreModuleInitSandboxBarrierHelper)
         QoreModuleInitSandboxBarrierHelper init_barrier(isTrusted());
-        // an AOT module merges its namespace under its own fence and must not hold the write lock
-        // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
-        module_ns_init(rns, qns, xsink);
+        if (init_barrier.failed()) {
+            xsink.outOfMemory();
+        } else {
+            // an AOT module merges its namespace under its own fence and must not hold the write lock
+            // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
+            module_ns_init(rns, qns, xsink);
+        }
     } else {
         // a binary module's namespace initialization writes directly into the target's committed
         // namespace (addSystemClass(), addConstant() and so on), which runtime lookups in the target
@@ -3058,6 +3062,10 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
         return;
     }
     QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getSandboxManagerRef();
+    // loaded by library code for code that is not trusted: governed by the sandbox of that code
+    if (!sm) {
+        sm = qore_module_init_lift_manager_ref();
+    }
     module_pgm.setSandboxManager(sm);
     if (sm) {
         sm->deref(nullptr);
@@ -3142,7 +3150,13 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner);
     // a sandboxed loader's parse defines do not shape library code (see below); checked before the barrier masks it
     const bool sandboxed_loader = trusted && qore_thread_is_sandboxed();
+    // library code loaded by code that is not trusted does not take what that code chose (see below)
+    const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
 
     QoreParseCountContextHelper pcch;
 
@@ -3181,13 +3195,21 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // qore_program_private::inheritModulePathLists), so the module's own
         // nested %requires(reexport) dependencies resolve against the same
         // module search surface the importer established.
+        if (trusted) {
+            qore_program_private::get(*mpgm)->library_module = true;
+        }
         if (p) {
             // library code is not shaped by the parse defines of sandboxed code that loads it
             if (!sandboxed_loader) {
                 qore_program_private::inheritParseDefines(*mpgm, *p);
             }
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
-            qore_program_private::inheritModulePathLists(*mpgm, *p);
+            // library code does not resolve its own dependencies, optional dependencies and child modules through
+            // the module paths of code that is not trusted; a library module's own Program has only library code's
+            // own
+            if (!untrusted_loader || qore_program_private::get(*p)->library_module) {
+                qore_program_private::inheritModulePathLists(*mpgm, *p);
+            }
         }
     }
     // A source module has its own Program, so inherit the caller's sandbox manager explicitly.  This makes module
@@ -4120,7 +4142,13 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner);
     // a sandboxed loader's parse defines do not shape library code (see below); checked before the barrier masks it
     const bool sandboxed_loader = trusted && qore_thread_is_sandboxed();
+    // library code loaded by code that is not trusted does not take what that code chose (see below)
+    const bool untrusted_loader = trusted && qore_caller_is_untrusted();
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
 
     QoreParseCountContextHelper pcch;
 
@@ -4154,13 +4182,21 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // qore_program_private::inheritModulePathLists), so the module's own
         // nested %requires(reexport) dependencies resolve against the same
         // module search surface the importer established.
+        if (trusted) {
+            qore_program_private::get(*mpgm)->library_module = true;
+        }
         if (p) {
             // library code is not shaped by the parse defines of sandboxed code that loads it
             if (!sandboxed_loader) {
                 qore_program_private::inheritParseDefines(*mpgm, *p);
             }
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
-            qore_program_private::inheritModulePathLists(*mpgm, *p);
+            // library code does not resolve its own dependencies, optional dependencies and child modules through
+            // the module paths of code that is not trusted; a library module's own Program has only library code's
+            // own
+            if (!untrusted_loader || qore_program_private::get(*p)->library_module) {
+                qore_program_private::inheritModulePathLists(*mpgm, *p);
+            }
         }
     }
     // See loadSeparatedModule(): source-module constant initialization must inherit the caller's sandbox.
@@ -4235,7 +4271,14 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         return nullptr;
     }
 
-    // source text is never library code: code that is not trusted cannot use it to replace a library module
+    // source text is never library code; loaded while library code is initialized, it is governed by the sandbox of
+    // the code that loaded that, if it is not trusted
+    QoreModuleInitSandboxBarrierHelper init_barrier(false);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
+    // code that is not trusted cannot use source text to replace a library module
     bool tenant_chosen;
     QoreSandboxManager* owner;
     if (checkShadowingLoad(xsink, path, feature, false, tenant_chosen, owner)) {
@@ -4454,7 +4497,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner);
+    // library code loaded by code that is not trusted does not resolve its dependencies through the module paths of
+    // that code; checked before the barrier is set
+    if (trusted && path_pgm && !qore_program_private::get(*path_pgm)->library_module && qore_caller_is_untrusted()) {
+        path_pgm = nullptr;
+    }
     QoreModuleInitSandboxBarrierHelper init_barrier(trusted);
+    if (init_barrier.failed()) {
+        xsink.outOfMemory();
+        return nullptr;
+    }
 
     QoreModuleNameContextHelper mnch(feature);
 
