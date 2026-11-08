@@ -674,6 +674,31 @@ class TestInheritB {
             assertThrows("PARSE-EXCEPTION", "cannot resolve.*conint", \p.parse(), ("class B { private:internal { const conint = 1; }} class C inherits B { int test() { return conint; } }", ""));
         }
 
+        # an internal static variable is not accessible in a subclass with the qualified name either, and the class
+        # itself still accesses it so
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "B::statint", \p.parse(), ("class B { private:internal { static int statint = 1; }} class C inherits B { int test() { return B::statint; } }", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "B::statint", \p.parse(), ("class B { private:internal { static int statint = 1; }} class C inherits B { test() { B::statint = 2; } }", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class B { private:internal { static int statint = 1; } static int get() { return B::statint; }} int sub test() { return B::get(); }", "");
+            assertEq(1, p.callFunction("test"));
+        }
+
+        {
+            # a private (not internal) static variable remains accessible in a subclass
+            Program p(PO_NEW_STYLE);
+            p.parse("class B { private { static int statpriv = 3; }} class C inherits B { static int get() { return B::statpriv; }} int sub test() { return C::get(); }", "");
+            assertEq(3, p.callFunction("test"));
+        }
+
         {
             Program p(PO_NEW_STYLE);
             p.parse("class B { private:internal constructor() {}} class C inherits B {} sub test() { C c(); }", "");
