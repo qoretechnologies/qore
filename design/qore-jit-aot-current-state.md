@@ -245,6 +245,13 @@ lvalue, apart from the fast paths for plain locals and their subscripts, emits a
 AST-evaluated lvalue operation (`StoreLValue`, `AddAssignLValue`, ...): those only
 evaluated the lvalue's AST, keys included, at runtime.
 
+The fast paths for an element of a local container (`h{k} = v`, `l[i] = v`, `h{k} += v`) load the
+container without a reference of its own, so that the store can change it in place. They lower the
+key or the index before they load the container, as the AST interpreter evaluates it before it
+resolves the container: a key expression that assigns the container variable
+(`h{(h = x).firstKey()} = v`) then gives the container the store writes, and the container loaded is
+not released before its use (`ContainerKeyAssignsContainer.qtest`).
+
 A slice (a hash slice, a list slice or a range) is an lvalue only as the whole lvalue of
 `remove` and `delete`, which take it as the terminal step of the path; `check_lvalue()`
 rejects any other slice lvalue at parse time, and a key or index that is a list only at

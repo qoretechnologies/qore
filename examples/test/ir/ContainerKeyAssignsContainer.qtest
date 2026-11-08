@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ContainerKeyAssignsContainerTest
+
+#! Regression test: a key or index expression that assigns the container variable stores into the container assigned
+/** The AST interpreter evaluates the key or index of an element lvalue (<tt>h{k} = v</tt>, <tt>l[i] = v</tt>,
+    <tt>h{k} += v</tt>) before it resolves the container, so an expression that assigns the container variable
+    (<tt>h{(h = {"b": 2}).firstKey()} = 3</tt>) stores into the container it assigned.  IR lowering loaded the container
+    first, without a reference of its own (for copy-on-write), then lowered the key: the compiled modes stored into the
+    container that the key expression had replaced (<tt>{b: 2}</tt> instead of <tt>{b: 3}</tt>), and the IR
+    interpreter used the container after its release (a crash under Guard Malloc).  The key and the index are now
+    lowered before the container is loaded.  The script assigns elements with const keys, dynamic keys and indexes,
+    plain and compound, whose key or index expression assigns the container, twice, in every execution mode, on the IR
+    tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ContainerKeyAssignsContainerTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+# a key or index expression that assigns the container variable: the store goes to the container it assigned
+sub stores() {
+    hash<auto> h = {"a": "x" * 40, "o": new T("h1")};
+    h{(h = {"b": 2, "o": new T("h2")}).firstKey()} = 3;
+    printf("h %y\n", (map {$1.key: $1.value instanceof T ? $1.value.n : $1.value}, h.pairIterator()));
+    list<auto> l = ("y" * 40, new T("l1"));
+    l[(l = (1, 2, new T("l2"))).size() - 2] = 9;
+    printf("l %y\n", (map $1 instanceof T ? $1.n : $1, l));
+    hash<auto> g = {"a": 1, "o": new T("g1")};
+    g{(g = {"a": 10, "o": new T("g2")}).firstKey()} += 5;
+    printf("g.a %y\n", g.a);
+    list<auto> m = (1, new T("m1"));
+    m[(m = (20, new T("m2"))).size() - 2] += 3;
+    printf("m[0] %y\n", m[0]);
+    hash<auto> k = {"a": 1, "o": new T("k1")};
+    k.a += (k = {"a": 100, "o": new T("k2")}).size();
+    printf("k.a %y\n", k.a);
+}
+for (int i = 0; i < 2; ++i) {
+    stores();
+    printf("--\n");
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor h1",
+            "h {b: 3, o: \"h2\"}",
+            "dtor l1",
+            "l [1, 9, \"l2\"]",
+            "dtor g1",
+            "g.a 15",
+            "dtor m1",
+            "m[0] 23",
+            "dtor k1",
+            "k.a 102",
+            "dtor k2",
+            "dtor m2",
+            "dtor g2",
+            "dtor l2",
+            "dtor h2",
+            "--",
+            "dtor h1",
+            "h {b: 3, o: \"h2\"}",
+            "dtor l1",
+            "l [1, 9, \"l2\"]",
+            "dtor g1",
+            "g.a 15",
+            "dtor m1",
+            "m[0] 23",
+            "dtor k1",
+            "k.a 102",
+            "dtor k2",
+            "dtor m2",
+            "dtor g2",
+            "dtor l2",
+            "dtor h2",
+            "--",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ContainerKeyAssignsContainer", Script, (map $1 + "\n", Expected).join(""),
+            "stores into the container that the key or index expression assigned, as the AST interpreter does") {
+    }
+}

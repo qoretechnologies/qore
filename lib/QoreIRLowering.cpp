@@ -12579,6 +12579,12 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
     // TRACE: emitHashKeyCompoundOp entry
 
+    // the key is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves the
+    // container: an expression that assigns the container variable (h{(h = x).firstKey()} = v) then gives the container
+    // written, and the container, loaded without a reference (auto_ref=false), is not released before its use
+    QoreIRValue key_val = lowerExpression(key_expr, error);
+    if (!key_val.isValid()) return QoreIRValue();
+
     // Load the hash container without refcount inflation (auto_ref=false)
     // This allows HashKeyStore's is_unique() check to accurately detect if COW is needed
     // based on whether the hash is shared with other code, not just with LoadLocal's cache
@@ -12590,10 +12596,6 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
         hash_val = loadVarRef(container_var, error, "hash-compound-op", full_expr);
     }
     if (!hash_val.isValid()) return QoreIRValue();
-
-    // Lower the key expression (required for consistent AST behavior with top-level evaluation)
-    QoreIRValue key_val = lowerExpression(key_expr, error);
-    if (!key_val.isValid()) return QoreIRValue();
 
     // Load current element value
     auto load_inst = builder.append<QoreIRHashKeyAccessInstruction>(key_name.c_str());
@@ -12625,6 +12627,14 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicCompoundOp(
         const VarRefNode* container_var, const QoreValue& key_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // the key is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves the
+    // container: an expression that assigns the container variable (h{(h = x).firstKey()} = v) then gives the container
+    // written, and the container, loaded without a reference (auto_ref=false), is not released before its use
+    QoreIRValue key_val = lowerExpression(key_expr, error);
+    if (!key_val.isValid()) {
+        return QoreIRValue();
+    }
+
     // Load the hash container without refcount inflation (auto_ref=false)
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
@@ -12634,12 +12644,6 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicCompoundOp(
         hash_val = loadVarRef(container_var, error, "hash-dynamic-compound-op", full_expr);
     }
     if (!hash_val.isValid()) {
-        return QoreIRValue();
-    }
-
-    // Lower the key expression
-    QoreIRValue key_val = lowerExpression(key_expr, error);
-    if (!key_val.isValid()) {
         return QoreIRValue();
     }
 
@@ -12677,6 +12681,12 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
         const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // the index is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves
+    // the container: an expression that assigns the container variable (l[(l = x).size() - 1] = v) then gives the
+    // container written, and the container, loaded without a reference (auto_ref=false), is not released before its use
+    QoreIRValue index_val = lowerExpressionInTempScope(index_expr, loc, error);
+    if (!index_val.isValid()) return QoreIRValue();
+
     // Load the list container without refcount inflation (auto_ref=false)
     // This allows ListIndexStore's is_unique() check to accurately detect if COW is needed
     QoreIRValue list_val;
@@ -12687,10 +12697,6 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
         list_val = loadVarRef(container_var, error, "list-compound-op", full_expr);
     }
     if (!list_val.isValid()) return QoreIRValue();
-
-    // Lower the index expression
-    QoreIRValue index_val = lowerExpressionInTempScope(index_expr, loc, error);
-    if (!index_val.isValid()) return QoreIRValue();
 
     // Load current element value via ListIndexAccess
     auto load_inst = builder.append<QoreIRListIndexAccessInstruction>();
@@ -12751,6 +12757,15 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
         const VarRefNode* container_var, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
         const QoreProgramLocation* loc, std::string& error) {
+    // the key is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves the
+    // container: an expression that assigns the container variable (h{(h = x).firstKey()} = v) then gives the container
+    // written, and the container, loaded without a reference (auto_ref=false), is not released before its use
+    // Lower the key expression to IR
+    QoreIRValue key_val = lowerExpressionInTempScope(key_expr, loc, error);
+    if (!key_val.isValid()) {
+        return QoreIRValue();
+    }
+
     // Load the hash container without refcount inflation (auto_ref=false)
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
@@ -12760,12 +12775,6 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
         hash_val = loadVarRef(container_var, error, "hash-dynamic-store", full_expr);
     }
     if (!hash_val.isValid()) {
-        return QoreIRValue();
-    }
-
-    // Lower the key expression to IR
-    QoreIRValue key_val = lowerExpressionInTempScope(key_expr, loc, error);
-    if (!key_val.isValid()) {
         return QoreIRValue();
     }
 
@@ -12881,6 +12890,14 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
         const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
         const QoreProgramLocation* loc, std::string& error) {
+    // the index is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves
+    // the container: an expression that assigns the container variable (l[(l = x).size() - 1] = v) then gives the
+    // container written, and the container, loaded without a reference (auto_ref=false), is not released before its use
+    QoreIRValue index_val = lowerExpressionInTempScope(index_expr, loc, error);
+    if (!index_val.isValid()) {
+        return QoreIRValue();
+    }
+
     // Load the list container without refcount inflation (auto_ref=false)
     QoreIRValue list_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
@@ -12890,12 +12907,6 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
         list_val = loadVarRef(container_var, error, "list-direct-store", full_expr);
     }
     if (!list_val.isValid()) {
-        return QoreIRValue();
-    }
-
-    // Lower the index expression
-    QoreIRValue index_val = lowerExpressionInTempScope(index_expr, loc, error);
-    if (!index_val.isValid()) {
         return QoreIRValue();
     }
 
