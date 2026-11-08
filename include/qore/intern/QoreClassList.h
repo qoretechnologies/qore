@@ -104,13 +104,16 @@ private:
     */
     DLLLOCAL void releaseAdded(cl_rec_t& rec);
 
-    //! adds a copy of a class; \a vars is true if the copy holds a reference to the values of its static variables
+    //! adds a copy of a class; \a vars is true if the copy may share the values of its static variables
+    /** The entry takes over the copy's reference to the values, if it has one (see
+        qore_class_private::takeWrapperVarRef()), and releases it at once if \a vars is false
+    */
     DLLLOCAL void addInternal(QoreClass* ot, bool priv, bool vars);
 
-    //! returns true if a copy of the class in the given entry of this list shares the values of its static variables
-    /** Takes the reference to the values for the copy if so; see qore_class_private::var_refs
+    //! returns true if a copy of the class in the given entry of this list may share the values of its static variables
+    /** see qore_class_private::var_refs
     */
-    DLLLOCAL bool copyVarRef(const cl_rec_t& rec) const;
+    DLLLOCAL bool sharesVars(const cl_rec_t& rec) const;
 
 public:
     DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false) {}

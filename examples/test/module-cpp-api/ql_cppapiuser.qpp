@@ -1667,6 +1667,38 @@ nothing cpp_api_class_key_value_release(string class_name) {
     return QoreValue();
 }
 
+//! Adds a copy of a class of the current Program, made with QoreClass::copy(), to a new namespace of the Program
+/** As a module adds a copy of a class to a Program (the jni module does); the copy shares the class's static
+    variables
+
+    @param name the name of the class
+    @param ns_name the name of the new namespace
+
+    @return @ref True "True" if the class was added, @ref False "False" if the current Program could not be owned for
+    parsing because it is being deleted
+
+    @throw CLASS-NOT-FOUND the class does not exist
+*/
+bool cpp_api_add_class_copy(string name, string ns_name) {
+    QoreProgram* pgm = getProgram();
+    CurrentProgramRuntimeExternalParseContextHelper pch;
+    if (!pch) {
+        return false;
+    }
+    const QoreClass* cls = pgm->findClass(name->c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!cls) {
+        xsink->raiseException("CLASS-NOT-FOUND", "class '%s' does not exist", name->c_str());
+        return QoreValue();
+    }
+    QoreNamespace* ns = new QoreNamespace(ns_name->c_str());
+    ns->addSystemClass(const_cast<QoreClass*>(cls)->copy());
+    pgm->getRootNS()->addNamespace(ns);
+    return true;
+}
+
 //! Stores a value in the key-value data of the class that cpp_api_class_key_value_release() is releasing
 /** @param key the key
     @param value the value to store

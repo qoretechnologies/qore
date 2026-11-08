@@ -56,14 +56,14 @@ QoreClassList::QoreClassList(const QoreClassList& old, const QoreParseOptions& p
         QoreClass* qc = i->second.cls->copy();
         // we cannot update the namespace in the class because classes are immutable; the class always points to the
         // original namespace
-        addInternal(qc, true, old.copyVarRef(i->second));
+        addInternal(qc, true, old.sharesVars(i->second));
     }
 }
 
-bool QoreClassList::copyVarRef(const cl_rec_t& rec) const {
-    // a Program created from a Program whose data is being cleared does not share the values, and no Program shares
-    // values that have been released
-    return !ns_vars && rec.vars && qore_class_private::get(*rec.cls)->varRef();
+bool QoreClassList::sharesVars(const cl_rec_t& rec) const {
+    // a Program created from a Program whose data is being cleared does not share the values, nor does a copy of an
+    // entry that does not share them; the copy does not have a reference if the values have been released
+    return !ns_vars && rec.vars;
 }
 
 QoreClassList::~QoreClassList() {
@@ -98,7 +98,15 @@ void QoreClassList::addInternal(QoreClass* oc, bool priv, bool vars) {
     printd(5, "QCL::addInternal() this: %p '%s' (%p)\n", this, oc->getName(), oc);
 
     assert(!find(oc->getName()));
-    cl_rec_t& rec = hm[oc->getName()] = cl_rec_t(oc, priv, vars);
+    // the entry takes over the copy's reference to the values, if it has one, and releases it at once if the copy
+    // must not share them
+    qore_class_private* cp = qore_class_private::get(*oc);
+    bool has_vars = cp->takeWrapperVarRef(*oc);
+    if (has_vars && !vars) {
+        ExceptionSink xsink;
+        cp->clear(&xsink);
+    }
+    cl_rec_t& rec = hm[oc->getName()] = cl_rec_t(oc, priv, has_vars && vars);
     releaseAdded(rec);
 }
 
@@ -109,7 +117,9 @@ int QoreClassList::add(QoreClass* oc) {
         return 1;
     }
 
-    cl_rec_t& rec = hm[oc->getName()] = cl_rec_t(oc, false);
+    // the entry takes over the reference to the values that the class (or the copy) holds
+    cl_rec_t& rec = hm[oc->getName()] = cl_rec_t(oc, false,
+        qore_class_private::get(*oc)->takeWrapperVarRef(*oc));
     releaseAdded(rec);
     return 0;
 }
@@ -143,7 +153,7 @@ void QoreClassList::mergeUserPublic(const QoreClassList& old, qore_ns_private* n
         qc = i->second.cls->copy();
         // we cannot update the namespace in the class because classes are immutable; the class always points to the
         // original namespace; a class added to a list whose values have been released does not share them
-        addInternal(qc, true, !ns_vars && old.copyVarRef(i->second));
+        addInternal(qc, true, !ns_vars && old.sharesVars(i->second));
     }
 }
 
@@ -166,7 +176,7 @@ int QoreClassList::importSystemClasses(const QoreClassList& source, qore_ns_priv
             QoreClass* qc = i->second.cls->copy();
             // we cannot update the namespace in the class because classes are immutable; the class always points to the
             // original namespace
-            addInternal(qc, true, !ns_vars && source.copyVarRef(i->second));
+            addInternal(qc, true, !ns_vars && source.sharesVars(i->second));
             ++cnt;
         }
     }

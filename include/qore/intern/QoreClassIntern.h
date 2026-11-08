@@ -2411,6 +2411,17 @@ public:
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
 
+    //! true while the wrapper that created the class (cls) holds the reference to the values in var_refs that it
+    //! took with the class; see takeWrapperVarRef()
+    bool cls_var_ref = true;
+
+    //! the copies of the class (see QoreClass::QoreClass(const QoreClass&)) that hold a reference in var_refs
+    /** A copy takes one if the values are still shared (varRef()); a class list entry takes it over when the copy is
+        added (QoreClassList), and another holder releases it with the copy (derefClass(), ~QoreClass()); see
+        takeWrapperVarRef().  Guarded by gate.asl_lock.
+    */
+    std::set<const QoreClass*> var_ref_wrappers;
+
     // the module that defined this class, if any
     std::string from_module;
 
@@ -2524,6 +2535,27 @@ public:
         return var_refs.optRef();
     }
 
+    //! Records that a copy of the class holds a reference in var_refs; see var_ref_wrappers
+    DLLLOCAL void addWrapperVarRef(const QoreClass& qc) {
+        AutoLocker al(gate.asl_lock);
+        var_ref_wrappers.insert(&qc);
+    }
+
+    //! Takes over the reference in var_refs that the given wrapper of the class holds, if any
+    /** The caller (a class list entry, or the holder releasing the wrapper) becomes responsible for releasing it
+
+        @return true if the wrapper held a reference
+    */
+    DLLLOCAL bool takeWrapperVarRef(const QoreClass& qc) {
+        AutoLocker al(gate.asl_lock);
+        if (&qc == cls) {
+            bool rv = cls_var_ref;
+            cls_var_ref = false;
+            return rv;
+        }
+        return var_ref_wrappers.erase(&qc) > 0;
+    }
+
     DLLLOCAL void ref() const {
         refs.ROreference();
     }
@@ -2601,10 +2633,16 @@ public:
 
     //! Dereferences a specific QoreClass pointer (handle) along with the private data
     /** Deletes the wrapper when the last pointer reference is released; see refClass() for the pointer
-        reference contract, and deref() for the other arguments
+        reference contract, and deref() for the other arguments.  A holder releasing a Program's references
+        (\a ns_data) also releases the reference to the values that the wrapper itself still holds, if any (see
+        takeWrapperVarRef()); \a ns_vars is a reference that the caller (a class list entry) took over.
     */
     DLLLOCAL static void derefClass(QoreClass& qc, bool ns_const, bool ns_vars, bool ns_data) {
         qore_class_private* priv = qc.priv;
+        if (ns_data && priv->takeWrapperVarRef(qc)) {
+            assert(!ns_vars);
+            ns_vars = true;
+        }
         bool del = false;
         if (&qc != priv->cls) {
             AutoLocker al(priv->gate.asl_lock);
@@ -2618,6 +2656,12 @@ public:
                     priv->qcrefs.erase(i);
                     qc.priv = nullptr;
                     del = true;
+                    // a copy deleted with its last pointer reference releases the reference to the values that
+                    // it still holds
+                    if (priv->var_ref_wrappers.erase(&qc)) {
+                        assert(!ns_vars);
+                        ns_vars = true;
+                    }
                 }
             }
         }
@@ -4292,9 +4336,9 @@ public:
 
     DLLLOCAL ~qore_class_private_holder() {
         if (qc) {
-            qore_class_private::derefClass(*qc, true, true, true);
+            qore_class_private::derefClass(*qc, true, false, true);
         } else if (c) {
-            c->deref(true, true, true);
+            c->deref(true, c->takeWrapperVarRef(*c->cls), true);
         }
     }
 

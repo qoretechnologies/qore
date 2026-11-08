@@ -1007,6 +1007,7 @@ qore_class_private::~qore_class_private() {
 
     assert(!refs.reference_count());
     assert(!var_refs.reference_count());
+    assert(var_ref_wrappers.empty());
     assert(!data_refs.reference_count());
     assert(!const_refs.reference_count());
 
@@ -4275,10 +4276,16 @@ QoreClass::QoreClass(const QoreClass& old) : priv(old.priv) {
     assert(priv->orNothingTypeInfo);
 
     priv->pgmRef();
+    // the copy shares the values of the static variables if they are still shared; a class list entry takes over the
+    // reference (see qore_class_private::var_ref_wrappers)
+    bool vars = priv->varRef();
 
     // ensure atomicity when writing to qcrefs
     AutoLocker al(priv->gate.asl_lock);
     priv->qcrefs[this] = 1;
+    if (vars) {
+        priv->var_ref_wrappers.insert(this);
+    }
 }
 
 QoreClass::QoreClass(std::string&& nme, std::string&& ns_path, int64 dom)
@@ -4325,7 +4332,7 @@ QoreClass::~QoreClass() {
             }
         }
 
-        priv->deref(true, true, true, true);
+        priv->deref(true, priv->takeWrapperVarRef(*this), true, true);
     }
 }
 
@@ -7622,7 +7629,7 @@ void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
 QoreClassHolder::~QoreClassHolder() {
     if (c) {
         // release the class pointer (handle) reference in case the class is a wrapper
-        qore_class_private::derefClass(*c, true, true, true);
+        qore_class_private::derefClass(*c, true, false, true);
     }
 }
 

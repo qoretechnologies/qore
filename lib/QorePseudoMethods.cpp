@@ -101,11 +101,11 @@ void pseudo_classes_init() {
 void pseudo_classes_del() {
     // delete pseudo-classes
     for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i)
-        qore_class_private::get(*po_list[i])->deref(true, true, true);
-    qore_class_private::get(*pseudo_buffer)->deref(true, true, true);
-    qore_class_private::get(*pseudo_char)->deref(true, true, true);
+        qore_class_private::derefClass(*po_list[i], true, false, true);
+    qore_class_private::derefClass(*pseudo_buffer, true, false, true);
+    qore_class_private::derefClass(*pseudo_char, true, false, true);
 
-    qore_class_private::get(*QC_PSEUDOVALUE)->deref(true, true, true);
+    qore_class_private::derefClass(*QC_PSEUDOVALUE, true, false, true);
 }
 
 // return the pseudo class for the given type

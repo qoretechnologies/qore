@@ -2942,7 +2942,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 
  // destructor actions for elements that need deleting when parse errors occur
 %destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def enum_def enum_members enum_member top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef callable_return_type classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
-%destructor { qore_class_private::get(*$$)->deref(true, true, true); } class_attributes
+%destructor { qore_class_private::derefClass(*$$, true, false, true); } class_attributes
 %destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING CLASS_GENERIC_STRING optname identifier ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
 %destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER DOT_HARD_KEYWORD hashdecl_attrs list list_n call_args named_call_args named_arg_list
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
