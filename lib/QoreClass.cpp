@@ -1014,6 +1014,16 @@ qore_class_private::~qore_class_private() {
         vars.del();
     }
 
+    // release the key-value data set after the values of the static variables were released, by a destructor that
+    // their release ran, for example; exceptions raised by destructors are reported when the sink goes out of scope
+    if (!kvmap.empty()) {
+        ExceptionSink xsink;
+        for (auto& i : kvmap) {
+            i.second.discard(&xsink);
+        }
+        kvmap.clear();
+    }
+
     // delete normal methods
     for (auto& i : hm) {
         //printd(5, "qore_class_private::~qore_class_private() deleting method %p %s::%s()\n", m, name, m->getName());

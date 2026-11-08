@@ -2544,15 +2544,16 @@ public:
                 constlist.deleteAll(nullptr);
             }
         }
-        // the values are released before the variables, as for deleteClassData()
+        // the values are released before the variables, as for deleteClassData(); exceptions raised by the
+        // destructors are reported when each sink goes out of scope, as no caller has a sink here
         if (ns_vars && var_refs.ROdereference()) {
-            // vars may not be empty when deleting an uninitialized user class
-            if (!vars.empty()) {
-                releaseVarValues(nullptr);
-            }
+            // the key-value data is released with the values, also for a class without static variables
+            ExceptionSink xsink;
+            releaseVarValues(&xsink);
         }
         if (ns_data && data_refs.ROdereference() && !vars.empty()) {
-            vars.del(nullptr);
+            ExceptionSink xsink;
+            vars.del(&xsink);
         }
 
         if (refs.ROdereference()) {
@@ -3453,7 +3454,8 @@ public:
     DLLLOCAL void releaseVarValues(ExceptionSink* xsink) {
         vars.clear(xsink);
         // delete key-value data when the last program sharing this class is cleaned up; the data is taken under
-        // the lock, as the destructors run by discarding it can set key values
+        // the lock, as the destructors run by discarding it can set key values, which are released with the class
+        // (see ~qore_class_private())
         kvmap_t kv;
         {
             AutoLocker al(gate.asl_lock);
