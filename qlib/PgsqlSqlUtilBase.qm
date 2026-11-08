@@ -569,8 +569,10 @@ public string sub get_pgsql_default_schema(AbstractDatasource ds) {
     return schema ?? "public";
 }
 
-# returns the server version of a connection as PostgreSQL's server_version_num gives it (ex: 160004 for 16.4); the
-# pgsql driver gives this number, and the jdbc driver a hash with the major and minor version numbers
+# returns the server version of a connection as a number that compares as PostgreSQL's server_version_num (ex:
+# 160004 for 16.4): the pgsql driver gives this number; the jdbc driver gives a hash with the major and minor version
+# numbers, which give major * 10000 + minor * 100 (ex: 160400 for 16.4), so the result is exact to the major version
+# only, which is all that it is compared with
 int sub pgsql_get_server_version_num(AbstractDatasource ds) {
     auto version = ds.getServerVersion();
     if (version.typeCode() == NT_HASH) {
