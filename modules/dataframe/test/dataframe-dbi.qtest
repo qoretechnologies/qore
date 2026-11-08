@@ -127,9 +127,11 @@ class DataFrameDbiTest inherits QUnit::Test {
             assertFalse(err =~ /current transaction is aborted/i,
                 label + " toTable() does not hide the error behind a fallback statement");
         }
-        list<int> ids = cast<list<int>>(getColumn(DataFrame::DataFrame::fromQuery(ds,
-            "SELECT id FROM " + key_table + " ORDER BY id"), "id"));
-        assertEq((1,), ids, label + " the caller rolled back the failed toTable()");
+        # Oracle's INTEGER column is a column of numbers, as above
+        list<auto> key_ids = getColumn(DataFrame::DataFrame::fromQuery(ds,
+            "SELECT id FROM " + key_table + " ORDER BY id"), "id");
+        assertEq(ds.getDriverRealName() =~ /oracle/i ? (1n,) : (1,), key_ids,
+            label + " the caller rolled back the failed toTable()");
     }
 
     private verifyConnstr(string label, *string connstr) {
