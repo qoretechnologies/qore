@@ -4941,9 +4941,14 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @return @ref True if the builder was successfully set (first call) or if the same builder is being
         re-registered; @ref False if a different builder is already registered
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: the builder would run on the threads of
+        other tenants and of trusted code
+
         @since DataProvider 3.5
     */
     static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) {
+        # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
+        AbstractDataProvider::checkNotSandboxed("set the generic API call child builder");
         if (cb_build_generic_api_call_child) {
             return cb_build_generic_api_call_child == builder;
         }
@@ -4954,10 +4959,23 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     #! Clears the registered generic API call child builder
     /** This method is primarily for testing purposes.
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
+
         @since DataProvider 3.5
     */
     static clearGenericApiCallChildBuilder() {
+        AbstractDataProvider::checkNotSandboxed("clear the generic API call child builder");
         delete cb_build_generic_api_call_child;
+    }
+
+    #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change a process-wide callback
+    /** Uses Qore::SandboxManager::isSandboxed(), which also sees a sandbox under a policy barrier and is not restricted
+    */
+    private:internal static checkNotSandboxed(string what) {
+        if (SandboxManager::isSandboxed()) {
+            throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would run on the "
+                "threads of other tenants and of trusted code", what);
+        }
     }
 
     #! Returns @ref True if a generic API call child builder is currently registered

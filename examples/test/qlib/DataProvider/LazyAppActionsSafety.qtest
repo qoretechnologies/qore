@@ -132,6 +132,11 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("listeners are not called on a catalog worker", \listenerThreadTest());
         addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
             \noWorkerTest());
+        addTestCase("sandboxed code cannot set or clear a process-wide callback", \callbackSetterTest());
+        addTestCase("the callbacks of an action registered under a sandbox run when it is registered",
+            \governedActionCallbacksTest());
+        addTestCase("a module that sandboxed code loads first sets no process-wide callback",
+            \sandboxedCallbackModuleLoadTest());
         addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
             \restrictedLoaderTest());
         set_return_value(main());
@@ -1109,6 +1114,83 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         if (forms.size() == 1) {
             testSkip("no AOT DataProvider.qmod was found; only the source form was tested");
         }
+    }
+
+    callbackSetterTest() {
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "sub set_lookup() { DataProviderActionCatalog::setSchemeLookupCallback(*hash<auto> sub (string s) {}); }\n"
+            "sub clear_lookup() { DataProviderActionCatalog::clearSchemeLookupCallback(); }\n"
+            "sub set_builder() { DataProviderActionCatalog::setGenericApiCallActionBuilder(\n"
+            "    hash<DataProviderActionInfo> sub (hash<DataProviderAppInfo> app) { return <DataProviderActionInfo>{}; }); }\n"
+            "sub clear_builder() { DataProviderActionCatalog::clearGenericApiCallActionBuilder(); }\n"
+            "sub set_child() { AbstractDataProvider::setGenericApiCallChildBuilder(*AbstractDataProvider sub (object o) {}); }\n"
+            "sub clear_child() { AbstractDataProvider::clearGenericApiCallChildBuilder(); }\n"
+            "sub barrier(code cap) { cap(); }\n", "tenant-callbacks");
+        tenant.setSandboxManager(new SandboxManager());
+        bool lookup = DataProviderActionCatalog::hasSchemeLookupCallback();
+        bool builder = DataProviderActionCatalog::hasGenericApiCallActionBuilder();
+        bool child = AbstractDataProvider::hasGenericApiCallChildBuilder();
+        foreach string f in (("set_lookup", "clear_lookup", "set_builder", "clear_builder", "set_child",
+                "clear_child")) {
+            assertThrows("DATA-PROVIDER-CALLBACK-ERROR", \tenant.callFunction(), (f,), f);
+        }
+        # also through trusted code serving the tenant under a policy barrier
+        code cap = SandboxManager::createSystemPolicyCall(sub () {
+            DataProviderActionCatalog::clearSchemeLookupCallback();
+        });
+        assertThrows("DATA-PROVIDER-CALLBACK-ERROR", \tenant.callFunction(), ("barrier", cap));
+        assertEq(lookup, DataProviderActionCatalog::hasSchemeLookupCallback());
+        assertEq(builder, DataProviderActionCatalog::hasGenericApiCallActionBuilder());
+        assertEq(child, AbstractDataProvider::hasGenericApiCallChildBuilder());
+    }
+
+    sandboxedCallbackModuleLoadTest() {
+        # the modules that set the catalog's process-wide callbacks when they are loaded, loaded first by sandboxed code
+        hash<auto> r = runChild("sandboxed-callback-modules", "Program loader(PO_NEW_STYLE, True);\n"
+            "loader.parse(\"sub load() { load_module('ConnectionProvider'); load_module('RestClientDataProvider'); }\",\n"
+            "    \"loader\");\n"
+            "loader.setSandboxManager(new SandboxManager());\n"
+            "loader.callFunction(\"load\");\n"
+            "printf(\"callbacks: %y %y %y\\n\", DataProviderActionCatalog::hasSchemeLookupCallback(),\n"
+            "    DataProviderActionCatalog::hasGenericApiCallActionBuilder(),\n"
+            "    AbstractDataProvider::hasGenericApiCallChildBuilder());\n");
+        assertEq(0, r.rc, r.output);
+        assertLines(("callbacks: False False False",), r.output);
+    }
+
+    governedActionCallbacksTest() {
+        string app = registerApp("SafeGovernedCallbacks");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "hash<auto> sub reg(string app) {\n"
+            "    hash<auto> tids;\n"
+            "    tids.thread = gettid();\n"
+            "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": \"typed\",\n"
+            "        \"path\": \"/typed\", \"display_name\": \"typed\", \"short_desc\": \"typed\", \"desc\": \"typed\",\n"
+            "        \"action_code\": DPAT_API,\n"
+            "        \"get_output_type\": AbstractDataProviderType sub () {\n"
+            "            tids.output_type = gettid();\n"
+            "            return new HashDataType(\"SafeGovernedOutput\");\n"
+            "        },\n"
+            "        \"get_dynamic_options\": sub (reference<hash<DataProviderActionInfo>> info) {\n"
+            "            tids.options = gettid();\n"
+            "            info.desc = \"options set\";\n"
+            "        },\n"
+            "    });\n"
+            "    return tids;\n"
+            "}\n", "tenant-action-callbacks");
+        tenant.setSandboxManager(new SandboxManager());
+        hash<auto> tids = tenant.callFunction("reg", app);
+        # both ran on the registering thread, when the action was registered
+        assertEq(tids.thread, tids.output_type);
+        assertEq(tids.thread, tids.options);
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getActionsNoInit(app)[0];
+        assertFalse(action.hasKey("get_output_type") && exists action.get_output_type);
+        assertFalse(action.hasKey("get_dynamic_options") && exists action.get_dynamic_options);
+        assertEq("SafeGovernedOutput", action.output_type.getName());
+        assertEq("options set", action.desc);
     }
 
     #! Returns the directory of the AOT library modules of the build that runs the test, if any

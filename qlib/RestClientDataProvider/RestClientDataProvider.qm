@@ -53,6 +53,13 @@ module RestClientDataProvider {
         # register the data provider factory
         DataProvider::registerFactory(new RestClientDataProviderFactory());
 
+        # the process-wide builders below run on the threads of every caller: when sandboxed code loads this module
+        # first, they are not registered, as the module's code is governed by its sandbox, and REST apps then have no
+        # framework-injected generic API call child or action
+        if (SandboxManager::isSandboxed()) {
+            return;
+        }
+
         # register the framework-injected generic API call child builder; the DataProvider framework calls
         # this to construct the auto-injected "__call__" child of every REST-capable data provider.
         # The builder accepts any AbstractRestClient subclass — the common parent of both the synchronous

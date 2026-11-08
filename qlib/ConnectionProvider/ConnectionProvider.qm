@@ -53,6 +53,12 @@ module ConnectionProvider {
         # The callback returns the ConnectionSchemeInfo hash for a given scheme name, or throws if
         # the scheme is unknown. DataProvider catches and treats unknown-scheme as "non-REST"
         # (conservative default).
+        #
+        # The callback runs on the threads of every caller: when sandboxed code loads this module first, it is not
+        # registered, as the module's code is governed by its sandbox, and no app is treated as a REST app.
+        if (SandboxManager::isSandboxed()) {
+            return;
+        }
         DataProvider::DataProviderActionCatalog::setSchemeLookupCallback(
             *hash<auto> sub (string scheme) {
                 return ConnectionProvider::ConnectionSchemeCache::getSchemeEx(scheme);

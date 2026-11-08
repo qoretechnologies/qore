@@ -3151,10 +3151,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return @ref True if the builder was successfully set (first call) or if the same builder is being
         re-registered; @ref False if a different builder is already registered
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller (see @ref dataprovider_lazy_actions)
+
         @since DataProvider 3.5
     */
     static bool setGenericApiCallActionBuilder(
             code<hash<DataProviderActionInfo>(hash<DataProviderAppInfo>)> builder) {
+        # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
+        DataProviderActionCatalog::checkNotGoverned("set the generic API call action builder");
         list<hash<DataProviderAppInfo>> to_register;
         {
             bool needs_lock = !lck.lockOwner();
@@ -3190,9 +3194,13 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Clears the registered generic API call action builder
     /** This method is primarily for testing purposes.
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller (see @ref dataprovider_lazy_actions)
+
         @since DataProvider 3.5
     */
     static clearGenericApiCallActionBuilder() {
+        # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
+        DataProviderActionCatalog::checkNotGoverned("clear the generic API call action builder");
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -3230,9 +3238,13 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return @ref True if the callback was successfully set (first call) or if the same callback
         is being re-registered; @ref False if a different callback is already registered
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller (see @ref dataprovider_lazy_actions)
+
         @since DataProvider 3.5
     */
     static bool setSchemeLookupCallback(code<*hash<auto>(string)> cb) {
+        # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
+        DataProviderActionCatalog::checkNotGoverned("set the scheme lookup callback");
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -3251,9 +3263,13 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Clears the registered scheme-lookup callback
     /** This method is primarily for testing purposes.
 
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller (see @ref dataprovider_lazy_actions)
+
         @since DataProvider 3.5
     */
     static clearSchemeLookupCallback() {
+        # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
+        DataProviderActionCatalog::checkNotGoverned("clear the scheme lookup callback");
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -3263,6 +3279,17 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
 
         delete cb_lookup_scheme;
+    }
+
+    #! Throws \c DATA-PROVIDER-CALLBACK-ERROR if a sandbox governs the caller, who cannot change a process-wide callback
+    /** Such a callback runs on the threads of every caller of the catalog, of other tenants and of trusted code; a
+        module that sandboxed code loads first cannot set it either
+    */
+    private:internal static checkNotGoverned(string what) {
+        if (DataProviderActionCatalog::isGoverned()) {
+            throw "DATA-PROVIDER-CALLBACK-ERROR", sprintf("code that a sandbox governs cannot %s: it would run on the "
+                "threads of other tenants and of trusted code", what);
+        }
     }
 
     #! Returns @ref True if a scheme-lookup callback is currently registered
@@ -3504,6 +3531,21 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         if (action.hasKey("get_dynamic_options") && !action.has_dynamic_options) {
             action.has_dynamic_options = True;
+        }
+
+        # code that a sandbox governs: the action's callbacks run now, on this thread, so that none runs later on the
+        # thread of another reader, where it could block other tenants or trusted code
+        if (DataProviderActionCatalog::isGoverned()) {
+            if (has_get_output_type) {
+                *code get_output_type = remove action.get_output_type;
+                has_get_output_type = False;
+                if (get_output_type) {
+                    action.output_type = get_output_type();
+                }
+            }
+            if (*code get_dynamic_options = remove action.get_dynamic_options) {
+                get_dynamic_options(\action);
+            }
         }
 
         # auto-detect the module providing the class so callers can load it before Class::forName()
