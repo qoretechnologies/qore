@@ -200,7 +200,6 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
-    { "qore_rt_foreach_assignment_error", reinterpret_cast<void*>(&qore_rt_foreach_assignment_error) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
     { "qore_rt_reload_local_if_stale_raw", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
@@ -404,6 +403,42 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
     { "qore_rt_aot_local_var", reinterpret_cast<void*>(&qore_rt_aot_local_var) },
+    { "qore_rt_coerce_value_foreach",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach) },
+    { "qore_rt_coerce_value_foreach_throwing",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_throwing) },
+    { "qore_rt_coerce_value_foreach_aot",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_aot) },
+    { "qore_rt_coerce_value_foreach_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_aot_throwing) },
+    { "qore_rt_coerce_value_foreach_by_type_path_aot",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_by_type_path_aot) },
+    { "qore_rt_coerce_value_foreach_by_type_path_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_coerce_value_foreach_by_type_path_aot_throwing) },
+    { "qore_rt_assign_local_foreach",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach) },
+    { "qore_rt_assign_local_foreach_eval_weak",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak) },
+    { "qore_rt_assign_local_foreach_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_throwing) },
+    { "qore_rt_assign_local_foreach_eval_weak_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak_throwing) },
+    { "qore_rt_assign_local_foreach_aot",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_aot) },
+    { "qore_rt_assign_local_foreach_eval_weak_aot",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak_aot) },
+    { "qore_rt_assign_local_foreach_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_aot_throwing) },
+    { "qore_rt_assign_local_foreach_eval_weak_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_eval_weak_aot_throwing) },
+    { "qore_rt_store_closure_foreach_aot",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_aot) },
+    { "qore_rt_store_closure_foreach_eval_weak_aot",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_eval_weak_aot) },
+    { "qore_rt_store_closure_foreach_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_aot_throwing) },
+    { "qore_rt_store_closure_foreach_eval_weak_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_store_closure_foreach_eval_weak_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
     { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
     { "qore_rt_assign_local_no_coerce_aot_throwing",
@@ -1646,8 +1681,12 @@ static QoreValue qore_rt_get_borrowed_list_element(const QoreListNode* l, size_t
     return qore_rt_get_weak_reference_target(l->retrieveEntry(i));
 }
 
+//! Assigns a value to a local on the runtime stack
+/** @param desc the description of the lvalue in a type error of the assignment's own type check: "<lvalue>", or
+    "<foreach lvalue assignment>" for the variable of a foreach loop, as the AST interpreter describes them
+*/
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
-        bool check_types, bool normalize_weak_refs) {
+        bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>") {
     if (!var || *xsink) {
         return;
     }
@@ -1665,11 +1704,11 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     }
     // refSelf before assign — assign takes ownership of the reference
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, "<lvalue>", check_types);
+    helper.assign(stored, desc, check_types);
 }
 
 static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
-        ExceptionSink* xsink, bool normalize_weak_refs) {
+        ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
     if (!cvv || *xsink) {
         return;
     }
@@ -1686,7 +1725,7 @@ static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
         return;
     }
     QoreValue stored = val.needsRef() ? val.refSelf() : val;
-    helper.assign(stored, "<lvalue>", true);
+    helper.assign(stored, desc, true);
 }
 
 // Variant of qore_rt_assign_local_impl() that TRANSFERS ownership of value's
@@ -1728,9 +1767,7 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
 //! Coerces a value as an assignment to an lvalue of the given type does; see qore_rt_coerce_value()
 /** @param normalize_weak_refs true to assign a weak reference as its target, false to keep it as it is (the variable
     of a foreach loop, which is assigned each element as it is)
-*/
-//! Coerces a value stored to a local as an assignment to it checks it
-/** @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for the
+    @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for the
     variable of a foreach loop, as the AST interpreter describes them
 */
 static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
@@ -2084,12 +2121,6 @@ static void qore_rt_reference_slot_write_impl(uint64_t ref, uint64_t value, Exce
         return;
     }
     lvh.assign(val.release(), desc);
-}
-
-//! Describes the type error of the assignment of an element to the variable of a foreach loop as the AST interpreter
-//! does (see qore_ir_describe_foreach_assignment_error())
-extern "C" DLLEXPORT void qore_rt_foreach_assignment_error(ExceptionSink* xsink) {
-    qore_ir_describe_foreach_assignment_error(xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink) {
@@ -12999,6 +13030,159 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_aot_th
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_eval_weak_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     qore_rt_store_closure_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+// --- The store helpers of the assignment of an element to the variable of a foreach loop ---
+// Each is the helper of the same name without "_foreach", except that the store's own type check describes a type
+// error as the AST interpreter describes it (ForEachStatement): "<foreach lvalue assignment>".  The description is
+// given to that check only, never to code that the store runs (a destructor of the value replaced), whose errors
+// keep their own; see qore_store_helper_name() in QoreIRToLLVM.cpp
+
+//! The description of the variable of a foreach loop in a type error of the assignment of an element to it
+static constexpr const char* QORE_FOREACH_LVALUE_DESC = "<foreach lvalue assignment>";
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_foreach(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_foreach_throwing(
+        const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_foreach(ti, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_foreach_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
+    return qore_rt_coerce_value_foreach(ti, value, cleanup_ptr, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_foreach_aot_throwing(
+        QoreAOTContext* ctx, int32_t local_idx, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_foreach_aot(ctx, local_idx, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_foreach_by_type_path_aot(QoreAOTContext* ctx,
+        const char* type_path, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    if (type_path && *type_path) {
+        type_info = qore_rt_resolve_full_type_path_cached(ctx, type_path, "local variable type", xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return qore_rt_coerce_value_foreach(type_info, value, cleanup_ptr, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_foreach_by_type_path_aot_throwing(
+        QoreAOTContext* ctx, const char* type_path, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_foreach_by_type_path_aot(ctx, type_path, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, false, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach_eval_weak(LocalVar* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, true, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_throwing(LocalVar* var,
+        uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_eval_weak_throwing(LocalVar* var,
+        uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach_eval_weak(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_foreach(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_foreach_eval_weak_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_foreach_eval_weak(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_aot_throwing(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_foreach_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+//! As qore_rt_store_closure_aot() and qore_rt_store_closure_eval_weak_aot() with the foreach description
+static void qore_rt_store_closure_foreach_aot_impl(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink, bool normalize_weak_refs) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static constinit QoreEnvFlag disable_direct_store_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    if (!disable_direct_store_env.get()) {
+        if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
+            qore_rt_assign_closure_impl(cvv, val, xsink, normalize_weak_refs, QORE_FOREACH_LVALUE_DESC);
+            return;
+        }
+    }
+    qore_rt_assign_local_impl(ctx->locals[idx], val, xsink, true, normalize_weak_refs, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure_foreach_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_aot_impl(ctx, idx, val, xsink, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure_foreach_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_aot_impl(ctx, idx, val, xsink, true);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_foreach_aot_throwing(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_foreach_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_foreach_eval_weak_aot(ctx, idx, val, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

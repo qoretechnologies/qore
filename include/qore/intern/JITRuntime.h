@@ -419,9 +419,6 @@ uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
 //! Assigns a value (whose reference is taken) through the reference in the native cache of an IR-only local
 void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink);
-//! Describes the type error of the assignment of an element to the variable of a foreach loop as the AST interpreter
-//! does
-void qore_rt_foreach_assignment_error(ExceptionSink* xsink);
 //! Stores an element to the native cache of the IR-only variable of a foreach loop; returns the value of the cache
 uint64_t qore_rt_element_local_replace(uint64_t old_value, uint64_t value, ExceptionSink* xsink);
 
@@ -1453,6 +1450,34 @@ void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, Ex
 void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 //! Returns the variable of an AOT local slot
 LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx);
+
+// the store helpers of the assignment of an element to the variable of a foreach loop (see JITRuntime.cpp)
+uint64_t qore_rt_coerce_value_foreach(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_foreach_throwing(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_foreach_aot(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_foreach_aot_throwing(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_foreach_by_type_path_aot(QoreAOTContext* ctx, const char* type_path, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink);
+uint64_t qore_rt_coerce_value_foreach_by_type_path_aot_throwing(QoreAOTContext* ctx, const char* type_path,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_eval_weak(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_eval_weak_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_eval_weak_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_local_foreach_eval_weak_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink);
+void qore_rt_store_closure_foreach_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_store_closure_foreach_eval_weak_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_store_closure_foreach_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_store_closure_foreach_eval_weak_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink);
 
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
