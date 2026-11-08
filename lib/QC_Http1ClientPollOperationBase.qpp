@@ -1171,6 +1171,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         // never be able to consume it, causing a busy-loop.
         int fd = sock_obj->getSocket();
         if (fd >= 0) {
+#ifdef DEBUG
+            if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+                hook(QoreDbgHttp1SendEvent::BeforeIdleCheck, dbgHookFd(), nullptr);
+            }
+#endif
             ExceptionSink idle_xsink;
             int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
             if (idle_rc < 0 || idle_xsink) {
@@ -1217,8 +1222,21 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                     streaming_active = is_streaming;
                 }
                 sock_obj->closeIo(xsink);
-                setError("HTTP1-UNEXPECTED-DATA",
-                    "server sent unexpected data on idle keep-alive connection before request", xsink);
+                // on a reused keep-alive connection, data before the request is what the server sent as it closed
+                // the idle connection (a 408, RFC 9110 section 15.5.9): the connection-closed error, which an
+                // idempotent request is repeated for on a new connection
+                bool reused;
+                {
+                    AutoLocker al(stream_lock);
+                    reused = next_stream_id > 1;
+                }
+                if (reused) {
+                    setError("HTTP1-CONNECTION-CLOSED",
+                        "the server closed the reused keep-alive connection before the request was sent", xsink);
+                } else {
+                    setError("HTTP1-UNEXPECTED-DATA",
+                        "server sent unexpected data on idle keep-alive connection before request", xsink);
+                }
                 return nullptr;
             }
             // idle_rc == 0: no application data (TLS records drained if any), connection alive
@@ -1486,6 +1504,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         if (next_stream_id > 1) {
             int fd = sock_obj->getSocket();
             if (fd >= 0) {
+#ifdef DEBUG
+                if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
+                    hook(QoreDbgHttp1SendEvent::AfterRequestSent, dbgHookFd(), nullptr);
+                }
+#endif
                 ExceptionSink idle_xsink;
                 int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
                 if (idle_rc < 0 || idle_xsink) {
@@ -1820,9 +1843,22 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             // its own as it closed the idle connection (RFC 9110 section 15.5.9), not an answer to this request: the
             // connection-closed error is reported (setError() reports it for a reused connection), so an idempotent
             // request is repeated on a new connection instead of being given another request's 408
-            if (send_failure_pending && send_failure_reused && response_status_code == 408) {
-                setError("HTTP1-CONNECTION-CLOSED", "the server closed the reused connection", xsink);
-                return nullptr;
+            if (response_status_code == 408) {
+                bool reused;
+                if (send_failure_pending) {
+                    reused = send_failure_reused;
+                } else {
+                    AutoLocker al(stream_lock);
+                    reused = next_stream_id > 1;
+                }
+                // a 408 on a reused keep-alive connection is the server's close of the idle connection, also when
+                // the request was sent before it arrived: the connection-closed error is reported, so an idempotent
+                // request is repeated on a new connection (RFC 9110 sections 9.2.2 and 15.5.9)
+                if (reused) {
+                    setError("HTTP1-CONNECTION-CLOSED", "the server closed the reused connection with a 408",
+                        xsink);
+                    return nullptr;
+                }
             }
             send_failure_pending = false;
             send_failure_reused = false;

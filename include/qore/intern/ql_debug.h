@@ -126,6 +126,10 @@ enum class QoreDbgHttp1SendEvent : unsigned char {
     //! the request body send side is about to be driven after the receive side, with data to send (I/O thread, no
     //! lock held)
     BeforeSendSide,
+    //! a request is about to be sent on a connection: the idle check for data from the server follows (I/O thread)
+    BeforeIdleCheck,
+    //! a request on a reused connection was sent: the check for the server's close follows (I/O thread)
+    AfterRequestSent,
 };
 
 //! called by the HTTP/1 client poll operation at the points of QoreDbgHttp1SendEvent; \a fd is the descriptor of the

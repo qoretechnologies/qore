@@ -16019,6 +16019,10 @@ struct Http1SendFailure {
     Counter* send_side = nullptr;
     //! the number of times the send side is reached with data to send before dbg_fail_http1_send_side() acts
     int64 send_side_skip = 0;
+    //! armed by dbg_http1_answer_at("idle-check"): decremented once the peer's answer and FIN have arrived
+    Counter* idle_check = nullptr;
+    //! armed by dbg_http1_answer_at("after-sent"): decremented once the peer's answer and FIN have arrived
+    Counter* after_sent = nullptr;
     //! armed by dbg_hold_http1_socket_send(): decremented when the write is reached (and the peer has answered)
     Counter* socket_send = nullptr;
     //! the port of the peer of the socket that dbg_hold_http1_socket_send() holds
@@ -16126,6 +16130,41 @@ void dbg_http1_answer_and_reset(int pfd, const std::string& response) {
     }
 }
 
+//! writes \a response on the peer's descriptor \a pfd and shuts its write side down (FIN), with system calls only
+void dbg_http1_answer_and_fin(int pfd, const std::string& response) {
+    size_t off = 0;
+    while (off < response.size()) {
+        ssize_t rc = ::send(pfd, response.data() + off, response.size() - off,
+#ifdef MSG_NOSIGNAL
+            MSG_NOSIGNAL
+#else
+            0
+#endif
+            );
+        if (rc > 0) {
+            off += rc;
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        break;
+    }
+    ::shutdown(pfd, SHUT_WR);
+}
+
+//! blocks until data can be read on \a fd; no timer is involved
+void dbg_http1_wait_readable(int fd) {
+    while (true) {
+        pollfd pfd = {fd, POLLIN, 0};
+        int rc = ::poll(&pfd, 1, -1);
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return;
+    }
+}
+
 //! returns the port of the peer of the socket \a fd, 0 if it has none
 int dbg_http1_peer_port(int fd) {
     sockaddr_storage addr;
@@ -16200,6 +16239,19 @@ void dbg_http1_send_hook(QoreDbgHttp1SendEvent event, int fd, const char* err) {
                 generation = h.generation;
                 break;
 
+            case QoreDbgHttp1SendEvent::BeforeIdleCheck:
+            case QoreDbgHttp1SendEvent::AfterRequestSent: {
+                Counter*& slot = event == QoreDbgHttp1SendEvent::BeforeIdleCheck ? h.idle_check : h.after_sent;
+                if (!slot || fd < 0 || (h.fd >= 0 && fd != h.fd)) {
+                    return;
+                }
+                h.fd = fd;
+                c = slot;
+                slot = nullptr;
+                dbg_http1_take_peer(h, pfd, response, peer);
+                break;
+            }
+
             case QoreDbgHttp1SendEvent::BeforeSendSide:
                 if (!h.send_side || fd < 0 || (h.fd >= 0 && fd != h.fd)) {
                     return;
@@ -16220,6 +16272,18 @@ void dbg_http1_send_hook(QoreDbgHttp1SendEvent event, int fd, const char* err) {
         // held until the operation publishes an error, as a cancel from another thread does
         std::unique_lock<std::mutex> l(h.m);
         h.cond.wait(l, [&h, generation] () { return h.published || h.generation != generation; });
+        return;
+    }
+    if (event == QoreDbgHttp1SendEvent::BeforeIdleCheck || event == QoreDbgHttp1SendEvent::AfterRequestSent) {
+        // the peer answers and closes its side of the connection (FIN); the client goes on once the answer arrived
+        if (pfd >= 0) {
+            dbg_http1_answer_and_fin(pfd, response);
+        }
+        dbg_http1_wait_readable(fd);
+        dbg_http1_send_failure_dec(c);
+        if (peer) {
+            peer->deref();
+        }
         return;
     }
     // the peer answers and resets the connection now, after the receive side found nothing, so the next write fails
@@ -16328,6 +16392,39 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
     return QoreValue();
 }
 
+//! has the peer of the next HTTP/1 client request answer and close its side (FIN) at a point of the request
+/** @param point \c "idle-check": before the check for data from the server that precedes the send of a request;
+    \c "after-sent": after a request on a reused connection was sent, before the check for the server's close
+    @param reached decremented once the answer has arrived
+    @param peer the peer's (plain) socket of the connection
+    @param response the raw response the peer answers with
+
+    @throw DBG-ARGUMENT-ERROR an unknown point, the point is already armed, or the peer's socket uses TLS
+*/
+static QoreValue f_dbg_http1_answer_at(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* point = get_param_value(params, 0).get<const QoreStringNode>();
+    if (!point || (*point != "idle-check" && *point != "after-sent")) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http1_answer_at(): the point must be \"idle-check\" or "
+            "\"after-sent\"");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> peer(dbg_http1_peer_arg(params, 2, "dbg_http1_answer_at", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!peer) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http1_answer_at() requires the peer's Socket");
+        return QoreValue();
+    }
+    Counter* c = get_counter_arg(params, 1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    dbg_http1_send_failure_arm(*point == "idle-check" ? http1_send_failure.idle_check : http1_send_failure.after_sent,
+        c, peer.release(), dbg_http1_bytes_arg(params, 3), "dbg_http1_answer_at", xsink);
+    return QoreValue();
+}
+
 //! makes the next write of the request body send side of an HTTP/1 client request fail
 /** Once armed, the I/O thread stops when it is about to drive the send side after the receive side, with data to
     send: the peer's socket is made to answer with \a response and reset the connection, with system calls, and the
@@ -16411,7 +16508,7 @@ static QoreValue f_dbg_http1_send_failure_result(const QoreListNode* params, Run
         if (h.published) {
             rv->setKeyValue("error", new QoreStringNode(h.error), xsink);
         }
-        for (Counter** slot : {&h.hold_recovery, &h.send_side, &h.socket_send}) {
+        for (Counter** slot : {&h.hold_recovery, &h.send_side, &h.socket_send, &h.idle_check, &h.after_sent}) {
             if (*slot) {
                 armed.push_back(*slot);
                 *slot = nullptr;
@@ -17199,6 +17296,9 @@ void init_debug_functions(QoreNamespace& qns) {
         nothingTypeInfo, 4, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached", QC_SOCKET->getTypeInfo(),
         QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response", softBigIntOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "skip");
+    qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");
     qns.addBuiltinVariant("dbg_hold_http1_socket_send", f_dbg_hold_http1_socket_send, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,

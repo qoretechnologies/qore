@@ -1660,9 +1660,10 @@
       then closes the connection, also over HTTPS and for streamed request bodies; see @ref httpclient_early_response
       (<a href="https://github.com/qoretechnologies/qore/issues/5630">issue 5630</a>)
     - @ref Qore::HTTPClient "HTTPClient" repeats an idempotent request on a new connection when the server closed a
-      reused keep-alive connection before it answered, also when the request write failed, and raises
-      \c HTTP1-CONNECTION-CLOSED for a request that is not idempotent; a \c 408 that the server sent as it closed the
-      idle connection is not returned as the answer to the request
+      reused keep-alive connection before it answered, also when the request write failed or the server sent a \c 408
+      as it closed the connection before or right after the request was written, and raises
+      \c HTTP1-CONNECTION-CLOSED for a request that is not idempotent; such a \c 408 is not returned as the answer to
+      the request
     - a TLS @ref Qore::Socket "Socket" stays open when a write fails because the peer closed the connection, so the
       data the peer sent before can still be read, and \c SOCKET-SSL-ERROR for a network failure has the error number
       as its argument; such a connection is closed without a TLS \c close_notify alert, and its session is not
