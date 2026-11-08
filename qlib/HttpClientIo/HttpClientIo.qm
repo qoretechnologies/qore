@@ -54,8 +54,12 @@ module HttpClientIo {
     - <b>Protocol auto-selection</b>: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
       preferring HTTP/3 when available, and falling back to HTTP/1.1 for endpoints that
       complete the TLS handshake but refuse HTTP/2 via ALPN: HTTP/1.1 is started as soon as HTTP/2 is refused and
-      raced against HTTP/3, so a network that drops UDP datagrams silently does not delay it; the fallback is
-      cached per host and re-probed periodically.  The race ends early only when a protocol connects, so a server
+      raced against HTTP/3, so a network that drops UDP datagrams silently does not delay it.  Such an endpoint
+      costs a TCP connection and a TLS handshake for HTTP/1.1 besides the one refused for HTTP/2, and when HTTP/1.1
+      connects before HTTP/3 does, a slow HTTP/3 endpoint loses the race: HTTP/1.1 is then cached for the host and
+      used without a race until HTTP/3 and HTTP/2 are tried again after 5 minutes
+      (@ref HttpClientIo::HttpClientConnectionManager::H1_REPROBE_INTERVAL "H1_REPROBE_INTERVAL").  The race ends
+      early only when a protocol connects, so a server
       that receives only HTTP/3 is reached whatever its head start; a denial of the @ref sandboxing "sandbox" or a
       refused server certificate
       ends the race with that error (see
