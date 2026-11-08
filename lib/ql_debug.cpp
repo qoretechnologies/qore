@@ -13764,7 +13764,9 @@ static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeCon
 }
 
 //! Debug-only: the number of QUIC packets processed by client and server connections: {"client": int, "server": int}
-//! Debug-only: starts counting the datagrams of the QUIC connections of the process; see qore_quic_test_count_datagrams()
+//! Debug-only: starts counting the datagrams of the QUIC connections of the process
+/** See qore_quic_test_count_datagrams()
+*/
 static QoreValue f_dbg_quic_count_datagrams(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     qore_quic_test_count_datagrams();
     return QoreValue();
