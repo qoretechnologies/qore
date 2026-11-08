@@ -496,6 +496,11 @@ DLLLOCAL int qore_check_module_owned_code(const ResolvedCallReferenceNode* code,
 */
 DLLLOCAL bool qore_caller_is_untrusted();
 
+//! Returns the sandbox of the code running on the current thread, if any, for the modules that it chooses
+/** the caller owns the reference returned; see QoreAbstractModule::isTenantChosen()
+*/
+DLLLOCAL QoreSandboxManager* qore_caller_sandbox_ref();
+
 //! Runs the initialization of a module from a trusted module directory with no sandbox provenance
 /** While it exists, sandbox resolution for every purpose (interrupts, limits, policy and the provenance of what
     is created) does not look beyond the code that loads the module: not at the Programs that were current when it

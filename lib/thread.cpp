@@ -3880,6 +3880,10 @@ bool qore_caller_is_untrusted() {
     return static_cast<bool>(governing);
 }
 
+QoreSandboxManager* qore_caller_sandbox_ref() {
+    return find_thread_sandbox_manager_ref_intern();
+}
+
 QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool active) {
     if (!active) {
         return;

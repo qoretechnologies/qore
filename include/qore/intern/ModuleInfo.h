@@ -263,6 +263,19 @@ public:
         return trusted;
     }
 
+    //! returns true if code that is not trusted loaded the module from outside the directories of library code
+    /** Such a module is given only to code that is not trusted and has the same sandbox (see tenantOwner()); see
+        QoreModuleManager::checkShadowingLoad()
+    */
+    DLLLOCAL bool isTenantChosen() const {
+        return tenant_chosen;
+    }
+
+    //! returns the sandbox of the code that loaded a module for which isTenantChosen() is true, if any
+    DLLLOCAL const QoreSandboxManager* tenantOwner() const {
+        return tenant_owner;
+    }
+
     DLLLOCAL void addModuleReExport(const char* m) {
         rmod.push_back(m);
     }
@@ -382,6 +395,10 @@ protected:
     bool trusted = false;
     // true once the module's load has been recorded on it (see QoreModuleManager::addModule())
     bool load_recorded = false;
+    // true if code that is not trusted chose the module; see isTenantChosen()
+    bool tenant_chosen = false;
+    // the sandbox of that code, if any (a reference); see tenantOwner()
+    QoreSandboxManager* tenant_owner = nullptr;
 
     bool priv : 1,
         injected : 1,
@@ -768,22 +785,19 @@ public:
         @param path the module's file
         @param feature the module's feature name
         @param trusted the result of isTrustedModulePath() for \a path
-        @param tenant_chosen set to true if the load is for such code and is allowed, and the feature was not
-        recorded already: the feature is then recorded (see isTenantChosen()), and the caller removes the record with
-        clearTenantChosen() if the load fails
+        @param tenant_chosen set to true if the load is for such code and is allowed: the module is then recorded as
+        chosen by that code when it is registered (see QoreAbstractModule::isTenantChosen())
+        @param owner set to the sandbox of that code, if any, a reference that the caller owns
 
         @return 0 if the load is allowed, -1 if \c LOAD-MODULE-ERROR was raised
     */
     DLLLOCAL int checkShadowingLoad(ExceptionSink& xsink, const char* path, const char* feature, bool trusted,
-            bool& tenant_chosen);
+            bool& tenant_chosen, QoreSandboxManager*& owner) const;
 
-    //! Removes the record of a feature made by checkShadowingLoad() when the load fails, unless the module is registered
-    /** must be called with the module manager's mutex held
+    //! Returns true if the code running on the current thread may use a module that code that is not trusted chose
+    /** Only code that is not trusted, with the same sandbox as the code that loaded the module
     */
-    DLLLOCAL void clearTenantChosen(const char* feature);
-
-    //! Returns true if a feature was loaded by code that is not trusted, from outside the process-wide module path
-    DLLLOCAL bool isTenantChosen(const char* feature) const;
+    DLLLOCAL static bool mayUseTenantModule(const QoreAbstractModule& mi);
 
     //! Adds a directory to the process-wide module path; ignored for code that is not trusted
     /** see qore_caller_is_untrusted(); a directory added after init() is not a directory of library code (see
@@ -1053,12 +1067,6 @@ protected:
 
     //! Records the directories of the process-wide module path as the directories of library code
     DLLLOCAL void setTrustedModuleDirs();
-
-    //! the features that code that is not trusted loaded from outside the process-wide module path; see
-    //! checkShadowingLoad()
-    std::set<std::string> tenant_features;
-    //! guards tenant_features
-    mutable std::mutex tenant_features_lck;
 
     DLLLOCAL QoreAbstractModule* loadModuleIntern(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
         AutoLocker sl(mutex); // make sure checking and loading are atomic

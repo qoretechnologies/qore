@@ -484,6 +484,7 @@ switch (case_name) {
         addTestCase("a directory added to the process-wide module path holds no library code",
             \globalAppendUnsandboxedTest());
         addTestCase("a load through a link to a library module loads the library module's file", \canonicalTest());
+        addTestCase("a module that a sandbox loads by path is not given to another sandbox", \crossTenantTest());
         set_return_value(main());
     }
 
