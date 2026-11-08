@@ -75,6 +75,10 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
             \h3GoawayExcludedRequestTest());
         addTestCase("a notifier-mode submission that the connection refuses is reported as not ready",
             \refusedSubmissionTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("a submission refused while the I/O thread sets the connection's state closes the connection",
+                \refusedDuringStateChangeTest());
+        }
         set_return_value(main());
     }
 
@@ -365,6 +369,50 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         assertThrows("HTTPCLIENT-NOT-READY", \stream2.startStreaming(), ("GET", "/ok", NOTHING, False, NOTHING,
             notifier));
         assertFalse(stream2.isSubmitted(), "nothing was submitted");
+
+        # the next request gets another connection
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+    }
+
+    #! A submitting thread records a refused submission while the I/O thread is about to set the state of the open
+    #! connection: the connection stays closed, so a notifier-mode submission on it is reported as not ready
+    /** The debug hook records the refusal on the I/O thread right before the state store that follows the dispatch
+        of a response, which is where a refusal recorded at the same time by another thread lands: a plain store there
+        made the closed connection ready again, and a submission then went through on it.
+    */
+    refusedDuringStateChangeTest() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("h3-refused-state-change",
+            LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        server.setDefaultHandler("ok", new OkHandler());
+        server.waitForAsyncIo();
+        int port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+        string url = sprintf("https://127.0.0.1:%d", port);
+
+        HttpClientConnectionManager mgr = getH3Manager();
+        on_exit mgr.closeAll();
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+
+        HttpClientStreamHandle stream = mgr.acquireStream(url);
+        HttpClientConnection conn = stream.getConnection();
+        HttpClientPollOperation op = conn.getPollOperation();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_http3_wait_close_before_open_state", 0);
+        call_function("dbg_http3_close_before_open_state", op, "response-dispatched");
+        # the response of this request is dispatched before the state store at which the hook records the refusal
+        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+        assertTrue(call_function("dbg_http3_wait_close_before_open_state", 30000), "the hook fired");
+        assertTrue(op.isClosed(), "the connection stays closed");
+
+        EventNotifier notifier();
+        assertThrows("HTTPCLIENT-NOT-READY", \stream.submitAsyncWithNotifier(), ("POST", "/ok", NOTHING, "body",
+            notifier));
+        assertFalse(stream.isSubmitted(), "nothing was submitted");
 
         # the next request gets another connection
         assertEq(200, mgr.request(url, "GET", "/ok").status_code);
