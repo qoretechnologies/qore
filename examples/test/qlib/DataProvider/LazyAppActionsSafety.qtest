@@ -119,6 +119,7 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
             \governedNowTest());
         addTestCase("sandboxed code cannot add a catalog change listener", \sandboxedListenerTest());
         addTestCase("a slow trusted registration does not delay another sandboxed reader", \workerPoolTest());
+        addTestCase("four blocked sandboxed readers' jobs run at once, on four workers", \workerPoolGrowthTest());
         addTestCase("listeners are not called on a catalog worker", \listenerThreadTest());
         addTestCase("a Program that may not use the sandbox APIs loads the module; registrations run at once",
             \restrictedLoaderTest());
@@ -889,6 +890,37 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(quick, False));
         release.dec();
         assertEq(0, slow_done.waitForZero(Deadline));
+    }
+
+    workerPoolGrowthTest() {
+        # jobs queued at once, faster than the workers take them: each job is counted from when it is queued, so the
+        # pool grows to one worker per job up to its size (four), and no job waits behind a blocked one
+        int jobs = 4;
+        Counter started(jobs);
+        Counter release(1);
+        list<string> apps = ();
+        on_exit map DataProviderActionCatalog::deregisterDynamicApp($1), apps;
+        for (int i = 0; i < jobs; ++i) {
+            string app = registerApp("SafePoolGrowth");
+            apps += app;
+            DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+                started.dec();
+                release.waitForZero();
+                registerAction(app, "lazy-a");
+            });
+        }
+        Program reader = readerProgram(new SandboxManager());
+        Counter done(jobs);
+        Queue errors();
+        map background LazyAppActionsSafetyTest::readIn(reader, $1, done, errors), apps;
+        on_exit if (release.getCount()) {
+            release.dec();
+            done.waitForZero();
+        }
+        assertEq(0, started.waitForZero(Deadline), "every job runs while the others are blocked");
+        release.dec();
+        assertEq(0, done.waitForZero(Deadline));
+        map assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions($1, False)), apps;
     }
 
     listenerThreadTest() {

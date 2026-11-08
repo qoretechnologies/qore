@@ -1356,8 +1356,11 @@ public class DataProviderActionCatalog {
         #! The catalog workers running: TID -> @ref True; see startLazyWorker()
         static hash<string, bool> lazy_workers = {};
 
-        #! The number of catalog workers running a job
-        static int lazy_busy = 0;
+        #! The jobs queued or running: each worker runs one at a time; set under @ref lazy_worker_lck
+        /** Counted when a job is queued and until it has ended, so that a job that a worker has taken from the queue
+            but not started yet is counted (see startLazyWorker())
+        */
+        static int lazy_pending = 0;
 
         #! The jobs that catalog workers run: job ID -> the TID of the worker; set under @ref init_lck
         static hash<string, int> lazy_job_running = {};
@@ -5352,6 +5355,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             queued.id = id;
             queued += job;
             lazy_jobs.push(queued);
+            ++lazy_pending;
             # another worker when every worker is busy: a slow registration does not delay this job
             DataProviderActionCatalog::startLazyWorker(False);
 %ifdef QoreDebug
@@ -5477,12 +5481,12 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         # the child of a fork() has none of the parent's threads; the jobs queued for them are dropped
         if (lazy_worker_pid != pid) {
             lazy_workers = {};
-            lazy_busy = 0;
+            lazy_pending = 0;
             lazy_jobs.clear();
             lazy_worker_pid = pid;
         }
         int count = lazy_workers.size();
-        if (first ? count : (lazy_busy + lazy_jobs.size() <= count || count >= MaxLazyWorkers)) {
+        if (first ? count : (lazy_pending <= count || count >= MaxLazyWorkers)) {
             return count > 0;
         }
         if (lazy_worker_shutdown || !lazy_worker_start) {
@@ -5510,10 +5514,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             DataProviderActionCatalog::endLazyWorker(tid);
         }
         while (*hash<auto> job = lazy_jobs.get()) {
-            {
-                AutoLock al(lazy_worker_lck);
-                ++lazy_busy;
-            }
             {
                 AutoLock al(init_lck);
                 lazy_job_running{job.id} = tid;
@@ -5543,7 +5543,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Delivers the result of a job to its reader, if it still waits
     private:internal static finishJob(string id, hash<auto> result) {
         AutoLock al(lazy_worker_lck);
-        --lazy_busy;
+        --lazy_pending;
         if (lazy_job_waiting{id}) {
             lazy_job_results{id} = result;
             lazy_job_cond.broadcast();
@@ -5569,7 +5569,11 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         while (lazy_jobs.size()) {
             *hash<auto> job = lazy_jobs.get();
-            if (job && lazy_job_waiting{job.id}) {
+            if (!job) {
+                continue;
+            }
+            --lazy_pending;
+            if (lazy_job_waiting{job.id}) {
                 lazy_job_results{job.id} = {"error": DataProviderActionCatalog::stoppedError(job)};
             }
         }
