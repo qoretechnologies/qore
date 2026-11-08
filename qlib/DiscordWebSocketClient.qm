@@ -473,10 +473,10 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         */
         *DiscordHeartbeat hb;
 
-        #! Set when the destructor starts
+        #! The TID of the thread running the destructor, 0 before it runs
         /** @since DiscordWebSocketClient 1.2
         */
-        bool in_destructor = False;
+        int destructor_tid = 0;
 
         #! The sequence number of the last heartbeat record; protected by @ref heartbeat_lock
         /** @since DiscordWebSocketClient 1.2
@@ -591,7 +591,7 @@ DiscordWebSocketClient ws();
     #! Deletes the object
     destructor() {
         # the heartbeat thread, if it runs this destructor, is detached when it is stopped (see stopHeartbeatThread())
-        in_destructor = True;
+        destructor_tid = gettid();
         # cancel watchdogs before teardown so a pending timer cannot
         # fire on an already-deleted object
         cancelHelloWatchdog();
@@ -1380,17 +1380,18 @@ hash<auto> h = ws.getInfo();
                 return False;
             }
             h = hb;
-            if (h.tid == gettid()) {
-                # on the heartbeat thread itself (e.g. the client is destroyed there when the thread releases the
-                # last reference): it is told to stop and ends after its beat; it is not waited for
+            # the destructor runs on the heartbeat thread itself (the thread released the last reference): the record
+            # is detached, nobody waits for its thread
+            if (h.tid == gettid() && destructor_tid == gettid()) {
                 remove hb;
             }
         }
         if (h.tid == gettid()) {
-            # detached only when the destructor runs on this thread, which waits for the other threads of the client:
-            # nobody may wait for this one then; otherwise (e.g. the zombie-reconnect fallback, which reconnects on
-            # this thread) the thread ends as usual once it returns to its loop
-            stopHeartbeatRecord(h, in_destructor);
+            # detached only when the destructor runs on this thread, which waits for the other threads of the client;
+            # otherwise (e.g. the zombie-reconnect fallback, which reconnects on this thread) the record stays the
+            # client's until its thread ended, so a destructor running on another thread, or the next heartbeat of a
+            # new connection, waits for that thread, which ends once it returns to its loop
+            stopHeartbeatRecord(h, destructor_tid == gettid());
             return True;
         }
         stopHeartbeatRecord(h);

@@ -811,6 +811,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("Discord: a failing closing step does not skip the heartbeat stop", \discordClosingStepsGuardedTest());
         addTestCase("library thread accounting", \libraryThreadAccountingTest());
         addTestCase("no library thread is started once the destructor runs", \noLibraryThreadOnDestroyTest());
+        addTestCase("Discord: a destructor on another thread waits for a heartbeat thread reconnecting itself",
+            \discordDeleteDuringInlineReconnectTest());
+        addTestCase("Discord: a destructor on another thread waits for a heartbeat thread that stopped its own record",
+            \discordDeleteAfterInlineStopTest());
         addTestCase("Discord: the destructor does not wait for a forced reconnect whose code the hook dropped",
             \discordDroppedStartTest());
         addTestCase("Discord: the destructor on the heartbeat thread does not wait for a forced reconnect whose code "
@@ -3096,6 +3100,79 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("threads-done", lifecycle.get(LifecycleWsClient::HandoffTimeout), "then the destructor goes on");
     }
 
+    #! An explicit delete on another thread while the heartbeat thread reconnects on its own thread: the destructor
+    #! waits for the heartbeat thread, which stops its own record in the reconnect, and does not detach it
+    discordDeleteDuringInlineReconnectTest() {
+        FailingStarter starter();
+        InlineHoldDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+            "start_thread": \starter.start()});
+        Queue events = d.events;
+        Counter rel1 = d.release_inline;
+        Counter rel2 = d.release_after_stop;
+        on_exit {
+            map $1.getCount() ? $1.dec() : NOTHING, (rel1, rel2);
+        }
+        d.connect();
+        d.force_zombie = True;
+        starter.ok_starts = 1;
+        d.hold_inline = True;
+        d.startHeartbeatForTest(100);
+        assertEq("hb-started:" + d.getCurrentConnectionId(), events.get(LifecycleWsClient::HandoffTimeout));
+        DiscordHeartbeat rec = d.hbRecordForTest();
+        # the heartbeat thread found the zombie, could not start the reconnect's thread and reconnects itself
+        assertEq("inline-held", events.get(LifecycleWsClient::HandoffTimeout));
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete d;
+            deleted.push({"ended": rec.ended, "detached": rec.detached});
+        });
+        # the destructor (on another thread) stops the heartbeat and waits for its thread
+        assertEq("waiting:hello", events.get(LifecycleWsClient::HandoffTimeout));
+        rel1.dec();
+        # the heartbeat thread stops its own record (closing callback of its reconnect) and is held after
+        assertEq("after-stop-held", events.get(LifecycleWsClient::HandoffTimeout));
+        rel2.dec();
+        hash<auto> r = deleted.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(r.ended, "the destructor returns only once the heartbeat thread has ended");
+        assertFalse(r.detached, "the record is not detached: the destructor does not run on its thread");
+    }
+
+    #! The heartbeat thread reconnects itself and stops its own record first; an explicit delete on another thread
+    #! then waits for the heartbeat thread to end
+    discordDeleteAfterInlineStopTest() {
+        FailingStarter starter();
+        InlineHoldDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+            "start_thread": \starter.start()});
+        Queue events = d.events;
+        Counter rel1 = d.release_inline;
+        Counter rel2 = d.release_after_stop;
+        on_exit {
+            map $1.getCount() ? $1.dec() : NOTHING, (rel1, rel2);
+        }
+        d.connect();
+        d.force_zombie = True;
+        starter.ok_starts = 1;
+        d.hold_inline = True;
+        d.startHeartbeatForTest(100);
+        assertEq("hb-started:" + d.getCurrentConnectionId(), events.get(LifecycleWsClient::HandoffTimeout));
+        DiscordHeartbeat rec = d.hbRecordForTest();
+        assertEq("inline-held", events.get(LifecycleWsClient::HandoffTimeout));
+        rel1.dec();
+        # the heartbeat thread stopped its own record and is held after
+        assertEq("after-stop-held", events.get(LifecycleWsClient::HandoffTimeout));
+        Queue deleted();
+        background TestThreads::run(sub () {
+            delete d;
+            deleted.push({"ended": rec.ended, "detached": rec.detached});
+        });
+        # the record is still the client's: the destructor waits for its thread
+        assertEq("waiting:hello", events.get(LifecycleWsClient::HandoffTimeout));
+        rel2.dec();
+        hash<auto> r = deleted.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(r.ended, "the destructor returns only once the heartbeat thread has ended");
+        assertFalse(r.detached, "the record is not detached: the destructor does not run on its thread");
+    }
+
     #! A start_thread hook that returns without running the code it was given: the destructor does not wait for a
     #! thread that will never run it
     discordDroppedStartTest() {
@@ -3987,6 +4064,44 @@ class TestThreads {
     #! records an exception that ended a thread
     static report(hash<ExceptionInfo> ex) {
         TestThreads::errors.push(get_exception_string(ex));
+    }
+}
+
+#! Holds the heartbeat thread in its own reconnect, and after it stopped its own record
+class InlineHoldDiscord inherits HbDiscord {
+    public {
+        bool hold_inline = False;
+        Counter release_inline(1);
+        int inline_tid = 0;
+        Counter release_after_stop(1);
+    }
+
+    constructor(hash<auto> opts) : HbDiscord(opts) {
+    }
+
+    private bool reconnectIntern(*int cid) {
+        if (hold_inline) {
+            hold_inline = False;
+            inline_tid = gettid();
+            Queue q = events;
+            Counter c = release_inline;
+            q.push("inline-held");
+            c.waitForZero(LifecycleWsClient::HandoffTimeout);
+        }
+        return HbDiscord::reconnectIntern(cid);
+    }
+
+    private bool stopHeartbeatThread(*int cid) {
+        Queue q = events;
+        Counter c = release_after_stop;
+        bool held = inline_tid && gettid() == inline_tid;
+        bool rv = HbDiscord::stopHeartbeatThread(cid);
+        if (held) {
+            inline_tid = 0;
+            q.push("after-stop-held");
+            c.waitForZero(LifecycleWsClient::HandoffTimeout);
+        }
+        return rv;
     }
 }
 
