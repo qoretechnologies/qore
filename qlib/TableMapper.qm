@@ -34,8 +34,8 @@
 
 # requires the Mapper module
 %requires Mapper
-# requires the SqlUtil module
-%requires SqlUtil
+# requires the SqlUtil module: AbstractTable::getInsertArgs() is in SqlUtil 3.11
+%requires SqlUtil >= 3.11
 
 module TableMapper {
     version = "1.3.1";
