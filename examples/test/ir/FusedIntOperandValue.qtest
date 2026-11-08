@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class FusedIntOperandValueTest
+
+#! Regression test: the fused int instructions of the IR interpreter leave their operands unchanged
+/** <tt>v += o</tt> on an \c int or \c softint local \c v and an \c int local \c o is the fused instruction
+    AddAssignLocalInt, and <tt>i < n</tt> on two \c int locals in a loop condition is BranchIfLtLocalInt.  The IR
+    interpreter reads an operand that is not in the frame's slot cache from the variable, as an int, and cached that
+    int in the operand's slot, so a local with no value read as 0 afterwards (<tt>int o; v += o;</tt> then
+    <tt>exists o</tt> gave \c True).  The slot now caches only the value the variable holds: the source of
+    AddAssignLocalInt is cached as LoadLocal caches it, and an operand of BranchIfLtLocalInt or the target of
+    AddAssignLocalInt is cached only when it holds an int (the target is then set to the result).
+
+    The script adds unset, parameter, reference, \c auto, \c float and \c any operands, compares unset \c int and
+    \c softint locals in loop conditions, and checks that the operands keep their values; each function is called
+    three times through a call reference and by name, in every execution mode and on the IR tier of tiered execution
+    (see ExecModeOutputTest).
+*/
+class FusedIntOperandValueTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# v += o on an int local v and an int local o, and i < n on int locals, are fused instructions that read their
+# operands as ints; the operands keep their values
+string sub add_unset() { int v = 1; int o; v += o; return sprintf("%y %y %y", v, o, exists o); }
+string sub add_unset_twice() { int v = 1; int o; v += o; v += o; o = 2; v += o; return sprintf("%y %y", v, o); }
+string sub add_unset_softint() { softint v = 1; int o; v += o; return sprintf("%y %y %y", v, o, exists o); }
+string sub add_param(int o) { int v = 1; v += o; return sprintf("%y %y", v, o); }
+string sub add_param_unset(*int o) { int v = 1; int p = o ?? 0; v += p; return sprintf("%y %y %y", v, o, p); }
+string sub add_self() { int v = 2; v += v; return sprintf("%y", v); }
+string sub add_auto() { int v = 1; auto o = "3"; v += o; return sprintf("%y %y", v, o); }
+string sub add_float() { softint v = 1; float o = 1.5; v += o; return sprintf("%y %y", v, o); }
+string sub add_any_unset() { int v = 1; any o; v += o; return sprintf("%y %y %y", v, o, exists o); }
+int sub add_ref_param(reference<int> x) { int v = 1; v += x; x = 5; v += x; return v; }
+string sub add_ref() { int n = 2; int v = add_ref_param(\n); return sprintf("%y %y", v, n); }
+string sub add_foreach() { int v = 0; foreach auto e in ((1, "2", 3.5, NOTHING)) { v += e; } return sprintf("%y", v); }
+string sub lt_unset() {
+    int i = -1;
+    int n;
+    int c = 0;
+    while (i < n) {
+        ++i;
+        ++c;
+    }
+    return sprintf("%y %y %y %y", i, n, exists n, c);
+}
+string sub lt_unset_lhs() {
+    int i;
+    int n = 1;
+    int c = 0;
+    while (i < n) {
+        c = 1;
+        break;
+    }
+    return sprintf("%y %y %y", c, i, exists i);
+}
+string sub lt_softint() {
+    softint n;
+    softint i = -1;
+    for (; i < n; ++i) {
+    }
+    return sprintf("%y %y %y", i, n, exists n);
+}
+string sub lt_param(int n) {
+    int i = 0;
+    while (i < n) {
+        ++i;
+    }
+    return sprintf("%y %y", i, n);
+}
+string sub incr_unset() { int v; v += 1; ++v; return sprintf("%y", v); }
+
+hash<string, code> tests = {
+    "add_unset": \add_unset(), "add_unset_twice": \add_unset_twice(), "add_unset_softint": \add_unset_softint(),
+    "add_param": string sub () { return add_param(4); }, "add_param_unset": string sub () { return add_param_unset(); },
+    "add_self": \add_self(), "add_auto": \add_auto(), "add_float": \add_float(), "add_any_unset": \add_any_unset(),
+    "add_ref": \add_ref(), "add_foreach": \add_foreach(), "lt_unset": \lt_unset(), "lt_unset_lhs": \lt_unset_lhs(),
+    "lt_softint": \lt_softint(), "lt_param": string sub () { return lt_param(3); }, "incr_unset": \incr_unset(),
+};
+for (int i = 0; i < 3; ++i) {
+    foreach hash<auto> t in (tests.pairIterator()) {
+        printf("%d %s: %s\n", i, t.key, t.value());
+    }
+}
+# the same functions called by name
+for (int i = 0; i < 3; ++i) {
+    printf("%d direct: %s | %s | %s | %s | %s\n", i, add_unset(), add_param(4), lt_unset(), lt_param(3), add_ref());
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 add_unset: 1 null False",
+            "0 add_unset_twice: 3 2",
+            "0 add_unset_softint: 1 null False",
+            "0 add_param: 5 4",
+            "0 add_param_unset: 1 null 0",
+            "0 add_self: 4",
+            "0 add_auto: 4 \"3\"",
+            "0 add_float: 2 1.5",
+            "0 add_any_unset: 1 null False",
+            "0 add_ref: 8 5",
+            "0 add_foreach: 6",
+            "0 lt_unset: 0 null False 1",
+            "0 lt_unset_lhs: 1 null False",
+            "0 lt_softint: 0 null False",
+            "0 lt_param: 3 3",
+            "0 incr_unset: 2",
+            "1 add_unset: 1 null False",
+            "1 add_unset_twice: 3 2",
+            "1 add_unset_softint: 1 null False",
+            "1 add_param: 5 4",
+            "1 add_param_unset: 1 null 0",
+            "1 add_self: 4",
+            "1 add_auto: 4 \"3\"",
+            "1 add_float: 2 1.5",
+            "1 add_any_unset: 1 null False",
+            "1 add_ref: 8 5",
+            "1 add_foreach: 6",
+            "1 lt_unset: 0 null False 1",
+            "1 lt_unset_lhs: 1 null False",
+            "1 lt_softint: 0 null False",
+            "1 lt_param: 3 3",
+            "1 incr_unset: 2",
+            "2 add_unset: 1 null False",
+            "2 add_unset_twice: 3 2",
+            "2 add_unset_softint: 1 null False",
+            "2 add_param: 5 4",
+            "2 add_param_unset: 1 null 0",
+            "2 add_self: 4",
+            "2 add_auto: 4 \"3\"",
+            "2 add_float: 2 1.5",
+            "2 add_any_unset: 1 null False",
+            "2 add_ref: 8 5",
+            "2 add_foreach: 6",
+            "2 lt_unset: 0 null False 1",
+            "2 lt_unset_lhs: 1 null False",
+            "2 lt_softint: 0 null False",
+            "2 lt_param: 3 3",
+            "2 incr_unset: 2",
+            "0 direct: 1 null False | 5 4 | 0 null False 1 | 3 3 | 8 5",
+            "1 direct: 1 null False | 5 4 | 0 null False 1 | 3 3 | 8 5",
+            "2 direct: 1 null False | 5 4 | 0 null False 1 | 3 3 | 8 5",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("FusedIntOperandValue", Script, (map $1 + "\n", Expected).join(""),
+            "leaves the operands of the fused int instructions unchanged") {
+    }
+}

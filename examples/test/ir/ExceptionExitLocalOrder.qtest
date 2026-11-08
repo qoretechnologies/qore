@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ExceptionExitLocalOrderTest
+
+#! Regression test: a function left by an exception releases its locals last declared first, whatever their storage
+/** A function left by an exception released its IR-only locals (ex: auto locals) before the locals on the runtime
+    stack (ex: locals of a class type) in the IR, JIT and tiered execution modes, so locals of both kinds were
+    destroyed out of the order of the AST interpreter: <tt>auto x = new Foo(); AutoLock al(m); throw ...</tt> with a
+    Foo destructor locking m raised LOCK-ERROR.  They are now released together, last declared first, by the IR
+    interpreter (SlotCacheCleanup, cleanupLocalCaches()) and native code (QoreIRToLLVM::getExitReleaseSequence()).
+    An on_block_exit handler run as an IR function of its own releases none of the locals of the function it belongs
+    to, which the function's own handlers still read (the k() case).  The script runs every case twice, in every execution mode, on the IR tier of tiered execution and as a qcc
+    executable (see ExecModeOutputTest).
+*/
+class ExceptionExitLocalOrderTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# on exception exit, locals are released last declared first, whatever their kind
+Mutex m();
+class Foo {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() {
+        m.lock();
+        printf("dtor %s\n", n);
+        m.unlock();
+    }
+}
+class Bar {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+sub f() {
+    auto x = new Foo("x");
+    AutoLock al(m);
+    throw "ERR";
+}
+sub g() {
+    Bar a("a");
+    auto b = new Bar("b");
+    Bar c("c");
+    auto d = new Bar("d");
+    throw "ERR2";
+}
+for (int i = 0; i < 2; ++i) {
+    try { f(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    try { g(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+}
+# a block within the function, left by the exception
+sub h() {
+    Bar a("ha");
+    {
+        auto b = new Bar("hb");
+        Bar c("hc");
+        throw "ERR3";
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    try { h(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+}
+class Baz {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+# an inner block whose on_error handler rethrows: the handler of the function still reads its locals and parameter
+sub k(reference<list<string>> order) {
+    Baz b("kb");
+    auto c = new Baz("kc");
+    on_error {
+        order += "oe:" + b.n + ":" + c.n;
+    }
+    {
+        Baz d("kd");
+        on_error rethrow $1.err, $1.desc + "-i";
+        throw "ERR4", "d";
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    list<string> order = ();
+    try { k(\order); } catch (hash<ExceptionInfo> ex) { printf("caught %s %s %y\n", ex.err, ex.desc, order); }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor x",
+            "caught ERR",
+            "dtor d",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "caught ERR2",
+            "dtor x",
+            "caught ERR",
+            "dtor d",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "caught ERR2",
+            "dtor hc",
+            "dtor hb",
+            "dtor ha",
+            "caught ERR3",
+            "dtor hc",
+            "dtor hb",
+            "dtor ha",
+            "caught ERR3",
+            "dtor kd",
+            "dtor kc",
+            "dtor kb",
+            "caught ERR4 d-i [\"oe:kb:kc\"]",
+            "dtor kd",
+            "dtor kc",
+            "dtor kb",
+            "caught ERR4 d-i [\"oe:kb:kc\"]",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ExceptionExitLocalOrder", Script, (map $1 + "\n", Expected).join(""),
+            "releases the locals of a function left by an exception in the order of the AST interpreter") {
+    }
+}

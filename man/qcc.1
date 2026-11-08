@@ -248,6 +248,23 @@ Show command-line help and exit.
 .TP
 .BR \-V ", " \-\-version
 Show version information and exit.
+.SH EXECUTABLE OPTIONS
+An executable that \fBqcc\fR generates reads the following options before the
+arguments of the program, which start with the first argument that is not one
+of them and are given to the program in \fBARGV\fR:
+.TP
+.B \-b
+Disable signal handling, as \fBqore \-b\fR does: no signal thread is started.
+Use it to run the executable under a tool that intercepts signals itself, such
+as \fBvalgrind\fR.
+.TP
+.BR \-G ", " \-\-enable\-debug
+Accepted as by \fBqore\fR and not given to the program; the \fB@assert\fR and
+\fB@debug\fR statements of the compiled code are not enabled by it.
+.TP
+.B \-d
+Increase the debugging output level of a debug build of libqore (can be given
+more than once).
 .SH ENVIRONMENT
 .TP
 .B QORE_LIBDIR

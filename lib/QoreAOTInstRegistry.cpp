@@ -707,7 +707,8 @@ static bool writeLocal(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU8(li->is_ref ? 1 : 0);
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
         ctx.writer.writeU8(li->local && li->local->isReadOnly() ? 1 : 0);
-        ctx.writer.writeU8(li->initial_assignment ? 1 : 0);
+        // bit 0: a declaration's initializer, bit 1: the assignment of an element to a foreach variable
+        ctx.writer.writeU8((li->initial_assignment ? 1 : 0) | (li->foreach_assignment ? 2 : 0));
     }
     return true;
 }
@@ -725,9 +726,12 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
     bool is_ref = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool read_only = false;
     bool initial_assignment = false;
+    bool foreach_assignment = false;
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
         read_only = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-        initial_assignment = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+        uint8_t store_flags = QoreAOTBinaryReader::readU8(ctx.ptr);
+        initial_assignment = (store_flags & 1) != 0;
+        foreach_assignment = (store_flags & 2) != 0;
     }
 
     // Prefer slot-indexed resolution to avoid name collisions across scopes
@@ -750,6 +754,7 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
     auto* li = new QoreIRLocalInstruction(static_cast<QoreIROpcode>(opcode_raw), lv, auto_ref);
     li->mode = mode;
     li->initial_assignment = initial_assignment;
+    li->foreach_assignment = foreach_assignment;
     li->is_closure = is_closure;
     li->is_ref = is_ref;
     li->slot_id = slot_id;

@@ -66,6 +66,20 @@ public:
     }
 };
 
+//! Reads the value of the lvalue that a reference held by a variable refers to, as a read of the variable gives it
+/** The lvalue expression of the reference is evaluated, which reads a missing hash key or list element as no value
+    without creating it; ReferenceNode::eval() resolves the reference as an lvalue instead, as for an assignment, and
+    so creates it.  A variable whose storage is not a LocalVarValue (the slot of an IR-only local in the IR
+    interpreter, the cache of a local in native code) holding a reference reads it with this function.
+
+    @param ref the reference held by the variable
+    @param needs_deref set to false if the value returned is borrowed, as for LocalVarValue::eval()
+    @param xsink for exceptions
+
+    @return the value of the referenced lvalue
+*/
+DLLLOCAL QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink);
+
 template <class T>
 class LValueRefHelper : public LocalRefHelper<T> {
 protected:
@@ -266,29 +280,7 @@ public:
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
         //    val.getTypeName());
         if (val.getType() == NT_REFERENCE) {
-            ReferenceNode* ref = const_cast<ReferenceNode*>(val.get<ReferenceNode>());
-            LocalRefHelper<LocalVarValue> helper(this, *ref, xsink);
-            if (!helper) {
-                return QoreValue();
-            }
-
-            lvalue_ref* lr = lvalue_ref::get(ref);
-            ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
-            if (*xsink) {
-                return QoreValue();
-            }
-            QoreValue rv = erh.takeValue(needs_deref);
-            if (rv.needsEval()) {
-                bool ref_needs_deref = needs_deref;
-                bool eval_needs_deref = true;
-                QoreValue resolved = rv.eval(eval_needs_deref, xsink);
-                if (ref_needs_deref) {
-                    rv.discard(xsink);
-                }
-                needs_deref = eval_needs_deref;
-                return *xsink ? QoreValue() : resolved;
-            }
-            return rv;
+            return qore_local_reference_eval(*val.get<ReferenceNode>(), needs_deref, xsink);
         }
 
         if (val.getType() == NT_WEAKREF) {

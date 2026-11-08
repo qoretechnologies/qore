@@ -774,7 +774,11 @@ public:
     //! @param num_steps number of steps in the array
     //! @param for_remove true if navigating for a remove operation
     //! @return 0 on success, -1 on error (exception raised in vl.xsink)
-    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
+    //! @param remove_root true for the remove or delete of the root variable itself (a path of one step): a global or
+    //! thread_local variable holding a reference then gives its own value, as Var::remove() does in the AST
+    //! interpreter, instead of the referenced lvalue
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
+            bool remove_root = false);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);

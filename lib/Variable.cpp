@@ -1812,7 +1812,7 @@ double LValueHelper::getAsFloat() const {
     return qv->getAsFloat();
 }
 
-int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
+int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
     assert(num_steps > 0);
 
     const bool final_assignment = assignment_only;
@@ -1918,8 +1918,12 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         return -1;
     }
 
-    // Check if root resolved to a reference — if so, follow it via AST path
-    {
+    // Check if root resolved to a reference — if so, follow it via AST path.  The remove or delete of a global or
+    // thread_local variable itself removes the variable's own value, the reference, as Var::remove() does in the AST
+    // interpreter (LValueRemoveHelper does not follow it), while the remove of a local variable holding a reference
+    // removes the referenced value (LocalVar::remove())
+    if (!(remove_root && num_steps == 1
+            && (root.kind == LVPathStepKind::GlobalVar || root.kind == LVPathStepKind::ThreadLocalVar))) {
         const ReferenceNode* ref = getReference();
         if (ref) {
             if (val) {
@@ -3898,6 +3902,32 @@ void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const Q
 
     typeInfo = resolvedTypeInfo;
     refTypeInfo = resolvedRefTypeInfo;
+}
+
+// documented in LocalVar.h
+QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
+    LocalRefHelper<LocalVarValue> helper(nullptr, const_cast<ReferenceNode&>(ref), xsink);
+    if (!helper) {
+        return QoreValue();
+    }
+
+    lvalue_ref* lr = lvalue_ref::get(&ref);
+    ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreValue rv = erh.takeValue(needs_deref);
+    if (rv.needsEval()) {
+        bool ref_needs_deref = needs_deref;
+        bool eval_needs_deref = true;
+        QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+        if (ref_needs_deref) {
+            rv.discard(xsink);
+        }
+        needs_deref = eval_needs_deref;
+        return *xsink ? QoreValue() : resolved;
+    }
+    return rv;
 }
 
 int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeInfo* typeInfo,

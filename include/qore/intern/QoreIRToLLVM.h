@@ -487,6 +487,15 @@ private:
     // runtime-stack ownership. Proven-assigned native int/float locals can stay
     // IR-only because they carry no references and cannot trigger double-free.
     std::unordered_set<const void*> aot_adjusted_ir_only;
+    //! The locals with IR storage (QoreIRFunction::hasIRStorage()) when the function has reference slot locals: the
+    //! set that ir_only_locals_set points to, which then includes them
+    std::unordered_set<const void*> ir_storage_locals;
+    //! The body locals of the function being lowered, which hold a reference only if a store gives them one or the
+    //! function creates one (see usesReferenceFlag())
+    std::unordered_set<const void*> reference_flag_body_locals;
+    //! True if the function being lowered creates a reference (\\var), so that any local of a type that can hold
+    //! one can be given one (see usesReferenceFlag())
+    bool function_creates_reference = false;
 
     // Lazy local-cache invalidation. Calls that can execute AST/Qore code bump
     // the function epoch; LoadLocal reloads only the specific stale local it
@@ -610,6 +619,29 @@ private:
     // are destroyed, preventing deferred-to-exit cleanup from keeping objects alive.
     std::unordered_map<const void*, std::vector<llvm::Value*>> local_cleanup_allocas;
 
+    //! The release of a local at an UninstantiateLocal lowered before the code that registers some of the allocas
+    //! holding references to its value
+    /** Blocks are lowered in layout order, and a block's exception cleanup (block.lvars.exception.cleanup.cont) is
+        laid out before the statements of the block: its UninstantiateLocal of a local declared in the block finds
+        none of the allocas that the local's stores register later (local_cleanup_allocas, the reload tracker and the
+        deferred reload value), whose references then outlived the local's value, so that the destructor of an
+        object it held ran after those of locals declared before it.  finalizeDeferredLocalReleases() releases them
+        there once the function is lowered; they are all allocas of the entry block, which dominates every release
+        point (a debug build asserts it).
+    */
+    struct DeferredLocalRelease {
+        //! the local
+        const void* key;
+        //! the block of the UninstantiateLocal
+        llvm::BasicBlock* block;
+        //! the instruction the releases are inserted after (null: at the start of \a block), which the release of
+        //! the local's value follows
+        llvm::Instruction* after;
+        //! the allocas released when the UninstantiateLocal was lowered
+        std::vector<llvm::Value*> released;
+    };
+    std::vector<DeferredLocalRelease> deferred_local_releases;
+
     // Phase 2B — SSA-direct cleanup tracking.  An alternative to the flat
     // cleanup-alloca forest: when a refcounted temp would normally be
     // tracked via invoke_result_allocas, it can instead be tracked as an
@@ -712,6 +744,67 @@ private:
     // (or NOTHING if the target has already been deleted), rather than reading
     // the cached WeakReferenceNode from an LLVM alloca.
     std::unordered_set<const void*> weak_assigned_locals;
+    //! Returns true if a local is declared with a reference type: it is read through the runtime stack on every load
+    /** Its value is that of the referenced lvalue, which can change without a store to the local (x = 10), so it is
+        never read from its native cache, and a store to it writes the referenced lvalue.  A local of no reference
+        type that holds a reference is handled by its reference flag instead (see usesReferenceFlag()).
+    */
+    bool readsThroughReference(const LocalVar* local) const {
+        return local && QoreTypeInfo::isReference(local->getTypeInfo());
+    }
+
+    //! The reference flag of each local that has one: see localReferenceFlag()
+    std::unordered_map<const void*, llvm::AllocaInst*> local_reference_flags;
+
+    //! Returns true if a local can hold a reference without a reference type and so has a reference flag
+    /** A local of no type, \c auto or \c any can hold a reference (<tt>auto r = \x;</tt>, a reference element of a
+        container, a reference passed to a parameter), which it reads as the referenced lvalue and through which a
+        store writes; its native cache then holds the reference itself (see qore_rt_load_local_raw()), and the flag
+        records whether it does: a load dereferences the cached value only when the flag is set
+        (qore_rt_read_reference_local()), so a local that never holds a reference reads its cache as any other.
+        Closure-bound, weak-assigned and foreach variables have mechanisms of their own.
+    */
+    bool usesReferenceFlag(const void* key) const;
+
+    //! Returns true if a local keeps a reference it holds in its native cache (QoreIRFunction::reference_slot_locals)
+    bool isReferenceSlotLocal(const void* key) const {
+        return current_ir_func && current_ir_func->reference_slot_locals.count(key)
+            && ir_only_locals_set && ir_only_locals_set->count(key);
+    }
+
+    //! Returns the reference flag of a local (an i8 that is non-zero if its native cache holds a reference)
+    /** Created in the entry block, cleared, the first time it is needed; null if the local has none (see
+        usesReferenceFlag())
+    */
+    llvm::AllocaInst* localReferenceFlag(const void* key, llvm::Function* llvm_func);
+
+    //! Emits the load of a local's value from the runtime stack for its native cache
+    /** For a local with a reference flag (see usesReferenceFlag()), a reference that the local holds is loaded as the
+        reference itself and the flag is set accordingly (qore_rt_load_local_raw()); any other local is loaded with
+        qore_rt_load_local().  Every load that fills a local's native cache uses this function.
+
+        @return the value loaded, with a reference for the cache
+    */
+    llvm::Value* emitLocalCacheLoad(const void* key, llvm::IRBuilder<>& b, llvm::Module& module);
+
+    //! Emits the read of a local with a reference flag: the cached value, or the referenced value if it is a reference
+    /** The referenced value is read only when the flag is set (qore_rt_read_reference_local()); it is owned and kept,
+        for the consumers of the value returned, until the read after the next one at this site or the exit of the
+        function, as a reload of a local's cache keeps the value it replaces
+
+        @param cached the value in the local's cache
+    */
+    llvm::Value* emitReferenceLocalRead(const void* key, llvm::Value* cached, llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    //! Emits the reference flag of a value (an i8, non-zero if the value is a reference) at the builder's position
+    /** Only a node can be a reference: qore_rt_value_is_reference() is called for a node only, and not at all for
+        a value that the IR knows is never a reference (QoreIRFunction::valueNeverReference(), ex: a string constant)
+
+        @param value_id the IR value of \a value
+    */
+    llvm::Value* emitValueIsReference(llvm::Value* value, QoreIRValue value_id, llvm::Module& module,
+            llvm::Function* llvm_func);
     //! IR-only variables of foreach loops (AssignmentMode::Element): their caches can hold weak references, which
     //! read as their targets (see loadLocalCacheValue())
     std::unordered_set<const void*> ir_only_element_locals;
@@ -740,6 +833,13 @@ private:
     // On abnormal exit (return/throw inside foreach body), emitIteratorCleanup()
     // calls qore_rt_iterator_cleanup() for each non-null alloca.
     std::vector<llvm::Value*> iterator_cleanup_allocas;
+    //! The cleanup allocas of the iterators of foreach statements whose place among the local slots is known
+    //! (QoreIRFunction::interpreter_iterator_slot_boundary), with the boundary, in the order they were lowered: an
+    //! exception exit releases such an iterator at its place among the locals (see getExitReleaseSequence()), as the
+    //! AST interpreter releases the value a foreach statement iterates when the statement ends, after the locals of
+    //! the loop body and before the loop variable and the locals declared before the statement
+    std::vector<std::pair<llvm::AllocaInst*, uint32_t>> positioned_iterator_allocas;
+    std::unordered_set<const llvm::Value*> positioned_iterator_alloca_set;
 
     // Reload tracker allocas for local variables modified by lvalue operations.
     // Each tracker alloca holds the most recent qore_rt_load_local reload value
@@ -1141,6 +1241,34 @@ private:
     */
     std::vector<llvm::AllocaInst*> getBoxedExitCleanupSlots() const;
 
+    //! An entry of the release of a function's locals at its exit: the native cache of a local, or a local on the
+    //! runtime stack whose value is released (see getExitReleaseSequence())
+    struct ExitReleaseEntry {
+        llvm::AllocaInst* alloca = nullptr;
+        LocalVar* var = nullptr;
+        //! the AOT slot of \a var in AOT code, whose LocalVar is known only at runtime (-1: none)
+        int32_t aot_slot = -1;
+        //! true if \a var is a closure-bound variable that the frame instantiated, which is popped from the closure
+        //! stack; false for one the caller instantiated, which only loses its value, and for a runtime-stack local
+        bool pop_closure = false;
+        //! true if \a alloca holds the iterator of a foreach statement (released with qore_rt_iterator_cleanup())
+        bool iterator = false;
+    };
+
+    //! The locals released at the exit of the function, in declaration order (they are released last first)
+    /** The boxed slots of getBoxedExitCleanupSlots(), and, unless \a runtime_locals is false, the closure-bound body
+        locals and (except in AOT code) the body locals on the runtime stack that the frame instantiated, between the
+        IR-only locals declared before and after them, so that a function left by an exception releases all of its
+        locals last declared first, as the AST interpreter does, whichever storage they have; with \a cache_allocas, a
+        runtime local is followed by the allocas of its native cache that hold references (released before the
+        variable's value)
+    */
+    std::vector<ExitReleaseEntry> getExitReleaseSequence(bool runtime_locals, bool cache_allocas) const;
+
+    //! Creates the alloca of the reference that a local's native cache replaced at its last reload, if it has none
+    //! yet (see retainLocalCacheValueIntern()), so that a release emitted before it is created releases it too
+    void ensureLocalReloadDeferred(const void* key, llvm::Function* llvm_func);
+
     //! Route boxed exit cleanup through qore_rt_cleanup_run_allocas() when the
     //! inline per-slot triples would need (slots x exit_edges) PHIs.
     /** @param llvm_func the function being finalized
@@ -1197,7 +1325,9 @@ private:
     void endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard);
 
     // Emit qore_rt_decref calls for pre-instantiated local entry loads
-    void emitPreinstantiatedCleanup(llvm::Module& module);
+    //! @param exception_exit true for an exit by an exception, which releases the body locals on the runtime stack
+    //! with the IR-only locals, in declaration order (see getExitReleaseSequence())
+    void emitPreinstantiatedCleanup(llvm::Module& module, bool exception_exit = false);
 
     // Conditionally re-instantiate pre-instantiated closure-use block-scoped locals
     // that were popped mid-execution (e.g. loop-body closure captures).  Called at
@@ -1212,7 +1342,9 @@ private:
     // iterators of the foreach statements left, before the on_block_exit handlers of the function's blocks run, as
     // the AST interpreter releases them when the statements unwind; the persistent cleanups follow in
     // emitInvokeCleanup()
-    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa);
+    //! @param exception_exit true for an exit by an exception, whose release of the locals releases the iterators
+    //! that have a place among them (positioned_iterator_allocas)
+    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false);
 
     // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
     // \a handler: a block that first releases the temporaries of the raising statement - the tracked call results
@@ -1266,7 +1398,19 @@ private:
     bool isSelfRecursiveVariant(const AbstractQoreFunctionVariant* variant) const;
 
     // Emit qore_rt_iterator_cleanup calls for active iterators
-    void emitIteratorCleanup(llvm::Module& module);
+    //! @param skip_positioned true to leave the iterators that the release of the locals releases at their places
+    //! (see positionIterators())
+    void emitIteratorCleanup(llvm::Module& module, bool skip_positioned = false);
+
+    //! Returns true if an exception exit releases the iterators of positioned_iterator_allocas at their places among
+    //! the locals: not when the iterators are released by the array form (iterator_cleanup_array)
+    //! Registers the cleanup alloca of the iterator that \a inst creates in positioned_iterator_allocas if the IR
+    //! gives it a place among the local slots
+    void registerPositionedIterator(const QoreIRInstruction* inst, llvm::Value* iter_alloca);
+
+    bool positionIterators() const {
+        return !iterator_cleanup_array && !positioned_iterator_allocas.empty();
+    }
 
     // Emit llvm.lifetime.start after each entry-block alloca and
     // llvm.lifetime.end before each ret/resume terminator.  Helps SROA/mem2reg
@@ -1328,6 +1472,10 @@ private:
     // then the shared tail (on_block_exit, iterators, preinstantiated
     // locals, invoke allocas, local uninstantiation) and resume().
     void finalizeFunctionCommonCleanup(llvm::Module& module);
+
+    //! Releases the allocas registered for a local after an UninstantiateLocal of it was lowered (see
+    //! DeferredLocalRelease), before the release of the local's value there
+    void finalizeDeferredLocalReleases(llvm::Module& module);
 
     // Phase 2B — emit decrefs for every pending_ssa_cleanup entry whose
     // def_bb dominates the current insert block.  Used by Return /

@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CompoundAssignmentResultTest
+
+#! Regression test: the result of += and -= on a variable is the value the variable holds afterwards
+/** The AST interpreter's += and -= operators return the value of the lvalue after the operation.  A variable's
+    declared type can convert the value that the operation computes when it is stored: an \c any or \c auto! variable
+    stores a \c hash<HD> operand of += on no value as a plain \c hash, and a \c list<int> as a plain \c list.  Compiled
+    code gave the value it computed instead, before the store converted it: native code returns the operand itself
+    for an lvalue with no value, so <tt>(v += <HD>{}).fullType()</tt> gave \c "hash<HD>" for an \c any or \c auto!
+    variable.  The result is now read from the variable when it is used.
+
+    -=, *= and /= return the lvalue's value as well.  The AST interpreter's *= and /= returned the value they
+    computed with a float operand (\c softint v = 7; v *= 2.5 gave \c 17.5 while \c v holds \c 17), and compiled
+    code also with a number operand; the result of every compound assignment is now the value stored, as for an
+    assignment.
+
+    The script applies += to \c any and \c auto! locals, globals, thread_local variables, members and static
+    variables, with no value and with \c NULL, and -=, *= and /= to \c softint and \c *softint locals and
+    \c softint globals, thread_local variables, members and static variables with \c number, \c float and \c int
+    operands, and prints the results and the values; it calls each function three times, in every execution mode and
+    on the IR tier of tiered execution (see ExecModeOutputTest).  CompoundAssignmentMatrix.qtest checks every
+    operator on every kind of lvalue.
+*/
+class CompoundAssignmentResultTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+hashdecl HD { int a = 1; }
+any ga;
+auto! gb;
+thread_local any ta;
+thread_local auto! tb;
+softint gsi;
+thread_local softint tsi;
+class C {
+    public {
+        any ma;
+        auto! mb;
+        softint msi;
+        static softint ssi;
+        static any sa;
+        static auto! sb;
+    }
+}
+
+string sub t(auto v) { return v.fullType(); }
+
+# the result of += on an lvalue with no value or NULL is the value the lvalue holds: any and auto! store a hash<HD>
+# as a plain hash
+string sub locals(auto o) {
+    any la;
+    auto! lb;
+    string r = sprintf("%s %s", t(la += o), t(lb += o));
+    la = NULL;
+    lb = NULL;
+    return r + sprintf(" %s %s / %s %s", t(la += o), t(lb += o), t(la), t(lb));
+}
+
+string sub others(auto o) {
+    C c();
+    remove ga;
+    remove gb;
+    ta = NULL;
+    tb = NULL;
+    remove C::sa;
+    remove C::sb;
+    return sprintf("%s %s %s %s %s %s %s %s", t(ga += o), t(gb += o), t(ta += o), t(tb += o), t(c.ma += o),
+        t(c.mb += o), t(C::sa += o), t(C::sb += o));
+}
+
+string sub t2(auto ignored, auto v) { return sprintf("%s:%y", v.type(), v); }
+
+# -=, *= and /= give the value the variable holds, whatever the operand (the softint variable
+# stores 17.5 as 17)
+string sub softints(auto o) {
+    softint l;
+    *softint ol;
+    C c();
+    string r = o.type();
+    r += sprintf(" local-=:%s", t2(l = 7, l -= o));
+    r += sprintf(" *local-=:%s", t2(ol = 7, ol -= o));
+    r += sprintf(" global-=:%s", t2(gsi = 7, gsi -= o));
+    r += sprintf(" tl-=:%s", t2(tsi = 7, tsi -= o));
+    r += sprintf(" member-=:%s", t2(c.msi = 7, c.msi -= o));
+    r += sprintf(" static-=:%s", t2(C::ssi = 7, C::ssi -= o));
+    r += sprintf(" local*=:%s", t2(l = 7, l *= o));
+    r += sprintf(" *local*=:%s", t2(ol = 7, ol *= o));
+    r += sprintf(" global*=:%s", t2(gsi = 7, gsi *= o));
+    r += sprintf(" tl*=:%s", t2(tsi = 7, tsi *= o));
+    r += sprintf(" member*=:%s", t2(c.msi = 7, c.msi *= o));
+    r += sprintf(" static*=:%s", t2(C::ssi = 7, C::ssi *= o));
+    r += sprintf(" local/=:%s", t2(l = 7, l /= o));
+    r += sprintf(" *local/=:%s", t2(ol = 7, ol /= o));
+    r += sprintf(" global/=:%s", t2(gsi = 7, gsi /= o));
+    r += sprintf(" tl/=:%s", t2(tsi = 7, tsi /= o));
+    r += sprintf(" member/=:%s", t2(c.msi = 7, c.msi /= o));
+    r += sprintf(" static/=:%s", t2(C::ssi = 7, C::ssi /= o));
+    return r;
+}
+
+list<auto> ops = (<HD>{}, cast<list<int>>((1, 2)));
+for (int i = 0; i < 3; ++i) {
+    foreach auto o in (ops) {
+        printf("%d %s: %s | %s\n", i, o.fullType(), locals(o), others(o));
+    }
+    foreach auto o in ((2.5n, 2.5, 2)) {
+        printf("%d%s\n", i, softints(o));
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
+            "0 list<int>: list list list list / list list | list list list list list list list list",
+            "0number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "0float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "0integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
+            "1 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
+            "1 list<int>: list list list list / list list | list list list list list list list list",
+            "1number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "1float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "1integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
+            "2 hash<HD>: hash hash hash hash / hash hash | hash hash hash hash hash hash hash hash",
+            "2 list<int>: list list list list / list list | list list list list list list list list",
+            "2number local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "2float local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:17 *local*=:integer:17 global*=:integer:17 tl*=:integer:17 member*=:integer:17 static*=:integer:17 local/=:integer:2 *local/=:integer:2 global/=:integer:2 tl/=:integer:2 member/=:integer:2 static/=:integer:2",
+            "2integer local-=:integer:5 *local-=:integer:5 global-=:integer:5 tl-=:integer:5 member-=:integer:5 static-=:integer:5 local*=:integer:14 *local*=:integer:14 global*=:integer:14 tl*=:integer:14 member*=:integer:14 static*=:integer:14 local/=:integer:3 *local/=:integer:3 global/=:integer:3 tl/=:integer:3 member/=:integer:3 static/=:integer:3",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CompoundAssignmentResult", Script, (map $1 + "\n", Expected).join(""),
+            "gives the AST interpreter's result of +=, -=, *= and /=") {
+    }
+}

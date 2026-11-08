@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CompoundAssignmentComplexTypeTest
+
+#! Regression test: += on an "auto" lvalue with no value keeps the complex type of the operand
+/** <tt>auto v; v += <HD>{}</tt> gives \c v the operand itself, as the AST interpreter does, so \c v holds a
+    \c hash<HD>; a \c list<int> or a \c hash<string, int> operand keeps its type in the same way.  The IR interpreter
+    and the runtime helper of compiled code computed the new value in a temporary lvalue without a type, and an
+    assignment to an lvalue without a type strips the complex type of a container, so \c v held a plain \c hash or
+    \c list.  Native code gave the right type only when the lvalue was NOTHING, where it returns the operand inline;
+    for a NULL lvalue it calls the same helper.  Mapper::mapFieldIntern() takes the input value with
+    <tt>v += rec{name} ?? NOTHING</tt>, so a mapped hashdecl value lost its type whenever the method ran on the IR
+    tier.
+
+    The helper now computes the value as the operation does on an \c auto lvalue, which keeps the type; the store
+    that follows applies the variable's declared type.  The controls check that \c any and \c auto! lvalues (locals,
+    globals, thread_local variables, members and static variables), whose assignment strips the complex type in the
+    AST interpreter, still hold a plain \c hash or \c list, and so do the lvalues with a declared type and the
+    elements of a plain \c hash or \c list; and they check the other compound operators on an \c auto lvalue with no
+    value or \c NULL.  Each function is called three times, in every execution mode and on the IR tier of tiered
+    execution (see ExecModeOutputTest).
+*/
+class CompoundAssignmentComplexTypeTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+hashdecl HD { int a = 1; }
+
+# an auto lvalue with no value
+string sub autoNothing(auto o) { auto v; v += o; return v.fullType(); }
+# an auto lvalue that holds NULL: native code calls the runtime helper for it
+string sub autoNull(auto o) { auto v = NULL; v += o; return v.fullType(); }
+# a second += merges into or appends to the value of the first
+string sub autoTwice(auto o) { auto v; v += o; v += o; return sprintf("%s/%d", v.fullType(), v.size()); }
+# the value is the operand itself
+bool sub autoSame(auto o) { auto v; v += o; return v === o; }
+# an auto parameter with no value
+string sub autoParam(auto o, auto v) { v += o; return v.fullType(); }
+# the operand as the result of an expression, as in Mapper::mapFieldIntern()
+string sub autoCoalesce(hash<auto> rec, string name) { auto v; v += rec{name} ?? NOTHING; return v.fullType(); }
+# an element of a hash or list with an auto element type
+string sub autoHashElement(auto o) { hash<auto> h = {}; h.x += o; return h.x.fullType(); }
+string sub autoListElement(auto o) { list<auto!> l = (NOTHING,); l[0] += o; return l[0].fullType(); }
+
+# controls: these lvalues strip the complex type of the operand in the AST interpreter
+string sub optHashAuto(auto o) { *hash<auto> v; v += o; return v.fullType(); }
+string sub optHash(auto o) { *hash v; v += o; return v.fullType(); }
+string sub optListAuto(auto o) { *list<auto> v; v += o; return v.fullType(); }
+string sub plainHashElement(auto o) { hash h = {}; h.x += o; return h.x.fullType(); }
+string sub plainListElement(auto o) { list l = (1,); l[1] += o; return l[1].fullType(); }
+
+# auto lvalues that are not locals keep the type of the operand as well
+auto ga;
+thread_local auto ta;
+class C {
+    public {
+        auto ma;
+        static auto sa;
+    }
+}
+string sub autoOthers(auto o) {
+    C c();
+    remove ga;
+    ta = NULL;
+    remove C::sa;
+    return sprintf("%s %s %s %s / %s %s %s %s", (ga += o).fullType(), (ta += o).fullType(), (c.ma += o).fullType(),
+        (C::sa += o).fullType(), ga.fullType(), ta.fullType(), c.ma.fullType(), C::sa.fullType());
+}
+# the result of += is the value the auto lvalue holds
+string sub autoResult(auto o) { auto v; auto r = (v += o); return sprintf("%s %y", r.fullType(), r === v); }
+
+# controls: any and auto! lvalues store the operand without its complex type, as an assignment does
+any gany;
+auto! gnn;
+thread_local any tany;
+thread_local auto! tnn;
+class D {
+    public {
+        any many;
+        auto! mnn;
+        static any sany;
+        static auto! snn;
+    }
+}
+string sub anyLocals(auto o) {
+    any a;
+    auto! b;
+    any c = NULL;
+    auto! d = NULL;
+    return sprintf("%s %s %s %s / %s %s %s %s", (a += o).fullType(), (b += o).fullType(), (c += o).fullType(),
+        (d += o).fullType(), a.fullType(), b.fullType(), c.fullType(), d.fullType());
+}
+string sub anyOthers(auto o) {
+    D d();
+    remove gany;
+    remove gnn;
+    tany = NULL;
+    tnn = NULL;
+    remove D::sany;
+    remove D::snn;
+    return sprintf("%s %s %s %s %s %s %s %s / %s %s %s %s %s %s %s %s", (gany += o).fullType(), (gnn += o).fullType(),
+        (tany += o).fullType(), (tnn += o).fullType(), (d.many += o).fullType(), (d.mnn += o).fullType(),
+        (D::sany += o).fullType(), (D::snn += o).fullType(), gany.fullType(), gnn.fullType(), tany.fullType(),
+        tnn.fullType(), d.many.fullType(), d.mnn.fullType(), D::sany.fullType(), D::snn.fullType());
+}
+
+# the other compound operators on an auto lvalue with no value or NULL
+string sub show(auto v) { return sprintf("%s:%y", v.fullType(), v); }
+string sub otherOps(auto o, auto init) {
+    list<string> r = ();
+    {
+        auto v = init;
+        try { r += show(v -= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v *= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v /= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v %= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v |= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v &= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v ^= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v <<= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    {
+        auto v = init;
+        try { r += show(v >>= o); } catch (hash<ExceptionInfo> ex) { r += ex.err; }
+    }
+    return r.join(" ");
+}
+
+list<auto> ops = (<HD>{}, cast<list<int>>((1, 2)), cast<hash<string, int>>({"a": 1}));
+for (int i = 0; i < 3; ++i) {
+    foreach auto o in (ops) {
+        printf("%d %s: %s %s %s %y %s %s %s %s | %s %s %s %s %s\n", i, o.fullType(), autoNothing(o), autoNull(o),
+            autoTwice(o), autoSame(o), autoParam(o, NOTHING), autoCoalesce({"x": o}, "x"), autoHashElement(o),
+            autoListElement(o), optHashAuto(o), optHash(o), optListAuto(o), plainHashElement(o),
+            plainListElement(o));
+        printf("%d %s: %s | %s | %s | %s\n", i, o.fullType(), autoOthers(o), autoResult(o), anyLocals(o), anyOthers(o));
+    }
+    foreach auto o in ((<HD>{}, 2, 1.5)) {
+        printf("%d %s: nothing: %s | null: %s\n", i, o.fullType(), otherOps(o, NOTHING), otherOps(o, NULL));
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 hash<HD>: hash<HD> hash<HD> hash<HD>/1 True hash<HD> hash<HD> hash<HD> hash<HD> | hash<auto> hash list<auto> hash hash",
+            "0 hash<HD>: hash<HD> hash<HD> hash<HD> hash<HD> / hash<HD> hash<HD> hash<HD> hash<HD> | hash<HD> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
+            "0 list<int>: list<int> list<int> list<int>/4 True list<int> list<int> list<int> list<int> | hash<auto> hash list<auto> list list",
+            "0 list<int>: list<int> list<int> list<int> list<int> / list<int> list<int> list<int> list<int> | list<int> True | list list list list / list list list list | list list list list list list list list / list list list list list list list list",
+            "0 hash<string, int>: hash<string, int> hash<string, int> hash<string, int>/1 True hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<auto> hash list<auto> hash hash",
+            "0 hash<string, int>: hash<string, int> hash<string, int> hash<string, int> hash<string, int> / hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<string, int> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
+            "0 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0",
+            "0 integer: nothing: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0 | null: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0",
+            "0 float: nothing: float:-1.5 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0 | null: integer:-1 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0",
+            "1 hash<HD>: hash<HD> hash<HD> hash<HD>/1 True hash<HD> hash<HD> hash<HD> hash<HD> | hash<auto> hash list<auto> hash hash",
+            "1 hash<HD>: hash<HD> hash<HD> hash<HD> hash<HD> / hash<HD> hash<HD> hash<HD> hash<HD> | hash<HD> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
+            "1 list<int>: list<int> list<int> list<int>/4 True list<int> list<int> list<int> list<int> | hash<auto> hash list<auto> list list",
+            "1 list<int>: list<int> list<int> list<int> list<int> / list<int> list<int> list<int> list<int> | list<int> True | list list list list / list list list list | list list list list list list list list / list list list list list list list list",
+            "1 hash<string, int>: hash<string, int> hash<string, int> hash<string, int>/1 True hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<auto> hash list<auto> hash hash",
+            "1 hash<string, int>: hash<string, int> hash<string, int> hash<string, int> hash<string, int> / hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<string, int> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
+            "1 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0",
+            "1 integer: nothing: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0 | null: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0",
+            "1 float: nothing: float:-1.5 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0 | null: integer:-1 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0",
+            "2 hash<HD>: hash<HD> hash<HD> hash<HD>/1 True hash<HD> hash<HD> hash<HD> hash<HD> | hash<auto> hash list<auto> hash hash",
+            "2 hash<HD>: hash<HD> hash<HD> hash<HD> hash<HD> / hash<HD> hash<HD> hash<HD> hash<HD> | hash<HD> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
+            "2 list<int>: list<int> list<int> list<int>/4 True list<int> list<int> list<int> list<int> | hash<auto> hash list<auto> list list",
+            "2 list<int>: list<int> list<int> list<int> list<int> / list<int> list<int> list<int> list<int> | list<int> True | list list list list / list list list list | list list list list list list list list / list list list list list list list list",
+            "2 hash<string, int>: hash<string, int> hash<string, int> hash<string, int>/1 True hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<auto> hash list<auto> hash hash",
+            "2 hash<string, int>: hash<string, int> hash<string, int> hash<string, int> hash<string, int> / hash<string, int> hash<string, int> hash<string, int> hash<string, int> | hash<string, int> True | hash hash hash hash / hash hash hash hash | hash hash hash hash hash hash hash hash / hash hash hash hash hash hash hash hash",
+            "2 hash<HD>: nothing: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0 | null: integer:0 integer:0 DIVISION-BY-ZERO integer:0 integer:0 integer:0 integer:0 integer:0 integer:0",
+            "2 integer: nothing: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0 | null: integer:-2 integer:0 integer:0 integer:0 integer:2 integer:0 integer:2 integer:0 integer:0",
+            "2 float: nothing: float:-1.5 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0 | null: integer:-1 float:0.0 float:0.0 integer:0 integer:1 integer:0 integer:1 integer:0 integer:0",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CompoundAssignmentComplexType", Script, (map $1 + "\n", Expected).join(""),
+            "keeps the type of the operand of += on an auto lvalue") {
+    }
+}

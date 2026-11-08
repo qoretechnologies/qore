@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class BorrowedLocalArgumentsTest
+
+#! Regression test: a local whose only use is the base or an argument of a call is read as the AST interpreter reads it
+/** The IR interpreter lets the load of an IR-only local borrow the local's value when the load's only use is the
+    base of a method call in the same block, so that an object is not referenced and released once more for the
+    call.  Only an object is borrowed, and only for a method call: code receiving a container with one reference can
+    take it over or change it in place, which the list given to select did (the heap was corrupted), and a direct
+    or inlined function call can take its argument's slot over as its parameter, which released a borrowed object
+    once more (a Queue given to a function after a background call was destroyed).
+
+    The script passes a list local to select, a list local to a function that changes its own copy, a hash local to
+    an operator, uses an object in a recursive graph as the base and argument of method calls in a loop, and passes
+    object locals to functions, one after a background call took it; each is run three times, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
+    ExecModeOutputTest).
+*/
+class BorrowedLocalArgumentsTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a local passed to a call or used as the base of a method call, with the call as its only use
+class Node {
+    public { *Node peer; int n; }
+    constructor(int n) { self.n = n; }
+    int get() { return n; }
+}
+bool sub is_x(string line) { return line =~ /^x/; }
+list<string> sub filter(string s) {
+    list<string> lines = s.split("\n");
+    if (lines && lines.last() == "") {
+        pop lines;
+    }
+    # the list is an argument of select, which must not take it over
+    list<string> a = select lines, is_x($1);
+    push lines, "end";
+    return a + lines;
+}
+list<auto> sub grow(list<auto> l) { push l, l.size(); return l; }
+string sub containers() {
+    list<auto> l = (1, 2);
+    # the list is the only use of the load, an argument of a function that changes its own copy
+    list<auto> m = grow(l);
+    hash<auto> h = {"a": 1};
+    hash<auto> h2 = h + {"b": 2};
+    return sprintf("%y %y %y %y", l, m, h, h2);
+}
+int sub objects(int n) {
+    Queue q();
+    int s = 0;
+    for (int i = 0; i < n; ++i) {
+        # an object in a recursive graph is the base and an argument of calls
+        Node a(i);
+        a.peer = a;
+        q.push(a);
+        s += q.size();
+        Node b = q.get();
+        s += b.get();
+        b.peer = NOTHING;
+    }
+    return s;
+}
+# an object local given to a function, which can take over the slot of the argument as its parameter, after a background
+# call took it
+sub tid_check(Queue q, int arg_tid) {
+    q.push(arg_tid == gettid() ? "new-thread" : "starting-thread");
+}
+string sub get(Queue q) {
+    try {
+        return q.get(10s);
+    } catch (hash<ExceptionInfo> ex) {
+        return "timeout";
+    }
+}
+string sub background_arg() {
+    Queue q();
+    background tid_check(q, gettid());
+    return get(q);
+}
+string sub node_name(Node n) {
+    return sprintf("node %d", n.get());
+}
+string sub object_arg() {
+    Node a(7);
+    return node_name(a);
+}
+for (int i = 0; i < 3; ++i) {
+    printf("%y | %s | %d | %s | %s\n", filter("xa\nb\nxc\n"), containers(), objects(4), background_arg(),
+        object_arg());
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "[\"xa\", \"xc\", \"xa\", \"b\", \"xc\", \"end\"] | [1, 2] [1, 2, 2] {a: 1} {a: 1, b: 2} | 10 | new-thread | node 7",
+            "[\"xa\", \"xc\", \"xa\", \"b\", \"xc\", \"end\"] | [1, 2] [1, 2, 2] {a: 1} {a: 1, b: 2} | 10 | new-thread | node 7",
+            "[\"xa\", \"xc\", \"xa\", \"b\", \"xc\", \"end\"] | [1, 2] [1, 2, 2] {a: 1} {a: 1, b: 2} | 10 | new-thread | node 7",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("BorrowedLocalArguments", Script, (map $1 + "\n", Expected).join(""),
+            "reads a local passed to a call as the AST interpreter does") {
+    }
+}

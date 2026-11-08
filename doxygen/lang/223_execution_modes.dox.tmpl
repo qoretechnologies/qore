@@ -248,6 +248,21 @@ qore --exec-mode=tiered --jit-ir-threshold=50 --jit-jit-threshold=500 script.qr
     entry function is absent, the executable exits with a \c NO-FUNCTION
     exception.
 
+    A generated executable reads the following options before the arguments of the program, which start with the
+    first argument that is not one of them and are given to the program in \c ARGV:
+
+    |!Option|!Description
+    |<tt>-b</tt>|Disables signal handling, as <tt>qore -b</tt> (<tt>--disable-signals</tt>) does: no signal thread \
+    is started and @ref Qore::HAVE_SIGNAL_HANDLING is @ref False; use it to run an executable under a tool that \
+    intercepts signals itself, such as \c valgrind
+    |<tt>-G</tt>, <tt>--enable-debug</tt>|Accepted as by \c qore and not given to the program; the \
+    \c @@assert and \c @@debug statements of the compiled code are not enabled by it
+    |<tt>-d</tt>|Increases the debugging output level of a debug build of \c libqore (can be given more than once)
+
+    @code{.sh}
+valgrind ./app -b arg1 arg2
+    @endcode
+
     @subsection aot_artifacts Artifact Types
 
     |!Artifact|!Command|!Description

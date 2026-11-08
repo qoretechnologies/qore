@@ -1,0 +1,303 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ClosureLocalExitReleaseArrayTest
+
+#! Regression test: as ClosureLocalExitRelease.qtest, with the array form of native code's exit release
+/** QORE_JIT_CLEANUP_PHI_BUDGET=1 makes native code release the locals of a function at its exits with
+    qore_rt_cleanup_run_allocas() and an array of their caches and variables, where a closure-bound variable that the
+    frame instantiated is tagged in bits 0 and 1 (see ClosureLocalExitRelease.qtest)
+*/
+class ClosureLocalExitReleaseArrayTest inherits ExecModeOutputTest {
+    private {
+        #! the array form of the exit release of native code (see QoreIRToLLVM::prepareBoxedExitCleanupArray()), for
+        #! the processes that the test runs
+        static int phi_budget_env = setenv("QORE_JIT_CLEANUP_PHI_BUDGET", "1");
+    }
+
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+class D {
+    private { int n; }
+    constructor(int n) { self.n = n; }
+    destructor() {
+        printf("dtor %d\n", n);
+        auto v = "s" + n;
+        int x;
+        x = v;
+    }
+}
+class E {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+# a closure-bound local released at the normal exit of the function
+sub g() {
+    E e("ge");
+    auto v = new D(1);
+    code c = auto sub () { return v; };
+    E f("gf");
+}
+# a closure-bound local of a block left by an exception
+sub h() {
+    E e("he");
+    {
+        auto v = new D(2);
+        code c = auto sub () { return v; };
+        E f("hf");
+        throw "H";
+    }
+}
+class It inherits AbstractIterator {
+    private { int i = 0; }
+    bool next() { return ++i <= 1; }
+    auto getValue() { return new D(3); }
+    bool valid() { return i == 1; }
+}
+# a closure-bound foreach variable left by an exception; the iterator holds no reference to the element
+sub k() {
+    E e("ke");
+    foreach auto v in (new It()) {
+        code c = auto sub () { return v; };
+        E f("kf");
+        throw "K";
+    }
+}
+foreach string fn in (("g", "h", "k")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: no exception\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s: %s\n", fn, ex.err, ex.desc);
+            while (ex.next) {
+                ex = ex.next;
+                printf("  next: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}
+# several closure-bound locals, each held by a closure declared in another order
+sub m1() {
+    E a("m1a");
+    E b("m1b");
+    code cb = auto sub () { return b; };
+    code ca = auto sub () { return a; };
+    throw "M1";
+}
+# closure-bound locals declared in one order and first assigned in another
+sub m2() {
+    E a;
+    E b("m2b");
+    code cb = auto sub () { return b; };
+    a = new E("m2a");
+    code ca = auto sub () { return a; };
+    throw "M2";
+}
+# the same, destructors raising exceptions, left by an exception and by return
+sub m3() {
+    *D a;
+    D b(31);
+    code cb = auto sub () { return b; };
+    a = new D(32);
+    code ca = auto sub () { return a; };
+    throw "M3";
+}
+sub m4() {
+    *D a;
+    D b(41);
+    code cb = auto sub () { return b; };
+    a = new D(42);
+    code ca = auto sub () { return a; };
+    return;
+}
+# closure-bound locals assigned in a loop and in a nested block left by return
+sub m5(bool ret) {
+    E a;
+    E c("m5c");
+    code cc = auto sub () { return c; };
+    for (int i = 0; i < 2; ++i) {
+        a = new E("m5a" + i);
+    }
+    code ca = auto sub () { return a; };
+    if (ret) {
+        E d("m5d");
+        code cd = auto sub () { return d; };
+        return;
+    }
+    throw "M5";
+}
+# a closure-bound foreach variable released before the on_exit handler of the function, for an exception and at the
+# end of the statement
+sub m6() {
+    on_exit printf("m6 on_exit\n");
+    list<E> l = (new E("m6l"),);
+    foreach E e in (l) {
+        code c = auto sub () { return e; };
+        remove l;
+        throw "M6";
+    }
+}
+sub m7() {
+    list<E> l = (new E("m7l"),);
+    foreach E e in (l) {
+        code c = auto sub () { return e; };
+    }
+    remove l;
+    printf("m7 after loop\n");
+}
+# a closure-bound variable of a foreach over a reference, left by an exception
+sub m8() {
+    list<auto> l = (new E("m8a"), new E("m8b"));
+    on_exit printf("m8 on_exit\n");
+    foreach auto v in (\l) {
+        code c = auto sub () { return v; };
+        v = new E("m8v");
+        throw "M8";
+    }
+}
+foreach string fn in (("m1", "m2", "m3", "m4", "m6", "m7", "m8")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: no exception\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s: %s\n", fn, ex.err, ex.desc);
+            while (ex.next) {
+                ex = ex.next;
+                printf("  next: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    foreach bool ret in ((True, False)) {
+        try {
+            m5(ret);
+            printf("m5: no exception\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("m5: %s\n", ex.err);
+        }
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor gf",
+            "dtor 1",
+            "dtor ge",
+            "g: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor gf",
+            "dtor 1",
+            "dtor ge",
+            "g: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor hf",
+            "dtor 2",
+            "dtor he",
+            "h: H: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor hf",
+            "dtor 2",
+            "dtor he",
+            "h: H: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor kf",
+            "dtor 3",
+            "dtor ke",
+            "k: K: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor kf",
+            "dtor 3",
+            "dtor ke",
+            "k: K: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor m1b",
+            "dtor m1a",
+            "m1: M1: ",
+            "dtor m1b",
+            "dtor m1a",
+            "m1: M1: ",
+            "dtor m2b",
+            "dtor m2a",
+            "m2: M2: ",
+            "dtor m2b",
+            "dtor m2a",
+            "m2: M2: ",
+            "dtor 31",
+            "dtor 32",
+            "m3: M3: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor 31",
+            "dtor 32",
+            "m3: M3: ",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor 41",
+            "dtor 42",
+            "m4: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor 41",
+            "dtor 42",
+            "m4: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "  next: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "dtor m6l",
+            "m6 on_exit",
+            "m6: M6: ",
+            "dtor m6l",
+            "m6 on_exit",
+            "m6: M6: ",
+            "dtor m7l",
+            "m7 after loop",
+            "m7: no exception",
+            "dtor m7l",
+            "m7 after loop",
+            "m7: no exception",
+            "dtor m8v",
+            "m8 on_exit",
+            "dtor m8a",
+            "dtor m8b",
+            "m8: M8: ",
+            "dtor m8v",
+            "m8 on_exit",
+            "dtor m8a",
+            "dtor m8b",
+            "m8: M8: ",
+            "dtor m5a0",
+            "dtor m5d",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: no exception",
+            "dtor m5a0",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: M5",
+            "dtor m5a0",
+            "dtor m5d",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: no exception",
+            "dtor m5a0",
+            "dtor m5c",
+            "dtor m5a1",
+            "m5: M5",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ClosureLocalExitReleaseArray", Script, (map $1 + "\n", Expected).join(""),
+            "releases closure-bound locals in the order of the AST interpreter with the array form of the exit release") {
+    }
+}

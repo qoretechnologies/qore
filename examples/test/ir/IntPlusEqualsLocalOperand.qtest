@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class IntPlusEqualsLocalOperandTest
+
+#! Regression test: += on an int lvalue does not change the local whose value is added
+/** The IR lowering gave <tt>v += o</tt> on an \c int or \c softint local \c v and a local \c o its fused
+    instruction for two int locals (AddAssignLocalInt) whatever the type of \c o; the IR interpreter reads \c o as an
+    int and caches that int in the slot of \c o, so a local holding \c "3" or \c 1.5 then held \c 3 or \c 1, even a
+    \c string or \c float local.  The fused instruction is now used only when the local added is an \c int local.
+
+    The script adds \c auto, \c string and \c float locals to \c int and \c softint locals, with an \c int local as
+    the control, and applies the compound operators to typed lvalues after them; each function is called three times,
+    in every execution mode and on the IR tier of tiered execution (see ExecModeOutputTest).
+*/
+class IntPlusEqualsLocalOperandTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+
+# an int or softint lvalue added to with the value of a local of another type: the local keeps its value
+string sub intLocal(auto o) {
+    int v = 1;
+    v += o;
+    return sprintf("%y %y", v, o);
+}
+
+string sub softintLocal(auto o) {
+    softint v = 1;
+    v += o;
+    return sprintf("%y %y", v, o);
+}
+
+string sub stringLocal(string o) {
+    softint v = 1;
+    v += o;
+    return sprintf("%y %y", v, o);
+}
+
+string sub floatLocal(float o) {
+    int v = 1;
+    v += o;
+    return sprintf("%y %y", v, o);
+}
+
+# a control: an int local added to an int lvalue
+string sub intIntLocal(int o) {
+    int v = 1;
+    v += o;
+    return sprintf("%y %y", v, o);
+}
+
+# the result of each compound operator on a typed lvalue is the value the lvalue holds
+string sub typed(auto o) {
+    softint si = 1;
+    softstring ss = "a";
+    softfloat sf = 1.5;
+    softnumber sn = 1.5n;
+    return sprintf("%y %y %y %y %y %y %y", si += o, si -= o, si *= o, ss += o, sf += o, sn += o, sf *= o);
+}
+
+for (int i = 0; i < 3; ++i) {
+    printf("%d %s | %s | %s | %s | %s | %s | %s\n", i, intLocal("3"), intLocal(1.5), softintLocal("3"), stringLocal("4"),
+        floatLocal(2.5), intIntLocal(5), typed("3"));
+    printf("%d %s | %s\n", i, typed(2), typed(1.5));
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 4 \"3\" | 2 1.5 | 4 \"3\" | 5 \"4\" | 3 2.5 | 6 5 | 4 1 3 \"a3\" 4.5 4.5 13.5",
+            "0 3 1 2 \"a2\" 3.5 3.5 7.0 | 2 1 1 \"a1.5\" 3.0 3 4.5",
+            "1 4 \"3\" | 2 1.5 | 4 \"3\" | 5 \"4\" | 3 2.5 | 6 5 | 4 1 3 \"a3\" 4.5 4.5 13.5",
+            "1 3 1 2 \"a2\" 3.5 3.5 7.0 | 2 1 1 \"a1.5\" 3.0 3 4.5",
+            "2 4 \"3\" | 2 1.5 | 4 \"3\" | 5 \"4\" | 3 2.5 | 6 5 | 4 1 3 \"a3\" 4.5 4.5 13.5",
+            "2 3 1 2 \"a2\" 3.5 3.5 7.0 | 2 1 1 \"a1.5\" 3.0 3 4.5",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("IntPlusEqualsLocalOperand", Script, (map $1 + "\n", Expected).join(""),
+            "leaves the local added to an int lvalue unchanged") {
+    }
+}
