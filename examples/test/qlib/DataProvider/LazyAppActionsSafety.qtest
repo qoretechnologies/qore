@@ -67,6 +67,9 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("NoInit getters never wait for another thread's initialization", \noInitNeverWaitsTest());
         addTestCase("a thread holding the catalog lock does not run a lazy registration", \lockHolderTest());
         addTestCase("a pending app initialized by registerAction() reads a lazy app", \pendingAppReaderTest());
+        addTestCase("a reader holding a lock that another app's registration needs reads its own app",
+            \unrelatedLockTest());
+        addTestCase("registerAction() does not wait for the lazy registrations of the app", \registerActionTest());
         addTestCase("an interrupted registration is not retained and runs again", \transientFailureTest());
         addTestCase("an interrupted wait leaves nothing behind, and the initialization ends for everyone",
             \sandboxInterruptTest());
@@ -74,11 +77,13 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a sandboxed reader's registration runs in its module's context", \sandboxedReaderTest());
         addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
-        addTestCase("a sandboxed thread loading a module runs no trusted registration", \sandboxedModuleLoadTest());
+        addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
         addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
-        addTestCase("a process ends with the catalog worker running", \exitTest());
+        addTestCase("no worker runs until a sandboxed reader needs one, and the process ends with it", \exitTest());
         addTestCase("the end of the process stops the worker, and its waiting readers get an error",
             \stoppedWorkerTest());
+        addTestCase("a worker whose thread a registration ends releases its readers and is started again",
+            \workerEndTest());
         addTestCase("the child of a fork() runs the initializations that the parent's threads ran", \forkTest());
         set_return_value(main());
     }
@@ -168,6 +173,52 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq(("eager-a", "lazy-b", "lazy-c"), seen);
         assertEq((), DataProviderActionCatalog::getInitializationFailures((lazy, pending)));
         assertEq(1, SafetyRuns::get(lazy));
+    }
+
+    unrelatedLockTest() {
+        # the registration of a, which a trusted reader runs, needs the lock that the second reader holds while it
+        # reads b: b's registration runs on the second reader's thread, not behind a's
+        string a = registerApp("SafeLockedA");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        string b = registerLazyApp("SafeLockedB");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        Mutex m();
+        Counter started(1);
+        Counter locked(1);
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            started.dec();
+            locked.waitForZero();
+            AutoLock al(m);
+            registerAction(a, "lazy-a");
+        });
+        Counter done(2);
+        background LazyAppActionsSafetyTest::read(a, done);
+        started.waitForZero();
+        background LazyAppActionsSafetyTest::readLocked(b, m, locked, done);
+        assertEq(0, done.waitForZero(Deadline), "neither reader waits for the other");
+        assertEq(("lazy-a",), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(b, False));
+    }
+
+    registerActionTest() {
+        # a's registration needs the lock that the thread registering another action of a holds
+        string a = registerApp("SafeRegisterAction");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        Mutex m();
+        Counter started(1);
+        Counter locked(1);
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            started.dec();
+            locked.waitForZero();
+            AutoLock al(m);
+            registerAction(a, "lazy-a");
+        });
+        Counter done(2);
+        background LazyAppActionsSafetyTest::read(a, done);
+        started.waitForZero();
+        background LazyAppActionsSafetyTest::registerLocked(a, m, locked, done);
+        assertEq(0, done.waitForZero(Deadline), "registerAction() does not wait for the registration");
+        assertEq(("direct-b", "lazy-a"), sort(map $1.action, DataProviderActionCatalog::getActions(a, False)));
     }
 
     transientFailureTest() {
@@ -396,37 +447,95 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         hash<auto> r = runChild("exit", "
 string app = register_lazy(\"SafeExitIdle\");
 register_lazy(\"SafeExitUnread\");
+# trusted readers run lazy registrations on their own threads: no worker is started
 printf(\"%y\\n\", map $1.action, DataProviderActionCatalog::getActions(app, False));
+printf(\"threads: %d\\n\", num_threads());
+# a sandboxed reader starts the worker, which the exit hook stops
+string sandboxed = register_lazy(\"SafeExitSandboxed\");
+Program reader(PO_NEW_STYLE, True);
+reader.parse(\"%requires DataProvider\\nsub read(string app) { DataProviderActionCatalog::getActions(app, False); }\\n\",
+    \"reader\");
+reader.setSandboxManager(new SandboxManager());
+reader.callFunction(\"read\", sandboxed);
+printf(\"threads: %d\\n\", num_threads());
 ");
         assertEq(0, r.rc, r.output);
-        assertEq("[\"eager-a\", \"lazy-b\"]", trim(r.output));
+        assertLines(("[\"eager-a\", \"lazy-b\"]", "threads: 1", "threads: 2"), r.output);
     }
 
     stoppedWorkerTest() {
+%ifndef QoreDebug
+        testSkip("the test needs the catalog worker's test hooks of a debug build");
+%endif
+        # the catalog worker is stopped by the exit hook while it runs a sandboxed reader's job, and a second
+        # sandboxed reader's job is queued behind it: the second reader gets DATA-PROVIDER-LAZY-WORKER-STOPPED.  The
+        # child loads the DataProvider module after it registered the hook releasing the first job, so that the
+        # DataProvider's exit hook, registered later, runs first.
         hash<auto> r = runChild("stopped", "
-Counter release(1);
-Counter started(1);
-# runs after the hook of the catalog worker, which the first lazy registration registers
+our Counter release(1);
 register_exit_hook(sub () { release.dec(); });
+", "
+Counter started(1);
 string a = register_lazy(\"SafeStopBlocked\");
 DataProviderActionCatalog::registerLazyAppActions(a, sub () { started.dec(); release.waitForZero(); });
 string b = register_lazy(\"SafeStopQueued\");
-background sub () { DataProviderActionCatalog::getActions(a, False); }();
+Program reader(PO_NEW_STYLE, True);
+reader.parse(\"%requires DataProvider\\n\"
+    \"string sub read(string app) {\\n\"
+    \"    try { DataProviderActionCatalog::getActions(app, False); return app + \\\": ok\\\"; }\\n\"
+    \"    catch (hash<ExceptionInfo> ex) { return app + \\\": \\\" + ex.err; }\\n\"
+    \"}\\n\", \"reader\");
+reader.setSandboxManager(new SandboxManager());
+background sub () { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", a), \"_[^:]*:\", \":\")); }();
 started.waitForZero();
 int queued = DataProviderActionCatalog::getLazyInitsQueued();
-background sub () {
-    try {
-        DataProviderActionCatalog::getActions(b, False);
-        printf(\"not stopped\\n\");
-    } catch (hash<ExceptionInfo> ex) {
-        printf(\"%s\\n\", ex.err);
-    }
-}();
-# the second reader waits for the worker, which runs the first one's initialization
+background sub () { printf(\"%s\\n\", regex_subst(reader.callFunction(\"read\", b), \"_[^:]*:\", \":\")); }();
+# the second reader's job is queued behind the first one, which waits until the process ends
 DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
-");
+", ("release",));
         assertEq(0, r.rc, r.output);
-        assertEq("DATA-PROVIDER-LAZY-WORKER-STOPPED", trim(r.output));
+        assertEq(("SafeStopBlocked: ok", "SafeStopQueued: DATA-PROVIDER-LAZY-WORKER-STOPPED"),
+            sort(map $1, r.output.split("\n"), $1 =~ /^SafeStop/), r.output);
+    }
+
+    workerEndTest() {
+%ifndef QoreDebug
+        testSkip("the test needs the catalog worker's test hooks of a debug build");
+%endif
+        # a registration ends the worker's thread while a second job is queued: both readers are told, the
+        # registration is restored, and the next sandboxed reader starts a new worker
+        string a = registerApp("SafeWorkerEnd");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(a);
+        registerAction(a, "eager-a");
+        string b = registerLazyApp("SafeWorkerEndQueued");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(b);
+        int queued = DataProviderActionCatalog::getLazyInitsQueued();
+        DataProviderActionCatalog::registerLazyAppActions(a, sub () {
+            SafetyRuns::run(a);
+            registerAction(a, "lazy-b");
+            if (SafetyRuns::get(a) == 1) {
+                # the second reader's job is queued behind this one
+                DataProviderActionCatalog::waitForLazyInitsQueued(queued + 2, Deadline);
+                thread_exit;
+            }
+            registerAction(a, "lazy-c");
+        });
+        Program reader = readerProgram(new SandboxManager());
+        Queue results();
+        Counter done(2);
+        background LazyAppActionsSafetyTest::readIn(reader, a, done, results);
+        DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, Deadline);
+        background LazyAppActionsSafetyTest::readIn(reader, b, done, results);
+        assertEq(0, done.waitForZero(Deadline), "the readers are released");
+        assertEq(("DATA-PROVIDER-LAZY-WORKER-STOPPED", "DATA-PROVIDER-LAZY-WORKER-STOPPED"),
+            (results.get().err, results.get().err));
+        # a new worker runs the restored registration and the queued one
+        reader.callFunction("read", a);
+        reader.callFunction("read", b);
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(a, False));
+        assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(b, False));
+        assertEq(2, SafetyRuns::get(a));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((a, b)));
     }
 
     forkTest() {
@@ -485,19 +594,24 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
         *Socket child = listener.accept(Deadline);
         assertTrue(exists child, "the child reports");
         string result = trim(child.recv(-1, Deadline));
-        # a sandboxed reader runs no registration itself; a trusted one starts a worker
-        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR; [\"eager-a\", \"lazy-b\", \"lazy-c\"]", result);
+        # the child's sandboxed reader starts a worker of its own, which runs the registration that a thread of the
+        # parent was running
+        assertEq("not refused; [\"eager-a\", \"lazy-b\", \"lazy-c\"]", result);
     }
 
     #! Runs a child process with the test's lazy app helpers, and returns its exit code and output
     private hash<auto> runChild(string name, string body) {
+        return runChild(name, "", body);
+    }
+
+    #! Runs a child process; \a pre runs before the DataProvider module is loaded, which \a body uses
+    /** With \a pre, \a body runs in a Program that the child creates after it has loaded the module, and the global
+        variables that \a pre declares with \c our and names in \a imports are imported into it
+    */
+    private hash<auto> runChild(string name, string pre, string body, *list<string> imports) {
         string dir = make_tmp_dir("lazy-safety-");
         on_exit remove_tree(dir);
-        string script = dir + "/" + name + ".q";
-        File f();
-        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
-        f.write("%modern\n%requires DataProvider\n"
-            "sub register_action(string app, string action) {\n"
+        string helpers = "sub register_action(string app, string action) {\n"
             "    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{\"app\": app, \"action\": action,\n"
             "        \"path\": \"/\" + action, \"display_name\": action, \"short_desc\": action, \"desc\": action,\n"
             "        \"action_code\": DPAT_API});\n"
@@ -510,14 +624,46 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
             "    register_action(app, \"eager-a\");\n"
             "    DataProviderActionCatalog::registerLazyAppActions(app, sub () { register_action(app, \"lazy-b\"); });\n"
             "    return app;\n"
-            "}\n" + body);
-        f.close();
+            "}\n";
+        string script = dir + "/" + name + ".q";
+        if (pre) {
+            LazyAppActionsSafetyTest::writeFile(dir + "/body.q", "%modern\n%requires DataProvider\n" + helpers + body);
+            LazyAppActionsSafetyTest::writeFile(script, "%modern\n" + pre
+                + "load_module(\"DataProvider\");\n"
+                # a global: the Program lives until the end of the process, after the exit hooks
+                + "our Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);\n"
+                + ((foldl $1 + $2, (map sprintf("p.importGlobalVariable(%y);\n", $1), imports)) ?? "")
+                + "p.parse(ReadOnlyFile::readTextFile(get_script_dir() + \"/body.q\"), \"body\");\n"
+                + "p.run();\n");
+        } else {
+            LazyAppActionsSafetyTest::writeFile(script, "%modern\n%requires DataProvider\n" + helpers + body);
+        }
         string output = dir + "/output.txt";
         string command = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
             get_script_dir() + "/../../../../qlib" + PathSep + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script,
             output);
         int rc = system(command);
         return {"rc": rc, "output": ReadOnlyFile::readTextFile(output)};
+    }
+
+    #! Writes a file of the test
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+
+    #! Asserts that the lines given are lines of the output, in that order; other lines, as warnings, are ignored
+    private assertLines(list<string> expected, string output) {
+        list<string> lines = map trim($1), output.split("\n");
+        int i = 0;
+        foreach string line in (lines) {
+            if (i < expected.size() && line == expected[i]) {
+                ++i;
+            }
+        }
+        assertEq(expected.size(), i, sprintf("the lines %y are in the output: %s", expected, output));
     }
 
     #! Returns a Program that reads the catalog under the sandbox given
@@ -527,6 +673,22 @@ DataProviderActionCatalog::waitForLazyInitsQueued(queued + 1, 60s);
             "sub read(string app) { DataProviderActionCatalog::getActions(app, False); }\n", "lazy-reader");
         reader.setSandboxManager(sm);
         return reader;
+    }
+
+    #! Reads an app in a thread of the test while it holds a lock
+    private static readLocked(string app, Mutex m, Counter locked, Counter done) {
+        on_exit done.dec();
+        AutoLock al(m);
+        locked.dec();
+        DataProviderActionCatalog::getActions(app, False);
+    }
+
+    #! Registers an action of an app in a thread of the test while it holds a lock
+    private static registerLocked(string app, Mutex m, Counter locked, Counter done) {
+        on_exit done.dec();
+        AutoLock al(m);
+        locked.dec();
+        LazyAppActionsSafetyTest::registerAction(app, "direct-b");
     }
 
     #! Reads an app in a thread of the test
