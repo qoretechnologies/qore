@@ -6193,6 +6193,10 @@ int Socket::shutdown() {
     the write side of a connection is closed; the peer's alert is not waited for.  The socket stays open: close it with
     close() when it is no longer needed.  Data cannot be sent on the connection afterwards.
 
+    A %Qore TLS peer closes its connection when it receives the \c close_notify alert, so with TLS a %Qore peer
+    cannot send a response after it has read the end of the stream: it must send its response before it reads the
+    end of the stream, or the half-close only works with a peer that keeps its connection open after the alert.
+
     @par Example:
     @code{.py}
 sock.send("GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
