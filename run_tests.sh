@@ -791,8 +791,11 @@ runner_signaled() {
         # TEST_INTERRUPT_WAIT seconds, and then kills the test, but only a process that still has the test's
         # QORE_TEST_PROCESS_MARK (see test_has_mark()): if the test ended and was waited for just before, its process
         # ID may belong to another process by then, which has not.  The FIFO is open for reading and writing here, so
-        # that neither side blocks.  (A trapped signal does not interrupt this trap's wait in dash, so the helper does
-        # not signal the runner.)
+        # that neither side blocks.  The helper kills the test itself rather than signalling the runner to do it: a
+        # trapped signal runs another trap inside this one while it waits (dash runs a second TERM's trap there), so
+        # the runner's kill would have to be safe in a nested trap; the mark check makes the helper's kill safe
+        # instead.  If the helper cannot be started, the test is killed at once (once its mark is confirmed), so the
+        # wait below is always bounded.
         interrupt_fifo="$TEST_EVENT_DIR/interrupt"
         interrupt_helper=""
         if [ -n "$TIMEOUT_CMD" ] && mkfifo "$interrupt_fifo" 2>/dev/null && (exec 5<>"$interrupt_fifo") 2>/dev/null; then
@@ -809,6 +812,10 @@ runner_signaled() {
                 fi
             ) &
             interrupt_helper=$!
+        elif test_has_mark $test_pid "$TEST_PROCESS_MARK"; then
+            echo "*** the run is interrupted, and the runner cannot wait for the test for a limited time: SIGKILL" \
+                "sent ***"
+            kill -KILL $test_pid 2>/dev/null
         fi
         # for the tests of run_tests.sh: reports that the trap waits for the test
         if [ -n "$QORE_TEST_RUNNER_TRAP_REPORT" ]; then

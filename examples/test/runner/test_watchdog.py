@@ -358,7 +358,9 @@ class InterruptedRunnerTest(unittest.TestCase):
         # The second signal re-entered the trap, which started a second helper and lost the first one: that one held
         # the output until its wait ended and then signalled the test's old process ID.  The test ignores the first
         # SIGTERM and ends at a second one, which it must not get (the runner ignores the second signal): it is
-        # killed after the wait, and when the runner has ended, every process of the run has ended.
+        # killed after the wait, and when the runner has ended, every process of the run has ended.  This proves the
+        # fix only where sh is dash (Linux CI): bash defers the second signal until the trap has ended, so the trap is
+        # not re-entered there with or without the fix.
         self.interrupt(signal.SIGTERM, [
             "import signal",
             "terms = []",
