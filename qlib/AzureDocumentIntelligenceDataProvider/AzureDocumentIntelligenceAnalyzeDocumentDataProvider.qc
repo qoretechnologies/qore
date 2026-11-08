@@ -47,7 +47,7 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
     private {
         #! The ID of the builder of the types; see initializeTypes()
         static int types_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return AzureDocumentIntelligenceAnalyzeDocumentDataProvider::buildTypes(); });
+            \AzureDocumentIntelligenceAnalyzeDocumentDataProvider::buildTypes());
     }
 
     #! Returns the request type, which is built on first use

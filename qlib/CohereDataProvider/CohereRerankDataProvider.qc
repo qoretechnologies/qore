@@ -42,12 +42,12 @@ public class CohereRerankDataProvider inherits CohereDataProviderCommon {
         static *CohereRerankRequestDataType request_type;
         #! The ID of the request type's builder; see requestType()
         static int request_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return CohereRerankDataProvider::buildRequestType(); });
+            \CohereRerankDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *CohereRerankResponseDataType response_type;
         #! The ID of the response type's builder; see responseType()
         static int response_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return CohereRerankDataProvider::buildResponseType(); });
+            \CohereRerankDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use

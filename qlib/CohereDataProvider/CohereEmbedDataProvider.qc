@@ -42,12 +42,12 @@ public class CohereEmbedDataProvider inherits CohereDataProviderCommon {
         static *CohereEmbedRequestDataType request_type;
         #! The ID of the request type's builder; see requestType()
         static int request_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return CohereEmbedDataProvider::buildRequestType(); });
+            \CohereEmbedDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *CohereEmbedResponseDataType response_type;
         #! The ID of the response type's builder; see responseType()
         static int response_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return CohereEmbedDataProvider::buildResponseType(); });
+            \CohereEmbedDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use

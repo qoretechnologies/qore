@@ -23,7 +23,7 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
     private {
         #! The ID of the builder of the types; see initializeTypes()
         static int types_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return GoogleDocumentAiWaitOperationDataProvider::buildTypes(); });
+            \GoogleDocumentAiWaitOperationDataProvider::buildTypes());
     }
 
     #! Creates the helper over the existing authenticated transport

@@ -41,12 +41,12 @@ public class MistralChatCompletionDataProvider inherits MistralDataProviderCommo
         static *MistralChatCompletionRequestDataType request_type;
         #! The ID of the request type's builder; see requestType()
         static int request_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return MistralChatCompletionDataProvider::buildRequestType(); });
+            \MistralChatCompletionDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *MistralChatCompletionResponseDataType response_type;
         #! The ID of the response type's builder; see responseType()
         static int response_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return MistralChatCompletionDataProvider::buildResponseType(); });
+            \MistralChatCompletionDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use

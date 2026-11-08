@@ -1626,7 +1626,7 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
 class MyProvider {
     private {
         static int request_type_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return MyProvider::buildRequestType(); });
+            \MyProvider::buildRequestType());
         static *MyRequestType request_type;
     }
 

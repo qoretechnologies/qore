@@ -1234,7 +1234,7 @@ public class JinaBatchRecordResponseDataType inherits HashDataType {
         static *JinaBatchRecordResponseDataType shared_instance;
         #! The ID of the shared instance's builder; see instance()
         static int instance_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return JinaBatchRecordResponseDataType::buildInstance(); });
+            \JinaBatchRecordResponseDataType::buildInstance());
     }
 
     #! Returns the field descriptions of the type
@@ -1284,7 +1284,7 @@ public class JinaBatchRecordDataType inherits HashDataType {
         static *JinaBatchRecordDataType shared_instance;
         #! The ID of the shared instance's builder; see instance()
         static int instance_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return JinaBatchRecordDataType::buildInstance(); });
+            \JinaBatchRecordDataType::buildInstance());
     }
 
     #! Returns the field descriptions of the type
@@ -1334,7 +1334,7 @@ public class JinaBatchDownloadResponseDataType inherits HashDataType {
         static *JinaBatchDownloadResponseDataType shared_instance;
         #! The ID of the shared instance's builder; see instance()
         static int instance_id = DataProviderActionCatalog::registerLazyValue(
-            auto sub () { return JinaBatchDownloadResponseDataType::buildInstance(); });
+            \JinaBatchDownloadResponseDataType::buildInstance());
     }
 
     #! Returns the field descriptions of the type
