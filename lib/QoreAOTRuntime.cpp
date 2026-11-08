@@ -13639,10 +13639,11 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
             if (!qore_program_private::get(*tpgm)->hasFeature(dep.c_str())) {
                 printd(5, "AOT module ns_init '%s': loading reexported dep '%s' into target program\n",
                     mod_name, dep.c_str());
-                // Use QMM.loadModuleForReexport() (like QoreAbstractModule::reexport()
-                // uses QMM.loadModuleIntern()) instead of MM.runTimeLoadModule() which
-                // would try to acquire the module manager mutex that is already held by
-                // parseLoadModule/runTimeLoadModule
+                // QMM.loadModuleForReexport() loads the dependency as QoreAbstractModule::reexport()
+                // does, with QMM.loadModuleIntern(); it takes the module manager mutex itself, which
+                // this thread does not hold here: qore_check_load_module_intern() releases it before
+                // it adds the module to the Program, as namespace initialization runs code (the mutex
+                // is not recursive; a debug build asserts that it is not taken twice)
                 QMM.loadModuleForReexport(xsink, dep.c_str(), tpgm);
                 if (xsink) {
                     // A failed reexport makes the public module surface incomplete.
