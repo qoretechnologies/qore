@@ -53,6 +53,33 @@ class EchoRequestHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Counts requests and answers the given number of them with 429 Too Many Requests
+class RateLimitedHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests received
+        int requests = 0;
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++requests;
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"error": {"code": 429, "message": "rate limited"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"user": {"username": "jane"}}),
+        };
+    }
+}
+
 public class SendCloudDataProviderTest inherits QUnit::Test {
     private {
         #! Logger for verbose output
@@ -94,6 +121,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         addTestCase("create-return v3 request type", \testCreateReturnV3RequestType());
         addTestCase("credential propagation", \testCredentialPropagation());
         addTestCase("other base URL requests", \testOtherBaseUrlRequests());
+        addTestCase("sync client rate limit", \testSyncClientRateLimit());
 
         # Integration tests (require -c <connection>)
         addTestCase("integration: ping", \testPing());
@@ -348,6 +376,43 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         # without credentials, no client can be created for another base URL
         SendCloudDataProvider::SendCloudDataProvider no_creds(new RestClientIo({"url": url}));
         assertThrows("SENDCLOUD-ERROR", "no credentials", \no_creds.doAbsoluteGet(), url + "/x");
+    }
+
+    #! The synchronous client retries a rate-limited request
+    testSyncClientRateLimit() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RateLimitedHandler handler();
+        server.setHandler("sendcloud", "", NOTHING, handler);
+        server.setDefaultHandler("sendcloud", handler);
+
+        SendCloudRestClient::SendCloudRestClient rest({"public_key": "pk-test", "secret_key": "sk-test",
+            "url": "http://127.0.0.1:" + port + "/api/v2"}, True);
+        # the request is repeated after the time given by the server
+        handler.rate_limited = 1;
+        hash<auto> info;
+        hash<auto> response = rest.doRequest("GET", "user", NOTHING, \info);
+        assertEq(200, info."response-code");
+        assertEq("jane", response.body.user.username);
+        assertEq(2, handler.requests);
+
+        # the request is not repeated while retries are suppressed
+        handler.requests = 0;
+        handler.rate_limited = 2;
+        hash<ExceptionInfo> ex = DataProviderRetryUtil::runWithoutRetries(hash<ExceptionInfo> sub () {
+            try {
+                rest.doRequest("GET", "user", NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                return ex;
+            }
+            throw "TEST-ERROR", "no exception";
+        });
+        assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+        assertEq(429, ex.arg.status_code);
+        assertEq(1, handler.requests);
     }
 
     #! Verify every advertised action is resolvable via the factory's action catalog

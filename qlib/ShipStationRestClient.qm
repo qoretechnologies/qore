@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires DataProvider
 
 module ShipStationRestClient {
     version = "1.0";
@@ -187,6 +188,8 @@ public class ShipStationRestClientBase {
     - Backoff multiplier: 2x (1s, 2s, 4s, 8s, 16s, 30s, 30s...)
     - Maximum single retry delay: 30 seconds
     - Uses Retry-After or X-Rate-Limit-Reset headers when available
+    - No retry while @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the
+      calling thread, as while a data provider requests example data: the first 429 response is returned or raised
 */
 public class ShipStationRestClient inherits RestClient::RestClient, ShipStationRestClientBase {
     #! creates the object with the given options
@@ -265,8 +268,10 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
             if (elapsed + retry_delay > MaxRetryTime) {
                 retry_delay = MaxRetryTime - elapsed;
             }
-            if (retry_delay <= 0s) {
-                # Max retry time exceeded, return or raise the 429 error
+            # nothing is retried while a data provider requests example data in this thread (see
+            # DataProvider::DataProviderRetryUtil::runWithoutRetries())
+            if (retry_delay <= 0s || DataProvider::DataProviderRetryUtil::retriesSuppressed()) {
+                # Max retry time exceeded or retries suppressed, return or raise the 429 error
                 if (error) {
                     throw error.err, error.desc, error.arg;
                 }
@@ -563,7 +568,9 @@ public class ShipStationRestClientIo inherits RestClientIo::RestClientIo, ShipSt
     #! Sends a REST request, retrying requests rejected with HTTP 429 (Too Many Requests)
     /** When ShipStation returns HTTP 429, the request is retried with exponential backoff (1s, 2s, 4s, ... up to
         30s per retry) for up to 75 seconds in total; the delay given by a \c Retry-After or
-        \c X-Rate-Limit-Reset response header is used when present.
+        \c X-Rate-Limit-Reset response header is used when present.  It is not retried while
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in the calling thread,
+        as while a data provider requests example data.
 
         @param method the HTTP method
         @param path the URI path
@@ -592,7 +599,10 @@ public class ShipStationRestClientIo inherits RestClientIo::RestClientIo, ShipSt
                 return RestClientIo::restDoRequestIntern(method, target.path, body, hdr, False, NOTHING,
                     NOTHING, request_context);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                # nothing is retried while a data provider requests example data in this thread (see
+                # DataProvider::DataProviderRetryUtil::runWithoutRetries())
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429
+                        || DataProvider::DataProviderRetryUtil::retriesSuppressed()) {
                     rethrow;
                 }
                 date elapsed = now_us() - start_time;

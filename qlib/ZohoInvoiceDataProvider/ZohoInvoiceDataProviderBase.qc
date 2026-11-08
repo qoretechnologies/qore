@@ -227,8 +227,9 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
                 }
                 hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting
-                if (response.headers."x-rate-limit-remaining" == "0") {
+                # Check for rate limiting; there is no wait while a data provider requests example data in this thread
+                # (see DataProviderRetryUtil::runWithoutRetries())
+                if (response.headers."x-rate-limit-remaining" == "0" && !DataProviderRetryUtil::retriesSuppressed()) {
                     *string reset = response.headers."x-rate-limit-reset";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();

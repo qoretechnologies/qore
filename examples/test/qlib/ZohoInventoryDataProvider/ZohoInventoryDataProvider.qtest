@@ -171,6 +171,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("example data rate limit", \exampleDataRateLimitTests());
         addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require Zoho Inventory credentials)
@@ -903,6 +904,34 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             assertEq("ZOHOINVENTORY-API-ERROR", ex.err);
             assertEq("not authorized for this operation", ex.desc);
         }
+    }
+
+    #! Example data is returned without waiting for the reset of an exhausted rate limit
+    exampleDataRateLimitTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeZohoInventoryHandler handler();
+        server.setHandler("zoho", "", NOTHING, handler);
+        server.setDefaultHandler("zoho", handler);
+
+        ZohoInventoryRestClient::ZohoInventoryRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "token": "test-token",
+            "organization_id": "org0",
+        });
+        ZohoInventoryDataProvider::ZohoInventoryNewInvoiceWatchDataProvider watch(rest, {"poll_interval": 60});
+        # the server reports the rate limit exhausted until the longest reset time that the provider waits for;
+        # the example data does not wait for it
+        handler.rate_limit_hdr = {"X-Rate-Limit-Remaining": "0", "X-Rate-Limit-Reset": "60"};
+        date start = now_us();
+        auto example = watch.getExampleEventData("new-invoice");
+        assertLt(30s, now_us() - start);
+        assertEq("v1", example.invoice_id);
+        assertEq(1, handler.requests.size());
+        assertRegex("^inventory/v1/invoices\\?", handler.requests[0].path);
     }
 
     #! Connection tests - verify connection scheme registration

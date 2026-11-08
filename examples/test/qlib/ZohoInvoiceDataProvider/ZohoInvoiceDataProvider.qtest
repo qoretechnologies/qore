@@ -48,6 +48,8 @@ class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
         list<hash<auto>> requests = ();
         #! if the rate limit is reported as exhausted in the next response
         bool rate_limit_exhausted;
+        #! the seconds until the rate limit is reset, as reported with an exhausted rate limit
+        string rate_limit_reset = "1";
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -60,7 +62,7 @@ class FakeZohoInvoiceHandler inherits AbstractHttpRequestHandler {
         hash<auto> resp_hdr = {"Content-Type": MimeTypeJson};
         if (rate_limit_exhausted) {
             rate_limit_exhausted = False;
-            resp_hdr += {"X-Rate-Limit-Remaining": "0", "X-Rate-Limit-Reset": "1"};
+            resp_hdr += {"X-Rate-Limit-Remaining": "0", "X-Rate-Limit-Reset": rate_limit_reset};
         }
         if (hdr.path =~ /contacts\/missing/) {
             return <HttpResponseInfo>{
@@ -164,6 +166,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("local server tests", \localServerTests());
+        addTestCase("example data rate limit", \exampleDataRateLimitTests());
         addTestCase("client option tests", \clientOptionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
@@ -675,6 +678,35 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         # Test setOrganizationId
         clientWithOrg.setOrganizationId("67890");
         assertEq("67890", clientWithOrg.getOrganizationId());
+    }
+
+    #! Example data is returned without waiting for the reset of an exhausted rate limit
+    exampleDataRateLimitTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        FakeZohoInvoiceHandler handler();
+        server.setHandler("zohoinvoice", "", NOTHING, handler);
+        server.setDefaultHandler("zohoinvoice", handler);
+
+        ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "token": "test-token",
+            "organization_id": "org-1",
+        });
+        ZohoInvoiceDataProvider::ZohoInvoiceNewContactWatchDataProvider watch(rest, {"poll_interval": 60});
+        # the server reports the rate limit exhausted until the longest reset time that the provider waits for;
+        # the example data does not wait for it
+        handler.rate_limit_exhausted = True;
+        handler.rate_limit_reset = "60";
+        date start = now_us();
+        auto example = watch.getExampleEventData("new-contact");
+        assertLt(30s, now_us() - start);
+        assertEq("c1", example.contact_id);
+        assertEq(1, handler.requests.size());
+        assertRegex("contacts\\?", handler.requests[0].path);
     }
 
     #! Connection tests - verify connection scheme registration
