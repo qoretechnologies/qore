@@ -1149,18 +1149,26 @@ void ThreadEntry::closeCancelWakeup() {
 
 void ThreadProgramData::delProgram(QoreProgram* pgm) {
     //printd(5, "ThreadProgramData::delProgram() this: %p pgm: %p\n", this, pgm);
+    bool listed;
     {
         AutoLocker al(pslock);
         pgm_set_t::iterator i = pgm_set.find(pgm);
-        if (i == pgm_set.end()) {
-            return;
+        listed = i != pgm_set.end();
+        if (listed) {
+            pgm_set.erase(i);
         }
-        pgm_set.erase(i);
     }
     //printd(5, "ThreadProgramData::delProgram() this: %p deref pgm: %p\n", this, pgm);
-    // this can never cause the program to go out of scope because it's always called
-    // when the reference count > 1, therefore *xsink = 0 is OK
-    pgm->depDeref();
+    // the dependency reference on the Program is released by whoever unlists the Program: here, or the thread's end
+    // (del()); this can never cause the program to go out of scope because it's always called when the reference
+    // count > 1, therefore *xsink = 0 is OK
+    if (listed) {
+        pgm->depDeref();
+    }
+    // the reference to this object that saveProgram() took belongs to the Program's entry for the thread
+    // (pgm_data_map), which the Program releases here (qore_program_private::clearProgramThreadData()): an ending
+    // thread that has unlisted the Program already leaves the entry to the Program while the Program's data is
+    // cleared (endThread() fails then), so the reference is released here in any case
     deref();
 }
 
@@ -1302,7 +1310,9 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
         // pgm_set, its own teardown cannot release this reference, so it can be the last one
         bool ended = !qore_program_private::get(*pgm)->endThread(this, xsink);
         pgm->depDeref();
-        // only dereference the current object if the thread was deleted from the program
+        // the reference to this object belongs to the Program's entry for the thread: it is released here only if the
+        // thread removed the entry (endThread() succeeded); otherwise the Program releases it with the entry when its
+        // data is cleared (see delProgram())
         if (ended) {
             deref();
         }

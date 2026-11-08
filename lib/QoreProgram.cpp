@@ -1738,6 +1738,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+        // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
+        // leave it, as its data is destroyed below; no other thread can enter it now
+        waitForAllThreadsToTerminateIntern();
         clr = true;
     }
 
