@@ -154,6 +154,10 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractDatabase::getDropFunctionSqlIfExists() "AbstractDatabase::getDropFunctionSqlIfExists()",
+      @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
+      @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no
+      SQL for an object that exists
     - added @ref SqlUtil::AbstractTable::getInsertArgs() "AbstractTable::getInsertArgs()", which gives the values that
       an insert of a row binds, so a statement prepared with the insert's SQL can insert more rows
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,

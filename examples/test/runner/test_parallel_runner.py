@@ -393,6 +393,7 @@ kill -9 $shells
                 "examples/test/qlib/SqlUtil/SerializationConfig.qtest": no_objects,
                 "examples/test/qlib/SqlUtil/PgsqlKeyAlignment.qtest": "it does not connect to MySQL",
                 "examples/test/qlib/SqlUtil/MssqlKeyAlignment.qtest": "it does not connect to MySQL",
+                "examples/test/qlib/SqlUtil/DropSqlIfExists.qtest": "it uses only its PostgreSQL and Oracle connections",
                 "examples/test/qlib/DbDataProvider/DbSqlUtilWhereOperators.qtest": unique,
                 "examples/test/qlib/DbDataProvider/DbMaterializedViewRefresh.qtest": no_objects + " in MySQL",
                 "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
@@ -412,6 +413,7 @@ kill -9 $shells
             "examples/test/misc/DbTestConnections.qtest": "it only parses datasource strings",
             "examples/test/bin/run_tests/run-tests-credentials.qtest": "it only prints datasource strings",
             "examples/test/qlib/SqlUtil/PgsqlKeyAlignment.qtest": "it does not connect to SQL Server",
+            "examples/test/qlib/SqlUtil/DropSqlIfExists.qtest": "it uses only its PostgreSQL and Oracle connections",
             "examples/test/qlib/SchemaReverse/schema-reverse.qtest": "it skips SQL Server, whose reverse output it "
                 "does not know",
             "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
