@@ -24,6 +24,7 @@
 
 %modern
 %requires Util
+%requires ./TestRunIsolation.qm
 
 module OracleTestIsolation {
     version = "1.0";
@@ -48,16 +49,16 @@ module OracleTestIsolation {
     The user is created with the connection given by the environment variable \c QORE_DB_CONNSTR_ORACLE_SYS, a user
     that may create and drop users (the CI scripts set it: see init_oracle.sh).  Without it,
     the run cannot have a schema of its own: the test uses its own datasource string, and the tests that do so on a
-    host run one at a time, by a lock on a file in the temporary directory that each holds until it ends.
+    host run one at a time (@ref TestRunIsolation::TestRun::lockHost() "TestRun::lockHost()").
 
     @ref OracleTestIsolation::OracleRunSchema::teardown() "OracleRunSchema::teardown()" drops the user with everything
     in its schema; a user that a connection of the test still uses, and one of a program that ends without calling
-    it, is dropped when the program ends.  A run that is killed leaves its user
-    behind, so the next run on the same host drops the users of runs whose process no longer exists and that are older
-    than @ref OracleTestIsolation::OracleRunSchema::LeftoverAge "LeftoverAge".
+    it, is dropped when the program ends.  A run that is killed leaves its user behind, so each run drops the users of
+    runs that are at least @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host,
+    as does @ref OracleTestIsolation::OracleRunSchema::dropLeftovers() "OracleRunSchema::dropLeftovers()" for a CI job.
 
-    A user is named <tt>QTEST_</tt><em>suite</em><tt>_</tt><em>host</em><tt>_</tt><em>pid</em><tt>_</tt>
-    <em>epoch</em>, with a tag of its own for another user of the run (see getConnectionString()).
+    A user is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, in upper case, with a
+    tag of its own for another user of the run (see getConnectionString()); its creation fails if it exists.
 
     @par Example:
     @code{.py}
@@ -108,12 +109,6 @@ class OracleRunUserGuard {
 #! The schema of this run of an Oracle test
 public class OracleRunSchema {
     public {
-        #! The prefix of the name of a run's user
-        const Prefix = "QTEST_";
-
-        #! A user left by a run whose process is gone is dropped only when it is at least this old
-        const LeftoverAge = 1h;
-
         #! The privileges of a run's user: those a test needs to create objects in its own schema
         const Privileges = (
             "create session", "create table", "create view", "create materialized view", "create sequence",
@@ -133,9 +128,6 @@ public class OracleRunSchema {
 
         #! The users that teardown() could not drop as the test was still connected: dropped when the program ends
         static list<OracleRunUserGuard> pending = ();
-
-        #! The locks of the tests that cannot have a schema of their own, keyed by the file
-        static hash<string, File> locks;
 
         #! Serializes setup and teardown
         static Mutex lck();
@@ -174,7 +166,7 @@ public class OracleRunSchema {
 
         *string admin_connstr = ENV.QORE_DB_CONNSTR_ORACLE_SYS;
         if (!admin_connstr) {
-            OracleRunSchema::lockHost(connstr);
+            TestRun::lockHost("oracle", connstr);
             return connstr;
         }
         Datasource ds(admin_connstr);
@@ -184,14 +176,13 @@ public class OracleRunSchema {
             # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
             return connstr;
         }
-        OracleRunSchema::dropLeftovers(ds);
+        OracleRunSchema::dropLeftoversIntern(ds);
 
         # the users of the run have the name of the first one, and a tag of their own
-        base = base ?? sprintf("%s%s_%s_%d_%d", Prefix, OracleRunSchema::getLabel(suite, 12),
-            OracleRunSchema::getHost(), getpid(), now_us().getEpochSeconds());
+        base = base ?? TestRun::makeName(suite).upr();
         string name = base;
         if (tag) {
-            name += "_" + OracleRunSchema::getLabel(tag, 8);
+            name += "_" + TestRun::getLabel(tag, 8).upr();
         }
         # a password that has the characters of every password rule
         string pass = "Q" + get_random_string(20).lwr() + "_7";
@@ -259,58 +250,38 @@ public class OracleRunSchema {
         return url.lwr().startsWith("oracle:");
     }
 
-    #! Holds the lock of the tests on this host that use the given datasource string without a schema of their own
-    private static lockHost(string connstr) {
-        string path = sprintf("%s/qore-test-oracle-%s.lock", tmp_location(), MD5(connstr));
-        if (locks{path}) {
-            return;
-        }
-        File f();
-        f.open2(path, O_CREAT | O_RDWR, 0666);
-        # held until the process ends
-        f.lockBlocking();
-        locks{path} = f;
+    #! Drops the users left by test runs on the database of the given admin datasource string
+    /** For a CI job's cleanup: a run that is killed leaves its users behind (see TestRun::isLeftover())
+
+        @param admin_connstr a datasource string of a user that may drop users (\c QORE_DB_CONNSTR_ORACLE_SYS)
+
+        @return the names of the users dropped
+    */
+    static list<string> dropLeftovers(string admin_connstr) {
+        Datasource ds(admin_connstr);
+        return OracleRunSchema::dropLeftoversIntern(ds);
     }
 
-    #! Drops the users left by runs on this host whose process is gone and that are older than LeftoverAge
-    private static dropLeftovers(Datasource ds) {
-        string host = OracleRunSchema::getHost().upr();
-        int now = now_us().getEpochSeconds();
+    #! Drops the users left by test runs that are at least TestRun::LeftoverAge old, whatever their host
+    private static list<string> dropLeftoversIntern(Datasource ds) {
+        list<string> rv = ();
         *list<string> users = ds.select("select username from all_users where username like %v",
-            Prefix + "%").username;
+            TestRun::Prefix.upr() + "%").username;
         foreach string user in (users) {
-            *list<string> parts = (user =~ x/^QTEST_([A-Z0-9]+)_([A-Z0-9]+)_([0-9]+)_([0-9]+)(?:_[A-Z0-9]+)?$/);
-            if (!parts || parts[1] != host) {
+            if (!TestRun::isLeftover(user)) {
                 continue;
             }
-            int pid = parts[2].toInt();
-            int created = parts[3].toInt();
-            if (OracleRunSchema::isProcessAlive(pid) || (now - created) < LeftoverAge.durationSeconds()) {
-                continue;
+            # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
+            # later run
+            # (a user that is still connected too)
+            try {
+                if (OracleRunSchema::dropUser(ds, user)) {
+                    rv += user;
+                }
+            } catch (hash<ExceptionInfo> ex) {
             }
-            OracleRunSchema::dropUser(ds, user);
         }
-    }
-
-    #! Returns True if a process with the given id exists on this host
-    private static bool isProcessAlive(int pid) {
-        # signal 0 checks that the process exists; EPERM means it exists and belongs to another user
-        return kill(pid, 0) == 0 || errno() == EPERM;
-    }
-
-    #! Returns the first label of the host name, as a label
-    private static string getHost() {
-        return OracleRunSchema::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
-    }
-
-    #! Returns the letters and digits of a string, in upper case, at most the given number of them
-    private static string getLabel(string str, int max) {
-        string label = str.upr();
-        label =~ s/[^A-Z0-9]//g;
-        if (!label) {
-            label = "X";
-        }
-        return label.substr(0, max);
+        return rv;
     }
 }
 }

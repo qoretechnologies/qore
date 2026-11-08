@@ -25,6 +25,7 @@
 %modern
 %requires Util
 %requires FsUtil
+%requires ./TestRunIsolation.qm
 
 module FirebirdTestIsolation {
     version = "1.0";
@@ -50,14 +51,16 @@ module FirebirdTestIsolation {
     the datasource string.  A run
     whose Jaybird cannot create a database, or whose URL names a database by an alias rather than a path, cannot have
     a database of its own: the test uses its own datasource string, and the tests that do so on a host run one at a
-    time, by a lock on a file in the temporary directory that each holds until it ends.
+    time (@ref TestRunIsolation::TestRun::lockHost() "TestRun::lockHost()").
 
     @ref FirebirdTestIsolation::FirebirdRunDatabase::teardown() "FirebirdRunDatabase::teardown()" drops the database;
     it is also dropped when the program ends without calling it.  A run that is killed leaves its database file on the
-    server, as the files of a server cannot be listed through a connection.
+    server, as the files of a server cannot be listed through a connection: where the server's data directory can be
+    read, @ref FirebirdTestIsolation::FirebirdRunDatabase::removeLeftoverFiles() "removeLeftoverFiles()" removes the
+    files of runs that are at least @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old.
 
-    A database is named <tt>qtest_</tt><em>suite</em><tt>_</tt><em>host</em><tt>_</tt><em>pid</em><tt>_</tt>
-    <em>epoch</em><tt>.fdb</tt>, as the schemas of PgsqlTestIsolation.qm are.
+    A database is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, with
+    <tt>.fdb</tt>, so no two runs have the same one; a run whose database exists fails.
 
     @par Example:
     @code{.py}
@@ -72,7 +75,7 @@ FirebirdRunDatabase::teardown();
 #! Contains the definitions of the FirebirdTestIsolation module
 public namespace FirebirdTestIsolation {
 #! The location of a Firebird database on its server
-hashdecl FirebirdDatabaseLocation {
+public hashdecl FirebirdDatabaseLocation {
     #! the server
     string host;
 
@@ -104,7 +107,12 @@ class FirebirdRunDatabaseGuard {
     }
 
     destructor() {
-        drop();
+        # no exception leaves a destructor, which runs when the program ends without a teardown()
+        try {
+            drop();
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("WARNING: FirebirdTestIsolation: %s: %s\n", ex.err, ex.desc);
+        }
     }
 
     #! Drops the database, unless it is already dropped
@@ -118,20 +126,12 @@ class FirebirdRunDatabaseGuard {
 
 #! The database of this run of a Firebird test
 public class FirebirdRunDatabase {
-    public {
-        #! The prefix of the name of a run's database
-        const Prefix = "qtest_";
-    }
-
     private {
         #! The run's database for each datasource string that the test gave
         static hash<string, FirebirdRunDatabaseGuard> guards;
 
         #! The datasource strings of the run's database, keyed by the datasource string that the test gave
         static hash<string, string> connstrs;
-
-        #! The locks of the tests that cannot have a database of their own, keyed by the file
-        static hash<string, File> locks;
 
         #! Serializes setup and teardown
         static Mutex lck();
@@ -176,35 +176,48 @@ public class FirebirdRunDatabase {
         # a path names a file; anything else is an alias of the server's configuration
         int slash = path.rfind("/");
         if (slash < 0 || !config.options.classpath) {
-            FirebirdRunDatabase::lockHost(connstr);
+            TestRun::lockHost("firebird", connstr);
             return connstr;
         }
-        string db_path = sprintf("%s/%s%s_%s_%d_%d.fdb", path.substr(0, slash), Prefix,
-            FirebirdRunDatabase::getLabel(suite, 12), FirebirdRunDatabase::getHost(), getpid(),
-            now_us().getEpochSeconds());
+        string db_path = sprintf("%s/%s.fdb", path.substr(0, slash), TestRun::makeName(suite));
         string props = parts[3] ?? "";
-        string new_url = sprintf("firebirdsql://%s%s/%s%s%screateDatabaseIfNotExist=true", parts[0],
-            parts[1] ? ":" + parts[1] : "", db_path, props, props ? "&" : "?");
-        hash<auto> new_config = config;
-        if (key == "url") {
-            new_config.options.url = new_url;
-        } else {
-            new_config.db = new_url;
-        }
-        string new_connstr = make_datasource_string(new_config);
+        string url_prefix = sprintf("firebirdsql://%s%s/%s%s", parts[0], parts[1] ? ":" + parts[1] : "", db_path,
+            props);
+        # the run's database without and with createDatabaseIfNotExist
+        string run_connstr = FirebirdRunDatabase::getJdbcConnectionString(config, key, url_prefix);
+        string create_connstr = FirebirdRunDatabase::getJdbcConnectionString(config, key,
+            url_prefix + (props ? "&" : "?") + "createDatabaseIfNotExist=true");
         try {
+            # a database of the run's name is never shared: it must not exist before the run creates it
+            bool found;
+            try {
+                Datasource ds(run_connstr);
+                ds.open();
+                ds.close();
+                found = True;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.desc !~ /335544344|No such file or directory/i) {
+                    rethrow;
+                }
+            }
+            if (found) {
+                throw "FIREBIRD-TEST-ISOLATION-ERROR", sprintf("the database %y of the run exists", db_path);
+            }
             # creates the database
-            Datasource ds(new_connstr);
+            Datasource ds(create_connstr);
             ds.open();
             ds.close();
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "FIREBIRD-TEST-ISOLATION-ERROR") {
+                rethrow;
+            }
             # a Jaybird before Jaybird 6 ignores createDatabaseIfNotExist, and fails to open the database that does
             # not exist (ISC error 335544344, "I/O error during open"): the run has no database of its own; a server
             # that cannot be reached is found by the test when it connects
             if (ex.desc !~ /335544344|No such file or directory|Unable to complete network request/i) {
                 rethrow;
             }
-            FirebirdRunDatabase::lockHost(connstr);
+            TestRun::lockHost("firebird", connstr);
             return connstr;
         }
         guards{connstr} = new FirebirdRunDatabaseGuard(<FirebirdDatabaseLocation>{
@@ -215,7 +228,17 @@ public class FirebirdRunDatabase {
             "pass": config.pass ?? "",
             "classpath": config.options.classpath,
         });
-        return connstrs{connstr} = new_connstr;
+        return connstrs{connstr} = create_connstr;
+    }
+
+    #! Returns a jdbc datasource string with the given Jaybird URL
+    private static string getJdbcConnectionString(hash<auto> config, string key, string url) {
+        if (key == "url") {
+            config.options.url = url;
+        } else {
+            config.db = url;
+        }
+        return make_datasource_string(config);
     }
 
     #! Drops the run's databases
@@ -251,9 +274,12 @@ public class FirebirdRunDatabase {
             "m.setPort(ARGV[1].toInt());\n"
             "m.start();\n"
             "on_exit m.stop();\n"
-            "m.dropDatabase(ARGV[2], ARGV[3], ARGV[4]);\n";
+            # the password is read from the standard input: it is not given on the command line, where any user of
+            # the host could see it
+            "m.dropDatabase(ARGV[2], ARGV[3], trim(stdin.readLine(False) ?? \"\"));\n";
         string dir = make_tmp_dir("qore-firebird-drop-");
         on_exit {
+            unlink(dir + "/password");
             unlink(dir + "/drop.q");
             rmdir(dir);
         }
@@ -261,11 +287,15 @@ public class FirebirdRunDatabase {
         f.open2(dir + "/drop.q", O_CREAT | O_WRONLY | O_TRUNC, 0600);
         f.write(code);
         f.close();
-        string cmd = sprintf("%s %s", FirebirdRunDatabase::quote(ENV.QORE_EXECUTABLE ?? "qore"),
-            FirebirdRunDatabase::quote(dir + "/drop.q"));
-        foreach auto arg in ((location.host, location.port, location.path, location.user, location.pass)) {
-            cmd += " " + FirebirdRunDatabase::quote(arg.toString());
+        # the password goes to the standard input from a file that only this user can read, in the run's own
+        # directory
+        {
+            File pf();
+            pf.open2(dir + "/password", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            pf.write(location.pass + "\n");
+            pf.close();
         }
+        string cmd = FirebirdRunDatabase::getDropCommand(location, dir);
         int rc;
         string out = backquote(cmd + " 2>&1", \rc);
         if (rc) {
@@ -274,37 +304,45 @@ public class FirebirdRunDatabase {
         }
     }
 
+    #! Returns the command of the process that drops a database: its arguments are all but the password, which it
+    #! reads from the standard input, from the file \c password in the given directory, as any user of the host can
+    #! see the arguments of a process
+    static string getDropCommand(hash<FirebirdDatabaseLocation> location, string dir) {
+        string cmd = sprintf("%s %s", FirebirdRunDatabase::quote(ENV.QORE_EXECUTABLE ?? "qore"),
+            FirebirdRunDatabase::quote(dir + "/drop.q"));
+        foreach auto arg in ((location.host, location.port, location.path, location.user)) {
+            cmd += " " + FirebirdRunDatabase::quote(arg.toString());
+        }
+        return cmd + " < " + FirebirdRunDatabase::quote(dir + "/password");
+    }
+
     #! Quotes a string for the shell
     private static string quote(string str) {
         return "'" + replace(str, "'", "'\\''") + "'";
     }
 
-    #! Holds the lock of the tests on this host that use the given datasource string without a database of their own
-    private static lockHost(string connstr) {
-        string path = sprintf("%s/qore-test-firebird-%s.lock", tmp_location(), MD5(connstr));
-        if (locks{path}) {
-            return;
-        }
-        File f();
-        f.open2(path, O_CREAT | O_RDWR, 0666);
-        # held until the process ends
-        f.lockBlocking();
-        locks{path} = f;
-    }
+    #! Removes the database files left by test runs in the given directory, the data directory of a Firebird server
+    /** For the cleanup of a host where the server's data directory can be read: a database's files cannot be listed
+        through a connection, so a run that is killed leaves its database file behind (see TestRun::isLeftover())
 
-    #! Returns the first label of the host name, as a label
-    private static string getHost() {
-        return FirebirdRunDatabase::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
-    }
-
-    #! Returns the letters and digits of a string, in lower case, at most the given number of them
-    private static string getLabel(string str, int max) {
-        string label = str.lwr();
-        label =~ s/[^a-z0-9]//g;
-        if (!label) {
-            label = "x";
+        @return the paths of the files removed
+    */
+    static list<string> removeLeftoverFiles(string dir) {
+        list<string> rv = ();
+        Dir d();
+        if (!d.chdir(dir)) {
+            return rv;
         }
-        return label.substr(0, max);
+        foreach string file in (d.listFiles(TestRun::Prefix + ".*\\.fdb$")) {
+            if (!TestRun::isLeftover(file.substr(0, -4))) {
+                continue;
+            }
+            string path = dir + "/" + file;
+            if (!unlink(path)) {
+                rv += path;
+            }
+        }
+        return rv;
     }
 }
 }

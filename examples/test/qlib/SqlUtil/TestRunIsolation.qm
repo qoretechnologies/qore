@@ -1,0 +1,142 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TestRunIsolation.qm the names, leftovers and host locks of the databases and schemas of test runs
+
+/*  TestRunIsolation.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires Util
+
+module TestRunIsolation {
+    version = "1.0";
+    desc = "the names, leftovers and host locks of the databases and schemas of test runs";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+/** @mainpage TestRunIsolation Module
+
+    @section testrunisolationintro Introduction
+
+    The isolation modules of the database tests (MysqlTestIsolation.qm, OracleTestIsolation.qm, MssqlTestIsolation.qm
+    and FirebirdTestIsolation.qm) give each run of a test a database, schema or user of its own:
+    - @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it
+      <tt>qtest_</tt><em>suite</em><tt>_</tt><em>host</em><tt>_</tt><em>pid</em><tt>_</tt><em>epoch</em><tt>_</tt>
+      <em>random</em>: two runs never have the same name, also in CI job pods whose host names and process ids are
+      the same, as the name has random characters of its own; a database, schema or user with the name of the run is
+      never shared: it is created, and its creation fails when it exists
+    - @ref TestRunIsolation::TestRun::isLeftover() "TestRun::isLeftover()" tells a run's object that is at least
+      @ref TestRunIsolation::TestRun::LeftoverAge "LeftoverAge" old, by the time in its name, whatever the host and
+      process that made it: a run that is killed leaves its objects behind, and a CI job's pod has a host name and
+      process ids of its own, so neither its host nor its process tells whether it still runs; no test runs that long
+    - @ref TestRunIsolation::TestRun::lockHost() "TestRun::lockHost()" makes the tests that cannot have a database of
+      their own on a host run one at a time: each holds an exclusive lock on a file in the temporary directory until
+      it ends
+*/
+
+#! Contains the definitions of the TestRunIsolation module
+public namespace TestRunIsolation {
+#! The names, leftovers and host locks of test runs
+public class TestRun {
+    public {
+        #! The prefix of the name of a run's object, in lower case
+        const Prefix = "qtest_";
+
+        #! A run's object is a leftover when it is at least this old: well above the longest test (its time limit)
+        const LeftoverAge = 6h;
+    }
+
+    private {
+        #! The locks of the tests that cannot have a database of their own, keyed by the file
+        static hash<string, File> locks;
+
+        #! Serializes the locks
+        static Mutex lck();
+    }
+
+    #! Returns the name of an object of a test run
+    /** @param suite the name of the test: its letters and digits, in lower case, at most 12 of them
+
+        @return \c qtest_<suite>_<host>_<pid>_<epoch>_<random>, in lower case
+    */
+    static string makeName(string suite) {
+        return sprintf("%s%s_%s_%d_%d_%s", Prefix, TestRun::getLabel(suite, 12), TestRun::getHost(), getpid(),
+            now_us().getEpochSeconds(), TestRun::getLabel(get_random_string(24), 6));
+    }
+
+    #! Returns True if the given name is that of a run's object that is at least LeftoverAge old
+    /** @param name a name, in any case
+        @param now the current time; the time is taken if not given
+
+        @return True if the name is a run's (see makeName()), optionally followed by \c "_" and a tag, and its time
+        is at least LeftoverAge before \a now
+    */
+    static bool isLeftover(string name, *date now) {
+        *string epoch = (name =~ x/^qtest_[a-z0-9]+_[a-z0-9]+_[0-9]+_([0-9]+)_[a-z0-9]+(?:_[a-z0-9]+)?$/i)[0];
+        if (!epoch) {
+            return False;
+        }
+        int age = (now ?? now_us()).getEpochSeconds() - epoch.toInt();
+        return age >= LeftoverAge.durationSeconds();
+    }
+
+    #! Holds an exclusive lock, until the process ends, of the tests on this host that use the given datasource string
+    #! without a database of their own
+    /** A second process that takes the lock waits until the first one has ended
+
+        @param kind the kind of database, in the name of the lock file
+        @param connstr the datasource string
+    */
+    static lockHost(string kind, string connstr) {
+        string path = TestRun::getLockPath(kind, connstr);
+        lck.lock();
+        on_exit lck.unlock();
+        if (locks{path}) {
+            return;
+        }
+        File f();
+        f.open2(path, O_CREAT | O_RDWR, 0666);
+        # an exclusive (write) lock: a shared (read) lock would not keep another run out
+        f.lockBlocking(F_WRLCK);
+        locks{path} = f;
+    }
+
+    #! Returns the path of the lock file of the given kind of database and datasource string
+    static string getLockPath(string kind, string connstr) {
+        return sprintf("%s/qore-test-%s-%s.lock", tmp_location(), kind, MD5(connstr));
+    }
+
+    #! Returns the letters and digits of a string, in lower case, at most the given number of them
+    static string getLabel(string str, int max) {
+        string label = str.lwr();
+        label =~ s/[^a-z0-9]//g;
+        if (!label) {
+            label = "x";
+        }
+        return label.substr(0, max);
+    }
+
+    #! Returns the first label of the host name, as a label
+    private static string getHost() {
+        return TestRun::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
+    }
+}
+}

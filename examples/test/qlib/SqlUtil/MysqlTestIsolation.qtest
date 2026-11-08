@@ -11,6 +11,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./MysqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -68,17 +69,15 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         Datasource ds(connstr);
         string host = getHost();
         int now = now_us().getEpochSeconds();
-        int old = now - MysqlRunDatabase::LeftoverAge.durationSeconds() - 60;
-        int gone = getGonePid();
+        int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
         hash<string, bool> expected = {
-            # a gone run, old enough: dropped
-            sprintf("qtest_leftover_%s_%d_%d", host, gone, old): False,
-            # a gone run, too recent: kept, as its process id may have been reused
-            sprintf("qtest_recent_%s_%d_%d", host, gone, now): True,
-            # a live run (this process), old: kept
-            sprintf("qtest_live_%s_%d_%d", host, getpid(), old): True,
-            # another host: kept
-            sprintf("qtest_otherhost_%s_%d_%d", host + "x", gone, old): True,
+            # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
+            sprintf("qtest_leftover_%s_%d_%d_abc123", host, getpid(), old): False,
+            sprintf("qtest_otherhost_%s_%d_%d_abc123", host + "x", 1, old): False,
+            # a recent run: kept
+            sprintf("qtest_recent_%s_%d_%d_abc123", host, 1, now): True,
+            # not a run's name: kept
+            sprintf("qtest_%d", old): True,
         };
         foreach string db in (keys expected) {
             ds.exec("create database `" + db + "`");
@@ -88,7 +87,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
 
         string run_connstr = MysqlRunDatabase::getConnectionString(connstr, "MysqlTestIsolation");
         *string run = MysqlRunDatabase::getName();
-        assertRegex(sprintf("^qtest_mysqltestiso_%s_%d_[0-9]+$", host, getpid()), run);
+        assertRegex(sprintf("^qtest_mysqltestiso_%s_%d_[0-9]+_[a-z0-9]{6}$", host, getpid()), run);
         assertEq(run, parse_datasource(run_connstr).db);
 
         hash<string, bool> present = map {$1: True}, ds.select("select schema_name as name from "
@@ -140,12 +139,4 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         return host.substr(0, 12);
     }
 
-    private static int getGonePid() {
-        for (int pid = 99999; pid > 1000; --pid) {
-            if (kill(pid, 0) == -1 && errno() == ESRCH) {
-                return pid;
-            }
-        }
-        throw "TEST-ERROR", "no free process id found";
-    }
 }

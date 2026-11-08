@@ -7,10 +7,12 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
+%requires FsUtil
 %requires QUnit
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./FirebirdTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %exec-class FirebirdTestIsolationTest
 
@@ -25,6 +27,9 @@ class FirebirdTestIsolationTest inherits QUnit::Test {
         addTestCase("a non-Firebird connection has no run database", \notFirebird());
         addTestCase("the run's connections use the run's database", \runDatabase());
         addTestCase("the teardown drops the run's database", \teardown());
+        addTestCase("the files of old runs are removed from a data directory", \leftoverFiles());
+        addTestCase("the password is not on the command line of the process that drops a database",
+            \dropCommand());
         set_return_value(main());
     }
 
@@ -51,7 +56,7 @@ class FirebirdTestIsolationTest inherits QUnit::Test {
 
         Datasource ds(run_connstr);
         string path = ds.selectRow("select mon$database_name as n from mon$database").n;
-        assertRegex(sprintf("/qtest_firebirdtest_[a-z0-9]+_%d_[0-9]+\\.fdb$", getpid()), path);
+        assertRegex(sprintf("/qtest_firebirdtest_[a-z0-9]+_%d_[0-9]+_[a-z0-9]{6}\\.fdb$", getpid()), path);
         # a table created in the run's database is not in the test's
         ds.exec("create table isolation_t (id integer)");
         ds.commit();
@@ -76,5 +81,41 @@ class FirebirdTestIsolationTest inherits QUnit::Test {
         assertThrows("JNI-ERROR", \ds.open());
         # nothing is done once it is dropped
         FirebirdRunDatabase::teardown();
+    }
+
+    private leftoverFiles() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        int t = now_us().getEpochSeconds();
+        int old = t - TestRun::LeftoverAge.durationSeconds() - 60;
+        hash<string, bool> kept = {
+            sprintf("qtest_suite_otherhost_1_%d_abc123.fdb", old): False,
+            sprintf("qtest_suite_host_1_%d_abc123.fdb", t): True,
+            "qore.fdb": True,
+            sprintf("qtest_suite_otherhost_1_%d_abc123.txt", old): True,
+        };
+        foreach string file in (keys kept) {
+            File f();
+            f.open2(dir + "/" + file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.close();
+        }
+        assertEq((dir + "/" + sprintf("qtest_suite_otherhost_1_%d_abc123.fdb", old),),
+            FirebirdRunDatabase::removeLeftoverFiles(dir));
+        foreach hash<auto> i in (kept.pairIterator()) {
+            assertEq(i.value, is_file(dir + "/" + i.key), i.key);
+        }
+    }
+
+    private dropCommand() {
+        string cmd = FirebirdRunDatabase::getDropCommand(<FirebirdDatabaseLocation>{
+            "host": "fbhost",
+            "port": 3050,
+            "path": "/data/qtest_x.fdb",
+            "user": "fbuser",
+            "pass": "Secret-pw-77",
+            "classpath": "/x.jar",
+        }, "/tmp/dir");
+        assertEq(-1, cmd.find("Secret-pw-77"));
+        assertRegex("'fbhost' '3050' '/data/qtest_x.fdb' 'fbuser' < '/tmp/dir/password'$", cmd);
     }
 }

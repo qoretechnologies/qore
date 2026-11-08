@@ -24,6 +24,7 @@
 
 %modern
 %requires Util
+%requires ./TestRunIsolation.qm
 
 module MssqlTestIsolation {
     version = "1.0";
@@ -47,16 +48,17 @@ module MssqlTestIsolation {
 
     The test's login must be allowed to create databases.  A run whose server is not SQL Server (a Sybase server of
     the \c freetds driver), or whose login cannot create a database, cannot have a database of its own: the test uses
-    its own datasource string, and the tests that do so on a host run one at a time, by a lock on a file in the
-    temporary directory that each holds until it ends.
+    its own datasource string, and the tests that do so on a host run one at a time
+    (@ref TestRunIsolation::TestRun::lockHost() "TestRun::lockHost()").
 
     @ref MssqlTestIsolation::MssqlRunDatabase::teardown() "MssqlRunDatabase::teardown()" drops the database, ending
     the connections to it; it is also dropped when the program ends without calling it.  A run that is killed leaves
-    its database behind, so the next run on the same host drops the databases of runs whose process no longer exists
-    and that are older than @ref MssqlTestIsolation::MssqlRunDatabase::LeftoverAge "LeftoverAge".
+    its database behind, so each run drops the databases of runs that are at least
+    @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host, as does
+    @ref MssqlTestIsolation::MssqlRunDatabase::dropLeftovers() "MssqlRunDatabase::dropLeftovers()" for a CI job.
 
-    A database is named <tt>qtest_</tt><em>suite</em><tt>_</tt><em>host</em><tt>_</tt><em>pid</em><tt>_</tt>
-    <em>epoch</em>, as the schemas of PgsqlTestIsolation.qm are.
+    A database is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, so no two runs
+    have the same one; its creation fails if it exists.
 
     @par Example:
     @code{.py}
@@ -100,14 +102,6 @@ class MssqlRunDatabaseGuard {
 
 #! The database of this run of a SQL Server test
 public class MssqlRunDatabase {
-    public {
-        #! The prefix of the name of a run's database
-        const Prefix = "qtest_";
-
-        #! A database left by a run whose process is gone is dropped only when it is at least this old
-        const LeftoverAge = 1h;
-    }
-
     private {
         #! The name of the run's database, once it is created
         static *string name;
@@ -117,9 +111,6 @@ public class MssqlRunDatabase {
 
         #! The datasource strings of the run's database, keyed by the datasource string that the test gave
         static hash<string, string> connstrs;
-
-        #! The locks of the tests that cannot have a database of their own, keyed by the file
-        static hash<string, File> locks;
 
         #! Serializes setup and teardown
         static Mutex lck();
@@ -167,16 +158,15 @@ public class MssqlRunDatabase {
         string version = ds.selectRow("select @@version as v").v;
         if (version !~ /^Microsoft SQL Server/) {
             ds.close();
-            MssqlRunDatabase::lockHost(connstr);
+            TestRun::lockHost("mssql", connstr);
             return connstr;
         }
-        MssqlRunDatabase::dropLeftovers(ds);
+        MssqlRunDatabase::dropLeftoversIntern(ds);
 
-        string db = name ?? sprintf("%s%s_%s_%d_%d", Prefix, MssqlRunDatabase::getLabel(suite, 12),
-            MssqlRunDatabase::getHost(), getpid(), now_us().getEpochSeconds());
+        string db = name ?? TestRun::makeName(suite);
         try {
-            ds.execRaw(MssqlRunDatabase::outsideTransaction("if db_id('" + db + "') is null create database [" + db
-                + "]"));
+            # a database of the run's name is never shared: its creation fails if it exists
+            ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
         } catch (hash<ExceptionInfo> ex) {
             # only a login that may not create databases (server message 262: "CREATE DATABASE permission denied")
             # runs without a database of its own
@@ -184,7 +174,7 @@ public class MssqlRunDatabase {
                 rethrow;
             }
             ds.close();
-            MssqlRunDatabase::lockHost(connstr);
+            TestRun::lockHost("mssql", connstr);
             return connstr;
         }
         name = db;
@@ -264,57 +254,36 @@ public class MssqlRunDatabase {
         return make_datasource_string(config);
     }
 
-    #! Holds the lock of the tests on this host that use the given datasource string without a database of their own
-    private static lockHost(string connstr) {
-        string path = sprintf("%s/qore-test-mssql-%s.lock", tmp_location(), MD5(connstr));
-        if (locks{path}) {
-            return;
-        }
-        File f();
-        f.open2(path, O_CREAT | O_RDWR, 0666);
-        # held until the process ends
-        f.lockBlocking();
-        locks{path} = f;
+    #! Drops the databases left by test runs on the server of the given datasource string
+    /** For a CI job's cleanup: a run that is killed leaves its database behind (see TestRun::isLeftover())
+
+        @return the names of the databases dropped
+    */
+    static list<string> dropLeftovers(string connstr) {
+        Datasource ds(connstr);
+        ds.setAutoCommit(True);
+        return MssqlRunDatabase::dropLeftoversIntern(ds);
     }
 
-    #! Drops the databases left by runs on this host whose process is gone and that are older than LeftoverAge
-    private static dropLeftovers(Datasource ds) {
-        string host = MssqlRunDatabase::getHost();
-        int now = now_us().getEpochSeconds();
-        *list<string> dbs = ds.select("select name from sys.databases where name like %v", Prefix + "%").name;
+    #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
+    private static list<string> dropLeftoversIntern(Datasource ds) {
+        list<string> rv = ();
+        *list<string> dbs = ds.select("select name from sys.databases where name like %v", TestRun::Prefix + "%")
+            .name;
         foreach string db in (dbs) {
-            *list<string> parts = (db =~ x/^qtest_([a-z0-9]+)_([a-z0-9]+)_([0-9]+)_([0-9]+)$/);
-            if (!parts || parts[1] != host) {
+            if (!TestRun::isLeftover(db)) {
                 continue;
             }
-            int pid = parts[2].toInt();
-            int created = parts[3].toInt();
-            if (MssqlRunDatabase::isProcessAlive(pid) || (now - created) < LeftoverAge.durationSeconds()) {
+            # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
+            # later run
+            try {
+                MssqlRunDatabase::dropDatabase(ds, db);
+            } catch (hash<ExceptionInfo> ex) {
                 continue;
             }
-            MssqlRunDatabase::dropDatabase(ds, db);
+            rv += db;
         }
-    }
-
-    #! Returns True if a process with the given id exists on this host
-    private static bool isProcessAlive(int pid) {
-        # signal 0 checks that the process exists; EPERM means it exists and belongs to another user
-        return kill(pid, 0) == 0 || errno() == EPERM;
-    }
-
-    #! Returns the first label of the host name, as a label
-    private static string getHost() {
-        return MssqlRunDatabase::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
-    }
-
-    #! Returns the letters and digits of a string, in lower case, at most the given number of them
-    private static string getLabel(string str, int max) {
-        string label = str.lwr();
-        label =~ s/[^a-z0-9]//g;
-        if (!label) {
-            label = "x";
-        }
-        return label.substr(0, max);
+        return rv;
     }
 }
 }

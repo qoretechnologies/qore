@@ -24,6 +24,7 @@
 
 %modern
 %requires Util
+%requires ./TestRunIsolation.qm
 
 module MysqlTestIsolation {
     version = "1.0";
@@ -46,12 +47,13 @@ module MysqlTestIsolation {
 
     @ref MysqlTestIsolation::MysqlRunDatabase::teardown() "MysqlRunDatabase::teardown()" drops the database with
     everything in it; it is also dropped when the program ends without calling it.  A run that is killed leaves its
-    database behind, so the next run on the same host drops the databases of runs whose process no longer exists and
-    that are older than @ref MysqlTestIsolation::MysqlRunDatabase::LeftoverAge "LeftoverAge".
+    database behind, so each run drops the databases of runs that are at least
+    @ref TestRunIsolation::TestRun::LeftoverAge "TestRun::LeftoverAge" old, whatever their host, as does
+    @ref MysqlTestIsolation::MysqlRunDatabase::dropLeftovers() "MysqlRunDatabase::dropLeftovers()" for a CI job.
 
-    A database is named <tt>qtest_</tt><em>suite</em><tt>_</tt><em>host</em><tt>_</tt><em>pid</em><tt>_</tt>
-    <em>epoch</em>, as the schemas of PgsqlTestIsolation.qm are.  The test's user must be allowed to create and drop
-    databases (the CI jobs connect as root).
+    A database is named as @ref TestRunIsolation::TestRun::makeName() "TestRun::makeName()" names it, so no two runs
+    have the same one; its creation fails if it exists.  The test's user must be allowed to create and drop databases
+    (the CI jobs connect as root).
 
     @par Example:
     @code{.py}
@@ -97,13 +99,6 @@ class MysqlRunDatabaseGuard {
 
 #! The database of this run of a MySQL/MariaDB test
 public class MysqlRunDatabase {
-    public {
-        #! The prefix of the name of a run's database
-        const Prefix = "qtest_";
-
-        #! A database left by a run whose process is gone is dropped only when it is at least this old
-        const LeftoverAge = 1h;
-    }
 
     private {
         #! The name of the run's database, once it is created
@@ -155,11 +150,11 @@ public class MysqlRunDatabase {
             # a server that cannot be reached: the test finds it so when it connects, and reports or skips it
             return connstr;
         }
-        MysqlRunDatabase::dropLeftovers(ds);
+        MysqlRunDatabase::dropLeftoversIntern(ds);
 
-        string db = name ?? sprintf("%s%s_%s_%d_%d", Prefix, MysqlRunDatabase::getLabel(suite, 12),
-            MysqlRunDatabase::getHost(), getpid(), now_us().getEpochSeconds());
-        ds.exec("create database if not exists `" + db + "`");
+        string db = name ?? TestRun::makeName(suite);
+        # a database of the run's name is never shared: its creation fails if it exists
+        ds.exec("create database `" + db + "`");
         ds.commit();
         name = db;
         guards{connstr} = new MysqlRunDatabaseGuard(ds, db);
@@ -191,46 +186,37 @@ public class MysqlRunDatabase {
         map $1.drop(), old_guards.iterator();
     }
 
-    #! Drops the databases left by runs on this host whose process is gone and that are older than LeftoverAge
-    private static dropLeftovers(Datasource ds) {
-        string host = MysqlRunDatabase::getHost();
-        int now = now_us().getEpochSeconds();
+    #! Drops the databases left by test runs on the server of the given datasource string (see TestRun::isLeftover())
+    /** For a CI job's cleanup: a run that is killed leaves its database behind
+
+        @return the names of the databases dropped
+    */
+    static list<string> dropLeftovers(string connstr) {
+        Datasource ds(connstr);
+        return MysqlRunDatabase::dropLeftoversIntern(ds);
+    }
+
+    #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
+    private static list<string> dropLeftoversIntern(Datasource ds) {
+        list<string> rv = ();
         *list<string> dbs = ds.select("select schema_name as name from information_schema.schemata "
-            "where schema_name like %v", Prefix + "%").name;
+            "where schema_name like %v", TestRun::Prefix + "%").name;
         foreach string db in (dbs) {
-            *list<string> parts = (db =~ x/^qtest_([a-z0-9]+)_([a-z0-9]+)_([0-9]+)_([0-9]+)$/);
-            if (!parts || parts[1] != host) {
+            if (!TestRun::isLeftover(db)) {
                 continue;
             }
-            int pid = parts[2].toInt();
-            int created = parts[3].toInt();
-            if (MysqlRunDatabase::isProcessAlive(pid) || (now - created) < LeftoverAge.durationSeconds()) {
+            # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
+            # later run
+            try {
+                ds.exec("drop database if exists `" + db + "`");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
                 continue;
             }
-            ds.exec("drop database if exists `" + db + "`");
-            ds.commit();
+            rv += db;
         }
-    }
-
-    #! Returns True if a process with the given id exists on this host
-    private static bool isProcessAlive(int pid) {
-        # signal 0 checks that the process exists; EPERM means it exists and belongs to another user
-        return kill(pid, 0) == 0 || errno() == EPERM;
-    }
-
-    #! Returns the first label of the host name, as a label
-    private static string getHost() {
-        return MysqlRunDatabase::getLabel((gethostname() =~ x/^([^.]+)/)[0] ?? gethostname(), 12);
-    }
-
-    #! Returns the letters and digits of a string, in lower case, at most the given number of them
-    private static string getLabel(string str, int max) {
-        string label = str.lwr();
-        label =~ s/[^a-z0-9]//g;
-        if (!label) {
-            label = "x";
-        }
-        return label.substr(0, max);
+        return rv;
     }
 }
 }

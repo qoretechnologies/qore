@@ -12,6 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./OracleTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -85,7 +86,7 @@ class OracleTestIsolationTest inherits QUnit::Test {
         string done = dir + "/done";
         system(sprintf("mkfifo %s %s", ready, done));
         string test_connstr = "oracle:u/p@db-" + get_random_string(8) + "%localhost:1";
-        string path = sprintf("%s/qore-test-oracle-%s.lock", tmp_location(), MD5(test_connstr));
+        string path = TestRun::getLockPath("oracle", test_connstr);
         on_exit unlink(path);
         string script = dir + "/holder.q";
         File sf();
@@ -109,8 +110,10 @@ class OracleTestIsolationTest inherits QUnit::Test {
         }
         File f();
         f.open2(path, O_RDWR);
-        # held by the other process
+        # held by the other process, exclusively: another run, which takes the same lock, waits; a shared lock is
+        # refused too
         assertNeq(0, f.lock(F_WRLCK));
+        assertNeq(0, f.lock(F_RDLCK));
         File d();
         d.open2(done, O_WRONLY);
         d.write("done\n");
@@ -125,18 +128,16 @@ class OracleTestIsolationTest inherits QUnit::Test {
         Datasource ds(admin_connstr);
         string host = getHost();
         int now = now_us().getEpochSeconds();
-        int old = now - OracleRunSchema::LeftoverAge.durationSeconds() - 60;
-        int gone = getGonePid();
+        int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
         hash<string, bool> expected = {
-            # a gone run, old enough: dropped, with its other user
-            sprintf("QTEST_LEFTOVER_%s_%d_%d", host, gone, old): False,
-            sprintf("QTEST_LEFTOVER_%s_%d_%d_OTHER", host, gone, old): False,
-            # a gone run, too recent: kept, as its process id may have been reused
-            sprintf("QTEST_RECENT_%s_%d_%d", host, gone, now): True,
-            # a live run (this process), old: kept
-            sprintf("QTEST_LIVE_%s_%d_%d", host, getpid(), old): True,
-            # another host: kept
-            sprintf("QTEST_OTHERHOST_%s_%d_%d", host + "X", gone, old): True,
+            # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
+            sprintf("QTEST_LEFTOVER_%s_%d_%d_ABC123", host, getpid(), old): False,
+            sprintf("QTEST_OTHERHOST_%s_%d_%d_ABC123", host + "X", 1, old): False,
+            sprintf("QTEST_LEFTOVER_%s_%d_%d_ABC123_OTHER", host, getpid(), old): False,
+            # a recent run: kept
+            sprintf("QTEST_RECENT_%s_%d_%d_ABC123", host, 1, now): True,
+            # not a run's name: kept
+            sprintf("QTEST_%d", old): True,
         };
         foreach string user in (keys expected) {
             ds.exec("create user " + user + " identified by \"Qtest_pw_1\"");
@@ -146,7 +147,7 @@ class OracleTestIsolationTest inherits QUnit::Test {
 
         string run_connstr = OracleRunSchema::getConnectionString(connstr, "OracleTestIsolation");
         string user = parse_datasource(run_connstr).user.upr();
-        assertRegex(sprintf("^QTEST_ORACLETESTIS_%s_%d_[0-9]+$", host, getpid()), user);
+        assertRegex(sprintf("^QTEST_ORACLETESTIS_%s_%d_[0-9]+_[A-Z0-9]{6}$", host, getpid()), user);
 
         hash<string, bool> present = map {$1: True}, ds.select("select username from all_users where username "
             "like %v", "QTEST%").username;
@@ -196,12 +197,4 @@ class OracleTestIsolationTest inherits QUnit::Test {
         return host.substr(0, 12);
     }
 
-    private static int getGonePid() {
-        for (int pid = 99999; pid > 1000; --pid) {
-            if (kill(pid, 0) == -1 && errno() == ESRCH) {
-                return pid;
-            }
-        }
-        throw "TEST-ERROR", "no free process id found";
-    }
 }
