@@ -8,6 +8,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires OracleSqlUtilBase
+%requires ./OracleTestIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -310,7 +311,9 @@ class OracleReferentialActionsTest inherits QUnit::Test {
 %ifdef NoOracle
         testSkip("no oracle module");
 %endif
-        *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE;
+        # the run's own schema: tests that run at the same time do not share the objects of this one
+        *string connstr = OracleRunSchema::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE,
+            "OracleRefActions");
         if (!connstr) {
             testSkip("no Oracle connection; set QORE_DB_CONNSTR_ORACLE or use -c");
         }
@@ -414,7 +417,9 @@ class OracleReferentialActionsTest inherits QUnit::Test {
 
     liveOtherSchema() {
         Datasource ds = getLiveDatasource();
-        *string other_connstr = ENV.QORE_DB_CONNSTR_ORACLE_OTHER;
+        # another user of the run's own
+        *string other_connstr = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE_OTHER,
+            "OracleRefActions", "other");
         if (!other_connstr) {
             testSkip("no connection to another Oracle user; set QORE_DB_CONNSTR_ORACLE_OTHER");
         }

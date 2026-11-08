@@ -1812,7 +1812,7 @@ double LValueHelper::getAsFloat() const {
     return qv->getAsFloat();
 }
 
-int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
+int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
     assert(num_steps > 0);
 
     const bool final_assignment = assignment_only;
@@ -1918,8 +1918,13 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         return -1;
     }
 
-    // Check if root resolved to a reference — if so, follow it via AST path
-    {
+    // Check if root resolved to a reference — if so, follow it via AST path.  The remove or delete of a global,
+    // thread_local or static class variable itself removes the variable's own value, the reference, as Var::remove()
+    // and StaticClassVarRefNode::remove() do in the AST interpreter (LValueRemoveHelper does not follow it), while
+    // the remove of a local variable holding a reference removes the referenced value (LocalVar::remove())
+    if (!(remove_root && num_steps == 1
+            && (root.kind == LVPathStepKind::GlobalVar || root.kind == LVPathStepKind::ThreadLocalVar
+                || root.kind == LVPathStepKind::StaticVar))) {
         const ReferenceNode* ref = getReference();
         if (ref) {
             if (val) {

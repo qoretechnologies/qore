@@ -155,6 +155,9 @@ public class HttpAsyncSocketIoController {
         #! Thread pool configuration for recreation after stop()
         hash<auto> pool_opts;
 
+        #! The time allowed for an I/O operation of a connection (the \c io_operation_timeout option)
+        date io_operation_timeout;
+
         #! Shutdown flag; prevents handler tasks from submitting new operations during stop()
         bool stopping = False;
 
@@ -218,6 +221,12 @@ public class HttpAsyncSocketIoController {
         - \c peer_hostname_lookup: if @ref True "True", the reverse DNS lookup of each client address is started when
           the connection is accepted and is set in the \c "peer-info-future" key of the connection context (default
           @ref False "False")
+        - \c io_operation_timeout: the time allowed for an I/O operation of a connection: reading the first request
+          of a connection, reading a request header after the idle time (\c ttl) of a keep-alive connection, and
+          sending a response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
+          zero
+
+        @throw HTTP-SERVER-INIT-ERROR \c io_operation_timeout is not greater than zero
     */
     constructor(AsyncSocketIoController controller, *LoggerInterface logger,
             hash<auto> opts = {}) {
@@ -225,6 +234,13 @@ public class HttpAsyncSocketIoController {
         self.controller = controller;
         self.logger = logger;
         self.pool_opts = opts;
+        io_operation_timeout = exists opts.io_operation_timeout
+            ? milliseconds(opts.io_operation_timeout)
+            : AsyncSocketIoController::DefaultIoOperationTimeout;
+        if (io_operation_timeout <= 0s) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("io_operation_timeout (%y) must be greater than zero",
+                io_operation_timeout);
+        }
         self.handler_pool = new ThreadPool(
             opts.max_handler_threads ?? 0,
             opts.min_idle_handler_threads ?? 0,
@@ -1643,7 +1659,7 @@ public class HttpAsyncSocketIoController {
             # which answers a request that a route qualifies for on the I/O thread (no handler hand-off), and
             # completes with the parsed header for every other request, as the ReadHeader operation does; the wait
             # for the first request is the time that the ReadHeader operation had
-            timeout first_request_wait = AsyncSocketIoController::DefaultIoOperationTimeout;
+            timeout first_request_wait = io_operation_timeout;
             new_cinfo.state = HttpConnectionState::SendAndReadHeader;
             new_cinfo.stream_op = sock.startPollIdleAndReadHttpHeader(first_request_wait);
             new_cinfo.ttl = first_request_wait;
@@ -2316,7 +2332,7 @@ public class HttpAsyncSocketIoController {
                 "sock": sock,
                 "spop": wrapped_op,
                 "owner": owner,
-                "to": AsyncSocketIoController::DefaultIoOperationTimeout,
+                "to": io_operation_timeout,
             });
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit SSL op for %s: %s: %s", uh, ex.err, ex.desc);
@@ -2421,7 +2437,7 @@ public class HttpAsyncSocketIoController {
                 # the listener has fast routes: the first request is read by the fused idle + read header operation,
                 # which answers a request that a route qualifies for on the I/O thread (see handleAcceptComplete())
                 *AbstractPollOperation first_request_op;
-                timeout first_request_wait = AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout first_request_wait = io_operation_timeout;
                 if (sock.hasHttpFastRoutes()) {
                     first_request_op = sock.startPollIdleAndReadHttpHeader(first_request_wait);
                 }
@@ -2681,7 +2697,7 @@ public class HttpAsyncSocketIoController {
     #! Shared implementation for submitConnectionOp / submitConnectionOpUnlocked
     private submitConnectionOpIntern(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         AbstractPollOperation op;
-        date timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+        date timeout = io_operation_timeout;
         string owner = uh;
 
         @debug {
@@ -2699,7 +2715,7 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::KeepAlive: {
                 # TTL covers idle wait; safety margin covers header-read phase
                 op = cinfo.keep_alive_op;
-                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = milliseconds(cinfo.ttl) + io_operation_timeout;
                 break;
             }
             case HttpConnectionState::ReadHeader: {
@@ -2720,7 +2736,7 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
                 op = cinfo.stream_op;
-                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = io_operation_timeout;
                 break;
             }
             case HttpConnectionState::Sse: {
@@ -2757,33 +2773,33 @@ public class HttpAsyncSocketIoController {
                     return;
                 }
                 op = cinfo.stream_op;
-                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = io_operation_timeout;
                 break;
             }
             case HttpConnectionState::SendAndReadHeader: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
                 # TTL covers idle wait after send; safety margin covers send + header-read phases
-                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = milliseconds(cinfo.ttl) + io_operation_timeout;
                 break;
             }
             case HttpConnectionState::SendStreamAndReadHeader: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
                 # TTL covers idle wait after stream send; safety margin covers send + header-read phases
-                timeout = milliseconds(cinfo.ttl) + AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = milliseconds(cinfo.ttl) + io_operation_timeout;
                 break;
             }
             case HttpConnectionState::SendStreamResponse: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
-                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = io_operation_timeout;
                 break;
             }
             case HttpConnectionState::ReadBody: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
-                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                timeout = io_operation_timeout;
                 break;
             }
             case HttpConnectionState::LingeringClose: {

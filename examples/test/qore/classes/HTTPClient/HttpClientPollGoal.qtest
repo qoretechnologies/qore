@@ -16,6 +16,8 @@ const HangGuard = 60s;
 class OneShotServer {
     public {
         int port;
+        #! for the "keep" mode: the server closes the kept connection once this reaches zero
+        Counter close_now(1);
     }
 
     private {
@@ -48,6 +50,14 @@ class OneShotServer {
                 conn.close();
                 return;
             }
+            if (mode == "keep") {
+                # the first request is answered and the connection kept; it is closed when the test says so
+                conn.readHTTPHeader(HangGuard);
+                conn.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "kept");
+                close_now.waitForZero(HangGuard);
+                conn.close();
+                return;
+            }
             if (mode == "ok") {
                 conn.readHTTPHeader(HangGuard);
                 conn.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain", "Connection": "close"},
@@ -69,6 +79,8 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         addTestCase("a request that times out has not reached its goal", \testTimeout());
         addTestCase("a request that fails has not reached its goal", \testError());
         addTestCase("an answered request has reached its goal", \testSuccess());
+        addTestCase("a request whose connection the server closed before it was submitted fails in its poll operation",
+            \testCloseBeforeSubmit());
         set_return_value(main());
     }
 
@@ -110,6 +122,33 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
         assertTrue(exists result.ex, "the request fails");
         assertFalse(spop.goalReached(), sprintf("a request that failed (%s) has not reached its goal", result.ex.err));
+    }
+
+    #! The server closes a pooled keep-alive connection after startPollSendRecv() found it ready and before the request
+    #! is submitted: the error is reported by the poll operation, as when the connection is found closed, and not
+    #! raised by startPollSendRecv()
+    testCloseBeforeSubmit() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that orders the close and the submit is only in debug builds");
+        }
+        OneShotServer srv("keep");
+        on_exit srv.stop();
+        on_exit if (srv.close_now.getCount()) {
+            srv.close_now.dec();
+        }
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        # the first request leaves a ready keep-alive connection in the pool
+        assertEq(200, hc.send(NOTHING, "GET", "/first").status_code);
+        # the server closes the connection when the submit of the next request is reached, and the submit is made
+        # once the I/O thread marked the connection closed
+        Counter closed(1);
+        call_function("dbg_http_submit_after_close", srv.close_now, closed);
+        on_exit call_function("dbg_http_submit_after_close_clear");
+        AbstractPollOperation spop = hc.startPollSendRecv("GET", "/closed");
+        assertEq(0, closed.getCount(), "the connection was closed before the request was submitted");
+        hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+        assertTrue(exists result.ex, "the request fails");
+        assertFalse(spop.goalReached(), "a request that failed has not reached its goal");
     }
 
     testSuccess() {

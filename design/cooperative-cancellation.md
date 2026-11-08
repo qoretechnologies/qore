@@ -790,6 +790,56 @@ It carries the `THREAD_CONTROL` functional domain, like `clear_thread_cancel()`,
 `PO_NO_THREAD_CONTROL` program cannot defer at all.  In C++, use the header-inline RAII
 `QoreCancelDeferralHelper` rather than the raw push/pop.
 
+#### Without thread control: synchronized state
+
+Code that must also run under `PO_NO_THREAD_CONTROL` (a module whose user may be sandboxed) cannot call
+`defer_thread_cancel()`.  It keeps the state its cleanup changes in **`synchronized` methods** and
+wakes its waiters with a **`Queue` push or a `Counter` decrement**: none of these is a cancellation
+point (the lock of a `synchronized` method is a `VRMutex` acquired without a `VLockCancellationPoint`,
+and `Queue::push()` and `Counter::dec()` never wait), so the cleanup completes on a cancelled
+thread.  Only the *waits* (`Queue::get()`, `Counter::waitForZero()`) are cancellation points, which
+is what the waiter wants.  The cleanup methods contain **no loop**: a loop statement is a cancellation
+point at each iteration, so on a cancelled thread it raises the cancellation again and skips the rest of
+the cleanup (a `map` expression is not one when run from source, but the code `qcc` compiles for it
+checks too, so cleanup code does not rely on it).  A waiter registers itself in a synchronized method before it waits and
+the cleanup pushes only while a waiter is registered, so no wakeup is lost and the queue does not
+grow without one:
+
+```qore
+synchronized leave(int token) {
+    remove live{token};
+    if (waiters) {
+        wake.push(True);    # not a cancellation point
+    }
+}
+
+waitOthers() {
+    while (beginWait()) {   # synchronized: false once nothing is left; registers the waiter
+        on_exit endWait();  # synchronized
+        wake.get();         # the cancellation point is the wait itself
+    }
+}
+```
+
+`WebSocketClient`'s thread accounting (`WscLibraryThreads`), its handoff of an action to a
+`connectAsync()` worker (`WscActionHandoff`, with `WscActionWaiters` recording an action that a
+cancelled thread cannot release; each thread waiting for an action waits on a Queue of its own, so
+the wakeup of such a record is never lost; one waiter is woken at a time, and a waiter that stops
+waiting without the action wakes the next one as it unregisters, so no wakeup needs a loop), and the Discord heartbeat record (`DiscordHeartbeat`) use this
+pattern.  `WscLibraryThreads::waitOthers()` supports a single waiter (the destructor): it pushes
+one wakeup per change while a waiter is registered.
+
+Not covered yet: a **destructor running on a cancelled thread**.  The destructors of both clients
+take Mutex locks (the handshake lock, the client lock, the heartbeat lock) before they reach this
+bookkeeping, so on a cancelled thread they stop at the first of them with `THREAD-CANCELLED`.
+
+A libqore primitive for "cleanup-only" lock acquisition that is not a cancellation point is not
+added: a `synchronized` method already is one, it cannot be held past its method (so it cannot be
+used to evade cancellation outside the method), and C++ module code takes `QoreThreadLock`
+(`pthread_mutex_t`), which is never a cancellation point.  A primitive on `Mutex` itself could not
+tell cleanup from ordinary code, so it would let any code block uninterruptibly on a contended
+lock.
+
 The deferral is only for cleanup that runs **while the cancelled code is still on the stack**.
 Cleanup the runtime runs *after* that code has returned uses the stronger rule below.
 

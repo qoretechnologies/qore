@@ -562,6 +562,12 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - new @ref Qore::Socket::getQuicSSLCipherName() "Socket::getQuicSSLCipherName()" and
       @ref Qore::Socket::getQuicSSLCipherVersion() "Socket::getQuicSSLCipherVersion()" for HTTP/3 QUIC sessions
+    - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection
+      only (a half-close): the peer reads the end of the stream, and the response that the peer sends can still be
+      read; a TLS connection sends its \c close_notify alert first
+    - a \c QOREADDRINFO-GETINFO-ERROR exception now gives the resolver's status in <tt>arg.status</tt>, so that a
+      name that does not exist (\c "ENOTFOUND") can be told from a temporary failure such as \c "ETIMEOUT"; also
+      raised by @ref Qore::getaddrinfo_async() "getaddrinfo_async()" (see @ref Qore::getaddrinfo() "getaddrinfo()")
     @endparblock
 
     @par astparser Uses a tree-sitter Parser
@@ -1443,12 +1449,14 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
-    - a class whose public member declaration declared both members and static class variables (ex:
-      <tt>public { auto m; static auto sm; }</tt>) accepted undeclared members, and so did its subclasses, except in
-      AOT-compiled code; undeclared members of such classes are now refused: at runtime with \c INVALID-MEMBER, and
-      at parse time with a \c PARSE-EXCEPTION (<tt>illegal access to unknown member</tt>) where the parser sees the
-      access, as in a method of such a class or of a subclass (ex: <tt>self.zz = 1;</tt>), so that code that used
-      such members no longer parses
+    - a separated module required by the path of its <tt>.qm</tt> file
+      (<tt>%requires ../lib/ModuleName/ModuleName.qm</tt>) was loaded without its other files, so its classes and
+      functions were missing; the whole module is loaded, as with the path of its directory (see
+      @ref separated_module_paths)
+    - a class whose public member declaration declared both members and static class variables, and its
+      subclasses, accepted undeclared members; they are now refused with \c INVALID-MEMBER at runtime, or with a
+      parse exception where the parser sees the access, so code that used such members no longer parses (see
+      @ref public_members)
     - a reference to an undeclared member of a class with a public member declaration raised two parse exceptions
       when types are required (as with @ref modern "%modern"): the illegal access and the missing type information;
       only the illegal access is now reported
@@ -1456,11 +1464,9 @@
       one of which is a \c reference<int> local or parameter (ex: <tt>while (i < n)</tt>) kept using the first value
       of the reference when its target changed in the loop; it now reads the reference each time, as with the AST
       interpreter
-    - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter, a
-      local variable holding a reference (ex: <tt>reference r = \\x;</tt> or a \c reference<T> parameter) kept
-      reading as the first value read after the referenced lvalue changed without an assignment to the variable (ex:
-      <tt>int x = 2; reference r = \\x; int a = r; x = 10;</tt> then \c r read as \c 2); it now reads as the
-      referenced lvalue, as with the AST interpreter
+    - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a local variable or
+      parameter holding a reference could keep giving an old value after the referenced lvalue changed; it now
+      gives the current value, as with the AST interpreter (see @ref lvalue_references)
     - the result of \c *= and \c /= is now the value stored in the lvalue, as for an assignment
       (<tt>x *= y</tt> gives what <tt>x = x * y</tt> gives): with a \c float operand on an lvalue that stores the
       result converted, the computed value was returned instead (ex: <tt>softint v = 7; (v *= 2.5)</tt> gave
@@ -1473,31 +1479,31 @@
     - the IR, JIT and tiered execution modes run code holding objects faster: loops declaring locals and member
       assignments allocate no memory, and method and constructor calls take fewer references to their receivers and
       arguments, which for objects in recursive graphs saves garbage-collection work
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a local variable of no reference type
-      (\c auto, \c any or no type) that holds a reference not created with <tt>\\x</tt> in the same function (a
-      reference element of a container, ex: <tt>auto r = h.r;</tt>, a reference returned by a call, or a reference
-      passed to a parameter of no reference type) read as the value that the referenced lvalue had when the variable
-      was assigned or the function entered, and an assignment to the variable could be lost instead of writing the
-      referenced lvalue; the variable now reads and writes the referenced lvalue, as with the AST interpreter
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a reference that arrives as a value (ex: an
-      element <tt>h.r</tt> holding <tt>\\x</tt>) is now handled as with the AST interpreter in these cases: added to
-      a variable of no type with no value (<tt>auto t; t += h.r;</tt>), where it could read as the reference itself
-      or a later assignment could replace it instead of assigning the referenced lvalue, also in a \c try block; as
-      the value of an assignment (<tt>auto r = (t = h.r); r = 5;</tt>, also with \c +=), which was the referenced
-      value instead of the reference; as an element of a list iterated by \c foreach, where an assignment to the
-      loop variable and the assignment of the following elements now assign the referenced lvalue, and where
-      <tt>s += v</tt> on an \c int local read the element as \c 0 in AOT-compiled code; and held by a global or
-      \c thread_local variable, which read as the reference itself in the IR execution mode and which an assignment
-      replaced instead of assigning the referenced lvalue
-    - in the IR, JIT and tiered execution modes and in AOT-compiled code, when an exception left a function, the
-      objects held by its local variables could be destroyed in another order than with the AST interpreter (ex: the
-      destructor of an object held by an \c auto local declared before an \c AutoLock ran while the lock was still
-      held, or the locals of a block whose inner block's \c on_error handler rethrew the exception were destroyed
-      first declared first, or a local variable bound by a closure was destroyed after the other local variables of
-      the function, and an exception raised by its destructor was lost, or in the IR execution mode the value a
-      running \c foreach statement iterates was released after the local variables declared before the statement);
-      local variables are now released last declared first and the value a \c foreach statement iterates when the
-      statement ends, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, an untyped or \c auto local variable holding
+      a reference obtained from a container, a call or an argument could give an old value, and an assignment to it
+      could be lost; it now reads and writes the referenced lvalue, as with the AST interpreter (see
+      @ref lvalue_references)
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, a reference stored as a value (ex: an
+      element <tt>h.r</tt> holding <tt>\\x</tt>) is now handled as with the AST interpreter when it is added to an
+      empty variable, is the value of an assignment, is an element of a list iterated by \c foreach, or is held by a
+      global or \c thread_local variable (see @ref lvalue_references)
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, when an exception left a function, objects
+      held by local variables could be destroyed in a different order than with the AST interpreter, and an
+      exception raised by a destructor could be lost; local variables are now released last declared first, and the
+      value a \c foreach statement iterates when the statement ends, as with the AST interpreter
+    - in the JIT and tiered execution modes, the loop variable of a \c foreach statement bound by a closure was
+      released only when the function returned, after its \c on_exit and \c on_error handlers, instead of when the
+      statement ended
+    - in the JIT and tiered execution modes and in AOT-compiled code, when \c break left a \c foreach statement
+      whose loop variable had been reassigned, the element that the loop variable held before was released after the
+      loop variable instead of with the value the statement iterates, before the loop variable, as with the AST
+      interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c remove and \c delete on a global,
+      \c thread_local or static class variable holding a reference now remove the variable's own value instead of
+      the referenced value, as with the AST interpreter (see @ref lvalue_references)
+    - in the JIT and tiered execution modes and in AOT-compiled code, a value read through a reference held by a local
+      variable (ex: <tt>auto v = \\o; v.name();</tt>) is now released at the end of the statement instead of when the
+      function returns (see @ref lvalue_references)
     - in the JIT and tiered execution modes, an exception raised by the destructor of the value that the loop
       variable of \c foreach held when an iterator's next element was assigned could crash the program
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, a type error assigning an element to the
@@ -1568,11 +1574,10 @@
       assigned a reference (ex: <tt>auto r = \\x;</tt>) kept reading as the value of the referenced lvalue when it
       was assigned after the lvalue changed (ex: <tt>int x = 2; auto r = \\x; x = 10;</tt> then \c r read as \c 2);
       it now reads as the referenced lvalue, as with the AST interpreter
-    - in AOT-compiled code, a class whose public member declaration declares no public member (an empty
-      <tt>public {}</tt> block, or one with only constants or static class variables), and its subclasses, accepted
-      undeclared members; they are now refused with \c INVALID-MEMBER, as in the other execution modes (the AOT
-      binary format version is now 22; modules compiled with an earlier version keep the earlier behavior until they
-      are recompiled)
+    - in AOT-compiled code, a class with a public member declaration but no public members, and its subclasses,
+      accepted undeclared members; they are now refused with \c INVALID-MEMBER, as in the other execution modes;
+      modules compiled before this release keep the old behavior until they are recompiled (see
+      @ref public_members)
     - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter,
       <tt>i += v</tt> on an \c int or \c softint local \c i changed the value of a local \c v to an integer (ex: a
       \c string local holding \c "3" then held \c 3, and an \c int local with no value held \c 0), and so did a
@@ -1585,14 +1590,10 @@
       could be a value that the variable's type does not store (ex: <tt>any v; (v += <StatInfo>{}).fullType()</tt>
       gave \c "hash<StatInfo>" while \c v holds a plain \c hash); the result is now the value the variable holds, as
       with the AST interpreter
-    - in the IR execution mode, and where the JIT and tiered execution modes ran a function with the IR interpreter, a
-      \c thread_local variable read after an assignment in the same function could give a value that the variable
-      does not hold: the value assigned instead of the value the variable stores (ex:
-      <tt>thread_local softint t; t = "5";</tt> then <tt>t.type()</tt> gave \c "string"), also as the result of
-      the assignment, and the value assigned before a change of the variable in place (ex:
-      <tt>t = {}; t.id = id; return t;</tt> returned an empty hash, and so did <tt>t[0] += 1</tt> or \c push on a
-      list); a rejected assignment seemed to have changed the variable; the variable's value is now given, as with the
-      AST interpreter
+    - in the IR execution mode, and where the JIT and tiered modes use the IR interpreter, a \c thread_local variable
+      read after an assignment or an in-place change in the same function could give a value it does not hold, such
+      as the unconverted value assigned or its value before the change; the variable's value is now given, as with
+      the AST interpreter (see @ref thread_local_variables)
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, \c ++ and \c -- on a value of a hash typed
       with float or number values (ex: <tt>hash<string, float> h = {"v": 2.5}; ++h.v</tt>) gave an integer and
       stored a truncated value; they now give the same results as the AST interpreter (\c 3.5 in the example)
@@ -1810,6 +1811,17 @@
       raises \c PARSE-URL-ERROR instead
     - fixed @ref Qore::HTTPClient "HTTPClient" delivering a response body that it streams to an output stream or a
       callback still compressed; see @ref httpclient_response_body
+    - fixed @ref Qore::HTTPClient "HTTPClient" and @ref httpclientiointro "HttpClientIo" raising a send error
+      instead of returning an HTTP/1.1 response sent before the request was read, such as a \c 413, when the server
+      then closes the connection, also over HTTPS and for streamed request bodies; see @ref httpclient_early_response
+      (<a href="https://github.com/qoretechnologies/qore/issues/5630">issue 5630</a>)
+    - @ref Qore::HTTPClient "HTTPClient" repeats an idempotent request on a new connection when the server closed a
+      reused keep-alive connection before it answered, also when the request write failed, and for any \c 408 on a
+      reused connection, and raises \c HTTP1-CONNECTION-CLOSED for a request that is not idempotent; a \c 408 on a
+      reused connection is not returned as the answer to the request
+    - a TLS @ref Qore::Socket "Socket" stays open when a write fails because the peer closed the connection, so the
+      data the peer sent before can still be read, and \c SOCKET-SSL-ERROR for a network failure has the error number
+      as its argument; such a connection is closed without a TLS \c close_notify alert
     - fixed \c qget: \c ftp:// and \c ftps:// downloads, saving an empty body, the exit status and error output of a
       failed retrieval, and a \c Content-Disposition file name that could write outside the current directory
     - fixed a crash when a file included with @ref include "%include" ends inside a literal or a block comment

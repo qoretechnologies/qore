@@ -17,7 +17,10 @@ if [ -n "$DOCKER_ORACLE" ]; then
     echo export ORACLE_SID=qoresid >> /tmp/env.sh
     echo export ORACLE_PDB=QOREPDB >> /tmp/env.sh
     echo export ORACLE_PWD=qore >> /tmp/env.sh
-    echo export QORE_DB_CONNSTR_ORACLE_SYS=oracle:pdbadmin/qore@oracle >> /tmp/env.sh
+    # a user that may create and drop users, with the privileges that OracleTestIsolation.qm grants the user of each
+    # test run (examples/test/qlib/SqlUtil): SYSTEM (ORACLE_PWD is the password of SYS, SYSTEM and PDBADMIN; PDBADMIN
+    # has only the PDB_DBA role, which need not have them)
+    echo export QORE_DB_CONNSTR_ORACLE_SYS=oracle:system/qore@oracle >> /tmp/env.sh
     echo export QORE_DB_CONNSTR_ORACLE=oracle:qore/qore@oracle >> /tmp/env.sh
 
     . /tmp/env.sh
@@ -45,35 +48,7 @@ if [ -n "$DOCKER_ORACLE" ]; then
         waited=$((waited+1))
     done
 else
-    echo "rippy =
-(DESCRIPTION =
-  (ADDRESS_LIST =
-    (ADDRESS = (PROTOCOL = TCP)(HOST = rippy)(PORT = 1521))
-  )
-  (CONNECT_DATA =
-    (SERVICE_NAME = rippy)
-  )
-)" >> /usr/lib/oracle/tnsnames.ora
-
-    . /tmp/env.sh
-
-    # setup new env vars
-    export ORACLE_USER=qore_test_`qore -lUtil -ne 'printf("%s", get_random_string());'`
-    echo unset ORACLE_PDB >> /tmp/env.sh
-    echo export ORACLE_SID=rippy >> /tmp/env.sh
-    echo export ORACLE_PWD=qore >> /tmp/env.sh
-    echo export ORACLE_USER=${ORACLE_USER} >> /tmp/env.sh
-    echo export QORE_DB_CONNSTR_ORACLE=oracle:${ORACLE_USER}/qore@rippy%rippy:1521 >> /tmp/env.sh
-
-    # create user for test; if Oracle is unavailable, skip Oracle tests
-    if qore -ne "Datasource ds(\"oracle:system/qore@rippy%rippy:1521\"); ds.exec(\"create user ${ORACLE_USER} identified by qore\"); ds.exec(\"grant create session, create procedure, create sequence, create table, create trigger, create type, create view, create synonym, unlimited tablespace to ${ORACLE_USER}\"); ds.commit();" 2>/dev/null; then
-        echo "created oracle user ${ORACLE_USER}"
-    else
-        echo "WARNING: could not connect to Oracle on rippy — Oracle tests will be skipped"
-        unset QORE_DB_CONNSTR_ORACLE
-        unset ORACLE_USER
-        # remove Oracle env vars from env.sh
-        sed -i '/ORACLE_USER/d;/QORE_DB_CONNSTR_ORACLE/d;/ORACLE_SID/d;/ORACLE_PWD/d' /tmp/env.sh
-    fi
+    # no Oracle container: the Oracle tests are skipped
+    echo "no Oracle container (DOCKER_ORACLE is not set); Oracle tests will be skipped"
 fi
 set -e

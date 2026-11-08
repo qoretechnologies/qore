@@ -262,7 +262,7 @@ public class GoogleDriveDataProviderBase inherits DataProvider::AbstractDataProv
                 }
                 throw "GOOGLE-DRIVE-ERROR", sprintf("unsupported HTTP method %y", method);
             } catch (hash<ExceptionInfo> ex) {
-                if (RetrySet{ex.err} && retries < MaxIoRetries) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet) && retries < MaxIoRetries) {
                     ++retries;
                     debug("Google Drive I/O error %s; retrying (%d/%d)", ex.err, retries, MaxIoRetries);
                     continue;
@@ -776,7 +776,7 @@ public class GoogleDrivePollOperation inherits Qore::AbstractPollOperation<auto>
             try {
                 rv = op.continuePoll();
             } catch (hash<ExceptionInfo> ex) {
-                if (GoogleDriveDataProviderBase::RetrySet{ex.err}
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, GoogleDriveDataProviderBase::RetrySet)
                         && retries < GoogleDriveDataProviderBase::MaxIoRetries) {
                     ++retries;
                     # a poll operation cannot be rewound, so the retry is a new request

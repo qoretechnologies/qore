@@ -527,8 +527,12 @@ public:
     unsigned cancel_defer_count = 0;
 
     // the sandbox context of the thread that started the operation that this thread is continuing; when set, it
-    // replaces the sandbox manager resolution below (see QoreSandboxContextHelper)
+    // governs the code that the operation runs, together with the sandboxes of the Programs entered after it was
+    // applied (see QoreSandboxContextHelper and find_thread_sandbox_stack_ref_intern())
     const QoreSandboxContext* sandbox_context = nullptr;
+    // the program context that was current when @ref sandbox_context was applied: the Programs entered after it
+    // are on the program-context stack above this one
+    const ProgramThreadCountContextHelper* sandbox_context_pgm_ctx = nullptr;
 
     // the sandbox inherited from the code that started this thread (background, q_start_thread()), or applied for a
     // task with QoreSandboxCaptureHelper; it governs the thread as the outermost caller of everything the thread
@@ -3705,13 +3709,60 @@ static QoreSandboxManager* find_thread_sandbox_stack_ref_intern(qore_program_id_
     // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
     if (const QoreSandboxContext* ctx = (policy && td->trusted_policy_depth) ? nullptr : td->sandbox_context) {
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
-        if (sm) {
-            sm->ref();
-            if (pgm_id && !policy) {
-                *pgm_id = ctx->pgm_id;
+        if (pgm_id && !policy && sm) {
+            *pgm_id = ctx->pgm_id;
+        }
+        // the Programs entered after the context was applied govern as well, the stricter wins: a context never
+        // lowers the sandbox of code that runs inside its scope.  A context captured inside a policy barrier has no
+        // policy manager; without this, a sandboxed Program called in the operation (Program::callFunction(), not
+        // a closure with provenance) would be unrestricted.  A policy barrier pushed inside the scope stops the walk
+        // as below.
+        // the references of the inner Programs' managers, released on every exit
+        struct ManagerRefs {
+            std::vector<QoreSandboxManager*> v;
+            ~ManagerRefs() {
+                for (auto* m : v) {
+                    m->deref(nullptr);
+                }
+            }
+        } inner_refs;
+        std::vector<QoreSandboxManager*>& inner = inner_refs.v;
+        const ProgramThreadCountContextHelper* barrier_ctx = (policy && td->sandbox_policy_barrier)
+            ? td->sandbox_policy_barrier_ctx.back()
+            : nullptr;
+        // without a manager of the context, the Program whose sandbox is reported is the innermost one that
+        // contributes a manager, so a manager is never reported with Program ID 0
+        auto note_pgm = [&](QoreProgram* p) {
+            if (pgm_id && !policy && !*pgm_id) {
+                *pgm_id = p->getProgramId();
+            }
+        };
+        if (td->current_pgm) {
+            if (QoreSandboxManager* m = qore_program_private::get(*td->current_pgm)->getSandboxManagerRef()) {
+                inner.push_back(m);
+                note_pgm(td->current_pgm);
             }
         }
-        return sm;
+        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
+                ch && ch != td->sandbox_context_pgm_ctx && ch != barrier_ctx; ch = ch->getOldContext()) {
+            QoreProgram* p = ch->getOldProgram();
+            if (p) {
+                if (QoreSandboxManager* m = qore_program_private::get(*p)->getSandboxManagerRef()) {
+                    inner.push_back(m);
+                    note_pgm(p);
+                }
+            }
+        }
+        if (inner.empty()) {
+            if (sm) {
+                sm->ref();
+            }
+            return sm;
+        }
+        // the context's manager is borrowed: it is combined, not released with the inner Programs' references
+        std::vector<QoreSandboxManager*> all(inner);
+        all.push_back(sm);
+        return QoreSandboxComposition::combine(all);
     }
     // issue #4285: with a policy barrier active, resolution does not walk out to the callers that
     // established it; see ThreadData::sandbox_policy_barrier and ThreadData::sandbox_policy_barrier_ctx
@@ -3816,6 +3867,12 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_i
 QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
+
+#ifdef DEBUG
+QoreSandboxManager* qore_dbg_find_thread_sandbox_manager_ref(qore_program_id_t* pgm_id) {
+    return find_thread_sandbox_manager_ref_intern(pgm_id);
+}
+#endif
 
 QoreModuleLifecycleBarrierHelper::QoreModuleLifecycleBarrierHelper() {
     ThreadData* td = thread_data.get();
@@ -4058,7 +4115,9 @@ QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx
     ThreadData* td = thread_data.get();
     if (td) {
         old_ctx = td->sandbox_context;
+        old_pgm_ctx = td->sandbox_context_pgm_ctx;
         td->sandbox_context = &ctx;
+        td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
         active = true;
         // the operation continues the call that started it, under the same budgets
         td->sandbox_budgets.attach(td->tid, ctx.budgets, this);
@@ -4070,6 +4129,7 @@ QoreSandboxContextHelper::~QoreSandboxContextHelper() {
         ThreadData* td = thread_data.get();
         td->sandbox_budgets.leave(td->tid, this);
         td->sandbox_context = old_ctx;
+        td->sandbox_context_pgm_ctx = old_pgm_ctx;
     }
 }
 

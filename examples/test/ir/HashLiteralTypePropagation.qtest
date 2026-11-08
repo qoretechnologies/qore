@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - the type propagation cases run in the test's own process
 
 %modern
 %no-child-restrictions

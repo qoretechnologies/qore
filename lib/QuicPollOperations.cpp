@@ -84,6 +84,28 @@ static constexpr int QUIC_CLIENT_RECV_BUDGET = 32;
 //! covers a couple of PTO retransmits at the typical 333 ms initial RTT.
 static constexpr int64_t QUIC_ECONNREFUSED_GRACE_NS = 1500000000LL;
 
+//! Returns the grace period (nanoseconds) after the first ICMP "port unreachable" of a QUIC client handshake
+/** QUIC_ECONNREFUSED_GRACE_NS, except in a DEBUG build, where the test hook QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS
+    (milliseconds, 0 or more) replaces it, so a test of a refused connection does not wait for the grace period of
+    each attempt: with 0 the handshake fails at its next poll, which the operation asks for at once (see
+    clampPollTimeoutToDeadline()).  Read for every refusal because tests scope the variable to one case in a shared
+    test process; a value that is not a number of milliseconds is ignored.
+*/
+static int64_t quic_econnrefused_grace_ns() {
+#ifdef DEBUG
+    QoreEnvironmentValue ms_holder("QORE_QUIC_TEST_ECONNREFUSED_GRACE_MS");
+    if (const char* ms = ms_holder.c_str()) {
+        char* end;
+        errno = 0;
+        long long v = strtoll(ms, &end, 10);
+        if (*ms && !*end && !errno && v >= 0 && v <= 3600000LL) {
+            return static_cast<int64_t>(v) * 1000000LL;
+        }
+    }
+#endif
+    return QUIC_ECONNREFUSED_GRACE_NS;
+}
+
 static int quic_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
     if (!is->supportsNonBlockingIo()) {
         return -1;
@@ -239,6 +261,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             msgs[i].msg_hdr.msg_controllen = QUIC_CMSG_BUF_SIZE;
         }
 
+#ifdef DEBUG
+        qore_quic_test_note_receive_fd(fd);
+#endif
         int nrecv = recvmmsg(fd, msgs, QUIC_MAX_RECV_BATCH, MSG_DONTWAIT, nullptr);
         if (nrecv < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -253,6 +278,11 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         if (nrecv == 0) {
             return 0;
         }
+#ifdef DEBUG
+        for (int i = 0; i < nrecv; ++i) {
+            qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&addrs[i]), 1);
+        }
+#endif
 
         // Batch packets by target session for readPacketBatch();
         // common case: all packets go to the same session (single client).
@@ -360,6 +390,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     while (true) {
         socklen_t src_addrlen = sizeof(src_addr);
         size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+        qore_quic_test_note_receive_fd(fd);
+#endif
         ssize_t nread = recvQuicPacket(fd, recv_buf, recv_buf_size, MSG_DONTWAIT,
                                         reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
                                         cmsg_buf, &cmsg_len);
@@ -376,6 +409,9 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         if (nread == 0) {
             return 0;
         }
+#ifdef DEBUG
+        qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
+#endif
 
         // Route to the correct session via dispatcher; drop packets
         // with unrecognized DCIDs rather than misrouting them.  Pin the session
@@ -854,6 +890,9 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
 
     int fd = sock->priv->socket->getSocket();
     size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+    qore_quic_test_note_receive_fd(fd);
+#endif
     ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
                                     reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
                                     cmsg_buf, &cmsg_len);
@@ -881,8 +920,8 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
             if (econnrefused_deadline_ns_ == 0
                 && (qcs_state == QCS::HANDSHAKE_SEND
                     || qcs_state == QCS::HANDSHAKE_RECV)) {
-                econnrefused_deadline_ns_ =
-                    QuicSession::timestamp() + QUIC_ECONNREFUSED_GRACE_NS;
+                econnrefused_grace_ns_ = quic_econnrefused_grace_ns();
+                econnrefused_deadline_ns_ = QuicSession::timestamp() + econnrefused_grace_ns_;
             }
             return SOCK_POLLIN;  // need to wait for read
         }
@@ -897,6 +936,9 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     // Successful recv: peer is responsive — disarm the unreachable deadline.
     econnrefused_deadline_ns_ = 0;
 
+#ifdef DEBUG
+    qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
+#endif
     // Use the cached getsockname() address directly — the client socket is
     // connect()ed, so the local address is always local_addr_.  Do NOT call
     // extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on connected UDP sockets
@@ -1062,7 +1104,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
             "unreachable) and did not recover within %lld ms; peer UDP port "
             "appears closed",
             host.c_str(), static_cast<unsigned>(port_),
-            (long long)(QUIC_ECONNREFUSED_GRACE_NS / 1000000LL));
+            (long long)(econnrefused_grace_ns_ / 1000000LL));
         return nullptr;
     }
 
@@ -1873,6 +1915,9 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
 
     int fd = sock->priv->socket->getSocket();
     size_t cmsg_len = sizeof(cmsg_buf);
+#ifdef DEBUG
+    qore_quic_test_note_receive_fd(fd);
+#endif
     ssize_t nread = recvQuicPacket(fd, recv_buf_, sizeof(recv_buf_), 0,
                                     reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
                                     cmsg_buf, &cmsg_len);
@@ -1890,6 +1935,9 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     if (nread == 0) {
         return 0;
     }
+#ifdef DEBUG
+    qore_quic_test_note_received(fd, reinterpret_cast<const struct sockaddr*>(&src_addr), 1);
+#endif
 
     // Start from cached local address (has correct family + port), then
     // overwrite the IP from pktinfo for actual per-packet destination

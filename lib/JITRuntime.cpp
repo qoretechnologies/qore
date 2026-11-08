@@ -1108,8 +1108,9 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     for (int32_t i = count - 1; i >= 0; --i) {
         // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
         // QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable that the frame instantiated is tagged in
-        // bits 0 and 1 and popped from the closure stack; the cache of an object local is tagged in bit 0, and its
-        // object is released with the real reference it has from the cache (see qore_rt_object_slot_release())
+        // bits 0 and 1 and popped from the closure stack; the alloca of a foreach statement's iterator is tagged in bit
+        // 2, and the cache of an object local in bit 0, whose object is released with the real reference it has from
+        // the cache (see qore_rt_object_slot_release())
         static_assert(alignof(LocalVar) >= 4, "the exit release array tags LocalVar addresses in bits 0 and 1");
         uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
         if ((tagged & 3) == 3) {
@@ -1118,6 +1119,14 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
         }
         if (tagged & 2) {
             qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
+            continue;
+        }
+        // the alloca of the iterator of a foreach statement is tagged in bit 2
+        if (tagged & 4) {
+            void** iter_slot = reinterpret_cast<void**>(tagged & ~static_cast<uintptr_t>(4));
+            void* iter = *iter_slot;
+            *iter_slot = nullptr;
+            qore_rt_iterator_cleanup(iter);
             continue;
         }
         uint64_t* slot = reinterpret_cast<uint64_t*>(tagged & ~static_cast<uintptr_t>(1));
@@ -14775,7 +14784,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
 
         {
             LValueHelper lvh(xsink);
-            if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
+            // the remove or delete of the variable itself (see LValueHelper::navigatePath())
+            if (lvh.navigatePath(path_copy.data(), path_copy.size(), true, path_copy.size() == 1)) {
                 return toBits(QoreValue());
             }
             if (inst->unary_op == LVUnaryOp::Remove) {

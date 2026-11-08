@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires ./TestRunIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./PgsqlTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%requires Sqlite3SqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class DriverOptionKeysTest
+
+#! A datasource of the sqlite3 driver that is a generic driver, and counts the calls of getDriverRealName()
+class CountingDatasource inherits Datasource {
+    public {
+        int real_calls = 0;
+    }
+
+    private {
+        string real_name;
+    }
+
+    constructor(string real_name = "SQLite") : Datasource("sqlite3:@:memory:") {
+        self.real_name = real_name;
+    }
+
+    string getDriverName() {
+        return "odbc";
+    }
+
+    string getDriverRealName() {
+        ++real_calls;
+        return real_name;
+    }
+}
+
+#! A datasource that does not connect, with the given driver name and real driver name
+class NameDatasource inherits Datasource {
+    private {
+        string name;
+        string real_name;
+    }
+
+    constructor(string name, string real_name) : Datasource("jdbc:u/p@x{url=x://h}") {
+        self.name = name;
+        self.real_name = real_name;
+    }
+
+    string getDriverName() {
+        return name;
+    }
+
+    string getDriverRealName() {
+        return real_name;
+    }
+}
+
+#! The driver-specific options of a description apply under the key of the database's native driver, and then under
+#! the key of a generic driver (jdbc, odbc) connected to it; they applied only under the driver's own name, so the
+#! options of an Oracle, PostgreSQL or SQL Server schema were ignored on a jdbc connection
+class DriverOptionKeysTest inherits QUnit::Test {
+    constructor() : Test("DriverOptionKeysTest", "1.0", \ARGV) {
+        addTestCase("the keys of each driver", \driverKeys());
+        addTestCase("options are applied in order", \order());
+        addTestCase("the value of the most specific key", \driverValue());
+        addTestCase("a table on a jdbc connection", \jdbcTables());
+        addTestCase("the keys are read once for each object", \keysCached());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        OracleRunSchema::teardown();
+        PgsqlRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+    }
+
+    private driverKeys() {
+        hash<string, list<auto>> cases = {
+            "oracle": ("oracle", "oracle", ("oracle",)),
+            "pgsql": ("pgsql", "pgsql", ("pgsql",)),
+            # a native driver applies only its own options, whatever the database
+            "sybase to SQL Server": ("sybase", "Microsoft SQL Server", ("sybase",)),
+            "freetds": ("freetds", "freetds", ("freetds",)),
+            "jdbc oracle": ("jdbc", "Oracle", ("oracle", "jdbc")),
+            "jdbc pgsql": ("jdbc", "PostgreSQL", ("pgsql", "jdbc")),
+            "jdbc mssql": ("jdbc", "Microsoft SQL Server", ("freetds", "jdbc")),
+            "jdbc sybase": ("jdbc", "Adaptive Server Enterprise", ("sybase", "jdbc")),
+            "jdbc mysql": ("jdbc", "MySQL", ("mysql", "jdbc")),
+            "jdbc mariadb": ("jdbc", "MariaDB", ("mysql", "jdbc")),
+            "jdbc firebird": ("jdbc", "Firebird 5.0", ("firebird", "jdbc")),
+            "odbc oracle": ("odbc", "Oracle", ("oracle", "odbc")),
+            # a database without a native driver key applies the generic driver's options only
+            "jdbc other": ("jdbc", "H2", ("jdbc",)),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            NameDatasource ds(i.value[0], i.value[1]);
+            assertEq(i.value[2], AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds), i.key);
+        }
+    }
+
+    #! the real name of the driver was read for each option validation, which on a jdbc connection is two calls in
+    #! Java, and acquires a connection for a pool or opens a closed datasource
+    private keysCached() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        CountingDatasource ds();
+        on_exit ds.rollback();
+        ds.exec("create table t (id integer)");
+        Sqlite3Table t(ds, "t");
+        for (int i = 0; i < 5; ++i) {
+            assertEq((), t.selectRows({"where": {"id": 1}}));
+        }
+        assertEq(("sqlite3", "odbc"), t.getDriverOptionKeys());
+        assertEq(1, ds.real_calls);
+
+        # another connection: its keys are read
+        CountingDatasource ds2("Oracle");
+        on_exit ds2.rollback();
+        ds2.exec("create table t (id integer)");
+        t.setDatasource(ds2);
+        assertEq(("oracle", "odbc"), t.getDriverOptionKeys());
+        assertEq(1, ds2.real_calls);
+    }
+
+    private order() {
+        hash<auto> h = {
+            "a": 1,
+            "b": 1,
+            "driver": {
+                "oracle": {"a": 2, "b": 2, "c": 2},
+                "jdbc": {"b": 3},
+                "pgsql": {"a": 4},
+            },
+        };
+        hash<auto> h1 = h;
+        AbstractDatabase::checkDriverOptions(\h1, ("oracle", "jdbc"));
+        assertEq({"a": 2, "b": 3, "c": 2}, h1);
+        hash<auto> h2 = h;
+        # a single key as before
+        AbstractDatabase::checkDriverOptions(\h2, "jdbc");
+        assertEq({"a": 1, "b": 3}, h2);
+        hash<auto> h3 = h;
+        AbstractDatabase::checkDriverOptions(\h3, "mysql");
+        assertEq({"a": 1, "b": 1}, h3);
+        # a narrowed hash takes options of other types
+        hash<string, hash<auto>> cols = {"c1": {"size": 1}, "driver": {"pgsql": {"native_type": "vector"}}};
+        hash<auto> h4 = cols;
+        AbstractDatabase::checkDriverOptions(\h4, ("pgsql", "jdbc"));
+        assertEq({"c1": {"size": 1}, "native_type": "vector"}, h4);
+    }
+
+    private driverValue() {
+        hash<auto> h = {"oracle": "o", "jdbc": "j", "pgsql": "p", "empty": ""};
+        assertEq("j", AbstractSqlUtilBase::getDriverValue(h, ("oracle", "jdbc")));
+        assertEq("o", AbstractSqlUtilBase::getDriverValue(h, ("oracle", "odbc")));
+        assertEq("p", AbstractSqlUtilBase::getDriverValue(h, ("pgsql",)));
+        # an existing value is returned, even when it is empty
+        assertEq("", AbstractSqlUtilBase::getDriverValue(h, ("oracle", "empty")));
+        assertNothing(AbstractSqlUtilBase::getDriverValue(h, ("mysql",)));
+        assertNothing(AbstractSqlUtilBase::getDriverValue(NOTHING, ("oracle", "jdbc")));
+    }
+
+    #! a table created on a jdbc connection takes the column default under the native key, and a size under "jdbc"
+    #! over the size of the description
+    private jdbcTables() {
+        int found = 0;
+        foreach hash<auto> i in ({
+                "QORE_DB_CONNSTR_JDBC_ORACLE": "oracle",
+                "QORE_DB_CONNSTR_JDBC_PGSQL": "pgsql",
+                "QORE_DB_CONNSTR_JDBC_MSSQL": "freetds",
+            }.pairIterator()) {
+            if (!ENV{i.key}.val()) {
+                continue;
+            }
+            ++found;
+            # the run's own schema or database, as the table is created
+            string connstr = ENV{i.key};
+            switch (i.value) {
+                case "oracle":
+                    connstr = OracleRunSchema::getConnectionString(connstr, "DriverOptionKeys");
+                    break;
+                case "pgsql":
+                    PgsqlRunSchema::setup(connstr, "DriverOptionKeys");
+                    connstr = PgsqlRunSchema::getConnectionString(connstr);
+                    break;
+                case "freetds":
+                    connstr = MssqlRunDatabase::getConnectionString(connstr, "DriverOptionKeys");
+                    break;
+            }
+            Datasource ds(connstr);
+            ds.open();
+            assertEq((i.value, "jdbc"), AbstractSqlUtilBase::getDatasourceDriverOptionKeys(ds), i.key);
+            jdbcTable(ds, i.value);
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
+    }
+
+    private jdbcTable(Datasource ds, string key) {
+        string name = TestRun::makeName("drvoptkeys");
+        hash<auto> drv_opts;
+        drv_opts.jdbc = {"size": 30};
+        drv_opts{key} = {"default_value": "native"};
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": SqlUtil::NUMERIC, "size": 14, "notnull": True},
+                "v": {"qore_type": SqlUtil::VARCHAR, "size": 10, "notnull": True, "driver": drv_opts},
+            },
+            "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+        };
+        Table t(ds, name);
+        t.setupTable(desc);
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table " + name);
+            ds.commit();
+        }
+        t.create();
+        ds.commit();
+
+        Table table(ds, name);
+        hash<auto> dh = table.getDescriptionHash();
+        assertEq(30, dh.columns.v.size, key + ": size");
+        # the default under the native key was applied
+        table.insert({"id": 1});
+        assertEq("native", table.selectRow({"where": {"id": 1}}).v, key + ": default");
+        ds.commit();
+    }
+}

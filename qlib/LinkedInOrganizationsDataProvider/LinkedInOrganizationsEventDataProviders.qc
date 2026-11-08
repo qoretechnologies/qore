@@ -279,16 +279,19 @@ public class LinkedInNewPostDataProvider inherits LinkedInOrganizationsDataProvi
     */
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            hash<auto> page = doCursorFinder(FeedContentsPath, {
-                "q": "postsByAuthor",
-                "author": LinkedInOrgActionProviderBase::organizationUrn(organization),
-            }, 1, NOTHING);
-            *string urn = page.elements[0].id;
-            if (urn.val()) {
-                hash<auto> posts = batchGet(PostsPath, (urn,), {"viewContext": "READER"});
-                if (*hash<auto> post = posts{urn}) {
-                    return LinkedInOrganizationsUtil::normalizePost(post);
+            # the example data is requested once, without retries
+            *hash<auto> post = DataProviderRetryUtil::runWithoutRetries(*hash<auto> sub () {
+                hash<auto> page = doCursorFinder(FeedContentsPath, {
+                    "q": "postsByAuthor",
+                    "author": LinkedInOrgActionProviderBase::organizationUrn(organization),
+                }, 1, NOTHING);
+                *string urn = page.elements[0].id;
+                if (urn.val()) {
+                    return batchGet(PostsPath, (urn,), {"viewContext": "READER"}){urn};
                 }
+            });
+            if (post) {
+                return LinkedInOrganizationsUtil::normalizePost(post);
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "getExampleEventData: error: %s: %s", ex.err, ex.desc);

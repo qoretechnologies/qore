@@ -34,6 +34,8 @@
 #define QORE_LIB_DEBUG_H
 
 #include <atomic>
+#include <string>
+#include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 
@@ -115,12 +117,55 @@ class AbstractHttpPollConnectionPriv;
 typedef bool (*qore_dbg_http1_defer_close_hook_t)(AbstractHttpPollConnectionPriv* conn, bool failed);
 DLLLOCAL extern std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook;
 
+//! The points at which the HTTP/1 client poll operation calls @ref qore_dbg_http1_send_hook
+enum class QoreDbgHttp1SendEvent : unsigned char {
+    //! the operation decided to read the response after a failed send of the request (I/O thread, no lock held)
+    RecoveryStart,
+    //! the failed send was given up and the response is about to be read (I/O thread, no lock held)
+    RecoveryRead,
+    //! the operation published its first error (any thread, no lock held); \a err is the error code
+    ErrorPublished,
+    //! the request body send side is about to be driven after the receive side, with data to send (I/O thread, no
+    //! lock held)
+    BeforeSendSide,
+    //! a request is about to be sent on a connection: the idle check for data from the server follows (I/O thread)
+    BeforeIdleCheck,
+    //! a request on a reused connection was sent: the check for the server's close follows (I/O thread)
+    AfterRequestSent,
+};
+
+//! called by the HTTP/1 client poll operation at the points of QoreDbgHttp1SendEvent; \a fd is the descriptor of the
+//! connection, \a err the error code for QoreDbgHttp1SendEvent::ErrorPublished; set by dbg_http1_send_failure_arm()
+typedef void (*qore_dbg_http1_send_hook_t)(QoreDbgHttp1SendEvent event, int fd, const char* err);
+DLLLOCAL extern std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook;
+
+//! one-shot: returns true if the HTTP/1 client response header read operation about to be created at \a site must fail
+//! (Http1ClientPollOperationPriv::dbgFailHeaderReadOp() then closes the socket); armed by
+//! dbg_fail_http1_header_read_op(), which names the site or none for any
+DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
+
+//! the number of TLS close_notify alerts sent by SSLSocketHelper::sendCloseNotify() (SSL_shutdown() calls); read by
+//! dbg_ssl_close_notify_count()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_ssl_close_notify_count;
+
+//! called by SocketSendPollOperation::continuePoll() with the socket's lock held, before it writes; \a fd is the
+//! socket's descriptor; set by dbg_http1_send_failure_arm()
+typedef void (*qore_dbg_socket_send_hook_t)(int fd);
+DLLLOCAL extern std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook;
+
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and
 //! before it releases the reference that it holds while running the hook; returns true if the hook released a
 //! reference of its own, in which case qore_dbg_conn_close_released() is called once setClosed() has released its
 //! reference; set by dbg_release_http1_connection_on_close()
 typedef bool (*qore_dbg_conn_close_release_hook_t)(AbstractHttpPollConnectionPriv* conn);
 DLLLOCAL extern std::atomic<qore_dbg_conn_close_release_hook_t> qore_dbg_conn_close_release_hook;
+
+//! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection: decrements the Counter
+//! armed by dbg_http_submit_after_close()
+DLLLOCAL void qore_dbg_http_note_closed();
+//! called by HTTPClient::startPollSendRecv() right before it submits its request on a ready connection: waits until
+//! the Counter armed by dbg_http_submit_after_close() reaches zero (a connection was marked closed), then disarms it
+DLLLOCAL void qore_dbg_http_wait_submit_after_close();
 
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
 //! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook
@@ -141,6 +186,26 @@ DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
     @return the previous setting
 */
 DLLLOCAL std::string qore_dbg_cares_set_servers(const std::string& servers);
+
+//! The query options of the c-ares channels that ask the DNS servers of qore_dbg_cares_set_servers()
+struct QoreDbgCaresQueryOptions {
+    //! the timeout of the first try of a query
+    int timeout_ms = 1000;
+    //! the tries of a query
+    int tries = 3;
+    //! set if the channels look up names with the search domains in @ref domains, not those of the host
+    bool domains_set = false;
+    //! the search domains, if @ref domains_set
+    std::vector<std::string> domains;
+    //! the \c ndots option, or -1 for that of the host
+    int ndots = -1;
+    //! false to make the channels keep no answer in their query cache
+    bool query_cache = true;
+};
+
+//! Sets the query options of the c-ares channels made from now on that ask the servers of
+//! qore_dbg_cares_set_servers(); returns the previous options
+DLLLOCAL QoreDbgCaresQueryOptions qore_dbg_cares_set_query_options(const QoreDbgCaresQueryOptions& opts);
 
 //! Sets the hosts file that the name lookups started from now on read, as with the c-ares ARES_OPT_HOSTS_FILE option
 /** @param path the hosts file; empty for the system's hosts file

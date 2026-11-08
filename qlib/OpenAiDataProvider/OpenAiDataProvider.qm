@@ -571,6 +571,9 @@ module OpenAiDataProvider {
 /** @page openaidataprovider_relnotes Release Notes
 
     @section openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - a failed request is not retried while
+      @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed", for example while
+      example data is requested (see @ref dataprovider_retries)
     - added the \c transcribe-audio data provider and the <b>Transcribe Audio</b> action implementing the OpenAI
       audio transcription (speech-to-text) API; the audio file is uploaded as \c multipart/form-data and the
       \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, and \c whisper-1 models are supported with the \c json,

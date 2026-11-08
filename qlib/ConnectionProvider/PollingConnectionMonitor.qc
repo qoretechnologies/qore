@@ -557,7 +557,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
         AbstractPollOperation spop;
         try {
-            spop = conn.startPollConnect(getLogger());
+            spop = startPollConnect(name, conn);
             log(LoggerLevel::DEBUG, "%y: starting connect ping to %y; poll state: %y", name,
                 conn.getUrl(), spop.getState());
         } catch (hash<ExceptionInfo> ex) {
@@ -744,6 +744,26 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         if (active && cache{name}) {
             scheduleNextPing(name, ping_repeat);
         }
+    }
+
+    #! Starts the ping of a connection: returns the poll operation that connects to it
+    /** Called for each ping, in the thread that submits it, without the monitor's lock held; the default
+        implementation calls @ref AbstractConnection::startPollConnect() "startPollConnect()" on the connection.
+
+        A subclass can override this method to decide how the connection is opened, for example to open it in the
+        context of the code that owns the connection; the operation is created in that context, and the monitor
+        handles its result as for any other ping.  An exception thrown here is handled as a ping that could not
+        be started (see failedToStartPing()).
+
+        @param name the name of the connection in the monitor
+        @param conn the connection to ping
+
+        @return the poll operation of the ping
+
+        @since ConnectionProvider 3.1
+    */
+    private AbstractPollOperation startPollConnect(string name, AbstractConnection conn) {
+        return conn.startPollConnect(getLogger());
     }
 
     #! Could not start ping

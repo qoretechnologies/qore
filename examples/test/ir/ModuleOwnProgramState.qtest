@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 # Copyright 2026 Qore Technologies, s.r.o.
 
@@ -134,12 +135,50 @@ user mark_resources: \"marked\"
     }
 
     #! returns a directory with the AOT forms of the Mapper and DataProvider modules, if the build has them
+    /** The build's own AOT forms (next to the Qore under test) must load: a loader warning for them fails the test,
+        unless the forms were compiled for another AOT runtime identity.  The forms in the source tree's qlib
+        directory may be another build's, so they are only used if they load.
+    */
     private *string getQlibAotDir() {
-        foreach string dir in (dirname(qore_bin) + "/qlib-qmod", qlib_dir) {
-            if (is_file(dir + "/Mapper.qmod") && is_file(dir + "/DataProvider/DataProvider.qmod")) {
-                return dir;
+        foreach hash<auto> c in ({"dir": dirname(qore_bin) + "/qlib-qmod", "own": True}, {"dir": qlib_dir}) {
+            if (is_file(c.dir + "/Mapper.qmod") && is_file(c.dir + "/DataProvider/DataProvider.qmod")
+                && aotFormsLoad(c.dir, c.own ?? False)) {
+                return c.dir;
             }
         }
+    }
+
+    #! Returns True if the AOT forms of the Mapper and DataProvider modules in @a dir load in the Qore under test
+    /** AOT modules compiled by another libqore (a different AOT runtime identity, such as qmods of a debug build tree
+        found by an installed release qore) fall back to their source with a loader warning; the test of the AOT
+        forms needs them to load as AOT modules.
+
+        @param own True if @a dir has the build's own AOT forms: any other loader warning (e.g. a dependency missing
+        from the module path) fails the test
+    */
+    private bool aotFormsLoad(string dir, bool own) {
+        string probe = tmp.path + "/aot-probe.q";
+        writeFile(probe, "%requires Mapper\n%requires DataProvider\n");
+        hash<ExecModeHarness::ModeRunResult> r = runScriptQuiet(dir + ":" + qlib_dir, probe);
+        if (!r.rc && !r.loader_warnings) {
+            return True;
+        }
+        string why = r.loader_warnings ? r.loader_warnings[0] : r.out;
+        if (own && why !~ /compiled for (another )?AOT runtime identity/) {
+            fail(sprintf("the build's AOT qlib modules in %y do not load in this Qore: %s", dir, why));
+        }
+        printf("the AOT qlib modules in %y do not load in this Qore: %s\n", dir, why);
+        return False;
+    }
+
+    #! runs the script like runScript() in the default mode, without echoing loader warnings
+    private hash<ExecModeHarness::ModeRunResult> runScriptQuiet(string module_path, string script_path) {
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += ":" + ENV.QORE_MODULE_DIR;
+        }
+        return ExecModeHarness::run_command(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b %s", libqore_dir, libqore_dir, libqore_dir, module_path, qore_bin, script_path),
+            True);
     }
 
     private string moduleCode() {
@@ -376,7 +415,7 @@ foreach string f in (\"module_put_user_get\", \"user_put_module_get\", \"user_on
     testAotQlib() {
         *string aot_dir = getQlibAotDir();
         if (!aot_dir) {
-            testSkip("the build has no AOT forms of the Mapper and DataProvider modules");
+            testSkip("the build has no AOT forms of the Mapper and DataProvider modules that load in this Qore");
         }
         checkAllModes(prepare(), aot_dir + ":" + qlib_dir, "aot");
     }

@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+
+%exec-class PgsqlServerVersionTest
+
+#! A datasource that does not connect: it reports the given server version and records the SQL it is given
+class VersionDatasource inherits Datasource {
+    public {
+        list<string> sql = ();
+    }
+
+    private {
+        auto version;
+    }
+
+    constructor(auto version) : Datasource("jdbc:u/p@x{url=postgresql://h:5432/db}") {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return "PostgreSQL";
+    }
+
+    auto selectRow(string sql, ...) {
+        self.sql += sql;
+        if (sql =~ /current_schema/) {
+            return {"schema": "public"};
+        }
+        # no routine
+        if (sql =~ /pg_proc/) {
+            return;
+        }
+        if (sql =~ /select c\.relname from pg_class/) {
+            return {"relname": "s"};
+        }
+        return {"start": 1, "increment": 1, "max": 9223372036854775807, "min": 1, "cycle": False};
+    }
+
+    auto select(string sql, ...) {
+        self.sql += sql;
+        return {};
+    }
+}
+
+#! The server version of a PostgreSQL connection, as the pgsql driver gives it (server_version_num) and as the jdbc
+#! driver gives it (a hash with the major and minor version numbers): the jdbc hash was compared with a number, so
+#! that a sequence was read as before PostgreSQL 10 (column "start_value" does not exist)
+class PgsqlServerVersionTest inherits QUnit::Test {
+    constructor() : Test("PgsqlServerVersionTest", "1.0", \ARGV) {
+        addTestCase("the sequence catalog of each version", \sequences());
+        addTestCase("the routines of each version", \routines());
+        set_return_value(main());
+    }
+
+    #! pg_proc.prokind was added with procedures in PostgreSQL 11: the routines of an earlier version are read without
+    #! it, and are all functions
+    private routines() {
+        hash<string, list<auto>> cases = {
+            "pgsql 10": (100023, False),
+            "pgsql 16": (160004, True),
+            "jdbc 10": ({"name": "PostgreSQL", "version": "10.23", "major_version": 10, "minor_version": 23}, False),
+            "jdbc 11": ({"name": "PostgreSQL", "version": "11.0", "major_version": 11, "minor_version": 0}, True),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            VersionDatasource ds(i.value[0]);
+            PgsqlDatabase db(ds);
+            bool procs = i.value[1];
+            assertEq(procs, db.hasProcedures(), i.key);
+            db.listFunctions();
+            db.getFunction("f");
+            db.getFunction("f(a integer)");
+            assertEq((), db.listProcedures(), i.key);
+            assertNothing(db.getProcedure("p"), i.key);
+            int prokind = (select ds.sql, $1 =~ /prokind/).size();
+            if (procs) {
+                # functions and procedures are told apart, and procedures are looked up and listed
+                assertTrue(prokind >= 5, i.key + ": " + ds.sql.join("; "));
+            } else {
+                assertEq(0, prokind, i.key + ": " + ds.sql.join("; "));
+            }
+            assertEq(procs ? "PgsqlProcedure" : "PgsqlFunction", db.makeProcedure("p(a int)", "language plpgsql as "
+                "$$ begin perform a; end; $$").className(), i.key);
+        }
+    }
+
+    private sequences() {
+        hash<string, list<auto>> cases = {
+            "pgsql 16": (160004, "pg_sequence"),
+            "pgsql 9.6": (90624, "start_value"),
+            "jdbc 16": ({"name": "PostgreSQL", "version": "16.4", "major_version": 16, "minor_version": 4},
+                "pg_sequence"),
+            "jdbc 10": ({"name": "PostgreSQL", "version": "10.0", "major_version": 10, "minor_version": 0},
+                "pg_sequence"),
+            "jdbc 9.6": ({"name": "PostgreSQL", "version": "9.6.24", "major_version": 9, "minor_version": 6},
+                "start_value"),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            VersionDatasource ds(i.value[0]);
+            PgsqlDatabase db(ds);
+            *AbstractSequence seq = db.getSequence("s");
+            assertEq("s", seq.name, i.key);
+            assertTrue((select ds.sql, $1 =~ /from pg_catalog\.pg_sequence/).size() == (i.value[1] == "pg_sequence" ? 1 : 0),
+                i.key + ": " + ds.sql.join("; "));
+            assertTrue((select ds.sql, $1 =~ /start_value/).size() == (i.value[1] == "start_value" ? 1 : 0),
+                i.key + ": " + ds.sql.join("; "));
+        }
+    }
+}

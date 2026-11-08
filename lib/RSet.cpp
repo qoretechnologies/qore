@@ -2272,7 +2272,7 @@ void RSetHelper::countInternalReferences() {
             ? static_cast<RObject*>(n.ptr)->refs()
             : static_cast<AbstractQoreNode*>(n.ptr)->reference_count();
         if (n.internal > refs) {
-            printd(0, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d "
+            printd(5, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d "
                 "references; not making a recursive set\n", n.ptr, static_cast<int>(n.kind), n.internal, refs);
             component_cyclic[n.component] = false;
         }

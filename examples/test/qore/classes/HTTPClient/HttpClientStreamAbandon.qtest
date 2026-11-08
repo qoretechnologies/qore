@@ -67,6 +67,10 @@ class StallingServer {
         }
     }
 
+    #! stops the server and waits for its connections to end
+    /** A connection that a client keeps for reuse ends only when the client closes it, or when its next request is
+        waited for in vain (\c CloseWait), so each test disconnects its client before the server is shut down
+    */
     shutdown() {
         quit = True;
         # wakes the listener up
@@ -212,6 +216,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server, {"max_response_body_size": 4096});
+        on_exit hc.disconnect();
         assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", \hc.sendWithRecvCallback(),
             (sub (hash<auto> h) {}, NOTHING, "GET", "/length"));
         assertReleased(server, hc, "/length");
@@ -221,6 +226,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server);
+        on_exit hc.disconnect();
         code recv = sub (hash<auto> h) {
             if (h.data) {
                 throw "CALLBACK-ERROR", "the receive callback stops the response";
@@ -234,6 +240,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server);
+        on_exit hc.disconnect();
         assertThrows("OUTPUT-STREAM-ERROR", \hc.send(), (new FailingOutputStream(), NOTHING, "GET", "/chunked"));
         assertReleased(server, hc, "/chunked");
     }
@@ -242,6 +249,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server, {"timeout": 500ms});
+        on_exit hc.disconnect();
         int chunks = 0;
         code recv = sub (hash<auto> h) {
             if (h.data) {
@@ -258,6 +266,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server);
+        on_exit hc.disconnect();
         BinaryOutputStream os();
         hc.send(os, NOTHING, "GET", "/redirect");
         assertEq(binary("ok"), os.getData(), "the redirect is followed");
@@ -269,6 +278,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server, {"timeout": 500ms});
+        on_exit hc.disconnect();
         assertThrows("HTTP-CLIENT-TIMEOUT", \hc.sendAndStream(), ("GET", "/silent"));
         hc.setTimeout(30s);
         assertReleased(server, hc, "/silent");
@@ -278,6 +288,7 @@ public class HttpClientStreamAbandonTest inherits QUnit::Test {
         StallingServer server();
         on_exit server.shutdown();
         HTTPClient hc = getClient(server);
+        on_exit hc.disconnect();
         for (int i = 0; i < 3; ++i) {
             string body;
             hc.sendWithRecvCallback(sub (hash<auto> h) {

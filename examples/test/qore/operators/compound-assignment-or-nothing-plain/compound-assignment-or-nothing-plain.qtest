@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 %modern
 %no-child-restrictions
@@ -96,34 +97,9 @@ class CompoundAssignmentOrNothingPlainTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
-        addTestCase("soft lvalues hold their declared type", \testSoftAst());
         addTestCase("or-nothing lvalues give the plain type's results", \testMatrix());
 
         set_return_value(main());
-    }
-
-    #! a soft-typed lvalue holds its declared type after a compound assignment in the AST interpreter
-    testSoftAst() {
-        code id = auto sub (auto v) { return v; };
-        softint i = 10;
-        i *= id(1.5);
-        assertEq(15, i);
-        assertEq("integer", i.type());
-        i /= id(4n);
-        assertEq("integer", i.type());
-        softfloat f = 2.5;
-        f *= id(2n);
-        assertEq(5.0, f);
-        assertEq("float", f.type());
-        softnumber n = 2.5n;
-        n *= id(2.0);
-        assertEq("number", n.type());
-        *softint oi = 10;
-        oi *= id(2.5);
-        assertEq(25, oi);
-        hash<string, softint> h = {"a": 10};
-        h.a *= id(1.5);
-        assertEq("integer", h.a.type());
     }
 
     testMatrix() {

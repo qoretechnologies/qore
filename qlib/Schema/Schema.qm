@@ -581,9 +581,14 @@ module Schema {
             - "CREATE MATERIALIZED VIEW mv_summary AS SELECT status, count(*) cnt FROM users GROUP BY status"
     @endcode
 
-    The \c driver key maps driver names (\c pgsql, \c oracle, \c mysql, \c mssql) to
+    The \c driver key maps driver names (\c pgsql, \c oracle, \c mysql, \c freetds) to
     driver-specific SQL statement lists. If a match is found for the current driver, those
-    statements execute instead of the \c statements list.
+    statements execute instead of the \c statements list.  A connection through a generic driver
+    (ex: \c jdbc or \c odbc) takes the list under the generic driver's name, else the list under the
+    key of the database's native driver (ex: \c oracle on a \c jdbc connection to Oracle), else the
+    \c statements list.  An empty list is no override: the next list in this order is taken (ex: an
+    empty \c jdbc list on a \c jdbc connection to Oracle runs the \c oracle list, or the \c statements
+    list if there is none).
 
     @section schema_upgrade_scripts Script-Based Migrations
 
@@ -933,6 +938,11 @@ module Schema {
     - \c qschema \c export is the canonical command for reverse-engineering a database schema, with schema naming,
       object filtering, YAML or JSON output and physical-partition options; \c schema-reverse is kept as a
       compatibility alias for it
+    - \c auto_triggers of a @ref Schema::DataSchema "DataSchema" table are generated for SQL Server, which raised
+      \c AUTO-TRIGGER-ERROR for the \c freetds driver, and, on a connection through a generic driver such as \c jdbc,
+      for the database it is connected to; a migration's \c sql step and a column's populate \c sql take the SQL under
+      the driver's own name, else under the key of the database's native driver (ex: \c "oracle" on a \c jdbc
+      connection to Oracle), else the default
 
     @section schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a

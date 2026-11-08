@@ -103,8 +103,11 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
                     "parts": ({"text": "Say hello"},),
                 },),
             };
-            hash<auto> resp = doRestCommand("POST",
-                GeminiDataProviderBase::buildModelPath("gemini-2.5-flash", "generateContent"), req).body;
+            # the example data is requested once, without retries
+            hash<auto> resp = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doRestCommand("POST",
+                    GeminiDataProviderBase::buildModelPath("gemini-2.5-flash", "generateContent"), req).body;
+            });
             if (resp.candidates) {
                 return resp;
             }

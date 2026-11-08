@@ -259,6 +259,26 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     @since %Qore 3.0
 
+    @section httpclient_early_response Responses Sent Before the Request Was Read
+
+    An HTTP/1.1 server can answer a request before it has read all of it, such as with a \c 413 or \c 431 error,
+    and then close the connection; with request data left unread, closing the connection resets it, and the
+    client's write of the rest of the request fails.  The client reads the response while it sends the request, and
+    after such a failed write it reads the response that the server sent before it closed:
+
+    |!Case|!Result
+    |a response arrives|the response is returned, and the connection, which carried an incomplete request, is closed
+    |no response arrives|the error of the failed write is raised: \c SOCKET-SEND-ERROR, or \c SOCKET-SSL-ERROR over TLS
+    |the response is cut short by the closed connection|the error of the truncated response is raised, such as \c SOCKET-CLOSED
+    |the request is cancelled|the cancellation is reported, as for any cancelled request
+    |the write fails on a connection that served an earlier request (a reused keep-alive connection) and no response arrives, or a \c 408 arrives on a reused connection (before, during or after the write of the request)|the server closed the idle connection: an idempotent request (\c GET, \c HEAD, \c PUT, \c DELETE, \c OPTIONS, \c TRACE) is repeated once on a new connection (RFC 9110 section 9.2.2); any other request raises \c HTTP1-CONNECTION-CLOSED, and the \c 408, which the server sent as it closed the idle connection, is never returned as the answer to the request
+    |the write fails on a reused connection and another response arrives (e.g. \c 413)|the response is returned, as on a new connection
+
+    This applies to HTTP and HTTPS and to request bodies sent in one piece as well as streamed bodies, such as with
+    @ref sendWithSendCallback() or @ref sendChunked().
+
+    @since %Qore 3.0
+
     @section httpclient_redirects HTTP Redirects
 
     Redirect responses with status codes 301, 302, 303, 307, and 308 are followed automatically (RFC 9110 section

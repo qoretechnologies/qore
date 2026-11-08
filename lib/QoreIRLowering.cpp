@@ -2460,6 +2460,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.setBlock(catch_block);
             builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
             builder.createRefForeachCleanup(state, stmt->loc);
+            // the loop variables are released before the exception leaves the statement, as the AST interpreter's
+            // foreach statement releases them when it unwinds, before the handlers of the enclosing blocks run; a
+            // closure-bound variable was otherwise released by the exit of the function, after its handlers
+            if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+                for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                    auto* ui = builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+                    ui->is_block_exit = true;
+                }
+            }
             {
                 // Route the synthetic rethrow to the outer exception handler (if any)
                 // so try/catch blocks around the ref foreach can catch the exception
@@ -2834,7 +2843,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // it holds to the list, and not at the end of the frame (an exhausted iterator has been released by
         // IteratorNext, which cleared its handle), and the list temporary is released before the variables rather
         // than at the end of the statement's temp scope
+        // The reference that the loop holds to the current element besides the variable's (the value that
+        // IteratorNext gave) is released first: native code keeps it until the next element or the end of the frame,
+        // so that after a break the element outlived the loop variable when the variable no longer held it
         if (foreach_source_entries) {
+            if (value_val.isValid()) {
+                builder.createReleaseOwnedTemp(value_val, stmt->loc);
+            }
             builder.createIteratorRelease(iter_val, stmt->loc);
             builder.createReleaseOwnedTemp(list_val, stmt->loc);
         }

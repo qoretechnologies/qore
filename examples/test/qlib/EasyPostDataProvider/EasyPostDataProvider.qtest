@@ -46,8 +46,95 @@
 
 %requires EasyPostRestClient
 %requires EasyPostDataProvider
+%requires HttpServerUtil
+%requires HttpServer
+%requires Logger
 
 %exec-class EasyPostDataProviderTest
+
+#! Counts requests and answers each with 429 Too Many Requests
+class RateLimitedHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the number of requests received
+        int requests = 0;
+        #! the Authorization header of the last request
+        *string authorization;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++requests;
+        authorization = hdr.authorization;
+        return <HttpResponseInfo>{
+            "code": 429,
+            "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+            "body": make_json({"error": {"code": "RATE_LIMITED", "message": "rate limited"}}),
+        };
+    }
+}
+
+#! Answers requests to the EasyPost API, the first ones of them with 429 Too Many Requests
+class RateLimitingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the paths of the requests received
+        list<string> paths = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited = 0;
+        #! the Retry-After header of a 429 response, if any
+        *string retry_after;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        paths += hdr.path;
+        if (rate_limited > 0) {
+            --rate_limited;
+            hash<auto> resp_hdr = {"Content-Type": MimeTypeJson};
+            if (retry_after) {
+                resp_hdr."Retry-After" = retry_after;
+            }
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": resp_hdr,
+                "body": make_json({"error": {"code": "RATE_LIMITED", "message": "rate limited"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"addresses": ({"id": "adr_1"},), "events": (), "has_more": False}),
+        };
+    }
+}
+
+#! An addresses provider that records its waits for the rate limit instead of waiting
+class RecordingEasyPostAddressesDataProvider inherits EasyPostDataProvider::EasyPostAddressesDataProvider {
+    public {
+        #! the waits for the rate limit, in order
+        list<date> waits = ();
+    }
+
+    constructor(RestClientIo rest) : EasyPostAddressesDataProvider(rest) {
+    }
+
+    private waitForRateLimit(date delay) {
+        waits += delay;
+    }
+}
+
+#! An event provider that records its waits for the rate limit instead of waiting
+class RecordingEasyPostTrackerCreatedEventDataProvider
+        inherits EasyPostDataProvider::EasyPostWatchTrackerCreatedEventDataProvider {
+    public {
+        #! the waits for the rate limit, in order
+        list<date> waits = ();
+    }
+
+    constructor(RestClientIo rest) : EasyPostWatchTrackerCreatedEventDataProvider(rest) {
+    }
+
+    private waitForRateLimit(date delay) {
+        waits += delay;
+    }
+}
 
 public class EasyPostDataProviderTest inherits QUnit::Test {
     private {
@@ -76,6 +163,8 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
         addTestCase("data type instantiation test", \dataTypeInstantiationTest());
         addTestCase("action registration test", \actionRegistrationTest());
         addTestCase("watch event example data test", \watchEventExampleDataTest());
+        addTestCase("sync client rate limit test", \syncClientRateLimitTest());
+        addTestCase("rate-limited retry test", \rateLimitedRetryTest());
 
         # Integration tests - require -c <connection>
         addTestCase("integration: list-addresses", \integrationListAddresses());
@@ -347,6 +436,106 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
             return True;
         }
         return False;
+    }
+
+    #! The synchronous client raises a rate-limited request's error after one request, and can use a local server
+    /** Its retry loop for HTTP 429 never ran (it read a key that the response info does not have, and the client
+        raises an error status), and was removed; the client always used the EasyPost API, whatever its \c url
+        option, so it could not be tested without the network
+    */
+    syncClientRateLimitTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RateLimitedHandler handler();
+        server.setHandler("easypost", "", NOTHING, handler);
+        server.setDefaultHandler("easypost", handler);
+
+        EasyPostRestClient::EasyPostRestClient rest({"apikey": "EZTKtest", "url": "http://127.0.0.1:" + port + "/v2"},
+            True);
+        assertEq("http://127.0.0.1:" + port + "/v2", rest.getURL(), "the url option is used");
+        hash<auto> info;
+        try {
+            rest.get("addresses", NOTHING, \info);
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(429, info."response-code", "the rate-limited response is the error");
+        }
+        assertEq(1, handler.requests, "the rate-limited request was made once");
+        assertEq("Basic " + make_base64_string("EZTKtest:"), handler.authorization, "the API key authenticates the request");
+    }
+
+    #! A rate-limited request is retried after the time given by the server, at most 60 seconds, or 5 seconds
+    /** The providers record their waits instead of waiting, so the test does not wait for the rate limit
+    */
+    rateLimitedRetryTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        RateLimitingHandler handler();
+        server.setHandler("easypost", "", NOTHING, handler);
+        server.setDefaultHandler("easypost", handler);
+
+        EasyPostRestClient::EasyPostRestClientIo rest({
+            "apikey": "EZTKtest",
+            "url": "http://127.0.0.1:" + port + "/v2",
+        });
+        RecordingEasyPostAddressesDataProvider addresses(rest);
+
+        # the time given by the server is honored from 1 to 60 seconds; otherwise, and without a time, the provider
+        # waits for 5 seconds
+        list<list<auto>> cases = (
+            ("3", 3s),
+            ("60", 60s),
+            ("61", EasyPostDataProviderBase::DefaultRateLimitWait),
+            ("3600", EasyPostDataProviderBase::DefaultRateLimitWait),
+            ("99999999999999999999", EasyPostDataProviderBase::DefaultRateLimitWait),
+            ("0", EasyPostDataProviderBase::DefaultRateLimitWait),
+            ("soon", EasyPostDataProviderBase::DefaultRateLimitWait),
+            (NOTHING, EasyPostDataProviderBase::DefaultRateLimitWait),
+        );
+        foreach list<auto> c in (cases) {
+            string label = sprintf("Retry-After: %y", c[0]);
+            handler.paths = ();
+            handler.rate_limited = 1;
+            handler.retry_after = c[0];
+            addresses.waits = ();
+            assertEq("adr_1", addresses.doGet("addresses").addresses[0].id, label);
+            assertEq(("v2/addresses", "v2/addresses"), handler.paths, label);
+            assertEq((c[1],), addresses.waits, label);
+        }
+
+        # a request that stays rate-limited fails after the last attempt, having waited before each retry
+        handler.paths = ();
+        handler.rate_limited = EasyPostDataProviderBase::MaxIoRetries;
+        handler.retry_after = "2";
+        addresses.waits = ();
+        try {
+            addresses.doGet("addresses");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EASYPOST-API-ERROR", ex.err);
+            assertEq(429, ex.arg.status);
+        }
+        assertEq(EasyPostDataProviderBase::MaxIoRetries, handler.paths.size());
+        list<date> retry_waits = map 2s, xrange(EasyPostDataProviderBase::MaxIoRetries - 1);
+        assertEq(retry_waits, addresses.waits);
+
+        # the example data is requested once: the rate-limited request is not retried, there is no wait, and the
+        # fake example event is returned
+        RecordingEasyPostTrackerCreatedEventDataProvider events(rest);
+        handler.paths = ();
+        handler.rate_limited = 1;
+        handler.retry_after = "2";
+        hash<auto> example = events.getExampleEventData("tracker.created");
+        assertEq(("v2/events?page_size=10",), handler.paths);
+        assertEq((), events.waits);
+        assertEq("evt_example", example.id);
+        assertEq("tracker.created", example.description);
     }
 
     #! Integration: search the addresses collection

@@ -154,7 +154,10 @@ public class DatasourceTest inherits QUnit::Test {
         Datasource ds = getAnyDatasource(connstr);
         string driver = ds.getDriverName();
         string sql = getTypedSelectSql(driver);
-        list<auto> expected_ids = getTypedSelectExpectedIds(driver);
+        # integers, also on Oracle: a columnar result gives integral NUMBER values as integers with the default
+        # "optimal-numbers" option, as a plain select does (a typed select gives the column's type for every row:
+        # number for a NUMBER without a precision)
+        list<auto> expected_ids = (1, 2);
 
         ColumnarResult result = ds.selectColumnar(sql);
         assertEq(2, result.numRows());
