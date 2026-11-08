@@ -7389,6 +7389,14 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     service name contains a NUL character
     @throw ASYNC-IO-ERROR called from the async I/O thread or the global async I/O controller is unavailable
 
+    @par Name lookup errors
+    A \c QOREADDRINFO-GETINFO-ERROR exception raised for the answer of the resolver has a hash argument with the key
+    \c status, the resolver's status: \c "ENOTFOUND" (the name does not exist), \c "ENODATA" (the name has no address
+    of the requested family) and \c "EBADNAME" (the name is not a valid name) are definite answers, which another
+    lookup gives again; others, such as \c "ETIMEOUT", \c "ESERVFAIL", \c "EREFUSED" and \c "ECONNREFUSED" (no DNS
+    server answered, or one failed), can be temporary.  An error that is not an answer of the resolver, such as a
+    resolver that could not be initialized, has no \c status.
+
     @since %Qore 3.0
  */
 static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,

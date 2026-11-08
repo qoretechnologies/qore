@@ -634,6 +634,16 @@ struct QoreHostsFileAddress {
     unsigned char addr[16] = {};
 };
 
+//! Returns the name of a c-ares status as given in the \c status key of a name lookup error's argument
+/** For example \c "ENOTFOUND" for \c ARES_ENOTFOUND; \c "EUNKNOWN" for a status that has no name here
+*/
+DLLLOCAL const char* qore_cares_status_name(int status);
+
+//! Returns the argument of a name lookup error that failed with the given c-ares status: <tt>{"status": name}</tt>
+/** See qore_cares_status_name(); the caller owns the reference
+*/
+DLLLOCAL QoreHashNode* qore_cares_error_arg(int status);
+
 class QoreCaresAddrInfoResolver {
 public:
     DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol,

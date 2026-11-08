@@ -556,6 +556,10 @@
     - new @ref Qore::Socket::shutdownWrite() "Socket::shutdownWrite()" shuts down the sending side of a connection
       only (a half-close): the peer reads the end of the stream, and the response that the peer sends can still be
       read; a TLS connection sends its \c close_notify alert first
+    - a \c QOREADDRINFO-GETINFO-ERROR exception for an answer of the resolver gives the resolver's status in its
+      argument (<tt>arg.status</tt>), so that a definite answer such as \c "ENOTFOUND" (the name does not exist) can
+      be told from a failure that can be temporary, such as \c "ETIMEOUT" or \c "ESERVFAIL" (see
+      @ref Qore::getaddrinfo() "getaddrinfo()")
     @endparblock
 
     @par astparser Uses a tree-sitter Parser
