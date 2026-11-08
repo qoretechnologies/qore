@@ -15095,18 +15095,18 @@ namespace {
 class DbgWaitAgainPollOperation : public SocketPollOperationBase {
 public:
     //! @p obj is kept by the operation's object, whose \c sock member references it
-    DLLLOCAL DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits) : obj(obj), events(events),
+    DbgWaitAgainPollOperation(QoreObject* obj, int events, int waits) : obj(obj), events(events),
             waits(waits) {
     }
 
-    DLLLOCAL virtual bool goalReached() const override {
+    virtual bool goalReached() const override {
         return calls > waits;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    virtual void abort(ExceptionSink*) override {
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (calls++ >= waits) {
             return nullptr;
         }
@@ -15116,11 +15116,11 @@ public:
         return *xsink ? nullptr : info.release();
     }
 
-    DLLLOCAL virtual QoreValue getOutput() const override {
+    virtual QoreValue getOutput() const override {
         return static_cast<int64>(calls);
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const override {
+    virtual const char* getStateImpl() const override {
         return calls > waits ? "done" : "waiting";
     }
 
