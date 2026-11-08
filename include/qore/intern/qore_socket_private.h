@@ -1587,6 +1587,10 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     std::atomic<bool> dbg_abortive_close{false};
 
+    //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds a peer-close error (a stale errno);
+    //! one-shot, set with QoreSocketObject::dbgForceSslErrorSslAtNextWrite()
+    std::atomic<bool> dbg_force_ssl_error_ssl{false};
+
     //! Debug-only: prepares an abortive close if one was requested; returns true if so (close_m held)
     DLLLOCAL bool dbgAbortiveCloseLocked() {
         if (!dbg_abortive_close.load(std::memory_order_acquire)) {

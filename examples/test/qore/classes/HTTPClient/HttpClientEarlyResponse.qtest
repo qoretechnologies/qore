@@ -377,6 +377,8 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
         addTestCase("a send failure after the final response header is a failure of the response",
             \sendFailureAfterResponseHeaderTest());
         addTestCase("arming an armed send-side hook again leaves its parameters", \sendSideHookArmedTwiceTest());
+        addTestCase("a response header read that cannot be started fails the request at once",
+            \headerReadStartFailureTest());
         set_return_value(main());
     }
 
@@ -890,6 +892,31 @@ public class HttpClientEarlyResponseTest inherits QUnit::Test {
         assertTrue(rv.err == "SOCKET-CLOSED" || rv.err == "SOCKET-RECV-ERROR",
             sprintf("the truncated response is reported, not the send error (got %y: %y)", rv.err, rv.desc));
         assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! When the response header read cannot be created, the request fails at once with that error instead of waiting
+    #! for a response that is never read
+    headerReadStartFailureTest() {
+        requireDebugHooks();
+        # the peer reads the request and does not answer: the client fails before it reads a response
+        EarlyPeer peer((<EarlyPlan>{"read": "drain", "status": 0},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+
+        call_function("dbg_fail_http1_header_read_op");
+        hash<auto> rv;
+        date start = now_us();
+        try {
+            rv.response = hc.send("x", "POST", "/header-read", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        assertEq("DBG-HEADER-READ-ERROR", rv.err, sprintf("the request fails with the error of the read (got %y: %y "
+            "after %y)", rv.err, rv.desc, now_us() - start));
+        peer.getObserved();
     }
 
     #! A second arming of the send-side hook fails and leaves the parameters of the first

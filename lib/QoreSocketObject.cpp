@@ -6210,6 +6210,10 @@ void QoreSocketObject::dbgResetOnClose() {
     qore_socket_private::get(*priv->socket)->dbg_abortive_close.store(true, std::memory_order_release);
 }
 
+void QoreSocketObject::dbgForceSslErrorSslAtNextWrite() {
+    qore_socket_private::get(*priv->socket)->dbg_force_ssl_error_ssl.store(true, std::memory_order_release);
+}
+
 QoreHashNode* QoreSocketObject::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
     if (session_id) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);

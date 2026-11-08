@@ -133,6 +133,14 @@ enum class QoreDbgHttp1SendEvent : unsigned char {
 typedef void (*qore_dbg_http1_send_hook_t)(QoreDbgHttp1SendEvent event, int fd, const char* err);
 DLLLOCAL extern std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook;
 
+//! one-shot: the next HTTP/1 client response header read operation cannot be created (newHeaderReadOp()); set by
+//! dbg_fail_http1_header_read_op()
+DLLLOCAL extern std::atomic<bool> qore_dbg_http1_fail_header_read_op;
+
+//! the number of TLS close_notify alerts sent by SSLSocketHelper::sendCloseNotify() (SSL_shutdown() calls); read by
+//! dbg_ssl_close_notify_count()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_ssl_close_notify_count;
+
 //! called by SocketSendPollOperation::continuePoll() with the socket's lock held, before it writes; \a fd is the
 //! socket's descriptor; set by dbg_http1_send_failure_arm()
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);

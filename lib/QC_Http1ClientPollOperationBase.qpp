@@ -928,6 +928,21 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
 
 SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(ExceptionSink* xsink) {
     ExceptionSink read_xsink;
+#ifdef DEBUG
+    // test hook: the operation cannot be created, as when the socket was closed
+    if (qore_dbg_http1_fail_header_read_op.exchange(false)) {
+        sock_obj->deref(&read_xsink);
+        read_xsink.raiseException("DBG-HEADER-READ-ERROR", "the response header read could not be started (debug "
+            "hook)");
+        QoreStringValueHelper err_str(read_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
+        std::string err(err_str->c_str());
+        std::string desc(desc_str->c_str());
+        read_xsink.clear();
+        setError(err.c_str(), desc.c_str(), xsink);
+        return nullptr;
+    }
+#endif
     SocketPollOperationBase* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
     if (!read_xsink) {
         return op;

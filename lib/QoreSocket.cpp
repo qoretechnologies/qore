@@ -6352,6 +6352,9 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
         // stays resumable.
         (void)SSL_shutdown(ssl);
         ERR_clear_error();
+#ifdef DEBUG
+        qore_dbg_ssl_close_notify_count.fetch_add(1, std::memory_order_relaxed);
+#endif
 #ifdef _Q_WINDOWS
         if (restore) {
             // a socket used from Qore threads is blocking; one on the async I/O thread stays non-blocking
@@ -11253,6 +11256,9 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
 #endif
     SSLSocketReferenceHelper ssrh(this);
 
+#ifdef DEBUG
+    bool dbg_forced_error_ssl = false;
+#endif
     int rc;
     while (true) {
         ERR_clear_error();
@@ -11261,6 +11267,14 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
                 rc = SSL_read_ex(ssl, buf, size, &real_io);
                 break;
             case WRITE:
+#ifdef DEBUG
+                // test hook: the write fails with a TLS protocol error while errno holds a stale peer-close error
+                if (qs.dbg_force_ssl_error_ssl.exchange(false)) {
+                    rc = 0;
+                    dbg_forced_error_ssl = true;
+                    break;
+                }
+#endif
                 rc = SSL_write_ex(ssl, buf, size, &real_io);
                 break;
             case PEEK:
@@ -11314,6 +11328,12 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
         }
 
         int err = SSL_get_error(ssl, rc);
+#ifdef DEBUG
+        if (dbg_forced_error_ssl) {
+            err = SSL_ERROR_SSL;
+            errno = EPIPE;
+        }
+#endif
 
         //printd(5, "SSLSocketHelper::doNonBlockingIo() %s size: %ld action: %s err: %d\n", mname, size,
         //    get_action_method(action), err);

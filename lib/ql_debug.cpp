@@ -13382,6 +13382,37 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
     return QoreValue();
 }
 
+//! Debug-only: the next SSL write of a socket fails with a TLS protocol error (SSL_ERROR_SSL) while errno holds EPIPE
+/** The socket must be closed by the failure whatever errno holds.  DEBUG builds only.
+*/
+static QoreValue f_dbg_force_ssl_error_ssl(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_force_ssl_error_ssl() requires a Socket argument");
+        }
+        return QoreValue();
+    }
+    sock->dbgForceSslErrorSslAtNextWrite();
+    return QoreValue();
+}
+
+//! Debug-only: returns the number of TLS close_notify alerts sent so far (SSL_shutdown() calls on close)
+static QoreValue f_dbg_ssl_close_notify_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_ssl_close_notify_count.load(std::memory_order_relaxed);
+}
+
+//! Debug-only: the next response header read operation of an HTTP/1 client cannot be created (one-shot)
+static QoreValue f_dbg_fail_http1_header_read_op(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_http1_fail_header_read_op.store(true);
+    return QoreValue();
+}
+
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
 /** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
     that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
@@ -15959,6 +15990,8 @@ static QoreValue f_dbg_release_http1_connection_close(const QoreListNode* params
 
 std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook{nullptr};
 std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook{nullptr};
+std::atomic<bool> qore_dbg_http1_fail_header_read_op{false};
+std::atomic<int64_t> qore_dbg_ssl_close_notify_count{0};
 
 namespace {
 //! the state of the HTTP/1 client send-failure test hooks
@@ -17029,6 +17062,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_reset_socket", f_dbg_reset_socket, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_force_ssl_error_ssl", f_dbg_force_ssl_error_ssl, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_ssl_close_notify_count", f_dbg_ssl_close_notify_count, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_http1_header_read_op", f_dbg_fail_http1_header_read_op, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 2,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",

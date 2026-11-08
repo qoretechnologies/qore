@@ -101,6 +101,10 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
             \plainTest());
         addTestCase("TLS: the socket stays open after the write fails, the answer is read, then the end of the "
             "connection", \tlsTest());
+        addTestCase("TLS: a socket kept open after a failed write is closed without a close_notify alert",
+            \tlsNoCloseNotifyAfterFailedWriteTest());
+        addTestCase("TLS: a protocol error on a write closes the socket whatever errno holds",
+            \tlsProtocolErrorClosesTest());
         set_return_value(main());
     }
 
@@ -110,6 +114,120 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
 
     tlsTest() {
         exchange(True);
+    }
+
+    #! Skips the test unless the library has its debugging hooks
+    private requireDebugHooks() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that observe and force the TLS behaviour are only in debug builds");
+        }
+    }
+
+    #! After a write failed because of a peer reset (SSL_ERROR_SYSCALL), OpenSSL forbids SSL_shutdown(): the close of
+    #! the socket kept open sends no close_notify alert, while the close of a healthy TLS socket does
+    tlsNoCloseNotifyAfterFailedWriteTest() {
+        requireDebugHooks();
+        # a healthy connection: its close sends the alert
+        {
+            Socket listener();
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+            listener.bind("localhost:0", True);
+            listener.listen();
+            on_exit listener.close();
+            Queue accepted();
+            background sub () {
+                try {
+                    Socket conn = listener.accept(Timeout);
+                    conn.upgradeServerToSSL(Timeout);
+                    accepted.push(conn);
+                } catch (hash<ExceptionInfo> ex) {
+                    accepted.push(ex.err);
+                }
+            }();
+            Socket sock();
+            sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+            auto conn = accepted.get(Timeout);
+            assertEq(NT_OBJECT, conn.typeCode(), sprintf("the peer accepted the connection: %y", conn));
+            int before = call_function("dbg_ssl_close_notify_count");
+            sock.close();
+            assertEq(before + 1, call_function("dbg_ssl_close_notify_count"), "a healthy close sends close_notify");
+            call_function("dbg_reset_socket", conn);
+        }
+        # a connection whose write failed because of the peer's reset: its close sends none
+        Socket sock = failedTlsWrite();
+        int before = call_function("dbg_ssl_close_notify_count");
+        sock.close();
+        assertEq(before, call_function("dbg_ssl_close_notify_count"),
+            "no close_notify is sent after a fatal write error");
+    }
+
+    #! An SSL_ERROR_SSL write failure closes the socket, also when errno holds a peer-close error from before
+    tlsProtocolErrorClosesTest() {
+        requireDebugHooks();
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Queue accepted();
+        background sub () {
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                accepted.push(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(ex.err);
+            }
+        }();
+        Socket sock();
+        sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        auto conn = accepted.get(Timeout);
+        on_exit if (conn.typeCode() == NT_OBJECT) {
+            call_function("dbg_reset_socket", conn);
+        }
+        call_function("dbg_force_ssl_error_ssl", sock);
+        hash<ExceptionInfo> ex;
+        try {
+            sock.send("x", Timeout);
+            fail("the forced protocol error must fail the write");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex.err, ex.desc);
+        assertFalse(sock.isOpen(), "the socket is closed after a TLS protocol error");
+    }
+
+    #! Returns a TLS socket whose write failed because the peer answered and reset the connection; the socket is open
+    private Socket failedTlsWrite() {
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                conn.recvBinary(1024, Timeout);
+                call_function("dbg_reset_socket", conn);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        Socket sock();
+        sock.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        try {
+            sock.send(strmul("w", WriteSize), Timeout);
+            fail("a write to a reset connection must fail");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertEq(0, done.waitForZero(Timeout), "the peer finished");
+        assertTrue(sock.isOpen(), "the socket stays open after the write failed");
+        return sock;
     }
 
     #! The peer reads a little, answers and resets the connection while the client is writing
