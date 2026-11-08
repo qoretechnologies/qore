@@ -85,12 +85,16 @@ class ExitHooksTest inherits QUnit::Test {
 
     programDeletionTest() {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
-        p.parse("our Queue jobs();\n"
-            "sub start() {\n"
-            "    background sub () { jobs.get(); }();\n"
+        # the Program's thread waits until its hook tells it to stop
+        p.parse("our *Queue jobs;\n"
+            "sub start(Counter started) {\n"
+            "    jobs = new Queue();\n"
+            "    background sub () { started.dec(); jobs.get(); }();\n"
             "    register_exit_hook(sub () { jobs.push(1); });\n"
             "}\n", "deleted-program");
-        p.callFunction("start");
+        Counter started(1);
+        p.callFunction("start", started);
+        started.waitForZero();
         Counter deleted(1);
         background ExitHooksTest::deleteProgram(p, deleted);
         remove p;
