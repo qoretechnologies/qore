@@ -1643,6 +1643,10 @@ list<hash<auto>> l = f.get();
 
     @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
 
+    @par Name lookup errors
+    The Future raises a \c QOREADDRINFO-GETINFO-ERROR exception for an answer of the resolver with the same argument
+    as @ref Qore::getaddrinfo() "getaddrinfo()": a hash with the resolver's \c status
+
     @since %Qore 3.0
  */
 Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {

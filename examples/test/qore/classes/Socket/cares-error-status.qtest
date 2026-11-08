@@ -23,6 +23,7 @@ class CaresErrorStatusTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("CaresErrorStatus", "1.0") {
         addTestCase("getaddrinfo() gives the resolver's status", \getaddrinfoTest());
+        addTestCase("getaddrinfo_async() gives the resolver's status", \getaddrinfoAsyncTest());
         addTestCase("Socket::resolveAddrInfo() gives the resolver's status", \resolveAddrInfoTest());
         addTestCase("Socket::connect() gives the resolver's status", \connectTest());
         addTestCase("HTTPClient gives the resolver's status", \httpClientTest());
@@ -50,6 +51,14 @@ class CaresErrorStatusTest inherits QUnit::Test {
         # a name ending in a dot is looked up as it is, without the search domains of the host
         foreach hash<auto> i in (Expected.pairIterator()) {
             checkStatus(\getaddrinfo(), (i.key + ".qore-test.",), i.value);
+        }
+    }
+
+    #! the Future of getaddrinfo_async() raised the error without its argument
+    getaddrinfoAsyncTest() {
+        checkDebug();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            checkStatus(sub (string name) { getaddrinfo_async(name).get(); }, (i.key + ".qore-test.",), i.value);
         }
     }
 

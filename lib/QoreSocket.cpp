@@ -7755,7 +7755,9 @@ public:
             if (desc_v) {
                 desc = desc_v.c_str();
             }
-            action->executeError(err, desc, xsink);
+            // the argument too, as the synchronous call raises it: a name lookup error has the resolver's status in
+            // it
+            action->executeErrorArg(err, desc, ex_hash->getKeyValue("arg").refSelf(), xsink);
             cleanupAction(xsink);
             return true;
         }
@@ -8434,7 +8436,9 @@ public:
             if (desc_v) {
                 desc = desc_v.c_str();
             }
-            action->executeError(err, desc, xsink);
+            // the argument too, as the synchronous call raises it: a name lookup error has the resolver's status in
+            // it
+            action->executeErrorArg(err, desc, ex_hash->getKeyValue("arg").refSelf(), xsink);
             cleanupAction(xsink);
             return true;
         }
