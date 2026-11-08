@@ -3907,7 +3907,7 @@ table.insert(row);
         @since SqlUtil 3.11
     */
     list<auto> getInsertArgs(hash<auto> row) {
-        return getPlaceholdersAndValues(row).values ?? ();
+        return getInsertSqlAndArgs(row).args;
     }
 
     #! Inserts a row or a hash-of-lists row batch without transaction management
@@ -3976,27 +3976,9 @@ table.insert(row);
         # check data callback options if any
         validateOptionsIntern("OPTION-ERROR", getInsertOptions(), \opt);
 
-        # issue #3352: do not execute runtime DML while holding the lock
-        if (!columns) {
-            l.lock();
-            on_exit l.unlock();
-
-            getColumnsUnlocked();
-        }
-        sql = sprintf("insert into %s (", getSqlName());
-        foreach string k in (keys row) {
-            if (!columns.hasKey(k))
-                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)", getDesc(), k,
-                    columns.keys());
-        }
-        hash vh = getPlaceholdersAndValues(row);
-
-        sql += (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row));
-        sql += ") values (";
-        sql += (foldl $1 + "," + $2, vh.placeholders);
-        sql += ")";
-
-        list<auto> exec_args = vh.values;
+        hash<auto> ia = getInsertSqlAndArgs(row);
+        sql = ia.sql;
+        list<auto> exec_args = ia.args;
         args = exec_args;
 
         # check for a bulk insert in case the driver does not support array binding
@@ -4033,6 +4015,36 @@ table.insert(row);
             return doReturningImpl(opt, \sql, exec_args);
 
         execData(opt, sql, exec_args);
+    }
+
+    #! Returns the SQL of an insert of the given row and the values that it binds, in the order of its placeholders
+    /** The one place where an insert's SQL and arguments are made, so that the arguments that
+        @ref getInsertArgs() gives are those of the SQL that @ref insert() runs; a driver that makes another SQL for
+        some rows (PostgreSQL's \c UNNEST insert of a hash of lists) overrides it
+
+        @return a hash with \c sql: the SQL, and \c args: the values bound to its placeholders, in their order
+    */
+    private hash<auto> getInsertSqlAndArgs(hash<auto> row) {
+        # issue #3352: do not execute runtime DML while holding the lock
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+
+            getColumnsUnlocked();
+        }
+        foreach string k in (keys row) {
+            if (!columns.hasKey(k))
+                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)", getDesc(), k,
+                    columns.keys());
+        }
+        hash vh = getPlaceholdersAndValues(row);
+
+        string sql = sprintf("insert into %s (", getSqlName());
+        sql += (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row));
+        sql += ") values (";
+        sql += (foldl $1 + "," + $2, vh.placeholders);
+        sql += ")";
+        return {"sql": sql, "args": vh.values ?? ()};
     }
 
     private hash<auto> getPlaceholdersAndValues(hash<auto> row) {
