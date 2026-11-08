@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../DnsTestServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class CaresErrorStatusTest
+
+#! A name lookup error gives the resolver's status in its argument
+/** \c QOREADDRINFO-GETINFO-ERROR was raised with the same error code and no argument for every failure of the
+    resolver, so a caller could not tell a name that does not exist from a DNS server that did not answer.  A local
+    DNS server (dbg_cares_set_servers()) gives each answer without the network.
+*/
+class CaresErrorStatusTest inherits QUnit::Test {
+    private {
+        *DnsTestServer dns;
+        string old_servers;
+    }
+
+    constructor() : QUnit::Test("CaresErrorStatus", "1.0") {
+        addTestCase("getaddrinfo() gives the resolver's status", \getaddrinfoTest());
+        addTestCase("Socket::resolveAddrInfo() gives the resolver's status", \resolveAddrInfoTest());
+        addTestCase("Socket::connect() gives the resolver's status", \connectTest());
+        addTestCase("a server that does not listen gives a temporary status", \refusedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        dns = new DnsTestServer();
+        old_servers = call_function("dbg_cares_set_servers", dns.getServer());
+    }
+
+    globalTearDown() {
+        if (dns) {
+            call_function("dbg_cares_set_servers", old_servers);
+            dns.stop();
+        }
+    }
+
+    getaddrinfoTest() {
+        checkDebug();
+        # a name ending in a dot is looked up as it is, without the search domains of the host
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            checkStatus(\getaddrinfo(), (i.key + ".qore-test.",), i.value);
+        }
+    }
+
+    resolveAddrInfoTest() {
+        checkDebug();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            checkStatus(\Socket::resolveAddrInfo(), (i.key + ".qore-test.", "80"), i.value);
+        }
+    }
+
+    connectTest() {
+        checkDebug();
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            checkStatus(sub (string target) { Socket s(); s.connect(target, 10s); }, (i.key + ".qore-test.:80",),
+                i.value);
+        }
+    }
+
+    refusedTest() {
+        checkDebug();
+        # nothing listens on the discard port of the loopback address
+        string servers = call_function("dbg_cares_set_servers", "127.0.0.1:9");
+        on_exit call_function("dbg_cares_set_servers", servers);
+        hash<ExceptionInfo> ex = lookupError(\getaddrinfo(), ("nx.qore-test.",));
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err);
+        assertEq("ECONNREFUSED", ex.arg.status, "a DNS server that does not listen is a temporary failure");
+    }
+
+    private checkStatus(code lookup, list<auto> args, string status) {
+        hash<ExceptionInfo> ex = lookupError(lookup, args);
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err, sprintf("%y: the error code", args[0]));
+        assertEq(status, ex.arg.status, sprintf("%y: the resolver's status", args[0]));
+    }
+
+    private hash<ExceptionInfo> lookupError(code lookup, list<auto> args) {
+        try {
+            call_function_args(lookup, args);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", sprintf("the lookup of %y did not fail", args[0]);
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_cares_set_servers() is only registered in a library-debug build");
+        }
+    }
+
+    #! the status of the resolver for the first label of a name (see DnsTestServer::Rcodes)
+    const Expected = {
+        "nx": "ENOTFOUND",
+        "nodata": "ENODATA",
+        "servfail": "ESERVFAIL",
+        "refused": "EREFUSED",
+    };
+}

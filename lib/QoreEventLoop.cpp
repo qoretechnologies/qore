@@ -209,6 +209,7 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
             return -1;
         }
         FdInfo& info = fd_map[fd];
+        info.fd = fd;
         info.events = events;
         info.udata = udata;
         info.regs[key] = {events, udata};
@@ -428,6 +429,7 @@ void QoreEventLoop::setArmed(FdInfo& info, bool armed) {
     assert(!armed || info.always_ready);
     if (armed) {
         ++armed_count;
+        armed_fds.push_back(info.fd);
     } else {
         assert(armed_count);
         --armed_count;
@@ -437,10 +439,18 @@ void QoreEventLoop::setArmed(FdInfo& info, bool armed) {
 
 void QoreEventLoop::addAlwaysReadyEvents(std::vector<QoreEventInfo>& events) {
     assert(armed_count);
-    for (auto& [fd, info] : fd_map) {
-        if (!info.armed) {
+    // only the descriptors armed since the last poll are looked at, not every registration; the list is emptied, as
+    // each armed descriptor is disarmed here
+    std::vector<int> fds;
+    fds.swap(armed_fds);
+    for (int fd : fds) {
+        ++dbg_always_ready_visits;
+        auto it = fd_map.find(fd);
+        // a descriptor disarmed or removed after it was armed, or listed again after it was armed again
+        if (it == fd_map.end() || !it->second.armed) {
             continue;
         }
+        FdInfo& info = it->second;
         setArmed(info, false);
         int ev = info.events & (QORE_EV_READ | QORE_EV_WRITE);
         // a file closed while it is registered, or whose number has been given to another file, is reported with an
@@ -454,6 +464,12 @@ void QoreEventLoop::addAlwaysReadyEvents(std::vector<QoreEventInfo>& events) {
             continue;
         }
         events.push_back({fd, ev, info.udata});
+    }
+    assert(!armed_count);
+    // the list keeps its storage for the next poll
+    fds.clear();
+    if (armed_fds.empty()) {
+        armed_fds.swap(fds);
     }
 }
 

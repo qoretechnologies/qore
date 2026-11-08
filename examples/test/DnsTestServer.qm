@@ -1,0 +1,172 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DnsTestServer.qm a local DNS server that gives the answers a test asks for, without the network
+
+/*  DnsTestServer.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module DnsTestServer {
+    version = "1.0";
+    desc    = "a local DNS server that gives the answers a test asks for, without the network";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A DNS server on a UDP port of the loopback address that answers every query with the response code that the
+    first label of the queried name selects (RFC 1035 section 4.1.1), with no answer records:
+    - \c nx: \c NXDOMAIN (3), the name does not exist (c-ares: \c ENOTFOUND)
+    - \c nodata: \c NOERROR (0) without an answer, the name has no address (c-ares: \c ENODATA)
+    - \c servfail: \c SERVFAIL (2), the server failed (c-ares: \c ESERVFAIL)
+    - \c refused: \c REFUSED (5), the server refused the query (c-ares: \c EREFUSED)
+    - any other name: \c SERVFAIL
+
+    A debug build of %Qore sends the name lookups of the process to it with \c dbg_cares_set_servers(), so a test of
+    name lookup errors does not depend on the network or on the DNS configuration of its host; a name ending in a dot
+    is looked up as it is, without the search domains of the host.
+
+    @par Example:
+    @code{.py}
+%requires ../../DnsTestServer.qm
+
+DnsTestServer dns();
+on_exit dns.stop();
+string old = call_function("dbg_cares_set_servers", dns.getServer());
+on_exit call_function("dbg_cares_set_servers", old);
+    @endcode
+*/
+public namespace DnsTestServer {
+    #! the response codes that the first label of a name selects
+    public const Rcodes = {
+        "nx": 3,
+        "nodata": 0,
+        "servfail": 2,
+        "refused": 5,
+    };
+
+    #! The DNS server
+    public class DnsTestServer {
+        private {
+            Socket sock();
+            int port;
+            #! the thread that answers the queries ends when it has received this datagram
+            const Stop = <53544f50>;
+            Counter done(1);
+            #! the number of queries answered, by the first label of the name
+            hash<string, int> queries;
+            Mutex m();
+        }
+
+        #! Starts the server on a port that the system assigns on 127.0.0.1
+        constructor() {
+            sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            port = sock.getSocketInfo().port;
+            background run();
+        }
+
+        #! Returns the server address for \c dbg_cares_set_servers(): <tt>127.0.0.1:</tt><em>port</em>
+        string getServer() {
+            return sprintf("127.0.0.1:%d", port);
+        }
+
+        #! Returns the number of queries answered for names whose first label is \a label
+        int getQueries(string label) {
+            m.lock();
+            on_exit m.unlock();
+            return queries{label} ?? 0;
+        }
+
+        #! Stops the server and waits for its thread to end
+        stop() {
+            Socket s();
+            s.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+            on_exit s.close();
+            drive(s.startPollSendTo("127.0.0.1", port, Stop));
+            done.waitForZero();
+            sock.close();
+        }
+
+        private run() {
+            on_exit done.dec();
+            while (True) {
+                AbstractPollOperation op = sock.startPollRecvFrom();
+                drive(op);
+                hash<auto> dgram = op.getOutput();
+                if (dgram.data == Stop) {
+                    return;
+                }
+                *binary reply = answer(dgram.data);
+                if (reply) {
+                    drive(sock.startPollSendTo(dgram.address, dgram.port, reply));
+                }
+            }
+        }
+
+        #! Returns the response to a query, or nothing if it is not a query
+        private *binary answer(binary query) {
+            # header (12 bytes), then the question: the name's labels, a zero byte, the type and the class
+            if (query.size() < 17) {
+                return;
+            }
+            int offset = 12;
+            *string first;
+            while (offset < query.size()) {
+                int len = query.substr(offset, 1).toHex().toInt(16);
+                if (!len) {
+                    break;
+                }
+                if (!first) {
+                    first = query.substr(offset + 1, len).toString().lwr();
+                }
+                offset += len + 1;
+            }
+            int question_end = offset + 1 + 4;
+            if (question_end > query.size()) {
+                return;
+            }
+            int rcode = Rcodes{first} ?? 2;
+            {
+                m.lock();
+                on_exit m.unlock();
+                ++queries{first ?? ""};
+            }
+            # the flags of the query, with QR set, RA set and the response code (RFC 1035 section 4.1.1)
+            int flags = query.substr(2, 2).toHex().toInt(16);
+            flags = (flags | 0x8080) & 0xfff0 | rcode;
+            binary reply = query.substr(0, 2);
+            reply += parse_hex_string(sprintf("%04x", flags));
+            # one question, no answer, authority or additional records
+            reply += <0001000000000000>;
+            reply += query.substr(12, question_end - 12);
+            return reply;
+        }
+
+        private static drive(AbstractPollOperation op) {
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    Socket::poll((info,), 3600s);
+                }
+            }
+        }
+    }
+}

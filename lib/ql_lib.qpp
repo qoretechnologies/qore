@@ -1592,6 +1592,14 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known, or the node or service name
     contains a NUL character
 
+    @par Name lookup errors
+    A \c QOREADDRINFO-GETINFO-ERROR exception raised for the answer of the resolver has a hash argument with the key
+    \c status, the resolver's status: \c "ENOTFOUND" (the name does not exist), \c "ENODATA" (the name has no address
+    of the requested family) and \c "EBADNAME" (the name is not a valid name) are definite answers, which another
+    lookup gives again; others, such as \c "ETIMEOUT", \c "ESERVFAIL", \c "EREFUSED" and \c "ECONNREFUSED" (no DNS
+    server answered, or one failed), can be temporary.  An error that is not an answer of the resolver, such as a
+    resolver that could not be initialized, has no \c status.
+
     @note A localhost name (\c "localhost" or a name ending in \c ".localhost"; RFC 6761) resolves to the addresses
     that the hosts file gives it, as with the system resolver; in an address family that the hosts file does not give
     the name, and when the hosts file does not have the name, it resolves to the loopback address (\c 127.0.0.1 or

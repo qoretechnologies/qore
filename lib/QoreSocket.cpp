@@ -7589,8 +7589,46 @@ void QoreCaresAddrInfoResolver::keepHostsFileAddresses() noexcept {
     addrs.front().canonname = std::move(canonname);
 }
 
+const char* qore_cares_status_name(int status) {
+    switch (status) {
+        case ARES_ENODATA: return "ENODATA";
+        case ARES_EFORMERR: return "EFORMERR";
+        case ARES_ESERVFAIL: return "ESERVFAIL";
+        case ARES_ENOTFOUND: return "ENOTFOUND";
+        case ARES_ENOTIMP: return "ENOTIMP";
+        case ARES_EREFUSED: return "EREFUSED";
+        case ARES_EBADQUERY: return "EBADQUERY";
+        case ARES_EBADNAME: return "EBADNAME";
+        case ARES_EBADFAMILY: return "EBADFAMILY";
+        case ARES_EBADRESP: return "EBADRESP";
+        case ARES_ECONNREFUSED: return "ECONNREFUSED";
+        case ARES_ETIMEOUT: return "ETIMEOUT";
+        case ARES_EOF: return "EOF";
+        case ARES_EFILE: return "EFILE";
+        case ARES_ENOMEM: return "ENOMEM";
+        case ARES_EDESTRUCTION: return "EDESTRUCTION";
+        case ARES_EBADSTR: return "EBADSTR";
+        case ARES_EBADFLAGS: return "EBADFLAGS";
+        case ARES_ENONAME: return "ENONAME";
+        case ARES_EBADHINTS: return "EBADHINTS";
+        case ARES_ENOTINITIALIZED: return "ENOTINITIALIZED";
+        case ARES_ECANCELLED: return "ECANCELLED";
+        case ARES_ESERVICE: return "ESERVICE";
+        case ARES_ENOSERVER: return "ENOSERVER";
+        default: return "EUNKNOWN";
+    }
+}
+
+QoreHashNode* qore_cares_error_arg(int status) {
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("status", new QoreStringNode(qore_cares_status_name(status)), nullptr);
+    return h;
+}
+
 int QoreCaresAddrInfoResolver::raiseError(ExceptionSink* xsink) const {
-    xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+    // the argument gives the resolver's status, which tells a definite answer (such as ENOTFOUND: the name does not
+    // exist) from a failure that might not happen again (such as ETIMEOUT or ESERVFAIL)
+    xsink->raiseExceptionArg("QOREADDRINFO-GETINFO-ERROR", qore_cares_error_arg(status),
         "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') error: %s",
         has_host ? host.c_str() : "", has_service ? service.c_str() : "", family, q_af_to_str(family),
         ares_strerror(status));
@@ -8954,7 +8992,8 @@ int SocketConnectInetHappyEyeballsPollState::finishResolve(ExceptionSink* xsink)
     addrs = resolver->getAddresses();
     resolver.reset();
     if (addrs.empty()) {
-        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+        // the name has no address: a definite answer, as for ARES_ENODATA
+        xsink->raiseExceptionArg("QOREADDRINFO-GETINFO-ERROR", qore_cares_error_arg(ARES_ENODATA),
             "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') returned no addresses",
             host.c_str(), service.c_str(), family, q_af_to_str(family));
         return -1;
@@ -13906,7 +13945,8 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
     qore_socket_close_private_from_controller(priv);
 
     if (addrs.empty()) {
-        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+        // the name has no address: a definite answer, as for ARES_ENODATA
+        xsink->raiseExceptionArg("QOREADDRINFO-GETINFO-ERROR", qore_cares_error_arg(ARES_ENODATA),
             "ares_getaddrinfo(node: '%s', service: '%s') returned no addresses", name ? name : "",
             service ? service : "");
         qore_socket_set_bind_no_address_error();
