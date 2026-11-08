@@ -665,6 +665,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             addTestCase(proto + ": stale teardown after the next connect", \staleTeardownAfterConnectTest(), proto);
             addTestCase(proto + ": teardown in progress across the next connect", \teardownAcrossConnectTest(), proto);
             addTestCase(proto + ": destructor in the closing callback", \destructorInClosingCallbackTest(), proto);
+            addTestCase(proto + ": destructor on the delivery task waits for a reconnect's thread",
+                \destructorOnDeliveryWithReconnectTest(), proto);
             addTestCase(proto + ": destructor during a teardown", \destructorDuringTeardownTest(), proto);
             addTestCase(proto + ": destructor of an open connection", \destructorOpenTest(), proto);
             addTestCase(proto + ": disconnect in progress while the closing callback connects",
@@ -984,6 +986,38 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         int tid = deleted.get(LifecycleWsClient::HandoffTimeout);
         assertTrue(tid > 0, "the client is destroyed in the closing callback");
         assertNothing(ctx.wsc);
+        assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
+    }
+
+    #! The last reference is released in the closing callback, on the delivery task, while the automatic reconnect's
+    #! thread is deferred by the start_thread hook: the destructor, on the delivery task, waits for that thread, and
+    #! not for itself
+    destructorOnDeliveryWithReconnectTest(string proto) {
+        GatedStarter starter();
+        on_exit starter.dropPending();
+        LifecycleCtx ctx = makeCtx(proto, {"reconnect": True, "start_thread": \starter.start()});
+        connectChecked(ctx, proto);
+        starter.gate_next = True;
+        Queue deleted();
+        Counter sent(1);
+        on_exit if (sent.getCount()) {
+            sent.dec();
+        }
+        ctx.on_closed = sub (int n) {
+            sent.waitForZero(LifecycleWsClient::HandoffTimeout);
+            # the reconnect's thread was started (deferred) before the connection is reported closed
+            starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
+            *LifecycleWsClient c = remove ctx.wsc;
+            delete c;
+            deleted.push(gettid());
+        };
+        ctx.wsc.send("bye");
+        sent.dec();
+        starter.started.waitForZero(LifecycleWsClient::HandoffTimeout);
+        # the destructor waits for the deferred reconnect: nothing is deleted until it runs
+        starter.startPending();
+        int tid = deleted.get(LifecycleWsClient::HandoffTimeout);
+        assertTrue(tid > 0, "the client is destroyed on the delivery task once the reconnect's thread ended");
         assertEq(1, ctx.closed.getCount(), "the connection is reported closed once");
     }
 
