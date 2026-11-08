@@ -386,7 +386,7 @@ kept the previous library's identity and the new library refused them. The
 AOT environment's `LD_LIBRARY_PATH` (`QORE_GET_AOT_LIBRARY_PATH()`) puts the
 directory of `QORE_LIBRARY` ahead of the configure-time `LD_LIBRARY_PATH`, so a
 path naming another Qore build tree cannot make qcc compile for that tree's
-library. `examples/test/ir/CMakeBuildHelpers.qtest` ("external AOT qmods
+library. `examples/test/ir/CMakeBuildHelpers.qc` (`CMakeBuildHelpers-*.qtest`) ("external AOT qmods
 rebuild for a new Qore library ...") covers both.
 
 Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked

@@ -8,6 +8,7 @@
 %requires QUnit
 %requires SqlUtil
 %requires MysqlSqlUtil
+%requires ./MysqlTestIsolation.qm
 
 %try-module mysql
 %define NoMysql
@@ -104,7 +105,9 @@ class MysqlIdentifierQuotingTest inherits QUnit::Test {
         addTestCase("live: aliases give their result keys", \liveAliases());
         addTestCase("live: functions are listed", \liveFunctions());
 
-        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL;
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        connstr = MysqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL,
+            "MysqlIdentifierQuoting");
         set_return_value(main());
     }
 

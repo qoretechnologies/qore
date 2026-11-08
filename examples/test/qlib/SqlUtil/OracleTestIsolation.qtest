@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./OracleTestIsolation.qm
+%requires ./TestRunIsolation.qm
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class OracleTestIsolationTest
+
+#! The schema that OracleTestIsolation gives a run of an Oracle test
+class OracleTestIsolationTest inherits QUnit::Test {
+    private {
+        *string connstr;
+        *string admin_connstr;
+        *string skip_reason;
+        # users made for the leftover test, dropped at the end
+        list<string> made;
+    }
+
+    constructor() : Test("OracleTestIsolationTest", "1.0", \ARGV) {
+%ifdef NoOracle
+        skip_reason = "oracle module unavailable";
+%endif
+        connstr = ENV.QORE_DB_CONNSTR_ORACLE;
+        admin_connstr = ENV.QORE_DB_CONNSTR_ORACLE_SYS;
+        if (!connstr || !admin_connstr) {
+            skip_reason = "QORE_DB_CONNSTR_ORACLE and QORE_DB_CONNSTR_ORACLE_SYS are not both configured";
+        } else if (!skip_reason) {
+            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            try {
+                Datasource connstr_ds(connstr);
+                connstr_ds.open();
+                Datasource admin_connstr_ds(admin_connstr);
+                admin_connstr_ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
+        }
+        addTestCase("a non-Oracle connection has no run schema", \notOracle());
+        addTestCase("without an admin connection, the tests on a host run one at a time", \hostLock());
+        # the leftover users are made before the run's user, whose setup drops the ones that may be dropped
+        addTestCase("the setup drops only the users of gone runs", \leftovers());
+        addTestCase("the run's connections use the run's schema", \runSchema());
+        addTestCase("the teardown drops the run's users", \teardown());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (admin_connstr && made) {
+            Datasource ds(admin_connstr);
+            foreach string user in (made) {
+                if (ds.selectRow("select count(*) as c from all_users where username = %v", user).c) {
+                    ds.exec("drop user " + user + " cascade");
+                }
+            }
+            ds.commit();
+        }
+    }
+
+    private checkSkip() {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+    }
+
+    private notOracle() {
+        assertNothing(OracleRunSchema::getConnectionString(NOTHING, "x"));
+        assertEq("sqlite3:@:memory:", OracleRunSchema::getConnectionString("sqlite3:@:memory:", "x"));
+    }
+
+    #! A process that has no admin connection holds a lock on a file that every such process on the host takes
+    /** The lock is checked from a process of its own, as a process does not conflict with its own locks; the
+        processes meet at FIFOs, so nothing waits for a time.  No database is needed: the lock is taken before any
+        connection.
+    */
+    private hostLock() {
+        if (PlatformOS == "Windows") {
+            testSkip("no FIFOs");
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string ready = dir + "/ready";
+        string done = dir + "/done";
+        system(sprintf("mkfifo %s %s", ready, done));
+        string test_connstr = "oracle:u/p@db-" + get_random_string(8) + "%localhost:1";
+        string path = TestRun::getLockPath("oracle", test_connstr);
+        on_exit unlink(path);
+        string script = dir + "/holder.q";
+        File sf();
+        sf.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        sf.write(sprintf("%%modern\n%%requires %s/OracleTestIsolation.qm\n"
+            "OracleRunSchema::getConnectionString(%y, \"HostLock\");\n"
+            "File r(); r.open2(%y, O_WRONLY); r.write(\"held\\n\"); r.close();\n"
+            "File d(); d.open2(%y); d.readLine();\n", normalize_dir(get_script_dir()), test_connstr, ready, done));
+        sf.close();
+        # the holder has no admin connection; when it has ended, however it ended, the shell that runs it says so, so
+        # that a holder that fails before it holds the lock is reported instead of waited for
+        system(sprintf("sh -c 'env -u QORE_DB_CONNSTR_ORACLE_SYS %s %s > %s/out 2>&1; echo ended > %s' &",
+            ENV.QORE_EXECUTABLE ?? "qore", script, dir, ready));
+        File r();
+        r.open2(ready);
+        string line = r.readLine(False);
+        if (line != "held") {
+            File out();
+            out.open2(dir + "/out");
+            fail("the holder ended before it held the lock: " + (out.read(-1) ?? ""));
+        }
+        # the holder holds the lock: it is told to end, also when an assertion fails, so that it does not hold the
+        # lock after the test
+        bool released;
+        code release = sub () {
+            if (released) {
+                return;
+            }
+            released = True;
+            File d();
+            d.open2(done, O_WRONLY);
+            d.write("done\n");
+            d.close();
+        };
+        on_exit release();
+        File f();
+        f.open2(path, O_RDWR);
+        # held by the other process, exclusively: another run, which takes the same lock, waits; a shared lock is
+        # refused too
+        assertNeq(0, f.lock(F_WRLCK));
+        assertNeq(0, f.lock(F_RDLCK));
+        release();
+        # released when the other process ends
+        f.lockBlocking(F_WRLCK);
+        f.close();
+    }
+
+    private leftovers() {
+        checkSkip();
+        Datasource ds(admin_connstr);
+        string host = getHost();
+        int now = now_us().getEpochSeconds();
+        int old = now - TestRun::LeftoverAge.durationSeconds() - 60;
+        hash<string, bool> expected = {
+            # runs at least TestRun::LeftoverAge old, of any host and process, this one's too: dropped
+            sprintf("QTEST_LEFTOVER_%s_%d_%d_ABC123", host, getpid(), old): False,
+            sprintf("QTEST_OTHERHOST_%s_%d_%d_ABC123", host + "X", 1, old): False,
+            sprintf("QTEST_LEFTOVER_%s_%d_%d_ABC123_OTHER", host, getpid(), old): False,
+            # a recent run: kept
+            sprintf("QTEST_RECENT_%s_%d_%d_ABC123", host, 1, now): True,
+            # not a run's name: kept
+            sprintf("QTEST_%d", old): True,
+        };
+        foreach string user in (keys expected) {
+            ds.exec("create user " + user + " identified by \"Qtest_pw_1\"");
+            push made, user;
+        }
+        ds.commit();
+
+        string run_connstr = OracleRunSchema::getConnectionString(connstr, "OracleTestIsolation");
+        string user = parse_datasource(run_connstr).user.upr();
+        assertRegex(sprintf("^QTEST_ORACLETESTIS_%s_%d_[0-9]+_[A-Z0-9]{6}$", host, getpid()), user);
+
+        hash<string, bool> present = map {$1: True}, ds.select("select username from all_users where username "
+            "like %v", "QTEST%").username;
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, present{i.key} ?? False, i.key);
+        }
+        # a second call, with the same datasource string or with the one returned, gives the same user
+        assertEq(run_connstr, OracleRunSchema::getConnectionString(connstr, "OracleTestIsolation"));
+        assertEq(run_connstr, OracleRunSchema::getConnectionString(run_connstr, "OracleTestIsolation"));
+    }
+
+    private runSchema() {
+        checkSkip();
+        string run_connstr = OracleRunSchema::getConnectionString(connstr, "OracleTestIsolation");
+        Datasource ds(run_connstr);
+        string user = parse_datasource(run_connstr).user.upr();
+        assertEq(user, ds.selectRow("select sys_context('USERENV', 'CURRENT_SCHEMA') as s from dual").s);
+        # a table created without a schema name is in the run's schema, not in the test's
+        ds.exec("create table isolation_t (id number)");
+        assertEq(1, ds.selectRow("select count(*) as c from all_tables where owner = %v and table_name = "
+            "'ISOLATION_T'", user).c);
+        Datasource shared(connstr);
+        assertEq(0, shared.selectRow("select count(*) as c from user_tables where table_name = 'ISOLATION_T'").c);
+        # another user of the run, with a tag
+        string other = OracleRunSchema::getConnectionString(connstr + "{min=1}", "OracleTestIsolation", "other");
+        assertRegex("_OTHER$", parse_datasource(other).user.upr());
+        assertNeq(user, parse_datasource(other).user.upr());
+        # a connection that is still open when the run's users are dropped (see teardown())
+        ds.commit();
+    }
+
+    private teardown() {
+        checkSkip();
+        Datasource ds(admin_connstr);
+        string user = parse_datasource(OracleRunSchema::getConnectionString(connstr, "OracleTestIsolation")).user
+            .upr();
+        OracleRunSchema::teardown();
+        assertEq(0, ds.selectRow("select count(*) as c from all_users where username like %v", user + "%").c);
+        # nothing is done once they are dropped
+        OracleRunSchema::teardown();
+    }
+
+    private static string getHost() {
+        string host = (gethostname() =~ x/^([^.]+)/)[0] ?? gethostname();
+        host = host.upr();
+        host =~ s/[^A-Z0-9]//g;
+        return host.substr(0, 12);
+    }
+
+}

@@ -94,7 +94,9 @@ process without the mark that has left the runner's process tree is not found.
 A runner ended by `SIGHUP`, `SIGINT` or `SIGTERM` stops the test's watchdog,
 kills what the test left, sends the test the signal (`SIGTERM` for `SIGINT`),
 waits up to `QORE_TEST_INTERRUPT_WAIT` seconds (default 10) for it before it
-kills it, removes its files and then ends by the signal itself.
+kills it, removes its files and then ends by the signal itself.  A parallel run
+(`QORE_TEST_JOBS`) does this for each test that runs, prints their output, and
+then ends by the signal.
 
 When running tests or tools that load the `jni` module in the same process as
 other native runtimes that use synchronous signals, such as V8 or Python, set up

@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+# test-exec-mode: parent - the cancellation cases run threads in the test's own process
 
 %no-child-restrictions
 

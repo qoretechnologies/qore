@@ -154,8 +154,12 @@ public class BgeM3FastApiDataProviderCommon inherits DataProvider::AbstractDataP
 
     #! Returns @ref True if the error indicates that the operation should be retried
     private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
+        # nothing is retried while retries are suppressed (see DataProviderRetryUtil::runWithoutRetries())
+        if (DataProviderRetryUtil::retriesSuppressed()) {
+            return False;
+        }
         # retry on I/O errors
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             if (++retries == MaxIoRetries) {
                 LoggerWrapper::error(sprintf("Maximum retries exceeded (%d)", retries));
                 return False;

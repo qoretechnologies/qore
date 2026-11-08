@@ -1,60 +1,62 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-%modern
-%no-child-restrictions
+# The cases of the CMakeBuildHelpers-<n>.qtest tests: each runs one part of them, so that each takes a
+# short time, and together they run every case (see addPartCase()); the helpers are those of
+# CMakeBuildHelpersTestBase.qm, which the generic qcc object helper scenarios
+# (CMakeBuildHelpers-generic-*.qtest) and the incremental preload cases (CMakeBuildHelpers-preload.qtest) share
 
-%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
-%requires ../../../qlib/QUnit.qm
-%requires ../../../qlib/FsUtil.qm
-%requires ../TestFileTime.qm
-%requires ./CMakeBuildHelpersTestBase.qm
-# catalog install reconciliation is verified by composing what it leaves installed
-%requires ../../../qlib/DataProvider
-%requires i18n
-%requires json
+class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
 
-%exec-class CMakeBuildHelpersTest
+    constructor(string name, int part) : CMakeBuildTest(name, "1.0", \ARGV) {
+        self.part = part;
 
-class CMakeBuildHelpersTest inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
-    constructor() : CMakeBuildTest("CMakeBuildHelpersTest", "1.0", \ARGV) {
-        addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
-        addTestCase("a build tree reached through another path is reported, not loaded as an SDK",
+        addPartCase(1, "exported Qore CMake build helpers", \testExportedHelpers());
+        addPartCase(1, "a build tree reached through another path is reported, not loaded as an SDK",
             \testMovedBuildTree());
-        addTestCase("downstream catalog install root",
+        addPartCase(1, "downstream catalog install root",
             \testDownstreamCatalogInstallRoot());
-        addTestCase("catalog install reconciles obsolete owner fragments",
+        addPartCase(1, "catalog install reconciles obsolete owner fragments",
             \testCatalogInstallReconciliation());
-        addTestCase("catalog reconciliation retires orphans it owns by name",
+        addPartCase(1, "catalog reconciliation retires orphans it owns by name",
             \testCatalogOwnedOrphanRetirement());
-        addTestCase("catalog reconciliation refuses unsafe manifest entries",
+        addPartCase(1, "catalog reconciliation refuses unsafe manifest entries",
             \testCatalogManifestEntryValidation());
-        addTestCase("catalog reconciliation honours DESTDIR staging",
+        addPartCase(1, "catalog reconciliation honours DESTDIR staging",
             \testCatalogInstallDestdirStaging());
-        addTestCase("managed qcc outputs prune stale artifacts safely",
+        addPartCase(2, "managed qcc outputs prune stale artifacts safely",
             \testManagedQccOutputPruning());
-        addTestCase("source qmod links reject stale format artifacts",
+        addPartCase(1, "source qmod links reject stale format artifacts",
             \testSourceQmodSymlinkFreshness());
-        addTestCase("source qmod link cleanup keeps other build trees' links",
+        addPartCase(1, "source qmod link cleanup keeps other build trees' links",
             \testSourceQmodSymlinkOtherBuildTree());
-        addTestCase("module source globs track added and removed sources",
+        addPartCase(1, "module source globs track added and removed sources",
             \testModuleSourceGlobTracking());
-        addTestCase("qcc format fingerprint covers every AOT format source",
+        addPartCase(1, "qcc format fingerprint covers every AOT format source",
             \testFormatFingerprintCoverage());
-        addTestCase("qcc build inputs track libqore for an installed qore",
+        addPartCase(1, "qcc build inputs track libqore for an installed qore",
             \testQccDepsTrackInstalledLibqore());
-        addTestCase("external AOT qmods rebuild for a new Qore library and use its qcc runtime",
+        addPartCase(1, "external AOT qmods rebuild for a new Qore library and use its qcc runtime",
             \testExternalQmodsTrackQoreRuntime());
-        addTestCase("cyclic source components build as one atomic generation",
+        addPartCase(2, "cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
-        addTestCase("a group watches what its members read from outside it through one depfile",
+        addPartCase(3, "a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
-        addTestCase("a partial aggregate of a group links the contracts its members baked",
+        addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
             \testPartialAggregateBodyContracts());
 
         set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! The module source names the generated install script installs for \a module

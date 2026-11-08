@@ -10,6 +10,7 @@
 %requires OracleSqlUtilBase
 %requires OracleSqlUtil
 %requires QUnit
+%requires ./OracleTestIsolation.qm
 
 %try-module oracle
 %define NoOracle
@@ -108,7 +109,9 @@ class OracleDateComparisonTest inherits QUnit::Test {
 %ifdef NoOracle
         testSkip("no oracle module");
 %endif
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE ?? "";
+        # the run's own schema: tests that run at the same time do not share the objects of this one
+        string connstr = OracleRunSchema::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE,
+            "OracleDateComparisons") ?? "";
         if (!connstr.val()) {
             testSkip("no DB connection");
         }

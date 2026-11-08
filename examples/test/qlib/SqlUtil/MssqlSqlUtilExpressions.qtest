@@ -11,6 +11,7 @@
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
 %requires QUnit
+%requires ./MssqlTestIsolation.qm
 
 %try-module freetds
 %define NoFreetds
@@ -121,7 +122,9 @@ class MssqlExpressionTest inherits QUnit::Test {
 %ifdef NoFreetds
         testSkip("no freetds module");
 %endif
-        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_FREETDS ?? "";
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(m_options.connstr ?? ENV.QORE_DB_CONNSTR_FREETDS,
+            "MssqlSqlUtilExpr") ?? "";
         if (!connstr.val()) {
             testSkip("no DB connection");
         }

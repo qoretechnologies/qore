@@ -206,7 +206,7 @@ longer qualifies a function for a context-independent entry.
 Coverage: `AOTIncrementalDeps.qtest` (the batch records the fold; standalone and batch
 enum folds, the narrowed edge, same-named enums, and mode-independent declarations),
 `AOTSmoke.qtest` (enum members returned through fast entries),
-`AOTSccIncrementalDriver.qtest` (the closure reaches the provider) and
+`AOTSccIncrementalDriver.qc` (`AOTSccIncrementalDriver-*.qtest`) (the closure reaches the provider) and
 `CMakeBuildHelpers-preload.qtest` (the whole path, through a real incremental build).
 
 Nothing breaks a cycle at load time, and both of its outcomes are build-stopping:

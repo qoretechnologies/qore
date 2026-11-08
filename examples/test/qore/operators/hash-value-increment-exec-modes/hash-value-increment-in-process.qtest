@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HashValueIncrementInProcessTest
+
+#! Tests ++ and -- on the float and number values of typed hashes in the execution mode of the test itself
+/** The child processes of hash-value-increment-exec-modes.qtest check every execution mode against the AST
+    interpreter; these checks run in the process of the test, so each CI job checks them in its own execution mode.
+*/
+class HashValueIncrementInProcessTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HashValueIncrementInProcess", "1.0", \ARGV) {
+        addTestCase("the AST interpreter's ++ and -- on float and number hash values", \testAst());
+
+        set_return_value(main());
+    }
+
+    #! the reference results: ++ and -- keep the float or number value of a typed hash
+    testAst() {
+        hash<string, float> hf = {"v": 2.5};
+        assertEq(3.5, ++hf.v);
+        assertEq(3.5, hf.v);
+        assertEq(2.5, --hf.v);
+        assertEq(2.5, hf.v--);
+        assertEq(1.5, hf.v);
+        string k = "v";
+        assertEq(2.5, ++hf{k});
+        hash<string, number> hn = {"v": 2.5n};
+        assertEq(3.5n, ++hn.v);
+        assertEq("number", hn.v.type());
+        hash<string, int> hi = {"v": 2};
+        assertEq(3, ++hi.v);
+        assertEq("integer", hi.v.type());
+    }
+}

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
 
 # Regression test for issue #5352: JIT-compiled native code must emit debugger step
 # events (dbgStep) at statement boundaries when a debugger attaches mid-execution.

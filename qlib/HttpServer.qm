@@ -349,6 +349,11 @@ log("started listener on %s", lh.desc);
       body, and a \c Content-Length only if it is the length of the \c GET response's message body (it was always
       \c 0), and an error response to a \c HEAD request has no message body
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
+    - the time allowed for an I/O operation of a connection, which was always 30 seconds, can be set with the new
+      \c io_operation_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"
+    - fixed an error response that the server sends for a request, for example \c 400 for an invalid
+      \c Content-Length or \c 413 for a body that is too large: a second response (\c 500, "returned without sending a
+      response") followed it on the same connection
     - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
       \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
       client that is still sending data the server did not read, such as the rest of a request body answered with
@@ -808,6 +813,19 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.7
     */
     timeout lingering_close_timeout = 5s;
+
+    #! The time allowed for an I/O operation of a connection
+    /** This is the time allowed to read a request header once a request has started to arrive, to read the first
+        request of a new connection, and to send a response.  An idle keep-alive connection is waited for the idle
+        time (\c ttl) plus this time, which covers reading the header of the next request: a connection that sends
+        nothing for longer is closed.  A connection whose requests are answered by fast routes renews its timeout
+        with each request.
+
+        Must be greater than zero.
+
+        @since HttpServer 1.7
+    */
+    timeout io_operation_timeout = 30s;
 
     #! Resolves the host name of each client address, available to handlers in the request context
     /** When @ref True "True", the reverse DNS lookup of the address of each accepted connection is started when the
@@ -3412,6 +3430,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (idle_threads < 1) {
             throw "HTTP-SERVER-INIT-ERROR", sprintf("idle_threads (%d) must be greater than zero", idle_threads);
         }
+        if (opts.io_operation_timeout <= 0) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("io_operation_timeout (%d ms) must be greater than zero",
+                opts.io_operation_timeout);
+        }
         threadPool = new ThreadPool(-1, idle_threads);
         # Apply sentinel-based defaults for members whose "real" default is a
         # RuntimeConstantRefNode or expression too complex for the AOT writer
@@ -3450,6 +3472,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
+            "io_operation_timeout": opts.io_operation_timeout,
         });
         asyncIo.start();
     }
@@ -4110,6 +4133,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         });
     }
 
+    #! Sends an error response for a request of handleRequest() and records that a response was sent
+    /** sendHttpError() takes the request context by value, so the context of handleRequest() is marked here; otherwise
+        the request ends as one whose handler sent no response, and a second response (500) followed the error on the
+        same connection
+    */
+    private:internal sendRequestError(HttpListener listener, reference<hash<auto>> cx, Socket s, int status_code,
+            *data msg, *InputStream chunked_msg, *hash<auto> extra_hdrs, *string encoding, bool head) {
+        cx."response-sent" = True;
+        sendHttpError(listener, cx, s, status_code, msg, chunked_msg, extra_hdrs, encoding, head);
+    }
+
     #! @cond nodoc
     #! Handles incoming requests
     /** This method is called by listeners when a request is received.
@@ -4141,7 +4175,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             cx.close = True;
             # Mark response as sent before calling sendHttpError to prevent double response
             cx."response-sent" = True;
-            sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
+            sendRequestError(listener, \cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
             return;
         }
 
@@ -4151,7 +4185,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 listener.getListenerSocketInfo().address_desc);
             listener.logError("%s", str);
             cx.close = True;
-            sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
+            sendRequestError(listener, \cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
             return;
         }
 
@@ -4166,7 +4200,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 async_response_out = buildAsyncErrorResponse(400, err, cx, listener, s, !is_multiplexed);
             } else {
                 cx.close = True;
-                sendHttpError(listener, cx, s, 400, err, NOTHING, NOTHING, cx."response-encoding", head);
+                sendRequestError(listener, \cx, s, 400, err, NOTHING, NOTHING, cx."response-encoding", head);
             }
             return;
         }
@@ -4249,7 +4283,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             listener, s, !is_multiplexed);
                         return;
                     } else {
-                        sendHttpError(listener, cx, s, 404, "Not found", NOTHING, NOTHING,
+                        sendRequestError(listener, \cx, s, 404, "Not found", NOTHING, NOTHING,
                             cx."response-encoding", head);
                         return;
                     }
@@ -4307,7 +4341,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
                     listener.logError("%s", str);
                     cx.close = True;
-                    sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
                     return;
                 }
@@ -4366,7 +4400,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                                 async_response_out = buildAsyncErrorResponse(408,
                                     "Request Timeout", cx, listener, s, !is_multiplexed);
                             } else {
-                                sendHttpError(listener, cx, s, 408, "Request Timeout",
+                                sendRequestError(listener, \cx, s, 408, "Request Timeout",
                                     NOTHING, NOTHING, cx."response-encoding",
                                     hdr.method == "HEAD");
                             }
@@ -4447,7 +4481,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             async_response_out = buildAsyncErrorResponse(408,
                                 "Request Timeout", cx, listener, s, !is_multiplexed);
                         } else {
-                            sendHttpError(listener, cx, s, 408, "Request Timeout",
+                            sendRequestError(listener, \cx, s, 408, "Request Timeout",
                                 NOTHING, NOTHING, cx."response-encoding",
                                 hdr.method == "HEAD");
                         }
@@ -4475,7 +4509,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             async_response_out = buildAsyncErrorResponse(502, etxt,
                                 cx, listener, s, !is_multiplexed);
                         } else {
-                            sendHttpError(listener, cx, s, 502, etxt, NOTHING,
+                            sendRequestError(listener, \cx, s, 502, etxt, NOTHING,
                                 NOTHING, cx."response-encoding",
                                 hdr.method == "HEAD");
                         }
@@ -4493,7 +4527,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         async_response_out = buildAsyncErrorResponse(413, etxt, cx,
                             listener, s, !is_multiplexed);
                     } else {
-                        sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
+                        sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
                             cx."response-encoding", hdr.method == "HEAD");
                     }
                     return;
@@ -4520,7 +4554,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         proto, cx."header-info".body.size(), max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
-                    sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
+                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
                         cx."response-encoding", hdr.method == "HEAD");
                     return;
                 }
@@ -4553,7 +4587,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
-                    sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
                     return;
                 }
@@ -4563,7 +4597,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         content_length, max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
-                    sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
+                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
                         cx."response-encoding", hdr.method == "HEAD");
                     return;
                 }
@@ -4589,7 +4623,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
                     listener.logError("%s", str);
                     cx.close = True;
-                    sendHttpError(listener, cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
                         hdr.method == "HEAD");
                     return;
                 }
@@ -4810,7 +4844,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # I/O controller on multiplexed (HTTP/2, HTTP/3) connections
                 async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_multiplexed);
             } else {
-                sendHttpError(listener, cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
+                sendRequestError(listener, \cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
             }
             logError("%s", str);
         }

@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ReferenceLocalReachTest
+
+#! Regression test: a reference that reaches a local of no reference type reads and writes the referenced lvalue
+/** A local of no type, \c auto or \c any holds a reference not only when the function assigns it <tt>\x</tt>: a
+    reference can be the element of a container (<tt>auto r = h.r</tt> where \c h.r holds <tt>\x</tt>), the value a
+    call returns, or an argument given to a parameter of no reference type.  The local then reads as the referenced
+    lvalue and a store to it writes the referenced lvalue, as in the AST interpreter.  Compiled code assumed that a
+    body local could only receive a reference from <tt>\x</tt> in the same function: the IR classified such a local
+    as IR-only, so stores to it were lost in every compiled mode, and native code read the value the reference had
+    when the local was assigned or the function entered (the parameter case in AOT code too).  The locals that a
+    store can give a reference are now known (QoreIRFunction::computeReferenceStoreLocals()): one that would be
+    IR-only keeps the reference in its own storage, which its reads and stores go through
+    (QoreIRFunction::reference_slot_locals), any other one stays on the runtime stack, and native code keeps a
+    reference that such a local or parameter holds in its cache, with a flag that its reads check
+    (QoreIRToLLVM::usesReferenceFlag()).
+
+    The script reads, writes and sums references taken from hash and list elements, returned by a call, held in an
+    \c any local, given to \c auto and \c any parameters of functions, methods and static methods (with a loop that
+    makes no call), redeclares a local in a loop with a reference and a value, and uses ordinary \c auto locals as
+    controls; each function is called three times through a call reference and by name, in every execution mode and
+    on the IR tier of tiered execution (see ExecModeOutputTest).
+*/
+class ReferenceLocalReachTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a reference reaches a local of no reference type from a container, a call or a parameter; the local reads and
+# writes the referenced lvalue
+auto sub ret(reference<int> x) { return \x; }
+string sub hash_elem() { int x = 2; hash<auto> h = {"r": \x}; auto r = h.r; int a = r; x = 10; int b = r; r = 7; return sprintf("%y %y %y", a, b, x); }
+string sub list_elem() { int x = 2; list<auto> l = (\x,); auto r = l[0]; int a = r; x = 10; int b = r; r = 7; return sprintf("%y %y %y", a, b, x); }
+string sub from_call() { int x = 2; auto r = ret(\x); int a = r; x = 10; int b = r; r = 7; return sprintf("%y %y %y", a, b, x); }
+string sub any_elem() { int x = 2; hash<auto> h = {"r": \x}; any r = h.r; int a = r; x = 10; int b = r; r = 8; return sprintf("%y %y %y", a, b, x); }
+sub write_elem(hash<auto> h) { auto r = h.r; r = 9; }
+string sub write_through() { int x = 2; write_elem({"r": \x}); return sprintf("%y", x); }
+sub write_elem_twice(hash<auto> h) { auto r = h.r; r = 9; r += 1; }
+string sub write_through_twice() { int x = 2; write_elem_twice({"r": \x}); return sprintf("%y", x); }
+string sub loop_sum() { int x = 0; hash<auto> h = {"r": \x}; auto r = h.r; int s = 0; for (int i = 0; i < 3; ++i) { x = i * 10; s += r; } return sprintf("%y", s); }
+int sub sum_param(auto p, reference<int> x) { int s = 0; for (int i = 0; i < 3; ++i) { x = i * 10; s += p; } return s; }
+string sub param_loop() { int x = 0; return sprintf("%y", sum_param(\x, \x)); }
+int sub read_param(auto p, reference<int> x) { int a = p; x = 5; return a * 100 + p; }
+string sub param_read() { int x = 1; return sprintf("%y", read_param(\x, \x)); }
+sub write_param(any p) { p = 6; }
+string sub param_write() { int x = 1; write_param(\x); return sprintf("%y", x); }
+class K {
+    string m(any p, reference<int> x) { int a = p; x = 5; int b = p; p = 6; return sprintf("%y %y", a, b); }
+    static string s(auto p, reference<int> x) { int a = p; x = 7; return sprintf("%y %y", a, p); }
+}
+string sub method() { int x = 1; K k(); string r = k.m(\x, \x); return sprintf("%s %y", r, x); }
+string sub static_method() { int x = 1; string r = K::s(\x, \x); return sprintf("%s %y", r, x); }
+string sub redecl() {
+    int x = 1; int y = 2;
+    hash<auto> h = {"a": \x, "b": \y};
+    for (int i = 0; i < 2; ++i) {
+        auto r = i ? h.b : h.a;
+        r = 10 + i;
+    }
+    return sprintf("%y %y", x, y);
+}
+string sub redecl_value() {
+    int x = 1;
+    hash<auto> h = {"a": \x};
+    for (int i = 0; i < 2; ++i) {
+        auto r = i ? 5 : h.a;
+        r = 20 + i;
+    }
+    return sprintf("%y", x);
+}
+string sub plain_auto() { auto v = 1; for (int i = 0; i < 3; ++i) { v += i; } auto s = "a"; s += "b"; return sprintf("%y %y", v, s); }
+
+hash<string, code> tests = {
+    "hash_elem": \hash_elem(), "list_elem": \list_elem(), "from_call": \from_call(), "any_elem": \any_elem(),
+    "write_through": \write_through(), "write_through_twice": \write_through_twice(), "loop_sum": \loop_sum(),
+    "param_loop": \param_loop(), "param_read": \param_read(), "param_write": \param_write(), "method": \method(),
+    "static_method": \static_method(), "redecl": \redecl(), "redecl_value": \redecl_value(),
+    "plain_auto": \plain_auto(),
+};
+for (int i = 0; i < 3; ++i) {
+    foreach hash<auto> t in (tests.pairIterator()) {
+        printf("%d %s: %s\n", i, t.key, t.value());
+    }
+}
+for (int i = 0; i < 3; ++i) {
+    printf("%d direct: %s | %s | %s | %s | %s | %s\n", i, hash_elem(), from_call(), write_through(), loop_sum(),
+        param_loop(), param_write());
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "0 hash_elem: 2 10 7",
+            "0 list_elem: 2 10 7",
+            "0 from_call: 2 10 7",
+            "0 any_elem: 2 10 8",
+            "0 write_through: 9",
+            "0 write_through_twice: 10",
+            "0 loop_sum: 30",
+            "0 param_loop: 30",
+            "0 param_read: 105",
+            "0 param_write: 6",
+            "0 method: 1 5 6",
+            "0 static_method: 1 7 7",
+            "0 redecl: 10 11",
+            "0 redecl_value: 20",
+            "0 plain_auto: 4 \"ab\"",
+            "1 hash_elem: 2 10 7",
+            "1 list_elem: 2 10 7",
+            "1 from_call: 2 10 7",
+            "1 any_elem: 2 10 8",
+            "1 write_through: 9",
+            "1 write_through_twice: 10",
+            "1 loop_sum: 30",
+            "1 param_loop: 30",
+            "1 param_read: 105",
+            "1 param_write: 6",
+            "1 method: 1 5 6",
+            "1 static_method: 1 7 7",
+            "1 redecl: 10 11",
+            "1 redecl_value: 20",
+            "1 plain_auto: 4 \"ab\"",
+            "2 hash_elem: 2 10 7",
+            "2 list_elem: 2 10 7",
+            "2 from_call: 2 10 7",
+            "2 any_elem: 2 10 8",
+            "2 write_through: 9",
+            "2 write_through_twice: 10",
+            "2 loop_sum: 30",
+            "2 param_loop: 30",
+            "2 param_read: 105",
+            "2 param_write: 6",
+            "2 method: 1 5 6",
+            "2 static_method: 1 7 7",
+            "2 redecl: 10 11",
+            "2 redecl_value: 20",
+            "2 plain_auto: 4 \"ab\"",
+            "0 direct: 2 10 7 | 2 10 7 | 9 | 30 | 30 | 6",
+            "1 direct: 2 10 7 | 2 10 7 | 9 | 30 | 30 | 6",
+            "2 direct: 2 10 7 | 2 10 7 | 9 | 30 | 30 | 6",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ReferenceLocalReach", Script, (map $1 + "\n", Expected).join(""),
+            "reads and writes a reference that reaches a local of no reference type") {
+    }
+}

@@ -10,6 +10,7 @@
 %requires SqlUtil
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
+%requires ./MssqlTestIsolation.qm
 
 %try-module freetds
 %define NO_FREETDS
@@ -407,7 +408,9 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_FREETDS) {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
-        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        # the run's own database: tests that run at the same time do not share the objects of this one
+        string connstr = MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "MssqlRefActions");
+        Datasource ds(connstr);
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
@@ -523,7 +526,8 @@ class CatalogDatasource inherits Datasource {
             return sequences{argv[1]};
         }
         # the existence of a table
-        if (s =~ /from sysobjects/) {
+        # the existence of a table in its schema
+        if (s =~ /from sys\.tables t join sys\.schemas s/) {
             return columns{argv[1]} ? {"name": argv[1]} : NOTHING;
         }
         if (s =~ /constraint_type = 'PRIMARY KEY'/) {

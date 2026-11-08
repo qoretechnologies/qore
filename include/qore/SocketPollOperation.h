@@ -341,6 +341,9 @@ public:
 
         After a failure the count is the number of bytes written before the failure, so a caller can tell that the
         request header block reached the peer, which may already have answered it before it reset the connection.
+        The count is a lower bound: a BSD-derived stack (macOS) fails a write that a reset interrupts without
+        reporting the bytes it had already transmitted, so after a reset more may have reached the peer than the
+        count shows.
 
         @return the number of payload bytes written to the socket so far; 0 before the operation has written
         anything, and the full payload size once it has reached its goal

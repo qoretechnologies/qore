@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./FirebirdTestIsolation.qm
+%requires ./TestRunIsolation.qm
+
+%exec-class FirebirdTestIsolationTest
+
+#! The database that FirebirdTestIsolation gives a run of a Firebird test
+class FirebirdTestIsolationTest inherits QUnit::Test {
+    private {
+        *string connstr;
+        *string skip_reason;
+    }
+
+    constructor() : Test("FirebirdTestIsolationTest", "1.0", \ARGV) {
+        connstr = ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD;
+        if (!connstr) {
+            skip_reason = "QORE_DB_CONNSTR_JDBC_FIREBIRD is not configured";
+        } else {
+            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            try {
+                Datasource ds(connstr);
+                ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
+        }
+        addTestCase("a non-Firebird connection has no run database", \notFirebird());
+        addTestCase("the run's connections use the run's database", \runDatabase());
+        addTestCase("the teardown drops the run's database", \teardown());
+        addTestCase("the files of old runs are removed from a data directory", \leftoverFiles());
+        addTestCase("the password is not on the command line of the process that drops a database",
+            \dropCommand());
+        set_return_value(main());
+    }
+
+    private checkSkip() {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+    }
+
+    private notFirebird() {
+        assertNothing(FirebirdRunDatabase::getConnectionString(NOTHING, "x"));
+        assertEq("sqlite3:@:memory:", FirebirdRunDatabase::getConnectionString("sqlite3:@:memory:", "x"));
+        string pg = "jdbc:u/p@x{url=postgresql://h/db,classpath=/x.jar}";
+        assertEq(pg, FirebirdRunDatabase::getConnectionString(pg, "x"));
+    }
+
+    private runDatabase() {
+        checkSkip();
+        string run_connstr = FirebirdRunDatabase::getConnectionString(connstr, "FirebirdTestIsolation");
+        assertNeq(connstr, run_connstr, "the run has a database of its own (Jaybird 6 or later)");
+        # a second call, with the same datasource string or with the one returned, gives the same database
+        assertEq(run_connstr, FirebirdRunDatabase::getConnectionString(connstr, "FirebirdTestIsolation"));
+        assertEq(run_connstr, FirebirdRunDatabase::getConnectionString(run_connstr, "FirebirdTestIsolation"));
+
+        Datasource ds(run_connstr);
+        string path = ds.selectRow("select mon$database_name as n from mon$database").n;
+        assertRegex(sprintf("/qtest_firebirdtest_[a-z0-9]+_%d_[0-9]+_[a-z0-9]{6}\\.fdb$", getpid()), path);
+        # a table created in the run's database is not in the test's
+        ds.exec("create table isolation_t (id integer)");
+        ds.commit();
+        assertEq(1, ds.selectRow("select count(*) as c from rdb$relations where rdb$relation_name = 'ISOLATION_T'")
+            .c);
+        Datasource shared(connstr);
+        assertEq(0, shared.selectRow("select count(*) as c from rdb$relations where rdb$relation_name = "
+            "'ISOLATION_T'").c);
+        # closed, so the teardown can drop the database
+        ds.close();
+        shared.close();
+    }
+
+    private teardown() {
+        checkSkip();
+        string run_connstr = FirebirdRunDatabase::getConnectionString(connstr, "FirebirdTestIsolation");
+        FirebirdRunDatabase::teardown();
+        # the database is gone: a connection without createDatabaseIfNotExist cannot open it
+        string plain = run_connstr;
+        plain =~ s/[?&]createDatabaseIfNotExist=true//;
+        Datasource ds(plain);
+        assertThrows("JNI-ERROR", \ds.open());
+        # nothing is done once it is dropped
+        FirebirdRunDatabase::teardown();
+    }
+
+    private leftoverFiles() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        int t = now_us().getEpochSeconds();
+        int old = t - TestRun::LeftoverAge.durationSeconds() - 60;
+        hash<string, bool> kept = {
+            sprintf("qtest_suite_otherhost_1_%d_abc123.fdb", old): False,
+            sprintf("qtest_suite_host_1_%d_abc123.fdb", t): True,
+            "qore.fdb": True,
+            sprintf("qtest_suite_otherhost_1_%d_abc123.txt", old): True,
+        };
+        foreach string file in (keys kept) {
+            File f();
+            f.open2(dir + "/" + file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.close();
+        }
+        assertEq((dir + "/" + sprintf("qtest_suite_otherhost_1_%d_abc123.fdb", old),),
+            FirebirdRunDatabase::removeLeftoverFiles(dir));
+        foreach hash<auto> i in (kept.pairIterator()) {
+            assertEq(i.value, is_file(dir + "/" + i.key), i.key);
+        }
+    }
+
+    private dropCommand() {
+        string cmd = FirebirdRunDatabase::getDropCommand(<FirebirdDatabaseLocation>{
+            "host": "fbhost",
+            "port": 3050,
+            "path": "/data/qtest_x.fdb",
+            "user": "fbuser",
+            "pass": "Secret-pw-77",
+            "classpath": "/x.jar",
+        }, "/tmp/dir");
+        assertEq(-1, cmd.find("Secret-pw-77"));
+        assertRegex("'fbhost' '3050' '/data/qtest_x.fdb' 'fbuser' < '/tmp/dir/password'$", cmd);
+    }
+}

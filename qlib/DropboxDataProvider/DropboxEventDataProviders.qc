@@ -325,10 +325,13 @@ public class DropboxWatchDataProviderBase inherits DropboxDataProviderBase,
     */
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            hash<auto> body = doRpc("/2/files/list_folder", {
-                "path": watch_path,
-                "recursive": watch_recursive,
-                "limit": MaxPageSize,
+            # the example data is requested once, without retries
+            hash<auto> body = DataProviderRetryUtil::runWithoutRetries(hash<auto> sub () {
+                return doRpc("/2/files/list_folder", {
+                    "path": watch_path,
+                    "recursive": watch_recursive,
+                    "limit": MaxPageSize,
+                });
             });
             foreach hash<auto> e in (body.entries) {
                 # a folder watch must show a folder and a file watch a file, or the example advertises the

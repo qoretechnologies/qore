@@ -63,8 +63,16 @@ uint64_t qore_get_method_dispatch_epoch() {
     return qore_method_dispatch_epoch.load(std::memory_order_acquire);
 }
 
-static void qore_bump_method_dispatch_epoch() {
+void qore_bump_method_dispatch_epoch() {
     qore_method_dispatch_epoch.fetch_add(1, std::memory_order_release);
+}
+
+// starts at 1 so that 0 never identifies a class
+static std::atomic<uint64_t> qore_class_instance_serial_seq{1};
+
+uint64_t qore_get_next_class_instance_serial() {
+    // only uniqueness is needed: the serial is published with the class pointer it identifies
+    return qore_class_instance_serial_seq.fetch_add(1, std::memory_order_relaxed);
 }
 
 AbstractQoreClassUserData::~AbstractQoreClassUserData() {
@@ -978,6 +986,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
+    // dispatch caches keyed by this class's address, its methods or its types must miss from now on, before the
+    // memory can be reused for another class
+    qore_bump_method_dispatch_epoch();
 
     if (spgm) {
         if (deref_source_program) {
@@ -1598,7 +1609,7 @@ static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClas
 
 QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
-        bool allow_abstract, const QoreTypeInfo* object_type_info) const {
+        bool allow_abstract, const QoreTypeInfo* object_type_info, bool tmp_args) const {
 #ifdef DEBUG
     if (!allow_abstract) {
         // instantiation checks have to be made at parse time
@@ -1685,9 +1696,9 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
             if (!constructor) {
                 hm_method_t::const_iterator i = hm.find("constructor");
                 assert(i != hm.end());
-                i->second->priv->evalConstructor(variant, self, args, *bceal, rc, xsink);
+                i->second->priv->evalConstructor(variant, self, args, *bceal, rc, xsink, tmp_args);
             } else
-                constructor->priv->evalConstructor(variant, self, args, *bceal, rc, xsink);
+                constructor->priv->evalConstructor(variant, self, args, *bceal, rc, xsink, tmp_args);
             printd(5, "qore_class_private::execConstructor() class: %p %s done\n", cls, name.c_str());
         }
     }
@@ -6945,11 +6956,16 @@ void BuiltinCopyVariantBase::evalCopy(const QoreClass& thisclass, QoreObject* se
 
 void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
-        RuntimeConfig& rc, ExceptionSink* xsink) const {
-    // setup call, save runtime position, and evaluate arguments
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, "constructor", args, self,
-        qore_class_private::get(thisclass), CT_UNUSED, false, nullptr,
-        qore_get_method_pgm_context(thisclass));
+        RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
+    // setup call, save runtime position, and evaluate arguments; a temporary list gives its values to the call (see
+    // QoreListNodeEvalOptionalRefHolder::evalIntern()), so that converting an argument needs no copy of the list,
+    // which referenced every argument again
+    assert(!tmp_args || !args || args->reference_count() == 1);
+    CodeEvaluationHelper ceh = tmp_args
+        ? CodeEvaluationHelper(xsink, rc, this, variant, "constructor", const_cast<QoreListNode*>(args), self,
+            qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, qore_get_method_pgm_context(thisclass))
+        : CodeEvaluationHelper(xsink, rc, this, variant, "constructor", args, self,
+            qore_class_private::get(thisclass), CT_UNUSED, false, nullptr, qore_get_method_pgm_context(thisclass));
     if (*xsink) {
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
             thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
@@ -7541,9 +7557,11 @@ int QoreMemberMap::parseInit(LocalVar& selfid) {
 }
 
 void QoreMemberMap::moveAllTo(QoreClass* qc, ClassAccess access) {
-    if (empty() && access == Public) {
-        qore_class_private::get(*qc)->parseSetEmptyPublicMemberDeclaration();
-        return;
+    // a public member declaration, whatever it declares (or if it declares nothing), means that the class declares
+    // its members, so that an undeclared member is refused (INVALID-MEMBER); this does not depend on which of the
+    // member and static variable lists of the declaration are empty
+    if (access == Public) {
+        qore_class_private::get(*qc)->parseSetPublicMemberDeclaration();
     }
     for (auto& i : member_list) {
         qore_class_private::parseAddMember(*qc, i.first, access, i.second);
@@ -7567,9 +7585,9 @@ void QoreVarMap::parseCommitRuntimeInit(ExceptionSink* xsink) {
 }
 
 void QoreVarMap::moveAllTo(QoreClass* qc, ClassAccess access) {
-    if (empty() && access == Public) {
-        qore_class_private::get(*qc)->parseSetEmptyPublicMemberDeclaration();
-        return;
+    // see QoreMemberMap::moveAllTo()
+    if (access == Public) {
+        qore_class_private::get(*qc)->parseSetPublicMemberDeclaration();
     }
     for (auto& i : member_list) {
         qore_class_private::parseAddStaticVar(qc, i.first, access, i.second);

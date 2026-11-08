@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: parent - checkParse parses and calls code in Program objects of the test's own process
 
 # A hash key or object member name is a NUL-terminated string, so a string with a NUL character used as a key was cut
 # at the NUL character and named another key.  A key with a NUL character raises HASH-KEY-ERROR instead: a constant

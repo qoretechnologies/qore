@@ -1318,6 +1318,27 @@ static bool qore_find_user_module_source(const std::string& dir, const char* nam
     return false;
 }
 
+//! Sets dir to the directory of a separated module whose entry source is the explicit path given
+/** An explicit path such as `<module-dir>/<feature>/<feature>.qm` names the entry source of a separated module, which
+    is the directory with its sibling .qc and .ql files; loading only the entry file leaves the module incomplete.
+
+    @return true if the path is the entry source of a separated module, in which case dir is set to its directory
+*/
+static bool qore_explicit_source_is_separated_main(const char* path, const char* feature, QoreString& dir) {
+    dir.clear();
+    const char* sep = q_find_last_path_sep(path);
+    if (!sep) {
+        return false;
+    }
+    dir = path;
+    dir.terminate(sep - path);
+    if (strcmp(q_basenameptr(dir.c_str()), feature) || !has_separated_module_main(dir.c_str(), feature)) {
+        dir.clear();
+        return false;
+    }
+    return true;
+}
+
 static bool qore_find_explicit_qmod_source(const char* path, const char* feature, QoreString& source_path,
         QoreString& separated_path) {
     separated_path.clear();
@@ -1338,16 +1359,7 @@ static bool qore_find_explicit_qmod_source(const char* path, const char* feature
     // An explicit path such as `<module-dir>/<feature>/<feature>.qmod`
     // refers to a separated module. The source fallback must load the parent
     // directory so that all sibling .qc and .ql files are parsed as well.
-    // Loading only the sibling .qm entry file leaves the module incomplete.
-    const char* sep = q_find_last_path_sep(source_path.c_str());
-    if (sep) {
-        separated_path = source_path;
-        separated_path.terminate(sep - source_path.c_str());
-        if (strcmp(q_basenameptr(separated_path.c_str()), feature)
-                || !has_separated_module_main(separated_path.c_str(), feature)) {
-            separated_path.clear();
-        }
-    }
+    qore_explicit_source_is_separated_main(source_path.c_str(), feature, separated_path);
     return true;
 }
 
@@ -2849,8 +2861,18 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             mi = loadSeparatedModule(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
         } else {
-            mi = loadUserModuleFromPath(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+            // the entry source of a separated module given by its path is loaded with the module's other sources,
+            // as when the module is found by name or its directory is given
+            QoreString separated_path;
+            std::string entry = std::string(name) + ".qm";
+            if (entry == q_basenameptr(raw_path)
+                    && qore_explicit_source_is_separated_main(raw_path, name, separated_path)) {
+                mi = loadSeparatedModule(xsink, wsink, separated_path.c_str(), name, pgm, reexport,
+                    pholder.release(), load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+            } else {
+                mi = loadUserModuleFromPath(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
+                    load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
+            }
         }
 
         return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask, unlock_lock) ? nullptr : mi;

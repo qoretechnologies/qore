@@ -10617,6 +10617,11 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             writer.writeU32(0);
         }
 
+        // class flags (QORE_AOT_CLASS_FLAGS_VERSION): a public member declaration that declares no public member
+        // (public {}, or only constants or static variables) is recorded only here; addMember() recreates the flag
+        // from public members alone
+        writer.writeU8(priv->has_public_memdecl ? QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL : 0);
+
         // members - only serialize local (non-inherited) members
         uint32_t num_members = 0;
         for (auto& mi : priv->members.member_list) {
@@ -16139,6 +16144,15 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             class_injected_paths[i] = makeDeferredStringRef(injected_path);
         }
         pending_bases.push_back(std::move(bases));
+
+        // the class flags: a public member declaration makes the class refuse undeclared members whatever the
+        // declaration holds, as when the class is parsed
+        if (reader.getHeader().version >= QORE_AOT_CLASS_FLAGS_VERSION) {
+            uint8_t class_flags = QoreAOTBinaryReader::readU8(ptr);
+            if (!class_already_existed && (class_flags & QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL)) {
+                qc->setPublicMemberFlag();
+            }
+        }
 
         // Read instance members (store for later resolution after hashdecls/enums)
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);

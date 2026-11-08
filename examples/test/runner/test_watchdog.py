@@ -140,12 +140,15 @@ class RunnerTree:
 
     def break_fifo(self):
         """Makes the event FIFO of the runner fail: another runner removes it between this runner's mkfifo and its
-        open, as runners that shared their FIFO did; the open then makes a regular file"""
+        open, as runners that shared their FIFO did; the open then makes a regular file.  The other FIFOs of the runner
+        (those of a parallel run and of its trap) are made as usual."""
         real = shutil.which("mkfifo")
         self.write_script("mkfifo", f"""\
             #!/bin/sh
             '{real}' "$@" || exit
-            rm -f "$@"
+            case "$*" in
+                */events) rm -f "$@" ;;
+            esac
             """)
 
 
@@ -239,12 +242,14 @@ class InterruptedRunnerTest(unittest.TestCase):
     """A runner ended by a signal ends the test that runs, its watchdog and the processes the test left, removes its
     files, the directory of its event FIFO among them, and ends by the signal"""
 
-    def interrupt(self, sig, test_source="", wait=None, test_lines=(), second_signal=False):
+    def interrupt(self, sig, test_source="", wait=None, test_lines=(), second_signal=False, jobs=1):
         """Runs a runner whose test blocks, sends the runner the signal and checks that it ends as it should
 
         test_source: lines of Python (a string or a list) that the test runs first, with {ready} and {alive} for the
         descriptors of the harness's pipes; second_signal: the runner is sent the signal again once it reports that
-        its trap waits for the test, and every process of the run must have ended when the runner has
+        its trap waits for the test, and every process of the run must have ended when the runner has; jobs: the
+        number of tests the runner runs at the same time (QORE_TEST_JOBS), each of them a test that blocks; the signal
+        is sent once all of them run, and each line of test_lines must be in the output once for each test
         """
         if isinstance(test_source, str):
             test_source = [test_source]
@@ -268,14 +273,17 @@ class InterruptedRunnerTest(unittest.TestCase):
                 # then) and blocks on a FIFO that only the harness's cleanup writes
                 hold = tree.root / "hold"
                 os.mkfifo(hold)
-                tree.add_test("blocks.qtest", f"""\
-                    # test-timeout: 600
-                    import os
-                    {(chr(10) + " " * 20).join(line.format(ready=ready_fd, alive=alive_fd) for line in test_source)}
-                    os.write({ready_fd}, b"running\\n")
-                    open({str(hold)!r}).read()
-                    """)
+                for number in range(1, jobs + 1):
+                    tree.add_test("blocks%d.qtest" % number, f"""\
+                        # test-timeout: 600
+                        import os
+                        {(chr(10) + " " * 24).join(line.format(ready=ready_fd, alive=alive_fd) for line in test_source)}
+                        os.write({ready_fd}, b"running\\n")
+                        open({str(hold)!r}).read()
+                        """)
                 env = tree.env()
+                if jobs > 1:
+                    env["QORE_TEST_JOBS"] = str(jobs)
                 if wait is not None:
                     env["QORE_TEST_INTERRUPT_WAIT"] = str(wait)
                 trap_report = None
@@ -296,23 +304,36 @@ class InterruptedRunnerTest(unittest.TestCase):
                 for fd in write_ends:
                     os.close(fd)
                 write_ends = []
-                readable, _, _ = select.select([ready_r], [], [], 120)
-                self.assertEqual([ready_r], readable, "the test did not start")
-                self.assertEqual(b"running\n", os.read(ready_r, 100), "the run ended before the test started")
+                started = b""
+                while started.count(b"\n") < jobs:
+                    readable, _, _ = select.select([ready_r], [], [], 120)
+                    self.assertEqual([ready_r], readable, "the tests did not start")
+                    data = os.read(ready_r, 100)
+                    self.assertNotEqual(b"", data, "the run ended before the tests started")
+                    started += data
+                self.assertEqual(b"running\n" * jobs, started)
                 self.assertEqual(1, len(list(tree.tmp.glob("qore-test-events.*"))),
                                  "the runner made its FIFO directory")
                 runner.send_signal(sig)
                 if second_signal:
-                    readable, _, _ = select.select([trap_report], [], [], 60)
-                    self.assertEqual([trap_report], readable, "the runner did not report that its trap waits")
-                    self.assertEqual(b"waiting\n", os.read(trap_report, 100))
+                    # each test's shell reports it (a parallel run)
+                    reports = b""
+                    while reports.count(b"\n") < jobs:
+                        readable, _, _ = select.select([trap_report], [], [], 60)
+                        self.assertEqual([trap_report], readable, "the runner did not report that its trap waits")
+                        reports += os.read(trap_report, 100)
+                    self.assertEqual(b"waiting\n" * jobs, reports)
                     runner.send_signal(sig)
                 runner.wait(timeout=120)
                 output = output_path.read_text()
                 # the runner ends by the signal, so that its caller sees why
                 self.assertEqual(-sig, runner.returncode, output)
                 for line in test_lines:
-                    self.assertIn(line, output)
+                    self.assertEqual(jobs, output.count(line), output)
+                if jobs > 1:
+                    # the output of each test that was ended is printed
+                    for number in range(1, jobs + 1):
+                        self.assertIn("blocks%d.qtest" % number, output)
                 # the read returns when no process holds the pipe anymore; one that is left keeps it open, which the
                 # time limit of the select ends as a failure
                 # (a runner that has waited for every process it started ends after them: then the pipe is at its end
@@ -335,6 +356,8 @@ class InterruptedRunnerTest(unittest.TestCase):
                         os.close(fd)
             self.assertEqual([], list(tree.tmp.glob("qore-test-events.*")),
                              "the runner ended by signal %d left its FIFO directory" % sig)
+            self.assertEqual([], list(tree.tmp.glob("qore-run-tests.*")),
+                             "the runner ended by signal %d left the directory of its parallel run" % sig)
             self.assertEqual([], sorted(p.name for p in tree.cores.iterdir()),
                              "the runner ended by signal %d left its files in the core directory" % sig)
 
@@ -373,6 +396,38 @@ class InterruptedRunnerTest(unittest.TestCase):
         # process group reaches it), which inherits the test's mark and the harness's pipes
         self.interrupt(signal.SIGTERM, "import subprocess; subprocess.Popen(['sleep', '600'], start_new_session=True, "
                        "pass_fds=({ready}, {alive}))")
+
+    # A parallel run (QORE_TEST_JOBS) ended by a signal ends each test that runs as a run of one test at a time does:
+    # its traps were "exit", which left the tests, their watchdogs and their shells running, and the event FIFO
+    # directory behind.  Its shells run in the background, where SIGINT cannot be trapped, so the runner sends them
+    # SIGTERM for it.
+    def test_sighup_in_a_parallel_run(self):
+        self.interrupt(signal.SIGHUP, jobs=2)
+
+    def test_sigint_in_a_parallel_run(self):
+        self.interrupt(signal.SIGINT, jobs=2)
+
+    def test_sigterm_in_a_parallel_run(self):
+        self.interrupt(signal.SIGTERM, jobs=2)
+
+    @unittest.skipUnless(HAVE_TIMEOUT, "the runner bounds its wait for the test only with a timeout command")
+    def test_tests_that_handle_the_signal_and_hang_in_a_parallel_run_are_killed(self):
+        self.interrupt(signal.SIGTERM, "import signal; signal.signal(signal.SIGTERM, signal.SIG_IGN)", 1,
+                       ("the run is interrupted, and the test did not end within 1s: SIGKILL sent",), jobs=2)
+
+    @unittest.skipUnless(HAVE_TIMEOUT, "the runner bounds its wait for the test only with a timeout command")
+    def test_a_second_signal_while_the_trap_of_a_parallel_run_runs_is_ignored(self):
+        self.interrupt(signal.SIGTERM, [
+            "import signal",
+            "terms = []",
+            "signal.signal(signal.SIGTERM, lambda *args: os._exit(0) if terms else terms.append(1))",
+        ], 1, ("the run is interrupted, and the test did not end within 1s: SIGKILL sent",), second_signal=True,
+            jobs=2)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/task"), "processes a test leaves are found through /proc (Linux)")
+    def test_the_processes_the_tests_of_a_parallel_run_left_are_ended(self):
+        self.interrupt(signal.SIGTERM, "import subprocess; subprocess.Popen(['sleep', '600'], start_new_session=True, "
+                       "pass_fds=({ready}, {alive}))", jobs=2)
 
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
@@ -433,6 +488,28 @@ class FailedFifoTest(unittest.TestCase):
             self.assertIn("second test ran", result.output)
             self.assertRegex(result.output, r"Passed 1 out of +2 tests\. 1 tests failed\.")
             self.assertIn("Harness errors: the watchdog of 2 tests failed", result.output)
+            self.assertEqual(2, result.returncode, result.output)
+
+    def test_a_watchdog_error_in_a_parallel_run_fails_the_run(self):
+        # each test of a parallel run runs in a shell of its own, which counted the watchdog's error only there: the
+        # run passed
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            tree.break_fifo()
+            for name in ("a.qtest", "b.qtest"):
+                tree.add_test(name, f"""\
+                    # test-timeout: 60
+                    print("test {name} ran to its end", flush=True)
+                    """)
+            result = tree.run(QORE_TEST_JOBS="2")
+            self.assertIn("2 at a time", result.output)
+            self.assertEqual(2, result.output.count("WATCHDOG ERROR: the watchdog's event FIFO"), result.output)
+            self.assertIn("test a.qtest ran to its end", result.output)
+            self.assertIn("test b.qtest ran to its end", result.output)
+            self.assertRegex(result.output, r"Passed 2 out of +2 tests\. 0 tests failed\.")
+            self.assertIn("Harness errors: the watchdog of 2 tests failed (WATCHDOG ERROR in their output):\n"
+                          "./examples/test/tests/a.qtest\n./examples/test/tests/b.qtest\n", result.output)
+            self.assertIn("TESTING RESULT: Failure.", result.output)
             self.assertEqual(2, result.returncode, result.output)
 
 

@@ -16,7 +16,7 @@
 /** Each case builds a small object group with the exported CMake helpers, edits some of its members, and checks that
     the group's incremental compiles -- of one component at a time, or a partial parse of several -- preload every
     sibling the edited sources need, current, and that the next build converges.  The cases are a file of their own,
-    beside CMakeBuildHelpers.qtest, so that no file of the CMake helper tests comes near the time limit of a test
+    beside CMakeBuildHelpers-<n>.qtest, so that no file of the CMake helper tests comes near the time limit of a test
     and test shards run them side by side.
 */
 class CMakeBuildHelpersPreloadTest inherits CMakeBuildHelpersTestBase::CMakeBuildTest {

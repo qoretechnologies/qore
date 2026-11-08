@@ -1,0 +1,323 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires ./PgsqlTestIsolation.qm
+
+%exec-class PgsqlProceduresTest
+
+#! A connection to the PostgreSQL server that reports the version of PostgreSQL 10, and records the queries
+class Pg10Datasource inherits Datasource {
+    public {
+        list<string> sql = ();
+    }
+
+    constructor(string connstr) : Datasource(connstr) {
+    }
+
+    auto getServerVersion() {
+        return 100023;
+    }
+
+    auto select(string sql, ...) {
+        self.sql += sql;
+        return Datasource::vselect(sql, argv);
+    }
+
+    auto selectRow(string sql, ...) {
+        self.sql += sql;
+        return Datasource::vselectRow(sql, argv);
+    }
+
+    auto selectRows(string sql, ...) {
+        self.sql += sql;
+        return Datasource::vselectRows(sql, argv);
+    }
+}
+
+#! The procedures of PostgreSQL 11 and later: PgsqlSqlUtil took them for functions, so that describing one raised
+#! FUNCTION-ERROR ("function does not begin with 'create or replace function'"), and a procedure given in a schema was
+#! created as a function; a function is still a procedure when there is no procedure, as before PostgreSQL 11
+class PgsqlProceduresTest inherits QUnit::Test {
+    private {
+        # label -> datasource string
+        hash<string, string> conns;
+
+        const Function = "create function qtest_pp_f(a integer) returns integer language plpgsql as $$ begin "
+            "return a; end; $$";
+        const Procedure = "create procedure qtest_pp_p(a integer) language plpgsql as $$ begin perform a; end; $$";
+    }
+
+    constructor() : Test("PgsqlProceduresTest", "1.0", \ARGV) {
+        foreach hash<auto> i in ({"pgsql": "QORE_DB_CONNSTR_PGSQL", "jdbc": "QORE_DB_CONNSTR_JDBC_PGSQL"}
+                .pairIterator()) {
+            *string connstr = ENV{i.value};
+            if (!connstr.val()) {
+                continue;
+            }
+            # the run's own schema
+            PgsqlRunSchema::setup(connstr, "PgsqlProcedures");
+            conns{i.key} = PgsqlRunSchema::getConnectionString(connstr);
+        }
+
+        addTestCase("functions are not procedures", \functions());
+        addTestCase("a procedure is described", \procedure());
+        addTestCase("a function is a procedure when there is no procedure", \functionAsProcedure());
+        addTestCase("procedures and functions are listed as procedures", \listProcedures());
+        addTestCase("makeProcedure() makes a procedure or a function", \makeProcedure());
+        addTestCase("a schema with a procedure is aligned", \alignSchema());
+        addTestCase("functions and procedures are renamed", \rename());
+        addTestCase("before PostgreSQL 11, functions are read without a routine kind", \beforeProcedures());
+        addTestCase("routines are read with standard_conforming_strings off", \nonStandardStrings());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    private skipIfNone() {
+        if (!conns) {
+            testSkip("no PostgreSQL connection available");
+        }
+    }
+
+    # returns a database with the function and the procedure created
+    private Database getDatabase(string connstr) {
+        Datasource ds(connstr);
+        ds.open();
+        ds.execRaw("drop procedure if exists qtest_pp_p(integer)");
+        ds.execRaw("drop function if exists qtest_pp_f(integer)");
+        ds.execRaw(Function);
+        ds.execRaw(Procedure);
+        ds.commit();
+        return new Database(ds);
+    }
+
+    #! pg_proc.prokind was added in PostgreSQL 11 with procedures: reading the functions of an earlier version
+    #! raised an error (column p.prokind does not exist)
+    private beforeProcedures() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            # the function and the procedure exist on the server, which is of a later version
+            getDatabase(i.value);
+            Pg10Datasource ds(i.value);
+            on_exit ds.rollback();
+            Database db(ds);
+            list<string> l = db.listFunctions();
+            assertTrue(inlist("qtest_pp_f(a int)", l) || inlist("qtest_pp_f(a integer)", l), i.key + ": " + l.join(","));
+            assertEq("PgsqlFunction", db.getFunction("qtest_pp_f").className(), i.key);
+            assertEq("PgsqlFunction", db.getFunction("qtest_pp_f(a integer)").className(), i.key);
+            # a function is the procedure of its name
+            assertEq("PgsqlFunction", db.getProcedure("qtest_pp_f").className(), i.key);
+            l = db.listProcedures();
+            assertTrue(inlist("qtest_pp_f(a int)", l) || inlist("qtest_pp_f(a integer)", l), i.key + ": " + l.join(","));
+            assertRegex("^drop function qtest_pp_f\\(", db.getDropProcedureSqlIfExists("qtest_pp_f"), i.key);
+            assertNothing(db.getDropFunctionSqlIfExists("qtest_pp_none"), i.key);
+            # a procedure source makes a function: there are no procedures
+            assertEq("PgsqlFunction", db.makeProcedure("qtest_pp_m1(a int)", "language plpgsql as $$ begin perform "
+                "a; end; $$").className(), i.key);
+            assertEq((), (select ds.sql, $1 =~ /prokind/), i.key);
+            assertTrue(ds.sql.size() > 0, i.key);
+        }
+    }
+
+    #! the argument lists of routines were read with a replacement string literal of a backslash, which is an escape
+    #! in a string literal when standard_conforming_strings is off: the argument mode IN was replaced with a control
+    #! character
+    private nonStandardStrings() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            AbstractDatasource ds = db.getDatasource();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("set standard_conforming_strings = on");
+                ds.commit();
+            }
+            ds.execRaw("set standard_conforming_strings = off");
+            assertEq("off", ds.selectRow("show standard_conforming_strings").standard_conforming_strings, i.key);
+            list<string> l = db.listProcedures();
+            list<string> p = select l, $1 =~ /^qtest_pp_p\(/;
+            assertEq(1, p.size(), i.key + ": " + l.join(","));
+            assertRegex("^qtest_pp_p\\(a int(eger)?\\)$", p[0], i.key);
+            assertEq("PgsqlProcedure", db.getProcedure("qtest_pp_p(a integer)").className(), i.key);
+            assertEq("PgsqlFunction", db.getFunction("qtest_pp_f(a integer)").className(), i.key);
+            l = db.listFunctions();
+            assertEq((), (select l, $1 =~ /[\x00-\x1f\\]/), i.key + ": " + l.join(","));
+        }
+    }
+
+    private functions() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            list<string> l = db.listFunctions();
+            assertTrue(inlist("qtest_pp_f(a int)", l) || inlist("qtest_pp_f(a integer)", l), i.key + ": " + l.join(","));
+            assertEq((), (select l, $1 =~ /^qtest_pp_p\(/), i.key + ": " + l.join(","));
+            assertEq("function", db.getFunction("qtest_pp_f").getType(), i.key);
+            # a procedure is not a function
+            assertNothing(db.getFunction("qtest_pp_p"), i.key);
+        }
+    }
+
+    private procedure() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            AbstractDatasource ds = db.getDatasource();
+            *AbstractFunction p = db.getProcedure("qtest_pp_p");
+            assertEq("PgsqlProcedure", p.className(), i.key);
+            assertEq("procedure", p.getType(), i.key);
+            list<string> create = p.getCreateSql({"replace": True});
+            assertRegex("^create or replace procedure qtest_pp_p\\(", create[0], i.key);
+            string drop = p.getDropSql();
+            assertRegex("^drop procedure qtest_pp_p\\(", drop, i.key);
+            # the SQL drops and creates the procedure again
+            ds.execRaw(drop);
+            assertNothing(db.getProcedure("qtest_pp_p"), i.key);
+            map ds.execRaw($1), create;
+            ds.commit();
+            ds.exec("call qtest_pp_p(1)");
+            ds.commit();
+            assertEq("PgsqlProcedure", db.getProcedure("qtest_pp_p(a integer)").className(), i.key);
+        }
+    }
+
+    private functionAsProcedure() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            *AbstractFunction f = db.getProcedure("qtest_pp_f");
+            assertEq("PgsqlFunction", f.className(), i.key);
+            assertEq("function", f.getType(), i.key);
+            assertNothing(db.getProcedure("qtest_pp_none"), i.key);
+        }
+    }
+
+    private listProcedures() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            list<string> l = db.listProcedures();
+            int p = -1;
+            int f = -1;
+            foreach string n in (l) {
+                if (n =~ /^qtest_pp_p\(/) {
+                    p = $#;
+                } else if (n =~ /^qtest_pp_f\(/) {
+                    f = $#;
+                }
+            }
+            assertTrue(p >= 0 && f >= 0, i.key + ": " + l.join(","));
+            # the default argument mode (IN) of a procedure's argument is left out, as for a function
+            assertEq((), (select l, $1 =~ /\(IN /), i.key + ": " + l.join(","));
+        }
+    }
+
+    private makeProcedure() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            hash<string, list<auto>> cases = {
+                "no returns": ("qtest_pp_m1(a int)", "language plpgsql as $$ begin perform a; end; $$",
+                    "PgsqlProcedure"),
+                # "returns" in the body is not a RETURNS clause
+                "returns in the body": ("qtest_pp_m2(a int)", "language plpgsql as $$ begin raise notice "
+                    "'returns %', a; end; $$", "PgsqlProcedure"),
+                "returns void": ("qtest_pp_m3(a int)", "returns void language plpgsql as $$ begin perform a; end; $$",
+                    "PgsqlFunction"),
+                "returns first": ("qtest_pp_m4()", "returns integer as $$ begin return 1; end; $$ language plpgsql",
+                    "PgsqlFunction"),
+                "out argument": ("qtest_pp_m5(a int, out b int)", "language plpgsql as $$ begin b := a; end; $$",
+                    "PgsqlFunction"),
+                "inout argument": ("qtest_pp_m6(inout a int)", "language plpgsql as $$ begin a := a + 1; end; $$",
+                    "PgsqlFunction"),
+                # an argument named "output" is not an OUT argument
+                "argument named out...": ("qtest_pp_m7(output int)", "language plpgsql as $$ begin perform output; "
+                    "end; $$", "PgsqlProcedure"),
+            };
+            AbstractDatasource ds = db.getDatasource();
+            foreach hash<auto> c in (cases.pairIterator()) {
+                AbstractFunction f = db.makeProcedure(c.value[0], c.value[1]);
+                assertEq(c.value[2], f.className(), i.key + ": " + c.key);
+                # the SQL creates the object on the server, as a procedure or a function
+                map ds.execRaw($1), f.getCreateSql();
+                ds.commit();
+                # the object by its name without arguments
+                *AbstractFunction g = db.getProcedure((c.value[0] =~ x/^([^(]+)/)[0]);
+                assertEq(c.value[2], g.className(), i.key + ": " + c.key + ": described");
+                ds.execRaw(g.getDropSql());
+                ds.commit();
+            }
+        }
+    }
+
+    private alignSchema() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            AbstractDatasource ds = db.getDatasource();
+            ds.execRaw("drop procedure if exists qtest_pp_a(integer)");
+            ds.commit();
+            hash<auto> schema = {
+                "procedures": {
+                    "qtest_pp_a(a integer)": "language plpgsql as $$ begin perform a; end; $$",
+                },
+            };
+            list<auto> l = db.getAlignSql(schema);
+            assertEq(1, l.size(), i.key + ": " + l.join("; "));
+            assertRegex("^create (or replace )?procedure qtest_pp_a\\(", l[0] ?? "", i.key);
+            map ds.execRaw($1), l;
+            ds.commit();
+            assertEq("PgsqlProcedure", db.getProcedure("qtest_pp_a").className(), i.key);
+            # nothing more to align
+            assertEq((), db.getAlignSql(schema), i.key);
+            ds.execRaw("drop procedure qtest_pp_a(integer)");
+            ds.commit();
+        }
+    }
+
+    #! the SQL renaming a function or a procedure gave the argument list after the new name, which PostgreSQL refuses
+    private rename() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            Database db = getDatabase(i.value);
+            AbstractDatasource ds = db.getDatasource();
+            ds.execRaw("drop procedure if exists qtest_pp_p2(integer)");
+            ds.execRaw("drop function if exists qtest_pp_f2(integer)");
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("drop procedure if exists qtest_pp_p2(integer)");
+                ds.execRaw("drop function if exists qtest_pp_f2(integer)");
+                ds.commit();
+            }
+            foreach list<string> r in ((("function", "qtest_pp_f", "qtest_pp_f2"),
+                    ("procedure", "qtest_pp_p", "qtest_pp_p2"))) {
+                AbstractFunction f = r[0] == "function" ? db.getFunction(r[1]) : db.getProcedure(r[1]);
+                list<string> sql = f.getRenameSql(r[2]);
+                assertEq(1, sql.size(), i.key + ": " + r[0]);
+                assertRegex(sprintf("^alter %s %s\\(a integer\\) rename to %s$", r[0], r[1], r[2]), sql[0],
+                    i.key + ": " + r[0]);
+                # the server renames it
+                map ds.execRaw($1), sql;
+                ds.commit();
+                *AbstractFunction g = r[0] == "function" ? db.getFunction(r[2]) : db.getProcedure(r[2]);
+                assertEq(f.className(), g.className(), i.key + ": " + r[0] + " renamed");
+                assertNothing(r[0] == "function" ? db.getFunction(r[1]) : db.getProcedure(r[1]),
+                    i.key + ": " + r[0] + " old name");
+                # an argument list given with the new name is ignored
+                assertEq(sql, f.getRenameSql(r[2] + "(a integer)"), i.key + ": " + r[0] + " with arguments");
+            }
+        }
+    }
+}

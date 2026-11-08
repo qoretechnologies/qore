@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ForeachStoreDestructorTypeErrorTest
+
+#! Regression test: a type error raised by a destructor during the assignment of a foreach element keeps its description
+/** The assignment of an element to the variable of a foreach loop releases the value the variable held; a type error
+    raised by that value's destructor is described by the code that raised it ("<lvalue> expects type ..."), while the
+    store's own type check describes its error as "<foreach lvalue assignment>" (see ForeachAssignmentTypeError.qtest).
+    The compiled modes rewrote every RUNTIME-TYPE-ERROR raised during the store, and a closure-bound variable left by
+    the exception was released without an exception sink by the frame boundary (a debug build aborted).  The variants
+    use an untyped, a class-typed, an object-typed and a closure-bound variable and a list.  The script runs every case
+    twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ForeachStoreDestructorTypeErrorTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# a destructor of the value replaced by a foreach store raises a type error described as "<lvalue>"
+class D {
+    private { int n; }
+    constructor(int n) { self.n = n; }
+    destructor() {
+        auto v = "s" + n;
+        int x;
+        x = v;
+    }
+}
+class It inherits AbstractIterator {
+    private { int i = 0; int max; }
+    constructor(int m) { max = m; }
+    bool next() { return ++i <= max; }
+    auto getValue() { return new D(i); }
+    bool valid() { return i > 0 && i <= max; }
+}
+sub fa() {
+    foreach auto v in (new It(3)) {
+    }
+}
+sub ft() {
+    foreach D v in (new It(3)) {
+    }
+}
+sub fo() {
+    foreach object v in (new It(3)) {
+    }
+}
+sub fc() {
+    code c;
+    foreach auto v in (new It(3)) {
+        c = auto sub () { return v; };
+    }
+}
+sub fl() {
+    list<auto> l = (new D(1), new D(2));
+    foreach auto v in (l) {
+        l = ();
+    }
+}
+foreach string fn in (("fa", "ft", "fo", "fc", "fl")) {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            call_function(fn);
+            printf("%s: no exception\n", fn);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s: %s: %s\n", fn, ex.err, ex.desc);
+        }
+    }
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "fa: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fa: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "ft: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "ft: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fo: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fo: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fc: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fc: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fl: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+            "fl: RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ForeachStoreDestructorTypeError", Script, (map $1 + "\n", Expected).join(""),
+            "keeps the description of a type error raised by a destructor during a foreach store as the AST interpreter does") {
+    }
+}

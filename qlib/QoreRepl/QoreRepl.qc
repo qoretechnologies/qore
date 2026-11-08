@@ -30,6 +30,13 @@ public const Version = "1.3";
 #! REPL result indicating the command requests exit
 public const ReplExit = {"exit": True};
 
+#! Classification for an embedding UI before submitting input; this does not mutate the session.
+public hashdecl ReplRequestInfo {
+    *string command;
+    bool requires_idle;
+    bool help;
+}
+
 #! Core REPL class providing evaluation functionality
 /** This class can be used standalone for programmatic REPL integration
     (e.g., WebSocket handlers) or with QoreReplClient for CLI usage.
@@ -109,6 +116,7 @@ public class QoreRepl {
             "/quit", "/exit", "/q",
             "/version",
             "/reset", "/clear",
+            "/threads", "/cancel", "/join",
             "/vars",
             "/functions", "/funcs",
             "/classes",
@@ -133,6 +141,7 @@ public class QoreRepl {
             "/version",
             "/reset",
             "/clear",
+            "/threads", "/cancel", "/join",
             "/vars",
             "/functions",
             "/classes",
@@ -336,20 +345,24 @@ if (!exists result) {
         @endcode
     */
     *hash<auto> eval(string input) {
-        # Check for special commands first
-        if (input =~ /^\//) {
+        # Only new requests interpret history shortcuts; continuation lines are literal Qore source.
+        if (!needsMoreInput() && input.size() >= 2 && input[0] == "!") {
+            input = qhistory.expand(input) ?? input;
+        }
+        hash<ReplRequestInfo> request = inspectRequest(input);
+        # Reject before changing history or the multi-line buffer. Embedders can wait and retry the exact request.
+        if (request.requires_idle && pgm.getThreadCount()) {
+            return {"error": <ExceptionInfo>{"err": "REPL-THREADS-ACTIVE",
+                "desc": "Running threads prevent parsing or resetting this Program. Wait, cancel this request, "
+                    "or use /cancel all to request thread termination.", "arg": pgm.getThreadList()}};
+        }
+        # Commands are available only at the primary prompt, never inside unfinished source.
+        if (request.command) {
+            input = trim(input);
             # Add command to history
             history += input;
             qhistory.add(input);
             return processCommand(input);
-        }
-
-        # Check for history expansion (!! !n !-n !prefix !$)
-        if (input.size() >= 2 && input[0] == "!") {
-            *string expanded = qhistory.expand(input);
-            if (exists expanded) {
-                input = expanded;
-            }
         }
 
         # Accumulate input
@@ -598,7 +611,9 @@ if (!exists result) {
         return needsMoreInput() ? ContinuationPrompt : DefaultPrompt;
     }
 
-    #! Resets the pending input state
+    #! Cancels unfinished source and returns to the primary prompt without resetting the Program
+    /** Call this method to cancel multiline input before submitting a slash command.
+        @note Interactive frontends bind this action to Ctrl+C. */
     reset() {
         pending_input = "";
         pending_indent_level = 0;
@@ -609,6 +624,32 @@ if (!exists result) {
     */
     Program getProgram() {
         return pgm;
+    }
+
+    /** Classifies input without parsing or changing session state.
+        @param input source or command @return command metadata; ambiguous commands are left for eval() to report
+        @note While needsMoreInput() is true, every input is source. Code execution and /load, /reset, /type
+        require an idle Program. Native parsing retains its own guard.
+    */
+    hash<ReplRequestInfo> inspectRequest(string input) {
+        if (needsMoreInput()) { return <ReplRequestInfo>{"requires_idle": True}; }
+        input = trim(input);
+        if (input.size() >= 2 && input[0] == "!") { input = qhistory.expand(input) ?? input; }
+        if (!input.startsWith("/")) { return <ReplRequestInfo>{"requires_idle": !!input}; }
+        string command = input.split(" ")[0].lwr();
+        *hash<auto> resolved = resolveCommandAbbreviation(command);
+        if (resolved.error) { return <ReplRequestInfo>{"command": command}; }
+        command = resolved.command ?? command;
+        return <ReplRequestInfo>{"command": command, "requires_idle": inlist(command, ("/reset", "/load", "/type")),
+            "help": command == "/help" || command == "/?"};
+    }
+
+    /** Requests cooperative cancellation of this session's current threads.
+        @param reason explanation delivered to workers @return number of requests delivered
+        @note Completion is separate: use getProgram().waitForThreads() from a worker and deliver an idle event.
+    */
+    int cancelThreads(string reason = "REPL requested thread termination") {
+        return pgm.cancelThreads(reason);
     }
 
     #! Returns the current indent level for continuation lines
@@ -667,16 +708,23 @@ if (!exists result) {
     }
 
     #! Returns help text for special commands
-    string getHelpText() {
+    /** @param keyboard include linenoise shortcuts; other frontends supply their own
+        @return command reference, including aliases and Program-scoped thread commands */
+    string getHelpText(bool keyboard = True) {
         string help = sprintf("%s\n", color.key("Commands:"));
-        help += helpLine("/help", "Show this help");
+        help += helpLine("/help", "Show this help (also /?)");
         help += helpLine("/quit", "Exit the REPL (also /exit, /q)");
         help += helpLine("/version", "Show QoreRepl and Qore version");
         help += sprintf("\n%s\n", color.key("Session:"));
         help += helpLine("/reset", "Reset the Program state");
-        help += helpLine("/clear", "Clear pending multi-line input");
+        help += helpLine("/clear", "Reset input state at the primary prompt");
         help += helpLine("/history", "Show command history");
         help += helpLine("/timing", "Toggle execution timing display");
+        help += sprintf("\n%s\n", color.key("Threads (current Program only):"));
+        help += helpLine("/threads", "List running thread IDs and names");
+        help += helpLine("/cancel <tid|all>", "Request cooperative thread termination");
+        help += helpLine("/join <tid|all>", "Wait for threads to leave the Program");
+        help += "Parsing, /type, /load and /reset require an idle Program.\n";
         help += sprintf("\n%s\n", color.key("Introspection:"));
         help += helpLine("/vars", "List global variables");
         help += helpLine("/functions", "List user-defined functions (also /funcs)");
@@ -694,6 +742,9 @@ if (!exists result) {
         help += "\nQore expressions and statements are evaluated directly.\n";
         help += sprintf("Multi-line input is supported - the prompt changes to '%s' when more input is needed.\n",
             color.value("    >"));
+        help += "Continuation lines are Qore source, including /commands and history shortcuts.\n"
+            "Cancel unfinished input before using commands at the qore> prompt.\n";
+        if (!keyboard) { return help; }
         help += sprintf("\n%s\n", color.key("Keyboard shortcuts (linenoise):"));
         help += helpLine("Up/Down", "Navigate history");
         help += helpLine("Ctrl+R", "Reverse search history");
@@ -761,7 +812,38 @@ if (!exists result) {
         switch (command) {
             case "/help":
             case "/?":
-                return {"value": getHelpText()};
+                return {"value": getHelpText(), "help": True};
+
+            case "/threads":
+                if (args.size()) { return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "Usage: /threads"}}; }
+                list<string> lines = ("TID     Name",);
+                foreach int tid in (pgm.getThreadList()) {
+                    lines += sprintf("%-7d %s", tid, get_thread_name(tid) ?? "(unnamed)");
+                }
+                return {"value": lines.size() == 1 ? "No running threads in this Program" : lines.join("\n")};
+
+            case "/cancel":
+            case "/join":
+                if (args.size() != 1 || (args[0] != "all" && !(args[0] =~ /^[1-9][0-9]*$/))) {
+                    return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "Usage: " + command + " <tid|all>"}};
+                }
+                if (args[0] == "all") {
+                    if (command == "/cancel") { return {"value": sprintf("Cancellation requested for %d thread(s)", cancelThreads())}; }
+                    pgm.waitForThreads();
+                } else {
+                    int tid = int(args[0]);
+                    if (string(tid) != args[0]) {
+                        return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "Thread ID is out of range"}};
+                    }
+                    if (!inlist(tid, pgm.getThreadList())) {
+                        return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "Thread is not active in this Program"}};
+                    }
+                    if (command == "/cancel") {
+                        return {"value": pgm.cancelThread(tid, "REPL /cancel") ? "Cancellation requested" : "Thread already finished"};
+                    }
+                    pgm.waitForThread(tid);
+                }
+                return {"value": "Requested threads have left the Program"};
 
             case "/quit":
             case "/exit":
@@ -776,10 +858,11 @@ if (!exists result) {
                 int parse_opts = (opts.parse_options ?? PO_NEW_STYLE) | PO_ALLOW_REPARSE | PO_ALLOW_STATEMENT_NO_EFFECT;
                 pgm = new Program(parse_opts, True);
                 eval_counter = 0;
+                reset();
                 return {"value": "Program state reset"};
 
             case "/clear":
-                pending_input = "";
+                reset();
                 return {"value": "Pending input cleared"};
 
             case "/vars":
@@ -2022,7 +2105,7 @@ if (!exists result) {
     */
     private list<string> completionForContext(string input) {
         # Handle REPL-specific command completion
-        if (input.startsWith("/") && input.find(" ") == -1) {
+        if (!needsMoreInput() && input.startsWith("/") && input.find(" ") == -1) {
             return completeCommand({"prefix": input});
         }
 
@@ -2078,7 +2161,7 @@ if (!exists result) {
     hash<auto> extractCompletionContext(string input) {
         # Command completion: only if input starts with "/" and has no space
         # (a space indicates command arguments, which should be completed as identifiers)
-        if (input.startsWith("/") && input.find(" ") == -1) {
+        if (!needsMoreInput() && input.startsWith("/") && input.find(" ") == -1) {
             return {
                 "kind": CC_COMMAND,
                 "prefix": input,
@@ -2109,7 +2192,7 @@ if (!exists result) {
     list<hash<QoreCodeCompletion::CompletionItem>> getCompletionDetails(string input) {
         try {
             # Handle REPL-specific command completion
-            if (input.startsWith("/") && input.find(" ") == -1) {
+            if (!needsMoreInput() && input.startsWith("/") && input.find(" ") == -1) {
                 return getCommandDetails({"prefix": input});
             }
 

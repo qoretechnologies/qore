@@ -318,12 +318,12 @@ public class BedrockDataProviderCommon inherits DataProvider::AbstractDataProvid
                 return rest.restDoRawRequest(method.upr(), path, exists body ? binary(make_json(body)) : NOTHING,
                     {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson} + (hdr ?? {}));
             } catch (hash<ExceptionInfo> ex) {
-                if (RetrySet{ex.err} && ++retries < MaxIoRetries) {
+                if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet) && ++retries < MaxIoRetries) {
                     warn("Bedrock transient error: %s: %s; retrying", ex.err, ex.desc);
                     continue;
                 }
                 if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 429
-                        && ++retries < MaxIoRetries) {
+                        && !DataProviderRetryUtil::retriesSuppressed() && ++retries < MaxIoRetries) {
                     int wait_secs = 1 << retries;
                     warn("Bedrock rate-limited; waiting %ds before retry %d", wait_secs, retries);
                     sleep(wait_secs);

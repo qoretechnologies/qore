@@ -479,6 +479,8 @@ public:
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     unsigned thread_count = 0;   // number of threads currently running in this Program
+    // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
+    bool cancel_new_threads = false;
     //! the references released by threads that deleted this Program while running its code: tid -> count
     /** A thread that deletes the Program while it runs the Program's code, or while it holds its parse lock (code
         that the parse commit runs, a constant initializer for example), cannot wait for itself to leave that code or
@@ -1467,17 +1469,23 @@ public:
         AutoLocker al(plock);
 
         assert(thread_count > 0);
-        if (!--thread_count && thread_waiting)
+        --thread_count;
+        if (!thread_count) {
+            cancel_new_threads = false;
+        }
+        if (thread_waiting) {
             pcond.broadcast();
+        }
     }
 
     // called from the new thread once the thread has been started (after preregisterNewThread())
-    DLLLOCAL void registerNewThread(int tid) {
+    DLLLOCAL bool registerNewThread(int tid) {
         // grab program-level lock
         AutoLocker al(plock);
 
         assert(thread_count);
         ++tidmap[tid];
+        return cancel_new_threads;
     }
 
     /*
@@ -1557,8 +1565,13 @@ public:
         }
 
         assert(thread_count > 0);
-        if (!--thread_count && thread_waiting)
+        if (!--thread_count) {
+            cancel_new_threads = false;
+        }
+        // Wake individual-thread waiters as well as whole-Program waiters.
+        if (thread_waiting) {
             pcond.broadcast();
+        }
         return derefs;
     }
 
@@ -3431,8 +3444,8 @@ public:
     }
 
     // called from the new thread once the thread has been started (after preregisterNewThread())
-    DLLLOCAL static void registerNewThread(QoreProgram& pgm, int tid) {
-        pgm.priv->registerNewThread(tid);
+    DLLLOCAL static bool registerNewThread(QoreProgram& pgm, int tid) {
+        return pgm.priv->registerNewThread(tid);
     }
 
     DLLLOCAL static void runtimeImportSystemClasses(QoreProgram& pgm, ExceptionSink* xsink) {

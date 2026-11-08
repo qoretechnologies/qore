@@ -764,6 +764,31 @@ public:
     */
     DLLEXPORT unsigned getThreadCount() const;
 
+    //! Waits for activity in this Program to finish, without polling
+    /** @param xsink receives cancellation or self-wait errors
+        @param timeout_ms negative means unlimited, zero means check only
+        @param tid zero waits for all activity including parsing; otherwise waits for this thread to leave
+        @return true when idle, false on timeout or error
+        @note This waits for Program activity, not the thread's final TLS cleanup.
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool waitForThreads(ExceptionSink* xsink, int64 timeout_ms = -1, int tid = 0) const;
+
+    //! Requests cooperative cancellation of a thread belonging to this Program
+    /** @param tid target thread ID @param reason optional cancellation reason
+        @param xsink receives invalid ID or self-cancellation errors
+        @return true if a request was delivered; false if the thread is no longer active here
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool cancelThread(int tid, const char* reason, ExceptionSink* xsink) const;
+
+    //! Requests cancellation of active and starting threads until this Program next becomes idle
+    /** @param xsink receives self-cancellation errors @param reason optional explanation
+        @return number of registered threads receiving a request
+        @since %Qore 3.0
+    */
+    DLLEXPORT unsigned cancelThreads(ExceptionSink* xsink, const char* reason = nullptr) const;
+
     //! search for the given class in the program; can be a simple class name or a namespace-prefixed path (ex: "NamespaceName::ClassName")
     /** @since %Qore 0.9
     */

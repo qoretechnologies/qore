@@ -1,0 +1,1114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  HttpClientEarlyResponse.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A server may answer an HTTP/1.1 request before it has read all of it - a 413 or 431 fault, say - and then close
+    the connection, which resets it because request data is left unread.  The client's write of the request then
+    fails, and the server's answer, already in the client's receive buffer, must be what the caller gets (issue
+    #5630).  These cases cover what HttpClientBufferedDuplex.qtest does not: TLS, streamed (chunked) request bodies,
+    a write of the request body that fails after the receive side found nothing, a response cut short by the reset,
+    a reused connection, and a request cancelled while its write fails or while its response is read.  Debug hooks
+    force each interleaving, so every case is deterministic.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientEarlyResponseTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Byte pattern of the payloads
+const Pattern = "0123456789abcdef";
+
+#! What an @ref EarlyPeer does on one exchange
+hashdecl EarlyPlan {
+    #! how much of the request the peer reads before it answers
+    /** - \c "partial": @ref read_size bytes, a small part of the request header block
+        - \c "header": the request header block
+        - \c "drain": the request header block and its \c Content-Length body
+        - \c "eof": everything until the client closes the connection; the peer then neither answers nor fails
+        - \c "none": nothing; the peer answers a request that it has not received
+        - \c "handover": nothing; the peer hands the connection over to the test (@ref EarlyPeer::takeConnection())
+          and waits for the test's Counter, then closes it; a debug hook answers and resets it in between
+    */
+    string read = "partial";
+
+    #! the number of request bytes a \c "partial" plan reads
+    int read_size = EarlyPeer::ReadSize;
+
+    #! if True the peer waits, after reading, until more request data has arrived, without reading it
+    /** It reports that on @ref EarlyPeer::waitForRequestStart() too, after the start of the request.
+    */
+    bool await_data = False;
+
+    #! if True the peer waits for the test's Counter to reach zero before it answers
+    bool wait = False;
+
+    #! the response status; 0: the peer does not answer
+    int status = 431;
+
+    #! the size of the response body declared with \c Content-Length
+    int body_size = 2048;
+
+    #! the number of body bytes sent; -1: the whole body
+    int body_sent = -1;
+
+    #! if True the peer shuts the connection down before it closes it
+    bool fin_first = False;
+
+    #! if True the peer keeps the connection for the next plan instead of closing it
+    bool keep = False;
+}
+
+#! A raw HTTP/1.1 peer that answers requests as its plans say, plain or over TLS
+/** A plan that does not keep the connection closes it after answering; with request data unread, the close resets
+    the connection.
+*/
+class EarlyPeer {
+    public {
+        #! upper bound on any blocking peer-side operation; reaching it fails the test
+        const PeerTimeout = 60s;
+
+        #! request bytes a \c "partial" plan reads before it answers, unless the plan says otherwise
+        const ReadSize = 1024;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        bool tls;
+        *Counter signal;
+        Queue observed();
+        Queue started();
+        Queue handed();
+        Counter done(1);
+        *hash<ExceptionInfo> peer_ex;
+    }
+
+    #! Starts the peer
+    /** @param plans one plan per exchange, in order
+        @param tls True to serve over TLS
+        @param signal the Counter that a plan with @ref EarlyPlan::wait waits for
+    */
+    constructor(list<hash<EarlyPlan>> plans, bool tls = False, *Counter signal) {
+        self.tls = tls;
+        self.signal = signal;
+        if (tls) {
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        }
+        listener.bind("localhost:0", True);
+        listener.listen();
+        port = listener.getPort();
+        background serve(plans);
+    }
+
+    string getUrl() {
+        return sprintf("%s://localhost:%d", tls ? "https" : "http", port);
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! Returns what the peer read of the next request: its request line or its path
+    string getObserved() {
+        return observed.get(PeerTimeout);
+    }
+
+    #! Returns once the peer has read the start of the next request, before it answers
+    string waitForRequestStart() {
+        return started.get(PeerTimeout);
+    }
+
+    #! Returns the connection that a \c "handover" plan hands over
+    Socket takeConnection() {
+        return handed.get(PeerTimeout);
+    }
+
+    #! Waits for the peer thread to finish and rethrows anything it caught
+    stopAndCheck() {
+        if (done.waitForZero(PeerTimeout)) {
+            throw "PEER-ERROR", "the raw peer did not finish";
+        }
+        if (peer_ex) {
+            throw "PEER-ERROR", sprintf("the raw peer failed: %s: %s", peer_ex.err, peer_ex.desc);
+        }
+    }
+
+    #! Closes @a conn so that the connection is reset at once
+    /** With request data left unread a close resets the connection, but a close shuts the socket down first, and on
+        macOS that discards the unread data, so the close ends the connection with a FIN; the debug hook closes it
+        with a reset on every platform.
+    */
+    static reset(Socket conn) {
+        try {
+            if (Option::HAVE_LIBRARY_DEBUGGING) {
+                call_function("dbg_reset_socket", conn);
+            } else {
+                conn.close();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    static binary makeBody(int size) {
+        return binary(strmul(Pattern, size / Pattern.size() + 1).substr(0, size));
+    }
+
+    private serve(list<hash<EarlyPlan>> plans) {
+        on_exit done.dec();
+        *Socket conn;
+        on_exit {
+            if (conn) {
+                try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
+            }
+            try { listener.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+        try {
+            foreach hash<EarlyPlan> plan in (plans) {
+                if (!conn) {
+                    conn = listener.accept(PeerTimeout);
+                    if (tls) {
+                        conn.upgradeServerToSSL(PeerTimeout);
+                    }
+                }
+                string what;
+                switch (plan.read) {
+                    case "partial": {
+                        string start = conn.recvBinary(plan.read_size, PeerTimeout).toString();
+                        what = (start =~ x/^([^\r\n]*)/)[0] ?? start;
+                        break;
+                    }
+                    case "header":
+                    case "drain": {
+                        hash<auto> hdr = conn.readHTTPHeader(PeerTimeout);
+                        what = hdr.path;
+                        if (plan.read == "drain" && hdr."content-length") {
+                            conn.recvBinary(hdr."content-length".toInt(), PeerTimeout);
+                        }
+                        break;
+                    }
+                    case "eof": {
+                        # the client closes or resets the connection, so the read may also fail
+                        try {
+                            conn.recvBinary(-1, PeerTimeout);
+                        } catch (hash<ExceptionInfo> ex) {
+                        }
+                        what = "eof";
+                        break;
+                    }
+                    case "none":
+                        what = "none";
+                        break;
+                    case "handover":
+                        what = "handover";
+                        handed.push(conn);
+                        break;
+                    default:
+                        throw "PEER-ERROR", sprintf("unknown read mode %y", plan.read);
+                }
+                started.push(what);
+                if (plan.await_data) {
+                    if (!conn.isDataAvailable(PeerTimeout)) {
+                        throw "PEER-ERROR", "no more request data arrived";
+                    }
+                    started.push("data");
+                }
+                if ((plan.wait || plan.read == "handover") && signal.waitForZero(PeerTimeout)) {
+                    throw "PEER-ERROR", "the test did not signal the peer";
+                }
+                if (plan.status) {
+                    conn.send(sprintf("HTTP/1.1 %d Early\r\nContent-Type: application/octet-stream\r\n"
+                        "Content-Length: %d\r\n\r\n", plan.status, plan.body_size), PeerTimeout);
+                    int sent = plan.body_sent < 0 ? plan.body_size : plan.body_sent;
+                    if (sent) {
+                        conn.send(EarlyPeer::makeBody(sent), PeerTimeout);
+                    }
+                }
+                if (!plan.keep) {
+                    if (plan.fin_first) {
+                        conn.shutdown();
+                    }
+                    reset(conn);
+                    delete conn;
+                }
+                observed.push(what);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            peer_ex = ex;
+            # unblock a test waiting for an exchange that will never be observed
+            started.push(sprintf("%s: %s", ex.err, ex.desc));
+            observed.push(sprintf("%s: %s", ex.err, ex.desc));
+            handed.push(new Socket());
+        }
+    }
+}
+
+public class HttpClientEarlyResponseTest inherits QUnit::Test {
+    public {
+        #! the size of the request header that a \c "partial" plan answers before it has read it
+        /** Larger than the client's send buffer plus the peer's receive buffer, so the client's write of the header
+            block is still unfinished when the peer stops reading.
+        */
+        const LargeHeaderSize = 8 * 1024 * 1024;
+
+        #! the size of a request body larger than the socket buffers
+        const UploadSize = 8 * 1024 * 1024;
+
+        #! the body of an early fault; small enough to be on the wire in full before the peer's reset
+        const FaultBodySize = 2048;
+
+        #! upper bound on any blocking client-side operation; reaching it fails the test
+        const ClientTimeout = 60s;
+
+        #! the size of each chunk of a streamed request body
+        const ChunkSize = 65536;
+
+        #! the error of a response header read started on a closed socket
+        const HeaderReadStartError = "SOCKET-NOT-OPEN";
+    }
+
+    private {
+        string upload;
+        string large_header;
+    }
+
+    constructor() : Test("HttpClientEarlyResponseTest", "1.0") {
+        upload = strmul(Pattern, UploadSize / Pattern.size());
+        large_header = strmul("h", LargeHeaderSize);
+
+        addTestCase("TLS: a fault answered during the write of the request headers is delivered after a reset",
+            \tlsEarlyFaultDuringHeaderWriteTest());
+        addTestCase("TLS: a reset during the write of the request headers without an answer reports the send error",
+            \tlsResetWithoutAnswerTest());
+        addTestCase("TLS: an early fault is delivered whenever the peer resets during the upload",
+            \tlsRepeatedEarlyFaultTest());
+        addTestCase("a fault answered after the receive side found nothing is delivered when the body write fails",
+            \sendSideFailureTest());
+        addTestCase("streamed body: a fault answered during the write of the request headers is delivered",
+            \streamedEarlyFaultDuringHeaderWriteTest());
+        addTestCase("streamed body over TLS: a fault answered during the write of the request headers is delivered",
+            \tlsStreamedEarlyFaultDuringHeaderWriteTest());
+        addTestCase("chunked body from an InputStream: a fault answered during the write of the request headers is "
+            "delivered", \chunkedInputStreamEarlyFaultTest());
+        addTestCase("streamed body: a fault answered when the write of a chunk fails is delivered",
+            \streamedSendSideFailureTest());
+        addTestCase("a response cut short by the reset is reported as the truncated response",
+            \truncatedEarlyResponseTest());
+        addTestCase("a streamed response cut short by the reset is reported as the truncated response",
+            \truncatedEarlyStreamedResponseTest());
+        addTestCase("a request cancelled while its response is read after a failed write reports the cancel",
+            \cancelDuringRecoveryTest());
+        addTestCase("a request cancelled during its write is not taken for a peer reset",
+            \cancelDuringWriteTest());
+        addTestCase("a response the server sent before a reused connection's request was written is not delivered",
+            \reusedConnectionUnsolicitedResponseTest());
+        addTestCase("an idempotent request is repeated when the server closed a reused connection with a 408",
+            \reusedConnectionIdempotentRetryTest());
+        addTestCase("an early fault on a reused connection is delivered although the write counted no bytes",
+            \reusedConnectionEarlyFaultTest());
+        addTestCase("a send failure after the final response header is a failure of the response",
+            \sendFailureAfterResponseHeaderTest());
+        addTestCase("arming an armed send-side hook again leaves its parameters", \sendSideHookArmedTwiceTest());
+        addTestCase("a response header read that cannot be started fails the request at once",
+            \headerReadStartFailureTest());
+        addTestCase("a response header read that cannot be started for a streamed request fails it at once",
+            \streamingHeaderReadStartFailureTest());
+        addTestCase("a response header read that cannot be started after a 100 Continue fails the request at once",
+            \interimHeaderReadStartFailureTest());
+        addTestCase("a response header read that cannot be started after a failed write fails the request at once",
+            \recoveryHeaderReadStartFailureTest());
+        addTestCase("a 408 before the request on a reused connection repeats an idempotent request",
+            \idle408RetryTest());
+        addTestCase("a 408 after the request was sent on a reused connection repeats an idempotent request",
+            \afterSent408RetryTest());
+        addTestCase("a 408 on a reused connection fails a request that is not idempotent with the connection-closed "
+            "error", \idle408PostTest());
+        set_return_value(main());
+    }
+
+    #! Builds a client for @a peer
+    private HTTPClient client(EarlyPeer peer) {
+        return new HTTPClient({
+            "url": peer.getUrl(),
+            "timeout": ClientTimeout,
+            "connect_timeout": 15s,
+            "error_passthru": True,
+            "ssl_verify_cert": False,
+        });
+    }
+
+    #! Request headers with a header block larger than the socket buffers
+    private hash<auto> largeHeaders() {
+        return {"Content-Type": "application/octet-stream", "X-Large": large_header};
+    }
+
+    #! Skips the test unless the library has its debugging hooks
+    private requireDebugHooks() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that force the interleaving are only in debug builds");
+        }
+    }
+
+    #! Sends a buffered request with a large header block to a peer that answers early and resets
+    private hash<auto> largeHeaderExchange(bool tls, int status) {
+        EarlyPeer peer((<EarlyPlan>{"status": status},), tls);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send("x", "POST", "/large-header", largeHeaders(), True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        assertEq("POST /large-header HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+        return rv;
+    }
+
+    #! Asserts that @a rv is the 431 fault of an @ref EarlyPeer
+    private checkFault(hash<auto> rv, int status = 431) {
+        assertEq(NOTHING, rv.err, sprintf("no error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(status, rv.response.status_code, "the peer's fault is delivered rather than the write error it caused");
+        assertEq(FaultBodySize, rv.response.body.size(), "the fault body is delivered");
+    }
+
+    tlsEarlyFaultDuringHeaderWriteTest() {
+        checkFault(largeHeaderExchange(True, 431));
+    }
+
+    #! With no answer, the TLS write error is reported as it is
+    tlsResetWithoutAnswerTest() {
+        hash<auto> rv = largeHeaderExchange(True, 0);
+        assertEq(NOTHING, rv.response, "no response is invented");
+        assertEq("SOCKET-SSL-ERROR", rv.err, sprintf("the TLS write error is reported (got %y: %y)", rv.err, rv.desc));
+    }
+
+    #! The original race over TLS: the peer answers from the request headers and resets during the upload
+    tlsRepeatedEarlyFaultTest() {
+        for (int i = 0; i < 12; ++i) {
+            EarlyPeer peer((<EarlyPlan>{"read": "header", "status": 413},), True);
+            on_exit peer.stopAndCheck();
+            HTTPClient hc = client(peer);
+            on_exit hc.disconnect();
+            hash<auto> response = hc.send(upload, "POST", "/toobig", {"Content-Type": "application/octet-stream"},
+                True);
+            assertEq(413, response.status_code, sprintf("the peer's fault is delivered (run %d)", i));
+            assertEq(FaultBodySize, response.body.size(), sprintf("the fault body is delivered (run %d)", i));
+        }
+    }
+
+    #! The raw response of a fault answered by a debug hook on the peer's behalf
+    private string faultResponse(int status) {
+        return sprintf("HTTP/1.1 %d Early\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n",
+            status, FaultBodySize) + strmul(Pattern, FaultBodySize / Pattern.size());
+    }
+
+    #! The receive side finds nothing, then the peer answers and resets, so the write of the body fails
+    /** A debug hook stops the client right before it writes more of the body, has the peer answer and reset the
+        connection then, and lets the client go on once the reset has arrived.  The client connects first, so the
+        test has the peer's end of the connection to arm the hook with before the request is sent.
+    */
+    sendSideFailureTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+
+        call_function("dbg_fail_http1_send_side", reached, peer.takeConnection(), faultResponse(413));
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send(upload, "POST", "/toobig", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook made the client stop before the write of the body");
+        assertEq(1, result.recoveries, "the failed write of the body was given up and the response read");
+        checkFault(rv, 413);
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! A streamed (chunked) request whose header block the peer answers before it has read it
+    private streamedLargeHeaderExchange(bool tls) {
+        EarlyPeer peer((<EarlyPlan>{},), tls);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        int calls = 0;
+        code send_callback = *data sub () {
+            return ++calls == 1 ? binary(strmul(Pattern, ChunkSize / Pattern.size())) : NOTHING;
+        };
+        hash<auto> rv;
+        try {
+            rv.response = hc.sendWithSendCallback(send_callback, "POST", "/streamed", largeHeaders(), NOTHING, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        assertEq("POST /streamed HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+        checkFault(rv);
+    }
+
+    streamedEarlyFaultDuringHeaderWriteTest() {
+        streamedLargeHeaderExchange(False);
+    }
+
+    tlsStreamedEarlyFaultDuringHeaderWriteTest() {
+        streamedLargeHeaderExchange(True);
+    }
+
+    #! The same with a chunked body read from an InputStream and the response written to an OutputStream
+    chunkedInputStreamEarlyFaultTest() {
+        EarlyPeer peer((<EarlyPlan>{},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        BinaryOutputStream os();
+        BinaryInputStream is(binary(strmul(Pattern, (4 * ChunkSize) / Pattern.size())));
+        *int status;
+        code receive_callback = sub (hash<auto> h) {
+            if (h.hdr.status_code) {
+                status = h.hdr.status_code;
+            }
+        };
+        hash<auto> rv;
+        try {
+            hc.sendChunked(os, is, "POST", ChunkSize, "/chunked", largeHeaders(), NOTHING, True, NOTHING,
+                receive_callback);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        assertEq("POST /chunked HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+        assertEq(NOTHING, rv.err, sprintf("no error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(431, status, "the peer's fault is delivered");
+        assertEq(FaultBodySize, os.getData().size(), "the fault body is delivered");
+    }
+
+    #! A streamed body whose chunk write fails after the receive side found nothing
+    streamedSendSideFailureTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+
+        call_function("dbg_fail_http1_send_side", reached, peer.takeConnection(), faultResponse(413));
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        int calls = 0;
+        code send_callback = *data sub () {
+            return ++calls == 1 ? binary(strmul(Pattern, ChunkSize / Pattern.size())) : NOTHING;
+        };
+        hash<auto> rv;
+        try {
+            rv.response = hc.sendWithSendCallback(send_callback, "POST", "/streamed",
+                {"Content-Type": "application/octet-stream"}, NOTHING, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook made the client stop before the write of the chunk");
+        assertEq(1, result.recoveries, "the failed write of the chunk was given up and the response read");
+        checkFault(rv, 413);
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! Once a response has started, a failure is the response's, not the send error that preceded it
+    truncatedEarlyResponseTest() {
+        EarlyPeer peer((<EarlyPlan>{"body_sent": 128},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> ex_info;
+        try {
+            hc.send("x", "POST", "/truncated", largeHeaders(), True);
+            fail("a response cut short must not be delivered");
+        } catch (hash<ExceptionInfo> ex) {
+            ex_info = {"err": ex.err, "desc": ex.desc};
+        }
+        assertEq("POST /truncated HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+        assertTrue(ex_info.err == "SOCKET-CLOSED" || ex_info.err == "SOCKET-RECV-ERROR",
+            sprintf("the truncated response is reported, not the write error (got %y: %y)", ex_info.err,
+                ex_info.desc));
+    }
+
+    #! The same for a response delivered to an output stream as it is received
+    truncatedEarlyStreamedResponseTest() {
+        EarlyPeer peer((<EarlyPlan>{"body_sent": 128},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        BinaryOutputStream os();
+        hash<auto> ex_info;
+        try {
+            hc.send(os, "x", "POST", "/truncated", largeHeaders());
+            fail("a response cut short must not be delivered");
+        } catch (hash<ExceptionInfo> ex) {
+            ex_info = {"err": ex.err, "desc": ex.desc};
+        }
+        assertEq("POST /truncated HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+        assertTrue(ex_info.err == "SOCKET-CLOSED" || ex_info.err == "SOCKET-RECV-ERROR",
+            sprintf("the truncated response is reported, not the write error (got %y: %y)", ex_info.err,
+                ex_info.desc));
+    }
+
+    #! Runs @a send in a thread that the test then cancels; returns the error the thread raised
+    private string runCancelled(code send, Counter reached) {
+        Counter worker_done(1);
+        Queue result();
+        int tid = background sub () {
+            on_exit worker_done.dec();
+            try {
+                send();
+                result.push("UNEXPECTED-SUCCESS");
+            } catch (hash<ExceptionInfo> ex) {
+                clear_thread_cancel();
+                result.push(ex.err);
+            }
+        }();
+        if (reached.waitForZero(ClientTimeout)) {
+            fail("the hook point was not reached");
+        }
+        assertTrue(cancel_thread(tid, "cancelled request"), "the caller is cancellable");
+        if (worker_done.waitForZero(ClientTimeout)) {
+            fail("the cancelled caller did not complete");
+        }
+        return result.get(ClientTimeout);
+    }
+
+    #! A cancel published from the caller's thread while the I/O thread reads the response after a failed write
+    /** The client's write fails and it starts to read the response; a debug hook holds it there until the operation
+        publishes an error.  The cancel publishes its own error from the caller's thread, and that is the error the
+        operation keeps: the send error belongs to the I/O thread, which alone reports it if no response arrives.
+    */
+    cancelDuringRecoveryTest() {
+        requireDebugHooks();
+        EarlyPeer peer((<EarlyPlan>{},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        Counter held(1);
+        call_function("dbg_hold_http1_send_failure_recovery", held);
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        string err = runCancelled(sub () { hc.send("x", "POST", "/cancelled", largeHeaders(), True); }, held);
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq("THREAD-CANCELLED", err, "the cancel reaches the caller");
+        assertEq(1, result.recoveries, "the response was being read after the failed write");
+        assertEq("HTTP1-CANCELLED", result.error, "the operation keeps the cancel's error, not the send error");
+        peer.getObserved();
+    }
+
+    #! A cancel shuts the socket down, which fails the write in progress with EPIPE: that is not a peer reset
+    /** A debug hook holds the request's write, with the socket's lock held, until the connection is shut down; the
+        test then cancels the request.  The write fails because of the cancel, so the client must not read a response.
+    */
+    cancelDuringWriteTest() {
+        requireDebugHooks();
+        EarlyPeer peer((<EarlyPlan>{"read": "eof", "status": 0},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        Counter reached(1);
+        call_function("dbg_hold_http1_socket_send", peer.getPort(), reached);
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        string err = runCancelled(sub () { hc.send(upload, "POST", "/cancelled", NOTHING, True); }, reached);
+        assertEq("eof", peer.getObserved(), "the peer saw the connection closed");
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq("THREAD-CANCELLED", err, "the cancel reaches the caller");
+        assertEq(0, result.recoveries, "no response is read after a write that the cancel made fail");
+        assertEq("HTTP1-CANCELLED", result.error, "the cancel's error is what the operation reports");
+    }
+
+    #! An unsolicited response on a reused connection is not taken for the answer to the next request
+    /** The first request is answered and leaves the connection open.  When the client is about to write the second
+        request on it, a debug hook has the peer send a 408 and reset the connection; the write fails before the
+        request header block is out.  The 408 is the server's close of the idle connection, not an answer to this
+        request: the connection-closed error is raised, and a POST, which is not idempotent, is not repeated.
+    */
+    reusedConnectionUnsolicitedResponseTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 2, "keep": True},
+            <EarlyPlan>{"read": "handover", "status": 0},
+        ), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> first = hc.send("x", "POST", "/first", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "the first request is answered");
+        assertEq("/first", peer.getObserved(), "the first request reaches the peer");
+
+        string response = "HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        call_function("dbg_hold_http1_socket_send", peer.getPort(), reached, peer.takeConnection(), response);
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send("x", "POST", "/second", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook held the write of the second request");
+        assertEq(1, result.recoveries, "what the server sent was read after the failed write");
+        assertEq(NOTHING, rv.response, "the 408 is not delivered as the answer");
+        assertEq("HTTP1-CONNECTION-CLOSED", rv.err, sprintf("the connection-closed error is raised (got %y: %y)",
+            rv.err, rv.desc));
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! An idempotent request whose reused connection the server closed with a 408 is repeated on a new connection
+    reusedConnectionIdempotentRetryTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 2, "keep": True},
+            <EarlyPlan>{"read": "handover", "status": 0},
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 3},
+        ), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> first = hc.send("x", "PUT", "/first", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "the first request is answered");
+        assertEq("/first", peer.getObserved(), "the first request reaches the peer");
+
+        string response = "HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        call_function("dbg_hold_http1_socket_send", peer.getPort(), reached, peer.takeConnection(), response);
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send("x", "PUT", "/second", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook held the write of the second request");
+        assertEq(NOTHING, rv.err, sprintf("no error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(200, rv.response.status_code, "the request was repeated and answered on a new connection");
+        assertEq(3, rv.response.body.size(), "the answer of the repeated request is delivered, not the 408");
+        assertEq("handover", peer.getObserved(), "the reused connection was answered by the hook");
+        assertEq("/second", peer.getObserved(), "the request was repeated on a new connection");
+    }
+
+    #! An early fault that the server sent on a reused connection before the request write failed is delivered
+    /** The write of the request fails at once, having counted no bytes, as a BSD-derived stack reports a write that
+        a reset interrupted; the server's 413 is the answer to the request and is delivered, not retried.
+    */
+    reusedConnectionEarlyFaultTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 2, "keep": True},
+            <EarlyPlan>{"read": "handover", "status": 0},
+        ), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> first = hc.send("x", "PUT", "/first", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "the first request is answered");
+        assertEq("/first", peer.getObserved(), "the first request reaches the peer");
+
+        call_function("dbg_hold_http1_socket_send", peer.getPort(), reached, peer.takeConnection(),
+            faultResponse(413));
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send(upload, "PUT", "/second", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook held the write of the second request");
+        assertEq(1, result.recoveries, "the response was read after the failed write");
+        checkFault(rv, 413);
+        assertEq("handover", peer.getObserved(), "the reused connection was answered by the hook");
+    }
+
+    #! Once the final response header has been received, a failed write of the rest of the upload is not reported
+    #! as the send error: the response that is cut short is reported as such
+    /** A streamed request: its header block is read by the test, which then answers with the response header and
+        part of the body, arms the hook and lets the body's next chunk be pushed.  The receive side reads the response
+        header before the send side writes the chunk, which the hook makes fail.
+    */
+    sendFailureAfterResponseHeaderTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+        Socket conn = peer.takeConnection();
+
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        int calls = 0;
+        code send_callback = *data sub () {
+            if (++calls == 1) {
+                # the next chunk is pushed once the response header has been sent and the hook armed
+                gate.waitForZero(ClientTimeout);
+                return binary(strmul(Pattern, ChunkSize / Pattern.size()));
+            }
+            return NOTHING;
+        };
+        Queue res();
+        background sub () {
+            hash<auto> rv;
+            try {
+                rv.response = hc.sendWithSendCallback(send_callback, "PUT", "/duplex",
+                    {"Content-Type": "application/octet-stream"}, NOTHING, True);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+            }
+            res.push(rv);
+        }();
+
+        # the request header block arrived: the response header and part of its body are sent
+        hash<auto> hdr = conn.readHTTPHeader(EarlyPeer::PeerTimeout);
+        assertEq("/duplex", hdr.path);
+        conn.send("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 100000\r\n\r\n"
+            + strmul(Pattern, 4), EarlyPeer::PeerTimeout);
+        call_function("dbg_fail_http1_send_side", reached, conn, "");
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+        gate.dec();
+
+        hash<auto> rv = res.get(ClientTimeout);
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the send side failed after the response header was received");
+        assertEq(NOTHING, rv.response, "a truncated response is not delivered");
+        assertTrue(rv.err == "SOCKET-CLOSED" || rv.err == "SOCKET-RECV-ERROR",
+            sprintf("the truncated response is reported, not the send error (got %y: %y)", rv.err, rv.desc));
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+
+    #! When the response header read cannot be created, the request fails at once with that error instead of waiting
+    #! for a response that is never read
+    headerReadStartFailureTest() {
+        requireDebugHooks();
+        # the peer reads the request and does not answer: the client fails before it reads a response
+        EarlyPeer peer((<EarlyPlan>{"read": "drain", "status": 0},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+        headerReadFailure("request-sent", hash<auto> sub () {
+            return hc.send("x", "POST", "/header-read", {"Content-Type": "application/octet-stream"}, True);
+        });
+        peer.getObserved();
+    }
+
+    #! The same for the response read started once the header block of a streamed request has been sent
+    streamingHeaderReadStartFailureTest() {
+        requireDebugHooks();
+        EarlyPeer peer((<EarlyPlan>{"read": "header", "status": 0},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+        int calls = 0;
+        code send_callback = *data sub () {
+            return ++calls == 1 ? binary(strmul(Pattern, ChunkSize / Pattern.size())) : NOTHING;
+        };
+        headerReadFailure("streaming-send", hash<auto> sub () {
+            return hc.sendWithSendCallback(send_callback, "POST", "/streamed",
+                {"Content-Type": "application/octet-stream"}, NOTHING, True);
+        });
+        peer.getObserved();
+    }
+
+    #! The same for the read of the final response header after a \c 100 \c Continue
+    interimHeaderReadStartFailureTest() {
+        requireDebugHooks();
+        Counter done(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, done);
+        on_exit peer.stopAndCheck();
+        on_exit if (done.getCount()) {
+            done.dec();
+        }
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+        Socket conn = peer.takeConnection();
+
+        call_function("dbg_fail_http1_header_read_op", "interim-response");
+        on_exit call_function("dbg_clear_http1_header_read_op_failure");
+        Queue res();
+        background sub () {
+            hash<auto> rv;
+            try {
+                rv.response = hc.send("x", "POST", "/interim", {"Content-Type": "application/octet-stream"}, True);
+            } catch (hash<ExceptionInfo> ex) {
+                rv.err = ex.err;
+                rv.desc = ex.desc;
+            }
+            res.push(rv);
+        }();
+        hash<auto> hdr = conn.readHTTPHeader(EarlyPeer::PeerTimeout);
+        assertEq("/interim", hdr.path);
+        conn.send("HTTP/1.1 100 Continue\r\n\r\n", EarlyPeer::PeerTimeout);
+        checkHeaderReadFailure("interim-response", res.get(ClientTimeout));
+    }
+
+    #! The same for the read of the response after the write of the request failed: the request fails with the
+    #! error of the write, since the response cannot be read
+    recoveryHeaderReadStartFailureTest() {
+        requireDebugHooks();
+        # the peer answers and resets the connection while the large header block is written
+        EarlyPeer peer((<EarlyPlan>{},));
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        headerReadFailure("send-failure-recovery", hash<auto> sub () {
+            return hc.send("x", "POST", "/large-header", largeHeaders(), True);
+        }, "SOCKET-SEND-ERROR");
+        assertEq("POST /large-header HTTP/1.1", peer.getObserved(), "the peer read the start of the request");
+    }
+
+    #! Makes the response header read at @a site fail and runs @a request, which must fail at once with its error
+    private headerReadFailure(string site, code request, string err = HeaderReadStartError) {
+        call_function("dbg_fail_http1_header_read_op", site);
+        on_exit call_function("dbg_clear_http1_header_read_op_failure");
+        hash<auto> rv;
+        try {
+            rv.response = request();
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        checkHeaderReadFailure(site, rv, err);
+    }
+
+    #! Asserts that the read could not be created at @a site, and that the request failed with the error of the
+    #! closed socket
+    private checkHeaderReadFailure(string site, hash<auto> rv, string err = HeaderReadStartError) {
+        assertEq(site, call_function("dbg_http1_header_read_op_failure_site"),
+            "the response header read could not be created there");
+        assertEq(NOTHING, rv.response, "no response is delivered");
+        assertEq(err, rv.err, sprintf("the request fails with the error of the read (got %y: %y)", rv.err, rv.desc));
+    }
+
+    #! The server answers with a 408 and closes the reused connection at @a point of the second request
+    /** @param retried True if the request is repeated on a new connection, which the peer answers
+    */
+    private hash<auto> reused408Exchange(string point, string method, bool retried) {
+        requireDebugHooks();
+        Counter reached(1);
+        list<hash<EarlyPlan>> plans = (
+            <EarlyPlan>{"read": "drain", "status": 200, "body_size": 2, "keep": True},
+            <EarlyPlan>{"read": "handover", "status": 0},
+        );
+        if (retried) {
+            plans += <EarlyPlan>{"read": "drain", "status": 200, "body_size": 3};
+        }
+        EarlyPeer peer(plans, False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> first = hc.send("x", method, "/first", {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "the first request is answered");
+        assertEq("/first", peer.getObserved(), "the first request reaches the peer");
+
+        string response = "HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        call_function("dbg_http1_answer_at", point, reached, peer.takeConnection(), response);
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send("x", method, "/second", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the server answered at the point of the request");
+        assertEq("handover", peer.getObserved(), "the reused connection was answered by the hook");
+        return rv;
+    }
+
+    idle408RetryTest() {
+        hash<auto> rv = reused408Exchange("idle-check", "PUT", True);
+        assertEq(NOTHING, rv.err, sprintf("no error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(200, rv.response.status_code, "the request was repeated and answered on a new connection");
+        assertEq(3, rv.response.body.size(), "the answer of the repeated request is delivered, not the 408");
+    }
+
+    afterSent408RetryTest() {
+        hash<auto> rv = reused408Exchange("after-sent", "PUT", True);
+        assertEq(NOTHING, rv.err, sprintf("no error is raised (got %y: %y)", rv.err, rv.desc));
+        assertEq(200, rv.response.status_code, "the request was repeated and answered on a new connection");
+        assertEq(3, rv.response.body.size(), "the answer of the repeated request is delivered, not the 408");
+    }
+
+    idle408PostTest() {
+        hash<auto> rv = reused408Exchange("idle-check", "POST", False);
+        assertEq(NOTHING, rv.response, "the 408 is not delivered");
+        assertEq("HTTP1-CONNECTION-CLOSED", rv.err, sprintf("the connection-closed error is raised (got %y: %y)",
+            rv.err, rv.desc));
+    }
+
+    #! A second arming of the send-side hook fails and leaves the parameters of the first
+    sendSideHookArmedTwiceTest() {
+        requireDebugHooks();
+        Counter reached(1);
+        EarlyPeer peer((<EarlyPlan>{"read": "handover", "status": 0},), False, reached);
+        on_exit peer.stopAndCheck();
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+        hc.connect();
+
+        Socket conn = peer.takeConnection();
+        call_function("dbg_fail_http1_send_side", reached, conn, faultResponse(413));
+        hash<auto> result;
+        on_exit if (!result) {
+            call_function("dbg_http1_send_failure_result");
+        }
+        # armed already: the second call fails, and its skip count is not taken
+        Counter other(1);
+        assertThrows("DBG-ARGUMENT-ERROR", \call_function(), ("dbg_fail_http1_send_side", other, new Socket(),
+            faultResponse(413), 1000000));
+
+        hash<auto> rv;
+        try {
+            rv.response = hc.send(upload, "POST", "/toobig", {"Content-Type": "application/octet-stream"}, True);
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err;
+            rv.desc = ex.desc;
+        }
+        result = call_function("dbg_http1_send_failure_result");
+        assertEq(0, reached.getCount(), "the hook acted on the first send side, as first armed");
+        checkFault(rv, 413);
+        assertEq("handover", peer.getObserved(), "the peer's connection was answered by the hook");
+    }
+}

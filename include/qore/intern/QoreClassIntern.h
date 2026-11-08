@@ -70,8 +70,18 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 // forward reference to private class implementation
 class qore_class_private;
 
-//! Process-wide epoch incremented whenever a callable method table changes.
+//! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
+/** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
+    increment at destruction makes every entry naming the destroyed metadata stale before its memory can be reused
+    for another class.
+*/
 DLLLOCAL uint64_t qore_get_method_dispatch_epoch();
+
+//! Increments the epoch returned by qore_get_method_dispatch_epoch()
+DLLLOCAL void qore_bump_method_dispatch_epoch();
+
+//! Returns a new process-unique class instance serial number; never 0 and never reused
+DLLLOCAL uint64_t qore_get_next_class_instance_serial();
 
 // map from abstract signature to variant for fast tracking of abstract variants
 //typedef vector_map_t<const char*, MethodVariantBase*> vmap_t;
@@ -837,9 +847,11 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    //! @param tmp_args true if \a args is a temporary list with one reference, whose values the call takes over
+    //! (see CodeEvaluationHelper), instead of copying the list to convert an argument
     DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, bool tmp_args = false) const;
 
     DLLLOCAL virtual MethodFunctionBase* copy(const QoreClass* n_qc) const {
         return new ConstructorMethodFunction(*this, n_qc);
@@ -2321,6 +2333,14 @@ public:
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
+
+    //! the identity of this private class instance for the lifetime of the process
+    /** Unlike the class ID, which a copy of a class keeps, and the address, which a later class can reuse after this
+        one is freed, no other qore_class_private ever has this serial number.  A cache holding raw class or method
+        pointers compares it with the serial of a live class to prove that the cached metadata is that class's.
+    */
+    const uint64_t instance_serial = qore_get_next_class_instance_serial();
+
     mutable QoreReferenceCounter refs;  // existence references
     mutable QoreReferenceCounter const_refs; // constant references
     mutable QoreReferenceCounter var_refs;   // static var references
@@ -2441,6 +2461,11 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
+    //! Returns the process-unique serial number of this private class instance; see instance_serial
+    DLLLOCAL uint64_t getInstanceSerial() const {
+        return instance_serial;
+    }
+
     // get base class list to add virtual class indexes for private data
     DLLLOCAL BCSMList* getBCSMList() const {
         return scl ? &scl->sml : nullptr;
@@ -2546,7 +2571,9 @@ public:
         return !ahm.empty();
     }
 
-    DLLLOCAL void parseSetEmptyPublicMemberDeclaration() {
+    //! records a public member declaration in the class: the class then declares its members (see
+    //! hasPublicMembersInHierarchy())
+    DLLLOCAL void parseSetPublicMemberDeclaration() {
         pending_has_public_memdecl = true;
         if (!has_new_user_changes) {
             has_new_user_changes = true;
@@ -2810,18 +2837,17 @@ public:
             }
             int rc = 0;
             if ((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !parseHasMemberGate()) {
-                if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
+                // one error for one access: in a class that declares its members, an undeclared member is an
+                // illegal access whatever the parse options; otherwise it is an error only if types are required
+                if (parseHasPublicMembersInHierarchy()) {
+                    parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
+                        "member list (or inherited public member list)", mem, name.c_str());
+                    rc = -1;
+                } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                     parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was " \
                         "not declared in a public or private member list, but parse options require type " \
                         "information for all declarations",
                         mem, name.c_str());
-                    rc = -1;
-                }
-                if (parseHasPublicMembersInHierarchy()) {
-                    //printd(5, "qore_class_private::parseCheckMemberAccess() %s %%.%s memberGate: %d pflag: %d\n",
-                    //  name.c_str(), mem, parseHasMemberGate(), pflag);
-                    parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
-                        "member list (or inherited public member list)", mem, name.c_str());
                     rc = -1;
                 }
             }
@@ -2875,17 +2901,17 @@ public:
             return rc;
         }
         if (!omi) {
-            if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
-                parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
-                    "declared in a public or private member list, but parse options require type information for " \
-                    "all declarations", mem, name.c_str());
-                if (!rc) {
-                    rc = -1;
-                }
-            }
+            // one error for one access; see parseCheckMemberAccess()
             if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
                     "list (or inherited public member list)", mem, name.c_str());
+                if (!rc) {
+                    rc = -1;
+                }
+            } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
+                parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
+                    "declared in a public or private member list, but parse options require type information for " \
+                    "all declarations", mem, name.c_str());
                 if (!rc) {
                     rc = -1;
                 }
@@ -3426,10 +3452,11 @@ public:
 
     // allow_abstract = true if only for other languages that have inherited this class and have implemented
     // the abstract methods
+    // tmp_args = true if args is a temporary list with one reference, whose values the constructor takes over
     DLLLOCAL QoreObject* execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
-        const QoreTypeInfo* object_type_info = nullptr) const;
+        const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) const;
 
     DLLLOCAL void addBuiltinMethod(const char* mname, MethodVariantBase* variant);
     DLLLOCAL void addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant);
@@ -3931,8 +3958,8 @@ public:
 
     DLLLOCAL static QoreObject* execConstructor(const QoreClass& qc, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink,
-            const QoreTypeInfo* object_type_info = nullptr) {
-        return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info);
+            const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) {
+        return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info, tmp_args);
     }
 
     DLLLOCAL static bool injected(const QoreClass& qc) {
@@ -4290,8 +4317,10 @@ public:
     }
 
     DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
-            const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) {
-        CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink);
+            const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
+            bool tmp_args = false) {
+        CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+            tmp_args);
     }
 
     DLLLOCAL void evalCopy(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const {

@@ -278,14 +278,16 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
                 }
                 hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting (response header names are lowercase in RestClientIo)
-                if (response.headers."x-ratelimit-remaining" == "0") {
+                # Check for rate limiting (response header names are lowercase in RestClientIo); there is no wait
+                # while a data provider requests example data in this thread (see
+                # DataProviderRetryUtil::runWithoutRetries())
+                if (response.headers."x-ratelimit-remaining" == "0" && !DataProviderRetryUtil::retriesSuppressed()) {
                     *string reset = response.headers."retry-after";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
                             # Wait for rate limit reset (up to 60 seconds)
-                            sleep(reset_secs * 1000ms);
+                            waitForRateLimit(seconds(reset_secs));
                         }
                     }
                 }
@@ -312,20 +314,32 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
         }
     }
 
+    #! Waits before a request is made again or its response is returned because of the rate limit of the API
+    /** Called after a rate-limited response (HTTP 429) before the request is made again, and after a response that
+        reports the rate limit exhausted before the response is returned; not called while retries are suppressed
+        (see @ref DataProvider::DataProviderRetryUtil::runWithoutRetries() "runWithoutRetries()").
+        A subclass can override it, for example a test that records the waits instead of waiting.
+
+        @param delay the time to wait
+    */
+    private waitForRateLimit(date delay) {
+        usleep(delay);
+    }
+
     #! Checks if a request should be retried
     /** @param ex the exception info
         @param retries reference to retry counter
         @return True if the request should be retried
     */
     private bool retryRequest(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (retries >= MaxRetries) {
+        if (retries >= MaxRetries || DataProviderRetryUtil::retriesSuppressed()) {
             return False;
         }
         # Retry on certain socket errors
-        if (RetrySet{ex.err}) {
+        if (DataProviderRetryUtil::isRetriableTransportError(ex, RetrySet)) {
             ++retries;
             # Exponential backoff
-            sleep(pow(2, retries) * 1000ms);
+            DataProviderRetryUtil::waitTransportRetry(pow(2, retries));
             return True;
         }
         # Retry on rate limit errors (HTTP 429)
@@ -337,7 +351,7 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
             if (wait_secs < 1 || wait_secs > 60) {
                 wait_secs = 5;
             }
-            sleep(wait_secs * 1000ms);
+            waitForRateLimit(seconds(wait_secs));
             return True;
         }
         return False;
