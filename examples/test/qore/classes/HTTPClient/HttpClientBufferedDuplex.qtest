@@ -33,10 +33,12 @@
     response that completes first waits for the upload rather than truncating it.  Only a peer that
     stops reading may cut the upload short, and the connection it happened on must not be reused.
 
-    Every assertion here is made against a raw peer that observes the transport directly: whether it
-    got its whole response out before it read anything, and how much of the upload it then read.
+    Integration tests use a raw peer that observes the transport directly: whether it got its whole
+    response out before it read anything, and how much of the upload it then read. Native unit tests
+    also force the concurrent read/write failure ordering without relying on socket timing.
 */
 
+%modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 
@@ -380,6 +382,10 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
         upload = strmul(Pattern, UploadSize / Pattern.size());
         expected_response = BufferedDuplexPeer::makeBody(ResponseSize);
 
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("concurrent send failure preserves the pending response", \concurrentSendFailureTest());
+        }
+
         addTestCase("buffered upload reads a Content-Length response concurrently",
             \bufferedDuplexContentLengthTest());
         addTestCase("buffered upload with a binary body", \bufferedDuplexBinaryBodyTest());
@@ -402,6 +408,14 @@ public class HttpClientBufferedDuplexTest inherits QUnit::Test {
         addTestCase("a small buffered request still goes out in one write and reuses the connection",
             \smallBufferedRequestTest());
         set_return_value(main());
+    }
+
+    #! Exercises the native state machine with a write failure between incomplete response reads
+    private concurrentSendFailureTest() {
+        hash<auto> result = call_function("dbg_run_http1_duplex_tests");
+        assertEq(0, result.fail_count, sprintf("%d of %d native assertions failed",
+            result.fail_count, result.test_count));
+        assertTrue(result.test_count > 0);
     }
 
     #! Builds a client for @a peer

@@ -80,6 +80,8 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Multi-line: class definition", \testMultiLineClass());
         addTestCase("Multi-line: nested blocks", \testNestedBlocks());
         addTestCase("Multi-line: trailing operators", \testTrailingOperators());
+        addTestCase("Multi-line: slash commands and history shortcuts stay source", \testContinuationCommands());
+        addTestCase("Multi-line: command completion follows input mode", \testContinuationCompletion());
 
         # Error handling tests
         addTestCase("Error: parse error", \testParseError());
@@ -394,7 +396,8 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(repl.needsMoreInput(), "Should be in multi-line mode");
         assertEq("    > ", repl.getPrompt(), "Should show continuation prompt");
 
-        # Clear the pending input
+        # Cancel unfinished source through the frontend/API, then commands are available again.
+        repl.reset();
         result = repl.eval("/clear");
         assertTrue(exists result, "Should return result");
         assertFalse(exists result.error, "Should not have error");
@@ -1024,6 +1027,49 @@ public class QoreReplTest inherits QUnit::Test {
         assertTrue(exists result, "Should complete");
         assertFalse(exists result.error, "Should not have error");
         assertEq(3, repl.getProgram().getGlobalVariable("x"), "1 + 2 = 3");
+    }
+
+    testContinuationCommands() {
+        QoreRepl repl({"history_file": NOTHING});
+        assertTrue(repl.eval("/help").help);
+        assertFalse(exists repl.eval("?"));
+        assertFalse(exists repl.eval("/?"));
+        *hash<auto> result = repl.eval("/threads");
+        assertTrue(result.error.err =~ /PARSE/);
+        assertFalse(!!result.help); assertFalse(exists result.value); assertFalse(repl.needsMoreInput());
+
+        list<string> lines = ("/?", "  /threads  ", "/reset", "/clear", "/exit", "!!");
+        assertFalse(exists repl.eval("our string literal = \"first"));
+        foreach string line in (lines) {
+            hash<ReplRequestInfo> request = repl.inspectRequest(line);
+            assertTrue(request.requires_idle); assertFalse(exists request.command); assertFalse(!!request.help);
+            assertFalse(exists repl.eval(line)); assertTrue(repl.needsMoreInput());
+        }
+        assertTrue(repl.inspectRequest("").requires_idle);
+        result = repl.eval("last\";"); assertFalse(exists result.error);
+        assertEq("first\n" + lines.join("\n") + "\nlast", repl.getProgram().getGlobalVariable("literal"));
+        assertFalse(exists repl.eval("(84")); assertEq(42, repl.eval("/ 2)").value);
+        assertFalse(exists repl.eval("if (True) {"));
+        assertFalse(exists repl.eval("/reset")); assertTrue(repl.needsMoreInput());
+        Program original = repl.getProgram(); repl.reset();
+        assertEq(original, repl.getProgram()); assertFalse(repl.needsMoreInput()); assertEq(0, repl.getIndentLevel());
+        assertTrue(repl.eval("/?").help);
+        assertFalse(exists repl.eval("/reset").error); assertTrue(original != repl.getProgram());
+    }
+
+    testContinuationCompletion() {
+        QoreRepl repl({"history_file": NOTHING});
+        assertEq(5, repl.extractCompletionContext("/hel").kind);
+        assertTrue(inlist("/help", repl.getCompletions("/hel")));
+        assertFalse(exists repl.eval("if (True) {"));
+        assertTrue(repl.extractCompletionContext("/hel").kind != 5);
+        assertFalse(inlist("/help", repl.getCompletions("/hel")));
+        foreach hash<QoreCodeCompletion::CompletionItem> item in (repl.getCompletionDetails("/hel")) {
+            assertTrue(item.label != "/help");
+        }
+        repl.reset();
+        assertEq(5, repl.extractCompletionContext("/hel").kind);
+        assertEq("/help", repl.getCompletionDetails("/hel")[0].label);
     }
 
     #! Test parse error handling

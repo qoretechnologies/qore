@@ -54,6 +54,7 @@ class ReplThreadsTest inherits QUnit::Test {
         assertFalse(exists repl.eval("/join all").error);
         assertTrue(thread_join(tids[0], 5000)); assertEq(2, repl.eval("1 + 1").value);
         repl.eval("class Pending {"); assertTrue(repl.needsMoreInput());
+        repl.reset();
         assertFalse(exists repl.eval("/reset").error); assertFalse(repl.needsMoreInput()); assertEq(0, repl.getIndentLevel());
         assertEq(42, repl.eval("6 * 7").value);
     }

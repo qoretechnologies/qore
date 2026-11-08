@@ -741,6 +741,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsin
 }
 
 int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
+    // A failed buffered upload has been abandoned. Keep receiving its response, but never resume writing.
+    if (send_failure_pending) {
+        return 0;
+    }
     while (true) {
         // Poll an in-flight send op (a request-body chunk or the final terminator)
         if (send_op) {
@@ -749,6 +753,25 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             if (poll_xsink) {
                 QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
                 QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+                if (send_buffered_body) {
+                    // The peer can answer and close between the receive attempt and this write. Preserve
+                    // current_op and req_state: either may already contain part of the response. Restarting
+                    // the header read would lose those bytes. As with an initial send failure, report the
+                    // saved write error only if receiving fails, and close after a complete response.
+                    send_failure_err = *err_str ? err_str->c_str() : "HTTP1-SEND-ERROR";
+                    send_failure_desc = *desc_str ? desc_str->c_str() : "buffered request-body send failed";
+                    poll_xsink.clear();
+                    releaseSendOp(xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    send_buffered_body = false;
+                    send_failure_pending = true;
+                    ASYNC_IO_TRACE("H1 driveSendSide: buffered write failed (%s), preserving response read "
+                        "state=%d fd=%d\n", send_failure_err.c_str(), static_cast<int>(req_state.load()),
+                        sock_obj ? sock_obj->getSocket() : -1);
+                    return 0;
+                }
                 setError(*err_str ? err_str->c_str() : "HTTP1-SEND-ERROR",
                     *desc_str ? desc_str->c_str() : "streaming request-body send failed", xsink);
                 poll_xsink.clear();
