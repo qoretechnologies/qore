@@ -120,9 +120,9 @@ MAX_ENTRIES_PER_BASE = 8
 
 #: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo)
 QAMI_MAGIC = b"QAMI"
-#: the record versions read: 1 (name, dependencies, unavailable optional modules) and 2, which adds the names of the
-#: compile-time closure and the module's own module path directives
-QAMI_VERSIONS = (1, 2)
+#: the only record version read: 2 (name, dependencies, unavailable optional modules, the names of the compile-time
+#: closure, the module's own module path directives); a module with a record of another version is never cached
+QAMI_VERSION = 2
 QAMI_MAX_PAYLOAD = 16 * 1024 * 1024
 
 FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
@@ -306,13 +306,13 @@ class ModuleInfo:
 
     - dependencies: the hard dependencies of the module descriptor (not the modules required with %requires(reexport))
     - optional: the %try-module requests that failed when the module was compiled
-    - compiled_with: (version 2) the names of every module of the compile-time closure, direct and transitive,
-      re-exported ones too, but not the module itself; None for a version 1 record
-    - prepend_paths, append_paths: (version 2) the module's own %prepend-module-path and %append-module-path
-      directories as compiled in
+    - compiled_with: the names of every module of the compile-time closure, direct and transitive, re-exported
+      ones too, but not the module itself
+    - prepend_paths, append_paths: the module's own %prepend-module-path and %append-module-path directories as
+      compiled in
     """
 
-    def __init__(self, name, dependencies, optional, compiled_with=None, prepend_paths=(), append_paths=()):
+    def __init__(self, name, dependencies, optional, compiled_with, prepend_paths=(), append_paths=()):
         self.name = name
         self.dependencies = dependencies
         self.optional = optional
@@ -322,11 +322,11 @@ class ModuleInfo:
 
 
 def parse_qami_record(data, offset):
-    """Parses an AOT module metadata record at @p offset; returns a ModuleInfo or None"""
+    """Parses a version 2 AOT module metadata record at @p offset; returns a ModuleInfo or None"""
     if offset + 12 > len(data):
         return None
     magic, version, payload_size = struct.unpack_from("<4sII", data, offset)
-    if magic != QAMI_MAGIC or version not in QAMI_VERSIONS or payload_size > QAMI_MAX_PAYLOAD:
+    if magic != QAMI_MAGIC or version != QAMI_VERSION or payload_size > QAMI_MAX_PAYLOAD:
         return None
     pos = offset + 12
     end = pos + payload_size
@@ -362,13 +362,10 @@ def parse_qami_record(data, offset):
         name, pos = read_str(pos)
         deps, pos = read_list(pos)
         optional, pos = read_list(pos)
-        if version == 1:
-            info = ModuleInfo(name, deps, optional)
-        else:
-            compiled_with, pos = read_list(pos)
-            prepend, pos = read_list(pos)
-            append, pos = read_list(pos)
-            info = ModuleInfo(name, deps, optional, compiled_with, prepend, append)
+        compiled_with, pos = read_list(pos)
+        prepend, pos = read_list(pos)
+        append, pos = read_list(pos)
+        info = ModuleInfo(name, deps, optional, compiled_with, prepend, append)
     except (ValueError, UnicodeDecodeError):
         return None
     if pos != end:
@@ -376,8 +373,23 @@ def parse_qami_record(data, offset):
     return info
 
 
+def record_version_of(data, name):
+    """The version of a metadata record for module @p name in @p data that is not version 2, or None: the header and
+    the module name, which every version starts its payload with, are all that is read of it"""
+    pos = data.find(QAMI_MAGIC)
+    encoded = name.encode("utf-8")
+    while pos >= 0:
+        if pos + 16 <= len(data):
+            version, size, name_len = struct.unpack_from("<III", data, pos + 4)
+            if (version != QAMI_VERSION and size <= QAMI_MAX_PAYLOAD and pos + 12 + size <= len(data)
+                    and name_len == len(encoded) and data[pos + 16:pos + 16 + name_len] == encoded):
+                return version
+        pos = data.find(QAMI_MAGIC, pos + 1)
+    return None
+
+
 def read_module_info(path, name):
-    """Returns the ModuleInfo of the metadata record of the AOT module @p name
+    """Returns the ModuleInfo of the version 2 metadata record of the AOT module @p name
 
     The record is found by its magic and must parse completely and name the module; exactly one such record must be
     in the file (an ELF note or a Mach-O section holds it), or CacheError is raised.
@@ -391,6 +403,11 @@ def read_module_info(path, name):
         if rec and rec.name == name:
             found.append(rec)
         pos = data.find(QAMI_MAGIC, pos + 1)
+    if not found:
+        other = record_version_of(data, name)
+        if other is not None:
+            raise CacheError("module '%s' has a metadata record of version %d; the cache uses only version %d "
+                             "(compile it with a qcc that writes it)" % (path, other, QAMI_VERSION))
     if len(found) != 1:
         raise CacheError("module '%s' has %d metadata records for '%s'" % (path, len(found), name))
     return found[0]
@@ -1060,40 +1077,17 @@ def check_optional(records, dirs):
     return None
 
 
-def required_module_names(required, deps, source_root, own_name, compiled_with=None):
-    """The names of the modules a module requires: those of its metadata's dependencies, and every module of its
-    compile-time closure
+def required_module_names(required, compiled_with, own_name):
+    """The names of the modules a module requires: those of its metadata's dependencies (@p required, module specs)
+    and every module of its compile-time closure (@p compiled_with): every module the module was compiled against,
+    directly or not, re-exported ones too
 
-    @param compiled_with the closure that qcc wrote in a version 2 metadata record (ModuleInfo.compiled_with): every
-    module the module was compiled against, directly or not, re-exported ones too; None for a version 1 record
-
-    The descriptor dependencies leave out the modules required with %requires(reexport) (to avoid load cycles).  A
-    version 2 record names them in its closure.  For a version 1 record they come from the file names of the depfile
-    (a <dir>/<Name>.qm, a module directory's <dir>/<Name>/<Name>.qm, a binary module <name>-api-<x>.<y>.qmod and an
-    AOT module <Name>.qmod are module Name), which takes a file that a module includes and that is named <x>.qm for a
-    module x as well.
+    The descriptor dependencies leave out the modules required with %requires(reexport) (to avoid load cycles); the
+    closure names them.  No name is taken from the depfile, whose files are no reliable sign of a module (a file that
+    a module includes may be named <x>.qm for a module x).
     """
     names = set(module_spec_name(r) for r in required)
-    if compiled_with is not None:
-        names.update(compiled_with)
-        names.discard(own_name)
-        names.discard("")
-        return sorted(names)
-    # TODO(#5624): the version 1 path goes when this branch and fix/qmod-staleness-gaps (whose qcc writes version 2
-    # records) are merged; until then this branch's own qcc writes version 1 records
-    own_root = os.path.realpath(source_root)
-    own_is_dir = os.path.isdir(source_root)
-    for dep in deps:
-        real = os.path.realpath(dep)
-        if real == own_root or (own_is_dir and real.startswith(own_root + os.sep)):
-            continue
-        base = os.path.basename(dep)
-        if base.endswith(".qm"):
-            names.add(base[:-3])
-        elif base.endswith(".qmod"):
-            stem = base[:-5]
-            api = stem.find("-api-")
-            names.add(stem[:api] if api > 0 else stem)
+    names.update(compiled_with)
     names.discard(own_name)
     names.discard("")
     return sorted(names)
@@ -1828,6 +1822,11 @@ class Module:
             os.chmod(tmps[""], int(entry["mode"]) & 0o777)
             if not contains_identity(tmps[""], self.identity):
                 raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
+            # only modules with a version 2 metadata record are cached (see read_module_info())
+            try:
+                read_module_info(tmps[""], self.name)
+            except CacheError as e:
+                raise CacheError("stored module: %s" % e)
             target, _ = read_depfile(tmps[".d"])
             if os.path.abspath(target) != self.out:
                 raise CacheError("stored dependency file names '%s'" % target)
@@ -1880,8 +1879,8 @@ class Module:
         for spec in optional_specs:
             name = module_spec_name(spec)
             optional.append({"spec": spec, "name": name, "candidates": module_candidates(name, dirs)})
-        resolution = resolution_records(required_module_names(info.dependencies, deps, self.source_root, self.name,
-                                                              info.compiled_with), dirs)
+        resolution = resolution_records(required_module_names(info.dependencies, info.compiled_with, self.name),
+                                        dirs)
         key = result_key(self.base, records, optional, resolution)
         entry = {
             "schema": SCHEMA,
@@ -2126,8 +2125,7 @@ def cmd_verify(args):
             info = read_module_info(qmod, rec["name"])
             if info.optional != [o["spec"] for o in entry["optional"]]:
                 raise CacheError("its unavailable optional modules differ from the cache entry")
-            names = required_module_names(info.dependencies, deps, rec.get("source_root") or "", rec["name"],
-                                          info.compiled_with)
+            names = required_module_names(info.dependencies, info.compiled_with, rec["name"])
             if names != [r["name"] for r in entry["resolution"]]:
                 raise CacheError("the modules it requires differ from the cache entry")
         except (OSError, ValueError, KeyError, CacheError) as e:

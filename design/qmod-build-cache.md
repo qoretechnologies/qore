@@ -10,7 +10,8 @@ writes after a compile.  CI uses it to keep the qmods of the build jobs between 
 
 Relevant code:
 
-- `tools/qore-qmod-cache.py`: the cache (`context`, `exec`, `verify`, `stats`, `prune`)
+- `tools/qore-qmod-cache.py`: the cache (`context`, `exec`, `verify`, `sign`, `signer-check`, `check-openssl`,
+  `stats`, `prune`)
 - `cmake/QoreMacros.cmake`: `QORE_QMOD_CACHE_SETUP()` (the context target and the launcher) and
   `QORE_USER_MODULE_AOT_RULES()` (puts the launcher before the qcc command of each module)
 - `CMakeLists.txt`: the `QORE_QMOD_CACHE_DIR` option
@@ -105,12 +106,12 @@ dependencies (the module descriptor's hard dependencies, which the loader loads 
 re-exported module that requires the module back would make a cycle), and a module sees the declarations of what it
 re-exports, so a module that appears for a re-exported module must make it a miss as well.  Version 2 of the
 metadata record names the closure: every module the module was compiled against, directly or not, re-exported ones
-too, as qcc loaded them.  For a version 1 record (a qcc before version 2) the closure is guessed from the depfile's
-file names (`<dir>/<Name>.qm` and a module directory's `<dir>/<Name>/<Name>.qm` are module `Name`,
-`<name>-api-<x>.<y>.qmod` the binary module `name`, `<Name>.qmod` the AOT module `Name`), which also takes a file
-that a module includes and that is named `<x>.qm` for a module `x`: a module `x` that appears in the module path then
-makes the module a miss for nothing.  A file the module includes is never taken for the source of a module from
-outside the tree, whatever its name.  The guard checks the same list.
+too, as qcc loaded them.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
+file that a module includes may be named `<x>.qm` for a module `x`), and a file the module includes is never taken for
+the source of a module from outside the tree, whatever its name.  A module whose record has another version (version
+1, written before the closure was recorded; the metadata section is in no release, and the loader refuses version 1
+too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
+record.  The guard checks the same list.
 
 ### Why absolute paths
 
@@ -122,7 +123,7 @@ depfile (whose target must be the module).  CI keeps the checkout path stable in
 ### Module path directives
 
 A module whose sources have `%prepend-module-path` or `%append-module-path` (with or without environment variables),
-or whose metadata record (version 2) has module path directories of its own, is not stored: the modules those
+or whose metadata record has module path directories of its own, is not stored: the modules those
 directives make qcc find are not in the candidate-file records.
 
 ### Why the failed optional modules
@@ -164,7 +165,8 @@ Before a cached module is used:
 3. the result key must be the digest of the entry;
 4. each stored file must have the SHA-256 digest the entry records (a damaged entry is removed);
 5. the stored module must contain the AOT runtime identity of the build;
-6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names).
+6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names);
+7. the stored module must have a version 2 metadata record.
 
 The depfile, the fingerprints and then the module are each renamed into place, and the module and depfile are
 compared with the entry's digests after the copy.  Anything unexpected makes the module a miss.
@@ -180,7 +182,7 @@ A module is stored only when qcc wrote the module, the depfile and the fingerpri
 build's identity, the depfile names the module, every source still has the size and modification time qcc recorded
 in its fingerprint and every dependency has one (a source written during the compile, or one qcc could not hash, is
 no stable input), every dependency can be covered (see
-above), and the metadata record can be read.
+above), and the metadata record can be read and has version 2.
 
 ### The CI guard: `verify`
 

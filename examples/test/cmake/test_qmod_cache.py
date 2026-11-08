@@ -67,19 +67,18 @@ def sign_build(cache, build, key_path, env=None):
                           input=key_path + "\n", capture_output=True, text=True, timeout=120, env=full)
 
 
-def qami_record(name, deps=(), optional=(), compiled_with=None, prepend=(), append=()):
-    """An AOT module metadata record: version 1, or version 2 with @p compiled_with (the module names of the
-    module's compile-time closure) and its own module path directives"""
+def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append=(), version=2):
+    """An AOT module metadata record (version 2): with @p compiled_with, the module names of the module's compile-time
+    closure, and its own module path directives; @p version 1 writes the earlier layout, without them"""
     def s(v):
         b = v.encode()
         return struct.pack("<I", len(b)) + b
     def lst(items):
         return struct.pack("<I", len(items)) + b"".join(s(i) for i in items)
     payload = s(name) + lst(deps) + lst(optional)
-    if compiled_with is None:
-        return b"QAMI" + struct.pack("<II", 1, len(payload)) + payload
-    payload += lst(compiled_with) + lst(prepend) + lst(append)
-    return b"QAMI" + struct.pack("<II", 2, len(payload)) + payload
+    if version != 1:
+        payload += lst(compiled_with) + lst(prepend) + lst(append)
+    return b"QAMI" + struct.pack("<II", version, len(payload)) + payload
 
 
 class DepfileTest(unittest.TestCase):
@@ -134,9 +133,17 @@ class ModuleInfoTest(unittest.TestCase):
     def test_record(self):
         # an ELF note header has the record's magic as its type; the note's name follows it, not a record
         note = struct.pack("<III", 5, 100, 0x494d4151) + b"Qore\0\0\0\0"
-        p = self.write(b"\x7fELF junk" + note + qami_record("M", ["Util"], ["xml >= 1.3"]) + b"tail QAMI")
+        p = self.write(b"\x7fELF junk" + note + qami_record("M", ["Util"], ["xml >= 1.3"], ["Util"]) + b"tail QAMI")
         info = qc.read_module_info(p, "M")
-        self.assertEqual((["Util"], ["xml >= 1.3"], None), (info.dependencies, info.optional, info.compiled_with))
+        self.assertEqual((["Util"], ["xml >= 1.3"], ["Util"]),
+                         (info.dependencies, info.optional, info.compiled_with))
+
+    def test_other_versions(self):
+        """Only version 2 records are read: a module with a record of version 1 (before the closure was recorded) or
+        of a later version is refused, saying which version it has"""
+        for version in (1, 3):
+            with self.assertRaisesRegex(qc.CacheError, "metadata record of version %d" % version):
+                qc.read_module_info(self.write(qami_record("M", ["Util"], version=version)), "M")
 
     def test_record_v2(self):
         """Version 2 adds the names of every module of the compile-time closure (re-exported ones too) and the
@@ -149,7 +156,7 @@ class ModuleInfoTest(unittest.TestCase):
         self.assertEqual(["Util", "Base", "Re"], info.compiled_with)
         self.assertEqual(["/p1", "/p2"], info.prepend_paths)
         self.assertEqual(["/a"], info.append_paths)
-        info = qc.read_module_info(self.write(qami_record("M", compiled_with=[])), "M")
+        info = qc.read_module_info(self.write(qami_record("M")), "M")
         self.assertEqual(([], [], []), (info.compiled_with, info.prepend_paths, info.append_paths))
         # a version 2 record must hold all six fields, and nothing after them
         rec = bytearray(qami_record("M", compiled_with=["A"]))
@@ -161,7 +168,7 @@ class ModuleInfoTest(unittest.TestCase):
         struct.pack_into("<I", longer, 8, len(longer) - 12)
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(longer)), "M")
-        v1 = qami_record("M", ["Util"])
+        v1 = qami_record("M", ["Util"], version=1)
         rec = bytearray(v1)
         rec[4] = 2
         with self.assertRaises(qc.CacheError):
@@ -237,30 +244,11 @@ class IncludeTest(unittest.TestCase):
 
 class RequiredModuleNamesTest(unittest.TestCase):
     def test_names(self):
-        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
-        self.addCleanup(d.cleanup)
-        root = Path(d.name)
-        (root / "qlib" / "Top").mkdir(parents=True)
-        own = root / "qlib" / "Top"
-        deps = [str(own / "Top.qm"), str(own / "Part.qc"), str(root / "qlib" / "Base.qm"),
-                str(root / "qlib" / "Split" / "Split.qm"), str(root / "qlib" / "Split" / "A.qc"),
-                str(root / "build" / "json-api-2.0.qmod"), str(root / "inst" / "Aot.qmod"), str(root / "inc.ql")]
-        self.assertEqual(["Aot", "Base", "Mid", "Split", "json"],
-                         qc.required_module_names(["Mid >= 1.0"], deps, str(own), "Top"))
-
-    def test_names_v2(self):
-        """With a version 2 record, the names are those qcc wrote: a file named <x>.qm that a module includes is no
-        module x, and a module required with %requires(reexport) (no descriptor dependency) is one"""
-        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-")
-        self.addCleanup(d.cleanup)
-        root = Path(d.name)
-        own = root / "qlib" / "Top"
-        own.mkdir(parents=True)
-        deps = [str(own / "Top.qm"), str(root / "qlib" / "helpers.qm"), str(root / "qlib" / "Base.qm"),
-                str(root / "qlib" / "Re.qm"), str(root / "build" / "json-api-2.0.qmod")]
+        """The names are those qcc wrote: the descriptor dependencies and the compile-time closure, which has the
+        modules required with %requires(reexport) (no descriptor dependency) too; a file named <x>.qm that a module
+        includes is no module x (no name is taken from the depfile)"""
         self.assertEqual(["Base", "Mid", "Re", "json"],
-                         qc.required_module_names(["Mid >= 1.0"], deps, str(own), "Top",
-                                                  ["Mid", "Base", "Re", "json", "Top"]))
+                         qc.required_module_names(["Mid >= 1.0"], ["Mid", "Base", "Re", "json", "Top"], "Top"))
 
 
 class EntryProblemTest(unittest.TestCase):
@@ -690,10 +678,12 @@ def s(v):
     return struct.pack("<I", len(b)) + b
 payload = s(out.stem) + struct.pack("<I", len(required)) + b"".join(s(r) for r in required) \
     + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
-qami_version = 1
-# a qcc that writes version 2 records (qami-v2.txt): the names of the compile-time closure, re-exported modules too
-if (here / "qami-v2.txt").exists():
-    qami_version = 2
+qami_version = 2
+# a qcc before version 2 of the record (qami-v1.txt), which wrote no closure
+if (here / "qami-v1.txt").exists():
+    qami_version = 1
+else:
+    # the names of the compile-time closure, re-exported modules too
     closure, todo = [], [n for k, r, n in re.findall(r"^%(requires|try-module)(\(reexport\))? (\w+)", text, re.M)]
     while todo:
         name = todo.pop(0)
@@ -966,7 +956,6 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         """With the module names that qcc writes (metadata version 2), a file named <x>.qm that a module includes is
         no module x: a module x that appears in the module path does not make the module a miss"""
         (self.source / "list-includes.txt").write_text("1")
-        (self.source / "qami-v2.txt").write_text("1")
         (self.source / "qlib" / "helpers.qm").write_text("# helpers\n")
         base = self.source / "qlib" / "Base.qm"
         base.write_text("%include helpers.qm\nmodule Base {}\n")
@@ -976,9 +965,38 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         self.assertEqual([], self.build_all())
         self.assertEqual(0, self.verify().returncode)
 
+    def test_metadata_version_1_is_never_used(self):
+        """A module whose metadata record has version 1 (a qcc before the closure was recorded) is never stored, and
+        never a hit, even from an entry that names it with the right digests"""
+        (self.source / "qami-v1.txt").write_text("1")
+        self.assertEqual(["Base", "Mid", "Other", "Top"], self.build_all())
+        self.assertEqual({"Base": "uncacheable", "Mid": "uncacheable", "Top": "uncacheable", "Other": "uncacheable"},
+                         self.origins())
+        self.assertIn("metadata record of version 1", self.output)
+        self.assertEqual([], self.entries())
+        # an entry whose stored module has a version 1 record, with every digest right
+        (self.source / "qami-v1.txt").unlink()
+        self.build_all()
+        def change(obj):
+            q = obj / "qmod"
+            data = q.read_bytes()
+            pos = data.index(b"QAMI")
+            name_len = struct.unpack_from("<I", data, pos + 12)[0]
+            end = pos + 16 + name_len
+            for _ in range(2):
+                count = struct.unpack_from("<I", data, end)[0]
+                end += 4
+                for _ in range(count):
+                    end += 4 + struct.unpack_from("<I", data, end)[0]
+            q.write_bytes(data[:pos] + b"QAMI" + struct.pack("<II", 1, end - pos - 12) + data[pos + 12:end])
+        entry_path, entry = self.tamper("Base", change)
+        entry_path.write_text(json.dumps(entry))
+        self.assertEqual(["Base"], self.build_all())
+        self.assertRegex(self.output, r"stored module: module '[^']*' has a metadata record of version 1; the cache "
+                                      r"uses only version 2")
+
     def test_module_path_in_v2_metadata_is_not_stored(self):
         """A module whose metadata records module path directives of its own is not stored"""
-        (self.source / "qami-v2.txt").write_text("1")
         (self.source / "qami-paths.txt").write_text("1")
         self.build_all()
         self.assertEqual("uncacheable", self.origins()["Base"])
@@ -987,7 +1005,6 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
     def test_reexported_module_in_v2_metadata(self):
         """A module that a module re-exports is in the names that qcc writes (metadata version 2), also when it is
         reached through another module: one that appears earlier in the module path makes the modules misses"""
-        (self.source / "qami-v2.txt").write_text("1")
         mid = self.source / "qlib" / "Mid.qm"
         mid.write_text("%requires(reexport) Base\nmodule Mid {}\n")
         self.build_all()
@@ -1946,6 +1963,20 @@ def find_build_dir():
     return None
 
 
+def qmod_metadata_version(build_dir):
+    """The version of the AOT module metadata record of a qmod that a Qore build tree compiled, or None"""
+    for qmod in sorted((build_dir / "qlib-qmod").glob("*.qmod"))[:1]:
+        data = qmod.read_bytes()
+        pos = data.find(b"QAMI")
+        while pos >= 0:
+            if pos + 12 <= len(data):
+                version, size = struct.unpack_from("<II", data, pos + 4)
+                if pos + 12 + size <= len(data) and version in (1, 2):
+                    return version
+            pos = data.find(b"QAMI", pos + 1)
+    return None
+
+
 class RealQccTest(unittest.TestCase):
     """The cache with the qcc and qore of a build tree: three modules compiled for real"""
 
@@ -1953,6 +1984,12 @@ class RealQccTest(unittest.TestCase):
         self.qore_build = find_build_dir()
         if not self.qore_build:
             self.skipTest("QORE_TEST_BUILD_DIR must name a Qore build tree with qcc and qore")
+        version = qmod_metadata_version(self.qore_build)
+        if version != 2:
+            # the cache uses only modules with version 2 records; a build of this branch alone (before
+            # fix/qmod-staleness-gaps, whose qcc writes them) has none, and every module is uncacheable
+            self.skipTest("the qcc of %s writes AOT module metadata of version %s; the cache needs version 2"
+                          % (self.qore_build, version))
         if not shutil.which(CMAKE):
             self.skipTest("CMake is required")
         d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-real-")
