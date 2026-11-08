@@ -638,8 +638,8 @@ with nothing running, which reads like a deadlock but is the restart loop failin
 ### A container that a scan finds locked
 
 A Pattern B container reports its values to a scan under its own lock, and the scan only tries that lock: blocking
-could deadlock, as the lock can be held by a thread that waits for something the scan holds (a `Queue` releases
-the values it clears under its lock, which can run any destructor). A scan that finds the lock held cannot read the
+could deadlock, as the lock can be held by a thread that waits for something the scan holds (a module's container
+can run Qore code under its lock, and a scan on the same thread can try a lock that the thread holds). A scan that finds the lock held cannot read the
 values, so it does not see the edges they make, and the dereference that made the scan has already taken the scan
 due at the object (`deferred_scan`). Skipping the values used to be all there was to it, on the assumption that a
 later scan would read them; but nothing made one due, and a cycle that only the container's values closed was never
@@ -1208,8 +1208,8 @@ scan commits, and the scan then records an `rcount` above the value's references
 Each object therefore carries a removal generation besides its edge generation:
 
 - `RObject::edgesRemoved()` advances `RObject::remove_gen`; a container calls it on the holder under its lock for
-  every value it gives up that needs a scan, before the value can be released: a value released under the
-  container's lock needs the mark as much as one handed out, for the scan race above.
+  every value it gives up that needs a scan, before the value can be released: a value that the container releases
+  after its lock needs the mark as much as one handed out, for the scan race above.
 - A scan reads each object's removal generation before it follows the object's edges (`RSetHelper::startNode()`), and
   the commit records it as `scan_remove_gen` whether it assigns a new set or confirms the one in place.
 - `RSet::canDelete()` collects a set only when `RSet::removalsUnchangedSinceScan()` is true; otherwise it asks for

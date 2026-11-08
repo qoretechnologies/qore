@@ -132,8 +132,8 @@ private:
 
     //! Releases the values of the nodes taken from the queue when it goes out of scope
     /** Declared before the queue's lock is taken, so that the values are released after the lock (see
-        design/dgc.md, "Scannable private data"): releasing a value can run a destructor that uses the queue, and a
-        recursive-set scan on the same thread tries the lock (scanMembers()).
+        design/dgc.md, "Pattern B for modules: `AbstractScannablePrivateData`"): releasing a value can run a
+        destructor that uses the queue, and a recursive-set scan on the same thread tries the lock (scanMembers()).
     */
     class NodeListRelease {
     public:

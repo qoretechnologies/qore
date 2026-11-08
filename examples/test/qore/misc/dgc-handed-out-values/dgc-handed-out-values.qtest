@@ -196,7 +196,7 @@ class DgcHandedOutValuesTest inherits QUnit::Test {
 
     #! Queue::clear() releases the values after its lock, so that a destructor can use the queue
     /** The values were released under the queue's lock, and a destructor that used the queue blocked forever on it.
-        See design/dgc.md, "Scannable private data".
+        See design/dgc.md, "Pattern B for modules: `AbstractScannablePrivateData`".
     */
     queueClearReleaseTest() {
         int destroyed = Destroyed::count.getCount();

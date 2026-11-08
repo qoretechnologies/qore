@@ -190,9 +190,9 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
 
     bool new_needs_scan = needs_scan(value);
 
-    // the value replaced is released after the lock (see design/dgc.md, "Scannable private data"): releasing it can
-    // rescan the recursive set of this map's object on this thread, and the scan tries the lock (scanMembers()); it
-    // can also run a destructor that uses the map
+    // the value replaced is released after the lock (see design/dgc.md, "Pattern B for modules:
+    // `AbstractScannablePrivateData`"): releasing it can rescan the recursive set of this map's object on this
+    // thread, and the scan tries the lock (scanMembers()); it can also run a destructor that uses the map
     ValueHolder old_value(xsink);
     {
         QoreAutoRWWriteLocker al(rwl);
