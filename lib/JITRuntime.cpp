@@ -1078,7 +1078,7 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
     for (int32_t i = count - 1; i >= 0; --i) {
         // a local on the runtime stack whose value is released is given by its LocalVar tagged in bit 1 (see
         // QoreIRToLLVM::getExitReleaseSequence()); a closure-bound variable that the frame instantiated is tagged in
-        // bits 0 and 1 and popped from the closure stack
+        // bits 0 and 1 and popped from the closure stack, and the alloca of a foreach statement's iterator in bit 2
         static_assert(alignof(LocalVar) >= 4, "the exit release array tags LocalVar addresses in bits 0 and 1");
         uintptr_t tagged = reinterpret_cast<uintptr_t>(alloca_ptrs[i]);
         if ((tagged & 3) == 3) {
@@ -1087,6 +1087,14 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
         }
         if (tagged & 2) {
             qore_rt_clear_local(reinterpret_cast<LocalVar*>(tagged & ~static_cast<uintptr_t>(2)), xsink);
+            continue;
+        }
+        // the alloca of the iterator of a foreach statement is tagged in bit 2
+        if (tagged & 4) {
+            void** iter_slot = reinterpret_cast<void**>(tagged & ~static_cast<uintptr_t>(4));
+            void* iter = *iter_slot;
+            *iter_slot = nullptr;
+            qore_rt_iterator_cleanup(iter);
             continue;
         }
         uint64_t* slot = alloca_ptrs[i];

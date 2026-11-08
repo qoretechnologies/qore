@@ -833,6 +833,13 @@ private:
     // On abnormal exit (return/throw inside foreach body), emitIteratorCleanup()
     // calls qore_rt_iterator_cleanup() for each non-null alloca.
     std::vector<llvm::Value*> iterator_cleanup_allocas;
+    //! The cleanup allocas of the iterators of foreach statements whose place among the local slots is known
+    //! (QoreIRFunction::interpreter_iterator_slot_boundary), with the boundary, in the order they were lowered: an
+    //! exception exit releases such an iterator at its place among the locals (see getExitReleaseSequence()), as the
+    //! AST interpreter releases the value a foreach statement iterates when the statement ends, after the locals of
+    //! the loop body and before the loop variable and the locals declared before the statement
+    std::vector<std::pair<llvm::AllocaInst*, uint32_t>> positioned_iterator_allocas;
+    std::unordered_set<const llvm::Value*> positioned_iterator_alloca_set;
 
     // Reload tracker allocas for local variables modified by lvalue operations.
     // Each tracker alloca holds the most recent qore_rt_load_local reload value
@@ -1244,6 +1251,8 @@ private:
         //! true if \a var is a closure-bound variable that the frame instantiated, which is popped from the closure
         //! stack; false for one the caller instantiated, which only loses its value, and for a runtime-stack local
         bool pop_closure = false;
+        //! true if \a alloca holds the iterator of a foreach statement (released with qore_rt_iterator_cleanup())
+        bool iterator = false;
     };
 
     //! The locals released at the exit of the function, in declaration order (they are released last first)
@@ -1333,7 +1342,9 @@ private:
     // iterators of the foreach statements left, before the on_block_exit handlers of the function's blocks run, as
     // the AST interpreter releases them when the statements unwind; the persistent cleanups follow in
     // emitInvokeCleanup()
-    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa);
+    //! @param exception_exit true for an exit by an exception, whose release of the locals releases the iterators
+    //! that have a place among them (positioned_iterator_allocas)
+    void emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit = false);
 
     // Returns the block that an exception raised by \a inst branches to on its way to the in-frame handler
     // \a handler: a block that first releases the temporaries of the raising statement - the tracked call results
@@ -1387,7 +1398,19 @@ private:
     bool isSelfRecursiveVariant(const AbstractQoreFunctionVariant* variant) const;
 
     // Emit qore_rt_iterator_cleanup calls for active iterators
-    void emitIteratorCleanup(llvm::Module& module);
+    //! @param skip_positioned true to leave the iterators that the release of the locals releases at their places
+    //! (see positionIterators())
+    void emitIteratorCleanup(llvm::Module& module, bool skip_positioned = false);
+
+    //! Returns true if an exception exit releases the iterators of positioned_iterator_allocas at their places among
+    //! the locals: not when the iterators are released by the array form (iterator_cleanup_array)
+    //! Registers the cleanup alloca of the iterator that \a inst creates in positioned_iterator_allocas if the IR
+    //! gives it a place among the local slots
+    void registerPositionedIterator(const QoreIRInstruction* inst, llvm::Value* iter_alloca);
+
+    bool positionIterators() const {
+        return !iterator_cleanup_array && !positioned_iterator_allocas.empty();
+    }
 
     // Emit llvm.lifetime.start after each entry-block alloca and
     // llvm.lifetime.end before each ret/resume terminator.  Helps SROA/mem2reg

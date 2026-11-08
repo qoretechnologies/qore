@@ -15,12 +15,14 @@
 
 #! Regression test: the value a foreach statement iterates is released in the order of the AST interpreter
 /** When a function is left by an exception while a foreach statement runs, the AST interpreter releases the value the
-    statement iterates when the statement ends: after the locals of the loop's body and before the loop variable and
+    statement iterates when the statement ends: after the locals of the loop body and before the loop variable and
     the locals declared before the statement.  The IR interpreter released its iterators after all of the frame's
-    locals.  The iterators are now released at their places among the local slots
-    (QoreIRFunction::interpreter_iterator_slot_boundary).  The script checks a loop over a list literal, nested loops,
-    a typed loop variable in a block and a loop left by return, every case twice, in every execution mode, on the IR
-    tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+    locals, and native code before all of them, so that an element of a list literal that the loop variable no longer
+    held died before the locals of the loop body.  The iterators are now released at their places among the local
+    slots (QoreIRFunction::interpreter_iterator_slot_boundary).  The script checks a loop over a list literal, one
+    whose loop variable is reassigned, nested loops, a typed loop variable in a block and a loop left by return,
+    every case twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
+    ExecModeOutputTest).
 */
 class ForeachExitIteratorOrderTest inherits ExecModeOutputTest {
     public {
@@ -39,6 +41,15 @@ sub k() {
     foreach auto v in ((new E("k3"),)) {
         E f("kf");
         throw "K";
+    }
+}
+# the loop variable holds another object than the iterated value: the element dies when the statement ends
+sub k2() {
+    E e("k2e");
+    foreach auto v in ((new E("k2l"), 1)) {
+        v = new E("k2v");
+        E f("k2f");
+        throw "K2";
     }
 }
 # nested loops
@@ -71,7 +82,7 @@ sub r() {
         return;
     }
 }
-foreach string fn in (("k", "n", "t", "r")) {
+foreach string fn in (("k", "k2", "n", "t", "r")) {
     for (int i = 0; i < 2; ++i) {
         try {
             call_function(fn);
@@ -93,6 +104,16 @@ foreach string fn in (("k", "n", "t", "r")) {
             "dtor k3",
             "dtor ke",
             "k: K",
+            "dtor k2f",
+            "dtor k2l",
+            "dtor k2v",
+            "dtor k2e",
+            "k2: K2",
+            "dtor k2f",
+            "dtor k2l",
+            "dtor k2v",
+            "dtor k2e",
+            "k2: K2",
             "dtor ng",
             "dtor nb",
             "dtor nf",

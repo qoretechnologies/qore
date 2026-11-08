@@ -2539,9 +2539,13 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // variable's, assigned by its first element store
     interpreter_iterator_slot_boundary.clear();
     const QoreIRInstruction* pending_iterator = nullptr;
+    // one past the highest slot of the locals referenced so far in layout order: a slot is assigned where its local
+    // first appears, but a later run of this pass keeps the slots of an earlier one (next_local_slot then starts
+    // after all of them)
+    uint32_t seen_slots = 0;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
-            const uint32_t slots_before = next_local_slot;
+            const uint32_t slots_before = seen_slots;
             if (inst->result.isValid() && inst->result.id > max_vid) {
                 max_vid = inst->result.id;
             }
@@ -2554,9 +2558,16 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             // Track LocalVar* pointers — assign slot IDs to all locals referenced
             // by any instruction type (LoadLocal, StoreLocal, fused ops, etc.)
             auto assign_slot = [&](const LocalVar* lv) {
-                if (lv && slot_map.find(lv) == slot_map.end()) {
-                    slot_map[lv] = next_local_slot++;
-                    used_local_slots.insert(slot_map[lv]);
+                if (!lv) {
+                    return;
+                }
+                auto it = slot_map.find(lv);
+                if (it == slot_map.end()) {
+                    it = slot_map.emplace(lv, next_local_slot++).first;
+                    used_local_slots.insert(it->second);
+                }
+                if (it->second + 1 > seen_slots) {
+                    seen_slots = it->second + 1;
                 }
             };
             auto assign_expr_slots = [&](const QoreValue& expr) {
@@ -2660,19 +2671,19 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 assign_expr_slots(find_inst->find_exp);
                 assign_expr_slots(find_inst->where);
             }
-            if (pending_iterator && next_local_slot != slots_before) {
+            if (pending_iterator && seen_slots != slots_before) {
                 // the first slot assigned after the iterator: the loop variable's goes before the iterator, which the
                 // AST interpreter releases before the loop variable
                 if (inst->opcode == QoreIROpcode::StoreLocal || inst->opcode == QoreIROpcode::StoreClosure) {
                     if (static_cast<const QoreIRLocalInstruction*>(inst.get())->foreach_assignment) {
-                        interpreter_iterator_slot_boundary[pending_iterator] = next_local_slot;
+                        interpreter_iterator_slot_boundary[pending_iterator] = seen_slots;
                     }
                 }
                 pending_iterator = nullptr;
             }
             if (inst->opcode == QoreIROpcode::IteratorCreate || inst->opcode == QoreIROpcode::IteratorCreateIterate
                     || inst->opcode == QoreIROpcode::IteratorCreateReverse) {
-                interpreter_iterator_slot_boundary[inst.get()] = next_local_slot;
+                interpreter_iterator_slot_boundary[inst.get()] = seen_slots;
                 pending_iterator = inst.get();
             }
         }
