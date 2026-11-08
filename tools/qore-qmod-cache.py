@@ -47,7 +47,8 @@ Environment (read by "exec"; never part of a key):
   them, chosen by their key and the seed) and fail the build unless qcc writes the same module byte for byte; a
   failure quarantines the cache the job writes to
 - QORE_QMOD_CACHE_SIGNING_KEY=<key>: sign the entries stored (HMAC-SHA256), and use only entries signed with the key
-- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1: for the tests only, a restored module is damaged after the copy
+- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1|.d|.d.fingerprints: for the tests only, a restored file (the module, its
+  depfile or its fingerprints) is damaged after the copy
 """
 
 import argparse
@@ -1333,11 +1334,13 @@ class Module:
                 for suffix in (".d", ".d.fingerprints", ""):
                     atomic_copy(os.path.join(obj, "qmod" + suffix), self.out + suffix,
                                 None if suffix else int(entry["mode"]) & 0o777)
-                    if suffix == "" and self.env.get("QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE"):
+                    corrupt = self.env.get("QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE")
+                    if corrupt and (corrupt == suffix or (corrupt in ("1", "qmod") and suffix == "")):
                         # for the tests: a copy that went wrong
-                        with open(self.out, "ab") as f:
+                        with open(self.out + suffix, "ab") as f:
                             f.write(b"x")
-                for suffix, digest in (("", entry["files"]["qmod"]), (".d", entry["files"][".d"])):
+                for suffix in STORED_SUFFIXES:
+                    digest = entry["files"][suffix or "qmod"]
                     if sha256_file(self.out + suffix) != digest:
                         raise CacheError("restored file '%s' differs from the cache" % (self.out + suffix))
                 if not readonly:

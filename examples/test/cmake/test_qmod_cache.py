@@ -948,10 +948,11 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
 
     def test_restored_files_are_checked(self):
         self.build_all()
-        self.assertEqual(["Base", "Mid", "Other", "Top"],
-                         self.build_all(env={"QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE": "1"}))
-        self.assertIn("differs from the cache", self.output)
-        self.assertEqual({"Base": "miss", "Mid": "miss", "Top": "miss", "Other": "miss"}, self.origins())
+        for damaged in ("1", ".d", ".d.fingerprints"):
+            self.assertEqual(["Base", "Mid", "Other", "Top"],
+                             self.build_all(env={"QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE": damaged}), damaged)
+            self.assertIn("differs from the cache", self.output)
+            self.assertEqual({"Base": "miss", "Mid": "miss", "Top": "miss", "Other": "miss"}, self.origins())
 
     def test_module_changed_in_the_build_tree_is_not_a_dependency_key(self):
         """A module's key in the build tree's index is used only while its qmod is the one the cache supplied"""
