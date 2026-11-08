@@ -110,8 +110,12 @@ class CaresErrorStatusTest inherits QUnit::Test {
 
     refusedTest() {
         checkDebug();
-        # nothing listens on the discard port of the loopback address
-        string servers = call_function("dbg_cares_set_servers", "127.0.0.1:9");
+        # a UDP port held by a socket connected to another address: no socket takes a datagram from the resolver on
+        # it, and none can be bound to it while it is held, so the system refuses the datagrams
+        Socket held();
+        held.connectINET("127.0.0.1", dns.getServer().split(":").last(), 5s, AF_INET, SOCK_DGRAM);
+        on_exit held.close();
+        string servers = call_function("dbg_cares_set_servers", "127.0.0.1:" + held.getSocketInfo().port);
         on_exit call_function("dbg_cares_set_servers", servers);
         hash<ExceptionInfo> ex = lookupError(\getaddrinfo(), ("nx.qore-test.",));
         assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err);
