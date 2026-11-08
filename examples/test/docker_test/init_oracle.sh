@@ -17,7 +17,10 @@ if [ -n "$DOCKER_ORACLE" ]; then
     echo export ORACLE_SID=qoresid >> /tmp/env.sh
     echo export ORACLE_PDB=QOREPDB >> /tmp/env.sh
     echo export ORACLE_PWD=qore >> /tmp/env.sh
-    echo export QORE_DB_CONNSTR_ORACLE_SYS=oracle:pdbadmin/qore@oracle >> /tmp/env.sh
+    # a user that may create and drop users, with the privileges that OracleTestIsolation.qm grants the user of each
+    # test run (examples/test/qlib/SqlUtil): SYSTEM (ORACLE_PWD is the password of SYS, SYSTEM and PDBADMIN; PDBADMIN
+    # has only the PDB_DBA role, which need not have them)
+    echo export QORE_DB_CONNSTR_ORACLE_SYS=oracle:system/qore@oracle >> /tmp/env.sh
     echo export QORE_DB_CONNSTR_ORACLE=oracle:qore/qore@oracle >> /tmp/env.sh
 
     . /tmp/env.sh
@@ -68,6 +71,8 @@ else
     # create user for test; if Oracle is unavailable, skip Oracle tests
     if qore -ne "Datasource ds(\"oracle:system/qore@rippy%rippy:1521\"); ds.exec(\"create user ${ORACLE_USER} identified by qore\"); ds.exec(\"grant create session, create procedure, create sequence, create table, create trigger, create type, create view, create synonym, unlimited tablespace to ${ORACLE_USER}\"); ds.commit();" 2>/dev/null; then
         echo "created oracle user ${ORACLE_USER}"
+        # the user that creates the user of each test run (OracleTestIsolation.qm in examples/test/qlib/SqlUtil)
+        echo export QORE_DB_CONNSTR_ORACLE_SYS=oracle:system/qore@rippy%rippy:1521 >> /tmp/env.sh
     else
         echo "WARNING: could not connect to Oracle on rippy — Oracle tests will be skipped"
         unset QORE_DB_CONNSTR_ORACLE
