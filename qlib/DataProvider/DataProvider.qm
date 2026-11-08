@@ -1646,6 +1646,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       the @ref Qore::Program "Program" that loads it first may not use the sandbox APIs
       (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), lazy registrations run and lazy values are
       built when they are registered, as before they were lazy
+    - pending registrations (\c registerPendingApp(), \c registerPendingAppAction()) made by code that a sandbox
+      governs run when they are made, so that no code registered under a sandbox runs later on another thread; for a
+      sandboxed reader, the catalog worker runs the registrations that trusted code made
+    - sandboxed code cannot add a catalog change listener
     - the \c NoInit getters of @ref DataProvider::DataProviderActionCatalog "DataProviderActionCatalog" never run or
       wait for deferred registrations; the deferred initialization of an app runs on one thread at a time, and a
       thread that uses the app meanwhile waits for it instead of reading part of what it registers
