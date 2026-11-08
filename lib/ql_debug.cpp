@@ -10407,7 +10407,7 @@ private:
                 "the send error is reported instead of the read error");
         }
         UT_ASSERT(c, !op->send_failure_pending, "the send error is reported once");
-        UT_ASSERT(c, op->h1_state == Http1ClientPollOperationPriv::H1State::CLOSED,
+        UT_ASSERT(c, op->h1_state == Http1ClientPollOperationPriv::H1State::CLOSED && !op->active_stream_count,
             "a failed upload cannot leave a reusable connection");
         xsink.clear();
     }
