@@ -152,13 +152,19 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         ds.open();
         int old = now_us().getEpochSeconds() - TestRun::LeftoverAge.durationSeconds() - 60;
         string db = sprintf("qtest_livesess_host_1_%d_abc123", old);
-        ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
-        push made, db;
-        # a session of the database
+        # the leftovers are not dropped until the database has a session: the setup of a test that runs at the same
+        # time would drop it
         hash<auto> config = parse_datasource(connstr);
         config.db = db;
         Datasource session(make_datasource_string(config));
-        session.open();
+        {
+            MssqlRunDatabase::lockLeftovers(ds);
+            on_exit MssqlRunDatabase::unlockLeftovers(ds);
+            ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
+            push made, db;
+            # a session of the database
+            session.open();
+        }
         list<string> dropped = MssqlRunDatabase::dropLeftovers(connstr);
         assertFalse(inlist(db, dropped));
         # the session was not ended

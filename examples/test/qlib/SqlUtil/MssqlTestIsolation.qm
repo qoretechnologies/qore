@@ -287,8 +287,25 @@ public class MssqlRunDatabase {
         return MssqlRunDatabase::dropLeftoversIntern(ds);
     }
 
+    #! Takes the server-wide lock of the leftover databases for the session of the datasource
+    /** The leftovers are dropped while the lock is held: a test that makes a database with an old name holds it until
+        the database has a session, so that no run drops it in between
+    */
+    static lockLeftovers(Datasource ds) {
+        ds.execRaw("declare @qore_rc int; exec @qore_rc = sp_getapplock @Resource = 'qtest-mssql-leftovers', "
+            "@LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = -1; if @qore_rc < 0 "
+            "raiserror('cannot take the lock of the leftover test databases: %d', 16, 1, @qore_rc)");
+    }
+
+    #! Releases the server-wide lock of the leftover databases that lockLeftovers() took for the session
+    static unlockLeftovers(Datasource ds) {
+        ds.execRaw("exec sp_releaseapplock @Resource = 'qtest-mssql-leftovers', @LockOwner = 'Session'");
+    }
+
     #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
     private static list<string> dropLeftoversIntern(Datasource ds) {
+        MssqlRunDatabase::lockLeftovers(ds);
+        on_exit MssqlRunDatabase::unlockLeftovers(ds);
         list<string> rv = ();
         *list<string> dbs = ds.select("select name from sys.databases where name like %v", TestRun::Prefix + "%")
             .name;
