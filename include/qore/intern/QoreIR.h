@@ -2879,6 +2879,11 @@ public:
     mutable const QoreClass* cached_object_class = nullptr;
     mutable const qore_class_private* cached_class_ctx = nullptr;
     mutable const QoreMethod* cached_method = nullptr;
+    //! qore_class_private::getInstanceSerial() of cached_object_class: the cached class and method may be freed
+    //! with their Program and their addresses reused by another class, so the pointer alone does not identify them
+    mutable uint64_t cached_object_class_serial = 0;
+    //! qore_class_private::getInstanceSerial() of cached_class_ctx, or 0 if there is no class context
+    mutable uint64_t cached_class_ctx_serial = 0;
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
@@ -2929,8 +2934,29 @@ public:
     mutable const QoreClass* cached_object_class = nullptr;
     mutable const qore_class_private* cached_class_ctx = nullptr;
     mutable const QoreMethod* cached_method = nullptr;
+    //! qore_class_private::getInstanceSerial() of cached_object_class: the cached class and method may be freed
+    //! with their Program and their addresses reused by another class, so the pointer alone does not identify them
+    mutable uint64_t cached_object_class_serial = 0;
+    //! qore_class_private::getInstanceSerial() of cached_class_ctx, or 0 if there is no class context
+    mutable uint64_t cached_class_ctx_serial = 0;
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
+
+#ifdef DEBUG
+//! Debug-only: runs the inline-cache lookup of a dot-eval method call site with no arguments
+/** For the C++ unit tests (lib/ql_debug.cpp), which publish a cache entry by hand to model one made for a destroyed
+    class whose address a live class reuses.
+
+    @return true if the call was executed (or raised an exception) through the inline cache; false if the caller
+    must use the generic call path
+*/
+DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRDotEvalMethodDirectInstruction* inst, QoreValue base,
+        const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink);
+
+//! Debug-only: as above, for the call site in a try block
+DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstruction* inst,
+        QoreValue base, const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink);
+#endif
 
 //! Creates a FunctionalOperatorInterface from a list or iterable expression
 //! result contains a pointer to the iterator (as int64_t)

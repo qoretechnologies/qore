@@ -137,6 +137,38 @@ never held across execution of the callee, and a failed claim never blocks, so a
 site that re-enters itself recursively during resolution simply takes the generic
 path.
 
+Publication safety does not make the pointees live. A call site in one Program can
+call an object of a class from another Program (the ncurses widget gallery calls
+`QRepl::joinEvaluation()` on an untyped object whose class lives in a child Program
+that each story reset replaces), so a published dot-eval cache can name a class, method
+and callee that are freed with their Program, and a later class can be allocated at the
+same address (qore#5631). A raw pointer is therefore never a cache key on its own:
+
+- The dot-eval inline cache records `qore_class_private::getInstanceSerial()` of the
+  receiver's class and of the class context next to their pointers
+  (`cached_object_class_serial`, `cached_class_ctx_serial`) and a hit requires both to
+  match the live receiver's class and the running code's class context, which can be
+  read safely because they are in use. The serial is process-unique and never reused,
+  unlike the class ID (which a class copy keeps) and the address; a `QoreClass` wrapper
+  sharing its private class shares the serial, so it is the same class. A matching
+  serial proves that the cached class is the live receiver's, so the cached method,
+  which belongs to that class or one of its parents, is alive too. A mismatch takes the
+  generic path; the published state is never replaced, so the call site stays generic
+  after its class is gone, exactly as for any other receiver class.
+- The AOT method dispatch cache (`QoreAOTMethodDispatchCache`) keys its entries by class,
+  class context and argument type pointers, so `qore_get_method_dispatch_epoch()`, which
+  every entry must match, also increments when a class (`~qore_class_private()`) or a
+  hashdecl (`~typed_hash_decl_private()`) is destroyed: an entry naming one is stale
+  before its memory can be reused. Parameterized and derived types are purged with
+  their base class, so they are covered as well. The caller and object Programs are
+  keyed by their never-reused `QoreProgram::getProgramId()`, as a Program can be
+  destroyed without destroying a class.
+
+`examples/test/ir/InlineMethodCacheClassLifetime.qtest` runs persistent call sites over
+destroyed Programs and, with a debug build, the C++ unit tests
+(`dbg_run_method_cache_lifetime_tests()`), which model the reused address
+deterministically by giving a published entry the serial of an earlier class.
+
 ## AOT Compiler
 
 `qcc` is the dedicated AOT compiler. It supports:

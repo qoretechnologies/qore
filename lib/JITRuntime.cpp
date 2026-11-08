@@ -18075,6 +18075,11 @@ static bool qore_rt_get_aot_dispatch_arg_key(QoreValue value,
     return type_info;
 }
 
+//! Returns the dispatch cache key of a Program: its never-reused ID, or 0 for no Program
+static qore_program_id_t qore_rt_aot_dispatch_program_id(const QoreProgram* pgm) {
+    return pgm ? pgm->getProgramId() : 0;
+}
+
 static bool qore_rt_build_aot_dispatch_key(QoreObject* object,
         uint64_t* args, int nargs,
         std::array<const QoreTypeInfo*,
@@ -18129,8 +18134,8 @@ static const QoreAOTMethodDispatchCacheEntry*
 qore_rt_find_aot_method_dispatch_cache_entry(
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
-        const qore_class_private* class_ctx, const QoreProgram* caller_program,
-        const QoreProgram* object_program,
+        const qore_class_private* class_ctx, qore_program_id_t caller_program_id,
+        qore_program_id_t object_program_id,
         const QoreParseOptions& parse_options, uint64_t dispatch_epoch,
         const std::array<const QoreTypeInfo*,
             QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_types,
@@ -18146,8 +18151,8 @@ qore_rt_find_aot_method_dispatch_cache_entry(
         if (entry && entry->receiver_class == receiver_class
                 && entry->receiver_type_info == receiver_type_info
                 && entry->class_ctx == class_ctx
-                && entry->caller_program == caller_program
-                && entry->object_program == object_program
+                && entry->caller_program_id == caller_program_id
+                && entry->object_program_id == object_program_id
                 && entry->parse_options == parse_options
                 && entry->dispatch_epoch == dispatch_epoch
                 && entry->nargs == nargs) {
@@ -18171,8 +18176,8 @@ qore_rt_find_aot_method_dispatch_cache_entry(
 static void qore_rt_add_aot_method_dispatch_cache_entry(
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
-        const qore_class_private* class_ctx, const QoreProgram* caller_program,
-        const QoreProgram* object_program,
+        const qore_class_private* class_ctx, qore_program_id_t caller_program_id,
+        qore_program_id_t object_program_id,
         const QoreParseOptions& parse_options, uint64_t dispatch_epoch,
         const std::array<const QoreTypeInfo*,
             QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_types,
@@ -18185,7 +18190,7 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
         return;
     }
     if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
-            receiver_type_info, class_ctx, caller_program, object_program,
+            receiver_type_info, class_ctx, caller_program_id, object_program_id,
             parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
         return;
     }
@@ -18194,8 +18199,8 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
     entry->receiver_class = receiver_class;
     entry->receiver_type_info = receiver_type_info;
     entry->class_ctx = class_ctx;
-    entry->caller_program = caller_program;
-    entry->object_program = object_program;
+    entry->caller_program_id = caller_program_id;
+    entry->object_program_id = object_program_id;
     entry->method = method;
     entry->variant = variant;
     entry->parse_options = parse_options;
@@ -18205,7 +18210,7 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
     entry->nargs = static_cast<uint8_t>(nargs);
     std::lock_guard<std::mutex> lock(cache->write_mutex);
     if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
-            receiver_type_info, class_ctx, caller_program, object_program,
+            receiver_type_info, class_ctx, caller_program_id, object_program_id,
             parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
         return;
     }
@@ -18240,8 +18245,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     std::array<uint8_t,
         QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_states{};
     const QoreTypeInfo* receiver_type_info = nullptr;
-    const QoreProgram* caller_program = nullptr;
-    const QoreProgram* object_program = nullptr;
+    qore_program_id_t caller_program_id = 0;
+    qore_program_id_t object_program_id = 0;
     QoreParseOptions parse_options;
     uint64_t dispatch_epoch = 0;
     QoreAOTMethodDispatchCache* cache = nullptr;
@@ -18249,8 +18254,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     if (!explicit_type_param_instantiation) {
         cache = qore_rt_get_aot_method_dispatch_cache(target);
         if (cache) {
-            caller_program = getProgram();
-            object_program = object->getProgram();
+            caller_program_id = qore_rt_aot_dispatch_program_id(getProgram());
+            object_program_id = qore_rt_aot_dispatch_program_id(object->getProgram());
             parse_options = runtime_get_parse_options();
             cacheable = qore_rt_build_aot_dispatch_key(object, args, nargs,
                 arg_types, arg_states, receiver_type_info);
@@ -18260,7 +18265,7 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
             const QoreAOTMethodDispatchCacheEntry* entry =
                 qore_rt_find_aot_method_dispatch_cache_entry(cache,
                     object->getClass(), receiver_type_info, class_ctx,
-                    caller_program, object_program, parse_options,
+                    caller_program_id, object_program_id, parse_options,
                     dispatch_epoch, arg_types, arg_states, nargs);
             if (entry) {
                 uint64_t result;
@@ -18325,8 +18330,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         &resolved_variant);
     if (cacheable && resolved_variant && !*xsink) {
         qore_rt_add_aot_method_dispatch_cache_entry(cache,
-            object->getClass(), receiver_type_info, class_ctx, caller_program,
-            object_program, parse_options, dispatch_epoch, arg_types,
+            object->getClass(), receiver_type_info, class_ctx, caller_program_id,
+            object_program_id, parse_options, dispatch_epoch, arg_types,
             arg_states, nargs, method, resolved_variant);
     }
     return toBits(result);
