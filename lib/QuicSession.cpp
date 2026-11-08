@@ -456,7 +456,8 @@ int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink) {
         // the I/O threads read a datagram when it is in its socket, so the next pass sees what it caused
         if (!quiet && in_flight && !quic_test_wait_delivered(30000)) {
             xsink->raiseException("DBG-QUIC-CLOCK-ERROR", "datagrams sent to sockets of the process were not read "
-                "within 30 seconds (%s); the QUIC test clock was not advanced", quic_test_describe_undelivered().c_str());
+                "within 30 seconds (%s); the QUIC test clock was not advanced",
+                quic_test_describe_undelivered().c_str());
             return -1;
         }
     }
