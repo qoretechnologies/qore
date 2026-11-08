@@ -51,6 +51,8 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
             \chainShadowTest());
         addTestCase("without a source module, an out-of-date AOT module is loaded with a warning",
             \noSourceTest());
+        addTestCase("another build of a native module with the same name and API version is the one compiled against",
+            \nativeModuleTest());
         addTestCase("a module compiled with a relative output path is checked", \relativeOutputTest());
         set_return_value(main());
     }
@@ -300,6 +302,31 @@ class AOTModuleDependencyStaleTest inherits QUnit::Test {
         assertEq("other User.qmod", out.split("\n").last(), out);
         assertRegex("BINARY-MODULE-STALE: .*AOT module '.*/User\\.qmod' for feature 'User' is out of date: it was "
             "compiled against other files of module 'Dep'.*no source module was found", out);
+    }
+
+    nativeModuleTest() {
+        TmpDir tmp("qore-aot-dep-stale-");
+        string src_dir = tmp.path + "/qlib";
+        string qmod_dir = tmp.path + "/build/qlib-qmod";
+        string other_dir = tmp.path + "/installed";
+        mkdir(src_dir);
+        mkdir(qmod_dir, 0755, True);
+        mkdir(other_dir);
+        # the directory of the json module of this process, which the module is compiled against
+        string json_file = trim(run(sprintf("%s %s -l json -X 'get_module_hash().json.filename'", env, qore_bin)));
+        json_file =~ s/^\"//;
+        json_file =~ s/\"$//;
+        assertTrue(is_file(json_file), json_file);
+        string json_dir = dirname(json_file);
+        writeModule(src_dir, "User", "%requires json", "public namespace User { public string sub value() { "
+            "return make_json({\"a\": 1}); } }");
+        string module_path = qmod_dir + ":" + src_dir + ":" + json_dir;
+        compile(module_path, src_dir, qmod_dir, "User");
+        # another build of json: the same name and API version, other bytes
+        string other = other_dir + "/" + basename(json_file);
+        assertEq(0, system(sprintf("cp '%s' '%s' && printf 'another build' >> '%s'", json_file, other, other)));
+        string out = runRequires(other_dir + ":" + module_path, tmp.path, "User", "User::value()");
+        assertEq("{\"a\":1} User.qmod", out, out);
     }
 
     relativeOutputTest() {

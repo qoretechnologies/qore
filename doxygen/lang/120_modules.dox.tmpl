@@ -1499,7 +1499,8 @@ qcc of this Qore installation
     one of them re-exports, is loaded from another module than the one it was compiled against, for example one that
     appeared in a directory of the module path that is searched first: the module loader raises
     \c AOT-MODULE-STALE for it and loads its source module instead, or, without a source module, loads it with a
-    \c BINARY-MODULE-STALE warning that it must be rebuilt.
+    \c BINARY-MODULE-STALE warning that it must be rebuilt.  Another build of a binary module with the same name and
+    module API version, such as an installed one, is the same module.
 
     A module without a dependency file next to it is not checked: an installed module (the install rules do not
     install dependency files), and a module compiled by hand with <tt>qcc --compile-module</tt> without

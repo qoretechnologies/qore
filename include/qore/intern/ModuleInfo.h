@@ -1031,7 +1031,8 @@ protected:
         The modules checked are the dependencies of its descriptor and every module whose files its depfile lists
         (those it requires, directly or not, and those they re-export); a module that is loaded is checked as it is
         loaded, and one that is not as findModuleFileUnlocked() finds it.  A module is the one compiled against if the
-        file it comes from is listed in the depfile, is a copy of a listed file, or is an AOT module of a build tree whose own sources are
+        file it comes from is listed in the depfile, is a copy of a listed file, is a native binary module with the
+        name and module API version of a listed one, or is an AOT module of a build tree whose own sources are
         listed (an AOT module without a depfile is not checked).  The mutex must be held.
 
         @param stale_desc set to why the AOT module is out of date
