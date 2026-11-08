@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
 # Copyright 2026 Qore Technologies, s.r.o.
+# test-parallel: serial - it creates fixed-name objects in the shared SQL Server/Sybase (FreeTDS) test database
 
 %modern
 
@@ -17,6 +18,7 @@
 %requires Sqlite3SqlUtil
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
 
 %try-module pgsql
 %define NO_PGSQL
@@ -63,6 +65,7 @@ class ConstraintRenameAlignmentTest inherits QUnit::Test {
 
     globalTearDown() {
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
     }
 
     #! Returns the description of the parent table, whose primary key the foreign constraint references
@@ -199,7 +202,9 @@ class ConstraintRenameAlignmentTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_MYSQL is not set");
         }
         skipIfNoConnection(ENV.QORE_DB_CONNSTR_MYSQL);
-        Datasource ds(ENV.QORE_DB_CONNSTR_MYSQL);
+        # the run's own database: tests that run at the same time do not share the tables of this one
+        string connstr = MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "ConstraintRenameAlignment");
+        Datasource ds(connstr);
         checkDatabase(ds, True, False);
 
         # an index with the definition of the template's under another name is renamed, not dropped and added

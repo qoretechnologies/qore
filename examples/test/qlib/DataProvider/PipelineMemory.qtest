@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - the pipelines run in the test's own process, and the worker gets the test's own options
 
 # Copyright 2026 Qore Technologies, s.r.o.
 #

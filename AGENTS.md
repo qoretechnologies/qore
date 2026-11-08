@@ -60,6 +60,29 @@
 - A test must end every process it starts (servers, helpers, children): on Linux, `run_tests.sh` fails a test that
   leaves processes running and kills them, as a leftover process keeps a CI job's output open and so the job running.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
+- A test that uses `examples/test/ExecModeHarness.qm` declares `# test-exec-mode: children - <why>` when all its checks
+  run in child processes that set their own `--exec-mode` (the CI jobs that run every test in one execution mode leave
+  it out, as the default-mode jobs run the same children), or `# test-exec-mode: parent - <why>` when it also checks
+  anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
+  child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
+  a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
+- `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs, the
+  Linux test jobs as many as their pod's CPU and memory limits allow: `qore_ci_test_jobs` in
+  `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must
+  therefore not share state: listen on port 0, write under their own `make_tmp_dir()`/`TmpDir`, and use names of their
+  own for shared objects.  A test that cannot run beside others declares `# test-parallel: serial - <why>` (one at a
+  time beside the others: the tests that create fixed-name objects in the Oracle, FreeTDS and Firebird test schemas,
+  which have no per-run schema) or `# test-parallel: exclusive - <why>` (alone: a test that reads the process limit of
+  the machine to reach it, such as `qore/threads/max-threads-count.qtest`, must, or the tests beside it cannot fork;
+  `examples/test/runner/test_parallel_runner.py` enforces it).  The reason names the shared resource; tests that
+  interfere only by names they share are a bug: a PostgreSQL test takes a schema of its own with
+  `examples/test/qlib/SqlUtil/PgsqlTestIsolation.qm`, a MySQL test a database of its own with `MysqlTestIsolation.qm`
+  there, and a Redis, Memcached or MongoDB test random key prefixes or a database of its own.  A test that takes more
+  than about two minutes is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each
+  `<name>-<part>.qtest` runs one part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks
+  the parts.
+- The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
+  pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 
 ## Running Tests Under valgrind
 - Disable signal handling with `-b` (`--disable-signals`), for example

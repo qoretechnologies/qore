@@ -36,18 +36,11 @@ ${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
 "${QORE_SRC_DIR}/test/docker_test/ci-build-image-check.sh" \
     "${QORE_SRC_DIR}/build/qore-ci-build-artifact-info" || exit 1
 
-# install from pre-built artifact
-#
-# Use `cmake --install` directly instead of `make install`.  The build-perf
-# job strips intermediate *.o files from the build/ artifact to keep its
-# size down, but `make install` depends transitively on `make all` and
-# therefore recompiles + relinks libqore + qore (~2 min wasted on the
-# single-compilation-unit) just to satisfy missing intermediates that are
-# not actually needed for installation.  `cmake --install` runs the install
-# rule directly and only copies the final binaries / headers / .qm files
-# the artifact already contains.
-echo && echo "-- installing Qore (Release) --"
-cmake --install ${QORE_SRC_DIR}/build
+# The build-perf job builds only qore and the modules that the performance tests require (see
+# perf-build-targets.py), so its build/ artifact cannot be installed as a whole; the tests run from the build tree, as
+# run_tests.sh runs them: with build/qore, the build's libqore (LD_LIBRARY_PATH), its qmods and binary modules
+# (QORE_MODULE_DIR) and the qlib sources
+echo && echo "-- running the performance tests from the build tree --"
 
 # core dumps: the pattern is the one every CI job on the node sets, as the node has only one (see
 # ci-core-capture.sh); cores are kept in crash-dumps/ (the job artifact)

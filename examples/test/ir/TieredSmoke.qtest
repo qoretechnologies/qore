@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - the test computes the expected results with the operators under test in its own process
 
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 

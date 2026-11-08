@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-parallel: serial - it creates fixed-name objects in the shared Oracle and FreeTDS test schemas
 
 %modern
 
@@ -21,6 +22,7 @@
 %requires ../SqlUtil/PgsqlTestIsolation.qm
 # the test runs against every database connection that is configured
 %requires ../../DbTestConnections.qm
+%requires ../SqlUtil/MysqlTestIsolation.qm
 
 #! a connection of the test, and its schema and table
 class TableMapperPerformanceContext {
@@ -216,6 +218,10 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         # on PostgreSQL, every connection of the run uses the run's own schema; this is set up before any
         # connection is opened
         map PgsqlRunSchema::setup($1.conn.connstr, "TableMapperPerf"), contexts;
+        # on MySQL, the run's own database
+        foreach TableMapperPerformanceContext ctx in (contexts) {
+            ctx.conn.connstr = MysqlRunDatabase::getConnectionString(ctx.conn.connstr, "TableMapperPerf");
+        }
         map setUpContext($1), contexts;
 
         # add test cases
@@ -272,6 +278,7 @@ public class TableMapperPerformanceTest inherits QUnit::Test {
         }
         # drop the run's schema on PostgreSQL
         PgsqlRunSchema::teardown();
+        MysqlRunDatabase::teardown();
     }
 
     private usageIntern() {

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-parallel: serial - it creates fixed-name objects in the shared Firebird test database
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
