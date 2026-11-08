@@ -41,6 +41,7 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         addTestCase("the setup drops only the databases of gone runs", \leftovers());
         addTestCase("the run's connections use the run's database", \runDatabase());
         addTestCase("the teardown drops the run's database", \teardown());
+        addTestCase("a leftover with sessions is left for a later run", \liveLeftover());
         set_return_value(main());
     }
 
@@ -119,6 +120,30 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         shared.rollback();
         ds.close();
         shared.close();
+    }
+
+    #! A leftover database with sessions is in use by a live run: its sessions are not ended, and it is left for a
+    #! later run
+    private liveLeftover() {
+        checkSkip();
+        Datasource ds(connstr);
+        ds.setAutoCommit(True);
+        ds.open();
+        int old = now_us().getEpochSeconds() - TestRun::LeftoverAge.durationSeconds() - 60;
+        string db = sprintf("qtest_livesess_host_1_%d_abc123", old);
+        ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
+        push made, db;
+        # a session of the database
+        hash<auto> config = parse_datasource(connstr);
+        config.db = db;
+        Datasource session(make_datasource_string(config));
+        session.open();
+        list<string> dropped = MssqlRunDatabase::dropLeftovers(connstr);
+        assertFalse(inlist(db, dropped));
+        # the session was not ended
+        assertEq(1, session.selectRow("select 1 as v").v);
+        assertEq(1, ds.selectRow("select count(*) as c from sys.databases where name = %v", db).c);
+        session.close();
     }
 
     private teardown() {

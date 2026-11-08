@@ -210,6 +210,9 @@ public class MysqlRunDatabase {
     #! Drops the databases left by test runs that are at least TestRun::LeftoverAge old, whatever their host
     private static list<string> dropLeftoversIntern(Datasource ds) {
         list<string> rv = ();
+        # a database that a live run (one that runs longer than its name's age tells) holds a lock of is not waited
+        # for longer than this: it is dropped by a later run
+        ds.exec("set session lock_wait_timeout = 5");
         *list<string> dbs = ds.select("select schema_name as name from information_schema.schemata "
             "where schema_name like %v", TestRun::Prefix + "%").name;
         foreach string db in (dbs) {

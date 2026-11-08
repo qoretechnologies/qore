@@ -288,7 +288,14 @@ public class MssqlRunDatabase {
             # another run may drop the same leftover at the same time: one that cannot be dropped now is left for a
             # later run
             try {
-                MssqlRunDatabase::dropDatabase(ds, db);
+                # a database with sessions is in use by a run that runs longer than its name's age tells: its
+                # sessions are not ended, and it is dropped by a later run
+                if (ds.selectRow("select count(*) as c from sys.dm_exec_sessions where database_id = db_id(%v)",
+                        db).c) {
+                    continue;
+                }
+                ds.execRaw(MssqlRunDatabase::outsideTransaction("if db_id('" + db + "') is not null drop database ["
+                    + db + "]"));
             } catch (hash<ExceptionInfo> ex) {
                 continue;
             }

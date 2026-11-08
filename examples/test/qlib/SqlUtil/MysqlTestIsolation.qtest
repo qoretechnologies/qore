@@ -41,6 +41,7 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         addTestCase("the setup drops only the databases of gone runs", \leftovers());
         addTestCase("the run's connections use the run's database", \runDatabase());
         addTestCase("the teardown drops the run's database", \teardown());
+        addTestCase("a leftover that a live run holds is left for a later run", \liveLeftover());
         set_return_value(main());
     }
 
@@ -118,6 +119,29 @@ class MysqlTestIsolationTest inherits QUnit::Test {
         shared.rollback();
         ds.close();
         shared.close();
+    }
+
+    #! A leftover database whose objects a connection holds locks of is not waited for longer than a few seconds: it
+    #! is left for a later run
+    private liveLeftover() {
+        checkSkip();
+        Datasource ds(connstr);
+        int old = now_us().getEpochSeconds() - TestRun::LeftoverAge.durationSeconds() - 60;
+        string db = sprintf("qtest_livelock_host_1_%d_abc123", old);
+        ds.exec("create database `" + db + "`");
+        ds.exec("create table `" + db + "`.t (id int)");
+        ds.commit();
+        push made, db;
+        # a transaction that holds a metadata lock of the database's table
+        Datasource holder(connstr);
+        holder.exec("insert into `" + db + "`.t values (1)");
+        on_exit holder.rollback();
+        date start = now_us();
+        list<string> dropped = MysqlRunDatabase::dropLeftovers(connstr);
+        assertFalse(inlist(db, dropped));
+        assertLt(60s, now_us() - start, "the drop is not waited for long");
+        assertEq(1, ds.selectRow("select count(*) as c from information_schema.schemata where schema_name = %v",
+            db).c);
     }
 
     private teardown() {
