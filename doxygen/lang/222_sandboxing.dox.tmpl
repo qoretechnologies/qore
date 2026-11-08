@@ -160,10 +160,10 @@ Program p(opts);
     - @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()" bounds the number of threads started
       on behalf of sandboxed code, through module code or otherwise; a @ref Qore::SandboxManager "SandboxManager" has no
       thread limit unless one is set
-    - the workers of a @ref Qore::Thread::ThreadPool "ThreadPool" count against the thread limit of the sandbox of the
+    - the threads of a @ref Qore::Thread::ThreadPool "ThreadPool" count against the thread limit of the sandbox of the
       %Program that created the pool (see @ref sandbox_resources), which
-      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" does not prevent; a pool created by module code, whose
-      %Program has no sandbox, is not limited, and runs each task under the sandbox of the code that submitted it
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" does not prevent; a pool created by a %Program without a
+      sandbox manager is not limited, and runs each task under the sandbox of the code that submitted it
 
     To bound the threads of restricted code, give its %Program a @ref Qore::SandboxManager "SandboxManager" with a
     thread limit.  A run-time refusal of the @ref background "background" operator in module code for restricted
@@ -618,14 +618,22 @@ sm.setMaxStackSize(1024 * 1024);
     This applies also to a %Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", whose code cannot
     start threads itself but can cause threads through module code (see @ref sandbox_po_threads).
 
-    The workers of a @ref Qore::Thread::ThreadPool "ThreadPool" count against the thread limit of the sandbox of the
-    %Program that created the pool, if that %Program has a @ref Qore::SandboxManager "SandboxManager"; the pool keeps
-    that sandbox if the %Program is given another one later.  A pool does not start more workers than the sandbox has
-    free thread slots: its queued tasks then wait for its busy workers, as when the pool's own \c max_threads is
-    reached, and a task submitted to a pool that has no worker and cannot start one is refused with
-    \c THREAD-CREATION-FAILURE in the code that submits it.  A worker stops counting when it leaves the pool or the
-    pool stops.  The workers of a pool created by a %Program without a sandbox, such as a module's %Program, are not
-    counted, as they serve every caller; each task runs under the sandbox of the code that submitted it.
+    The threads of a @ref Qore::Thread::ThreadPool "ThreadPool" (its own thread, which assigns tasks to workers, and
+    its workers) count against the thread limit of the sandbox of the %Program that created the pool, if that
+    %Program has a @ref Qore::SandboxManager "SandboxManager"; the pool keeps that sandbox if the %Program is given
+    another one later.  A user module's %Program gets the sandbox of the %Program that loads the module first, so a
+    pool that the code of a module first loaded by sandboxed code creates is counted as well.
+    - creating a pool when the sandbox has no free thread slot raises \c THREAD-CREATION-FAILURE in the code that
+      creates it
+    - a pool does not start more workers than the sandbox has free slots: its queued tasks then wait for one of its
+      own busy workers, as when the pool's own \c max_threads is reached, and a task submitted to a pool that has no
+      worker and cannot start one is refused with \c THREAD-CREATION-FAILURE in the code that submits it
+    - an idle worker keeps its slot until the pool releases it (see \c max_idle_threads and \c idle_release_timeout
+      in @ref Qore::Thread::ThreadPool::constructor() "ThreadPool::constructor()"); a worker stops counting when it
+      leaves the pool, and the pool's own thread when the pool has stopped
+
+    The threads of a pool created by a %Program without a sandbox manager are not counted, as they serve every
+    caller; each task runs under the sandbox of the code that submitted it.
 
     A @ref Qore::SandboxManager "SandboxManager" has no thread limit by default, as no single limit suits every host
     and a default limit would restrict every sandbox that a host creates for other purposes, such as a filesystem

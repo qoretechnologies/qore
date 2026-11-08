@@ -196,10 +196,10 @@ SandboxManager::copy() {
     operator, @ref Qore::call_async() "call_async()", the workers of @ref Qore::parallel_map() "parallel_map()" and
     @ref Qore::parallel_foreach() "parallel_foreach()", and the threads that module code starts for the sandboxed code,
     also for a Program with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL", whose code cannot start threads
-    itself (see @ref sandbox_po_threads).  The workers of a @ref Qore::Thread::ThreadPool "ThreadPool" count against
-    the limit of the sandbox of the Program that created the pool.  The thread that calls into the sandbox, the
-    threads of the async I/O controller and the workers of a pool created by a Program without a sandbox (such as a
-    module's Program) are not counted.
+    itself (see @ref sandbox_po_threads).  The threads of a @ref Qore::Thread::ThreadPool "ThreadPool" (its own thread
+    and its workers, also idle ones) count against the limit of the sandbox of the Program that created the pool.  The
+    thread that calls into the sandbox, the threads of the async I/O controller and the threads of a pool created by a
+    Program without a sandbox manager are not counted.
 
     Starting a thread at the limit raises \c THREAD-CREATION-FAILURE in the code that starts it; a thread stops
     counting when its work ends.  Lowering the limit does not affect threads already running.

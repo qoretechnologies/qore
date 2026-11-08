@@ -605,9 +605,11 @@ Program can therefore cause concurrent execution through module code. What bound
   `parallel_map()`, `parallel_foreach()`) inherits the caller's `QoreSandboxManager`: filesystem and network policy,
   interrupts, cancellation scope and the thread limit (see [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)).
 - `SandboxManager::setMaxThreads()` bounds how many threads are started on behalf of sandboxed code. A sandbox has no
-  thread limit unless the host sets one, so hosts that run sandboxed code must set it. `ThreadPool` workers count
-  against the sandbox of the Program that created the pool; a pool created by module code (a Program without a
-  sandbox) serves every caller and is not limited.
+  thread limit unless the host sets one, so hosts that run sandboxed code must set it. The threads of a `ThreadPool`
+  count against the sandbox of the Program that created the pool; a module's Program has the sandbox of the Program
+  that loaded the module first, so the pools of a module first loaded by sandboxed code are counted, while a pool
+  created by a Program without a sandbox manager (for example a module first loaded by trusted code) serves every
+  caller and is not limited.
 - A user module first loaded by a restricted Program inherits its restrictions and cannot use `background`; module
   threads for restricted callers come from modules the host loaded already or loads with a parse option mask.
 - Builtins with the `MODULE_OWNED` flag (`call_async()`, `parallel_map()`, `parallel_foreach()`,
@@ -620,7 +622,7 @@ Guidance for module authors:
 
 - Run caller-supplied code asynchronously through the documented mechanisms: `call_async()` or `AsyncIoController`
   (which apply the caller's restrictions and sandbox), a `ThreadPool` (which applies the submitter's sandbox per
-  task; a pool that module code creates is not limited by the caller's thread limit), or `q_start_thread()` in C++
+  task; its threads count against the sandbox of the Program that created it), or `q_start_thread()` in C++
   (which inherits the starter's sandbox). Never start a native thread
   (`pthread_create`, `std::thread`) that runs Qore code without the sandbox handling described in
   [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md).

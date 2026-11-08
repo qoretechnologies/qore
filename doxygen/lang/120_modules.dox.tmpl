@@ -1692,8 +1692,9 @@ public class Lookup {
     @ref sandbox_po_threads).  A module that runs its callers' code asynchronously should use
     @ref Qore::call_async() "call_async()" or @ref Qore::AsyncIoController "AsyncIoController", which apply the
     caller's restrictions (see @ref MODULE_OWNED) and its sandbox, or a @ref Qore::Thread::ThreadPool "ThreadPool",
-    which applies the sandbox of the code that submits each task; the workers of a pool count against the thread limit
-    of the sandbox of the %Program that created it, so the workers of a pool that module code creates are not limited.
+    which applies the sandbox of the code that submits each task; the threads of a pool count against the thread limit
+    of the sandbox of the %Program that created it, which for module code is the sandbox of the %Program that loaded
+    the module first, if it has one.
 
     @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
 

@@ -72,18 +72,24 @@ threads a module starts with `q_start_thread()` on the sandboxed code's behalf â
 the sandbox. The thread that enters the sandboxed Program from outside is not counted, and neither are the async
 I/O threads, which do not inherit the sandbox.
 
-The workers of a `ThreadPool` do not inherit a sandbox either, but they count against the sandbox of the Program that
+The threads of a `ThreadPool` do not inherit a sandbox either, but they count against the sandbox of the Program that
 created the pool (the Program running the constructor), if it has one: the pool takes a reference to that Program's
-`QoreSandboxManager` when it is created (keeping it if the Program later gets another manager), and each worker holds
-one of its thread slots while it is in the pool. The slots are taken and released under the pool's lock: a slot is
+`QoreSandboxManager` when it is created (keeping it if the Program later gets another manager), its own thread holds a
+slot from construction until the pool has stopped (the constructor raises `THREAD-CREATION-FAILURE` if none is free),
+and each worker holds one of its thread slots while it is in the pool, also while idle. The slots are taken and released under the pool's lock: a slot is
 taken before a worker is started, and released when a worker leaves the pool (idle release, `done()` not requeuing
 it) or when the pool stops, so the slots held are always the pool's workers, and a worker that is still exiting
 never holds one. When no slot is free, the pool behaves as when its own `max_threads` is reached: queued tasks wait
 for its busy workers, and idle workers beyond the limit (`min_idle_threads`) are not started. A pool with no worker
 could not run a queued task, so `submit()` reserves the slot of the first worker in the submitting thread when the pool
 has none, raising `THREAD-CREATION-FAILURE` there if the sandbox has no free slot. A pool created by a Program without
-a sandbox (a module's Program) serves every caller and is not limited (qore#5635; test:
-`examples/test/qore/security/thread-pool-thread-limit.qtest`).
+a sandbox manager serves every caller and is not limited; a module's Program inherits the manager of the Program that
+loads the module first (`inherit_module_sandbox_manager()`), so a pool that the code of a module first loaded by
+sandboxed code creates is counted (qore#5635;
+test: `examples/test/qore/security/thread-pool-thread-limit.qtest`).
+
+A slot that another thread of the sandbox frees does not wake a pool whose queued tasks wait for a worker: the tasks
+wait for the pool's own busy workers, as with `max_threads`.
 
 A thread is counted when its inheritance is captured (`QoreInheritedSandbox::capture()`), before the thread is
 created, so the count is accurate the moment `background`/`q_start_thread()` returns. Starting a thread at the limit

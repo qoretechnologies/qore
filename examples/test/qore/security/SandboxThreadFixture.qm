@@ -53,6 +53,14 @@ public namespace SandboxThreadFixture {
             };
             return background outer();
         }
+
+        #! Creates a ThreadPool in the module's Program
+        /** Its threads count against the sandbox of the module's Program, which is the sandbox of the Program that
+            loaded the module, if it has one
+        */
+        static ThreadPool makePool(int max_threads) {
+            return new ThreadPool(max_threads);
+        }
     }
 
     #! Runs the caller's code in a new thread; a module function runs in the Program of its caller

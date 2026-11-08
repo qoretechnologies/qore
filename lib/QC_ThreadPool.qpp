@@ -130,11 +130,18 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
         minidle = 0;
     if (maxidle <= 0)
         maxidle = minidle;
+    // the pool's own thread counts against the sandbox of the creating Program like its workers; it is released when
+    // the pool has stopped (see ThreadPool::worker())
+    if (sbx && sbx->acquireThreadSlot(xsink)) {
+        stopped = true;
+        return;
+    }
     // the pool's own thread only manages workers for every submitter; tasks carry their own sandbox (see ThreadTask)
     if (q_start_thread(xsink, (q_thread_t)tp_start_thread, this, QTF_EXTERNAL_LIFECYCLE | QTF_NO_SANDBOX_INHERIT)
             == -1) {
         assert(*xsink);
         stopped = true;
+        releaseWorkerSlotUnlocked();
     }
 }
 
@@ -175,6 +182,10 @@ void ThreadPool::worker(ExceptionSink* xsink) {
         while (!q.empty()) {
             ThreadPoolThread* tpt = getThreadUnlocked(xsink);
             if (!tpt) {
+                // the pool was stopped while waiting for a worker: stop without waiting to retry
+                if (stopflag) {
+                    break;
+                }
                 xsink->handleExceptions();
                 // release the lock and wait before retrying to avoid a livelock;
                 // this allows worker threads to call done() and submit() to proceed
@@ -188,7 +199,7 @@ void ThreadPool::worker(ExceptionSink* xsink) {
             q.pop_front();
         }
 
-        while ((int)fh.size() < minidle && (!max || ((int)fh.size() + (int)ah.size() < max))) {
+        while (!stopflag && (int)fh.size() < minidle && (!max || ((int)fh.size() + (int)ah.size() < max))) {
             if (addIdleWorker(xsink)) {
                 xsink->handleExceptions();
                 break;
@@ -221,8 +232,9 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 
     sl.lock();
 
-    // the workers have ended: release their slots and any slot reserved for a worker that was never started
-    for (size_t i = 0, e = fh.size() + ah.size() + reserved; i < e; ++i) {
+    // the workers have ended: release their slots, any slot reserved for a worker that was never started, and the slot
+    // of this thread, which only runs the cancellation code of queued tasks from now on
+    for (size_t i = 0, e = fh.size() + ah.size() + reserved + 1; i < e; ++i) {
         releaseWorkerSlotUnlocked();
     }
     reserved = 0;
@@ -285,11 +297,11 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     @endcode
 
-    The workers of a ThreadPool created by a @ref Qore::Program "Program" with a
-    @ref Qore::SandboxManager "SandboxManager" count against the thread limit of that sandbox
-    (@ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"): the pool does not start more workers
-    than the sandbox has free thread slots, and its queued tasks then wait for its busy workers, as when
-    \a max_threads is reached; see @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted
+    The threads of a ThreadPool created by a @ref Qore::Program "Program" with a
+    @ref Qore::SandboxManager "SandboxManager" (its own thread and its workers, also idle ones) count against the
+    thread limit of that sandbox (@ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"): the
+    pool does not start more workers than the sandbox has free thread slots, and its queued tasks then wait for its
+    busy workers, as when \a max_threads is reached; see @ref sandbox_resources.  Each task runs under the sandbox of the code that submitted
     it.
 
     @since %Qore 0.8.8
@@ -316,6 +328,8 @@ ThreadPool tp(max_threads: 10, min_idle_threads: 2, max_idle_threads: 4);
     (i.e. \c 2m = two minutes, etc.)
 
     @throw THREADPOOL-ERROR min_idle_threads > max_threads, max_idle_threads > max_threads or min_idle_threads > max_idle_threads, or idle_release_timeout < 0
+    @throw THREAD-CREATION-FAILURE the Program creating the pool has a sandbox whose thread limit is reached (see
+    @ref sandbox_resources), or the pool's thread cannot be started
  */
 ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_idle_threads = 0,
         timeout idle_release_timeout = 5s) [flags=NAMED_ARGS] {

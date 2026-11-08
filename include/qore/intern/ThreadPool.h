@@ -254,10 +254,11 @@ protected:
         detach = false;        // detach flag
 
     //! The sandbox manager of the Program that created the pool, or nullptr if it has none
-    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah), so
-        the workers count against the thread limit of the sandbox of the Program that created the pool.  Slots are
-        acquired and released only with \a m held, so the number of slots held is always the number of workers plus
-        \a reserved.
+    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah), and
+        the pool's own thread holds one until the pool has stopped, so the pool's threads count against the thread
+        limit of the sandbox of the Program that created the pool.  Slots are acquired and released only with \a m
+        held (or in the constructor), so the number of slots held is always the number of workers plus \a reserved
+        plus one for the pool's own thread.
     */
     QoreSandboxManager* sbx;
 
