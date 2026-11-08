@@ -39,6 +39,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires ../../DnsTestServer.qm
+%requires ../../ClosingTestServer.qm
 
 %exec-class TableauDataProviderTest
 
@@ -124,60 +125,6 @@ class CountingTableauRestClientIo inherits TableauRestClient::TableauRestClientI
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         ++requests;
         return TableauRestClient::TableauRestClientIo::restDoRequest(method, path, body, hdr);
-    }
-}
-
-#! A server that accepts each connection and closes it at once
-/** An HTTPS request to it fails in the TLS handshake, which the server ends, with a transport error that is retried
-    (\c HTTPCLIENT-CONNECT-ERROR from an asynchronous client), at once and the same way every time.  Its port is held
-    by its listener while it runs, so no other program can listen on it meanwhile (a port that is free when a test
-    reads it can be taken by another test run at the same time before it is used, and a port that is bound but does
-    not listen refuses a connection on Linux but makes it wait for its timeout on macOS).  The client uses HTTP/1.1
-    only (\c "protocol": \c "h1"), so that it does not race HTTP/3 against the port
-*/
-class ClosingServer {
-    private {
-        Socket listener();
-        int port;
-        Counter done(1);
-        bool stopping;
-    }
-
-    constructor() {
-        listener.bindINET("127.0.0.1", "0", False, AF_INET);
-        listener.listen();
-        port = listener.getSocketInfo().port;
-        background run();
-    }
-
-    int getPort() {
-        return port;
-    }
-
-    #! Stops the server and waits for its thread to end
-    stop() {
-        stopping = True;
-        # the thread is woken by a connection of its own
-        Socket s();
-        on_exit s.close();
-        try {
-            s.connect(sprintf("127.0.0.1:%d", port), 10s);
-        } catch (hash<ExceptionInfo> ex) {
-            # the thread ends when its accept() fails as well
-        }
-        done.waitForZero();
-        listener.close();
-    }
-
-    private run() {
-        on_exit done.dec();
-        while (True) {
-            Socket s = listener.accept();
-            s.close();
-            if (stopping) {
-                return;
-            }
-        }
     }
 }
 
@@ -931,7 +878,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
 
         # a failed connection is retried
-        ClosingServer server();
+        ClosingTestServer server();
         on_exit server.stop();
         CountingTableauRestClientIo rest = getClosingClient(server);
         AbstractDataProvider projects = new TableauDataProvider::TableauDataProvider({"tableaurestclient": rest})
@@ -953,7 +900,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         # retries do not wait
         DataProviderRetryUtil::setTransportRetryDelayUnit(0s);
 
-        ClosingServer server();
+        ClosingTestServer server();
         on_exit server.stop();
         CountingTableauRestClientIo rest = getClosingClient(server);
         TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});
@@ -1013,7 +960,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
     }
 
     #! Returns a counting client for a server that closes each connection at once
-    private static CountingTableauRestClientIo getClosingClient(ClosingServer server) {
+    private static CountingTableauRestClientIo getClosingClient(ClosingTestServer server) {
         return new CountingTableauRestClientIo({
             "token_name": "pat-name",
             "token_secret": "pat-secret",

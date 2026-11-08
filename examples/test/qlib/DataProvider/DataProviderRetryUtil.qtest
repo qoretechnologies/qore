@@ -30,6 +30,7 @@
 %requires RestClient
 %requires RestClientIo
 %requires ../../DnsTestServer.qm
+%requires ../../ClosingTestServer.qm
 
 %exec-class DataProviderRetryUtilTest
 
@@ -64,60 +65,6 @@ class RetryRecordingProvider inherits AbstractDataProvider {
         return {
             "id": new QoreDataField("id", "the id", IntType),
         };
-    }
-}
-
-#! A server that accepts each connection and closes it at once
-/** An HTTPS request to it fails in the TLS handshake, which the server ends, with a transport error that is retried
-    (\c HTTPCLIENT-CONNECT-ERROR from an asynchronous client), at once and the same way every time.  Its port is held
-    by its listener while it runs, so no other program can listen on it meanwhile (a port that is free when a test
-    reads it can be taken by another test run at the same time before it is used, and a port that is bound but does
-    not listen refuses a connection on Linux but makes it wait for its timeout on macOS).  The client uses HTTP/1.1
-    only (\c "protocol": \c "h1"), so that it does not race HTTP/3 against the port
-*/
-class ClosingServer {
-    private {
-        Socket listener();
-        int port;
-        Counter done(1);
-        bool stopping;
-    }
-
-    constructor() {
-        listener.bindINET("127.0.0.1", "0", False, AF_INET);
-        listener.listen();
-        port = listener.getSocketInfo().port;
-        background run();
-    }
-
-    int getPort() {
-        return port;
-    }
-
-    #! Stops the server and waits for its thread to end
-    stop() {
-        stopping = True;
-        # the thread is woken by a connection of its own
-        Socket s();
-        on_exit s.close();
-        try {
-            s.connect(sprintf("127.0.0.1:%d", port), 10s);
-        } catch (hash<ExceptionInfo> ex) {
-            # the thread ends when its accept() fails as well
-        }
-        done.waitForZero();
-        listener.close();
-    }
-
-    private run() {
-        on_exit done.dec();
-        while (True) {
-            Socket s = listener.accept();
-            s.close();
-            if (stopping) {
-                return;
-            }
-        }
     }
 }
 
@@ -221,7 +168,7 @@ public class DataProviderRetryUtilTest inherits QUnit::Test {
         }
 
         # a failed connection is not a name resolution failure and is retried
-        ClosingServer server();
+        ClosingTestServer server();
         on_exit server.stop();
         string url = sprintf("https://127.0.0.1:%d", server.getPort());
         hash<ExceptionInfo> ex = getError(sub () {

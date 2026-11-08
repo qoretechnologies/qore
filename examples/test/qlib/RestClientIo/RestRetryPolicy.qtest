@@ -8,6 +8,7 @@
 %requires ../../../../qlib/QUnit.qm
 %requires HttpServer
 %requires Logger
+%requires ../../ClosingTestServer.qm
 %exec-class RestRetryPolicyTest
 
 #! A local server that counts requests and answers each of them with the same status
@@ -429,9 +430,19 @@ class RestRetryPolicyTest inherits QUnit::Test {
         }
     }
 
-    #! A connection that is refused is attempted once with a retry policy while retries are suppressed
+    #! A connection that fails is attempted once with a retry policy while retries are suppressed
+    /** The server holds its port and closes each connection, so the TLS handshake of each attempt fails at once
+        and the same way every time (see ClosingTestServer)
+    */
     testSuppressedConnect() {
-        RestClientIo rest({"url": "http://127.0.0.1:" + getUnusedPort(), "data": "json"});
+        ClosingTestServer server();
+        on_exit server.stop();
+        RestClientIo rest({
+            "url": sprintf("https://127.0.0.1:%d", server.getPort()),
+            "data": "json",
+            # HTTP/3 is not raced over UDP against the port
+            "protocol": "h1",
+        });
 
         list<hash<RestRetryEvent>> events = ();
         RestRetryPolicy policy(<RestRetryOptions>{
@@ -450,8 +461,11 @@ class RestRetryPolicyTest inherits QUnit::Test {
         assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
         assertEq(1, ex.arg.attempts);
         assertEq((), events);
+        # the connections of the one attempt reached the server
+        int attempt_connections = server.getConnections();
+        assertGt(0, attempt_connections);
 
-        # the refused connection is retried otherwise
+        # the failed connection is retried otherwise
         policy = new RestRetryPolicy(<RestRetryOptions>{
             "max_retries": 2,
             "retry_max_delay": 0,
@@ -466,18 +480,8 @@ class RestRetryPolicyTest inherits QUnit::Test {
         }
         assertEq((1, 2), map $1.attempt, events);
         assertEq(("HTTPCLIENT-CONNECT-ERROR", "HTTPCLIENT-CONNECT-ERROR"), map $1.err, events);
-    }
-
-    #! Returns a port on 127.0.0.1 that no socket is bound to at the time of the call, so connections are refused
-    /** Binds a socket to port 0, so that the system assigns a free port, and closes it again; a socket that is
-        bound but does not listen does not refuse a connection on every platform (on macOS the connection attempt
-        times out instead)
-    */
-    private static int getUnusedPort() {
-        Socket s();
-        s.bindINET("127.0.0.1", "0", False, AF_INET);
-        int port = s.getSocketInfo().port;
-        s.close();
-        return port;
+        # each of the three attempts connected as often as the one attempt made with retries suppressed: the server
+        # has counted the connections of four attempts in all
+        assertEq(attempt_connections * 4, server.getConnections());
     }
 }
