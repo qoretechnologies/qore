@@ -969,7 +969,7 @@ was the completeness defect above -- `OmqMap.qc` was neither compiled nor preloa
 `new OmqMap()` was deferred and its deferred value read as no value -- and not a missing body. On
 the current Qorus tree a partial parse compiling `MetadataActionContext.qc` with
 `QorusMapManager.qc`, `GroupRuntimeContext.qc` and `OmqMap.qc` all preloaded commits cleanly, and
-`CMakeBuildHelpers.qtest` pins the same call chain, counting the preloaded body's runs.
+`CMakeBuildHelpers-preload.qtest` pins the same call chain, counting the preloaded body's runs.
 
 What #5466 did find was a hole in what an object records about a **static class variable**. A
 read the parse resolves is a `LoadStaticVar` that names the variable itself and takes no
@@ -1792,10 +1792,13 @@ which two builders can still race to restore.
   that no member depfile reaches a target consuming the object stamps, that a module a member
   started requiring after the group parse is watched and an edit to it rebuilds that member
   alone, and that configuring resets the consolidated dependencies an earlier configuration
-  left, that code a preloaded sibling runs at parse commit finds what it calls -- a static
-  method, a function and a construction -- after its caller was compiled standalone, and that a
+  left
+- `examples/test/ir/CMakeBuildHelpers-preload.qtest` — what a group's incremental compiles
+  preload, and in which order they run: the owner of a sibling's aliased constant, a newly
+  referenced typedef, that code a preloaded sibling runs at parse commit finds what it calls -- a
+  static method, a function and a construction -- after its caller was compiled standalone, that a
   partial parse's constant initializers run a preloaded provider's body on every build, not every
-  other one
+  other one, and that a provider edited with its consumer is compiled first
 - `examples/test/ir/CMakeBuildHelpers-generic-*.qtest` — the incremental life of one object group
   of 24 sources through the CMake helpers, one scenario per file, each on a baseline built for it
   (`CMakeBuildHelpersTestBase.qm`): module, sibling and symbol rebuilds and adopting the object

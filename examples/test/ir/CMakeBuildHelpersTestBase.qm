@@ -37,6 +37,8 @@ module CMakeBuildHelpersTestBase {
 /** The tests of the exported CMake build helpers build CMake projects with the cmake in the PATH and the Qore under
     test:
     - \c CMakeBuildHelpers.qtest: the helpers one at a time
+    - \c CMakeBuildHelpers-preload.qtest: what the incremental compiles of an object group preload, and in which
+      order they run
     - \c CMakeBuildHelpers-generic-*.qtest: the incremental life of one object group, the generic qcc object helper
       project of @ref CMakeBuildHelpersTestBase::GenericQccObjectTest, one scenario per file, each on a baseline
       built for it, so that no file comes near the time limit of a test and test shards run them side by side

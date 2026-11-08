@@ -1,0 +1,648 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+%requires ./CMakeBuildHelpersTestBase.qm
+
+%exec-class CMakeBuildHelpersPreloadTest
+
+#! Incremental compiles of an object group: what they preload, and in which order they run
+/** Each case builds a small object group with the exported CMake helpers, edits some of its members, and checks that
+    the group's incremental compiles -- of one component at a time, or a partial parse of several -- preload every
+    sibling the edited sources need, current, and that the next build converges.  The cases are a file of their own,
+    beside CMakeBuildHelpers.qtest, so that no file of the CMake helper tests comes near the time limit of a test
+    and test shards run them side by side.
+*/
+class CMakeBuildHelpersPreloadTest inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
+    public {
+        #! How the engine in testIncrementalExecutedCalleePreload() reaches its provider, by variant name
+        const ExecutedCalleeVariants = {
+            "static-method": "return StepPhasePolicy::validate(41);",
+            "function": "return stepPhaseOffset() + 41;",
+            "construction": "StepPhasePolicy policy(41);\n        return policy.get() + 1;",
+        };
+    }
+
+    constructor() : CMakeBuildTest("CMakeBuildHelpersPreloadTest", "1.0", \ARGV) {
+        addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
+            \testIncrementalConstantOwnerPreload());
+        addTestCase("an incremental compile preloads a newly referenced typedef",
+            \testIncrementalTypedefPreload());
+        # one case per kind of reference, so a failure in one does not hide the others
+        foreach hash<auto> variant in (ExecutedCalleeVariants.pairIterator()) {
+            addTestCase("an incremental compile preloads what a preloaded sibling's code runs at parse commit: "
+                + variant.key, \testIncrementalExecutedCalleePreload(), (variant.key, variant.value));
+        }
+        addTestCase("a partial parse runs a preloaded provider's body from a constant initializer",
+            \testSubsetParseInitializerCallsPreloadedBody());
+        addTestCase("an edit to a provider and its consumer compiles the provider first",
+            \testIncrementalStaleProviderCompiledFirst());
+
+        set_return_value(main());
+    }
+
+    #! An incremental compile must be preloaded with the owner of every constant its siblings reference.
+    /** The group here is the shape a Qorus incremental build failed on.  `typeinfo.qc` aliases a class
+        constant declared in `catalogue.qc`; `handler.qc` calls a function in `typeinfo.qc` and knows
+        nothing about the catalogue.  Editing `handler.qc` alone leaves one component stale, which the
+        coordinator compiles standalone, preloading what `handler.qc` requires -- and the alias's object
+        serializes its constant as a reference to the catalogue's, so loading that object without the
+        catalogue's own object cannot resolve it:
+
+          error: sibling .qo cross-resolution failed: AOT cannot deserialize value for class constant
+            'QorusTypeInfoRestClass::QorusDataTypeInfo': cannot resolve const_ref
+            'QorusDataTypeCatalogue::Info' in the current program
+
+        Two independent defects produced that, and both are covered here because the build only
+        succeeds when both are repaired:
+
+          * the shared parse that built the group recorded NO dependency from the alias to the
+            catalogue at all.  A constant initializer is resolved at parse commit, after every source
+            in the batch has been parsed, and the scoped resolvers did not pass the referring
+            expression's location down -- so the batch had no consumer to attribute the fold to; and
+          * the standalone preload closure walked required edges only.  A folded constant records its
+            provider as a content dependency, deliberately, so that a comment in the provider does not
+            rebuild every consumer -- and a closure that ignores those edges leaves the owner out even
+            once the dependency is recorded.
+
+        The edit is a comment, which is the case that matters: it changes nothing the alias can see,
+        so nothing else in the group goes stale and the plan really does take the standalone path.
+    */
+    testIncrementalConstantOwnerPreload() {
+        TmpDir tmp("qore-cmake-qcc-const-preload-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        write(snippets_dir + "/catalogue.qc", "%new-style
+public class DataTypeCatalogue {
+    public {
+        const Info = {
+            \"string\": {\"desc\": \"a string\"},
+            \"int\": {\"desc\": \"an int\"},
+        };
+    }
+}
+");
+        # the alias: its object records `Info` as a reference to the catalogue's constant
+        write(snippets_dir + "/typeinfo.qc", "%new-style
+public class TypeInfoRestClass {
+    public {
+        const DataTypeInfo = DataTypeCatalogue::Info;
+    }
+}
+string sub typeInfoDesc() {
+    return TypeInfoRestClass::DataTypeInfo.string.desc;
+}
+");
+        # the consumer: a required edge to the alias, none to the catalogue
+        write(snippets_dir + "/handler.qc", "%new-style
+string sub handlerDesc() {
+    code ref = \\typeInfoDesc();
+    return ref();
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoConstPreload NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP constpreload
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/catalogue.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/typeinfo.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/handler.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
+            "configured the constant-owner group: " + configure);
+
+        string clean = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(3, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles every member in one shared parse: " + clean);
+
+        # the shared parse must record the fold; without it nothing downstream can preload the owner
+        string alias_dep = read(glob(build_dir + "/qo/*typeinfo_qc.qo.d")[0]);
+        assertTrue(alias_dep.find("catalogue") != -1,
+            "the shared parse records the aliased constant's owner: " + alias_dep);
+
+        # a comment in the consumer: one stale component, compiled on the standalone path
+        string member = snippets_dir + "/handler.qc";
+        write(member, read(member) + "# documentation-only correction\n");
+        string edited = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(-1, edited.find("cross-resolution failed"),
+            "the stale component is preloaded with the owner of every constant its siblings "
+                "reference: " + edited);
+        assertEq(-1, edited.find("cannot resolve const_ref"),
+            "no preloaded sibling is left holding an unresolvable constant reference: " + edited);
+        assertEq(1, occurrences(edited, "one at a time"),
+            "the plan really does take the standalone path this covers: " + edited);
+        assertEq(1, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited component is recompiled: " + edited);
+
+        string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            "the build after the incremental compile converges: " + converged);
+    }
+
+    #! A newly named typedef has no depfile edge yet and must be found from the source summary.
+    testIncrementalTypedefPreload() {
+        TmpDir tmp("qore-cmake-qcc-typedef-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+        write(src_dir + "/types.qc", "%modern\n"
+            "public namespace Metrics {\n"
+            "public typedef Measurements = hash<string, int>;\n"
+            "}\n");
+        string consumer = src_dir + "/consumer.qc";
+        write(consumer, "%modern\nint sub measurement() { return 42; }\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoTypedef NONE)
+find_package(Qore REQUIRED)
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP typedefs
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES \"${CMAKE_SOURCE_DIR}/types.qc\" \"${CMAKE_SOURCE_DIR}/consumer.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"), "configured: " + configure);
+        string clean = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(2, occurrences(clean, "qcc: script-context .qo"), "clean group parse: " + clean);
+        string depfile = glob(build_dir + "/qo/*consumer_qc.qo.d")[0];
+        string old_depfile = read(depfile);
+        assertEq(-1, old_depfile.find("types_qc"), "the old depfile has no typedef edge");
+
+        # Nested type arguments are not caught by the declaration-type regex.  The alias must be
+        # expanded during this parse; a deferred class placeholder cannot accept the hash value.
+        write(consumer, "%modern\nint sub measurement() {\n"
+            "    list<Metrics::Measurements> values = ({\"size\": 42},);\n"
+            "    return values[0].size;\n}\n");
+        string edited = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(-1, edited.find("Error"), "the new typedef use compiles: " + edited);
+        assertEq(1, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited consumer compiles: " + edited);
+        string manifest = read(build_dir + "/qo-scripts/source-symbols.manifest");
+        assertTrue(manifest.find("typedef\tMetrics::Measurements\t") >= 0,
+            "the manifest records the qualified alias: " + manifest);
+        # Simulate a consumer compiled before typedef dependency attribution: its existing alias use
+        # still has to work even though that old depfile omitted the provider.
+        write(depfile, old_depfile);
+        write(consumer, read(consumer) + "# rebuild with a legacy depfile\n");
+        string legacy = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(-1, legacy.find("Error"), "an existing use with an old depfile also compiles: " + legacy);
+        assertEq(1, occurrences(legacy, "qcc: script-context .qo"),
+            "the legacy depfile does not require a group parse: " + legacy);
+        write(src_dir + "/types.qc", "%modern\n"
+            "public namespace Metrics {\n"
+            "public typedef Measurements = hash<string, auto>;\n"
+            "}\n");
+        string changed = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(-1, changed.find("Error"), "a changed alias rebuilds successfully: " + changed);
+        assertEq(2, occurrences(changed, "qcc: script-context .qo"),
+            "the source dependency rebuilds both the provider and its consumer: " + changed);
+        string converged = run(sprintf("cmake --build %s -- -j4", build_dir));
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"), "the next build is current: " + converged);
+    }
+
+    #! An incremental compile must be preloaded with everything a preloaded sibling's code reaches at parse commit.
+    /** The group is the shape a Qorus incremental build failed on (TestEngine, TestMetadata, QorusMapManager,
+        TestStepPhasePolicy).  `registry.qc` initializes a static class variable by calling into `engine.qc`,
+        and `engine.qc` reaches `policy.qc` from that code; `store.qc` folds a constant from `registry.qc`.  A
+        standalone compile of `store.qc` preloads `registry.qc`, whose static initializer runs at parse commit
+        and materializes the engine's source-stripped IR, and registering that IR needs every class and
+        function it calls:
+
+          AOT-SOURCE-IR-ERROR: could not materialize source-stripped function IR for 'kinds': AOT slot map
+            registration failed for 'StepEngine::_static_kinds()': unsupported AOT slot metadata: expr slot 0
+            (STATIC_METHOD_CALL): cannot resolve the call to 'StepPhasePolicy::validate()': class
+            'StepPhasePolicy' is not declared in this Program
+          error: parse commit failed: .../store.qc
+
+        The group's own parse records `engine.qc`'s use of `policy.qc` as a declaration-contract dependency,
+        so the first incremental build after it succeeds.  A standalone compile of `engine.qc` defers the
+        reference through the source-symbol manifest instead and records it only as a late-bound import in
+        the object's symbol index, so once `engine.qc` has been compiled standalone no edge the preload
+        closure walks reaches `policy.qc` any more.  Editing `engine.qc` and `store.qc` together is exactly
+        that: the coordinator compiles `engine.qc` first, then `store.qc` in the same pass.
+
+        Each variant reaches the provider through a different kind of reference, because each is imported
+        differently: a static method call and a plain function call record their provider source in the
+        object's index, while a construction records only the class.
+    */
+    testIncrementalExecutedCalleePreload(string variant, string engine_body) {
+        TmpDir tmp("qore-cmake-qcc-exec-preload-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        # the provider: nothing in the group names it except the engine's code
+        write(snippets_dir + "/policy.qc", "%new-style
+public class StepPhasePolicy {
+    public {
+        int base;
+    }
+    constructor(int base) {
+        self.base = base;
+    }
+    public static int validate(int v) {
+        return v + 1;
+    }
+    int get() {
+        return base;
+    }
+}
+public int sub stepPhaseOffset() {
+    return 1;
+}
+");
+        # the engine: its constant is what makes it part of every preload below
+        write(snippets_dir + "/engine.qc", "%new-style
+public class StepEngine {
+    public {
+        const Marker = 3;
+    }
+    public static int kinds() {
+        " + engine_body + "
+    }
+}
+");
+        # a static initializer: runs the engine's code whenever this object is preloaded
+        write(snippets_dir + "/registry.qc", "%new-style
+public class StepRegistry {
+    public {
+        const Marker = StepEngine::Marker;
+        static int kinds = StepEngine::kinds();
+    }
+}
+");
+        # the consumer: a content dependency on the registry, none on the engine's callees
+        write(snippets_dir + "/store.qc", "%new-style
+public class ArtifactStore {
+    public {
+        const Marker = StepRegistry::Marker;
+    }
+    static int kinds() {
+        return StepRegistry::kinds;
+    }
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoExecPreload NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP execpreload
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/policy.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/engine.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/registry.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/store.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
+            variant + ": configured the executed-callee group: " + configure);
+
+        string clean = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(4, occurrences(clean, "qcc: script-context .qo"),
+            variant + ": the clean build compiles every member in one shared parse: " + clean);
+
+        # the engine and the consumer together: the engine is compiled standalone first, then the
+        # consumer in the same pass, preloading the registry and the engine
+        foreach string name in (("engine", "store")) {
+            string member = snippets_dir + "/" + name + ".qc";
+            write(member, read(member) + "# documentation-only correction\n");
+        }
+        string edited = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(-1, edited.find("parse commit failed"),
+            variant + ": code a preloaded sibling runs at parse commit finds everything it calls: " + edited);
+        assertEq(-1, edited.find("is not declared in this Program"),
+            variant + ": no preloaded object is left calling a class nothing declares: " + edited);
+        assertEq(-1, edited.find("could not be resolved"),
+            variant + ": no preloaded object is left calling a function nothing declares: " + edited);
+        assertEq(1, occurrences(edited, "one at a time"),
+            variant + ": the plan really does take the standalone path this covers: " + edited);
+        assertEq(2, occurrences(edited, "qcc: script-context .qo"),
+            variant + ": only the edited components are recompiled: " + edited);
+
+        # what the standalone compile of the engine records for the preload closure; the construction names only
+        # the class, whose provider comes from the group's source-symbol manifest
+        string requires = read(glob(build_dir + "/qo/*engine_qc.qo.load-requires")[0] ?? "");
+        assertTrue(requires.find("/srcs/policy.qc") != -1,
+            variant + ": the engine records the source its code calls as a load requirement: " + requires);
+        assertEq(-1, requires.find("/srcs/engine.qc"),
+            variant + ": an object does not record its own source: " + requires);
+
+        # the consumer alone, now that the engine's object is the standalone one
+        string member = snippets_dir + "/store.qc";
+        write(member, read(member) + "# a second correction\n");
+        string again = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(-1, again.find("parse commit failed"),
+            variant + ": a later standalone compile still preloads what the engine calls: " + again);
+        assertEq(1, occurrences(again, "qcc: script-context .qo"),
+            variant + ": only the edited component is recompiled: " + again);
+
+        string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            variant + ": the build after the incremental compiles converges: " + converged);
+    }
+
+    #! A partial parse's constant initializers run code whose body is in a preloaded object.
+    /** Parse commit runs user code, so a constant initializer in a source a partial parse compiles
+        can call across the boundary into a source it preloads (issue #5466).  The group is the shape
+        the Qorus report named: `action.qc`'s `TypeMap` folds `MapManager::groups`, a static variable
+        `manager.qc` initializes by calling `GroupRuntimeContext::hostOmqMap()` in `context.qc`, and
+        that constructs an `OmqMap` from `omqmap.qc`, which `context.qc` names only as a type and in a
+        `new` expression.  On Qorus it failed as:
+
+          RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
+            no value instead (while initializing constant 'TypeMap')
+
+        That was not a missing body -- a preloaded `.qo` carries its source-stripped IR and parse
+        commit executes it -- but a missing *declaration*: `omqmap.qc` had no edge the preload closure
+        walked, so it was neither compiled nor preloaded, the construction was deferred as pending
+        linking, and the deferred value read as no value.  Both halves are covered elsewhere for the
+        standalone path; this covers them through a real partial parse of several sources, with every
+        provider on the other side of the boundary.
+
+        Editing the two leaf consumers leaves two components stale that do not reach each other, so
+        the coordinator compiles both in one partial parse and preloads the three providers.
+    */
+    testSubsetParseInitializerCallsPreloadedBody() {
+        TmpDir tmp("qore-cmake-qcc-subset-body-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        # the constructed class: named by the context only as a type and in a `new` expression
+        write(snippets_dir + "/omqmap.qc", "%new-style
+public class OmqMap {
+    public {
+        int n = 42;
+    }
+}
+");
+        write(snippets_dir + "/context.qc", "%new-style
+public class GroupRuntimeContext {
+    private {
+        static *OmqMap host_map;
+    }
+    public static OmqMap hostOmqMap() {
+        # the partial parse's output shows each time a preloaded copy of this body runs
+        stderr.print(\"HOSTMAP-BODY-RAN\\n\");
+        if (!host_map) {
+            host_map = new OmqMap();
+        }
+        return host_map;
+    }
+}
+");
+        # a static variable whose initializer runs the context's code whenever this object is loaded
+        write(snippets_dir + "/manager.qc", "%new-style
+public OmqMap sub managerHostOmqMap() {
+    return GroupRuntimeContext::hostOmqMap();
+}
+public class MapManager {
+    public {
+        static int groups = managerHostOmqMap().n;
+    }
+}
+");
+        # the consumers: constant initializers that reach the providers' bodies at parse commit, and
+        # raise if what they get back is not what the providers compute
+        write(snippets_dir + "/action.qc", "%new-style
+public int sub actionCheckHostMap(int v) {
+    if (v != 42) {
+        throw \"WRONG-HOST-MAP\", sprintf(\"expected 42, got %y\", v);
+    }
+    return v;
+}
+public class ActionContext {
+    public {
+        const TypeMap = {
+            \"group\": actionCheckHostMap(MapManager::groups),
+            \"host\": actionCheckHostMap(GroupRuntimeContext::hostOmqMap().n),
+        };
+    }
+}
+");
+        write(snippets_dir + "/report.qc", "%new-style
+public int sub reportCheckHostMap(int v) {
+    if (v != 42) {
+        throw \"WRONG-HOST-MAP\", sprintf(\"expected 42, got %y\", v);
+    }
+    return v;
+}
+public class Report {
+    public {
+        const Size = reportCheckHostMap(GroupRuntimeContext::hostOmqMap().n) + 1;
+    }
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoSubsetBody NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP subsetbody
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/omqmap.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/context.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/manager.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/action.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/report.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/qcc-subset.sh"),
+            "configured a group that can be parsed in part: " + configure);
+
+        string build = sprintf("QORE_QCC_SUBSET_PARSE=1 cmake --build %s -- -j9", build_dir);
+        string clean = run(build);
+        assertEq(5, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles every member: " + clean);
+
+        foreach string name in (("action", "report")) {
+            string member = snippets_dir + "/" + name + ".qc";
+            write(member, read(member) + "# documentation-only correction\n");
+        }
+        string edited = run(build);
+        assertEq(1, occurrences(edited, "compiling 2 of 5 sources in one shared parse"),
+            "both edited consumers are compiled in one partial parse: " + edited);
+        assertEq(-1, edited.find("leaving"),
+            "the two consumers do not reach each other, so neither is deferred: " + edited);
+        assertEq(2, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited consumers are compiled; the providers are preloaded: " + edited);
+        # manager's static initializer, action's `TypeMap` and report's `Size`, each in the partial parse;
+        # an initializer whose provider was not preloaded would instead be deferred to link time silently
+        assertEq(3, occurrences(edited, "HOSTMAP-BODY-RAN"),
+            "parse commit runs the preloaded provider's body for every initializer that calls it: " + edited);
+        assertEq(-1, edited.find("no value instead"),
+            "a construction in a preloaded body yields its object: " + edited);
+        assertEq(-1, edited.find("WRONG-HOST-MAP"),
+            "each initializer gets back what the preloaded bodies compute: " + edited);
+        assertEq(-1, edited.find("parse commit failed"),
+            "the partial parse commits: " + edited);
+        assertEq(-1, edited.find("falling back"),
+            "the partial parse is not replaced by the group's own parse: " + edited);
+
+        string converged = run(build);
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            "the build after the partial parse converges: " + converged);
+    }
+
+    #! One edit changes a static method's signature and the call in its consumer.
+    /** The shape a Qorus incremental build failed on: `QonsoleReferenceScope.qc` changed
+        `runAuxiliary(string, code<auto()>)` to take a third argument and `QorusQonsoleCore.qc` started
+        passing one, in the same edit.  The consumer folds a constant of the provider, so after the
+        group's own parse it reaches the provider only over a declaration contract -- preloaded, but
+        not an ordering edge -- and it is listed first.  The call names the class without its
+        namespace, which resolves against the preloaded class instead of a deferred import, so a
+        standalone compile of the consumer ahead of the provider read the provider's previous object:
+
+          PARSE-TYPE-ERROR: no variant matching 'A::f(string, string)' can be found; the following
+            variants were tested:
+             A::f(string a)
+    */
+    testIncrementalStaleProviderCompiledFirst() {
+        TmpDir tmp("qore-cmake-qcc-stale-provider-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        string provider = "%new-style
+%strict-args
+public namespace StaleProvider {
+public class A {
+    public {
+        const K = 1;
+    }
+    public static string f(string a) {
+        return a;
+    }
+}
+}
+";
+        string consumer = "%new-style
+%strict-args
+public namespace StaleProvider {
+public class B {
+    public {
+        const K = A::K + 1;
+    }
+    public static string g() {
+        return A::f(\"x\");
+    }
+}
+}
+";
+        write(snippets_dir + "/a.qc", provider);
+        write(snippets_dir + "/b.qc", consumer);
+        # the consumer is listed first, so it is first in the topological order
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoStaleProvider NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP staleprovider
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/b.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/a.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/Makefile"), "the fixture configures: " + configure);
+        string build = sprintf("cmake --build %s -- -j9", build_dir);
+        string clean = run(build);
+        assertEq(2, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles both members: " + clean);
+
+        write(snippets_dir + "/a.qc", replace(replace(provider, "f(string a)", "f(string a, *string b)"),
+            "return a;", "return a + (b ?? \"\");"));
+        write(snippets_dir + "/b.qc", replace(consumer, "A::f(\"x\")", "A::f(\"x\", \"y\")"));
+        string edited = run(build);
+        assertEq(-1, edited.find("PARSE-TYPE-ERROR"),
+            "the consumer is not compiled against the provider's previous object: " + edited);
+        assertEq(-1, edited.find("cannot build stale component"), "the incremental plan succeeds: " + edited);
+        assertEq(-1, edited.find("selecting the shared-parse batch"),
+            "without a whole-group parse: " + edited);
+        int provider_pos = edited.find("_srcs_a_qc.qo\n");
+        int consumer_pos = edited.find("_srcs_b_qc.qo\n");
+        assertTrue(provider_pos >= 0 && consumer_pos > provider_pos,
+            "the provider is compiled before its consumer: " + edited);
+        assertEq(2, occurrences(edited, "qcc: script-context .qo"),
+            "each edited member is compiled once: " + edited);
+
+        string converged = run(build);
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            "the build after the incremental compiles converges: " + converged);
+    }
+}
