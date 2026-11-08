@@ -164,6 +164,8 @@ module SqlUtil {
       @ref SqlUtil::AbstractSqlUtilBase::getDriverValue() "getDriverValue()" and
       @ref SqlUtil::DriverOptionFamilyKeys "DriverOptionFamilyKeys"; @ref SqlUtil::AbstractDatabase::checkDriverOptions()
       "AbstractDatabase::checkDriverOptions()" accepts a list of keys
+    - @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" takes \c "freetds", the name of the SQL Server
+      driver, for SQL Server, as \c "mssql"
     - fixed @ref SqlUtil::AbstractDatabase::getDropFunctionSqlIfExists() "AbstractDatabase::getDropFunctionSqlIfExists()",
       @ref SqlUtil::AbstractDatabase::getDropProcedureSqlIfExists() "getDropProcedureSqlIfExists()" and
       @ref SqlUtil::AbstractDatabase::getDropSequenceSqlIfExists() "getDropSequenceSqlIfExists()", which returned no

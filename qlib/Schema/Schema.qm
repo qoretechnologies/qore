@@ -933,6 +933,11 @@ module Schema {
     - \c qschema \c export is the canonical command for reverse-engineering a database schema, with schema naming,
       object filtering, YAML or JSON output and physical-partition options; \c schema-reverse is kept as a
       compatibility alias for it
+    - \c auto_triggers of a @ref Schema::DataSchema "DataSchema" table are generated for SQL Server, which raised
+      \c AUTO-TRIGGER-ERROR for the \c freetds driver, and, on a connection through a generic driver such as \c jdbc,
+      for the database it is connected to; a migration's \c sql step and a column's populate \c sql take the SQL under
+      the driver's own name, else under the key of the database's native driver (ex: \c "oracle" on a \c jdbc
+      connection to Oracle), else the default
 
     @section schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a
