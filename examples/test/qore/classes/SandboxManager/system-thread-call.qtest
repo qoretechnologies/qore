@@ -26,6 +26,7 @@ class SystemThreadCallTest inherits QUnit::Test {
         addTestCase("the capability takes no arguments", \argumentsTest());
         addTestCase("a sandbox's policy, interrupts and limits do not reach the thread", \sandboxTest());
         addTestCase("the threads stop at the end of the process; none starts after the exit hooks", \exitTest());
+        addTestCase("no thread starts in a Program whose exit hooks have started", \deletedProgramTest());
         set_return_value(main());
     }
 
@@ -91,6 +92,11 @@ class SystemThreadCallTest inherits QUnit::Test {
         assertEq(0, r.rc, r.output);
         assertEq(("start: SANDBOX-CAPABILITY-ERROR", "create: SANDBOX-CAPABILITY-ERROR: exit hooks", "worker stopped"),
             r.lines, r.output);
+    }
+
+    deletedProgramTest() {
+        # a Program created during the module's initialization created the capability and was deleted then
+        assertThrows("SANDBOX-CAPABILITY-ERROR", "its Program", SystemThreadWorker::Worker::deleted_program_cap);
     }
 
     #! Runs a child process with the test module and the code given; returns its exit code, output and lines

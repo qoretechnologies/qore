@@ -5351,9 +5351,9 @@ int qore_start_system_thread(const ResolvedCallReferenceNode* code, QoreProgram*
     // qore_close_exit_hooks()), so that the hook that stops the thread runs after it exists
     {
         std::lock_guard<std::mutex> l(exit_hook_lock);
-        if (exit_hooks_closed) {
+        if (exit_hooks_closed || qore_program_private::get(*pgm)->exit_hooks_closed) {
             xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread cannot be started after the exit hooks "
-                "of the process have started");
+                "of the process or of its Program have started");
             return -1;
         }
         ++system_threads_starting;

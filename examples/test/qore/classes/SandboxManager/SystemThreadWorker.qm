@@ -24,6 +24,9 @@ public class Worker {
 
         #! what each refused creation of a capability raised during the module's initialization: case -> error
         static hash<string, string> refusals = {};
+
+        #! a capability created by a Program that was deleted afterwards
+        static code deleted_program_cap;
     }
 
     private {
@@ -54,6 +57,7 @@ public class Worker {
             "capability": Worker::tryCreate(starter),
             "governed": Worker::createGoverned(),
         };
+        deleted_program_cap = Worker::createInDeletedProgram();
     }
 
     #! Starts a worker, also for a sandboxed caller; returns its TID
@@ -141,6 +145,15 @@ public class Worker {
         p.parse("code sub get() { return sub () {}; }", "sandboxed-callback");
         p.setSandboxManager(sm);
         return p.callFunction("get");
+    }
+
+    #! Returns a capability that a Program created during this initialization, and that was deleted then
+    private static code createInDeletedProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("code sub create() { return SandboxManager::createSystemThreadCall(sub () {}); }\n", "deleted");
+        code cap = p.callFunction("create");
+        delete p;
+        return cap;
     }
 
     #! Returns what sandboxed code gets when it creates a capability
