@@ -6985,8 +6985,9 @@ static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
     query - ares_getaddrinfo() moving on to the next search domain, for example - and the new query is given the id
     of the query that completed: ares_flush_requeue() detaches the completed query before its callback, freeing the
     id, and ares_free_query() detaches it a second time afterwards, which removes the new query's id mapping.  The
-    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  The bundled
-    c-ares build is patched (cmake/PatchCaresLostQuery.cmake), but a system library can have the defect.
+    answer to the new query is then dropped as unknown, and its retry is discarded when it times out.  c-ares 1.34.9,
+    the minimum version (cmake/third-party-sources.cmake; an older system library is not used), releases only the id
+    that a query still holds; the check stays as a safety net for a defect that c-ares could have again.
 
     @param channel the channel of an unfinished lookup, after its events were processed
 */
