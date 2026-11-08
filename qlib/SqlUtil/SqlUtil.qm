@@ -154,6 +154,8 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - a column with a qore type and a native type that the database's type map does not have raises
+      \c COLUMN-ERROR, which names the column and the type; it raised \c RUNTIME-TYPE-ERROR
     - the driver-specific options of a description under the key of a database's native driver (ex: \c "oracle",
       \c "pgsql" or \c "freetds") apply also on a connection to that database through a generic driver such as
       \c jdbc or \c odbc, followed by the options under the generic driver's own name, which take precedence; they

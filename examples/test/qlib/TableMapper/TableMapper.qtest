@@ -31,8 +31,11 @@ class TableMapperContext {
         #! the connection
         hash<DbTestConnection> conn;
 
-        #! the reason the connection's test cases are skipped if its schema could not be created
+        #! the reason the connection's test cases are skipped if the connection could not be opened
         string skip_reason = "the connection is not open";
+
+        #! the error that made the test schema fail to be created on the open connection; the test cases fail with it
+        *hash<ExceptionInfo> setup_error;
 
         #! the test schema, or @ref nothing if it could not be created
         *AbstractSchema schema;
@@ -420,11 +423,21 @@ public class TableMapperTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! opens the connection and creates its schema; the connection's test cases are skipped if it fails
+    #! opens the connection and creates its schema; the connection's test cases are skipped if the connection
+    #! cannot be opened, and fail if the schema cannot be created
     private setUpContext(TableMapperContext ctx) {
+        Datasource ds;
         try {
-            Datasource ds(ctx.conn.connstr);
+            ds = new Datasource(ctx.conn.connstr);
             ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            ctx.skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            if (m_options.verbose) {
+                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+            }
+            return;
+        }
+        try {
             # create the test schema
             # the schema is kept before it is aligned, so that what the alignment created is dropped if it fails
             ctx.schema = new TableMapperTestSchema(ds);
@@ -433,15 +446,21 @@ public class TableMapperTest inherits QUnit::Test {
             ctx.table = (new Table(ds, "table_mapper_test")).getTable();
             ctx.upsert_table = (new Table(ds, "table_mapper_upsert_test")).getTable();
         } catch (hash<ExceptionInfo> ex) {
-            ctx.skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            # an error of the schema or of its tables is an error of each test case of the connection
+            ctx.setup_error = ex;
             if (m_options.verbose) {
-                printf("%s: %s\n", ctx.conn.label, ctx.skip_reason);
+                printf("%s: cannot create the test schema: %s\n", ctx.conn.label, get_exception_string(ex));
             }
         }
     }
 
-    #! makes the connection's schema and tables those of the test case, or skips it if there are none
+    #! makes the connection's schema and tables those of the test case; skips it if the connection could not be
+    #! opened, and raises the error that made its schema fail to be created
     private useContext(TableMapperContext ctx) {
+        if (ctx.setup_error) {
+            throw ctx.setup_error.err, sprintf("%s: the test schema could not be created: %s", ctx.conn.label,
+                ctx.setup_error.desc), ctx.setup_error.arg;
+        }
         if (!ctx.table) {
             testSkip(ctx.skip_reason);
         }

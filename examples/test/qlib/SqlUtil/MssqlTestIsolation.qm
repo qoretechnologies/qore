@@ -179,6 +179,12 @@ public class MssqlRunDatabase {
             # a database of the run's name is never shared: its creation fails if it exists
             ds.execRaw(MssqlRunDatabase::outsideTransaction("create database [" + db + "]"));
         } catch (hash<ExceptionInfo> ex) {
+            # the run created it already with another datasource string to the same server (ex: the freetds driver
+            # and the jdbc driver; server message 1801): it is the run's, and is dropped with the first one
+            if (name && ex.desc =~ /Database '[^']+' already exists/) {
+                ds.close();
+                return connstrs{connstr} = MssqlRunDatabase::getRunConnectionString(config, jdbc, db);
+            }
             # only a login that may not create databases (server message 262: "CREATE DATABASE permission denied")
             # runs without a database of its own
             if (ex.desc !~ /CREATE DATABASE permission denied/i) {
@@ -190,11 +196,16 @@ public class MssqlRunDatabase {
         }
         name = db;
         guards{connstr} = new MssqlRunDatabaseGuard(ds, db);
+        return connstrs{connstr} = MssqlRunDatabase::getRunConnectionString(config, jdbc, db);
+    }
+
+    #! Returns the datasource string of the run's database from the parsed datasource string of the test
+    private static string getRunConnectionString(hash<auto> config, bool jdbc, string db) {
         if (jdbc) {
-            return connstrs{connstr} = MssqlRunDatabase::getJdbcConnectionString(config, db);
+            return MssqlRunDatabase::getJdbcConnectionString(config, db);
         }
         config.db = db;
-        return connstrs{connstr} = make_datasource_string(config);
+        return make_datasource_string(config);
     }
 
     #! Returns the name of the run's database, or @ref nothing if none was created

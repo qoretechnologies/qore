@@ -186,6 +186,11 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - added SQL Server's Unicode string types \c nchar, \c nvarchar, \c nvarchar(max) and \c ntext, and
+      \c varchar(max); a column of one of them raised an error
+    - a \c varchar(max), \c nvarchar(max) or \c varbinary(max) column is described with that type, and a \c text,
+      \c ntext or \c image column without a size; they were described with the size -1 or the size of the largest
+      value, so each alignment altered them, also the columns of the @ref SqlUtil::BLOB and @ref SqlUtil::CLOB types
     - the comments of columns are kept on SQL Server, as the \c MS_Description extended properties of the columns:
       they are created with a table or column, aligned, and described; they were ignored before
     - implemented the \c "returning" insert option (@ref SqlUtil::AbstractTable::InsertOptions) with SQL Server's
@@ -2010,6 +2015,14 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
             "char varying": ("qore": Type::String, "size": SZ_OPT),
             "character varying": ("qore": Type::String, "size": SZ_OPT),
             "varchar": ("qore": Type::String, "size": SZ_OPT, "default_size": 80),
+            "varchar(max)": ("qore": Type::String,),
+
+            # Unicode strings (SQL Server); the size is in byte pairs: 1 - 4000, or "max"
+            "nchar": ("qore": Type::String, "size": SZ_OPT),
+            "nvarchar": ("qore": Type::String, "size": SZ_OPT, "default_size": 80),
+            "nvarchar(max)": ("qore": Type::String,),
+            # deprecated in SQL Server
+            "ntext": ("qore": Type::String,),
 
             # The following uni* types are used in Sybase Adaptive Server
             "unichar": ("qore": Type::String, "size": SZ_MAND,),
@@ -2934,9 +2947,16 @@ so.name = %v", name);
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             row.column_name = row.column_name.lwr();
+            # a varchar(max), nvarchar(max) or varbinary(max) column has the length -1: it is a type of its own, as
+            # the column is declared, so that it is aligned with no change
+            if (row.character_maximum_length == -1 && MssqlTypeMap{row.data_type + "(max)"}) {
+                row.data_type += "(max)";
+                row.character_maximum_length = NOTHING;
+            }
             *hash th = MssqlTypeMap.(row.data_type);
             *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
-            if (!exists size) {
+            # a type without a size (ex: text, ntext, image) has the length of its largest value
+            if (!exists size || (th && !th.size && !row.numeric_precision)) {
                 size = 0;
             }
             switch (th.qore) {

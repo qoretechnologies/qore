@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires ./TestRunIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%exec-class MssqlColumnTypesTest
+
+#! The string and binary column types of SQL Server, with the freetds driver and the jdbc driver
+/** The Unicode types nchar, nvarchar, nvarchar(max) and ntext were not in the type map of SQL Server, so a column of
+    one of them raised an error; a varchar(max), nvarchar(max) and varbinary(max) column was read from the database
+    with the size -1, and a text and ntext column with the length of its largest value, so each alignment altered
+    them (also the columns of SqlUtil's BLOB and CLOB types)
+*/
+class MssqlColumnTypesTest inherits QUnit::Test {
+    private {
+        #! the columns of the test table
+        const Columns = {
+            "id": {"qore_type": "integer", "notnull": True},
+            "vm": {"native_type": "varchar(max)"},
+            "nvm": {"native_type": "nvarchar(max)"},
+            "vbm": {"native_type": "varbinary(max)"},
+            "tx": {"native_type": "text"},
+            "ntx": {"native_type": "ntext"},
+            "nv": {"native_type": "nvarchar", "size": 20},
+            "nvd": {"qore_type": "string", "native_type": "nvarchar"},
+            "nc": {"native_type": "nchar", "size": 3},
+            "v": {"native_type": "varchar", "size": 10},
+            "bl": {"qore_type": SqlUtil::BLOB},
+            "cl": {"qore_type": SqlUtil::CLOB},
+        };
+
+        #! the types of the columns read from the database
+        const NativeTypes = {
+            "id": "bigint",
+            "vm": "varchar(max)",
+            "nvm": "nvarchar(max)",
+            "vbm": "varbinary(max)",
+            "tx": "text",
+            "ntx": "ntext",
+            "nv": "nvarchar(20)",
+            "nvd": "nvarchar(80)",
+            "nc": "nchar(3)",
+            "v": "varchar(10)",
+            "bl": "varbinary(max)",
+            "cl": "text",
+        };
+
+        #! the values of a row, with characters outside of any single-byte code page in the Unicode columns
+        const Row = {
+            "id": 1,
+            "vm": "a",
+            "nvm": "čžř ñ 日本",
+            "vbm": <0102>,
+            "tx": "t",
+            "ntx": "ňů 日本",
+            "nv": "žluťoučký kůň",
+            "nvd": "año",
+            "nc": "日本語",
+            "v": "abc",
+            "bl": <03>,
+            "cl": "c",
+        };
+    }
+
+    constructor() : Test("MssqlColumnTypesTest", "1.0", \ARGV) {
+        addTestCase("the string and binary types with the freetds driver", \freetdsTypes());
+        addTestCase("the string and binary types with the jdbc driver", \jdbcTypes());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        MssqlRunDatabase::teardown();
+    }
+
+    private freetdsTypes() {
+        checkTypes("QORE_DB_CONNSTR_FREETDS");
+    }
+
+    private jdbcTypes() {
+        checkTypes("QORE_DB_CONNSTR_JDBC_MSSQL");
+    }
+
+    #! creates a table with the types, reads its description, aligns it and reads and writes its values
+    private checkTypes(string var) {
+        *Datasource ds = datasource(var);
+        if (!ds) {
+            return;
+        }
+        Database db(ds);
+        string name = TestRun::makeName("mssql_types");
+        AbstractTable t = db.makeTable(name, {"columns": Columns});
+        assertEq(("create table " + name + " (\n  id bigint not null,\n  vm varchar(max),\n  nvm nvarchar(max),\n"
+            "  vbm varbinary(max),\n  tx text,\n  ntx ntext,\n  nv nvarchar(20),\n  nvd nvarchar(80),\n"
+            "  nc nchar(3),\n  v varchar(10),\n  bl varbinary(max),\n  cl text\n)",), t.getCreateSql());
+        t.create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table " + name);
+            ds.commit();
+        }
+
+        AbstractTable live = db.getTable(name);
+        assertEq(NativeTypes, map {$1.name: $1.getNativeTypeString()}, live.describe().iterator());
+        assertEq({"id": "integer", "vm": "string", "nvm": "string", "vbm": "binary", "tx": "string",
+            "ntx": "string", "nv": "string", "nvd": "string", "nc": "string", "v": "string", "bl": "binary",
+            "cl": "string"}, map {$1.name: $1.qore_type}, live.describe().iterator());
+        # the table is aligned to its description with no change
+        assertEq((), live.getAlignSql(db.makeTable(name, {"columns": Columns})));
+
+        live.insert(Row);
+        ds.commit();
+        assertEq(Row, live.selectRow({"where": {"id": 1}}));
+    }
+
+    #! returns the datasource of the run's database on SQL Server, or nothing if the connection string is not set
+    private *Datasource datasource(string var) {
+        if (!ENV{var}.val()) {
+            testSkip(var + " is not set");
+        }
+        try {
+            Datasource ds(ENV{var});
+            ds.open();
+            if (MssqlDatabase::isSybase(ds)) {
+                testSkip("the database is Sybase, not SQL Server");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        Datasource ds(MssqlRunDatabase::getConnectionString(ENV{var}, "MssqlColumnTypes"));
+        ds.open();
+        return ds;
+    }
+}

@@ -40,6 +40,7 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         # the leftover databases are made before the run's database, whose setup drops the ones that may be dropped
         addTestCase("the setup drops only the databases of gone runs", \leftovers());
         addTestCase("the run's connections use the run's database", \runDatabase());
+        addTestCase("another driver's connection to the same server uses the run's database", \otherDriver());
         addTestCase("the teardown drops the run's database", \teardown());
         addTestCase("a leftover with sessions is left for a later run", \liveLeftover());
         set_return_value(main());
@@ -120,6 +121,26 @@ class MssqlTestIsolationTest inherits QUnit::Test {
         shared.rollback();
         ds.close();
         shared.close();
+    }
+
+    #! A datasource string of another driver to the same server (the jdbc driver) failed: the run's database, created
+    #! for the first one, existed already
+    private otherDriver() {
+        checkSkip();
+        *string jdbc = ENV.QORE_DB_CONNSTR_JDBC_MSSQL;
+        if (!jdbc.val()) {
+            testSkip("QORE_DB_CONNSTR_JDBC_MSSQL is not configured");
+        }
+        string run = MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation");
+        Datasource jds(MssqlRunDatabase::getConnectionString(jdbc, "MssqlTestIsolation"));
+        on_exit {
+            jds.rollback();
+            jds.close();
+        }
+        # the same server: the same database
+        assertEq(MssqlRunDatabase::getName(), jds.selectRow("select db_name() as db").db);
+        # and the same datasource string again
+        assertEq(run, MssqlRunDatabase::getConnectionString(connstr, "MssqlTestIsolation"));
     }
 
     #! A leftover database with sessions is in use by a live run: its sessions are not ended, and it is left for a

@@ -3637,7 +3637,8 @@ string sql = table.getDropTriggerSql("trig_mytable");
         validateOptionsIntern("COLUMN-ERROR", copt, \opt, sprintf("%s.%s", name, cname));
 
         hash otm = getTypeMapImpl();
-        hash th;
+        # the description of the native type: none when the type is not in the map, which is checked below
+        *hash<auto> th;
 
         # first try to handle non-registered type (like eg. Oracle's objects)
         if (opt.native_type && !otm.hasKey(opt.native_type) && !opt.qore_type) {
