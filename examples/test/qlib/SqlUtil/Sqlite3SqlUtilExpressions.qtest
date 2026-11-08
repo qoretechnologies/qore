@@ -458,9 +458,12 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
             probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
                 {"initially_deferred": True});
         });
-        assertFalse(probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
-            {"deferrable": False}) =~ /deferrable/i,
-            "explicit portable defaults preserve existing SQL");
+        # explicit portable defaults are accepted, and the constraint is then refused only as SQLite cannot add a
+        # foreign constraint to an existing table
+        assertThrows("UNSUPPORTED", "SQLite cannot add a foreign constraint to an existing table", sub () {
+            probe.getAddForeignConstraintSql("fk_dfk_probe", "parent_id", "sqlite3_dfk_probe", "id",
+                {"deferrable": False});
+        });
     }
 
     # --- Pattern matching tests ---
