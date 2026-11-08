@@ -135,7 +135,8 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     "table(sys.odcinumberlist(%v, %v, %v, %v)))", 1, 2, 3, 4);
     @endcode
 
-    The SQL then depends on the number of values, and a statement binds at most 65535 values.
+    The SQL then depends on the number of values, and a statement binds at most 65535 values: a list with more
+    values, with the values bound before it, raises an exception when the SQL is made.
 
     @section ora_date_comparisons Date Comparisons on Oracle
 
@@ -392,9 +393,9 @@ hash schema = (
 
     @section oracle17 OracleSqlUtilBase v1.7
     - fixed the \c IN operator with a driver other than \c oracle (ex: \c jdbc), which cannot bind the collection of
-      values that the \c oracle driver binds: each value is bound in a collection constructor (see
-      @ref ora_in_operator); without the \c oracle module, the operator raised \c MISSING-ORACLE-DRIVER for any
-      driver
+      values that the \c oracle driver binds, so the statement failed: each value is bound in a collection
+      constructor (see @ref ora_in_operator), and a list with more values than a statement can bind raises an
+      exception when the SQL is made
     - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: runtime temporary
       tables were refused, interval partitioning was not used and row limits were taken for Oracle 11g ones
     - added @ref SqlUtil::AbstractDatabase::refreshMaterializedView() "refreshMaterializedView()" with
@@ -3042,13 +3043,19 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         */
         const OracleSelectOptions = AbstractTable::SelectOptions;
 
-        #! Oracle Expression map
         #! the most elements bound in one \c SYS.ODCI*LIST collection constructor by a driver other than \c oracle
         /** Measured on Oracle 23 with the \c oracle and \c jdbc drivers: a constructor of any of these collection
             types with 1000 or more arguments raises \c ORA-00939 (too many arguments for function)
         */
         const InListConstructorMaxArgs = 999;
 
+        #! the most values that a statement binds on Oracle
+        /** A driver other than \c oracle binds each value of the \c IN operator: a list with more values is refused
+            when the SQL is made
+        */
+        const MaxBindValues = 65535;
+
+        #! Oracle Expression map
         const OracleExpressionMap = DefaultExpressionMap + {
             # Oracle server-side digest via STANDARD_HASH (returns RAW); supports MD5, SHA1, SHA256,
             # SHA384, and SHA512 (SHA224 is not supported by STANDARD_HASH).  base64 output is not
@@ -3962,6 +3969,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         }
 
         bool native = info.table.getDriverName() == "oracle";
+        # each value is bound by a driver other than oracle
+        if (!native && (info.args.size() + l.size()) > MaxBindValues) {
+            throw err, sprintf("the \"in\" operator: %d values with the %d values bound before them exceed the "
+                "%d values that a statement binds on Oracle with the %y driver; use fewer values, or the oracle "
+                "driver, which binds the list as collections", l.size(), info.args.size(), MaxBindValues,
+                info.table.getDriverName());
+        }
         list<string> sql = ();
         while (l) {
             if (native) {

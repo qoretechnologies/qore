@@ -58,6 +58,7 @@ class OracleInOperatorTest inherits QUnit::Test {
         addTestCase("the old-style where operator", \whereOperator());
         addTestCase("empty, NULL and the constructor limit", \limits());
         addTestCase("the SQL of each driver", \sql());
+        addTestCase("the most values bound in a statement", \bindLimit());
         set_return_value(main());
     }
 
@@ -176,6 +177,36 @@ class OracleInOperatorTest inherits QUnit::Test {
             assertEq(1000, countIn(i.value, "id", l), i.key);
             # a list value is refused
             assertThrows("ORACLE-IN-OPERATOR-ERROR", \countIn(), (i.value, "id", ((1, 2),)), i.key);
+        }
+    }
+
+    #! a statement binds at most 65535 values (ORA-01745 on the server, or an error of the driver); a driver that
+    #! binds each value of the list refused more only when the statement was executed
+    private bindLimit() {
+        skipIfNone();
+        foreach hash<auto> i in (tables.pairIterator()) {
+            list<auto> args;
+            hash<auto> sh = {"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65535)))};
+            i.value.getSelectSql(sh, \args);
+            if (i.key == "oracle") {
+                # collections of up to 32767 values, each one value
+                assertEq(3, args.size(), i.key);
+                args = ();
+                i.value.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 70000)))}, \args);
+                assertEq(3, args.size(), i.key);
+                args = ();
+                i.value.getSelectSql({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65534)))}, \args);
+                assertEq(2, args.size(), i.key);
+                continue;
+            }
+            assertEq(65535, args.size(), i.key);
+            args = ();
+            assertThrows("ORACLE-IN-OPERATOR-ERROR", "65535", \i.value.getSelectSql(),
+                ({"columns": "id", "where": mkexp(OP_IN, (fld("id"), seq(1, 65536)))}, \args), i.key);
+            # with another value bound in the statement, with the old-style operator
+            args = ();
+            assertThrows("ORACLE-DRIVER-ERROR", "65535", \i.value.getSelectSql(),
+                ({"columns": "id", "where": {"s": "x", "id": op_in(seq(1, 65535))}}, \args), i.key);
         }
     }
 
