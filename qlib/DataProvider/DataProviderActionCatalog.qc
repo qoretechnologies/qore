@@ -1362,6 +1362,11 @@ public class DataProviderActionCatalog {
         */
         static int lazy_pending = 0;
 
+        #! @ref True while a delivery of catalog changes is queued for a worker; set under @ref lazy_worker_lck
+        /** See queueDelivery()
+        */
+        static bool lazy_delivery_queued = False;
+
         #! The jobs that catalog workers run: job ID -> the TID of the worker; set under @ref init_lck
         static hash<string, int> lazy_job_running = {};
 
@@ -2008,11 +2013,15 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
 
     #! Calls the catalog change listeners if the revision advanced since the last delivery; never throws
     /** Does nothing while this thread holds the catalog lock: the section that releases it delivers.
+
+        The listeners belong to code that no sandbox governs (see addCatalogChangeListener()), and never run on a
+        thread that a sandbox governs, where they would run under its policy, and could be interrupted with it: the
+        changes made on such a thread are delivered by a catalog worker (see queueDelivery()).  A worker delivers the
+        changes that it makes itself, so that they are delivered also when the reader that it runs a job for stops
+        waiting.
     */
     private:internal static deliverCatalogChanges() {
-        # a worker's changes are delivered on the thread of the reader it runs a job for (see runOnWorker()), so that
-        # no listener runs on a worker, where it would delay the jobs of every sandboxed reader
-        if (lck.lockOwner() || DataProviderActionCatalog::isLazyWorker()) {
+        if (lck.lockOwner()) {
             return;
         }
         int revision;
@@ -2022,6 +2031,17 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
             # the revision only advances, so a delivery never reports an older one than an earlier delivery
             revision = catalog_revision;
             if (revision == notified_revision) {
+                return;
+            }
+            if (!listeners) {
+                notified_revision = revision;
+                return;
+            }
+            # a thread that a sandbox governs leaves the delivery to a worker; without a worker (see initLazyWorker()),
+            # there is no listener that code a sandbox does not govern added, as no such code loaded the module
+            if (lazy_worker_start && DataProviderActionCatalog::isGoverned()) {
+                al.unlock();
+                DataProviderActionCatalog::queueDelivery();
                 return;
             }
             notified_revision = revision;
@@ -2054,6 +2074,29 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
                 failure = ex;
             }
             DataProviderActionCatalog::endListenerCall(target.id, tid, revision, failure);
+        }
+    }
+
+    #! Queues a delivery of the catalog changes for a catalog worker, unless one is queued already; never throws
+    /** For a thread that a sandbox governs (see deliverCatalogChanges()); it does not wait for the delivery.  At the
+        end of the process, when no worker can be started, the changes are not delivered.
+    */
+    private:internal static queueDelivery() {
+        try {
+            AutoLock al(lazy_worker_lck);
+            if (lazy_delivery_queued || !DataProviderActionCatalog::startLazyWorker(True)) {
+                return;
+            }
+            lazy_delivery_queued = True;
+            lazy_jobs.push({"id": (++lazy_job_seq).toString(), "deliver": True});
+            ++lazy_pending;
+            DataProviderActionCatalog::startLazyWorker(False);
+%ifdef QoreDebug
+            ++lazy_jobs_submitted;
+            lazy_queue_cond.broadcast();
+%endif
+        } catch (hash<ExceptionInfo> ex) {
+            # the listeners are told of these changes with the next delivery
         }
     }
 
@@ -5422,8 +5465,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             result = lazy_job_results{id};
         }
-        # the changes that the worker made are delivered to the listeners on this thread, not on the worker's
-        DataProviderActionCatalog::deliverCatalogChanges();
+        # the worker delivered the changes that it made (see deliverCatalogChanges())
         if (result.error) {
             throw result.error.err, result.error.desc, result.error.arg;
         }
@@ -5432,6 +5474,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Describes a job of the catalog worker for an error message
     private:internal static string describeJob(hash<auto> job) {
+        if (job.deliver) {
+            return "the delivery of catalog changes";
+        }
         return exists job.app
             ? sprintf("the actions of application %y", job.app)
             : sprintf("lazy value %d", job.value);
@@ -5525,6 +5570,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             lazy_workers = {};
             lazy_pending = 0;
             lazy_jobs.clear();
+            lazy_delivery_queued = False;
             lazy_worker_pid = pid;
         }
         int count = lazy_workers.size();
@@ -5570,7 +5616,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 continue;
             }
             try {
-                if (exists job.app) {
+                if (job.deliver) {
+                    {
+                        AutoLock al(lazy_worker_lck);
+                        lazy_delivery_queued = False;
+                    }
+                    DataProviderActionCatalog::deliverCatalogChanges();
+                    result = {};
+                } else if (exists job.app) {
                     DataProviderActionCatalog::runPending(job.app, job.what, job.action, RunTrusted);
                     result = {};
                 } else {
@@ -5615,7 +5668,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 continue;
             }
             --lazy_pending;
-            if (lazy_job_waiting{job.id}) {
+            if (job.deliver) {
+                # the listeners are told of the changes with the next delivery
+                lazy_delivery_queued = False;
+            } else if (lazy_job_waiting{job.id}) {
                 lazy_job_results{job.id} = {"error": DataProviderActionCatalog::stoppedError(job)};
             }
         }

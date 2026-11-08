@@ -42,6 +42,32 @@ class SafetyRuns {
 #! The thread on which the registration of barrierRegistrationTest() ran
 our int barrier_registration_tid;
 
+#! A catalog change listener that queues each call: its thread, revision, and whether it could read a file
+class QueueListener inherits DataProviderCatalogChangeListener {
+    public {
+        Queue calls();
+    }
+
+    private {
+        string path;
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    catalogChanged(int revision) {
+        string read;
+        try {
+            ReadOnlyFile::readTextFile(path);
+            read = "read";
+        } catch (hash<ExceptionInfo> ex) {
+            read = ex.err;
+        }
+        calls.push({"tid": gettid(), "revision": revision, "read": read});
+    }
+}
+
 #! A catalog change listener that records the threads that call it
 class SafetyListener inherits DataProviderCatalogChangeListener {
     private {
@@ -129,7 +155,11 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("sandboxed code cannot add a catalog change listener", \sandboxedListenerTest());
         addTestCase("a slow trusted registration does not delay another sandboxed reader", \workerPoolTest());
         addTestCase("four blocked sandboxed readers' jobs run at once, on four workers", \workerPoolGrowthTest());
-        addTestCase("listeners are not called on a catalog worker", \listenerThreadTest());
+        addTestCase("listeners are called on a catalog worker, never on a sandboxed reader's thread",
+            \listenerThreadTest());
+        addTestCase("a listener runs under no tenant's policy", \listenerPolicyTest());
+        addTestCase("the changes made on a sandboxed thread are delivered by a worker", \governedChangeDeliveryTest());
+        addTestCase("a worker's change is delivered when the reader stopped waiting", \interruptedReaderDeliveryTest());
         addTestCase("without a worker, every deferred registration runs when it is made, from source and AOT",
             \noWorkerTest());
         addTestCase("sandboxed code cannot set or clear a process-wide callback", \callbackSetterTest());
@@ -1045,7 +1075,8 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         SafetyListener listener();
         int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
         on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
-        # a sandboxed reader has a worker register the actions; the listener is called on the reader's thread
+        # a sandboxed reader has a worker register the actions; the worker delivers the change before the reader's
+        # wait ends
         Program reader = readerProgram(new SandboxManager());
         Counter done(1);
         Queue errors();
@@ -1055,11 +1086,103 @@ printf(\"%s\\n\", p.callFunction(\"test\"));
         int reader_tid = tids.get();
         list<int> workers = DataProviderActionCatalog::getLazyWorkers();
         assertTrue(workers.size() > 0, "a worker ran the registration");
-        assertEq((), (map $1, listener.getTids(), inlist($1, workers)), "no call ran on a worker");
-        assertTrue(inlist(reader_tid, listener.getTids()), "the reader's thread delivered the change");
+        list<int> calls = listener.getTids();
+        assertTrue(calls.size() > 0, "the change was delivered");
+        assertEq((), (map $1, calls, !inlist($1, workers)), "every call ran on a worker");
+        assertFalse(inlist(reader_tid, calls), "no call ran on the reader's thread");
 %else
         testSkip("the test needs the catalog worker's test hooks, which only debug builds have");
 %endif
+    }
+
+    listenerPolicyTest() {
+        string app = registerLazyApp("SafeListenerPolicy");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        # the tenant may not read files; the listener, trusted code, reads one
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program reader = readerProgram(sm);
+        Counter done(1);
+        Queue errors();
+        Queue tids();
+        background LazyAppActionsSafetyTest::readInWithTid(reader, app, done, errors, tids);
+        assertEq(0, done.waitForZero(Deadline));
+        assertEq(0, errors.size());
+        int reader_tid = tids.get();
+        hash<auto> call = listener.calls.get(Deadline);
+        assertTrue(call.tid != reader_tid, "the listener did not run on the tenant's thread");
+        assertEq("read", call.read, "the tenant's filesystem policy does not apply to the listener");
+        assertEq((), DataProviderActionCatalog::getCatalogChangeListenerFailures(id));
+    }
+
+    governedChangeDeliveryTest() {
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        tenant.parse("%requires DataProvider\n"
+            "int sub reg(string app) {\n"
+            "    DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{\"name\": app, \"display_name\": app,\n"
+            "        \"short_desc\": app, \"desc\": app, \"groups\": (AppGroup::DataTransformation,),\n"
+            "        \"logo\": \"data\", \"logo_mime_type\": MimeTypeSvg, \"logo_file_name\": \"x.svg\",\n"
+            "        \"dynamic\": True});\n"
+            "    return gettid();\n"
+            "}\n", "tenant-change");
+        tenant.setSandboxManager(sm);
+        string app = "SafeGovernedChange_" + get_random_string(8);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        int tenant_tid = tenant.callFunction("reg", app);
+        # the tenant's own change is delivered by a worker, not on the tenant's thread
+        hash<auto> call = listener.calls.get(Deadline);
+        assertTrue(call.tid != tenant_tid, "the listener did not run on the tenant's thread");
+        assertEq("read", call.read);
+%ifdef QoreDebug
+        assertTrue(inlist(call.tid, DataProviderActionCatalog::getLazyWorkers()), "a worker delivered the change");
+%endif
+    }
+
+    interruptedReaderDeliveryTest() {
+        string app = registerApp("SafeInterruptedDelivery");
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+        Counter started(1);
+        Counter release(1);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        DataProviderActionCatalog::registerLazyAppActions(app, sub () {
+            started.dec();
+            release.waitForZero();
+            LazyAppActionsSafetyTest::registerAction(app, "lazy-b");
+        });
+        QueueListener listener(get_script_path());
+        int id = DataProviderActionCatalog::addCatalogChangeListener(listener);
+        on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
+        SandboxManager sm();
+        on_exit sm.clearInterrupt();
+        Program reader = readerProgram(sm);
+        Counter done(1);
+        Queue results();
+        background LazyAppActionsSafetyTest::readIn(reader, app, done, results);
+        # the worker runs the registration, and the reader's wait is interrupted
+        assertEq(0, started.waitForZero(Deadline));
+        sm.requestInterrupt();
+        assertEq(0, done.waitForZero(Deadline));
+        assertEq("PROGRAM-INTERRUPTED", results.get().err);
+        int revision = DataProviderActionCatalog::getCatalogRevision();
+        release.dec();
+        # the worker delivers its change, though no reader waits for it any more
+        while (True) {
+            hash<auto> call = listener.calls.get(Deadline);
+            if (call.revision > revision) {
+                break;
+            }
+        }
+        assertEq(("lazy-b",), map $1.action, DataProviderActionCatalog::getActionsNoInit(app));
     }
 
     noWorkerTest() {
