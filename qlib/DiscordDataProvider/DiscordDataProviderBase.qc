@@ -141,7 +141,10 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Makes a REST call and returns the response; handles rate limit responses
-    /** @param method the HTTP method
+    /** A rate-limited request is repeated when the rate limit is reset, unless
+        @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed" in this thread
+
+        @param method the HTTP method
         @param path the request path
         @param body the optional request body
 
@@ -162,9 +165,11 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
                 if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
                     resp = ex.arg{"status_code", "headers"};
                 }
-                # handle rate limit errors immediately
+                # handle rate limit errors immediately; nothing is retried while a data provider requests example
+                # data in this thread (see DataProviderRetryUtil::runWithoutRetries())
                 if (resp.status_code == 429
                     && (resp.headers."x-ratelimit-remaining" == "0")
+                    && !DataProviderRetryUtil::retriesSuppressed()
                     && (*softfloat r = resp.headers."x-ratelimit-reset")) {
                     int lt = r.toInt(); softint us = (r - lt) * 1000000;
                     date reset = localtime(lt, us);
