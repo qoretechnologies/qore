@@ -16158,6 +16158,40 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 #endif
 
 #ifdef DEBUG
+extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
+
+//! Debug-only: dbg_http3_close_before_open_state(op, site): when the I/O thread of the HTTP/3 poll operation @a op
+//! next sets its open state at @a site, a refused submission is recorded first (see
+//! Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState()); the caller keeps @a op until the hook fired
+static QoreValue f_dbg_http3_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    const QoreStringNode* site = get_param_value(params, 1).get<const QoreStringNode>();
+    PrivateDataRefHolder<Http3ClientPollOperationPriv> op(obj, CID_HTTP3CLIENTPOLLOPERATIONBASE, xsink);
+    if (!op) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-HTTP3-ERROR", "the object is not an HTTP/3 client poll operation");
+        }
+        return QoreValue();
+    }
+    Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState(*op, site->c_str());
+    return QoreValue();
+}
+
+//! Debug-only: dbg_http3_wait_close_before_open_state(timeout_ms): waits until the hook armed with
+//! dbg_http3_close_before_open_state() fired; returns False on timeout and disarms the hook
+static QoreValue f_dbg_http3_wait_close_before_open_state(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    bool fired = Http3ClientPollOperationPriv::dbgWaitCloseBeforeOpenState(timeout_ms);
+    if (!fired) {
+        Http3ClientPollOperationPriv::dbgArmCloseBeforeOpenState(nullptr, "");
+    }
+    return fired;
+}
+#endif
+
+#ifdef DEBUG
 //! Debug-only: runs Http1DuplexSendFailureTest: response recovery after a concurrent write of the request body
 //! (buffered or streamed) fails, before and after the final response header, on a new and on a reused connection
 static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
@@ -19475,6 +19509,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_http3_close_before_open_state", f_dbg_http3_close_before_open_state, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, objectTypeInfo, QORE_PARAM_NO_ARG, "op", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_http3_wait_close_before_open_state", f_dbg_http3_wait_close_before_open_state,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

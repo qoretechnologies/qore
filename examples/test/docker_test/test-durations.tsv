@@ -812,7 +812,6 @@ examples/test/qlib/HttpServer/HttpServerDefaultContentType.qtest	0.5	0.5	-	1.0	0
 examples/test/qlib/HttpServer/HttpServerEncodingPreferences.qtest	1.5	1.0	-	1.5	1.0	1.2	-	1.5	1.5	1.0
 examples/test/qlib/HttpServer/HttpServerFastRequestDifferential.qtest	126.6	125.5	-	130.1	127.1	125.2	-	126.6	127.6	137.2
 examples/test/qlib/HttpServer/HttpServerFastRoutes.qtest	3.5	1.5	-	1.5	3.0	1.8	-	2.0	1.5	2.0
-examples/test/qlib/HttpServer/HttpServerFastRoutesBench.qtest	30.0	26.5	-	34.5	19.0	12.3	-	19.5	20.0	59.1
 examples/test/qlib/HttpServer/HttpServerFastRoutesExample.qtest	0.5	0.5	-	0.0	0.0	0.2	-	0.0	0.5	0.0
 examples/test/qlib/HttpServer/HttpServerFastRoutesHttp2.qtest	1.0	0.5	-	1.5	1.0	0.7	-	0.5	1.0	1.5
 examples/test/qlib/HttpServer/HttpServerFastRoutesHttp3.qtest	0.5	0.5	-	0.5	0.5	0.4	-	0.5	0.5	0.5
