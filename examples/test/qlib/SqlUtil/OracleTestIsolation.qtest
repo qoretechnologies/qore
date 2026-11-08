@@ -38,6 +38,16 @@ class OracleTestIsolationTest inherits QUnit::Test {
         admin_connstr = ENV.QORE_DB_CONNSTR_ORACLE_SYS;
         if (!connstr || !admin_connstr) {
             skip_reason = "QORE_DB_CONNSTR_ORACLE and QORE_DB_CONNSTR_ORACLE_SYS are not both configured";
+        } else if (!skip_reason) {
+            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            try {
+                Datasource connstr_ds(connstr);
+                connstr_ds.open();
+                Datasource admin_connstr_ds(admin_connstr);
+                admin_connstr_ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
         }
         addTestCase("a non-Oracle connection has no run schema", \notOracle());
         addTestCase("without an admin connection, the tests on a host run one at a time", \hostLock());

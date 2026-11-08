@@ -20,10 +20,22 @@
 class FirebirdTestIsolationTest inherits QUnit::Test {
     private {
         *string connstr;
+        *string skip_reason;
     }
 
     constructor() : Test("FirebirdTestIsolationTest", "1.0", \ARGV) {
         connstr = ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD;
+        if (!connstr) {
+            skip_reason = "QORE_DB_CONNSTR_JDBC_FIREBIRD is not configured";
+        } else {
+            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            try {
+                Datasource ds(connstr);
+                ds.open();
+            } catch (hash<ExceptionInfo> ex) {
+                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+            }
+        }
         addTestCase("a non-Firebird connection has no run database", \notFirebird());
         addTestCase("the run's connections use the run's database", \runDatabase());
         addTestCase("the teardown drops the run's database", \teardown());
@@ -34,8 +46,8 @@ class FirebirdTestIsolationTest inherits QUnit::Test {
     }
 
     private checkSkip() {
-        if (!connstr) {
-            testSkip("QORE_DB_CONNSTR_JDBC_FIREBIRD is not configured");
+        if (skip_reason) {
+            testSkip(skip_reason);
         }
     }
 
