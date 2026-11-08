@@ -483,6 +483,7 @@ switch (case_name) {
         addTestCase("restricted code cannot extend the process-wide module path", \globalAppendRestrictedTest());
         addTestCase("a directory added to the process-wide module path holds no library code",
             \globalAppendUnsandboxedTest());
+        addTestCase("a load through a link to a library module loads the library module's file", \canonicalTest());
         set_return_value(main());
     }
 

@@ -1508,7 +1508,7 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     if (is_aot_user) {
         // an AOT module from the process-wide module path is library code: its initialization, which runs when it is
         // first applied to a Program, belongs to no sandbox (see QoreModuleInitSandboxBarrierHelper)
-        QoreModuleInitSandboxBarrierHelper init_barrier(QMM.isTrustedModulePath(getFileName()));
+        QoreModuleInitSandboxBarrierHelper init_barrier(isTrusted());
         // an AOT module merges its namespace under its own fence and must not hold the write lock
         // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
         module_ns_init(rns, qns, xsink);
@@ -1558,6 +1558,54 @@ QoreHashNode* QoreBuiltinModule::getHash(bool with_filename) const {
     }
 
     return h;
+}
+
+namespace {
+//! What was decided when a module was loaded, until the module is registered
+struct QoreModuleLoadFrame {
+    //! the module's feature name
+    const char* feature;
+    //! true if the module is library code (see QoreModuleManager::isTrustedModulePath())
+    bool trusted;
+    //! the frame of the enclosing load in this thread, if any
+    QoreModuleLoadFrame* prev;
+};
+
+//! the innermost module load in progress in this thread
+thread_local QoreModuleLoadFrame* module_load_frame = nullptr;
+
+//! Records what was decided when a module is loaded, so that QoreModuleManager::addModule() records it on the module
+class QoreModuleLoadFrameHelper {
+public:
+    QoreModuleLoadFrameHelper(const char* feature, bool trusted) : frame{feature, trusted, module_load_frame} {
+        module_load_frame = &frame;
+    }
+
+    ~QoreModuleLoadFrameHelper() {
+        assert(module_load_frame == &frame);
+        module_load_frame = frame.prev;
+    }
+
+private:
+    QoreModuleLoadFrame frame;
+};
+}
+
+void QoreModuleManager::addModule(QoreAbstractModule* m) {
+    assert(map.find(m->getName()) == map.end());
+    if (!m->load_recorded) {
+        m->load_recorded = true;
+        // the innermost load in this thread is the module's own, under its feature name; a private module was
+        // renamed, and a module registered with no load in progress was not loaded from a file by this manager
+        const QoreModuleLoadFrame* f = module_load_frame;
+        if (f && (!strcmp(m->getName(), f->feature) || (m->getOrigName() && !strcmp(m->getOrigName(), f->feature)))) {
+            m->trusted = f->trusted;
+        } else {
+            m->trusted = isTrustedModulePath(m->getFileName());
+        }
+    }
+    map.insert(module_map_t::value_type(m->getName(), m));
+    //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
 }
 
 QoreAbstractModule::~QoreAbstractModule() {
@@ -3085,7 +3133,14 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     ON_BLOCK_EXIT(module_load_clear, feature);
 
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
-    const bool trusted = isTrustedModulePath(path);
+    std::string trusted_path;
+    const bool trusted = isTrustedModulePath(path, &trusted_path);
+    if (trusted) {
+        // the file that was found to be library code is the file that is loaded
+        path = trusted_path.c_str();
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, trusted);
     // code that is not trusted cannot replace a library module with a module from elsewhere
     bool tenant_chosen;
     if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen)) {
@@ -4056,7 +4111,14 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
 
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
-    const bool trusted = isTrustedModulePath(path);
+    std::string trusted_path;
+    const bool trusted = isTrustedModulePath(path, &trusted_path);
+    if (trusted) {
+        // the file that was found to be library code is the file that is loaded
+        path = trusted_path.c_str();
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, trusted);
     // code that is not trusted cannot replace a library module with a module from elsewhere
     bool tenant_chosen;
     if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen)) {
@@ -4181,6 +4243,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     }
 
     // source text is never library code: code that is not trusted cannot use it to replace a library module
+    QoreModuleLoadFrameHelper load_frame(feature, false);
     bool tenant_chosen;
     if (checkShadowingLoad(xsink, path, feature, false, tenant_chosen)) {
         return nullptr;
@@ -4383,7 +4446,14 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
 
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
-    const bool trusted = isTrustedModulePath(path);
+    std::string trusted_path;
+    const bool trusted = isTrustedModulePath(path, &trusted_path);
+    if (trusted) {
+        // the file that was found to be library code is the file that is loaded
+        path = trusted_path.c_str();
+    }
+    // recorded on the module when it is registered
+    QoreModuleLoadFrameHelper load_frame(feature, trusted);
     // code that is not trusted cannot replace a library module with a module from elsewhere
     bool tenant_chosen;
     if (checkShadowingLoad(xsink, path, feature, trusted, tenant_chosen)) {

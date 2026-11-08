@@ -255,6 +255,14 @@ public:
         init_failed = true;
     }
 
+    //! returns true if the module is library code: it was loaded from a directory of library code
+    /** decided once, when the module was loaded (see QoreModuleManager::isTrustedModulePath()), and recorded when
+        it was registered (see QoreModuleManager::addModule())
+    */
+    DLLLOCAL bool isTrusted() const {
+        return trusted;
+    }
+
     DLLLOCAL void addModuleReExport(const char* m) {
         rmod.push_back(m);
     }
@@ -369,6 +377,11 @@ protected:
     // true while a thread is attaching this module's children; other threads wait for it to complete so
     // that a module load only returns once its children have been registered
     bool children_attaching = false;
+
+    // true if the module is library code; see isTrusted()
+    bool trusted = false;
+    // true once the module's load has been recorded on it (see QoreModuleManager::addModule())
+    bool load_recorded = false;
 
     bool priv : 1,
         injected : 1,
@@ -596,11 +609,11 @@ public:
 
     DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
 
-    DLLLOCAL void addModule(QoreAbstractModule* m) {
-        assert(map.find(m->getName()) == map.end());
-        map.insert(module_map_t::value_type(m->getName(), m));
-        //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
-    }
+    //! Registers a module under its current name
+    /** The first time a module is registered, what was decided when it was loaded (see
+        QoreModuleLoadFrameHelper) is recorded on it; a module registered under a new name keeps it
+    */
+    DLLLOCAL void addModule(QoreAbstractModule* m);
 
     DLLLOCAL QoreAbstractModule* findModule(const char* name) {
         AutoLocker al(mutex);
