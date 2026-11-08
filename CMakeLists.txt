@@ -2945,7 +2945,8 @@ add_executable(qcc qcc-main.cpp)
 # qcc's test hooks run a command named in the environment at fixed points of a compile (QORE_QCC_TEST_*_COMMAND, see
 # qcc_run_test_hook() in qcc-main.cpp), for the tests that change a source while qcc compiles; a qcc that is
 # packaged must never run a command taken from its environment, so they are only in a debug build by default, and
-# CI's release builds enable them explicitly
+# CI's release builds enable them explicitly.  Like any option(), the value is cached at the first configure of a build
+# directory: changing CMAKE_BUILD_TYPE later does not change it; pass -DQORE_QCC_TEST_HOOKS=ON|OFF to change it
 if (QORE_BUILD_TYPE_LWR STREQUAL "debug")
     set(_QORE_QCC_TEST_HOOKS_DEFAULT ON)
 else()

@@ -106,13 +106,15 @@ FILE* qore_open_regular_file(const char* path) {
     if (stat(path, &sb) || !S_ISREG(sb.st_mode)) {
         return nullptr;
     }
-    // without blocking, in case the file was replaced by a FIFO since; then it must be the file stat() saw
+    // without blocking, in case the file was replaced by a FIFO since, and then only if it is still a regular file:
+    // not necessarily the one stat() saw, as a build replaces a module or a depfile atomically by renaming a new file
+    // over it, which must be read like the old one (refusing it would load an out-of-date module without a warning)
     int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) {
         return nullptr;
     }
     struct stat fsb;
-    if (fstat(fd, &fsb) || !S_ISREG(fsb.st_mode) || fsb.st_dev != sb.st_dev || fsb.st_ino != sb.st_ino) {
+    if (fstat(fd, &fsb) || !S_ISREG(fsb.st_mode)) {
         close(fd);
         return nullptr;
     }
@@ -880,8 +882,11 @@ bool qore_aot_read_module_depfile(const std::string& qmod, std::vector<std::stri
     The check is skipped if the Program cannot access the filesystem; a file that the filesystem policy of a sandbox
     does not allow to be read is not checked.
 
-    @param qmod_path the path of the AOT module found in the module path
-    @param source_dir the module directory where the source of the module was found
+    @param qmod_path the path of the AOT module: found in the module path, or named by its path
+    @param source_dir the directory where the source module was found, which the check of a linked module without a
+    dependency file compares (\c \<source_dir\>/\<name\>.qm, or the module directory \c \<source_dir\>/\<name\>/);
+    for a module without a source module to load instead, the directory of \a qmod_path, where such a check finds
+    no source
     @param name the name of the module
     @param pgm the Program loading the module, if any
     @param stale_source set to a source that has changed since the module was compiled
@@ -2925,7 +2930,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     // an AOT module of a build tree (linked into a source tree, or a built module with its depfile) is not loaded if
     // one of its sources has changed: the source module is loaded instead, with a warning that the AOT module must be
-    // rebuilt
+    // rebuilt; source_dir is the directory of the module path where its source module was found (with no source
+    // module found there, the module is refused: see refuse_stale_aot_module_without_source below)
     auto load_source_for_stale_aot_module = [&](const char* qmod_path, const std::string& source_dir,
             QoreAbstractModule*& rv) -> bool {
         std::string stale_source;
@@ -2961,7 +2967,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     };
 
     // an out-of-date AOT module of a build tree without a source module to load instead is not loaded, as when it is
-    // named by its path (see above)
+    // named by its path (see above); it is checked with the directory of the AOT module as the source directory (see
+    // qore_build_aot_module_is_stale()), which only a linked module without a dependency file uses
     auto refuse_stale_aot_module_without_source = [&](const char* qmod_path) -> bool {
         std::string module_dir = qmod_path;
         const char* dsep = q_find_last_path_sep(module_dir.c_str());
@@ -4533,7 +4540,10 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 
 #ifndef _Q_WINDOWS
     // a binary module is a regular file: reading or mapping a FIFO or a device with the name of one would block the
-    // loader with the module manager's mutex held (a file that does not exist is left to dlopen() to report)
+    // loader with the module manager's mutex held (a file that does not exist is left to dlopen() to report).  The
+    // check is by path, as are the reads that follow (the metadata reader, which checks again through
+    // qore_open_regular_file(), the integrity check and dlopen()): replacing the file between them takes write access
+    // to the module's directory, which can plant code in the module path anyway, so it is no boundary to defend here
     {
         struct stat sb;
         if (!stat(path, &sb) && !S_ISREG(sb.st_mode)) {
