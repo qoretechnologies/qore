@@ -296,9 +296,12 @@ else
     echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
 fi
 # the CPUs and memory the job may use, and (after the tests) its peak memory use (see ci-resource-report.sh); the
-# tests run one at a time (QORE_TEST_JOBS, see run_tests.sh) until these show the memory to run more
+# tests run as many at a time as the pod's CPU and memory limits allow (QORE_TEST_JOBS, see run_tests.sh), unless the
+# job sets QORE_TEST_JOBS; see run_tests.sh for the tests that run in a lane of their own
 . "${QORE_SRC_DIR}/test/docker_test/ci-resource-report.sh"
 qore_ci_resource_report "before the tests"
+QORE_TEST_JOBS="${QORE_TEST_JOBS:-$(qore_ci_test_jobs)}"
+echo "QORE_TEST_JOBS=${QORE_TEST_JOBS}"
 TEST_RC=0
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
@@ -310,6 +313,7 @@ gosu qore:qore env \
     QORE_EXCLUDE_PERF_TESTS="${QORE_EXCLUDE_PERF_TESTS}" \
     QORE_PERF_TESTS_ONLY="${QORE_PERF_TESTS_ONLY}" \
     QORE_TEST_EXTRA_DIRS="${QORE_TEST_EXTRA_DIRS}" \
+    QORE_TEST_JOBS="${QORE_TEST_JOBS}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh || TEST_RC=$?

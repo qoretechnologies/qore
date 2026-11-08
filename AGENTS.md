@@ -66,8 +66,9 @@
   anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
   child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
   a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
-- `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs) and
-  prints each test's output whole when it ends.  Tests must therefore not share state: listen on port 0, write under
+- `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs,
+  the Linux test jobs as many as their pod's CPU and memory limits allow: `qore_ci_test_jobs` in
+  `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must therefore not share state: listen on port 0, write under
   their own `make_tmp_dir()`/`TmpDir`, and use names of their own for shared objects.  A test that cannot run beside
   others declares `# test-parallel: serial - <why>` (one at a time beside the others: the database and service tests,
   which share schemas and data) or `# test-parallel: exclusive - <why>` (alone: a test that reads the process limit
