@@ -163,6 +163,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             addTestCase("an aborted operation does not go on with a close the server starts", \abortedDuringPeerCloseTest());
             addTestCase("an operation aborted while its I/O thread releases its receive operation",
                 \abortedDuringRecvReleaseTest());
+            addTestCase("an operation aborted while a send is in progress ends once, as closed",
+                \abortedDuringSendTest());
         }
         addTestCase("no data frame is sent after a close frame", \noDataAfterCloseTest());
         addTestCase("WebSocketClient::startPollSend() sends no data frame after a close frame",
@@ -625,6 +627,29 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         assertEq("closed", poll_op.getState());
         assertEq(1006, poll_op.getCloseCode(), "the abort's close code is kept");
         assertEq("aborted", poll_op.getCloseReason(), "the abort's close reason is kept");
+    }
+
+    #! The operation is aborted (as by another thread) while its I/O thread runs a send operation: the abort closes
+    #! the socket under the send, whose failure does not turn the abort's close into an error, nor report a second end
+    abortedDuringSendTest() {
+        HTTPClient hc = wsHandshake();
+        on_exit hc.disconnect();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+        poll_op.sendText("hello");
+        # the first cycle starts the send operation
+        poll_op.continuePoll();
+        # disarms the hook if it did not fire
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", poll_op, "send-poll");
+        list<hash<auto>> msgs = driveAndCollect(poll_op);
+        *bool closed = call_function("dbg_poll_wait_close_before_open_state", 0);
+        assertTrue(exists closed, "the hook fired");
+        assertTrue(closed, "the operation was aborted");
+        assertEq("closed", poll_op.getState(), "the abort's close is kept");
+        assertEq(1006, poll_op.getCloseCode());
+        assertEq("aborted", poll_op.getCloseReason());
+        assertEq((), messagesOfType(msgs, "error"), "no error is reported after the abort");
+        assertEq(("aborted",), (map $1.reason, messagesOfType(msgs, "closed")), "the end is reported once");
     }
 
     #! A close the server starts is answered, and its close frame is reported once

@@ -126,7 +126,15 @@ public:
 
     //! Returns the WebSocket close code
     DLLLOCAL uint16_t getCloseCode() const {
+        AutoLocker al(close_lock);
         return close_code;
+    }
+
+    //! Returns the close code and reason as one pair; any thread
+    DLLLOCAL void getCloseInfo(uint16_t& code, std::string& reason) const {
+        AutoLocker al(close_lock);
+        code = close_code;
+        reason = close_reason;
     }
 
     //! Returns a copy of the WebSocket close reason; any thread
@@ -421,17 +429,19 @@ private:
     DLLLOCAL void applyCloseRequest(const QoreHashNode* request, ExceptionSink* xsink);
 
     //! Sets the state of the operation; every change of the state is made with this method
-    /** WsState::CLOSED and WsState::ERROR are final for a change to WsState::CONNECTED or WsState::CLOSING:
-        abort() runs on any thread (the Qore-level abort() method, or a worker dispatched by the I/O controller for a
-        timeout) and sets WsState::CLOSED without a lock, while the I/O thread and the threads that request a close
-        check the state and then set WsState::CLOSING.  A compare-exchange that never leaves a final state keeps an
-        abort() made between the check and the store, after which the aborted operation would go on with a close
-        handshake.  A final state can still replace another one, as before.
+    /** WsState::CLOSED and WsState::ERROR are final: abort() runs on any thread (the Qore-level abort() method, or a
+        worker dispatched by the I/O controller for a timeout) and sets WsState::CLOSED without a lock, while the I/O
+        thread and the threads that request a close check the state and then set the next one.  A compare-exchange
+        that never leaves a final state keeps an abort() made between the check and the store, after which the
+        aborted operation would go on with a close handshake, or end again with an error or another close (e.g. when
+        abort() closed the socket under a send or receive operation in progress).  The first final state is kept.
 
         @param s the new state
         @param site where the state is set, for the debug hook (see PollStateCloseHook), or nullptr
+
+        @return true if the state was set, false if the operation had ended
     */
-    DLLLOCAL void setWsStateValue(WsState s, const char* site = nullptr);
+    DLLLOCAL bool setWsStateValue(WsState s, const char* site = nullptr);
 
     //! Returns true while a close started by the client waits for the server's close frame
     /** The close handshake ends when the server's close frame arrives (RFC 6455 section 5.5.1), when the
@@ -515,7 +525,7 @@ private:
     DLLLOCAL void setError(ExceptionSink* xsink);
 
     //! Transitions to CLOSED state with the given code and reason
-    DLLLOCAL void setClosed(uint16_t code, const char* reason);
+    DLLLOCAL bool setClosed(uint16_t code, const char* reason);
 };
 
 DLLLOCAL QoreClass* initWebSocketClientPollOperationBaseClass(QoreNamespace& qorens);
