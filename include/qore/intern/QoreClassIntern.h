@@ -2341,60 +2341,31 @@ public:
 
     mutable QoreReferenceCounter refs;  // existence references
     mutable QoreReferenceCounter const_refs; // constant references
-    //! Holds a reference to the values of the static variables while they are released; see releaseVarValues()
-    class VarRefHolder {
-    public:
-        DLLLOCAL VarRefHolder(const QoreReferenceCounter& refs) : refs(refs) {
-            refs.ROreference();
-        }
+    //! references to the values of the static variables: one for each Program that shares them
+    /** The Program that creates the class holds the first one; a Program that inherits the class takes one with
+        varRef(), which never takes one once the count has reached zero, so the values are released exactly once.
+        A Program releases its reference when its data is cleared (clear()), or when it is deleted without having been
+        cleared (deleteClassData() or deref()); the Program that releases the last one releases the values (see
+        releaseVarValues()).  The variables themselves are deleted only when data_refs reaches zero.
 
-        DLLLOCAL ~VarRefHolder() {
-            if (!released) {
-                refs.ROdereference();
-            }
-        }
-
-        VarRefHolder(const VarRefHolder&) = delete;
-        VarRefHolder& operator=(const VarRefHolder&) = delete;
-
-        //! Releases the reference; returns true if it was the last one
-        DLLLOCAL bool release() {
-            assert(!released);
-            released = true;
-            return refs.ROdereference();
-        }
-
-    private:
-        const QoreReferenceCounter& refs;
-        bool released = false;
-    };
-
-    //! references to the values of the static variables: one for each Program that has not released them yet
-    /** A Program releases its reference when its data is cleared (clear()), or when it is deleted without having been
-        cleared (deleteClassData() or deref()).  The Program that releases the last one releases the values (see
-        releaseVarValues()); the variables themselves are deleted only when data_refs reaches zero.
-
-        A Program created while the values are released, by a destructor that they run, shares the class (it inherits
-        the public classes of the Program running the destructor) and so takes a reference again, possibly from zero.
-        Releasing that reference releases the values again (no value can be assigned once a variable's value has been
-        released, but key-value data can be set), and never deletes the variables, which the Programs that share the
-        class can still use.
+        A Program created from a Program whose data is being cleared or has been cleared (for example by a destructor
+        that the release of the values runs) does not take one (see QoreClassList): it sees the values until that
+        Program releases them, and NOTHING afterwards, and it can never keep the values, nor itself, alive by being
+        stored in one of them.
     */
     mutable QoreReferenceCounter var_refs;
 
     //! references to the static variable objects: one for each Program that has not deleted its class data yet
     /** Each Program sharing the class takes one (the Program that creates the class holds the first one, and
-        pgmRef() takes one for each other Program), and releases it exactly once, after its references in var_refs:
-        with deleteClassData() when its namespaces' data is deleted, or with deref() when it releases the class
+        pgmRef() takes one for each other Program), and releases it exactly once, after its reference in var_refs, if
+        any: with deleteClassData() when its namespaces' data is deleted, or with deref() when it releases the class
         without having done so.  The variables (QoreVarMap::del()) are deleted only by whoever releases the last
         one, so they are deleted exactly once, and only after the last Program that can run code reading them (its
         parse tree or native code holds QoreVarInfo pointers) has deleted its class data.
 
-        This is separate from var_refs because a Program created while the values are released, after var_refs has
-        reached zero, takes a reference in both counts: if the variables were deleted when var_refs reached zero
-        again, the deletion of such a Program would free the variables while the Program that created it still runs
-        code that reads them, and two Programs deleted at the same time in different threads could both see zero and
-        both delete them.
+        This is separate from var_refs because a Program can share the class without sharing the values of its
+        static variables (see var_refs): its code still reads the variables, whose values are then NOTHING; and two
+        Programs deleted at the same time in different threads must not both delete the variables.
     */
     mutable QoreReferenceCounter data_refs;
 
@@ -2524,12 +2495,21 @@ public:
         return scl ? &scl->sml : nullptr;
     }
 
-    //! References the class for a Program that shares it; see var_refs and data_refs
+    //! References the class for a Program that shares it, except for the values of its static variables
+    /** The Program takes a reference to the values with varRef() if it shares them; see var_refs and data_refs
+    */
     DLLLOCAL void pgmRef() const {
         refs.ROreference();
-        var_refs.ROreference();
         data_refs.ROreference();
         const_refs.ROreference();
+    }
+
+    //! References the values of the static variables for a Program that shares the class, if they are still shared
+    /** @return true if the reference was taken, false if the values have been released (var_refs is zero), in which
+        case the Program does not share them
+    */
+    DLLLOCAL bool varRef() const {
+        return var_refs.optRef();
     }
 
     DLLLOCAL void ref() const {
@@ -3450,39 +3430,25 @@ public:
     }
 
     //! Releases the values of the static variables and the key-value data for the last Program sharing them
-    /** Called after the last reference in var_refs has been released.  The destructors of the values run here, and
-        one can create a Program that shares the class (a Program inherits the classes of the Program that creates it,
-        and a destructor runs in the Program of its class).  A reference is held while the values are released, so
-        that deleting such a Program meanwhile does not release them again while they are being released here; one
-        that still exists afterwards releases them (and any key-value data set meanwhile) when its data is cleared.
+    /** Called once, by the Program that releases the last reference in var_refs, which no Program can take again
+        (see varRef()).  The destructors of the values run here; a Program that they create shares the class without
+        sharing the values (see var_refs), so it never releases them again.
 
         The variables themselves are not deleted here; see data_refs.
 
         @param xsink for exceptions raised by destructors
     */
     DLLLOCAL void releaseVarValues(ExceptionSink* xsink) {
-        while (true) {
-            VarRefHolder holder(var_refs);
-            vars.clear(xsink);
-            // delete key-value data when the last program sharing this class is cleaned up; the data is taken under
-            // the lock, as the destructors run by discarding it can set key values
-            kvmap_t kv;
-            {
-                AutoLocker al(gate.asl_lock);
-                kv.swap(kvmap);
-            }
-            for (auto& i : kv) {
-                i.second.discard(xsink);
-            }
-            // a Program still sharing the values releases them itself
-            if (!holder.release()) {
-                break;
-            }
-            // the last reference was released again here: release any key-value data set in the meantime
+        vars.clear(xsink);
+        // delete key-value data when the last program sharing this class is cleaned up; the data is taken under
+        // the lock, as the destructors run by discarding it can set key values
+        kvmap_t kv;
+        {
             AutoLocker al(gate.asl_lock);
-            if (kvmap.empty()) {
-                break;
-            }
+            kv.swap(kvmap);
+        }
+        for (auto& i : kv) {
+            i.second.discard(xsink);
         }
     }
 

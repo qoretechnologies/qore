@@ -475,7 +475,9 @@ public:
 
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearData(ExceptionSink* xsink);
-    DLLLOCAL void deleteData(bool deref_vars, ExceptionSink* xsink);
+    DLLLOCAL void deleteData(ExceptionSink* xsink);
+    //! marks the class lists of the namespace tree as owned by a Program releasing its values; see QoreClassList::setVarsReleased()
+    DLLLOCAL void setVarsReleased();
     //DLLLOCAL void deleteClearData(ExceptionSink* xsink);
 
     DLLLOCAL void parseAssimilate(QoreNamespace* ns);
@@ -3579,6 +3581,8 @@ public:
     }
 
     DLLLOCAL static void clearData(RootQoreNamespace& ns, ExceptionSink* xsink) {
+        // no Program created while the values are released shares them; see qore_class_private::var_refs
+        ns.priv->setVarsReleased();
         ns.priv->clearData(xsink);
     }
 };

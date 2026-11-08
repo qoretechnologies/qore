@@ -2739,7 +2739,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue(pgm);
 
     // delete the namespace and all data
-    qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);
+    qore_root_ns_private::get(*RootNS)->deleteData(xsink);
 
     // no more code of this Program runs: free the thread-local data of the family for the last time if this
     // Program is its root, including the data that the destructors run above have saved; the members of the family

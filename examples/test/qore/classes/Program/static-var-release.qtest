@@ -180,6 +180,58 @@ list<Program> sub make(int n) {
         #! the reports of the in-process Programs whose guard Program shares a class whose variables have been
         #! released
         const SharedReports = ("guard Program result: 42", "guard read: null null", "reader read: null null");
+
+        #! the code of the in-process Program whose Program created by the guard's destructor is kept in a static
+        #! variable of a public class that it shares, whose values have not been released yet (Xray)
+        /** The Program created while the values are released does not share them: it reads Xray's value before the
+            values are released and Alpha's (already released) as NOTHING, and keeping it in Xray's static variable
+            does not keep Xray's values, nor itself, alive
+        */
+        const CycleSrc = "
+public class Alpha {
+    public {
+        static int v = 5;
+    }
+}
+
+public class Guard {
+    destructor() {
+        Program p(PO_NEW_STYLE);
+        p.parse(\"int sub get() { return Holder::value(); } *int sub xray() { return Xray::z; } *int sub alpha() { return Alpha::v; }\", \"guard\");
+        svr_report(sprintf(\"guard Program: %d %y %y\", p.callFunction(\"get\"), p.callFunction(\"xray\"),
+            p.callFunction(\"alpha\")));
+        Xray::kept = p;
+    }
+}
+
+public class Holder {
+    public {
+        static Guard guard = new Guard();
+    }
+
+    static int value() {
+        return 42;
+    }
+}
+
+public class Marker {
+    destructor() {
+        svr_report(\"marker released\");
+    }
+}
+
+public class Xray {
+    public {
+        static *Program kept;
+        static int z = 7;
+        static Marker marker = new Marker();
+    }
+}
+
+int sub get() {
+    return Holder::value();
+}
+";
     }
 
     private {
@@ -196,6 +248,8 @@ list<Program> sub make(int n) {
             \deletedProgramSharedTest());
         addTestCase("deleted Program; the Program created by the destructor shares released variables and is "
             "deleted afterwards", \deletedProgramSharedKeptTest());
+        addTestCase("deleted Program; the Program created by the destructor is kept in a static variable of a "
+            "class it shares", \deletedProgramCycleTest());
         addTestCase("Programs sharing a class deleted in parallel", \parallelDeleteTest());
         addTestCase("main Program at exit", \exitTest(), ("main-exit.q", ExitOutput));
         addTestCase("user module at exit", \exitTest(), ("module-exit.q", ExitOutput));
@@ -261,6 +315,16 @@ list<Program> sub make(int n) {
         }
         assertEq(SharedReports, Results::reports);
         assertEq((), Results::kept);
+    }
+
+    deletedProgramCycleTest() {
+        Results::reports = ();
+        {
+            Program p = getProgram(False, CycleSrc);
+            delete p;
+        }
+        # the kept Program and the values of Xray's static variables are released with the Program
+        assertEq(("guard Program: 42 7 null", "marker released"), Results::reports);
     }
 
     #! Programs sharing a class are deleted at the same time in different threads after the Program of the class

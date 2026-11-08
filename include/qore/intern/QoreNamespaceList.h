@@ -178,7 +178,9 @@ public:
 
     DLLLOCAL bool addGlobalVars(qore_root_ns_private& rns);
 
-    DLLLOCAL void deleteData(bool deref_vars, ExceptionSink *xsink);
+    DLLLOCAL void deleteData(ExceptionSink *xsink);
+    //! marks the class lists of the namespaces as owned by a Program releasing its values; see QoreClassList::setVarsReleased()
+    DLLLOCAL void setVarsReleased();
 
     DLLLOCAL bool empty() const {
         return nsmap.empty();

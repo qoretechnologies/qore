@@ -43,11 +43,13 @@
 struct cl_rec_t {
     QoreClass* cls = nullptr;
     bool priv = false;
+    //! true if the entry holds a reference to the values of the class's static variables; see qore_class_private::var_refs
+    bool vars = true;
 
     DLLLOCAL cl_rec_t() {
     }
 
-    DLLLOCAL cl_rec_t(QoreClass* c, bool p) : cls(c), priv(p) {
+    DLLLOCAL cl_rec_t(QoreClass* c, bool p, bool v = true) : cls(c), priv(p), vars(v) {
     }
 };
 
@@ -80,13 +82,23 @@ class QoreClassList {
 private:
     hm_qc_t hm;        // hash_map for name lookups
     bool ns_const : 1;
+    //! set when the Program owning the list releases the values of the static variables of its classes
+    /** Set when the Program's data is being cleared (see setVarsReleased()), and by clear() and deleteClassData().
+        A copy of a class from a list with this flag set does not share the values (see qore_class_private::var_refs).
+    */
     bool ns_vars : 1;
     //! set when the class data has been deleted with deleteClassData(); see qore_class_private::data_refs
     bool ns_data : 1;
 
     DLLLOCAL void deleteAll();
 
-    DLLLOCAL void addInternal(QoreClass* ot, bool priv);
+    //! adds a copy of a class; \a vars is true if the copy holds a reference to the values of its static variables
+    DLLLOCAL void addInternal(QoreClass* ot, bool priv, bool vars);
+
+    //! returns true if a copy of the class in the given entry of this list shares the values of its static variables
+    /** Takes the reference to the values for the copy if so; see qore_class_private::var_refs
+    */
+    DLLLOCAL bool copyVarRef(const cl_rec_t& rec) const;
 
 public:
     DLLLOCAL QoreClassList() : ns_const(false), ns_vars(false), ns_data(false) {}
@@ -139,7 +151,15 @@ public:
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearConstants(ExceptionSink* xsink);
     //! releases the class data held by the Program whose namespace is deleted; see qore_class_private::deleteClassData()
-    DLLLOCAL void deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink);
+    DLLLOCAL void deleteClassData(const QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! marks the list as owned by a Program that is releasing the values of the static variables of its classes
+    /** Called for all of the Program's class lists before any value is released, so that a Program created from it
+        while the values are released (by a destructor) does not share them; see qore_class_private::var_refs
+    */
+    DLLLOCAL void setVarsReleased() {
+        ns_vars = true;
+    }
 };
 
 class ClassListIterator {

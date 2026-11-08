@@ -56,8 +56,14 @@ QoreClassList::QoreClassList(const QoreClassList& old, const QoreParseOptions& p
         QoreClass* qc = i->second.cls->copy();
         // we cannot update the namespace in the class because classes are immutable; the class always points to the
         // original namespace
-        addInternal(qc, true);
+        addInternal(qc, true, old.copyVarRef(i->second));
     }
+}
+
+bool QoreClassList::copyVarRef(const cl_rec_t& rec) const {
+    // a Program created from a Program whose data is being cleared does not share the values, and no Program shares
+    // values that have been released
+    return !ns_vars && rec.vars && qore_class_private::get(*rec.cls)->varRef();
 }
 
 QoreClassList::~QoreClassList() {
@@ -68,7 +74,7 @@ void QoreClassList::deleteAll() {
     for (auto& i : hm) {
         //printd(5, "QoreClassList::deleteAll() this: %p cls: '%s' %p priv: %p ns_const: %d ns_vars: %d\n", this,
         //  i.second.cls->getName(), i.second.cls, qore_class_private::get(*i.second.cls), ns_const, ns_vars);
-        qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars, !ns_data);
+        qore_class_private::derefClass(*i.second.cls, !ns_const, i.second.vars, !ns_data);
     }
     hm.clear();
     ns_const = false;
@@ -76,11 +82,11 @@ void QoreClassList::deleteAll() {
     ns_data = false;
 }
 
-void QoreClassList::addInternal(QoreClass* oc, bool priv) {
+void QoreClassList::addInternal(QoreClass* oc, bool priv, bool vars) {
     printd(5, "QCL::addInternal() this: %p '%s' (%p)\n", this, oc->getName(), oc);
 
     assert(!find(oc->getName()));
-    hm[oc->getName()] = cl_rec_t(oc, priv);
+    hm[oc->getName()] = cl_rec_t(oc, priv, vars);
 }
 
 int QoreClassList::add(QoreClass* oc) {
@@ -123,7 +129,7 @@ void QoreClassList::mergeUserPublic(const QoreClassList& old, qore_ns_private* n
         qc = i->second.cls->copy();
         // we cannot update the namespace in the class because classes are immutable; the class always points to the
         // original namespace
-        addInternal(qc, true);
+        addInternal(qc, true, old.copyVarRef(i->second));
     }
 }
 
@@ -146,7 +152,7 @@ int QoreClassList::importSystemClasses(const QoreClassList& source, qore_ns_priv
             QoreClass* qc = i->second.cls->copy();
             // we cannot update the namespace in the class because classes are immutable; the class always points to the
             // original namespace
-            addInternal(qc, true);
+            addInternal(qc, true, source.copyVarRef(i->second));
             ++cnt;
         }
     }
@@ -202,7 +208,7 @@ void QoreClassList::parseRemove(const char* name, ExceptionSink* xsink) {
         // Roll back any pending variants first
         qore_class_private::parseRollback(*(i->second.cls));
         // Then delete the class
-        qore_class_private::derefClass(*i->second.cls, !ns_const, !ns_vars, !ns_data);
+        qore_class_private::derefClass(*i->second.cls, !ns_const, i->second.vars, !ns_data);
         hm.erase(i);
     }
 }
@@ -237,7 +243,7 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
         if (ns.hashDeclList.find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "hashdecl '%s' has already been defined in " \
                 "namespace '%s'", i.first, ns.name.c_str());
-            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars, !ns_data);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, i.second.vars, !ns_data);
         } else if (QoreClass* existing = ns.classList.find(i.first)) {
             if (ns.imported && qore_class_private::isPublic(*existing)
                 && qore_class_private::isPublic(*i.second.cls)) {
@@ -247,16 +253,16 @@ void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
                 parse_error(*qore_class_private::get(*i.second.cls)->loc,
                     "class '%s' has already been defined in namespace '%s'", i.first, ns.name.c_str());
             }
-            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars, !ns_data);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, i.second.vars, !ns_data);
         } else if (find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "class '%s' is already pending in namespace " \
                 "'%s'", i.first, ns.name.c_str());
-            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars, !ns_data);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, i.second.vars, !ns_data);
         } else if (ns.nsl.find(i.first)) {
             parse_error(*qore_class_private::get(*i.second.cls)->loc, "cannot add class '%s' to existing " \
                 "namespace '%s' because a subnamespace has already been defined with this name", i.first,
                 ns.name.c_str());
-            qore_class_private::derefClass(*i.second.cls, !ns_const, !ns_vars, !ns_data);
+            qore_class_private::derefClass(*i.second.cls, !ns_const, i.second.vars, !ns_data);
         } else {
             printd(5, "QoreClassList::assimilate() this: %p adding: %p '%s::%s'\n", this, i.second.cls,
                 ns.name.c_str(), i.second.cls->getName());
@@ -299,27 +305,23 @@ void QoreClassList::clearConstants(ExceptionSink* xsink) {
 
 // clears static class vars
 void QoreClassList::clear(ExceptionSink* xsink) {
-    assert(!ns_vars);
     ns_vars = true;
     for (auto& i : hm) {
-        qore_class_private::get(*i.second.cls)->clear(xsink);
+        if (i.second.vars) {
+            i.second.vars = false;
+            qore_class_private::get(*i.second.cls)->clear(xsink);
+        }
     }
 }
 
-void QoreClassList::deleteClassData(bool deref_vars, const QoreProgram* pgm, ExceptionSink* xsink) {
-    if (deref_vars) {
-        if (!ns_vars) {
-            ns_vars = true;
-        } else {
-            deref_vars = false;
-        }
-    } else {
-        assert(ns_vars);
-    }
+void QoreClassList::deleteClassData(const QoreProgram* pgm, ExceptionSink* xsink) {
+    ns_vars = true;
     // the reference to the static variables of each class is released only once
     bool deref_data = !ns_data;
     ns_data = true;
     for (auto& i : hm) {
+        bool deref_vars = i.second.vars;
+        i.second.vars = false;
         qore_class_private::get(*i.second.cls)->deleteClassData(deref_vars, deref_data, pgm, xsink);
     }
 }
