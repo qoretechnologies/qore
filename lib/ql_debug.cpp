@@ -4131,7 +4131,9 @@ public:
         mixedFamilies(c, dns);
         addressesFoundByCheck(c, dns);
         flappingRepeat(c, dns);
+        repeatOwnFailure(c, dns);
         singleLabel(c, dns);
+        probeCnameOnly(c, dns);
         destroyDuringConfirmation(c, dns);
         destroyDuringProbeAndRepeat(c, dns);
         restartDuringConfirmation(c, dns);
@@ -4166,6 +4168,8 @@ private:
         std::vector<std::string> addrs;
         //! set to answer the query only after the A query of the same name has been answered
         bool after_a = false;
+        //! if not empty, the answer is a CNAME record with this name (and the addresses, if any)
+        std::string cname;
     };
 
     class DnsServer {
@@ -4234,9 +4238,31 @@ private:
             r[2] = static_cast<char>((static_cast<unsigned char>(q.raw[2]) & 0x79) | 0x80);
             r[3] = static_cast<char>(0x80 | a.rcode);
             r[6] = 0;
-            r[7] = static_cast<char>(a.addrs.size());
+            r[7] = static_cast<char>(a.addrs.size() + (a.cname.empty() ? 0 : 1));
             for (int i = 8; i < 12; ++i) {
                 r[i] = 0;
+            }
+            if (!a.cname.empty()) {
+                // the name of the question, CNAME, class IN, a TTL of 60 seconds and the canonical name
+                std::string target;
+                size_t start = 0;
+                while (start <= a.cname.size()) {
+                    size_t dot = a.cname.find('.', start);
+                    std::string label = a.cname.substr(start, dot == std::string::npos ? std::string::npos
+                        : dot - start);
+                    if (!label.empty()) {
+                        target += static_cast<char>(label.size());
+                        target += label;
+                    }
+                    if (dot == std::string::npos) {
+                        break;
+                    }
+                    start = dot + 1;
+                }
+                target += static_cast<char>(0);
+                r += std::string("\xc0\x0c\x00\x05\x00\x01\x00\x00\x00\x3c\x00", 11);
+                r += static_cast<char>(target.size());
+                r += target;
             }
             for (const std::string& addr : a.addrs) {
                 // the name of the question, the type, class IN, a TTL of 60 seconds and the address
@@ -4248,6 +4274,15 @@ private:
                 r += addr;
             }
             sendto(fd, r.data(), r.size(), 0, reinterpret_cast<const struct sockaddr*>(&q.from), q.fromlen);
+        }
+
+        //! Reads and forgets the queries that have arrived, such as those of a lookup destroyed before they were read,
+        //! and the record of the queries received
+        DLLLOCAL void drain() {
+            char buf[512];
+            while (recv(fd, buf, sizeof(buf), MSG_DONTWAIT) >= 0) {
+            }
+            queries.clear();
         }
 
         DLLLOCAL int count(const std::string& query) const {
@@ -4399,7 +4434,9 @@ private:
 
     //! A name that does not exist is a definite answer; with no failed query, no other query is made
     static void definiteWithoutFailure(UnitTestCounters& c, DnsServer& dns) {
-        dns.queries.clear();
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
+        dns.drain();
         ExceptionSink xsink;
         {
             QoreCaresAddrInfoResolver r("nx.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
@@ -4413,7 +4450,9 @@ private:
 
     //! A SERVFAIL answer for A and a NODATA answer for AAAA, given last, is a failure that might not happen again
     static void mixedFamilies(UnitTestCounters& c, DnsServer& dns) {
-        dns.queries.clear();
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
+        dns.drain();
         ExceptionSink xsink;
         {
             QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
@@ -4432,6 +4471,8 @@ private:
 
     //! A check that finds an address starts the lookup again: its addresses are in the order that c-ares gives them
     static void addressesFoundByCheck(UnitTestCounters& c, DnsServer& dns) {
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
         static const std::string v4("\x7f\x00\x00\x01", 4);
         // a unique local address (fd00::/8), which RFC 6724 orders by the routes of the host: after or before the
         // IPv4 address, as c-ares sorts the answer of a lookup
@@ -4450,7 +4491,7 @@ private:
         }
         // the first lookup fails for A, and AAAA is not found (an NXDOMAIN answer without an SOA record, which the
         // query cache does not keep); the checks find both addresses
-        dns.queries.clear();
+        dns.drain();
         std::string found;
         {
             QoreCaresAddrInfoResolver r("flip.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
@@ -4503,6 +4544,8 @@ private:
         A failed, which might not happen again
     */
     static void flappingRepeat(UnitTestCounters& c, DnsServer& dns) {
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
         static const std::string v6("\xfd\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
         // without a query cache, which would answer the lookup started again with the address of the check
         QoreDbgCaresQueryOptions opts;
@@ -4510,7 +4553,7 @@ private:
         opts.timeout_ms = 30000;
         opts.query_cache = false;
         QueryOptionsHelper query_options(opts);
-        dns.queries.clear();
+        dns.drain();
         ExceptionSink xsink;
         bool repeated = false;
         {
@@ -4543,11 +4586,100 @@ private:
         }
     }
 
+    //! A lookup started again does not hide its own temporary failure behind a definite status
+    /** A fails, then has an address (which makes the lookup start again), then fails again, and AAAA is never found:
+        the lookup started again fails with ENOTFOUND, as the answer for AAAA comes last, though its query for A
+        failed
+    */
+    static void repeatOwnFailure(UnitTestCounters& c, DnsServer& dns) {
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
+        static const std::string v4("\x7f\x00\x00\x01", 4);
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.query_cache = false;
+        QueryOptionsHelper query_options(opts);
+        ExceptionSink xsink;
+        bool repeated = false;
+        {
+            QoreCaresAddrInfoResolver r("flap2.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            int a_queries = 0;
+            drive(r, dns, [&a_queries] (const Query& q) {
+                if (q.type == TypeA) {
+                    if (++a_queries == 2) {
+                        Answer a;
+                        a.addrs.push_back(v4);
+                        return a;
+                    }
+                    return rcode(ServFail);
+                }
+                Answer a = rcode(NxDomain);
+                a.after_a = true;
+                return a;
+            }, [&r, &repeated] () {
+                if (r.running_check == QoreCaresAddrInfoResolver::Check::Repeat) {
+                    repeated = true;
+                }
+                return false;
+            }, xsink);
+        }
+        UT_ASSERT(c, repeated, "c-ares repeat: the lookup was started again");
+        std::string status = statusOf(xsink);
+        UT_ASSERT(c, !status.empty() && status != "ENOTFOUND" && status != "ENODATA",
+            "c-ares repeat: the failure of the lookup started again is not definite");
+        if (status.empty() || status == "ENOTFOUND" || status == "ENODATA") {
+            printf("  got '%s'; queries:", status.c_str());
+            for (const std::string& q : dns.queries) {
+                printf(" %s", q.c_str());
+            }
+            printf("\n");
+        }
+    }
+
+    //! A query for a single-label name itself that is answered with a CNAME record only finds no address
+    /** An answer with records (ARES_SUCCESS) was taken for an address, and the lookup was started again
+    */
+    static void probeCnameOnly(UnitTestCounters& c, DnsServer& dns) {
+        dns.drain();
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.domains_set = true;
+        opts.domains.push_back("qore-check-domain");
+        opts.ndots = 0;
+        QueryOptionsHelper query_options(opts);
+        ExceptionSink xsink;
+        bool repeated = false;
+        {
+            QoreCaresAddrInfoResolver r("single", nullptr, AF_INET, SOCK_STREAM, 0);
+            int bare_queries = 0;
+            drive(r, dns, [&bare_queries] (const Query& q) {
+                if (q.name == "single" && q.type == TypeA && ++bare_queries > 1) {
+                    // the query for the name itself: an alias of a name that has no address
+                    Answer a;
+                    a.cname = "alias.qore-check-domain";
+                    return a;
+                }
+                return rcode(q.name == "single" ? ServFail : NxDomain);
+            }, [&r, &repeated] () {
+                if (r.running_check == QoreCaresAddrInfoResolver::Check::Repeat) {
+                    repeated = true;
+                }
+                return false;
+            }, xsink);
+        }
+        UT_ASSERT(c, !repeated, "c-ares probe: a CNAME record alone is not an address");
+        UT_ASSERT(c, statusOf(xsink) == "ENOTFOUND", "c-ares probe: the name is not found");
+    }
+
     //! A SERVFAIL or REFUSED answer for a single-label name itself is reported, though a search domain followed
     /** systemd-resolved, for example, answers a single-label name with SERVFAIL or REFUSED by policy, and c-ares then
         tries the search domains (c-ares issue #852)
     */
     static void singleLabel(UnitTestCounters& c, DnsServer& dns) {
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
         // the name itself is asked for first (ndots 0), then with the search domain
         QoreDbgCaresQueryOptions opts;
         opts.tries = 1;
@@ -4560,7 +4692,7 @@ private:
         // that the lookup asked for, so an A record of the name does not hide the failure for AAAA
         {
             static const std::string v4("\x0a\x01\x02\x03", 4);
-            dns.queries.clear();
+            dns.drain();
             ExceptionSink xsink;
             {
                 QoreCaresAddrInfoResolver r("single", nullptr, AF_INET6, SOCK_STREAM, 0, AI_V4MAPPED);
@@ -4578,6 +4710,7 @@ private:
             }
             std::string status = statusOf(xsink);
             UT_ASSERT(c, status == "ESERVFAIL", "c-ares check: the failure for AAAA of a single-label name is reported");
+            UT_ASSERT_EQ(c, 0, dns.count("single/1"), "c-ares check: an IPv6 lookup asks for no A record");
             if (status != "ESERVFAIL") {
                 printf("  AF_INET6|AI_V4MAPPED: got %s; queries:", status.c_str());
                 for (const std::string& q : dns.queries) {
@@ -4588,7 +4721,7 @@ private:
         }
         for (int family : {AF_INET, AF_UNSPEC}) {
             for (int code : {ServFail, Refused}) {
-                dns.queries.clear();
+                dns.drain();
                 ExceptionSink xsink;
                 {
                     QoreCaresAddrInfoResolver r("single", nullptr, family, SOCK_STREAM, 0);
@@ -4608,7 +4741,7 @@ private:
                 }
             }
             // a failure that does not happen again leaves the definite answer (below)
-            dns.queries.clear();
+            dns.drain();
             ExceptionSink xsink;
             {
                 QoreCaresAddrInfoResolver r("single", nullptr, family, SOCK_STREAM, 0);
@@ -4652,7 +4785,9 @@ private:
 
     //! A lookup destroyed while the lookups of each family run ends them
     static void destroyDuringConfirmation(UnitTestCounters& c, DnsServer& dns) {
-        dns.queries.clear();
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
+        dns.drain();
         ExceptionSink xsink;
         {
             QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
@@ -4664,6 +4799,8 @@ private:
 
     //! A lookup destroyed while it asks for a single-label name itself, or while it is started again, ends at once
     static void destroyDuringProbeAndRepeat(UnitTestCounters& c, DnsServer& dns) {
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
         {
             QoreDbgCaresQueryOptions opts;
             opts.tries = 1;
@@ -4703,7 +4840,9 @@ private:
 
     //! A lookup started again while the lookups of each family run drops them and gives the result of the new one
     static void restartDuringConfirmation(UnitTestCounters& c, DnsServer& dns) {
-        dns.queries.clear();
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
+        dns.drain();
         ExceptionSink xsink;
         {
             QoreCaresAddrInfoResolver r("mixed.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
@@ -4722,12 +4861,14 @@ private:
 
     //! The lookups of each family that time out make the failure a timeout
     static void timeoutDuringConfirmation(UnitTestCounters& c, DnsServer& dns) {
+        // a query of an earlier case that arrives late is not counted for this one
+        dns.drain();
         // the queries of the checks are not answered; a timeout long enough for the lookup itself to be answered
         QoreDbgCaresQueryOptions opts;
         opts.tries = 1;
         opts.timeout_ms = 500;
         QueryOptionsHelper query_options(opts);
-        dns.queries.clear();
+        dns.drain();
         ExceptionSink xsink;
         bool confirmed = false;
         {

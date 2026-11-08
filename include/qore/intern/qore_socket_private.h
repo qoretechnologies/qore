@@ -716,7 +716,8 @@ private:
     //! Starts the lookup again once, after a check found that the name has addresses after all
     /** The addresses are those of a lookup, in the order that c-ares gives them (RFC 6724), not those of the checks;
         if it fails with a definite status after the check saw a temporary failure, it fails with that failure (see
-        repeat_failure)
+        repeat_failure); a definite failure during which one of its own queries failed is checked again, and if that
+        check finds an address again, the lookup fails with the check's temporary status, or ESERVFAIL
     */
     DLLLOCAL void startRepeat();
     //! Records the result of a lookup or query of a check

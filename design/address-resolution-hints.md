@@ -75,7 +75,12 @@ as a lookup takes the environment lock. The checks are:
 - **Repeat**: a check that finds an address (a family with addresses, or a probe with records) starts the lookup
   again once, and its result is the answer, so that the addresses are in the order that c-ares sorts them (RFC 6724).
   If the lookup started again fails with a definite status after the check saw a temporary failure, the lookup fails
-  with that failure: a definite failure is never reported after a temporary one was seen.
+  with that failure. A definite failure of the lookup started again during which one of its own queries failed is
+  checked like the first one (Confirm or Probe), but not started again: if that check finds an address again, the
+  answers keep changing, and the lookup fails with the check's temporary status, or `ESERVFAIL` if it saw none (c-ares
+  does not say how the query failed). A definite failure is never reported after a temporary one was seen.
+- A probe answer with records counts as an address only if one is of the type asked for: a `CNAME` record alone is not
+  one.
 
 A lookup started again after c-ares lost its query (`restart()`) drops a running check. The unit test
 `QoreCaresCheckTest` (`lib/ql_debug.cpp`, run by `asyncio_unit_tests.qtest`) drives lookups against a DNS server that
