@@ -1511,6 +1511,61 @@
       the AST interpreter
     - the IR execution mode runs <tt>i += v</tt> on an \c int local with an \c auto local \c v as fast as with an
       \c int local again
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, an operator, a container access or an
+      iteration given a reference that arrives as a value (ex: an element <tt>h.r</tt> holding <tt>\\x</tt>) now
+      takes the reference as it is, as with the AST interpreter, instead of reading the referenced lvalue (ex:
+      <tt>NOTHING + h.r</tt> and <tt>h.r.a</tt> gave the referenced value or its member, <tt>foreach</tt> and
+      \c select iterated the referenced list)
+    - the IR, JIT and tiered execution modes and AOT-compiled code keep the locals of an object type (a class,
+      \c object) out of the runtime stack as they keep other locals, with the same garbage-collection behavior: a loop
+      assigning an object to such a local runs up to 1.4 times faster
+    - a method call whose argument assigns the variable holding the receiver (ex: <tt>o.m(o = new T())</tt>,
+      <tt>o.m(remove o)</tt>) could crash the program with every execution mode, and a call whose argument assigns the
+      variable read for an earlier argument (ex: <tt>f(t = new T("a"), t = new T("b"))</tt>, <tt>f(t, t = x)</tt>)
+      could crash the program in the JIT and tiered execution modes and in AOT-compiled code; the call now runs with
+      the values read before the assignment, which live until the call returns
+    - with the AST interpreter, a call through a variable whose argument assigns the variable another value (ex:
+      <tt>c(c = NOTHING)</tt>, <tt>c(c = other)</tt>), and the \c [] and \c {} operators on a variable that the index
+      or key expression assigns or removes (ex: <tt>l[(l = x).size() - 1]</tt>, <tt>h{(h = x).firstKey()}</tt>,
+      <tt>l[0..(l = x).size()]</tt>), could crash the program; the call now runs the closure or call reference that
+      the variable held, and the operators read the list or hash that the variable held, as in every other execution
+      mode
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, <tt>map $1.key, l</tt> gave \c NOTHING for
+      each object in the list instead of its member, and \c map, \c select and \c foldl over an object that is not
+      an iterator gave a list of one value instead of the value, as the AST interpreter gives it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, when an exception left an expression, the
+      objects created for it were destroyed in another order than with the AST interpreter (ex:
+      <tt>f(new T("a"), new T("b"), thr())</tt> destroyed \c b before \c a); the arguments evaluated are now released
+      first argument first, the innermost call's first, and the objects that the statement holds (such as the object
+      of a method call) last, as with the AST interpreter
+    - in AOT-compiled code, a function called directly from compiled code left an entry on the runtime stack for each
+      local variable of its own that is visible to the runtime at each call, so a loop of such calls in top-level code
+      took time quadratic in the number of iterations, and memory grew with it
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the operands of a
+      comparison, \c instanceof, \c exists or a slice, and the elements of a list that is the source of \c map,
+      \c select or the hash \c map operators, were destroyed when the statement ended instead of when the operator
+      had run (ex: <tt>f(new T("a") == new T("b"), g())</tt> destroyed the objects after \c g() ran); they are now
+      destroyed when the operator has run, as with the AST interpreter; so are now the elements of a list or hash
+      literal once the container holds them, the source of \c foldl and \c foldr and a single value that is the
+      source of a functional operator, and, in the IR execution mode, the last element of a \c map or \c select over
+      an iterator, and an exception that leaves a fused pipeline of functional operators for a \c catch block
+      releases the pipeline's source before the block runs
+    - in the IR execution mode, an exception raised by a destructor while an exception left an expression (ex: when
+      the arguments of a call were released) was lost, and a debug build aborted; it is now added to the exception
+      raised, as with the AST interpreter
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
+      call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
+      destroyed first argument first in calls of closures, of static methods and from top-level code, and of
+      constructors in the IR execution mode), also when an argument is given by an expression such as
+      <tt>c ? new T() : new T()</tt>
+    - in AOT-compiled code, an object that a local variable held when it was assigned another value in a loop was
+      destroyed only at the next assignment or when the function returned instead of at the assignment
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, assigning an element of a local hash or
+      list whose key or index expression assigns the variable (ex: <tt>h{(h = x).firstKey()} = v</tt>) stored into
+      the container the variable held before, and could crash the program in the IR execution mode; it now stores into
+      the container assigned, as with the AST interpreter
+    - the IR, JIT and tiered execution modes and AOT-compiled code mark an object held by a local of no type
+      (\c auto) as reachable from the stack, as they mark one held by a local of an object type
     - in the IR execution mode and wherever the JIT and tiered execution modes run a function with the IR
       interpreter, the first call of a large function in a thread with a pending cancellation (ex: in code that
       caught a \c THREAD-CANCELLED exception) raised the exception before the function ran; it is now raised at the

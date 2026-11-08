@@ -1,0 +1,376 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class OperatorOperandReleaseTest
+
+#! Regression test: the temporaries of an operator's operands are released once the operator has run
+/** The AST interpreter evaluates the operands of an operator into holders that the operator releases when it returns,
+    so <tt>f(new T("a") == new T("b"), g())</tt> destroys b and a before g() runs; a functional operator (map,
+    select, map-select, map with a hash result, foldl, foldr) releases its source when it returns, and a list or hash
+    literal holds the only references to its elements.  The compiled modes released these temporaries when the
+    statement ended.  The lowering now releases the temporaries of the operands of comparisons, \c instanceof,
+    \c exists, \c elements and slices, the source of a functional operator and the elements of a literal once they
+    have been used (ReleaseOwnedTemp); the value of a functional operator that can be its source's (over a single
+    value) gets a reference of its own first.  A destructor that throws when a temporary is released adds its
+    exception to the one raised, and an exception raised after a release, and in a fused pipeline, releases the rest
+    before the handler runs.  The script runs the operators in call arguments, in a loop and as branch conditions,
+    twice, in every execution mode, on the IR tier of tiered execution and as a qcc executable (see
+    ExecModeOutputTest).
+*/
+class OperatorOperandReleaseTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+class U {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+}
+auto sub one(string n) { return new T(n); }
+list<auto> sub mk(string p) { return (new T(p + "0"), new T(p + "1"), new T(p + "2")); }
+auto sub p(auto a) { printf("p\n"); return a; }
+sub f(auto a, auto b, auto c) { printf("f\n"); }
+# the operands of an operator are released when the operator has run, before the next argument is evaluated
+sub operators() {
+    f(new T("a") == new T("b"), p(1), 1);
+    printf("--\n");
+    f(new T("c") != new T("d"), p(1), 1);
+    printf("--\n");
+    f(new T("e") === new T("f"), p(1), 1);
+    printf("--\n");
+    f(new T("g") instanceof T, p(1), 1);
+    printf("--\n");
+    f(exists new T("h"), p(1), 1);
+    printf("--\n");
+    f(new T("i") == NOTHING, p(1), 1);
+    printf("--\n");
+    f(mk("s")[1..1], p(1), 1);
+    printf("--\n");
+    auto o = new T("j");
+    f(o == new T("k"), p(1), 1);
+    printf("-- %s\n", o.n);
+}
+# the source of a functional operator is released when the operator has run
+sub functional() {
+    f((map $1.n, mk("q")), p(1), 1);
+    printf("--\n");
+    f((map $1.n + "!", mk("r")), p(1), 1);
+    printf("--\n");
+    f((select mk("t"), $1.n == "t0").size(), p(1), 1);
+    printf("--\n");
+    f((map {$1.n: True}, mk("v")).size(), p(1), 1);
+    printf("--\n");
+    # a single value: the value of the operator can be the source, which stays valid (an object without a destructor:
+    # the release of a single value that the operator gives is not the subject here)
+    printf("%s\n", (map $1, new U("w")).n);
+    printf("%s\n", (select new U("x"), True).n);
+    printf("%s\n", (foldl $1 + $2, new U("y")).n);
+    printf("%s\n", (map $1, mk("z")[1..1])[0].n);
+    printf("--\n");
+    # a list literal, the operand of elements and a single value from a call
+    f((map $1.n, (one("la"), one("lb"))), p(1), 1);
+    printf("--\n");
+    f(elements mk("el"), p(1), 1);
+    printf("--\n");
+    printf("%s\n", (map $1.n, one("sv")));
+    printf("--\n");
+}
+class X {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); throw "DTOR", n; }
+}
+list<auto> sub mkx(string p) { return (new X(p + "0"), new X(p + "1")); }
+auto sub thr() { throw "THR"; }
+sub show(hash<ExceptionInfo> ex) {
+    string str = sprintf("caught %s %y", ex.err, ex.desc);
+    for (*hash<ExceptionInfo> e = ex.next; e; e = e.next) {
+        str += sprintf(", %s %y", e.err, e.desc);
+    }
+    printf("%s\n", str);
+}
+# a destructor that throws when an operand is released, and an exception raised after the release
+sub exceptions() {
+    try { f(mkx("x")[1..1], p(1), 1); printf("after\n"); } catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { f(new X("y") == NOTHING, p(1), 1); printf("after\n"); } catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { f(new X("z"), thr(), 1); } catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { f(new T("a") == new T("b"), thr(), 1); } catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { f((map $1.n, mk("c")), thr(), 1); } catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { f(mk("d")[1..1], thr(), 1); } catch (hash<ExceptionInfo> ex) { show(ex); }
+    try { f(1, (map $1.n, (select mk("g"), $1.n == "g2" ? thr() : True)), 1); } catch (hash<ExceptionInfo> ex) {
+        show(ex);
+    }
+    printf("--\n");
+}
+# in a loop, and when the value of the operator is a branch condition
+sub loops() {
+    for (int i = 0; i < 2; ++i) {
+        if (new T("l" + i) == new T("m" + i)) {
+            printf("never\n");
+        } else {
+            p(i);
+        }
+    }
+    printf("--\n");
+}
+for (int i = 0; i < 2; ++i) {
+    operators();
+    functional();
+    exceptions();
+    loops();
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor b",
+            "dtor a",
+            "p",
+            "f",
+            "--",
+            "dtor d",
+            "dtor c",
+            "p",
+            "f",
+            "--",
+            "dtor f",
+            "dtor e",
+            "p",
+            "f",
+            "--",
+            "dtor g",
+            "p",
+            "f",
+            "--",
+            "dtor h",
+            "p",
+            "f",
+            "--",
+            "dtor i",
+            "p",
+            "f",
+            "--",
+            "dtor s0",
+            "dtor s2",
+            "p",
+            "f",
+            "dtor s1",
+            "--",
+            "dtor k",
+            "p",
+            "f",
+            "-- j",
+            "dtor j",
+            "dtor q0",
+            "dtor q1",
+            "dtor q2",
+            "p",
+            "f",
+            "--",
+            "dtor r0",
+            "dtor r1",
+            "dtor r2",
+            "p",
+            "f",
+            "--",
+            "dtor t1",
+            "dtor t2",
+            "p",
+            "f",
+            "dtor t0",
+            "--",
+            "dtor v0",
+            "dtor v1",
+            "dtor v2",
+            "p",
+            "f",
+            "--",
+            "w",
+            "x",
+            "y",
+            "dtor z0",
+            "dtor z2",
+            "z1",
+            "dtor z1",
+            "--",
+            "dtor la",
+            "dtor lb",
+            "p",
+            "f",
+            "--",
+            "dtor el0",
+            "dtor el1",
+            "dtor el2",
+            "p",
+            "f",
+            "--",
+            "dtor sv",
+            "sv",
+            "--",
+            "dtor x0",
+            "dtor x1",
+            "caught DTOR \"x0\", DTOR \"x1\"",
+            "dtor y",
+            "caught DTOR \"y\"",
+            "dtor z",
+            "caught THR null, DTOR \"z\"",
+            "dtor b",
+            "dtor a",
+            "caught THR null",
+            "dtor c0",
+            "dtor c1",
+            "dtor c2",
+            "caught THR null",
+            "dtor d0",
+            "dtor d2",
+            "dtor d1",
+            "caught THR null",
+            "dtor g0",
+            "dtor g1",
+            "dtor g2",
+            "caught THR null",
+            "--",
+            "dtor m0",
+            "dtor l0",
+            "p",
+            "dtor m1",
+            "dtor l1",
+            "p",
+            "--",
+            "dtor b",
+            "dtor a",
+            "p",
+            "f",
+            "--",
+            "dtor d",
+            "dtor c",
+            "p",
+            "f",
+            "--",
+            "dtor f",
+            "dtor e",
+            "p",
+            "f",
+            "--",
+            "dtor g",
+            "p",
+            "f",
+            "--",
+            "dtor h",
+            "p",
+            "f",
+            "--",
+            "dtor i",
+            "p",
+            "f",
+            "--",
+            "dtor s0",
+            "dtor s2",
+            "p",
+            "f",
+            "dtor s1",
+            "--",
+            "dtor k",
+            "p",
+            "f",
+            "-- j",
+            "dtor j",
+            "dtor q0",
+            "dtor q1",
+            "dtor q2",
+            "p",
+            "f",
+            "--",
+            "dtor r0",
+            "dtor r1",
+            "dtor r2",
+            "p",
+            "f",
+            "--",
+            "dtor t1",
+            "dtor t2",
+            "p",
+            "f",
+            "dtor t0",
+            "--",
+            "dtor v0",
+            "dtor v1",
+            "dtor v2",
+            "p",
+            "f",
+            "--",
+            "w",
+            "x",
+            "y",
+            "dtor z0",
+            "dtor z2",
+            "z1",
+            "dtor z1",
+            "--",
+            "dtor la",
+            "dtor lb",
+            "p",
+            "f",
+            "--",
+            "dtor el0",
+            "dtor el1",
+            "dtor el2",
+            "p",
+            "f",
+            "--",
+            "dtor sv",
+            "sv",
+            "--",
+            "dtor x0",
+            "dtor x1",
+            "caught DTOR \"x0\", DTOR \"x1\"",
+            "dtor y",
+            "caught DTOR \"y\"",
+            "dtor z",
+            "caught THR null, DTOR \"z\"",
+            "dtor b",
+            "dtor a",
+            "caught THR null",
+            "dtor c0",
+            "dtor c1",
+            "dtor c2",
+            "caught THR null",
+            "dtor d0",
+            "dtor d2",
+            "dtor d1",
+            "caught THR null",
+            "dtor g0",
+            "dtor g1",
+            "dtor g2",
+            "caught THR null",
+            "--",
+            "dtor m0",
+            "dtor l0",
+            "p",
+            "dtor m1",
+            "dtor l1",
+            "p",
+            "--",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("OperatorOperandRelease", Script, (map $1 + "\n", Expected).join(""),
+            "releases the temporaries of the operands of an operator once it has run, as the AST interpreter does") {
+    }
+}

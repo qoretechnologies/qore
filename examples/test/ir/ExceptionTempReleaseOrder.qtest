@@ -1,0 +1,296 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class ExceptionTempReleaseOrderTest
+
+#! Regression test: an exception raised while an expression is evaluated releases its temporaries as the AST interpreter
+/** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of a call (and the
+    elements of a list or a hash) evaluated before the exception are released with their argument list, first argument
+    first, the innermost call's first, and an operand held by an operator as it is unwound; the receivers that the
+    statement holds (the object of a method call, the container of [] and {}, the value of a cast) are released when
+    the statement ends, last held first.  The compiled modes released the statement's temporaries last registered first:
+    <tt>f(new T("a"), new T("b"), thr())</tt> destroyed b before a.  They are now released in the AST interpreter's
+    order (qore_ir_order_exception_release()).  The script raises exceptions in the arguments of function and method
+    calls, constructor calls, call references, list and hash literals and operands of operators, nested, with
+    receivers and conditional arguments, caught in the function and leaving it, twice, in every execution mode, on the
+    IR tier of tiered execution and as a qcc executable (see ExecModeOutputTest).
+*/
+class ExceptionTempReleaseOrderTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+    T m(auto a, auto b, auto c) { return new T(n + "1"); }
+}
+class U {
+    constructor(auto a, auto b, auto c) {}
+}
+auto sub thr() { throw "X"; }
+sub f(auto a, auto b, auto c) {}
+sub fthr(auto a, auto b, auto c) { throw "Y"; }
+auto sub g(auto a, auto b, auto c) { return a; }
+# an exception raised by an argument releases the arguments evaluated, first argument first, the innermost call
+# first, and then the receivers that the statement holds, last held first
+sub caught(int n) {
+    try { f(new T("a"), new T("b"), thr()); } catch () { printf("caught 1\n"); }
+    try { f(new T("a"), g(new T("b"), new T("c"), thr()), new T("d")); } catch () { printf("caught 2\n"); }
+    try { new T("r").m(new T("b"), new T("c"), thr()); } catch () { printf("caught 3\n"); }
+    try { new U(new T("a"), new T("b"), thr()); } catch () { printf("caught 4\n"); }
+    try { list<auto> l = (new T("a"), new T("b"), thr()); } catch () { printf("caught 5\n"); }
+    try { hash<auto> h = {"a": new T("a"), "b": new T("b"), "c": thr()}; } catch () { printf("caught 6\n"); }
+    try { f(new T("a"), (new T("b"), new T("c"), thr()), new T("d")); } catch () { printf("caught 7\n"); }
+    try { f(new T("a"), g(new T("b"), new T("c"), new T("x")), thr()); } catch () { printf("caught 8\n"); }
+    try { f(new T("a"), n ? new T("b") : new T("c"), thr()); } catch () { printf("caught 9\n"); }
+    code c = \f();
+    try { c(new T("a"), new T("b"), thr()); } catch () { printf("caught 10\n"); }
+    try { f(new T("a"), new T("x").n, thr()); } catch () { printf("caught 11\n"); }
+    try { f(new T("a"), new T("x").m(1, 2, 3).n, thr()); } catch () { printf("caught 12\n"); }
+    try { fthr(new T("a"), new T("b"), new T("c")); } catch () { printf("caught 13\n"); }
+    try { f(new T("a"), new T("b"), n ? thr() : 1); } catch () { printf("caught 14\n"); }
+    try { f(new T("a"), new T("b"), new T("c").m(new T("d"), new T("e"), thr())); } catch () { printf("caught 15\n"); }
+    try { f(new T("a"), (new T("b"), new T("c"))[thr()], 1); } catch () { printf("caught 16\n"); }
+    try { f(new T("a"), {"b": new T("b")}{thr()}, 1); } catch () { printf("caught 17\n"); }
+    try { f(new T("a"), new T("b") ?? thr(), thr()); } catch () { printf("caught 18\n"); }
+    try { f(new T("a"), cast<T>(new T("b")).m(new T("c"), thr(), 1), 1); } catch () { printf("caught 19\n"); }
+    try { f(new T("a"), new T("b") + thr(), 1); } catch () { printf("caught 20\n"); }
+}
+# the same exceptions leaving the function
+sub uncaught(int n, int which) {
+    switch (which) {
+        case 1: f(new T("a"), new T("b"), thr()); break;
+        case 2: f(new T("a"), g(new T("b"), new T("c"), thr()), new T("d")); break;
+        case 3: new T("r").m(new T("b"), new T("c"), thr()); break;
+        case 4: f(new T("a"), new T("x").n, thr()); break;
+        case 5: f(new T("a"), new T("b"), new T("c").m(new T("d"), new T("e"), thr())); break;
+        case 6: list<auto> l = (new T("a"), new T("b"), thr()); break;
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    caught(1);
+    for (int w = 1; w <= 6; ++w) {
+        try {
+            uncaught(1, w);
+        } catch () {
+            printf("uncaught %d\n", w);
+        }
+    }
+    printf("--\n");
+}
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor a",
+            "dtor b",
+            "caught 1",
+            "dtor b",
+            "dtor c",
+            "dtor a",
+            "caught 2",
+            "dtor b",
+            "dtor c",
+            "dtor r",
+            "caught 3",
+            "dtor a",
+            "dtor b",
+            "caught 4",
+            "dtor a",
+            "dtor b",
+            "caught 5",
+            "dtor a",
+            "dtor b",
+            "caught 6",
+            "dtor b",
+            "dtor c",
+            "dtor a",
+            "caught 7",
+            "dtor x",
+            "dtor c",
+            "dtor a",
+            "dtor b",
+            "caught 8",
+            "dtor a",
+            "dtor b",
+            "caught 9",
+            "dtor a",
+            "dtor b",
+            "caught 10",
+            "dtor a",
+            "dtor x",
+            "caught 11",
+            "dtor a",
+            "dtor x1",
+            "dtor x",
+            "caught 12",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "caught 13",
+            "dtor a",
+            "dtor b",
+            "caught 14",
+            "dtor d",
+            "dtor e",
+            "dtor a",
+            "dtor b",
+            "dtor c",
+            "caught 15",
+            "dtor a",
+            "dtor b",
+            "dtor c",
+            "caught 16",
+            "dtor a",
+            "dtor b",
+            "caught 17",
+            "dtor a",
+            "dtor b",
+            "caught 18",
+            "dtor c",
+            "dtor a",
+            "dtor b",
+            "caught 19",
+            "dtor b",
+            "dtor a",
+            "caught 20",
+            "dtor a",
+            "dtor b",
+            "uncaught 1",
+            "dtor b",
+            "dtor c",
+            "dtor a",
+            "uncaught 2",
+            "dtor b",
+            "dtor c",
+            "dtor r",
+            "uncaught 3",
+            "dtor a",
+            "dtor x",
+            "uncaught 4",
+            "dtor d",
+            "dtor e",
+            "dtor a",
+            "dtor b",
+            "dtor c",
+            "uncaught 5",
+            "dtor a",
+            "dtor b",
+            "uncaught 6",
+            "--",
+            "dtor a",
+            "dtor b",
+            "caught 1",
+            "dtor b",
+            "dtor c",
+            "dtor a",
+            "caught 2",
+            "dtor b",
+            "dtor c",
+            "dtor r",
+            "caught 3",
+            "dtor a",
+            "dtor b",
+            "caught 4",
+            "dtor a",
+            "dtor b",
+            "caught 5",
+            "dtor a",
+            "dtor b",
+            "caught 6",
+            "dtor b",
+            "dtor c",
+            "dtor a",
+            "caught 7",
+            "dtor x",
+            "dtor c",
+            "dtor a",
+            "dtor b",
+            "caught 8",
+            "dtor a",
+            "dtor b",
+            "caught 9",
+            "dtor a",
+            "dtor b",
+            "caught 10",
+            "dtor a",
+            "dtor x",
+            "caught 11",
+            "dtor a",
+            "dtor x1",
+            "dtor x",
+            "caught 12",
+            "dtor c",
+            "dtor b",
+            "dtor a",
+            "caught 13",
+            "dtor a",
+            "dtor b",
+            "caught 14",
+            "dtor d",
+            "dtor e",
+            "dtor a",
+            "dtor b",
+            "dtor c",
+            "caught 15",
+            "dtor a",
+            "dtor b",
+            "dtor c",
+            "caught 16",
+            "dtor a",
+            "dtor b",
+            "caught 17",
+            "dtor a",
+            "dtor b",
+            "caught 18",
+            "dtor c",
+            "dtor a",
+            "dtor b",
+            "caught 19",
+            "dtor b",
+            "dtor a",
+            "caught 20",
+            "dtor a",
+            "dtor b",
+            "uncaught 1",
+            "dtor b",
+            "dtor c",
+            "dtor a",
+            "uncaught 2",
+            "dtor b",
+            "dtor c",
+            "dtor r",
+            "uncaught 3",
+            "dtor a",
+            "dtor x",
+            "uncaught 4",
+            "dtor d",
+            "dtor e",
+            "dtor a",
+            "dtor b",
+            "dtor c",
+            "uncaught 5",
+            "dtor a",
+            "dtor b",
+            "uncaught 6",
+            "--",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("ExceptionTempReleaseOrder", Script, (map $1 + "\n", Expected).join(""),
+            "releases the temporaries of an expression that an exception leaves as the AST interpreter unwinds them") {
+    }
+}

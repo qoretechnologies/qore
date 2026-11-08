@@ -3675,9 +3675,45 @@ public:
     */
     std::unordered_set<const void*> reference_slot_locals;
 
+    //! Body locals whose type names a class that keep their value in IR storage, marked with a real reference
+    /** A local variable on the runtime stack marks the object it holds with a real reference
+        (check_lvalue_object_in_out()): the collector takes an object with real references to be reachable from a
+        stack and makes no collection decision when another reference to it is released.  IR storage (the slot of the
+        IR interpreter, the native cache) holds a plain reference, so an object in a recursive graph held only by IR
+        storage made the collector decide at every release of a reference to it (a loop pushing objects that refer to a
+        Queue to the Queue held by such a local ran 1.5 times the instructions).  The engines give the object held by
+        one of these locals a real reference of its own (QoreObject::realRef()), taken when the local is assigned the
+        object and released when it is assigned another value, when its scope ends and when the function is left, so
+        that the object has a real reference exactly while the local holds it, as for a variable on the runtime stack
+        (see qore_ir_real_slot_set()).  These locals are not in ir_only_locals, so that the IR optimizations keyed on
+        that set, which take an IR-only local's storage to be its value, leave them alone; the engines store them as
+        IR-only locals (see hasIRStorage()).  Parameters stay on the runtime stack.
+    */
+    std::unordered_set<const void*> real_reference_locals;
+
+    //! IR-only body locals of no type (auto, any, no type declared) whose object, when they hold one, has a real
+    //! reference from their IR storage
+    /** As for real_reference_locals, the object such a local holds is marked with a real reference while the local
+        holds it, so that releasing another reference to an object in a recursive graph that the local holds needs no
+        collection decision.  These locals stay in ir_only_locals, so the IR optimizations keyed on that set keep
+        applying to them: the value is checked at run time, and only an object is marked (a store releases the value
+        it replaces with its mark, as a release of the storage does; see qore_rt_object_slot_replace() and
+        qore_rt_element_local_replace_real()).  Every write to the storage of such a local goes through those helpers
+        (or IRLocalSlotCache::set()/release() in the IR interpreter); the writes that bypass the store of a value
+        (fused int updates, in-place string appends and list pushes, typed foreach) never replace an object: they apply
+        to int and string locals, and to a local holding a list.  Parameters are not marked.
+    */
+    std::unordered_set<const void*> real_reference_ir_only_locals;
+
+    //! Returns true if the object a local holds has a real reference from its IR storage (see real_reference_locals
+    //! and real_reference_ir_only_locals)
+    bool hasRealReferenceStorage(const void* key) const {
+        return real_reference_locals.count(key) || real_reference_ir_only_locals.count(key);
+    }
+
     //! Returns true if a local keeps its value in IR storage only and has none on the runtime stack
     bool hasIRStorage(const void* key) const {
-        return ir_only_locals.count(key) || reference_slot_locals.count(key);
+        return ir_only_locals.count(key) || reference_slot_locals.count(key) || real_reference_locals.count(key);
     }
 
     // Locals referenced by AST expression subtrees retained in otherwise
@@ -3779,7 +3815,8 @@ public:
     //! never accessed via thread-local stack).  When true, callers can skip
     //! instantiating/uninstantiating body locals on the thread-local stack.
     bool areAllBodyLocalsIROnly() const {
-        return !all_body_locals.empty() && (!ir_only_locals.empty() || !reference_slot_locals.empty())
+        return !all_body_locals.empty() && (!ir_only_locals.empty() || !reference_slot_locals.empty()
+                || !real_reference_locals.empty())
             && std::all_of(all_body_locals.begin(), all_body_locals.end(),
                 [this](const LocalVar* lv) {
                     return hasIRStorage(reinterpret_cast<const void*>(lv));
@@ -3821,6 +3858,12 @@ public:
     //! call arguments that the call consumes: their only use is a call in the block that defines them, so the value
     //! cannot be needed again (a later execution of the block recomputes it first)
     mutable std::vector<uint8_t> interpreter_consumed_call_args;
+    //! Non-zero for an incoming value of a Phi that is a temporary used by the Phi once (and otherwise only before it
+    //! in its own block): the Phi's slot takes its reference over; every Phi is a temporary that a call consumes
+    mutable std::vector<uint8_t> interpreter_phi_takes_incoming;
+    //! The class of each value for the order of the release of a statement's temporaries by an exception (see
+    //! qore_ir_build_exception_release_groups())
+    mutable std::vector<uint32_t> interpreter_exception_release_groups;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
@@ -3828,6 +3871,8 @@ public:
     //! Non-zero for the local slots of reference_slot_locals, whose slot can hold a reference that a store writes
     //! through
     mutable std::vector<uint8_t> interpreter_reference_slots;
+    //! Non-zero for the local slots of real_reference_locals, whose object has a real reference from the slot
+    mutable std::vector<uint8_t> interpreter_real_slots;
     //! The local of each local slot (null for a slot of no local), for the release of the locals at the exit
     mutable std::vector<const LocalVar*> interpreter_slot_locals;
     //! The place among the local slots of the iterator that each instruction creating the iterator of a foreach

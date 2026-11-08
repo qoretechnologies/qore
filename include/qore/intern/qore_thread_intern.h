@@ -1221,6 +1221,8 @@ DLLLOCAL void thread_push_frame_boundary();
 DLLLOCAL void thread_pop_frame_boundary();
 
 DLLLOCAL QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink);
+//! Returns the number of local variables on the current thread's runtime stack of the current Program, for tests
+DLLLOCAL int64 thread_get_local_var_count(ExceptionSink* xsink);
 // returns 0 = OK, 1 = no such variable, -1 exception setting variable
 DLLLOCAL int thread_set_local_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink);
 // returns 0 = OK, 1 = no such variable, -1 exception setting variable

@@ -37,11 +37,13 @@
 class QoreListNodeEvalOptionalRefHolder {
 public:
     //! initializes an empty object and saves the ExceptionSink object
-    DLLLOCAL QoreListNodeEvalOptionalRefHolder(ExceptionSink* n_xsink) : val(nullptr), xsink(n_xsink), needs_deref(false) {
+    DLLLOCAL QoreListNodeEvalOptionalRefHolder(ExceptionSink* n_xsink) : val(nullptr), xsink(n_xsink),
+            needs_deref(false), tmp_source(false) {
     }
 
     //! performs an optional evaluation of the list (sets the dereference flag)
-    DLLLOCAL QoreListNodeEvalOptionalRefHolder(const QoreListNode* exp, ExceptionSink* n_xsink) : xsink(n_xsink) {
+    DLLLOCAL QoreListNodeEvalOptionalRefHolder(const QoreListNode* exp, ExceptionSink* n_xsink) : xsink(n_xsink),
+            tmp_source(false) {
         evalIntern(exp);
     }
 
@@ -54,6 +56,7 @@ public:
     DLLLOCAL void discard() {
         discardIntern();
         needs_deref = false;
+        tmp_source = false;
         val = nullptr;
     }
 
@@ -73,6 +76,7 @@ public:
     DLLLOCAL void assign(bool n_needs_deref, QoreListNode* n_val) {
         discardIntern();
         needs_deref = n_needs_deref;
+        tmp_source = false;
         val = n_val;
     }
 
@@ -87,6 +91,12 @@ public:
         @return the list value, where the caller will own the reference count
     */
     DLLLOCAL QoreListNode* getReferencedValue() {
+        if (tmp_source) {
+            // the list is shared from now on, so the holder no longer edits it in place
+            tmp_source = false;
+            val->ref();
+            return val;
+        }
         if (needs_deref) {
             needs_deref = false;
         }
@@ -115,7 +125,7 @@ public:
         of the same expression see NOTHING entries.  Require `needs_deref` to confirm
         the holder owns its own reference before allowing destructive edits. */
     DLLLOCAL bool canEdit() const {
-        return !val || needs_deref;
+        return !val || needs_deref || tmp_source;
     }
 
     //! returns a pointer to the QoreListNode object being managed
@@ -139,6 +149,9 @@ private:
     QoreListNode* val;
     ExceptionSink* xsink;
     bool needs_deref;
+    //! true if val is the temporary list given to the holder (see evalIntern(QoreListNode*)): the caller owns its
+    //! reference and releases it, and the holder can take its values over and edit it in place
+    bool tmp_source;
 
     DLLLOCAL void discardIntern() {
         if (needs_deref && val) {
@@ -147,6 +160,7 @@ private:
     }
 
     DLLLOCAL void evalIntern(const QoreListNode* exp) {
+        tmp_source = false;
         if (exp) {
             val = exp->evalList(needs_deref, xsink);
             //printd(0, "QoreListNodeEvalOptionalRefHolder::evalIntern() this: %p exp: %p '%s' (%d) val: %p '%s' "
@@ -164,8 +178,10 @@ private:
         if (!val) {
             val = new QoreListNode(autoTypeInfo);
             needs_deref = true;
-        }
-        else if (!needs_deref || !val->is_unique()) {
+        } else if (tmp_source) {
+            // the temporary list given to the holder is edited in place
+            return;
+        } else if (!needs_deref || !val->is_unique()) {
             val = val->copy();
             needs_deref = true;
         }

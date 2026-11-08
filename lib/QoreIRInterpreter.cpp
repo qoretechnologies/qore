@@ -460,6 +460,75 @@ static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK
 static constinit QoreEnvFlag ir_trace_debug_env("QORE_IR_TRACE_DEBUG");
 static constinit QoreEnvFlag ir_trace_exceptions_env("QORE_IR_TRACE_EXCEPTIONS");
 
+//! The operand of an AST operator node built from an IR value that is a reference (as <tt>\\x</tt> creates)
+/** An operator of the AST interpreter evaluates its operand expressions and takes the values they give as they are:
+    an expression giving a reference (ex: an element h.r holding <tt>\\x</tt>) gives the reference itself, which the
+    operator does not read (ex: <tt>NOTHING + h.r</tt> is \c NOTHING, <tt>h.r + 1</tt> is \c 1).  An IR value is the
+    value of such an expression already, and a reference given to an operator node as its operand would be evaluated
+    by the node, which reads the referenced lvalue.  This node evaluates to the reference itself instead.
+*/
+class IRReferenceOperandNode : public ParseNode {
+public:
+    //! takes a new reference to the reference given
+    DLLLOCAL IRReferenceOperandNode(const QoreValue& ref) : ParseNode(get_runtime_location(), getNodeType()),
+            ref(ref.refSelf()) {
+        assert(ref.getType() == NT_REFERENCE);
+    }
+
+    DLLLOCAL virtual ~IRReferenceOperandNode() {
+        ref.discard(nullptr);
+    }
+
+    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+        str.concat("reference operand");
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
+        del = true;
+        return new QoreString("reference operand");
+    }
+
+    DLLLOCAL virtual const char* getTypeName() const {
+        return "reference operand";
+    }
+
+    //! the node type of these nodes, which no other node has
+    DLLLOCAL static qore_type_t getNodeType() {
+        static const qore_type_t type = get_next_type_id();
+        return type;
+    }
+
+protected:
+    QoreValue ref;
+
+    //! the reference itself, borrowed from the node
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        needs_deref = false;
+        return ref;
+    }
+
+    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+        assert(false);
+        return 0;
+    }
+
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return nullptr;
+    }
+};
+
+//! Returns the operand of an AST operator node for an IR value, with a reference of its own
+/** A reference is given to the node as an IRReferenceOperandNode, which evaluates to the reference itself, as the
+    operand expression gave it in the AST interpreter
+*/
+static QoreValue ir_operator_operand(const QoreValue& value) {
+    if (value.getType() == NT_REFERENCE) {
+        return new IRReferenceOperandNode(value);
+    }
+    return value.refSelf();
+}
+
 // Helper: evaluate a node and ensure the caller owns a reference to the result.
 // Some operator eval() implementations return with needs_deref=false (borrowed reference).
 // This function ensures we always return an owned reference.
@@ -995,6 +1064,47 @@ public:
         slot_owned_entries.clear();
     }
 
+    //! Orders the temp entries from the given position for their release by an exception, which drains them last first
+    /** Each temp scope (the entries between two sentinels) is ordered as the AST interpreter releases a statement's
+        temporaries when an exception leaves it (see qore_ir_order_exception_release())
+    */
+    void orderForException(size_t from, const std::vector<uint32_t>& groups) {
+        // the order is only changed in place, without allocation, once it is computed, so a failed allocation leaves
+        // the entries in the order of their registration, which releases them all the same
+        try {
+            orderForExceptionIntern(from, groups);
+        } catch (const std::bad_alloc&) {
+        }
+    }
+
+private:
+    void orderForExceptionIntern(size_t from, const std::vector<uint32_t>& groups) {
+        std::vector<size_t> order;
+        std::vector<uint32_t> ordered;
+        size_t end = entries.size();
+        while (end > from) {
+            size_t start = end;
+            while (start > from && entries[start - 1] < counts.size()) {
+                --start;
+            }
+            if (end - start > 1
+                    && qore_ir_order_exception_release(groups, entries.data() + start, end - start, order)) {
+                // the entries are drained last first: the first released is put last
+                ordered.clear();
+                for (size_t i = order.size(); i > 0; --i) {
+                    ordered.push_back(entries[start + order[i - 1]]);
+                }
+                std::copy(ordered.begin(), ordered.end(), entries.begin() + start);
+            }
+            // skip the sentinel ending the scope below
+            end = start ? start - 1 : 0;
+            if (start <= from) {
+                break;
+            }
+        }
+    }
+
+public:
     //! LIFO iteration for cleanup passes
     std::vector<uint32_t>::const_reverse_iterator rbegin() const {
         return entries.rbegin();
@@ -1053,7 +1163,51 @@ public:
         return slots[i];
     }
 
+    //! Releases the value stored in the given slot, which the caller then replaces
+    /** The object held by the slot of an object local (QoreIRFunction::real_reference_locals) has a real reference
+        from the slot, which is released with it
+    */
+    DLLLOCAL void release(size_t i, ExceptionSink* xsink) {
+        QoreValue& v = slots[i];
+        if (isRealSlot(i) && v.getType() == NT_OBJECT) {
+            v.get<QoreObject>()->realDeref(xsink);
+            return;
+        }
+        v.discard(xsink);
+    }
+
+    //! Stores a value in the given slot, which takes its reference; the slot's value has been released
+    /** An object stored in the slot of an object local is marked with a real reference, as a variable on the runtime
+        stack marks the object it holds (see QoreIRFunction::real_reference_locals)
+    */
+    DLLLOCAL void set(size_t i, QoreValue v) {
+        slots[i] = v;
+        if (isRealSlot(i) && v.getType() == NT_OBJECT) {
+            qore_object_private::get(*v.get<QoreObject>())->setRealReference();
+        }
+    }
+
+    //! Returns true if the slot is that of an object local, whose object has a real reference from the slot
+    DLLLOCAL bool isRealSlot(size_t i) const {
+        return i < real_slots.size() && real_slots[i];
+    }
+
+    //! Sets the slots of the object locals of the function the frame runs (see interpreter_real_slots)
+    DLLLOCAL void setRealSlots(const std::vector<uint8_t>& real) {
+        real_slots = real;
+    }
+
+    //! Releases the values of every slot, last slot first, and resets them
+    DLLLOCAL void releaseAll(ExceptionSink* xsink) {
+        for (size_t i = slots.size(); i; --i) {
+            release(i - 1, xsink);
+            slots[i - 1] = QoreValue();
+        }
+    }
+
     //! Returns the vector of the stored values, for the frames and the native code that share the slots
+    /** The slots of object locals are never shared: their locals are not referenced by any other frame
+    */
     DLLLOCAL std::vector<QoreValue>& vector() {
         return slots;
     }
@@ -1064,6 +1218,7 @@ public:
 
     DLLLOCAL void clear() {
         slots.clear();
+        real_slots.clear();
     }
 
     DLLLOCAL void resize(size_t size) {
@@ -1080,6 +1235,8 @@ public:
 
 private:
     std::vector<QoreValue> slots;
+    //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
+    std::vector<uint8_t> real_slots;
 };
 
 //! A set of local variables that allocates no memory once its capacity covers the locals it holds
@@ -1306,6 +1463,13 @@ struct IRCallFrame {
     // results from variable-held values — only temporaries are cleared at block exit.
     // indexed by value slot id; a set allocated a node for each slot in every call
     std::vector<uint8_t> local_owned_slots;
+    //! a temp scope mark: the size of the cleanup vector when the scope was entered
+    struct TempCleanupMark {
+        uint32_t scope_id;
+        size_t cleanup_size;
+    };
+    //! the marks of the temp scopes entered (PushTempMark), pooled with the frame so that a call does not allocate them
+    std::vector<TempCleanupMark> temp_cleanup_marks;
 
     // Reset all fields for reuse.  clear() retains capacity, so no heap
     // allocation after the first call at each recursion depth.
@@ -1326,10 +1490,7 @@ struct IRCallFrame {
             }
         }
         cleanup.clear();
-        for (auto& val : locals_slot_cache) {
-            val.discard(xsink);
-            val = QoreValue();
-        }
+        locals_slot_cache.releaseAll(xsink);
     }
 
     void reset(size_t reserve_size, size_t local_slot_count) {
@@ -1352,21 +1513,23 @@ struct IRCallFrame {
             borrowed_temp_remaining.resize(reserve_size, 0);
         }
         if (local_slot_count > 0) {
-            for (auto& val : locals_slot_cache) {
-                val.discard(nullptr);
-            }
+            locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_slot_cache.resize(local_slot_count);
             locals_lvar_cache.assign(local_slot_count, nullptr);
             locals_ir_only.assign(local_slot_count, false);
             locals_instantiated.assign(local_slot_count, false);
             local_init_slots.assign(local_slot_count, UINT32_MAX);
-            local_load_slots.clear();
+            // the vectors kept keep their capacity, so a call reading a local does not allocate one
+            if (local_load_slots.size() > local_slot_count) {
+                local_load_slots.resize(local_slot_count);
+            }
+            for (std::vector<uint32_t>& load_slots : local_load_slots) {
+                load_slots.clear();
+            }
             local_load_slots.resize(local_slot_count);
         } else {
-            for (auto& val : locals_slot_cache) {
-                val.discard(nullptr);
-            }
+            locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_lvar_cache.clear();
             locals_ir_only.clear();
@@ -1382,6 +1545,7 @@ struct IRCallFrame {
         active_iterators.clear();
         on_block_exit_handlers.clear();
         local_owned_slots.assign(reserve_size, 0);
+        temp_cleanup_marks.clear();
     }
 };
 
@@ -1681,9 +1845,17 @@ static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& clean
 }
 
 static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
-        ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
-    // Iterate in reverse (LIFO) to clean up the latest values first.
-    ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
+        ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log,
+        const std::vector<uint32_t>* release_groups = nullptr) {
+    // an exception leaving the function releases each statement's temporaries as the AST interpreter unwinds them
+    if (no_throw && release_groups) {
+        cleanup.orderForException(0, *release_groups);
+    }
+    // Iterate in reverse (LIFO) to clean up the latest values first.  On the path of an exception (no_throw), an
+    // exception raised by a destructor is added to the one that is raised, as the AST interpreter adds it when it
+    // unwinds the holders of the temporaries; a null sink made execDestructor() lose it (an assertion in a debug build)
+    ExceptionSink no_throw_xsink;
+    ExceptionSink* eff_xsink = no_throw && !xsink ? &no_throw_xsink : xsink;
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
         uint32_t id = *it;
         if (id >= values.size()) {
@@ -2126,20 +2298,22 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 */
 static bool buildValueUseCounts(const QoreIRFunction& func,
         std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
-        std::vector<uint8_t>& consumed_call_args, ExceptionSink* xsink) {
+        std::vector<uint8_t>& consumed_call_args, std::vector<uint8_t>& phi_takes_incoming, ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
     std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
     std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
-    // values used as call arguments by a call in the block or the temp scope (the statement) that defines them,
-    // after the definition: a call in a try block is an invoke that ends its block, and its arguments are defined
-    // in the blocks before it; a loop invariant hoisted out of a loop is defined in a temp scope of its own
+    // values used as call arguments by a call in the block or the temp scope (the statement) that defines them: a
+    // call in a try block is an invoke that ends its block, and its arguments are defined in the blocks before it, as
+    // is an argument given by a Phi (c ? new T() : new T()); a loop invariant hoisted out of a loop is defined in a
+    // temp scope of its own
     std::vector<uint8_t> same_block_call_args(counts.size(), 0);
-    // the block and the temp scope defining each value seen so far
+    // the block and the temp scope defining each value
     std::vector<const QoreIRBasicBlock*> def_block(counts.size(), nullptr);
     std::vector<uint32_t> def_scope(counts.size(), 0);
     // values created by a call: the temporaries whose release is observable; a value loaded from a variable or a
     // constant is not a temporary, and the interpreter can read it again from its slot
     std::vector<uint8_t> def_by_call(counts.size(), 0);
+    std::vector<const QoreIRPhiInstruction*> phis;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
             const QoreIRInstruction* inst = inst_uptr.get();
@@ -2147,15 +2321,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 countIRValueUse(counts, operand);
             });
             int arg_start = qore_ir_call_arg_start(inst);
-            if (arg_start >= 0) {
-                for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
-                    QoreIRValue arg = inst->operands[i];
-                    if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
-                            && (def_block[arg.id] == block.get()
-                                || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
-                        same_block_call_args[arg.id] = 1;
-                    }
-                }
+            if (inst->opcode == QoreIROpcode::Phi && inst->result.isValid()) {
+                phis.push_back(static_cast<const QoreIRPhiInstruction*>(inst));
             }
 
             bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
@@ -2180,6 +2347,66 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 def_block[inst->result.id] = block.get();
                 def_scope[inst->result.id] = inst->temp_scope_id;
                 def_by_call[inst->result.id] = arg_start >= 0;
+            }
+        }
+    }
+    // a Phi is a temporary, which a call consumes as its argument as it consumes any temporary
+    // (f(new T(), c ? new T() : new T(), new T())), so that it is released with the other arguments, last argument
+    // first, as the AST interpreter releases the callee's parameters; the incoming temporaries that the Phi takes over
+    // are marked in phi_takes_incoming (by value)
+    phi_takes_incoming.assign(counts.size(), 0);
+    // an incoming temporary is used by its Phi once, and otherwise only in the block that defines it, before the Phi
+    // (new T() ?? x tests the temporary before the Phi), so the Phi's slot can take its reference over
+    std::vector<uint32_t> phi_uses(counts.size(), 0);
+    std::vector<uint8_t> used_elsewhere(counts.size(), 0);
+    if (!phis.empty()) {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_uptr : block->instructions) {
+                const QoreIRInstruction* inst = inst_uptr.get();
+                bool phi_inst = inst->opcode == QoreIROpcode::Phi;
+                qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                    if (!operand.isValid() || operand.id >= counts.size()) {
+                        return;
+                    }
+                    if (phi_inst) {
+                        ++phi_uses[operand.id];
+                    } else if (def_block[operand.id] != block.get()) {
+                        used_elsewhere[operand.id] = 1;
+                    }
+                });
+            }
+        }
+    }
+    // a Phi's slot owns its value (taken over or referenced again; see setPhiValue), so a Phi is a temporary that a
+    // call consumes as any temporary; an incoming value that is a temporary (a call result or a Phi) used by the Phi
+    // once, and otherwise only before it in its own block, gives the Phi its reference (nested ?: and ??)
+    for (const QoreIRPhiInstruction* phi : phis) {
+        if (phi->result.id < def_by_call.size()) {
+            def_by_call[phi->result.id] = 1;
+        }
+    }
+    for (const QoreIRPhiInstruction* phi : phis) {
+        for (const auto& inc : phi->incoming) {
+            if (inc.value.isValid() && inc.value.id < counts.size() && def_by_call[inc.value.id]
+                    && phi_uses[inc.value.id] == 1 && !used_elsewhere[inc.value.id]) {
+                phi_takes_incoming[inc.value.id] = 1;
+            }
+        }
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_uptr : block->instructions) {
+            const QoreIRInstruction* inst = inst_uptr.get();
+            int arg_start = qore_ir_call_arg_start(inst);
+            if (arg_start < 0) {
+                continue;
+            }
+            for (size_t i = static_cast<size_t>(arg_start); i < inst->operands.size(); ++i) {
+                QoreIRValue arg = inst->operands[i];
+                if (arg.isValid() && arg.id < def_block.size() && def_by_call[arg.id]
+                        && (def_block[arg.id] == block.get()
+                            || (def_scope[arg.id] && def_scope[arg.id] == inst->temp_scope_id))) {
+                    same_block_call_args[arg.id] = 1;
+                }
             }
         }
     }
@@ -2212,7 +2439,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
     std::vector<uint8_t> consumed_call_args;
-    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, xsink)) {
+    std::vector<uint8_t> phi_takes_incoming;
+    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, consumed_call_args, phi_takes_incoming,
+            xsink)) {
         return false;
     }
     std::vector<int32_t> operand_use_counts(func.max_value_id + 1, 0);
@@ -2331,6 +2560,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint8_t> locals_ir_only;
     // the slots of locals that keep a reference they hold in their slot (see QoreIRFunction::reference_slot_locals)
     std::vector<uint8_t> reference_slots;
+    // the slots of object locals, whose object has a real reference from the slot (see
+    // QoreIRFunction::real_reference_locals)
+    std::vector<uint8_t> real_slots;
     bool has_non_ir_only_locals = false;
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
@@ -2347,6 +2579,12 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                         }
                         reference_slots[sid] = 1;
                     }
+                    if (func.hasRealReferenceStorage(key)) {
+                        if (real_slots.empty()) {
+                            real_slots.assign(local_slot_count, 0);
+                        }
+                        real_slots[sid] = 1;
+                    }
                 } else {
                     has_non_ir_only_locals = true;
                 }
@@ -2356,11 +2594,18 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_value_use_counts = std::move(value_use_counts);
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
     func.interpreter_consumed_call_args = std::move(consumed_call_args);
+    func.interpreter_phi_takes_incoming = std::move(phi_takes_incoming);
+    {
+        std::vector<uint32_t> release_groups;
+        qore_ir_build_exception_release_groups(func, release_groups);
+        func.interpreter_exception_release_groups = std::move(release_groups);
+    }
     func.interpreter_operand_use_counts = std::move(operand_use_counts);
     func.interpreter_param_slot_ids = std::move(param_slot_ids);
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_reference_slots = std::move(reference_slots);
+    func.interpreter_real_slots = std::move(real_slots);
     // the local of each slot, for the release of the locals at the exit of the function (see SlotCacheCleanup): only
     // the function's own body locals; the slot of a parameter, which the caller releases after the function's
     // handlers, and that of a local of the parent function used by an on_block_exit handler or a closure body, which
@@ -2377,13 +2622,21 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     }
     // the loads of IR-only locals whose only use is the base of a method call in the same block, with no write to
     // the local between: when the value is an object, they borrow it, as the AST interpreter evaluates the base of a
-    // method call without a reference of its own; each reference taken and released was a dereference of the object,
+    // method call without a reference of its own (it takes one only while arguments that need evaluation are
+    // evaluated, which can assign the variable; see QoreDotEvalOperatorNode::evalImpl()); each reference taken and
+    // released was a dereference of the object,
     // which is a garbage-collection decision for an object in a recursive graph.  An argument is never borrowed: a
     // direct or inlined call can take its argument's slot over as the parameter's, and a container is never
     // borrowed: code that receives one with a single reference can take it over or change it in place
     {
         std::vector<uint8_t> borrowed_bases(func.max_value_id + 1, 0);
         const std::vector<uint8_t>& bases = func.interpreter_dot_eval_only_bases;
+        // a write to the local between the load and the call (o.m(o = new T()), o.m(remove o)) can release the value
+        // borrowed; the analysis also sees writes that are not stores (an lvalue path rooted at the local) and the
+        // writes through a reference; if it is cancelled, it gives every load, and none is borrowed
+        // the candidates: the loads of IR-only locals used only as the base of a method call; the analysis runs only
+        // for a function that has one
+        std::vector<std::pair<const QoreIRBasicBlock*, size_t>> candidates;
         for (const auto& block : func.blocks) {
             const auto& insts = block->instructions;
             for (size_t i = 0; i < insts.size(); ++i) {
@@ -2400,28 +2653,34 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                         || !static_cast<const QoreIRLocalInstruction*>(load)->auto_ref) {
                     continue;
                 }
-                for (size_t j = i + 1; j < insts.size(); ++j) {
-                    const QoreIRInstruction* next = insts[j].get();
-                    bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
-                        || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
-                            static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
-                    if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
-                        borrowed_bases[rid] = 1;
-                        break;
-                    }
-                    // a write to the local can release the value borrowed
-                    const LocalVar* written = nullptr;
-                    if (next->opcode == QoreIROpcode::StoreLocal || next->opcode == QoreIROpcode::UninstantiateLocal
-                            || next->opcode == QoreIROpcode::StoreClosure) {
-                        written = static_cast<const QoreIRLocalInstruction*>(next)->local;
-                    } else if (next->opcode == QoreIROpcode::IncrementLocalInt) {
-                        written = static_cast<const QoreIRIncrementLocalIntInstruction*>(next)->local;
-                    } else if (next->opcode == QoreIROpcode::AddAssignLocalInt) {
-                        written = static_cast<const QoreIRAddAssignLocalIntInstruction*>(next)->target;
-                    }
-                    if (written == lv) {
-                        break;
-                    }
+                candidates.emplace_back(block.get(), i);
+            }
+        }
+        std::unordered_set<uint32_t> overwritten;
+        if (!candidates.empty()) {
+            qore_ir_find_local_reads_overwritten_before_use(func, overwritten);
+        }
+        for (const auto& [block, i] : candidates) {
+            const auto& insts = block->instructions;
+            const QoreIRInstruction* load = insts[i].get();
+            const uint32_t rid = load->result.id;
+            if (overwritten.count(rid)) {
+                continue;
+            }
+            const LocalVar* lv = static_cast<const QoreIRLocalInstruction*>(load)->local;
+            for (size_t j = i + 1; j < insts.size(); ++j) {
+                const QoreIRInstruction* next = insts[j].get();
+                bool dot_eval = next->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || (next->opcode == QoreIROpcode::Invoke && isDotEvalInvokeOpcode(
+                        static_cast<const QoreIRInvokeInstruction*>(next)->invoke_opcode));
+                if (dot_eval && !next->operands.empty() && next->operands[0].id == rid) {
+                    borrowed_bases[rid] = 1;
+                    break;
+                }
+                // a write to the local can release the value borrowed (one between the load and the call puts the
+                // load in overwritten)
+                if (qore_ir_get_written_local(next) == lv) {
+                    break;
                 }
             }
         }
@@ -4942,12 +5201,23 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
         const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
     std::unordered_map<uint32_t, uint32_t> occurrences;
     countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
+    // callee returns (an argument given twice is released at its last position)
     uint32_t checked = 0;
-    for (const auto& [id, occurrences_in_args] : occurrences) {
+    for (size_t i = operands.size(); i > start_index; --i) {
         if (((++checked % 100) == 0)
                 && qore_check_cancel(xsink, "IR call argument cleanup")) {
             return;
         }
+        QoreIRValue operand = operands[i - 1];
+        auto it = operand.isValid() ? occurrences.find(operand.id) : occurrences.end();
+        if (it == occurrences.end()) {
+            continue;
+        }
+        uint32_t id = operand.id;
+        uint32_t occurrences_in_args = it->second;
+        // released once
+        occurrences.erase(it);
         if (value_use_counts[id] != occurrences_in_args) {
             continue;
         }
@@ -6216,6 +6486,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (!ensureInterpreterAnalysis(func, xsink)) {
         return false;
     }
+    // the classes of the values for the order in which an exception releases a statement's temporaries
+    const std::vector<uint32_t>* release_groups = &func.interpreter_exception_release_groups;
+    // the slots of the object locals, whose object has a real reference from the slot
+    if (!func.interpreter_real_slots.empty()) {
+        locals_slot_cache.setRealSlots(func.interpreter_real_slots);
+    }
     // nothing has been registered for cleanup yet
     assert(cleanup.empty() && cleanup.slotOwnedEntries().empty());
     cleanup.setSlotOwned(&func.interpreter_slot_owned_values);
@@ -6275,7 +6551,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             // Copy parent's value into handler's slot (with reference counting); raw slot: the value is copied
             // as it is stored
             const QoreValue& parent_val = (*parent_slot_cache)[i];
-            locals_slot_cache.storage(i) = parent_val;
+            locals_slot_cache.set(i, parent_val);
             if (parent_val.needsRef()) {
                 // raw slot: the copy of the parent's value takes its own reference
                 locals_slot_cache.storage(i).refSelf();
@@ -6293,7 +6569,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 bool needs_deref = true;
                 QoreValue parent_val = lvar->eval(needs_deref, xsink);
                 if (!parent_val.isNothing()) {
-                    locals_slot_cache.storage(i) = parent_val.needsRef() ? parent_val.refSelf() : parent_val;
+                    locals_slot_cache.set(i, parent_val.needsRef() ? parent_val.refSelf() : parent_val);
                     if (needs_deref && parent_val.needsRef()) {
                         parent_val.discard(xsink);
                     }
@@ -6448,8 +6724,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             uint32_t cleanup_sid = func.interpreter_param_slot_ids[static_cast<size_t>(j)];
             if (cleanup_sid < local_slot_count && locals_instantiated[cleanup_sid]) {
-                locals_slot_cache.storage(cleanup_sid).discard(xsink);
-                locals_slot_cache.storage(cleanup_sid) = QoreValue();
+                locals_slot_cache.release(cleanup_sid, xsink);
+                locals_slot_cache.set(cleanup_sid, QoreValue());
                 locals_instantiated[cleanup_sid] = false;
             }
         }
@@ -6483,7 +6759,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         }
                     }
 
-                    locals_slot_cache.storage(sid) = val;
+                    locals_slot_cache.set(sid, val);
                     locals_instantiated[sid] = true;
                     if (sid < locals_ir_only.size()) {
                         // Direct params intentionally bypass the runtime local
@@ -6607,8 +6883,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (preserveParentSlotForWriteback(i)) {
                         continue;
                     }
-                    locals_slot_cache.storage(i).discard(xsink);
-                    locals_slot_cache.storage(i) = QoreValue();
+                    locals_slot_cache.release(i, xsink);
+                    locals_slot_cache.set(i, QoreValue());
                 }
                 std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
             }
@@ -6650,8 +6926,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (preserve_ir_only && i < locals_ir_only.size() && locals_ir_only[i]) {
                 continue;  // Preserve IR-only locals
             }
-            locals_slot_cache.storage(i).discard(xsink);
-            locals_slot_cache.storage(i) = QoreValue();
+            locals_slot_cache.release(i, xsink);
+            locals_slot_cache.set(i, QoreValue());
             // at the exit of the function, the value of a local on the runtime stack is released at its slot's
             // place too (see SlotCacheCleanup)
             if (!preserve_ir_only && i < func.interpreter_slot_locals.size()
@@ -6685,8 +6961,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     continue;
                 }
                 if (!locals_ir_only[i]) {
-                    locals_slot_cache.storage(i).discard(xsink);
-                    locals_slot_cache.storage(i) = QoreValue();
+                    locals_slot_cache.release(i, xsink);
+                    locals_slot_cache.set(i, QoreValue());
                 }
             }
         }
@@ -6770,11 +7046,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto releaseContainerBookkeepingRefs = [&](uint32_t container_slot_id, uint32_t operand_slot_id) {
         clearLoadSlots(container_slot_id);
         if (container_slot_id != UINT32_MAX && container_slot_id < locals_slot_cache.size()) {
-            locals_slot_cache.storage(container_slot_id).discard(xsink);
+            locals_slot_cache.release(container_slot_id, xsink);
             // reset to the cache-miss sentinel so the next load re-reads TLS;
             // leaving the stale value would hand out a cache hit backed by a
             // released reference
-            locals_slot_cache.storage(container_slot_id) = QoreValue();
+            locals_slot_cache.set(container_slot_id, QoreValue());
         }
         discardContainerValueSlot(operand_slot_id, container_slot_id, false);
     };
@@ -6821,16 +7097,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // this frame instantiated is released at its slot's place too, between those of the IR-only locals
         // declared before and after it (the variable is removed from the stack afterwards): a function left by an
         // exception releases all of its locals last declared first, as the AST interpreter does, whichever storage
-        // they have
         // they have.  The iterator of a foreach statement that is still running is released at its place among them
         // (see IRActiveIterator)
         ~SlotCacheCleanup() {
             for (size_t i = cache.size(); i; --i) {
                 releaseActiveIteratorsFrom(iters, i);
-                // raw slot: the value the slot owns is released
-                QoreValue& v = cache.storage(i - 1);
-                v.discard(xsink);
-                v = QoreValue();
+                // the object of an object local is released with the real reference it has from the slot
+                cache.release(i - 1, xsink);
+                cache.set(i - 1, QoreValue());
                 if (i - 1 < slot_locals.size() && !(i - 1 < ir_only.size() && ir_only[i - 1])) {
                     releaseFrameRuntimeLocal(slot_locals[i - 1], instantiated, pre_instantiated, xsink);
                 }
@@ -6969,13 +7243,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (j < locals_ir_only.size() && locals_ir_only[j]) {
                     continue;
                 }
-                locals_slot_cache.storage(j).discard(xsink);
-                locals_slot_cache.storage(j) = QoreValue();
+                locals_slot_cache.release(j, xsink);
+                locals_slot_cache.set(j, QoreValue());
             }
         } else {
             if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                locals_slot_cache.storage(path_inst->lvalue_slot_id).discard(xsink);
-                locals_slot_cache.storage(path_inst->lvalue_slot_id) = QoreValue();
+                locals_slot_cache.release(path_inst->lvalue_slot_id, xsink);
+                locals_slot_cache.set(path_inst->lvalue_slot_id, QoreValue());
             }
             clearLoadSlots(path_inst->lvalue_slot_id);
         }
@@ -6996,14 +7270,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         if (lval_inst->hasLocalTarget()) {
             if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                locals_slot_cache.storage(lval_inst->lvalue_slot_id).discard(xsink);
-                locals_slot_cache.storage(lval_inst->lvalue_slot_id) = QoreValue();
+                locals_slot_cache.release(lval_inst->lvalue_slot_id, xsink);
+                locals_slot_cache.set(lval_inst->lvalue_slot_id, QoreValue());
             }
             clearLoadSlots(lval_inst->lvalue_slot_id);
         } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
             for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                locals_slot_cache.storage(i).discard(xsink);
-                locals_slot_cache.storage(i) = QoreValue();
+                locals_slot_cache.release(i, xsink);
+                locals_slot_cache.set(i, QoreValue());
             }
         }
         return lval_vrn;
@@ -7053,11 +7327,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
         if (sid < locals_slot_cache.size()) {
-            locals_slot_cache.storage(sid).discard(xsink);
+            locals_slot_cache.release(sid, xsink);
             if (repopulate) {
-                locals_slot_cache.storage(sid) = res.needsRef() ? res.refSelf() : res;
+                locals_slot_cache.set(sid, res.needsRef() ? res.refSelf() : res);
             } else {
-                locals_slot_cache.storage(sid) = QoreValue();
+                locals_slot_cache.set(sid, QoreValue());
             }
             clearLoadSlots(sid);
             markParentLValueDirty(lval_inst, lval_vrn);
@@ -7117,7 +7391,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         fireScopeExits();
         if (!values_cleaned) {
-            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
         }
         cleanupLocalCaches(false);
         if (!xsink || !*xsink) {
@@ -7287,11 +7561,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
     auto& borrowed_temp_remaining = frame.borrowed_temp_remaining;
     auto& borrowed_temp_active = frame.borrowed_temp_active;
-    struct TempCleanupMark {
-        uint32_t scope_id;
-        size_t cleanup_size;
-    };
-    std::vector<TempCleanupMark> temp_cleanup_marks;
+    using TempCleanupMark = IRCallFrame::TempCleanupMark;
+    auto& temp_cleanup_marks = frame.temp_cleanup_marks;
 
     auto releaseWeakLoadTemp = [&](uint32_t id) {
         if (id >= values.size()) {
@@ -7330,14 +7601,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (arg_start < 0) {
             return;
         }
-        for (size_t i = static_cast<size_t>(arg_start); i < call_inst->operands.size(); ++i) {
+        // last argument first, as the AST interpreter releases the parameters that took the arguments over when the
+        // callee returns
+        size_t count = 0;
+        for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
             // a cancelled release leaves the remaining arguments to the end of the statement (DiscardTemps)
-            if (i > static_cast<size_t>(arg_start) && !((i - arg_start) % 100)
+            if (count++ && !(count % 100)
                     && qore_check_cancel(xsink, "IR call argument cleanup")) {
                 return;
             }
-            uint32_t id = call_inst->operands[i].id;
-            if (!call_inst->operands[i].isValid() || id >= values.size() || id >= consumed_call_args.size()
+            uint32_t id = call_inst->operands[i - 1].id;
+            if (!call_inst->operands[i - 1].isValid() || id >= values.size() || id >= consumed_call_args.size()
                     || !consumed_call_args[id]
                     || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
                     || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
@@ -7348,6 +7622,29 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             values[id] = QoreValue();
             // an exception raised by a destructor is added to any exception raised by the call, as in the AST
             v.discard(xsink);
+        }
+    };
+
+    // Sets the slot of a Phi to the value of its incoming operand: a temporary used by the Phi only gives the Phi its
+    // reference (see QoreIRFunction::interpreter_phi_takes_incoming), which makes the Phi a temporary that a call
+    // consumes as its argument; any other value is referenced again
+    const std::vector<uint8_t>& phi_takes_incoming = func.interpreter_phi_takes_incoming;
+    auto setPhiValue = [&](const QoreIRPhiInstruction* phi, QoreIRValue incoming) {
+        QoreValue val = getIRValue(values, incoming);
+        uint32_t id = incoming.id;
+        if (val.needsRef() && id < phi_takes_incoming.size() && phi_takes_incoming[id]
+                && id < values.size() && !weak_load_temp_slots.count(id)
+                && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
+                && removeAllCleanupEntries(cleanup, id)) {
+            values[id] = QoreValue();
+            setValueSlot(values, phi->result.id, val, xsink);
+            cleanup.push_back(phi->result.id);
+            return;
+        }
+        QoreValue stored = val.needsRef() ? val.refSelf() : val;
+        setValueSlot(values, phi->result.id, stored, xsink);
+        if (stored.needsRef()) {
+            cleanup.push_back(phi->result.id);
         }
     };
 
@@ -7433,7 +7730,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             - static_cast<size_t>(std::distance(temp_cleanup_marks.rbegin(), mark));
         // the mark's sentinel is at cleanup_size; keeping the mark keeps its sentinel too
         size_t cleanup_size = mark->cleanup_size + (keep_mark ? 1 : 0);
-        ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
+        // on the path of an exception (no_throw), an exception raised by a destructor is added to the one that is
+        // raised, as the AST interpreter adds it when it unwinds the holders of the temporaries (see cleanupValues())
+        ExceptionSink no_throw_xsink;
+        ExceptionSink* eff_xsink = no_throw && !xsink ? &no_throw_xsink : xsink;
+        // an exception releases the temporaries as the AST interpreter unwinds them (no_throw is only given for one)
+        if (no_throw && cleanup.size() > cleanup_size + 1) {
+            cleanup.orderForException(cleanup_size, *release_groups);
+        }
         unsigned cancel_countdown = 100;
         while (cleanup.size() > cleanup_size) {
             if (!--cancel_countdown) {
@@ -7579,7 +7883,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (xsink) {
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block");
             }
-            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
             cleanupLocalCaches();
             return false;
         }
@@ -7593,7 +7897,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "phi has no predecessor");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -7610,16 +7914,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "phi missing predecessor incoming");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue val = getIRValue(values, incoming_value);
-                QoreValue stored = val.needsRef() ? val.refSelf() : val;
-                setValueSlot(values, phi->result.id, stored, xsink);
-                if (stored.needsRef()) {
-                    cleanup.push_back(phi->result.id);
-                }
+                setPhiValue(phi, incoming_value);
                 ++ip;
             }
         }
@@ -7627,7 +7926,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (xsink) {
                 xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
             }
-            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
             cleanupLocalCaches();
             return false;
         }
@@ -7829,7 +8128,7 @@ next_instruction:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -7897,7 +8196,7 @@ next_instruction:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -7963,7 +8262,7 @@ next_instruction:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8031,7 +8330,7 @@ next_instruction:
                 }
                 if (xsink && *xsink) {
                     result.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8227,7 +8526,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8255,7 +8554,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8281,7 +8580,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8371,7 +8670,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8421,7 +8720,7 @@ next_instruction:
                         result->concat(*s, xsink);
                         if (xsink && *xsink) {
                             result->deref();
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -8437,7 +8736,7 @@ next_instruction:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "incref missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8453,7 +8752,7 @@ next_instruction:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "refself missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8471,7 +8770,7 @@ next_instruction:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "decref missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8489,7 +8788,7 @@ next_instruction:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -8568,8 +8867,8 @@ next_instruction:
                             if (inv_slot_it != func.local_var_slots.end()) {
                                 inv_lvalue_sid = inv_slot_it->second;
                                 if (inv_lvalue_sid < locals_slot_cache.size()) {
-                                    locals_slot_cache.storage(inv_lvalue_sid).discard(xsink);
-                                    locals_slot_cache.storage(inv_lvalue_sid) = QoreValue();
+                                    locals_slot_cache.release(inv_lvalue_sid, xsink);
+                                    locals_slot_cache.set(inv_lvalue_sid, QoreValue());
                                 }
                                 clearLoadSlots(inv_lvalue_sid);
                             }
@@ -8589,8 +8888,8 @@ next_instruction:
                 // operation modifies TLS. Always invalidate (not repopulate) since
                 // the invoke expression may be a complex lvalue.
                 if (inv_lvalue_sid < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(inv_lvalue_sid).discard(xsink);
-                    locals_slot_cache.storage(inv_lvalue_sid) = QoreValue();
+                    locals_slot_cache.release(inv_lvalue_sid, xsink);
+                    locals_slot_cache.set(inv_lvalue_sid, QoreValue());
                     clearLoadSlots(inv_lvalue_sid);
                 }
                 // Invalidate external caches after Invoke — the AST call may have
@@ -8823,7 +9122,7 @@ next_instruction:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -8866,7 +9165,7 @@ next_instruction:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -8929,7 +9228,7 @@ next_instruction:
                     bool needs_deref = true;
                     out = local_inst->local->eval(needs_deref, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -8976,7 +9275,7 @@ next_instruction:
                             }
                             if (xsink && *xsink) {
                                 out.discard(xsink);
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                 cleanupLocalCaches();
                                 return false;
                             }
@@ -8996,7 +9295,7 @@ next_instruction:
                                     // The runtime local remains the persistent
                                     // owner. Drop only the interpreter cache's
                                     // duplicate ref before the CoW guard runs.
-                                    locals_slot_cache.storage(sid) = QoreValue();
+                                    locals_slot_cache.set(sid, QoreValue());
                                     cached_val.discard(xsink);
                                 }
                                 result_slot_owned = false;
@@ -9030,7 +9329,7 @@ next_instruction:
                         bool needs_deref = true;
                         QoreValue val = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -9080,17 +9379,17 @@ next_instruction:
                         }
                         // Store in slot cache for fast access on next load (unless weak-ref)
                         if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(sid).discard(xsink);
+                            locals_slot_cache.release(sid, xsink);
                             if (reference_value) {
                                 // the slot holds the reference itself, which the fast path above reads through on
                                 // every load; for an IR-only local an empty slot would read as no value
-                                locals_slot_cache.storage(sid) = reference_value->refRefSelf();
+                                locals_slot_cache.set(sid, reference_value->refRefSelf());
                             } else if (is_weak_ref_local) {
                                 // Clear cache entirely for weak-ref locals so next
                                 // access re-evaluates via TLS (weak-ref target check)
-                                locals_slot_cache.storage(sid) = QoreValue();
+                                locals_slot_cache.set(sid, QoreValue());
                             } else {
-                                locals_slot_cache.storage(sid) = val.needsRef() ? val.refSelf() : val;
+                                locals_slot_cache.set(sid, val.needsRef() ? val.refSelf() : val);
                             }
                         }
                         if (is_weak_ref_local && val.hasNode()) {
@@ -9121,7 +9420,7 @@ next_instruction:
                         bool needs_deref = true;
                         out = local_inst->local->eval(needs_deref, xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -9237,7 +9536,7 @@ load_local_done:
                             QoreValue val = cv->evalWeakBorrowed(is_weak_ref_local, xsink);
                             if (is_weak_ref_local) {
                                 if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
                                 }
@@ -9245,7 +9544,7 @@ load_local_done:
                             } else {
                                 if (xsink && *xsink) {
                                     val.discard(xsink);
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
                                 }
@@ -9264,7 +9563,7 @@ load_local_done:
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                                     cleanupLocalCaches();
                                     return false;
                                 }
@@ -9306,9 +9605,9 @@ load_local_done:
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 bool preserve_weak_result = isDotEvalOnlyBase(inst);
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
-                ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
+                QoreIROperandHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9322,7 +9621,7 @@ load_local_done:
                         out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     }
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9331,7 +9630,7 @@ load_local_done:
                     if (h) {
                         out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -9342,7 +9641,7 @@ load_local_done:
                     const QoreHashNode* h = base.get<const QoreHashNode>();
                     out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9352,7 +9651,7 @@ load_local_done:
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9360,7 +9659,7 @@ load_local_done:
                 if (!preserve_weak_result) {
                     evaluateOwnedWeakReferenceResult(out, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9376,9 +9675,9 @@ load_local_done:
             case QoreIROpcode::HashKeyAccessInt: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
-                ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
+                QoreIROperandHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9469,7 +9768,7 @@ load_local_done:
                         // Release the slot cache ref.
                         uint32_t csid = hks_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
 
                         // Clear the container slot so cleanup doesn't try to discard it
@@ -9515,7 +9814,7 @@ load_local_done:
                         clearLoadSlots(hks_inst->container_slot_id);
                         uint32_t csid = hks_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
                             isClosureContainer(hks_inst->container_lv, hks_inst->container));
@@ -9526,7 +9825,7 @@ load_local_done:
                     return true;
                 };
                 if (!store_key()) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9538,7 +9837,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9609,7 +9908,7 @@ load_local_done:
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
                             isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
@@ -9653,7 +9952,7 @@ load_local_done:
                         clearLoadSlots(hksd_inst->container_slot_id);
                         uint32_t csid = hksd_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
                             isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
@@ -9671,7 +9970,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9683,9 +9982,9 @@ load_local_done:
             }
             case QoreIROpcode::ListIndexAccess: {
                 QoreValue raw_list_val = getIRValue(values, inst->operands[0]);
-                ValueEvalOptimizedRefHolder list_holder(raw_list_val, xsink);
+                QoreIROperandHolder list_holder(raw_list_val, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9815,7 +10114,7 @@ load_local_done:
                         // Release the slot cache ref.
                         uint32_t csid = lis_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
 
                         // Clear the container slot so cleanup doesn't try to discard it
@@ -9884,7 +10183,7 @@ load_local_done:
                         clearLoadSlots(lis_inst->container_slot_id);
                         uint32_t csid = lis_inst->container_slot_id;
                         if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(csid).discard(xsink);
+                            locals_slot_cache.release(csid, xsink);
                         }
                         discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
                             isClosureContainer(lis_inst->container_lv, lis_inst->container));
@@ -9898,7 +10197,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -9928,14 +10227,14 @@ load_local_done:
                     bool nd = true;
                     QoreValue tv = fused_inst->target->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
                     target_val = tv.getAsBigInt();
                     // the slot is set to the result below; until then it may only hold what the variable holds
                     if (tv.getType() == NT_INT && fused_inst->target_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->target_slot_id) = tv;
+                        locals_slot_cache.set(fused_inst->target_slot_id, tv);
                     }
                     if (nd && tv.needsRef()) {
                         tv.discard(xsink);
@@ -9957,7 +10256,7 @@ load_local_done:
                         if (ref_needs_deref) {
                             rv.discard(xsink);
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9976,7 +10275,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue sv = fused_inst->source->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10000,10 +10299,10 @@ load_local_done:
                                 reference_value = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                             }
                         }
-                        locals_slot_cache.storage(fused_inst->source_slot_id).discard(xsink);
-                        locals_slot_cache.storage(fused_inst->source_slot_id) = reference_value
+                        locals_slot_cache.release(fused_inst->source_slot_id, xsink);
+                        locals_slot_cache.set(fused_inst->source_slot_id, reference_value
                             ? QoreValue(reference_value->refRefSelf())
-                            : (sv.needsRef() ? sv.refSelf() : sv);
+                            : (sv.needsRef() ? sv.refSelf() : sv));
                     }
                     if (nd && sv.needsRef()) {
                         sv.discard(xsink);
@@ -10013,8 +10312,8 @@ load_local_done:
                 // Update slot cache (always); a result outside the immediate int range is a heap
                 // value, so the slot must release the value it replaces
                 if (fused_inst->target_slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(fused_inst->target_slot_id).discard(xsink);
-                    locals_slot_cache.storage(fused_inst->target_slot_id) = QoreValue(result_val);
+                    locals_slot_cache.release(fused_inst->target_slot_id, xsink);
+                    locals_slot_cache.set(fused_inst->target_slot_id, QoreValue(result_val));
                 }
                 // Write through to thread-local variable only if not IR-only
                 if (!fused_inst->target_ir_only) {
@@ -10022,7 +10321,7 @@ load_local_done:
                         // Closure-use variable: write through cvstack, not lvstack
                         assignClosureVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -10068,14 +10367,14 @@ load_local_done:
                             result_val = qore_rt_increment_closure_int(fused_inst->local, fused_inst->delta, xsink);
                         }
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
                     }
                     if (fused_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(fused_inst->slot_id) = QoreValue(result_val);
+                        locals_slot_cache.release(fused_inst->slot_id, xsink);
+                        locals_slot_cache.set(fused_inst->slot_id, QoreValue(result_val));
                     }
                     markParentSlotDirty(fused_inst->slot_id);
                     if (fused_inst->result.isValid()) {
@@ -10101,13 +10400,13 @@ load_local_done:
                     bool nd = true;
                     QoreValue lv = fused_inst->local->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
                     local_val = lv.getAsBigInt();
                     if (fused_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->slot_id) = QoreValue(local_val);
+                        locals_slot_cache.set(fused_inst->slot_id, QoreValue(local_val));
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -10117,8 +10416,8 @@ load_local_done:
                 // Update slot cache (always); a result outside the immediate int range is a heap
                 // value, so the slot must release the value it replaces
                 if (fused_inst->slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(fused_inst->slot_id).discard(xsink);
-                    locals_slot_cache.storage(fused_inst->slot_id) = QoreValue(result_val);
+                    locals_slot_cache.release(fused_inst->slot_id, xsink);
+                    locals_slot_cache.set(fused_inst->slot_id, QoreValue(result_val));
                 }
                 // Write through to thread-local variable only if not IR-only; a closure-bound variable was
                 // changed above
@@ -10167,7 +10466,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue lv = fused_inst->lhs->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10175,7 +10474,7 @@ load_local_done:
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
                     if (lv.getType() == NT_INT && fused_inst->lhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->lhs_slot_id) = lv;
+                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv);
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -10197,7 +10496,7 @@ load_local_done:
                     bool nd = true;
                     QoreValue rv = fused_inst->rhs->eval(nd, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10205,7 +10504,7 @@ load_local_done:
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
                     if (rv.getType() == NT_INT && fused_inst->rhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(fused_inst->rhs_slot_id) = rv;
+                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv);
                     }
                     if (nd && rv.needsRef()) {
                         rv.discard(xsink);
@@ -10231,7 +10530,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10254,7 +10553,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10348,7 +10647,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10433,7 +10732,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10459,7 +10758,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10475,14 +10774,14 @@ load_local_done:
                 QoreObject* obj = runtime_get_stack_object();
                 assert(obj);
                 if (qore_ir_check_closure_self_valid(obj, xsink)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 ValueHolder val(qore_object_private::get(*obj)->getReferencedMemberForSelf(
                     sm_inst->member_name.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10493,7 +10792,7 @@ load_local_done:
                 QoreValue out = needs_eval ? val->eval(xsink)
                     : (qore_weak_reference_target_destroyed(*val) ? QoreValue() : val.release());
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10521,7 +10820,7 @@ load_local_done:
                         : qore_rt_load_static_var_by_path(deferred_static->class_path.c_str(),
                             deferred_static->member_name.c_str(), xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10543,7 +10842,7 @@ load_local_done:
                 if (!vi) {
                     xsink->raiseException("IR-RUNTIME-ERROR",
                         "LoadStaticVar instruction has invalid static member metadata");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10551,14 +10850,14 @@ load_local_done:
                 ValueHolder val(vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
                         xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10616,7 +10915,7 @@ load_local_done:
                     // the class was not bound at parse time, so neither were the sandboxing and abstract-class
                     // checks; a class bound here once is not resolved again, but a deferred class always is
                     if (qc && qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10640,7 +10939,7 @@ load_local_done:
                         xsink->raiseException("RUNTIME-ERROR",
                             "cannot construct object: class not resolved");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10663,7 +10962,7 @@ load_local_done:
                 uint64_t rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10707,7 +11006,7 @@ load_local_done:
                         : lc_inst->expr.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10762,12 +11061,12 @@ load_local_done:
                 } else {
                     xsink->raiseException("RUNTIME-ERROR",
                         "closure expression not resolved in AOT mode");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10786,7 +11085,7 @@ load_local_done:
                     xsink->raiseException("RUNTIME-ERROR",
                         "call reference expression not resolved in AOT mode");
                     ref_expr.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10796,7 +11095,7 @@ load_local_done:
                 }
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10815,7 +11114,7 @@ load_local_done:
                     xsink->raiseException("RUNTIME-ERROR",
                         "method reference expression not resolved in AOT mode");
                     ref_expr.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10832,7 +11131,7 @@ load_local_done:
                 }
                 ref_expr.discard(xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10862,7 +11161,7 @@ load_local_done:
                         pr_inst->expr.getInternalNode());
                     if (!prn) {
                         xsink->raiseException("RUNTIME-ERROR", "parse reference expression has invalid type in AOT mode");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -10875,12 +11174,12 @@ load_local_done:
                     }
                 } else {
                     xsink->raiseException("RUNTIME-ERROR", "parse reference not resolved in AOT mode");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10900,7 +11199,7 @@ load_local_done:
                 const NewHashDeclNode* nhd = dynamic_cast<const NewHashDeclNode*>(node);
                 if (!nhd) {
                     raiseMissingAOTExpr("new hashdecl", nhd_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10909,7 +11208,7 @@ load_local_done:
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10929,7 +11228,7 @@ load_local_done:
                 const NewComplexHashNode* nch = dynamic_cast<const NewComplexHashNode*>(node);
                 if (!nch) {
                     raiseMissingAOTExpr("new complex hash", nch_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10938,7 +11237,7 @@ load_local_done:
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10958,7 +11257,7 @@ load_local_done:
                 const NewComplexListNode* ncl = dynamic_cast<const NewComplexListNode*>(node);
                 if (!ncl) {
                     raiseMissingAOTExpr("new complex list", ncl_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10967,7 +11266,7 @@ load_local_done:
                     out = out.refSelf();
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -10986,7 +11285,7 @@ load_local_done:
                 const NewComplexBufferNode* ncb = dynamic_cast<const NewComplexBufferNode*>(node);
                 if (!ncb) {
                     raiseMissingAOTExpr("new complex buffer", ncb_inst->expr);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11002,7 +11301,7 @@ load_local_done:
                     }
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11065,7 +11364,7 @@ load_local_done:
                         "vrn.construct has neither AST node nor serialized expression");
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11081,7 +11380,7 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, inst->operands[0]);
                 const TypedHashDecl* hd = resolveNewHashDeclFromHashTarget(*nhdfh_inst, xsink);
                 if (!hd) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11090,7 +11389,7 @@ load_local_done:
                     xsink->raiseException("HASHDECL-INIT-ERROR",
                         "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead",
                         hd->getName(), hash_val.getTypeName());
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11099,7 +11398,7 @@ load_local_done:
                 QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(
                     init, nhdfh_inst->runtime_check, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11133,7 +11432,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11143,7 +11442,7 @@ load_local_done:
             case QoreIROpcode::IteratorCreateReverse: {
                 QoreValue iterable = getIRValue(values, inst->operands[0]);
                 FunctionalOperator::FunctionalValueType value_type;
-                FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIterator(
+                FunctionalOperatorInterface* iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(
                     value_type, iterable, false, "foldr operator", xsink);
                 if (xsink && *xsink) {
                     delete iter;
@@ -11155,7 +11454,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11186,7 +11485,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.local missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11219,8 +11518,8 @@ load_local_done:
                             && val.getInternalNode()
                             && locals_slot_cache.storage(sid).getInternalNode()
                                 != val.getInternalNode()) {
-                        locals_slot_cache.storage(sid).discard(xsink);
-                        locals_slot_cache.storage(sid) = val.refSelf();
+                        locals_slot_cache.release(sid, xsink);
+                        locals_slot_cache.set(sid, val.refSelf());
                         if (sid < locals_instantiated.size()) {
                             locals_instantiated[sid] = true;
                         }
@@ -11250,7 +11549,7 @@ load_local_done:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11292,7 +11591,7 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -11328,7 +11627,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11340,8 +11639,8 @@ load_local_done:
                     assert(local_inst->mode != AssignmentMode::Normal || qore_ir_value_node_type(stored) != NT_REFERENCE
                         || (local_inst->slot_id < func.interpreter_reference_slots.size()
                             && func.interpreter_reference_slots[local_inst->slot_id]));
-                    locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                    locals_slot_cache.storage(local_inst->slot_id) = stored;
+                    locals_slot_cache.release(local_inst->slot_id, xsink);
+                    locals_slot_cache.set(local_inst->slot_id, stored);
                     if (local_inst->slot_id < locals_instantiated.size()) {
                         // For IR-only locals, this bit also records that the slot
                         // cache contains a valid value; QoreValue() is both
@@ -11374,8 +11673,8 @@ load_local_done:
                 if (store_mode != AssignmentMode::Normal) {
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_lvar_cache.size()) {
@@ -11386,7 +11685,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11409,7 +11708,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11432,8 +11731,8 @@ load_local_done:
                     // storage and can also force unnecessary CoW in typed lvalues.
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_lvar_cache.size()) {
@@ -11461,7 +11760,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -11498,8 +11797,8 @@ load_local_done:
                         if (!QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
                             // Type mismatch: invalidate caches and use full
                             // type-checking path (will raise RUNTIME-TYPE-ERROR)
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 locals_lvar_cache[local_inst->slot_id] = nullptr;
                             }
@@ -11507,8 +11806,8 @@ load_local_done:
                         } else {
                             // Type is compatible: pre-populate the cache to avoid a
                             // cache miss on the next LoadLocal
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = val;
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, val);
                             // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 LocalVarValue*& lvv = locals_lvar_cache[local_inst->slot_id];
@@ -11536,8 +11835,8 @@ load_local_done:
                     } else {
                         // Complex type: invalidate because assignLocalVarValue() →
                         // acceptAssignment() may coerce the value
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                         // Also invalidate lvar cache for complex types
                         if (local_inst->slot_id < locals_lvar_cache.size()) {
                             locals_lvar_cache[local_inst->slot_id] = nullptr;
@@ -11561,8 +11860,8 @@ load_local_done:
                     // value is now stale even though this store landed in the local's own
                     // slot (a reference-capable local need not actually hold a reference).
                     // Drop just this entry; the next load re-reads the runtime stack.
-                    locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                    locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                    locals_slot_cache.release(local_inst->slot_id, xsink);
+                    locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     if (local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
@@ -11580,7 +11879,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -11659,8 +11958,8 @@ load_local_done:
                         // to trigger destructors at block scope exit (e.g., AutoLock).
                         if (local_inst->slot_id != UINT32_MAX
                                 && local_inst->slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, QoreValue());
                         }
                         // Also clear the init slot (from StoreLocal) to drop that reference
                         if (local_inst->slot_id != UINT32_MAX) {
@@ -11695,8 +11994,8 @@ load_local_done:
                     // Drop slot cache reference FIRST (before lvar->del)
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                        locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                        locals_slot_cache.release(local_inst->slot_id, xsink);
+                        locals_slot_cache.set(local_inst->slot_id, QoreValue());
                     }
 
                     // Helper lambda: drop all value slots associated with this local
@@ -11772,8 +12071,8 @@ load_local_done:
                             // Clear slot cache for closure-use locals
                             if (local_inst->slot_id != UINT32_MAX
                                     && local_inst->slot_id < locals_slot_cache.size()) {
-                                locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                                locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                                locals_slot_cache.release(local_inst->slot_id, xsink);
+                                locals_slot_cache.set(local_inst->slot_id, QoreValue());
                             }
                             // Clear init/load slots for closure vars
                             cleanupLocalSlots(local_inst->slot_id);
@@ -11919,8 +12218,8 @@ load_local_done:
                         // Clear slot cache
                         if (local_inst->slot_id != UINT32_MAX
                                 && local_inst->slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache.storage(local_inst->slot_id).discard(xsink);
-                            locals_slot_cache.storage(local_inst->slot_id) = QoreValue();
+                            locals_slot_cache.release(local_inst->slot_id, xsink);
+                            locals_slot_cache.set(local_inst->slot_id, QoreValue());
                         }
                         // For closure-use vars: release all extra refs BEFORE
                         // clearValue so clearValue is the final deref that triggers
@@ -11989,7 +12288,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.closure missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12005,7 +12304,7 @@ load_local_done:
                 } else if (store_mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12026,7 +12325,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12067,7 +12366,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12093,7 +12392,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12111,7 +12410,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.global missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12127,7 +12426,7 @@ load_local_done:
                 } else if (store_mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12156,7 +12455,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12182,7 +12481,7 @@ load_local_done:
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12200,7 +12499,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.threadlocal missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12216,7 +12515,7 @@ load_local_done:
                 } else if (store_mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -12246,7 +12545,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12379,7 +12678,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12402,7 +12701,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12425,7 +12724,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12475,7 +12774,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12500,7 +12799,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12524,7 +12823,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12537,7 +12836,7 @@ load_local_done:
                 QoreValue res = QoreIterateOperatorNode::evalIteratorValue(source,
                     QoreIterateOperatorNode::getElementTypeInfo(source, source.getTypeInfo()), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12560,7 +12859,7 @@ load_local_done:
                     iter = QoreIterateOperatorNode::getFunctionalIterator(value_type, iterable, nullptr,
                         "streaming operator expression", xsink);
                 } else {
-                    iter = FunctionalOperatorInterface::getFunctionalIterator(value_type, iterable, true,
+                    iter = FunctionalOperatorInterface::getFunctionalIteratorForValue(value_type, iterable, true,
                         "foreach statement", xsink);
                 }
                 if (xsink && *xsink) {
@@ -12575,7 +12874,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12620,7 +12919,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12668,7 +12967,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12678,6 +12977,28 @@ load_local_done:
                     delete iter;
                     // Clear the iterator value so we don't double-delete
                     setValueSlot(values, iter_inst->iterator.id, QoreValue(static_cast<int64_t>(0)), xsink);
+                    // the last element is released when the loop ends, as the AST interpreter releases each element
+                    // when its iteration ends and native code releases the element's slot here (the next call of
+                    // qore_rt_iterator_next() releases the previous element and stores NOTHING when it is done)
+                    uint32_t elem_id = iter_inst->result.id;
+                    if (elem_id < values.size() && hasCleanupEntry(cleanup, elem_id)) {
+                        removeAllCleanupEntries(cleanup, elem_id);
+                        QoreValue elem = values[elem_id];
+                        values[elem_id] = QoreValue();
+                        elem.discard(xsink);
+                        if (xsink && *xsink) {
+                            if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                                prev_block = block;
+                                block = inst->exception_target;
+                                ip = 0;
+                                break;
+                            }
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                    }
                     prev_block = block;
                     block = iter_inst->done_target;
                     ip = 0;
@@ -12707,7 +13028,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12740,7 +13061,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12759,7 +13080,7 @@ load_local_done:
                     static_cast<uint64_t>(state_val.getAsBigInt()),
                     toBits(value_val), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12773,7 +13094,7 @@ load_local_done:
                     static_cast<uint64_t>(state_val.getAsBigInt()),
                     fill_val.getAsBigInt(), xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12808,7 +13129,7 @@ load_local_done:
                         xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement or handler IR");
                     }
                     executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -12837,7 +13158,7 @@ load_local_done:
                                 tlpd->dbgFunctionExit(statements, return_value, xsink);
                             }
                             executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return dbg_rc == RC_RETURN;
                         }
@@ -12893,14 +13214,14 @@ load_local_done:
                             }
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                             executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
                         if (dbg_rc == RC_RETURN) {
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                             executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return true;
                         }
@@ -12932,7 +13253,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13051,7 +13372,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13084,7 +13405,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "discard.temps.keep missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13118,7 +13439,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13218,7 +13539,7 @@ load_local_done:
                 if (xsink) {
                     xsink->raiseThreadExit();
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             case QoreIROpcode::GuardInt:
@@ -13230,7 +13551,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "guard missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13293,7 +13614,7 @@ load_local_done:
                         // Mutex::unlock()); without this, on_exit handlers are orphaned
                         // and resources like mutexes remain locked.
                         executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13321,14 +13642,14 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "unary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 QoreValue val = getIRValue(values, inst->operands[0]);
                 QoreValue res = QoreIRInterpreter::evalUnary(inst->opcode, val, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13393,7 +13714,7 @@ load_local_done:
                             ip = 0;
                             break;
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         if (debug_active) {
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                         }
@@ -13417,7 +13738,7 @@ load_local_done:
                         xsink->raiseException("IR-EXEC-ERROR",
                             "string append missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13439,7 +13760,7 @@ load_local_done:
                         toBits(left), toBits(right), xsink))
                     : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13606,7 +13927,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "binary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13620,7 +13941,7 @@ load_local_done:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13641,7 +13962,7 @@ load_local_done:
                 auto* plugin_inst = static_cast<QoreIRPluginInstruction*>(inst);
                 uint32_t global_id = resolvePluginOperationId(*plugin_inst, xsink);
                 if (!global_id || (xsink && *xsink)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13663,7 +13984,7 @@ load_local_done:
                     QoreValue self = getIRValue(values, inst->operands[0]);
                     args_value = makePluginArgsList(inst->operands, 1, values, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13671,7 +13992,7 @@ load_local_done:
                 } else if (inst->opcode == QoreIROpcode::PluginConstruct) {
                     args_value = makePluginArgsList(inst->operands, 0, values, xsink);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13691,7 +14012,7 @@ load_local_done:
 
                 args_value.discard(xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13710,7 +14031,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "container access op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13735,7 +14056,7 @@ load_local_done:
                         static_cast<int32_t>(expr_inst->list_selector_kinds.size()),
                         selector_bits.data(), string_index_char, xsink));
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -13756,7 +14077,7 @@ load_local_done:
                     evaluateOwnedListElement(res, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13788,7 +14109,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 } else {
@@ -13798,7 +14119,7 @@ load_local_done:
                     res = QoreIRInterpreter::evalTernary(inst->opcode, first, second, third, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13814,7 +14135,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "fused sprintf join missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13825,7 +14146,7 @@ load_local_done:
                 QoreValue res = fromBits(qore_rt_list_int_sprintf_join(
                     toBits(separator), toBits(list), toBits(literal), metadata.getAsBigInt(), xsink));
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13848,7 +14169,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 } else {
@@ -13859,7 +14180,7 @@ load_local_done:
                     res = QoreIRInterpreter::evalQuaternary(inst->opcode, first, second, third, fourth, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13874,7 +14195,7 @@ load_local_done:
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
                 QoreValue res = QoreIRInterpreter::evalLValueLoad(lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13894,7 +14215,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "store.lvalue missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13929,8 +14250,8 @@ load_local_done:
                 if (lval_inst->hasLocalTarget()) {
                     // Fast path: pre-computed slot_id for the lvalue target
                     if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id).discard(xsink);
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id) = QoreValue();
+                        locals_slot_cache.release(lval_inst->lvalue_slot_id, xsink);
+                        locals_slot_cache.set(lval_inst->lvalue_slot_id, QoreValue());
                     }
                     // Also discard values[] entries from LoadLocal results for the
                     // target variable.  These hold +1 references (from guard loads
@@ -13944,16 +14265,16 @@ load_local_done:
                         if (bv_slot_it != func.local_var_slots.end()) {
                             uint32_t sid = bv_slot_it->second;
                             if (sid < locals_slot_cache.size()) {
-                                locals_slot_cache.storage(sid).discard(xsink);
-                                locals_slot_cache.storage(sid) = QoreValue();
+                                locals_slot_cache.release(sid, xsink);
+                                locals_slot_cache.set(sid, QoreValue());
                             }
                             clearLoadSlots(sid);
                         }
                     } else {
                         // Truly unknown lvalue target - full slot cache wipe for safety
                         for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                            locals_slot_cache.storage(i).discard(xsink);
-                            locals_slot_cache.storage(i) = QoreValue();
+                            locals_slot_cache.release(i, xsink);
+                            locals_slot_cache.set(i, QoreValue());
                         }
                     }
                 }
@@ -13962,7 +14283,7 @@ load_local_done:
                 QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink,
                     lval_inst->mode);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -13994,7 +14315,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->operands.empty() || path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.assign missing operand or path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14010,7 +14331,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14068,7 +14389,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14093,7 +14414,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->operands.empty() || path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.compound missing operand or path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14108,7 +14429,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14142,7 +14463,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14166,7 +14487,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.unary missing path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14186,7 +14507,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14663,13 +14984,13 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
                 if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache.storage(path_inst->lvalue_slot_id).discard(xsink);
-                    locals_slot_cache.storage(path_inst->lvalue_slot_id) = QoreValue();
+                    locals_slot_cache.release(path_inst->lvalue_slot_id, xsink);
+                    locals_slot_cache.set(path_inst->lvalue_slot_id, QoreValue());
                     clearLoadSlots(path_inst->lvalue_slot_id);
                     if (path_inst->lvalue_slot_id < local_init_slots.size()
                             && local_init_slots[path_inst->lvalue_slot_id] != UINT32_MAX) {
@@ -14699,7 +15020,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.binary_mut missing path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14714,7 +15035,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14840,7 +15161,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14861,7 +15182,7 @@ load_local_done:
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
                 if (path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.ternary missing path");
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -14876,7 +15197,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15045,7 +15366,7 @@ load_local_done:
                         ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15065,12 +15386,12 @@ load_local_done:
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
                             }
-                            locals_slot_cache.storage(j).discard(xsink);
-                            locals_slot_cache.storage(j) = QoreValue();
+                            locals_slot_cache.release(j, xsink);
+                            locals_slot_cache.set(j, QoreValue());
                         }
                     } else if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(path_inst->lvalue_slot_id).discard(xsink);
-                        locals_slot_cache.storage(path_inst->lvalue_slot_id) = QoreValue();
+                        locals_slot_cache.release(path_inst->lvalue_slot_id, xsink);
+                        locals_slot_cache.set(path_inst->lvalue_slot_id, QoreValue());
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
@@ -15093,21 +15414,21 @@ load_local_done:
                 // Targeted cache invalidation before the lvalue operation
                 if (lval_inst->hasLocalTarget()) {
                     if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id).discard(xsink);
-                        locals_slot_cache.storage(lval_inst->lvalue_slot_id) = QoreValue();
+                        locals_slot_cache.release(lval_inst->lvalue_slot_id, xsink);
+                        locals_slot_cache.set(lval_inst->lvalue_slot_id, QoreValue());
                     }
                     clearLoadSlots(lval_inst->lvalue_slot_id);
                 } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
                     for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache.storage(i).discard(xsink);
-                        locals_slot_cache.storage(i) = QoreValue();
+                        locals_slot_cache.release(i, xsink);
+                        locals_slot_cache.set(i, QoreValue());
                     }
                 }
                 // evalLValueUnary returns the old value for post-inc/dec, new value for pre-inc/dec.
                 // The slot cache was pre-invalidated above; next LoadLocal re-reads from TLS.
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15124,7 +15445,7 @@ load_local_done:
                 const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15144,7 +15465,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15174,7 +15495,7 @@ load_local_done:
                     res = evalPlusEquals(lval_inst->lvalue, right, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15201,7 +15522,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15264,7 +15585,7 @@ load_local_done:
                     res = evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15283,7 +15604,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue binary op missing operand");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15293,7 +15614,7 @@ load_local_done:
                     lval_inst->lvalue.getInternalNode()) != nullptr;
                 QoreValue res = QoreIRInterpreter::evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15311,7 +15632,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "lvalue ternary op missing operands");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15322,7 +15643,7 @@ load_local_done:
                 QoreValue res = QoreIRInterpreter::evalLValueTernary(inst->opcode, lval_inst->lvalue, first, second,
                     third, xsink);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15821,7 +16142,7 @@ load_local_done:
                         xsink->raiseException("IR-INTERPRETER-ERROR",
                             "no self object in direct method call");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -15939,7 +16260,7 @@ load_local_done:
                         xsink->raiseException("IR-INTERPRETER-ERROR",
                             "no self object in invoke method direct");
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16011,7 +16332,7 @@ load_local_done:
                     if (!o || !o->isValid()) {
                         qore_raise_deleted_object(xsink, 
                             "cannot call method on a deleted weak reference");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -16181,7 +16502,7 @@ load_local_done:
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16195,7 +16516,7 @@ load_local_done:
                 releaseConsumedCallArgs(direct_inst);
                 if (xsink && *xsink) {
                     res.discard(xsink);
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16387,7 +16708,7 @@ load_local_done:
             }
             if (xsink && *xsink) {
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16414,7 +16735,7 @@ load_local_done:
                     break;
                 }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16438,7 +16759,7 @@ load_local_done:
                     break;
                 }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache.vector());
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16486,7 +16807,7 @@ load_local_done:
                     expr_inst->expr);
             }
             if (xsink && *xsink) {
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
             }
@@ -16542,7 +16863,7 @@ load_local_done:
                 QoreValue res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                     expr_inst->expr);
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16585,7 +16906,7 @@ load_local_done:
                     res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                         expr_inst->expr);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         return false;
                     }
                 }
@@ -16617,14 +16938,14 @@ load_local_done:
                     }
                     // For other types, res stays NOTHING
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         return false;
                     }
                 } else {
                     res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                         expr_inst->expr);
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                         return false;
                     }
                 }
@@ -16682,7 +17003,7 @@ load_local_done:
                     if (branchToExceptionTarget(inst)) {
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16708,7 +17029,7 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -16729,7 +17050,7 @@ load_local_done:
                 cleanupLocalCaches();
 
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     return false;
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
@@ -16758,7 +17079,7 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16796,7 +17117,7 @@ load_local_done:
                         expr_inst->expr);
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16853,13 +17174,13 @@ load_local_done:
                 // No exception target: fire all scope exits after raising the exception.
                 // The exception is now on xsink, so on_error handlers can access it
                 // via CatchExceptionHelper for rethrow support.
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 return returnAfterUnhandledException(true);
             }
             case QoreIROpcode::Rethrow: {
                 auto* rethrow_inst = static_cast<QoreIRThrowInstruction*>(inst);
                 if (!xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                     cleanupLocalCaches();
                     return false;
                 }
@@ -16946,7 +17267,7 @@ load_local_done:
                                 ip = 0;
                                 break;
                             }
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                             cleanupLocalCaches();
                             return false;
                         }
@@ -17022,12 +17343,7 @@ load_local_done:
                     }
                 }
                 if (found) {
-                    QoreValue val = getIRValue(values, incoming_value);
-                    QoreValue stored = val.needsRef() ? val.refSelf() : val;
-                    setValueSlot(values, phi->result.id, stored, xsink);
-                    if (stored.needsRef()) {
-                        cleanup.push_back(phi->result.id);
-                    }
+                    setPhiValue(phi, incoming_value);
                 }
                 ++ip;
                 break;
@@ -17038,7 +17354,7 @@ load_local_done:
                     msg += std::to_string(static_cast<int>(inst->opcode));
                     xsink->raiseException("IR-EXEC-ERROR", "%s", msg.c_str());
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
                 cleanupLocalCaches();
                 return false;
         }
@@ -17070,7 +17386,7 @@ load_local_done:
     if (xsink) {
         xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
     }
-    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+    cleanupValues(values, cleanup, xsink, true, cleanup_log, release_groups);
     cleanupLocalCaches(false);
     return false;
 }
@@ -17095,7 +17411,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             // results), causing a UAF when cache/values later deref.  Binary
             // ops in evalBinary already refSelf for the same reason.
             QoreUnaryPlusOperatorNode node(nullptr,
-                value.needsRef() ? value.refSelf() : value);
+                ir_operator_operand(value));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::UnaryMinusInt:
@@ -17105,15 +17421,14 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::UnaryMinusAny: {
             // See UnaryPlusAny — refSelf balances the operator node's dtor.
             QoreUnaryMinusOperatorNode node(nullptr,
-                value.needsRef() ? value.refSelf() : value);
+                ir_operator_operand(value));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
             return QoreValue(!value.isNothing());
         case QoreIROpcode::IsCollectionType: {
-            qore_type_t t = value.getType();
-            return QoreValue(t == NT_LIST || t == NT_OBJECT);
+            return QoreValue(static_cast<bool>(qore_rt_is_collection_type(toBits(value))));
         }
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
@@ -17181,7 +17496,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAny: {
             bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QorePlusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::AddTimeout: {
@@ -17207,7 +17522,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             // Fallback for non-timeout cases
             bool needs_deref = true;
-            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QorePlusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::AddString: {
@@ -17243,7 +17558,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAny: {
             bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QoreMinusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::SubTimeout: {
@@ -17267,7 +17582,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             // Fallback
             bool needs_deref = true;
-            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QoreMinusOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::MulInt:
@@ -17276,7 +17591,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsFloat() * right.getAsFloat());
         case QoreIROpcode::MulAny: {
             bool needs_deref = true;
-            QoreMultiplicationOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            QoreMultiplicationOperatorNode node(nullptr, ir_operator_operand(left), ir_operator_operand(right));
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::DivInt: {
@@ -17336,21 +17651,24 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() & right.getAsBigInt());
         case QoreIROpcode::AndAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreBinaryAndOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::OrInt:
             return QoreValue(left.getAsBigInt() | right.getAsBigInt());
         case QoreIROpcode::OrAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreBinaryOrOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::XorInt:
             return QoreValue(left.getAsBigInt() ^ right.getAsBigInt());
         case QoreIROpcode::XorAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreBinaryXorOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::AddAssignInt:
@@ -17418,14 +17736,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue(left.getAsBigInt() << right.getAsBigInt());
         case QoreIROpcode::ShlAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreShiftLeftOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::ShrInt:
             return QoreValue(left.getAsBigInt() >> right.getAsBigInt());
         case QoreIROpcode::ShrAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreShiftRightOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::ShlAssignInt:
@@ -17440,7 +17760,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldlInt:
         case QoreIROpcode::FoldlFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreFoldlOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreFoldlOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         // Optimized fold operations with native loops
@@ -17878,14 +18199,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::FoldrInt:
         case QoreIROpcode::FoldrFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreFoldrOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreFoldrOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::MapAny:
         case QoreIROpcode::MapInt:
         case QoreIROpcode::MapFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreMapOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreMapOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         // Optimized map operations with native loops
@@ -18128,7 +18451,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SelectInt:
         case QoreIROpcode::SelectFloat: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreSelectOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreSelectOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         // Optimized select operations with native loops
@@ -18475,14 +18799,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 toBits(left), toBits(right), xsink));
         case QoreIROpcode::RangeAny: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
         case QoreIROpcode::RangeDate: {
             bool needs_deref = true;
-            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);
+            ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), ir_operator_operand(left),
+                ir_operator_operand(right))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::EqInt:
@@ -18601,21 +18927,21 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
         case QoreIROpcode::RangeSliceFloat: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreSquareBracketsRangeOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::MapSelectAny:
         case QoreIROpcode::MapSelectList: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreMapSelectOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMap: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third))), xsink);
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::StringJoinStart:
@@ -18643,7 +18969,8 @@ QoreValue QoreIRInterpreter::evalQuaternary(QoreIROpcode op, const QoreValue& fi
         case QoreIROpcode::HashMapSelect: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreHashMapSelectOperatorNode(get_runtime_location(),
-                first.refSelf(), second.refSelf(), third.refSelf(), fourth.refSelf())), xsink);
+                ir_operator_operand(first), ir_operator_operand(second), ir_operator_operand(third),
+                ir_operator_operand(fourth))), xsink);
             return evalAndRef(*node, xsink);
         }
         default:

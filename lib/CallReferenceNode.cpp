@@ -215,6 +215,14 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
     if (*xsink) {
         return QoreValue();
     }
+    // a call reference or closure read from a variable is borrowed; the arguments are evaluated after it, and an
+    // argument can assign the variable another value (c(c = NOTHING), c(c = other)), which releases the only reference
+    // to the closure before it runs, so the call holds its own reference to a borrowed callable while its arguments
+    // need evaluation: the call runs the closure that the expression gave, as in every other execution mode
+    ValueHolder borrowed_callable(xsink);
+    if (!lv.isTemp() && lv->hasNode() && args && args->needs_eval()) {
+        borrowed_callable = lv->refSelf();
+    }
     // a temporary call reference or closure that is called lives until the end of the statement, as a temporary
     // receiver does
     QoreStatementTempScope::holdReceiver(exp, lv, xsink);

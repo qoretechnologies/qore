@@ -85,6 +85,12 @@ the real reference a plain local variable gives its object (`QoreLValue::closure
 variable), so a write to that object - by the frame, through a `\var` argument, or by another thread through a
 closure - is deferred as well.
 
+The IR storage of an object local (a body local of an object type that compiled code keeps out of the runtime stack,
+`QoreIRFunction::real_reference_locals`) gives the object it holds a real reference in the same way: it is marked
+with `setRealReference()` when stored and released with `realDeref()` (see `design/qore-jit-aot-current-state.md`).
+IR storage that does not mark its object (an `auto` local) is correct, as its reference is external to any recursive
+set, but each release of another reference to an object in a recursive set held only there is a collection decision.
+
 A deferred scan is replayed by the first dereference that finds no real reference left while other references
 remain. A constructor that writes to its members defers such a scan on the new object (its `self` holds a real
 reference), so the new object must not be dereferenced again after it has been linked into a graph, or the replay

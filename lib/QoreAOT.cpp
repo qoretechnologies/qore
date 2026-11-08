@@ -4710,6 +4710,12 @@ private:
             if (fn->reference_slot_locals.count(key)) {
                 helper->reference_slot_locals.insert(key);
             }
+            if (fn->real_reference_locals.count(key)) {
+                helper->real_reference_locals.insert(key);
+            }
+            if (fn->real_reference_ir_only_locals.count(key)) {
+                helper->real_reference_ir_only_locals.insert(key);
+            }
         }
         for (const LocalVar* lv : region.shared_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
@@ -4721,6 +4727,9 @@ private:
             // a shared local that a reference can reach is on the runtime stack in both functions, which read and
             // write it as a variable that can hold a reference
             fn->reference_slot_locals.erase(key);
+            // and an object local is on the runtime stack in both functions, which marks its object as a variable
+            fn->real_reference_locals.erase(key);
+            fn->real_reference_ir_only_locals.erase(key);
             if (fn->reference_store_locals.count(key)) {
                 helper->reference_store_locals.insert(key);
             }

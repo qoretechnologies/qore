@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class OperandAssignedByArgumentTest
+
+#! Regression test: a call, [] or {} on a value read from a variable that an argument, index or key assigns
+/** The AST interpreter read the callable of a call through a variable (<tt>c(...)</tt>) and the container of
+    <tt>[]</tt> and <tt>{}</tt> borrowed from the variable, then evaluated the arguments or the index; an argument or
+    index expression that assigns or removes the variable (<tt>c(c = NOTHING)</tt>, <tt>e(e = other)</tt>,
+    <tt>l[(l = x).size() - 1]</tt>, <tt>h{(h = x).firstKey()}</tt>, <tt>l[0..(l = x).size()]</tt>) released the only reference to the value before it
+    was used: a crash or a use after free.  Every other execution mode uses the value of its own that the expression
+    gave, and the AST interpreter now holds a reference to a borrowed callable or container while the arguments or
+    the index need evaluation, as it does for the receiver of a method call.  The script runs these expressions in
+    functions, twice, and in top-level code, in every execution mode, on the IR tier of tiered execution and as a qcc
+    executable (see ExecModeOutputTest).
+*/
+class OperandAssignedByArgumentTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%new-style
+%require-types
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+list<auto> sub mk(string p) { return (new T(p + "0"), new T(p + "1"), new T(p + "2")); }
+hash<auto> sub mkh(string p) { return {"a": new T(p + "a"), "b": new T(p + "b")}; }
+code sub mkc(string n) {
+    T t(n);
+    return auto sub (auto a) { printf("%s called: %s\n", t.n, a.type()); return 1; };
+}
+# a call through a variable whose argument assigns or removes the variable runs the closure the variable gave
+sub calls() {
+    *code c = mkc("c");
+    c(c = NOTHING);
+    printf("c after: %y\n", c);
+    *code d = mkc("d");
+    d(remove d);
+    printf("d after: %y\n", d);
+    *code e = mkc("e");
+    e(e = mkc("e2"));
+    printf("e replaced: %y\n", exists e);
+    e = NOTHING;
+}
+# [] and {} on a container that the index or key expression assigns read the container the variable gave
+sub reads() {
+    list<auto> l = mk("l");
+    auto v = l[(l = mk("m")).size() - 1];
+    printf("l value: %s size: %d\n", v.n, l.size());
+    remove v;
+    remove l;
+    *list<auto> l2 = mk("r");
+    v = l2[(remove l2) ? 1 : 0];
+    printf("l2 value: %s\n", v.n);
+    remove v;
+    hash<auto> h = mkh("h");
+    v = h{(h = mkh("k")).firstKey()};
+    printf("h value: %s keys: %y\n", v.n, h.keys());
+    remove v;
+    remove h;
+    *hash<auto> h2 = mkh("s");
+    v = h2{(h2 = NOTHING) ?? "b"};
+    printf("h2 value: %s\n", v.n);
+    remove v;
+    *T o = new T("o");
+    v = o{(o = NOTHING) ?? "n"};
+    printf("o value: %y\n", v);
+    list<auto> sl = mk("q");
+    v = sl[1..(sl = ()).size() + 1];
+    printf("sl value: %y size: %d\n", (map $1.n, v), sl.size());
+    remove v;
+    list<auto> ml = mk("p");
+    list<auto> mv = map $1.n, ml[0..(ml = ()).size() + 1];
+    printf("ml map: %y\n", mv);
+}
+for (int i = 0; i < 2; ++i) {
+    calls();
+    reads();
+    printf("--\n");
+}
+# top-level code
+*code tc = mkc("tc");
+tc(tc = NOTHING);
+list<auto> tl = mk("tl");
+auto tv = tl[(tl = ()).size()];
+printf("tl value: %s\n", tv.n);
+remove tv;
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "c called: nothing",
+            "dtor c",
+            "c after: null",
+            "d called: closure",
+            "dtor d",
+            "d after: null",
+            "e called: closure",
+            "dtor e",
+            "e replaced: True",
+            "dtor e2",
+            "dtor l0",
+            "dtor l1",
+            "l value: l2 size: 3",
+            "dtor l2",
+            "dtor m0",
+            "dtor m1",
+            "dtor m2",
+            "dtor r0",
+            "dtor r2",
+            "l2 value: r1",
+            "dtor r1",
+            "dtor hb",
+            "h value: ha keys: [\"a\", \"b\"]",
+            "dtor ha",
+            "dtor ka",
+            "dtor kb",
+            "dtor sa",
+            "h2 value: sb",
+            "dtor sb",
+            "dtor o",
+            "o value: \"o\"",
+            "dtor q0",
+            "dtor q2",
+            "sl value: [\"q1\"] size: 0",
+            "dtor q1",
+            "dtor p0",
+            "dtor p1",
+            "dtor p2",
+            "ml map: [\"p0\", \"p1\"]",
+            "--",
+            "c called: nothing",
+            "dtor c",
+            "c after: null",
+            "d called: closure",
+            "dtor d",
+            "d after: null",
+            "e called: closure",
+            "dtor e",
+            "e replaced: True",
+            "dtor e2",
+            "dtor l0",
+            "dtor l1",
+            "l value: l2 size: 3",
+            "dtor l2",
+            "dtor m0",
+            "dtor m1",
+            "dtor m2",
+            "dtor r0",
+            "dtor r2",
+            "l2 value: r1",
+            "dtor r1",
+            "dtor hb",
+            "h value: ha keys: [\"a\", \"b\"]",
+            "dtor ha",
+            "dtor ka",
+            "dtor kb",
+            "dtor sa",
+            "h2 value: sb",
+            "dtor sb",
+            "dtor o",
+            "o value: \"o\"",
+            "dtor q0",
+            "dtor q2",
+            "sl value: [\"q1\"] size: 0",
+            "dtor q1",
+            "dtor p0",
+            "dtor p1",
+            "dtor p2",
+            "ml map: [\"p0\", \"p1\"]",
+            "--",
+            "tc called: nothing",
+            "dtor tc",
+            "dtor tl1",
+            "dtor tl2",
+            "tl value: tl0",
+            "dtor tl0",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("OperandAssignedByArgument", Script, (map $1 + "\n", Expected).join(""),
+            "uses the callable or container that the variable held, as the AST interpreter does") {
+    }
+}
