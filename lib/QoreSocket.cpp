@@ -7290,6 +7290,7 @@ void QoreCaresAddrInfoResolver::resetCheck() noexcept {
     check_found = false;
     lookup_definite = false;
     check_finished = false;
+    repeat_failure = ARES_SUCCESS;
     server_failures = 0;
     check_failures_start = 0;
     repeated = false;
@@ -7624,21 +7625,21 @@ void QoreCaresAddrInfoResolver::startConfirmation() {
 
 void QoreCaresAddrInfoResolver::startProbe() {
     assert(singleLabel());
-    // the record types that the lookup asked for: c-ares also asks for A records for an IPv6 lookup with
-    // AI_V4MAPPED
+    // the record types that the lookup asked for: c-ares 1.34.9 asks for AAAA records only for an IPv6 lookup, also
+    // with AI_V4MAPPED, so an A record of the name would hide a failure for AAAA
     std::vector<ares_dns_rec_type_t> types;
     if (family != AF_INET6) {
         types.push_back(ARES_REC_TYPE_A);
     }
     if (family != AF_INET) {
         types.push_back(ARES_REC_TYPE_AAAA);
-        if (family == AF_INET6 && (flags & AI_V4MAPPED)) {
-            types.push_back(ARES_REC_TYPE_A);
-        }
     }
     check_remaining = static_cast<int>(types.size());
     check_status = status;
-    // a query names the host itself, without the search domains
+    // a query names the host itself, without the search domains; c-ares looks up a single-label name with the name
+    // that HOSTALIASES gives it, if any (ares_lookup_hostaliases()), and the query names the host as given: the
+    // SERVFAIL or REFUSED answer that c-ares hid is one for a name that the DNS server was asked for, which an alias
+    // is not, so a host with an alias is asked for as given, and its answer only tells whether that name fails
     for (ares_dns_rec_type_t type : types) {
         ares_query_dnsrec(channel, host.c_str(), ARES_CLASS_IN, type, probeCallback, this, nullptr);
     }
@@ -7745,6 +7746,11 @@ void QoreCaresAddrInfoResolver::complete(int new_status, struct ares_addrinfo* r
         // the failed queries (serverStateCallback()) when its public call returns, after the lookup's callback
         lookup_definite = true;
         return;
+    } else if (qore_cares_status_is_definite(status) && repeated && repeat_failure != ARES_SUCCESS) {
+        // the lookup started again failed with a definite status, but the check before it saw a failure that might
+        // not happen again: the answers of the server changed, and a definite failure is never reported after a
+        // temporary one was seen
+        status = repeat_failure;
     }
     done = true;
 }
@@ -7770,7 +7776,9 @@ void QoreCaresAddrInfoResolver::checked(int new_status, bool found) {
 void QoreCaresAddrInfoResolver::finishCheck() {
     if (check_found) {
         // the name has an address after all: the lookup is started again once, and its result is the answer, in
-        // the order that c-ares gives it
+        // the order that c-ares gives it (RFC 6724); a temporary failure that the check saw is reported if the
+        // lookup started again fails with a definite status (see complete())
+        repeat_failure = qore_cares_status_is_definite(check_status) ? ARES_SUCCESS : check_status;
         pending_check = Check::Repeat;
         return;
     }

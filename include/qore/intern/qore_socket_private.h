@@ -694,7 +694,9 @@ private:
           happen again
         - a lookup of a single-label name, which c-ares looks up with the search domains, asks for the name itself
           (see startProbe()): c-ares goes on to the next name after a SERVFAIL or REFUSED answer for a single-label
-          name (c-ares issue #852), so a later definite answer hid it
+          name (c-ares issue #852, for systemd-resolved, which refuses or fails single-label names by policy), so a
+          later definite answer for a search domain hid it; a single-label name that such a server fails or refuses
+          by policy then fails with that status, which is not a definite answer about the name
 
         A lookup during which no query failed is definite as c-ares gives it, with no other query.
     */
@@ -712,7 +714,9 @@ private:
     //! Starts the queries for a single-label name itself, without the search domains
     DLLLOCAL void startProbe();
     //! Starts the lookup again once, after a check found that the name has addresses after all
-    /** The addresses are those of a lookup, in the order that c-ares gives them (RFC 6724), not those of the checks
+    /** The addresses are those of a lookup, in the order that c-ares gives them (RFC 6724), not those of the checks;
+        if it fails with a definite status after the check saw a temporary failure, it fails with that failure (see
+        repeat_failure)
     */
     DLLLOCAL void startRepeat();
     //! Records the result of a lookup or query of a check
@@ -787,6 +791,8 @@ private:
     unsigned check_failures_start = 0;
     //! set when the lookup was started again (see startRepeat()), whose result is not checked again
     bool repeated = false;
+    //! the temporary failure that the check before the lookup was started again saw, or ARES_SUCCESS
+    int repeat_failure = ARES_SUCCESS;
     //! the number of times the lookup was started again after c-ares lost its query
     unsigned lost_query_restarts = 0;
     bool started = false;

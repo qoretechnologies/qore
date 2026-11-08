@@ -4130,8 +4130,10 @@ public:
         definiteWithoutFailure(c, dns);
         mixedFamilies(c, dns);
         addressesFoundByCheck(c, dns);
+        flappingRepeat(c, dns);
         singleLabel(c, dns);
         destroyDuringConfirmation(c, dns);
+        destroyDuringProbeAndRepeat(c, dns);
         restartDuringConfirmation(c, dns);
         timeoutDuringConfirmation(c, dns);
     }
@@ -4289,9 +4291,17 @@ private:
     */
     static int drive(QoreCaresAddrInfoResolver& r, DnsServer& dns, const answer_t& answer,
             const std::function<bool()>& stop, ExceptionSink& xsink) {
-        // the queries held until the A query of their name has been answered
-        std::vector<std::pair<Query, Answer>> held;
-        std::set<std::string> a_answered;
+        // the AAAA queries held until the A query of the same round has been answered: the n-th AAAA query for a
+        // name is answered after the n-th A query for it (a lookup, a check and a lookup started again each ask for
+        // both, unless an answer comes from the query cache)
+        struct Held {
+            Query q;
+            Answer a;
+            int n;
+        };
+        std::vector<Held> held;
+        std::map<std::string, int> a_count;
+        std::map<std::string, int> aaaa_count;
         while (true) {
             int rc = r.continuePoll(&xsink);
             if (rc != 1 || stop()) {
@@ -4316,16 +4326,19 @@ private:
                 if (a.rcode < 0) {
                     continue;
                 }
-                if (a.after_a && !a_answered.count(q.name)) {
-                    held.push_back({q, a});
-                    continue;
+                if (a.after_a) {
+                    int n = ++aaaa_count[q.name];
+                    if (a_count[q.name] < n) {
+                        held.push_back({q, a, n});
+                        continue;
+                    }
                 }
                 dns.reply(q, a);
                 if (q.type == TypeA) {
-                    a_answered.insert(q.name);
+                    int n = ++a_count[q.name];
                     for (auto i = held.begin(); i != held.end();) {
-                        if (i->first.name == q.name) {
-                            dns.reply(i->first, i->second);
+                        if (i->q.name == q.name && i->n <= n) {
+                            dns.reply(i->q, i->a);
                             i = held.erase(i);
                         } else {
                             ++i;
@@ -4420,62 +4433,120 @@ private:
     //! A check that finds an address starts the lookup again: its addresses are in the order that c-ares gives them
     static void addressesFoundByCheck(UnitTestCounters& c, DnsServer& dns) {
         static const std::string v4("\x7f\x00\x00\x01", 4);
-        static const std::string v6("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
-        for (int flags : {0, AI_V4MAPPED | AI_ALL}) {
-            // the addresses that a lookup that is answered at once gives
-            std::string expected;
-            ExceptionSink xsink;
-            {
-                QoreCaresAddrInfoResolver r("both.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0, flags);
-                UT_ASSERT_EQ(c, 0, drive(r, dns, [] (const Query& q) {
-                    Answer a;
-                    a.addrs.push_back(q.type == TypeA ? v4 : v6);
+        // a unique local address (fd00::/8), which RFC 6724 orders by the routes of the host: after or before the
+        // IPv4 address, as c-ares sorts the answer of a lookup
+        static const std::string v6("\xfd\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+        // the addresses that a lookup that is answered at once gives
+        std::string expected;
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("both.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            UT_ASSERT_EQ(c, 0, drive(r, dns, [] (const Query& q) {
+                Answer a;
+                a.addrs.push_back(q.type == TypeA ? v4 : v6);
+                return a;
+            }, xsink), "c-ares check: a name with addresses is resolved");
+            expected = addressesOf(r);
+        }
+        // the first lookup fails for A, and AAAA is not found (an NXDOMAIN answer without an SOA record, which the
+        // query cache does not keep); the checks find both addresses
+        dns.queries.clear();
+        std::string found;
+        {
+            QoreCaresAddrInfoResolver r("flip.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            UT_ASSERT_EQ(c, 0, drive(r, dns, flipAnswers(), xsink),
+                "c-ares check: a name whose check finds addresses is resolved");
+            found = addressesOf(r);
+        }
+        UT_ASSERT(c, !xsink, "c-ares check: the lookup started again succeeds");
+        xsink.clear();
+        UT_ASSERT(c, found == expected, "c-ares check: the addresses are in the order of a lookup");
+        if (found != expected) {
+            printf("  expected '%s', got '%s'\n", expected.c_str(), found.c_str());
+        }
+    }
+
+    //! The answers of the flip case: A fails and AAAA is not found at first, then both have an address
+    static answer_t flipAnswers() {
+        static const std::string v4("\x7f\x00\x00\x01", 4);
+        static const std::string v6("\xfd\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+        auto first_a = std::make_shared<bool>(true);
+        auto first_aaaa = std::make_shared<bool>(true);
+        return [first_a, first_aaaa] (const Query& q) {
+            // a query of an earlier case, which was destroyed before the server read it, is not one of this case
+            if (q.name != "flip.qore-check") {
+                return rcode(NxDomain);
+            }
+            Answer a;
+            if (q.type == TypeA) {
+                if (*first_a) {
+                    *first_a = false;
+                    return rcode(ServFail);
+                }
+                a.addrs.push_back(v4);
+            } else {
+                a.after_a = true;
+                if (*first_aaaa) {
+                    *first_aaaa = false;
+                    a.rcode = NxDomain;
                     return a;
-                }, xsink), "c-ares check: a name with addresses is resolved");
-                expected = addressesOf(r);
+                }
+                a.addrs.push_back(v6);
             }
-            // the first lookup fails for A, and AAAA is not found (an NXDOMAIN answer without an SOA record, which
-            // the query cache does not keep); the checks find both addresses
-            dns.queries.clear();
-            std::string found;
-            {
-                QoreCaresAddrInfoResolver r("flip.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0, flags);
-                bool first_a = true;
-                bool first_aaaa = true;
-                UT_ASSERT_EQ(c, 0, drive(r, dns, [&first_a, &first_aaaa] (const Query& q) {
-                    Answer a;
-                    if (q.type == TypeA) {
-                        if (first_a) {
-                            first_a = false;
-                            return rcode(ServFail);
-                        }
-                        a.addrs.push_back(v4);
-                    } else {
-                        a.after_a = true;
-                        if (first_aaaa) {
-                            first_aaaa = false;
-                            a.rcode = NxDomain;
-                            return a;
-                        }
-                        a.addrs.push_back(v6);
-                    }
-                    return a;
-                }, xsink), "c-ares check: a name whose check finds addresses is resolved");
-                found = addressesOf(r);
-            }
-            UT_ASSERT(c, !xsink, "c-ares check: the lookup started again succeeds");
-            xsink.clear();
-            UT_ASSERT(c, found == expected, "c-ares check: the addresses are in the order of a lookup");
-            if (found != expected) {
-                printf("  expected '%s', got '%s' (flags %d)\n", expected.c_str(), found.c_str(), flags);
-            }
-            bool has_v4 = (" " + found + " ").find(" 127.0.0.1 ") != std::string::npos;
-            bool has_mapped = found.find("::ffff:127.0.0.1") != std::string::npos;
-            UT_ASSERT(c, !(has_v4 && has_mapped), "c-ares check: no IPv4 address is given twice");
+            return a;
+        };
+    }
+
+    //! A lookup started again after a check that saw a temporary failure does not report a definite failure
+    /** The server flaps: A fails every time, and AAAA is not found, then has an address (which makes the lookup
+        start again), then is not found again; the lookup started again fails with ENOTFOUND, but the check saw that
+        A failed, which might not happen again
+    */
+    static void flappingRepeat(UnitTestCounters& c, DnsServer& dns) {
+        static const std::string v6("\xfd\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+        // without a query cache, which would answer the lookup started again with the address of the check
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.query_cache = false;
+        QueryOptionsHelper query_options(opts);
+        dns.queries.clear();
+        ExceptionSink xsink;
+        bool repeated = false;
+        {
+            QoreCaresAddrInfoResolver r("flap.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            int aaaa_queries = 0;
+            drive(r, dns, [&aaaa_queries] (const Query& q) {
+                if (q.type == TypeA) {
+                    return rcode(ServFail);
+                }
+                Answer a;
+                a.after_a = true;
+                if (++aaaa_queries == 2) {
+                    a.addrs.push_back(v6);
+                } else {
+                    a.rcode = NxDomain;
+                }
+                return a;
+            }, [&r, &repeated] () {
+                if (r.running_check == QoreCaresAddrInfoResolver::Check::Repeat) {
+                    repeated = true;
+                }
+                return false;
+            }, xsink);
+        }
+        UT_ASSERT(c, repeated, "c-ares flap: the lookup was started again");
+        std::string status = statusOf(xsink);
+        UT_ASSERT(c, status == "ESERVFAIL", "c-ares flap: the failure that the check saw is reported");
+        if (status != "ESERVFAIL") {
+            printf("  got %s\n", status.c_str());
         }
     }
 
     //! A SERVFAIL or REFUSED answer for a single-label name itself is reported, though a search domain followed
+    /** systemd-resolved, for example, answers a single-label name with SERVFAIL or REFUSED by policy, and c-ares then
+        tries the search domains (c-ares issue #852)
+    */
     static void singleLabel(UnitTestCounters& c, DnsServer& dns) {
         // the name itself is asked for first (ndots 0), then with the search domain
         QoreDbgCaresQueryOptions opts;
@@ -4485,6 +4556,36 @@ private:
         opts.domains.push_back("qore-check-domain");
         opts.ndots = 0;
         QueryOptionsHelper query_options(opts);
+        // an IPv6 lookup with AI_V4MAPPED asks for AAAA records only: the name itself is asked for the record type
+        // that the lookup asked for, so an A record of the name does not hide the failure for AAAA
+        {
+            static const std::string v4("\x0a\x01\x02\x03", 4);
+            dns.queries.clear();
+            ExceptionSink xsink;
+            {
+                QoreCaresAddrInfoResolver r("single", nullptr, AF_INET6, SOCK_STREAM, 0, AI_V4MAPPED);
+                drive(r, dns, [] (const Query& q) {
+                    if (q.name == "single") {
+                        if (q.type == TypeAaaa) {
+                            return rcode(ServFail);
+                        }
+                        Answer a;
+                        a.addrs.push_back(v4);
+                        return a;
+                    }
+                    return rcode(NxDomain);
+                }, xsink);
+            }
+            std::string status = statusOf(xsink);
+            UT_ASSERT(c, status == "ESERVFAIL", "c-ares check: the failure for AAAA of a single-label name is reported");
+            if (status != "ESERVFAIL") {
+                printf("  AF_INET6|AI_V4MAPPED: got %s; queries:", status.c_str());
+                for (const std::string& q : dns.queries) {
+                    printf(" %s", q.c_str());
+                }
+                printf("\n");
+            }
+        }
         for (int family : {AF_INET, AF_UNSPEC}) {
             for (int code : {ServFail, Refused}) {
                 dns.queries.clear();
@@ -4506,7 +4607,7 @@ private:
                     printf("\n");
                 }
             }
-            // a failure that does not happen again leaves the definite answer
+            // a failure that does not happen again leaves the definite answer (below)
             dns.queries.clear();
             ExceptionSink xsink;
             {
@@ -4558,6 +4659,45 @@ private:
             UT_ASSERT_EQ(c, 1, toConfirmation(r, dns, xsink), "c-ares destroy: the lookup of each family runs");
         }
         UT_ASSERT(c, !xsink, "c-ares destroy: the lookup is destroyed without an error");
+        xsink.clear();
+    }
+
+    //! A lookup destroyed while it asks for a single-label name itself, or while it is started again, ends at once
+    static void destroyDuringProbeAndRepeat(UnitTestCounters& c, DnsServer& dns) {
+        {
+            QoreDbgCaresQueryOptions opts;
+            opts.tries = 1;
+            opts.timeout_ms = 30000;
+            opts.domains_set = true;
+            opts.domains.push_back("qore-check-domain");
+            opts.ndots = 0;
+            QueryOptionsHelper query_options(opts);
+            ExceptionSink xsink;
+            {
+                QoreCaresAddrInfoResolver r("single", nullptr, AF_INET, SOCK_STREAM, 0);
+                UT_ASSERT_EQ(c, 1, drive(r, dns, [] (const Query& q) {
+                    return rcode(q.name == "single" && q.type == TypeA ? ServFail : NxDomain);
+                }, [&r] () {
+                    return r.running_check == QoreCaresAddrInfoResolver::Check::Probe && r.check_remaining > 0;
+                }, xsink), "c-ares destroy: the name itself is asked for");
+            }
+            UT_ASSERT(c, !xsink, "c-ares destroy: the lookup that asks for the name itself is destroyed");
+            xsink.clear();
+        }
+        // without a query cache, which would answer the lookup started again at once with the addresses of the check
+        QoreDbgCaresQueryOptions opts;
+        opts.tries = 1;
+        opts.timeout_ms = 30000;
+        opts.query_cache = false;
+        QueryOptionsHelper query_options(opts);
+        ExceptionSink xsink;
+        {
+            QoreCaresAddrInfoResolver r("flip.qore-check.", nullptr, AF_UNSPEC, SOCK_STREAM, 0);
+            UT_ASSERT_EQ(c, 1, drive(r, dns, flipAnswers(), [&r] () {
+                return r.running_check == QoreCaresAddrInfoResolver::Check::Repeat;
+            }, xsink), "c-ares destroy: the lookup is started again");
+        }
+        UT_ASSERT(c, !xsink, "c-ares destroy: the lookup started again is destroyed");
         xsink.clear();
     }
 

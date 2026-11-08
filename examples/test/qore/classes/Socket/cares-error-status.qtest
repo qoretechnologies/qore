@@ -95,6 +95,10 @@ class CaresErrorStatusTest inherits QUnit::Test {
     */
     definiteQueriesTest() {
         checkDebug();
+        # without a query cache, which keeps a NODATA answer without an SOA record, a check of the failure would ask
+        # for both families again
+        hash<auto> opts = call_function("dbg_cares_set_query_options", {"query_cache": False});
+        on_exit call_function("dbg_cares_set_query_options", opts);
         foreach hash<auto> i in ({"label": "nx", "status": "ENOTFOUND"}, {"label": "nodata", "status": "ENODATA"}) {
             string name = i.label + ".qore-test.";
             int before = dns.getQueries(i.label);
