@@ -747,6 +747,18 @@ DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo 
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
 
+//! Finds a method of a class or of its parent classes that may not be committed yet, without an access check
+/** A method reference in an expression that is read while a module's classes are being loaded, such as the initial
+    value of a static member, names a method whose variants are not committed yet, and is read with no class context:
+    the runtime lookups (QoreClass::findStaticMethod(), QoreClass::findMethod()) see no committed method then, and
+    would refuse a private one.  The reference was resolved, with its access, when the module was compiled.
+
+    @param qc the class
+    @param name the method's name
+    @param is_static true for a static method, false for a normal one
+*/
+DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static);
+
 //! Clears namespace/global/static data for all registered AOT user modules.
 /** AOT user modules are loaded as binary modules, so they are skipped by
     QoreModuleManager::delUser().  This helper lets shutdown clear their global
