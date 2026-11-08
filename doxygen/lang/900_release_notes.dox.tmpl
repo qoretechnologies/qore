@@ -523,36 +523,18 @@
     @ref user_module_exit_hooks)
 
     @par System Thread Capabilities
-    @ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()" creates, during a
-    module's initialization, a capability that starts a fixed operation in a new thread that no sandbox governs, so that
-    trusted infrastructure can do work for sandboxed callers, such as building shared state, without the callers'
-    sandbox, interrupts or limits reaching it; @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"
-    tells such infrastructure whether the code it serves is sandboxed, also under a policy barrier, and can be called
-    by any code
+    @ref Qore::SandboxManager::createSystemThreadCall() "SandboxManager::createSystemThreadCall()" lets a module start a
+    fixed operation in a thread that no sandbox governs, and @ref Qore::SandboxManager::isSandboxed()
+    "SandboxManager::isSandboxed()" tells trusted code whether the code it serves is sandboxed
 
     @par Module Initialization Belongs to No Sandbox
-    A module from the process-wide module path is initialized as library code, with no sandbox provenance, also when
-    sandboxed or restricted code loads it first: what its initialization creates belongs to no sandbox, and a source
-    module's %Program no longer keeps the sandbox of the %Program that loaded it first, which governed every later
-    call into the module; every call into it is governed by its caller.  A module loaded by path or through a
-    %Program's own module paths is still initialized under the loader's sandbox (see @ref sandbox_module_init)
+    A module from the process-wide module path is initialized as library code, with no sandbox, also when sandboxed
+    code loads it first; every later call into it is governed by its caller (see @ref sandbox_module_init)
 
     @par Sandboxed Module Loads Cannot Replace Library Modules
-    Code that a sandbox governs, and code whose parse options restrict a functional domain, can no longer change which
-    modules are library code or which modules library code uses (see @ref sandbox_module_init):
-    - only the directories of the process-wide module path when the library is initialized hold library code, and
-      such code can no longer extend the process-wide module path with an unquoted \c %append-module-path directive
-    - it can no longer load a module from outside the module path, or into a %Program container of its own that is not
-      private, under the name of a library module, which replaced the library module for every later user of the
-      process; the load raises \c LOAD-MODULE-ERROR naming the module, its path and the module it would replace
-    - a module that it loads from outside the module path under another name is given only to code that is not
-      trusted and has the same sandbox
-    - a library module that it loads no longer resolves its dependencies, optional dependencies and child modules
-      through the loading %Program's module paths, and is parsed only with the parse defines that the %Program's host
-      set; a module that is not library code and that the library module's initialization loads is governed by the
-      loading code's sandbox
-    - a library module that it loads into a %Program container of its own is not initialized as library code
-    - it can no longer mark imported classes and hashdecls for re-export to the modules that a %Program loads
+    Sandboxed and restricted code can no longer extend the process-wide module path, replace a library module, or
+    choose the modules and parse defines that a library module uses; a module that it loads from elsewhere is used
+    only by its own sandbox (see @ref sandbox_module_init)
 
     @par Reflection Member Access
     Code that a sandbox governs, and code whose parse options restrict a functional domain, may use the

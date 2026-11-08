@@ -212,10 +212,14 @@ authenticate();
     initialized: those of \c QORE_MODULE_DIR and the standard module directories (or those that the embedding
     application sets before it initializes the library).  A directory added to the process-wide module path later,
     with an unquoted \c %append-module-path directive or by the embedding application, is searched for modules but
-    does not hold library code.  Code that is not trusted, and a %Program that is sandboxed or restricted when it is
-    parsed, cannot extend the process-wide module path: an unquoted \c %append-module-path directive is a parse error
-    there (a quoted path adds a directory to the %Program's own module path), and the embedding API that adds
-    directories ignores such a caller.
+    does not hold library code: an application whose modules must be library code puts their directories in
+    \c QORE_MODULE_DIR (Qorus, for example, puts \c $OMQ_DIR/qlib and \c $OMQ_DIR/user/modules there; its own
+    unquoted directives only repeat them as a fallback).  Code that is not trusted, and a %Program that is sandboxed
+    or restricted when it is parsed, cannot extend the process-wide module path: an unquoted
+    \c %append-module-path directive is a parse error there (a quoted path adds a directory to the %Program's own
+    module path), and the embedding API that adds directories ignores such a caller.  The source of a library module
+    can, whoever loads it first: whether such a directive is allowed depends on the source being parsed, not on the
+    code that loads it.
 
     A module found in a directory of library code is library code.  It is loaded from the file that was found there:
     a load by path through a link to a library module loads the library module's file.  Its initialization (the
@@ -231,10 +235,14 @@ authenticate();
     Library code that code that is not trusted loads is not shaped by that code:
     - its source is parsed with the parse defines that the loading %Program's host set (with
       @ref Qore::Program::define() "Program::define()" by trusted code, or by the embedding application), but not
-      with those that the loading code defined in its source or set itself;
+      with those that the loading code defined in its source or set itself; a %Program that code that is not trusted
+      creates has no host, so no define of it (its parse option defines included) shapes library code, and a child
+      %Program keeps the record of the defines that its parent's host did not set;
     - its dependencies (\c %requires), its optional dependencies (\c %try-module) and its child modules
       (\c %try-child-module) are resolved through its own module paths and the process-wide module path, not through
-      the module paths that the loading %Program added;
+      the module paths that the loading %Program added, and never to a module that code that is not trusted chose
+      (see below), also when that code loaded it before: an optional dependency or a child module is then left out,
+      and a dependency is missing;
     - a module that is not library code and that its initialization loads, by path or otherwise, is governed by the
       sandbox of the loading code, and is subject to the same limits as a module that the loading code loads itself
       (see below);
@@ -260,8 +268,9 @@ authenticate();
       @ref Qore::Program::loadApplyToUserModule() "Program::loadApplyToUserModule()") under the name of a module in a
       directory of library code; the load raises \c LOAD-MODULE-ERROR, naming the module and the library module
     - a module that it loaded from outside the directories of library code under any other name is given only to code
-      that is not trusted and that has the same sandbox: a later request for its name from other code, including a
-      reload, raises \c LOAD-MODULE-ERROR, naming the module and its file
+      that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
+      a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
+      naming the module and its file
 
     @section sandbox_filesystem Filesystem Security
 

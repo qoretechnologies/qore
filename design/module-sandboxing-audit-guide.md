@@ -127,9 +127,23 @@ orders (`QoreModuleManager::checkShadowingLoad()`):
   paths, or from source) under the name of a library module (`findTrustedModule()`, which looks for every form that
   the module search loads, with no pattern matching); the load raises `LOAD-MODULE-ERROR`;
 - a module that such code did load from outside them is marked when it is registered
-  (`QoreAbstractModule::isTenantChosen()`, with the loader's sandbox as `tenantOwner()`, a reference), and
-  `loadModuleIntern()` gives it only to code that is not trusted and has the same sandbox
-  (`mayUseTenantModule()`); a request from other code, a reload included, raises `LOAD-MODULE-ERROR`.
+  (`QoreAbstractModule::isTenantChosen()`, with the loader's sandbox as `tenantOwner()`, a reference, and, for code
+  with no sandbox, its Program as `tenantOwnerProgramId()`), and `loadModuleIntern()` gives it only to code that is
+  not trusted and has the same sandbox, or the same Program (`mayUseTenantModule()`); never to library code while it
+  is initialized or while a library module's children are attached (`attachChildModules()` sets a barrier for a
+  library parent), so a module that a tenant loaded first does not satisfy a library module's `%requires`,
+  `%try-module` or `%try-child-module`; a request from other code, a reload included, raises `LOAD-MODULE-ERROR`.
+
+Two more rules close the remaining routes:
+
+- every define of a Program that code that is not trusted creates is in its `source_defines`, and a child Program
+  copies its parent's `source_defines`, so neither a child Program nor a Program built by a tenant passes its defines
+  (parse option defines included) to library code;
+- `mayChangeModulePath()` allows an unquoted `%append-module-path` in a library module's own source
+  (`qore_program_private::library_module`), whoever loads it first: the rule depends on the source being parsed. The
+  directory it adds is searched but holds no library code; an application whose modules must be library code puts
+  their directories in `QORE_MODULE_DIR` (Qorus puts `$OMQ_DIR/qlib` and `$OMQ_DIR/user/modules` there in
+  `distrib/qorus.sh` and the container `env.sh`; its unquoted directives only repeat them as a fallback).
 
 What this means for an audit:
 
