@@ -614,8 +614,10 @@ CORE_DIR_ABS=$(cd "$CORE_DIR" && pwd)
 # does not exist in their containers, so their cores would be lost; the CI scripts set the pattern every job on the
 # node sets (examples/test/docker_test/ci-core-capture.sh), and the cores are found below where it puts them.
 CORE_PATTERN_SET=0
-if [ -z "$CI" ] && [ -w /proc/sys/kernel/core_pattern ]; then
-    echo "$CORE_DIR_ABS/core.%e.%p" > /proc/sys/kernel/core_pattern
+# The write itself tells whether the pattern was set: "-w" is true for root also where /proc/sys is read-only (a
+# container), and the write then fails
+if [ -z "$CI" ] && [ -w /proc/sys/kernel/core_pattern ] \
+    && { echo "$CORE_DIR_ABS/core.%e.%p" > /proc/sys/kernel/core_pattern; } 2>/dev/null; then
     CORE_PATTERN_SET=1
 fi
 # Also try sysctl (works on some systems where /proc write fails)
