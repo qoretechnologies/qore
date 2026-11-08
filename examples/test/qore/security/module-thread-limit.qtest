@@ -121,6 +121,7 @@ list<auto> sub start_with_function(int n, Queue gate) {
         addTestCase("a thread that a module thread starts counts", \testNested());
         addTestCase("a module function that starts a thread counts", \testModuleFunction());
         addTestCase("module threads for an unsandboxed caller are not limited", \testUnsandboxed());
+        addTestCase("only PO_NO_THREAD_CLASSES keeps restricted code from creating a ThreadPool", \testThreadPoolOption());
         set_return_value(main());
     }
 
@@ -287,12 +288,14 @@ list<auto> sub start_with_function(int n, Queue gate) {
         Queue outer_gate();
         Queue inner_gate();
         int outer = p.callFunction("start_nested", result, outer_gate, inner_gate);
-        auto inner = result.get(60s);
+        auto inner;
+        # the threads are released and waited for however the test ends
         on_exit {
             outer_gate.push(True);
             inner_gate.push(True);
             joinAll((outer, inner));
         }
+        inner = result.get(60s);
         # the outer module thread and the inner thread it started both count
         assertEq(NT_INT, inner.typeCode());
         assertEq((refused(2),), p.callFunction("start", 1, new Queue()));
@@ -323,6 +326,17 @@ list<auto> sub start_with_function(int n, Queue gate) {
         assertEq(NT_INT, l[0].typeCode());
         assertEq(NT_INT, l[1].typeCode());
         assertEq(refused(2), l[2]);
+    }
+
+    # ThreadPool workers are shared threads that the sandbox thread limit does not count, so the documentation tells
+    # hosts to add PO_NO_THREAD_CLASSES; PO_NO_THREAD_CONTROL alone does not refuse the class
+    testThreadPoolOption() {
+        string src = "int sub f() { ThreadPool tp(1); tp.stopWait(); return 1; }";
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        p.parse(src, "no-thread-control");
+        assertEq(1, p.callFunction("f"));
+        Program p2(PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", "ThreadPool", \p2.parse(), (src, "no-thread-classes"));
     }
 
     testUnsandboxed() {

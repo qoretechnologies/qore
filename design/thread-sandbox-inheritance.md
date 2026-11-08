@@ -86,7 +86,14 @@ module code that the Program calls from starting threads, including threads that
 module function or method doing `background c()` with a closure that the caller passed in). The `background` operator
 in module code is checked against the module's own parse options only. Such threads inherit the caller's sandbox and
 count against its thread limit like any other thread started on the sandboxed code's behalf, so the sandbox thread
-limit is what bounds the threads that restricted code can cause. The `MODULE_OWNED` builtins (`call_async()`,
+limit bounds them. A user module that the restricted Program loads first inherits its restrictions and cannot use
+`background`; module threads come from modules that the host loaded already or loads with a parse option mask.
+
+The workers of a `ThreadPool` are not counted, also when the sandboxed code (or module code acting for it) creates
+the pool: they start with `QTF_NO_SANDBOX_INHERIT` as shared threads and apply each task's captured sandbox.
+`PO_NO_THREAD_CONTROL` does not stop a Program from creating a `ThreadPool` (the class is in the `THREAD_CLASS`
+domain); `PO_NO_THREAD_CLASSES` does. Until pool workers are accounted to a sandbox, the documentation tells hosts to
+add `PO_NO_THREAD_CLASSES` for code that must stay within its thread limit. The `MODULE_OWNED` builtins (`call_async()`,
 `parallel_map()`, `parallel_foreach()`, the `AsyncIoController` timer and task submitters) additionally refuse to run
 the code of a caller that may not control threads; a module's own closure that calls the caller's code is accepted, and
 its thread is counted as well.

@@ -604,8 +604,12 @@ Program can therefore cause concurrent execution through module code. What bound
 - A thread started on behalf of a sandboxed caller (`background`, `q_start_thread()`, `call_async()`,
   `parallel_map()`, `parallel_foreach()`) inherits the caller's `QoreSandboxManager`: filesystem and network policy,
   interrupts, cancellation scope and the thread limit (see [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md)).
-- Only `SandboxManager::setMaxThreads()` bounds how many threads sandboxed code causes. A sandbox has no thread limit
-  unless the host sets one, so hosts that run sandboxed code must set it.
+- `SandboxManager::setMaxThreads()` bounds how many threads are started on behalf of sandboxed code. A sandbox has no
+  thread limit unless the host sets one, so hosts that run sandboxed code must set it. `ThreadPool` workers are not
+  counted (they are shared threads that apply each task's sandbox), also for a pool the sandboxed code creates;
+  `PO_NO_THREAD_CLASSES` keeps restricted code from creating pools.
+- A user module first loaded by a restricted Program inherits its restrictions and cannot use `background`; module
+  threads for restricted callers come from modules the host loaded already or loads with a parse option mask.
 - Builtins with the `MODULE_OWNED` flag (`call_async()`, `parallel_map()`, `parallel_foreach()`,
   `AsyncIoController::addTimer()` / `submitTask()`, `defer_thread_cancel()`) refuse to run the code of a caller that
   may not control threads. The `background` operator in module code is not checked at run time: a run-time refusal
@@ -616,7 +620,7 @@ Guidance for module authors:
 
 - Run caller-supplied code asynchronously through the documented mechanisms: `call_async()` or `AsyncIoController`
   (which apply the caller's restrictions and sandbox), a `ThreadPool` (which applies the submitter's sandbox per
-  task), or `q_start_thread()` in C++ (which inherits the starter's sandbox). Never start a native thread
+  task, but whose workers do not count against the caller's thread limit), or `q_start_thread()` in C++ (which inherits the starter's sandbox). Never start a native thread
   (`pthread_create`, `std::thread`) that runs Qore code without the sandbox handling described in
   [thread-sandbox-inheritance.md](thread-sandbox-inheritance.md).
 - A thread that serves many callers must not inherit the sandbox of the caller that happened to start it: start it

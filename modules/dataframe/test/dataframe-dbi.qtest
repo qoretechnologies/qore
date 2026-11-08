@@ -109,12 +109,16 @@ class DataFrameDbiTest inherits QUnit::Test {
         ds.exec("INSERT INTO " + key_table + " (id, name) VALUES (1, 'Ada')");
         ds.commit();
         DataFrame::DataFrame dup({"id": (2, 1), "name": ("Bo", "Ada again")});
+        *hash<ExceptionInfo> ex;
         try {
             dup.toTable(ds, key_table);
-            ds.commit();
-            assertTrue(False, label + " toTable() of a duplicate key raises an exception");
-        } catch (hash<ExceptionInfo> ex) {
-            ds.rollback();
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        # the caller rolls back the failed write; nothing is committed in either case
+        ds.rollback();
+        assertTrue(exists ex, label + " toTable() of a duplicate key raises an exception");
+        if (ex) {
             string err = ex.err + ": " + ex.desc;
             assertRegex("duplicate|unique|primary key", err.lwr(),
                 label + " toTable() raises the duplicate key error of the database");

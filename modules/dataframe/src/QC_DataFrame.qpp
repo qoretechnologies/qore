@@ -1646,8 +1646,9 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
     ds.commit();
     @endcode
 
-    @throw DATAFRAME-DB-ERROR the table name or a column name is not a plain SQL identifier, or the SqlUtil module
-    cannot be loaded
+    @throw DATAFRAME-DB-ERROR the table name or a column name is not a plain SQL identifier, the SqlUtil module
+    cannot be loaded, the \c table_description option is not a hash, or SqlUtil returns an SQL name that is not a
+    string
 */
 nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [dom=DATABASE] {
     if (qore_check_cancel(xsink, "writing DataFrame to table")) {
