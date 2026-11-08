@@ -716,8 +716,13 @@ public:
     DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
 
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
+    /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
+        or nullptr; with it, the module's name is checked, an optional module that it was compiled without and that is
+        available now is reported (\c BINARY-MODULE-STALE, as the module has no source to fall back to), and its
+        dependencies are found with its own module path directives (QoreModulePathScope), as for a \c .qmod
+    */
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
-            qore_binary_module_desc_t desc_fn, const char* path);
+            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo* aot_info = nullptr);
 
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();

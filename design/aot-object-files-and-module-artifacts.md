@@ -345,7 +345,7 @@ automatically:
   AOT module goes through that descriptor: loadable `.qmod`s, `.qmod`s
   aggregated from objects (the glue object carries the descriptor), `.qoa`
   archives and executables registering embedded modules with
-  `qore_aot_register_into_program()`. The identity is also written to each
+  `qore_aot_register_into_program_v2()`. The identity is also written to each
   metadata blob's `BUILD_INFO` (`aot-runtime-identity`) for inspection, and
   `qcc --version` prints it.
 - **Checking.** `QoreModuleManager::loadBinaryModuleFromDesc()` refuses an AOT
@@ -544,7 +544,20 @@ section, so an AOT module loaded from a file without it was changed after it was
 built (for example by a tool that removed the section): it is refused after the
 runtime identity check, before its initialization, since loading it would skip
 the check of optional modules below. Statically registered AOT modules
-(`.qoa`, `qcc -o` executables) are not loaded from a file and have no section.
+(`.qoa` archives, module objects registered by their `qore_<name>_register()`)
+are not loaded from a file and have no section: an archive or an executable can
+hold several modules. qcc links the record with each module's register function
+instead, as a private constant (`emitStaticModuleInfoRecord()`), and the
+registration passes it to `qore_aot_register_into_program_v2()`, which decodes it.
+With it the loader checks a statically registered module as a `.qmod`: the record
+must name the module, an optional module that it was compiled without and that is
+available now is reported (`BINARY-MODULE-STALE`; there is no source module to
+load instead, so the module is used), and its dependencies are found with its own
+module path directives (`QoreModulePathScope`; see `aot-linked-module-sources.md`).
+The check of the files a module of a build tree was compiled against does not
+apply: the module has no file and no dependency file of its own; it is part of the
+program or archive that links it, whose build rebuilds it when an input changes,
+as for an installed module (`AOTStaticModuleMetadata.qtest`).
 The metadata keeps a qmod self-contained; there is no sidecar whose
 installation, renaming, or symlink lifetime could diverge from the executable
 artifact.

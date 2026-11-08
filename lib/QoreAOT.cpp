@@ -25456,8 +25456,31 @@ static void emitFragmentSymbols(llvm::LLVMContext& ctx, llvm::Module& module,
 
     @return true on success
 */
+static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProgram* pgm,
+        std::vector<uint8_t>& record, std::string& error);
+static bool addAOTModuleInfoSectionRecord(llvm::LLVMContext& ctx, llvm::Module& module, std::vector<uint8_t> record,
+        const char* target_triple, std::string& error);
+
 static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module, const QoreAOTModuleInfo& mod_info,
         QoreProgram* pgm, const char* target_triple, std::string& error) {
+    std::vector<uint8_t> record;
+    if (!buildAOTModuleInfoRecord(mod_info, pgm, record, error)) {
+        return false;
+    }
+    return addAOTModuleInfoSectionRecord(ctx, module, std::move(record), target_triple, error);
+}
+
+//! Encodes the AOT module metadata record of a module (see QoreAOTModuleFileInfo)
+/** @param mod_info the module's descriptor information
+    @param pgm the Program the module was compiled in: the %try-module requests that failed, the modules it was
+    compiled with and its own module path directives come from it
+    @param record receives the encoded record
+    @param error receives a description of invalid metadata
+
+    @return true on success
+*/
+static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProgram* pgm,
+        std::vector<uint8_t>& record, std::string& error) {
     qore_program_private* pp = qore_program_private::get(*pgm);
     QoreAOTModuleFileInfo info;
     info.module_name = mod_info.name;
@@ -25481,11 +25504,12 @@ static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module
     // appendModulePathListSections() stores for it): the loader finds the modules it checks with them
     info.prepended_module_paths = pp->prepended_module_paths;
     info.appended_module_paths = pp->appended_module_paths;
-    std::vector<uint8_t> record;
-    if (!qoreAOTEncodeModuleInfo(info, record, error)) {
-        return false;
-    }
+    return qoreAOTEncodeModuleInfo(info, record, error);
+}
 
+//! Adds the section holding an encoded AOT module metadata record; see addAOTModuleInfoSection()
+static bool addAOTModuleInfoSectionRecord(llvm::LLVMContext& ctx, llvm::Module& module, std::vector<uint8_t> record,
+        const char* target_triple, std::string& error) {
     llvm::Triple triple(target_triple ? std::string(target_triple) : llvm::sys::getDefaultTargetTriple());
     std::vector<uint8_t> contents;
     const char* section;
@@ -25513,6 +25537,28 @@ static bool addAOTModuleInfoSection(llvm::LLVMContext& ctx, llvm::Module& module
     return true;
 }
 
+//! Adds the metadata record of a module that is registered statically, as a private constant of the glue object
+/** A module linked into a static archive (\c .qoa) or registered by its \c qore_<name>_register() function is not
+    loaded from a file, so it has no metadata section; the record is passed to the loader by the registration
+    instead (qore_aot_register_into_program_v2()), which checks its optional modules and finds its dependencies with
+    its own module path directives as for a \c .qmod.  It is not put in the metadata section, as an executable or
+    archive can hold several modules.
+
+    @return the global holding the record
+*/
+static llvm::GlobalVariable* emitStaticModuleInfoRecord(llvm::LLVMContext& ctx, llvm::Module& module,
+        const std::string& mod_prefix, const std::vector<uint8_t>& record) {
+    const std::string name = mod_prefix + "qore_module_info_record";
+    if (llvm::GlobalVariable* gv = module.getNamedGlobal(name)) {
+        return gv;
+    }
+    llvm::Constant* data = llvm::ConstantDataArray::get(ctx, llvm::ArrayRef<uint8_t>(record));
+    auto* gv = new llvm::GlobalVariable(module, data->getType(), true, llvm::GlobalValue::PrivateLinkage, data,
+        name);
+    gv->setAlignment(llvm::Align(4));
+    return gv;
+}
+
 //! Generate LLVM IR for binary module ABI symbols
 /** Embeds serialized metadata blob and calls qore_aot_module_init_v3.
 
@@ -25528,7 +25574,9 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
         const QoreParseOptions& parse_options, const QoreAOTModuleInfo& mod_info,
         const std::vector<AOTCompiledFunc>& compiled_funcs,
-        bool compile_only = false) {
+        bool compile_only = false, const std::vector<uint8_t>* static_record = nullptr) {
+    // the metadata record of a module registered statically (see emitStaticModuleInfoRecord())
+    assert(!compile_only || static_record);
     auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
@@ -25828,9 +25876,11 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         assert(desc_fn && "desc function must be emitted before register function");
 
         auto* bridge_fn_type = llvm::FunctionType::get(void_type,
-            {ptr_type, ptr_type, ptr_type}, false);
-        auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program",
+            {ptr_type, ptr_type, ptr_type, ptr_type, i64_type}, false);
+        auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program_v2",
             bridge_fn_type);
+        llvm::GlobalVariable* record_gv = emitStaticModuleInfoRecord(ctx, module, mod_prefix, *static_record);
+        auto* record_len = llvm::ConstantInt::get(i64_type, static_record->size());
 
         // Private label string for diagnostics — "<aot-static>" is a stable
         // cookie the bridge passes through to the loader.
@@ -25850,7 +25900,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::IRBuilder<> reg_builder(reg_entry_bb);
 
         llvm::Value* tpgm_arg = &*register_fn->arg_begin();
-        reg_builder.CreateCall(bridge_fn, {tpgm_arg, desc_fn, path_gv});
+        reg_builder.CreateCall(bridge_fn, {tpgm_arg, desc_fn, path_gv, record_gv, record_len});
         reg_builder.CreateRetVoid();
     }
 }
@@ -26315,8 +26365,13 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // Pass the program's FINAL parse options (after parsing) so %modern /
         // %new-style / %require-types / etc added by the source are preserved
         // at module load time.  mod_po is only the initial seed.
+        // a module object (.qo) is registered statically, with its metadata record
+        std::vector<uint8_t> static_record;
+        if (compile_only && !buildAOTModuleInfoRecord(mod_info, *qpgm, static_record, error)) {
+            return false;
+        }
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
-            mod_info, compiled_funcs, compile_only);
+            mod_info, compiled_funcs, compile_only, compile_only ? &static_record : nullptr);
         if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info, *qpgm, target_triple,
                 error)) {
             return false;
@@ -26798,8 +26853,14 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
             // Pass the program's final parse options — see comment in the
             // single-file module path.
+            // a module object (.qo) is registered statically, with its metadata record
+            std::vector<uint8_t> static_record;
+            if (compile_only && !buildAOTModuleInfoRecord(mod_info, *qpgm, static_record, error)) {
+                return false;
+            }
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
-                qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
+                qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only,
+                compile_only ? &static_record : nullptr);
             if (!compile_only && !addAOTModuleInfoSection(ctx, *module, mod_info, *qpgm, target_triple,
                     error)) {
                 return false;
@@ -31304,9 +31365,10 @@ static bool createStaticArchive(const std::vector<std::string>& obj_paths,
 // in one host would collide on this symbol (known slice 7 limitation
 // — deferred to later multi-archive work).
 static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
-        llvm::Module& module, const std::string& sanitized_mod_name) {
+        llvm::Module& module, const std::string& sanitized_mod_name, const std::vector<uint8_t>& record) {
     auto* void_type = llvm::Type::getVoidTy(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
+    auto* i64_type = llvm::Type::getInt64Ty(ctx);
 
     // Locate the desc fn emitted earlier by generateModuleABIV2.
     std::string desc_fn_name = sanitized_mod_name + "_qore_module_desc";
@@ -31315,9 +31377,13 @@ static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
 
     // Declare qore_aot_register_into_program bridge.
     auto* bridge_fn_type = llvm::FunctionType::get(void_type,
-        {ptr_type, ptr_type, ptr_type}, false);
-    auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program",
+        {ptr_type, ptr_type, ptr_type, ptr_type, i64_type}, false);
+    auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program_v2",
         bridge_fn_type);
+    // the record that generateModuleABIV2() added for the module's own register function
+    llvm::GlobalVariable* record_gv = emitStaticModuleInfoRecord(ctx, module,
+        "qore_" + sanitized_mod_name + "_", record);
+    auto* record_len = llvm::ConstantInt::get(i64_type, record.size());
 
     // Private label for diagnostic path (same "<aot-static>" cookie slice 3 uses).
     auto* path_data = llvm::ConstantDataArray::getString(ctx, "<aot-static>", true);
@@ -31334,7 +31400,7 @@ static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
     auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
     llvm::IRBuilder<> builder(entry_bb);
     llvm::Value* pgm_arg = &*fn->arg_begin();
-    builder.CreateCall(bridge_fn, {pgm_arg, desc_fn, path_gv});
+    builder.CreateCall(bridge_fn, {pgm_arg, desc_fn, path_gv, record_gv, record_len});
     builder.CreateRetVoid();
 }
 
@@ -31689,9 +31755,13 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             // function, and slice 3's `qore_<mod>_register`.  Prefixed
             // globals keep independent `.qo`s inside the archive from
             // colliding with each other on module-info symbols.
+            std::vector<uint8_t> static_record;
+            if (!buildAOTModuleInfoRecord(mod_info, *qpgm, static_record, error)) {
+                return false;
+            }
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs,
-                /*compile_only=*/true);
+                /*compile_only=*/true, &static_record);
 
             // Slice 7: single public entry point for C++ hosts.
             // Delegates to qore_aot_register_into_program via the
@@ -31701,7 +31771,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 for (char& c : sanitized) {
                     if (c == '-') c = '_';
                 }
-                emitQoaRegisterAllFunction(ctx, *module, sanitized);
+                emitQoaRegisterAllFunction(ctx, *module, sanitized, static_record);
             }
         }
 

@@ -118,6 +118,9 @@ API version in the file's name (`<name>-api-<x>.<y>.qmod`) is the version of the
 
 An AOT module without its depfile (an installed module, or one compiled by hand without `--depfile`) is not checked:
 what it was compiled from is not known, and the loader does not check such a module's own sources either.
+Nor is a statically registered module (a `.qoa`, or a module object linked into a program): it has no file and no
+depfile of its own, and the build of the program that links it rebuilds it; its dependencies are still found with its
+own module path directives, from the metadata record linked with it (see `aot-object-files-and-module-artifacts.md`).
 
 Otherwise the module is out of date: the loader raises `AOT-MODULE-STALE`, which, as for any AOT module that cannot
 be loaded, loads the source module instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning.  Without a source module

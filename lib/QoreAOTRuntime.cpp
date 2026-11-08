@@ -16140,12 +16140,22 @@ extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreSt
     }
 }
 
-extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
-        void (*desc_fn)(QoreModuleInfo&), const char* path) {
+extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
+        void (*desc_fn)(QoreModuleInfo&), const char* path, const uint8_t* record, uint64_t record_len) {
     ExceptionSink xsink;
-    MM.registerAOTStaticModule(&xsink, tpgm,
-        reinterpret_cast<qore_binary_module_desc_t>(desc_fn),
-        path ? path : "<aot-static>");
+    if (!path) {
+        path = "<aot-static>";
+    }
+    QoreAOTModuleFileInfo info;
+    std::string error;
+    if (!record || qoreAOTDecodeModuleInfo(record, static_cast<size_t>(record_len), info, error)
+            != QoreAOTModuleInfoStatus::FOUND) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "the AOT module metadata linked "
+            "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
+    } else {
+        QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
+            &info);
+    }
     if (xsink) {
         xsink.handleExceptions();
     }

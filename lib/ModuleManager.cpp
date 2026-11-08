@@ -2218,7 +2218,7 @@ void QoreModuleManager::loadModuleForReexport(ExceptionSink& xsink, const char* 
 }
 
 int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
-        qore_binary_module_desc_t desc_fn, const char* path) {
+        qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo* aot_info) {
     // Populate mod_info up front so the feature name is known before taking the
     // parse lock / module manager mutex.  The info hash is captured here and
     // re-assigned to mod_info.info before handing off to loadBinaryModuleFromDesc,
@@ -2269,6 +2269,35 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     // and just stitch it into the target program
     QoreAbstractModule* mi = findModuleUnlocked(feature);
     if (!mi) {
+        // the metadata record linked with the module: as for a .qmod (see loadBinaryModuleFromPath()), the module
+        // must be the one it describes, an optional module it was compiled without must not be available now, and its
+        // dependencies are found with its own module path directives
+        std::unique_ptr<QoreModulePathScope> path_scope;
+        if (aot_info) {
+            if (aot_info->module_name != feature) {
+                xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "the AOT module metadata "
+                    "linked with module '%s' identifies feature '%s'", feature, aot_info->module_name.c_str());
+                return -1;
+            }
+            if (!aot_info->prepended_module_paths.empty() || !aot_info->appended_module_paths.empty()) {
+                path_scope = std::make_unique<QoreModulePathScope>(tpgm, aot_info->prepended_module_paths,
+                    aot_info->appended_module_paths);
+            }
+            std::string available;
+            if (!aot_info->unavailable_optional_modules.empty()
+                    && findAvailableOptionalModule(aot_info->unavailable_optional_modules, tpgm, available)) {
+                // a statically linked module has no source module to load instead: it is used, and the missing
+                // functionality is always reported, as for a .qmod without its source
+                qore_report_module_load_warning(xsink, nullptr, QP_WARN_MODULES, true, "BINARY-MODULE-STALE",
+                    feature, new QoreStringNodeMaker("AOT module '%s' linked into this program was compiled when "
+                    "optional module '%s' was not available, but it is available now; the module is used without the "
+                    "functionality that requires the optional module; rebuild the program", feature,
+                    available.c_str()));
+                if (xsink) {
+                    return -1;
+                }
+            }
+        }
         // restore info hash for the descriptor handoff
         mod_info.info = info_holder.release();
         mi = loadBinaryModuleFromDesc(xsink, nullptr, mod_info, path, feature, false,
