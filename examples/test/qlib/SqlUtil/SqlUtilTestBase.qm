@@ -342,7 +342,8 @@ public class SqlTestBase inherits QUnit::Test {
         }
         assertTrue(commit_error ? True : False, "an unresolved deferred move fails at commit");
         if (commit_error) {
-            assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:ERROR$/, commit_error.err);
+            # a database error: DBI:<DRIVER>:ERROR, or DBI:ORACLE:OCI-ERROR for Oracle
+            assertTrue(commit_error.err =~ /^DBI(:[^:]+)?:(OCI-)?ERROR$/, commit_error.err);
         }
         ds.rollback();
     }
