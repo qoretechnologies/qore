@@ -12,6 +12,7 @@
 %requires Util
 %requires FsUtil
 %requires DataProvider
+%requires LazyAppActionsValues
 
 %exec-class LazyAppActionsSafetyTest
 
@@ -81,6 +82,8 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         addTestCase("a registration made under a sandbox runs under it for any reader", \governedRegistrationTest());
         addTestCase("a thread loading a module does not wait for an initialization", \moduleLoadTest());
         addTestCase("a sandboxed thread loading a module is refused trusted registrations", \sandboxedModuleLoadTest());
+        addTestCase("a sandboxed thread loading a module is refused a lazy value that is not built",
+            \sandboxedValueLoadTest());
         addTestCase("a sandboxed reader is refused the worker while the worker waits for its initialization",
             \workerCycleTest());
         addTestCase("deregistering an app during its initialization retains nothing", \deregistrationTest());
@@ -480,6 +483,30 @@ class LazyAppActionsSafetyTest inherits QUnit::Test {
         assertEq(("eager-a", "lazy-b", "lazy-c"), map $1.action, DataProviderActionCatalog::getActions(app, False));
         assertEq(1, SafetyRuns::get(app));
         assertEq((), DataProviderActionCatalog::getInitializationFailures((app,)));
+    }
+
+    sandboxedValueLoadTest() {
+        string result = "not run";
+        # what the module's initialization does under the sandbox of the Program loading it: it reads the value
+        string hook = registerHook("SafeSandboxedValueLoadHook", sub () {
+            try {
+                result = DataProviderActionCatalog::getLazyValue(Values::counted);
+            } catch (hash<ExceptionInfo> ex) {
+                result = ex.err;
+            }
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(hook);
+        setenv("LAZY_APP_ACTIONS_SANDBOXED_VALUE_LOAD_HOOK", hook);
+        on_exit unsetenv("LAZY_APP_ACTIONS_SANDBOXED_VALUE_LOAD_HOOK");
+        Program loader(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS, True);
+        loader.parse("sub load(string path) { load_module(path); }\n", "lazy-sandboxed-value-loader");
+        loader.setSandboxManager(new SandboxManager());
+        loader.callFunction("load", get_script_dir() + "/LazyAppActionsSandboxedValueLoad.qm");
+        # refused instead of waiting for the worker, which could be loading the same module
+        assertEq("DATA-PROVIDER-LAZY-INIT-ERROR", result);
+        assertEq(0, Values::runs);
+        assertEq("counted", DataProviderActionCatalog::getLazyValue(Values::counted));
+        assertEq(1, Values::runs);
     }
 
     workerCycleTest() {

@@ -1698,7 +1698,8 @@ class MyProvider {
         @return the value
 
         @throw DATA-PROVIDER-LAZY-VALUE-ERROR no value is registered with the ID
-        @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandbox governs the reader and there is no catalog worker
+        @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandbox governs the reader, the value is not built, and there is no
+        catalog worker, or the reader is loading a module
 
         @since %DataProvider 3.11
     */
@@ -1714,6 +1715,12 @@ class MyProvider {
         if (v.governed || !DataProviderActionCatalog::isGoverned() || DataProviderActionCatalog::isLazyWorker()) {
             DataProviderActionCatalog::buildLazyValue(key);
         } else {
+            # as for lazy registrations (see runLazy()): a sandboxed thread loading a module cannot wait for the worker,
+            # whose builder can load the module that this thread is loading
+            if (get_module_context_path()) {
+                throw "DATA-PROVIDER-LAZY-INIT-ERROR", sprintf("lazy value %d has not been built, and a sandboxed "
+                    "thread that is loading a module cannot build it or wait for it to be built", id);
+            }
             DataProviderActionCatalog::runOnWorker({"value": id});
         }
         return lazy_values{key}.value;
