@@ -98,58 +98,73 @@ string sub semanticCases() {
         typed_unshift_ref.size(), unshift_error);
 }
 
-# Scaling probes for the shared-container CoW paths.
+# Copy-on-write probes for the shared-container paths.
 #
 # The container is mutated through a live reference for the whole loop, which is
 # the shape that copies the entire container on every iteration when the lvalue
-# path regresses; a reference taken only after the loop measures the plain local
+# path regresses; a reference taken only after the loop checks the plain local
 # path instead and proves nothing.  The reference is created in this function and
-# clock_get_monotonic_us() is called between creating it and the loop on purpose:
-# reading a local that holds a reference yields the referenced value, so the AOT
-# reload cache used to own the container and every mutation through the reference
-# copied it (16x for 4x the input under source-free AOT).
+# a function is called between creating it and the loop on purpose: reading a
+# local that holds a reference yields the referenced value, so the AOT reload
+# cache used to own the container and every mutation through the reference
+# copied it (under source-free AOT).
 #
-# clock_get_monotonic_us() is also required for the timing itself: now_us() is a
-# wall clock, so an NTP step during a measured loop corrupts the elapsed time.
+# The check counts the hashes and lists that the loop copies (with library
+# debugging, dbg_get_container_copy_count(), which the call before the loop
+# reads): a loop that changes the container in place copies none, a loop that
+# copies it on every iteration copies one per element, so 4x the input must not
+# copy more.  Without library debugging nothing is counted, and the check passes.
+int sub copies() {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return -1;
+    }
+    return call_function(\"dbg_get_container_copy_count\");
+}
+
+#! the containers copied since before, or -1 without library debugging
+int sub copiedSince(int before) {
+    return before < 0 ? -1 : copies() - before;
+}
+
 hash<auto> sub measureHash(int n) {
     hash<string, int> values = {};
     reference<hash<string, int>> values_ref = \\values;
-    int started = clock_get_monotonic_us();
+    int before = copies();
     for (int i = 0; i < n; ++i) {
         values_ref{sprintf(\"k%d\", i)} = i;
     }
-    int elapsed = clock_get_monotonic_us() - started;
+    int copied = copiedSince(before);
     touchHash(\\values);
-    return {\"elapsed\": elapsed, \"size\": values.size()};
+    return {\"copied\": copied, \"size\": values.size()};
 }
 
 hash<auto> sub measureList(int n) {
     list<int> values = ();
     reference<list<int>> values_ref = \\values;
-    int started = clock_get_monotonic_us();
+    int before = copies();
     for (int i = 0; i < n; ++i) {
         push values_ref, i;
     }
-    int elapsed = clock_get_monotonic_us() - started;
+    int copied = copiedSince(before);
     touchList(\\values);
-    return {\"elapsed\": elapsed, \"size\": values.size()};
+    return {\"copied\": copied, \"size\": values.size()};
 }
 
 # An untyped local can hold a reference at runtime, so it takes the same
-# structured lvalue path.  Pushing to one was quadratic in IR, tiered and AOT
-# (16x for 4x the input, over a second at 32k) until the native
-# Load + ListPush + Store sequence stopped claiming reference-capable locals.
+# structured lvalue path.  Pushing to one copied the list on every push in IR,
+# tiered and AOT until the native Load + ListPush + Store sequence stopped
+# claiming reference-capable locals.
 hash<auto> sub measureAutoList(int n) {
     auto values = ();
-    int started = clock_get_monotonic_us();
+    int before = copies();
     for (int i = 0; i < n; ++i) {
         push values, i;
     }
-    int elapsed = clock_get_monotonic_us() - started;
-    return {\"elapsed\": elapsed, \"size\": values.size()};
+    int copied = copiedSince(before);
+    return {\"copied\": copied, \"size\": values.size()};
 }
 
-# warm up (JIT promotion, allocator growth) before the measured runs
+# warm up (JIT promotion) before the measured runs
 measureHash(1000);
 measureList(1000);
 measureAutoList(1000);
@@ -159,17 +174,15 @@ hash<auto> ls = measureList(8000);
 hash<auto> ll = measureList(32000);
 hash<auto> as = measureAutoList(8000);
 hash<auto> al = measureAutoList(32000);
-# 4x the input must not cost more than ~8x the time: linear is ~4x, a copy per
-# iteration is ~16x and takes over a second even on a fast machine.  The
-# absolute bound keeps timer noise on loaded CI hosts from failing runs that are
-# already an order of magnitude below the quadratic floor.  touchHash() and
-# touchList() each add one element after the loop; measureAutoList() adds none.
-bool hash_linear = hs.size == 8001 && hl.size == 32001
-    && (hl.elapsed < 8 * hs.elapsed || hl.elapsed < 250000);
-bool list_linear = ls.size == 8001 && ll.size == 32001
-    && (ll.elapsed < 8 * ls.elapsed || ll.elapsed < 250000);
-bool auto_list_linear = as.size == 8000 && al.size == 32000
-    && (al.elapsed < 8 * as.elapsed || al.elapsed < 250000);
+# a loop over 4x the input copies no more containers than the smaller one, and no more than a handful: one copy per
+# iteration would give 8000 and 32000.  touchHash() and touchList() each add one element after the loop;
+# measureAutoList() adds none.
+bool sub inPlace(hash<auto> small, hash<auto> large) {
+    return small.copied < 0 || (large.copied <= small.copied && small.copied < 8);
+}
+bool hash_linear = hs.size == 8001 && hl.size == 32001 && inPlace(hs, hl);
+bool list_linear = ls.size == 8001 && ll.size == 32001 && inPlace(ls, ll);
+bool auto_list_linear = as.size == 8000 && al.size == 32000 && inPlace(as, al);
 printf(\"%s:%s|%y|%y|%y\\n\", semanticCases(), memberAssignmentErrors(),
     hash_linear, list_linear, auto_list_linear);
 ";
