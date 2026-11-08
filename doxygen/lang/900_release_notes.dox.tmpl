@@ -1524,6 +1524,9 @@
       <tt>l[0..(l = x).size()]</tt>), could crash the program; the call now runs the closure or call reference that
       the variable held, and the operators read the list or hash that the variable held, as in every other execution
       mode
+    - in the IR, JIT and tiered execution modes and in AOT-compiled code, <tt>map $1.key, l</tt> gave \c NOTHING for
+      each object in the list instead of its member, and \c map, \c select and \c foldl over an object that is not
+      an iterator gave a list of one value instead of the value, as the AST interpreter gives it
     - in the IR, JIT and tiered execution modes and in AOT-compiled code, the objects created for the arguments of a
       call are now destroyed last argument first when the call returns, as with the AST interpreter (they were
       destroyed first argument first in calls of closures, of static methods and from top-level code, and of

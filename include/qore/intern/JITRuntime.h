@@ -1219,6 +1219,11 @@ uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val, const char* key
 uint64_t qore_rt_select_hash_key_positive_int_prehashed(uint64_t list_val,
         const char* key, uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
 
+//! Returns 1 if a functional operator (map, select, foldl) iterates the value: a list or an AbstractIterator object
+/** any other value, including an object of another class, is a single value, as with the AST interpreter
+*/
+int64_t qore_rt_is_collection_type(uint64_t val);
+
 //! Map a hash member while retaining the common runtime element type.
 /** @param list_val borrowed NaN-boxed input list
     @param key hash member name

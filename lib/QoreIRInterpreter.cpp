@@ -17331,8 +17331,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::ExistsBool:
             return QoreValue(!value.isNothing());
         case QoreIROpcode::IsCollectionType: {
-            qore_type_t t = value.getType();
-            return QoreValue(t == NT_LIST || t == NT_OBJECT);
+            return QoreValue(static_cast<bool>(qore_rt_is_collection_type(toBits(value))));
         }
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:

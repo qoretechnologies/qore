@@ -6825,10 +6825,20 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store
 
 // Runtime type check: returns 1 if value is NT_LIST or NT_OBJECT, 0 otherwise
 // Used by select to determine if the result should be returned as a list or unwrapped
+// documented in JITRuntime.h
 extern "C" DLLEXPORT int64_t qore_rt_is_collection_type(uint64_t val) {
     QoreValue v = fromBits(val);
     qore_type_t t = v.getType();
-    return (t == NT_LIST || t == NT_OBJECT) ? 1 : 0;
+    if (t == NT_LIST) {
+        return 1;
+    }
+    if (t != NT_OBJECT) {
+        return 0;
+    }
+    // as the AST interpreter's functional operators, which iterate an object only if it is an AbstractIterator
+    // (AbstractIteratorHelper) and give any other object as a single value
+    bool priv;
+    return v.get<const QoreObject>()->getClass()->getClass(*QC_ABSTRACTITERATOR, priv) ? 1 : 0;
 }
 
 // Optimized list iteration helpers for foldl/map/select
@@ -7866,24 +7876,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_value(uint64_t list_val, cons
         if (i && !(i % 100) && qore_check_cancel(xsink, "hash-key map")) {
             return toBits(QoreValue());
         }
-        QoreValue elem = l->retrieveEntry(i);
-        QoreValue val;
-        if (elem.getType() == NT_HASH) {
-            val = elem.get<const QoreHashNode>()->getKeyValue(key, xsink);
-            if (*xsink) {
-                return toBits(QoreValue());
-            }
+        // the element is read as $1.key reads it: the member of an object (and the target of a weak reference) as
+        // well as the key of a hash, and NOTHING for any other value
+        ValueHolder val(fromBits(qore_rt_hash_key_access_impl(toBits(l->retrieveEntry(i)), key, 0, false, xsink,
+            false)), xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
         }
         // Match the AST map's runtime result type, including optional and
         // hashdecl values. Keep the builder unconstrained until every value
         // has been collected so a later NOTHING or unrelated value is valid.
         if (!i) {
-            value_type = val.getTypeInfo();
+            value_type = val->getTypeInfo();
             common_type = true;
-        } else if (common_type && !QoreTypeInfo::matchCommonType(value_type, val.getTypeInfo())) {
+        } else if (common_type && !QoreTypeInfo::matchCommonType(value_type, val->getTypeInfo())) {
             common_type = false;
         }
-        qore_rt_append_map_result(result_priv, **result, val.refSelf(), xsink);
+        qore_rt_append_map_result(result_priv, **result, val.release(), xsink);
         if (!result_priv && *xsink) {
             return toBits(QoreValue());
         }
