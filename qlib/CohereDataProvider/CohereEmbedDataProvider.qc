@@ -40,34 +40,38 @@ public class CohereEmbedDataProvider inherits CohereDataProviderCommon {
     private {
         #! The request type, built on first use; see requestType()
         static *CohereEmbedRequestDataType request_type;
-        #! Serializes building the request type
-        static Mutex request_type_lock();
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereEmbedDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *CohereEmbedResponseDataType response_type;
-        #! Serializes building the response type
-        static Mutex response_type_lock();
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereEmbedDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use
     /** Built from the vendored API description, so loading the module does not parse it
     */
     static CohereEmbedRequestDataType requestType() {
-        AutoLock al(request_type_lock);
-        if (!request_type) {
-            request_type = new CohereEmbedRequestDataType();
-        }
-        return request_type;
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static CohereEmbedRequestDataType buildRequestType() {
+        return new CohereEmbedRequestDataType();
     }
 
     #! Returns the response type, which is built on first use
     /** Built from the vendored API description, so loading the module does not parse it
     */
     static CohereEmbedResponseDataType responseType() {
-        AutoLock al(response_type_lock);
-        if (!response_type) {
-            response_type = new CohereEmbedResponseDataType();
-        }
-        return response_type;
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static CohereEmbedResponseDataType buildResponseType() {
+        return new CohereEmbedResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : CohereDataProviderCommon(rest) {}

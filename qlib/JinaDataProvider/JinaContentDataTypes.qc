@@ -1232,8 +1232,8 @@ public class JinaBatchRecordResponseDataType inherits HashDataType {
     private {
         #! The shared instance; see instance()
         static *JinaBatchRecordResponseDataType shared_instance;
-        #! Serializes building the shared instance
-        static Mutex instance_lock();
+        #! The ID of the shared instance's builder; see instance()
+        static int instance_id = DataProviderActionCatalog::registerLazyValue(\JinaBatchRecordResponseDataType::buildInstance());
     }
 
     #! Returns the field descriptions of the type
@@ -1261,11 +1261,12 @@ public class JinaBatchRecordResponseDataType inherits HashDataType {
     /** It refers to types built from the pinned schema, so loading the module does not build it
     */
     static JinaBatchRecordResponseDataType instance() {
-        AutoLock al(instance_lock);
-        if (!shared_instance) {
-            shared_instance = new JinaBatchRecordResponseDataType();
-        }
-        return shared_instance;
+        return shared_instance ?? (shared_instance = DataProviderActionCatalog::getLazyValue(instance_id));
+    }
+
+    #! Builds the shared instance; see instance()
+    private static JinaBatchRecordResponseDataType buildInstance() {
+        return new JinaBatchRecordResponseDataType();
     }
 
     #! Creates the documented data type
@@ -1280,8 +1281,8 @@ public class JinaBatchRecordDataType inherits HashDataType {
     private {
         #! The shared instance; see instance()
         static *JinaBatchRecordDataType shared_instance;
-        #! Serializes building the shared instance
-        static Mutex instance_lock();
+        #! The ID of the shared instance's builder; see instance()
+        static int instance_id = DataProviderActionCatalog::registerLazyValue(\JinaBatchRecordDataType::buildInstance());
     }
 
     #! Returns the field descriptions of the type
@@ -1309,11 +1310,12 @@ public class JinaBatchRecordDataType inherits HashDataType {
     /** It refers to types built from the pinned schema, so loading the module does not build it
     */
     static JinaBatchRecordDataType instance() {
-        AutoLock al(instance_lock);
-        if (!shared_instance) {
-            shared_instance = new JinaBatchRecordDataType();
-        }
-        return shared_instance;
+        return shared_instance ?? (shared_instance = DataProviderActionCatalog::getLazyValue(instance_id));
+    }
+
+    #! Builds the shared instance; see instance()
+    private static JinaBatchRecordDataType buildInstance() {
+        return new JinaBatchRecordDataType();
     }
 
     #! Creates the documented data type
@@ -1328,8 +1330,8 @@ public class JinaBatchDownloadResponseDataType inherits HashDataType {
     private {
         #! The shared instance; see instance()
         static *JinaBatchDownloadResponseDataType shared_instance;
-        #! Serializes building the shared instance
-        static Mutex instance_lock();
+        #! The ID of the shared instance's builder; see instance()
+        static int instance_id = DataProviderActionCatalog::registerLazyValue(\JinaBatchDownloadResponseDataType::buildInstance());
     }
 
     #! Returns the field descriptions of the type
@@ -1347,11 +1349,12 @@ public class JinaBatchDownloadResponseDataType inherits HashDataType {
     /** It refers to types built from the pinned schema, so loading the module does not build it
     */
     static JinaBatchDownloadResponseDataType instance() {
-        AutoLock al(instance_lock);
-        if (!shared_instance) {
-            shared_instance = new JinaBatchDownloadResponseDataType();
-        }
-        return shared_instance;
+        return shared_instance ?? (shared_instance = DataProviderActionCatalog::getLazyValue(instance_id));
+    }
+
+    #! Builds the shared instance; see instance()
+    private static JinaBatchDownloadResponseDataType buildInstance() {
+        return new JinaBatchDownloadResponseDataType();
     }
 
     #! Creates the documented data type

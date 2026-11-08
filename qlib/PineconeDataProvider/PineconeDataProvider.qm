@@ -99,6 +99,8 @@ module PineconeDataProvider {
             "groups": (DataProvider::AppGroup::Databases, DataProvider::AppGroup::AiLlm,),
         });
 
+        # the actions are built from the vendored API descriptions the first time that the catalog is asked for
+        # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(PineconeDataProvider::AppName, sub () {
             # every action generated from the vendored Pinecone API descriptions; see PineconeManifest for
             # what is exported and why

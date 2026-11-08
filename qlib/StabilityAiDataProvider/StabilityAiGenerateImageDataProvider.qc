@@ -39,10 +39,14 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
     private {
         #! The request type, built on first use; see requestType()
         static *StabilityAiGenerateImageRequestDataType request_type;
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiGenerateImageDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *StabilityAiGenerateImageResponseDataType response_type;
-        #! Serializes building the types
-        static Mutex type_mutex();
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiGenerateImageDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use
@@ -52,20 +56,22 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
         @throw REST-SCHEMA-ACTION-ERROR the pinned input schema is invalid
     */
     static StabilityAiGenerateImageRequestDataType requestType() {
-        AutoLock lock(type_mutex);
-        if (!request_type) {
-            request_type = new StabilityAiGenerateImageRequestDataType();
-        }
-        return request_type;
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static StabilityAiGenerateImageRequestDataType buildRequestType() {
+        return new StabilityAiGenerateImageRequestDataType();
     }
 
     #! Returns the response type, which is built on first use
     static StabilityAiGenerateImageResponseDataType responseType() {
-        AutoLock lock(type_mutex);
-        if (!response_type) {
-            response_type = new StabilityAiGenerateImageResponseDataType();
-        }
-        return response_type;
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static StabilityAiGenerateImageResponseDataType buildResponseType() {
+        return new StabilityAiGenerateImageResponseDataType();
     }
 
     constructor(StabilityAiRestClient::StabilityAiRestClientIo rest)

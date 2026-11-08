@@ -55,7 +55,11 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
         #! The request type, built on first use; see requestType()
         static *BflGenerateImageRequestDataType request_type;
     }
-    private { static Mutex type_mutex(); }
+    private {
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \BflGenerateImageDataProvider::buildTypes());
+    }
     #! Returns the request type, which is built on first use
     /** It is built from the vendored API description, so loading the module does not parse it
     */
@@ -64,10 +68,25 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
         return request_type;
     }
 
+    #! Returns the response type
+    /** Unlike the request type, it is not built from the vendored API description, so it is a constant; this accessor
+        gives it the same form as the request type's
+    */
+    static AbstractDataProviderType responseType() {
+        return ResponseType;
+    }
+
     #! Initializes the immutable compatible form once
     private static initializeTypes() {
-        AutoLock lock(type_mutex);
-        if (!request_type) { request_type = new BflGenerateImageRequestDataType(); }
+        if (!request_type) {
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            request_type = types.request;
+        }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
+        return {"request": new BflGenerateImageRequestDataType()};
     }
     #! Creates the action using an existing authenticated client
     constructor(BflRestClientIo rest) : BflDataProviderCommon(rest) {}
@@ -91,7 +110,7 @@ public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
     private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
         return getRequestTypeWithOptionsImpl(req.typeCode() == NT_HASH ? req : NOTHING);
     }
-    private *AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *AbstractDataProviderType getResponseTypeImpl() { return responseType(); }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     #! Executes one validated image generation and download

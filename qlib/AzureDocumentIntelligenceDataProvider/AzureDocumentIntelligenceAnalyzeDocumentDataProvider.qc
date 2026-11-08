@@ -45,7 +45,9 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
         static *AzureDocumentIntelligenceAnalyzeResponseDataType response_type;
     }
     private {
-        static Mutex type_lock();
+        #! The ID of the builder of the types; see initializeTypes()
+        static int types_id = DataProviderActionCatalog::registerLazyValue(
+            \AzureDocumentIntelligenceAnalyzeDocumentDataProvider::buildTypes());
     }
 
     #! Returns the request type, which is built on first use
@@ -67,13 +69,19 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
     #! Initializes complete helper types after the lightweight inventory is registered
     /** @throw AZURE-DOCUMENT-INTELLIGENCE-SCHEMA-ERROR an unreviewed schema resource is installed */
     private static initializeTypes() {
-        AutoLock al(type_lock);
         if (!request_type) {
-            AzureDocumentIntelligenceAnalyzeRequestDataType request();
-            AzureDocumentIntelligenceAnalyzeResponseDataType response();
-            request_type = request;
-            response_type = response;
+            hash<auto> types = DataProviderActionCatalog::getLazyValue(types_id);
+            # the request type is set last: it tells that both are set
+            response_type = types.response;
+            request_type = types.request;
         }
+    }
+
+    #! Builds the types; see initializeTypes()
+    private static hash<auto> buildTypes() {
+        AzureDocumentIntelligenceAnalyzeRequestDataType request();
+        AzureDocumentIntelligenceAnalyzeResponseDataType response();
+        return {"request": request, "response": response};
     }
 
     constructor(AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo rest)

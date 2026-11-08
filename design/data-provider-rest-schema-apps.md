@@ -364,9 +364,12 @@ provider, or only needs the connection, never registers the actions at all.
   `fork()`, the worker's start on demand, its end, and the end of the process.
 - **A type built from the schema is built on first use, behind an accessor**, never in a constant, a static
   member's initializer or the module's initialization: any of those parses the schema when the module is loaded,
-  whatever the catalog does. A provider class returns its types from `requestType()` and `responseType()`, which
-  build them under a lock the first time; a shared type built from one (Jina's batch record types) is returned
-  by an `instance()` accessor of its class. Before the accessors, `MistralDataProvider`, `CohereDataProvider`,
+  whatever the catalog does. A provider class returns its types from `requestType()` and `responseType()`; a
+  shared type built from one (Jina's batch record types) is returned by an `instance()` accessor of its class. The
+  class registers the builder of each type with `DataProviderActionCatalog::registerLazyValue()` when the module is
+  loaded, and its accessor returns the type cached in a static member, or gets it with `getLazyValue()` the first
+  time, which builds it as a lazy closure is run: on a trusted reader's thread, or on the catalog worker for a
+  sandboxed reader, whose sandbox would otherwise deny the module's vendored description and keep the shared type. Before the accessors, `MistralDataProvider`, `CohereDataProvider`,
   `JinaDataProvider`, `BflDataProvider`, `StabilityAiDataProvider`, `AzureDocumentIntelligenceDataProvider` and
   `GoogleDocumentAiDataProvider` took 0.3 to 1.3 s to load on a debug build; they now take less than 0.1 s, as
   the other modules do.

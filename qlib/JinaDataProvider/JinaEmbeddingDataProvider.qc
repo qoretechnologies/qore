@@ -42,34 +42,38 @@ public class JinaEmbeddingDataProvider inherits JinaDataProviderCommon {
     private {
         #! The request type, built on first use; see requestType()
         static *JinaEmbeddingRequestDataType request_type;
-        #! Serializes building the request type
-        static Mutex request_type_lock();
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaEmbeddingDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *JinaEmbeddingResponseDataType response_type;
-        #! Serializes building the response type
-        static Mutex response_type_lock();
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \JinaEmbeddingDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use
     /** Built from the vendored API description, so loading the module does not parse it
     */
     static JinaEmbeddingRequestDataType requestType() {
-        AutoLock al(request_type_lock);
-        if (!request_type) {
-            request_type = new JinaEmbeddingRequestDataType();
-        }
-        return request_type;
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static JinaEmbeddingRequestDataType buildRequestType() {
+        return new JinaEmbeddingRequestDataType();
     }
 
     #! Returns the response type, which is built on first use
     /** Built from the vendored API description, so loading the module does not parse it
     */
     static JinaEmbeddingResponseDataType responseType() {
-        AutoLock al(response_type_lock);
-        if (!response_type) {
-            response_type = new JinaEmbeddingResponseDataType();
-        }
-        return response_type;
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static JinaEmbeddingResponseDataType buildResponseType() {
+        return new JinaEmbeddingResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : JinaDataProviderCommon(rest) {

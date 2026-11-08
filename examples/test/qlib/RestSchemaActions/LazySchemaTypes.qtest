@@ -45,12 +45,11 @@ class LazySchemaTypesTest inherits QUnit::Test {
             "StabilityAiDataProvider": (
                 "StabilityAiDataProvider::StabilityAiGenerateImageDataProvider",
             ),
-        };
-
-        #! Classes with a request type accessor only
-        const RequestOnly = {
             "BflDataProvider": (
                 "BflDataProvider::BflGenerateImageDataProvider",
+            ),
+            "AssemblyAiDataProvider": (
+                "AssemblyAiDataProvider::AssemblyAiTranscribeDataProvider",
             ),
         };
 
@@ -69,10 +68,13 @@ class LazySchemaTypesTest inherits QUnit::Test {
 
     constructor() : Test("public schema types are built on first use", "1.0") {
         int before = RestSchemaActionSet::getConstructionCount();
-        map load_module($1), keys (Classes + RequestOnly);
+        map load_module($1), keys Classes;
         load_sets = RestSchemaActionSet::getConstructionCount() - before;
 
         addTestCase("loading builds no action set", \loadTest());
+        # first: the types must not have been built yet
+        addTestCase("a sandboxed first use builds each type outside the sandbox", \sandboxedFirstUseTest());
+        addTestCase("the AssemblyAI types are available before the catalog is read", \assemblyAiTest());
         addTestCase("concurrent first calls build one type", \concurrentTest());
         addTestCase("each accessor builds its type once", \accessorTest());
         addTestCase("the Jina batch types are shared and built on first use", \jinaTest());
@@ -106,10 +108,9 @@ class LazySchemaTypesTest inherits QUnit::Test {
     }
 
     accessorTest() {
-        foreach hash<auto> i in ((Classes + RequestOnly).pairIterator()) {
+        foreach hash<auto> i in (Classes.pairIterator()) {
             foreach string cls in (i.value) {
-                list<string> methods = RequestOnly{i.key} ? ("requestType",) : ("requestType", "responseType");
-                foreach string method in (methods) {
+                foreach string method in (("requestType", "responseType")) {
                     auto t = call_static_method(cls, method);
                     assertTrue(t instanceof AbstractDataProviderType, sprintf("%s::%s()", cls, method));
                     assertTrue(t.getName().val(), sprintf("%s::%s() has a name", cls, method));
@@ -117,6 +118,46 @@ class LazySchemaTypesTest inherits QUnit::Test {
                 }
             }
         }
+    }
+
+    sandboxedFirstUseTest() {
+        # the sandbox denies the filesystem, where the vendored API descriptions are read from
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        map p.loadModule($1), keys Classes;
+        p.parse("auto sub get(string cls, string method) { return call_static_method(cls, method); }\n",
+            "sandboxed-first-use");
+        p.setSandboxManager(sm);
+        list<string> calls = ();
+        foreach hash<auto> i in (Classes.pairIterator()) {
+            foreach string cls in (i.value) {
+                calls += map cls + "::" + $1, ("requestType", "responseType");
+            }
+        }
+        calls += map $1 + "::instance", JinaShared;
+        hash<string, object> types = {};
+        foreach string call in (calls) {
+            (*string cls, *string method) = (call =~ x/^(.*)::([^:]+)$/);
+            try {
+                types{call} = p.callFunction("get", cls, method);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("", sprintf("%s: %s", ex.err, ex.desc), call);
+            }
+        }
+        # the types are shared: trusted callers get the same ones
+        foreach hash<auto> i in (types.pairIterator()) {
+            (*string cls, *string method) = (i.key =~ x/^(.*)::([^:]+)$/);
+            assertTrue(i.value == call_static_method(cls, method), i.key + " is shared");
+        }
+        assertEq(calls.size(), types.size());
+    }
+
+    assemblyAiTest() {
+        assertEq("AssemblyAI Transcription Request",
+            call_static_method("AssemblyAiDataProvider::AssemblyAiTranscribeDataProvider", "requestType").getName());
+        assertTrue(call_static_method("AssemblyAiDataProvider::AssemblyAiTranscribeDataProvider", "responseType")
+            instanceof AbstractDataProviderType);
     }
 
     jinaTest() {

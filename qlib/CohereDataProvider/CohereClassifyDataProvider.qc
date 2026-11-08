@@ -43,34 +43,38 @@ public class CohereClassifyDataProvider inherits CohereDataProviderCommon {
     private {
         #! The request type, built on first use; see requestType()
         static *CohereClassifyRequestDataType request_type;
-        #! Serializes building the request type
-        static Mutex request_type_lock();
+        #! The ID of the request type's builder; see requestType()
+        static int request_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereClassifyDataProvider::buildRequestType());
         #! The response type, built on first use; see responseType()
         static *CohereClassifyResponseDataType response_type;
-        #! Serializes building the response type
-        static Mutex response_type_lock();
+        #! The ID of the response type's builder; see responseType()
+        static int response_type_id = DataProviderActionCatalog::registerLazyValue(
+            \CohereClassifyDataProvider::buildResponseType());
     }
 
     #! Returns the request type, which is built on first use
     /** Built from the vendored API description, so loading the module does not parse it
     */
     static CohereClassifyRequestDataType requestType() {
-        AutoLock al(request_type_lock);
-        if (!request_type) {
-            request_type = new CohereClassifyRequestDataType();
-        }
-        return request_type;
+        return request_type ?? (request_type = DataProviderActionCatalog::getLazyValue(request_type_id));
+    }
+
+    #! Builds the request type; see requestType()
+    private static CohereClassifyRequestDataType buildRequestType() {
+        return new CohereClassifyRequestDataType();
     }
 
     #! Returns the response type, which is built on first use
     /** Built from the vendored API description, so loading the module does not parse it
     */
     static CohereClassifyResponseDataType responseType() {
-        AutoLock al(response_type_lock);
-        if (!response_type) {
-            response_type = new CohereClassifyResponseDataType();
-        }
-        return response_type;
+        return response_type ?? (response_type = DataProviderActionCatalog::getLazyValue(response_type_id));
+    }
+
+    #! Builds the response type; see responseType()
+    private static CohereClassifyResponseDataType buildResponseType() {
+        return new CohereClassifyResponseDataType();
     }
 
     constructor(RestClientIo::RestClientIo rest) : CohereDataProviderCommon(rest) {}
