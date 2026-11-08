@@ -821,6 +821,27 @@ public class WscActionHandoff {
     }
 }
 
+#! The handoffs of actions to the threads that run connectAsync() workers, by TID; internal to WebSocketClient
+/** Changed in synchronized methods, which are not cancellation points (see WscActionHandoff).
+
+    @since WebSocketClient 2.5
+*/
+public class WscActionHandoffs {
+    private {
+        hash<string, WscActionHandoff> h = {};
+    }
+
+    #! Records the handoff to the calling thread
+    synchronized set(WscActionHandoff handoff) {
+        h{gettid()} = handoff;
+    }
+
+    #! Removes and returns the handoff to the calling thread, if any
+    synchronized *WscActionHandoff take() {
+        return remove h{gettid()};
+    }
+}
+
 #! The start of a thread of a client, held by the code that the thread runs
 /** When the code is released without having been run (e.g. a \c start_thread hook that dropped it, or a thread that
     ended before it ran it), the start is uncounted, so the client's destructor does not wait for a thread that will
@@ -1156,6 +1177,11 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         /** @since WebSocketClient 2.5
         */
         hash<string, Condition> action_waiters();
+
+        #! The handoffs of actions to connectAsync() workers (see connectAsync())
+        /** @since WebSocketClient 2.5
+        */
+        WscActionHandoffs action_handoffs();
 
         #! The number of calls of each thread that act without the action; protected by \c m
         /** See acquireActionUnlocked().
@@ -1837,7 +1863,7 @@ ws.connect();
         # The action is handed over to the background thread, so calls made after this method returns run after the
         # connect.
         WscActionHandoff handoff();
-        startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, handoff); }, NOTHING, handoff);
+        startLibraryThread(sub () { connectAsyncWorker(opts, ready_queue, True); }, NOTHING, handoff);
         # the worker takes the action over as its connect's action, with the lock held; this call returns once it
         # did, without waiting for the connect
         locked = False;
@@ -1861,16 +1887,17 @@ ws.connect();
 
         @param opts the connection options
         @param ready_queue optional Queue that receives the connect result hash or an exception hash
-        @param handoff when set, the worker takes over the action of connectAsync() as its connect's action
+        @param handed_over True if the action of connectAsync() was handed over to this thread: its connect takes it
+        over as its action
 
         @since WebSocketClient 2.5
     */
-    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *WscActionHandoff handoff) {
-        # the action is taken over by connectIntern(), which then releases it as its own; if this thread ends before
-        # (e.g. it is cancelled), the thread's end abandons the handoff (see startLibraryThread()), and connectAsync()
-        # releases the action
+    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *bool handed_over) {
+        # an action handed over to this thread is taken over by connectIntern(), which then releases it as its own;
+        # if this thread ends before (e.g. it is cancelled), the thread's end abandons the handoff (see
+        # startLibraryThread()), and connectAsync() releases the action
         try {
-            hash<auto> result = connectIntern(opts, NOTHING, NOTHING, handoff);
+            hash<auto> result = connectIntern(opts);
             if (ready_queue) {
                 ready_queue.push(result);
             }
@@ -2243,8 +2270,7 @@ ws.connect();
     }
 
     #! Connects to the websocket server
-    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnecting,
-            *WscActionHandoff handoff) {
+    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnecting) {
         if (opts.hdr && opts.hdr.typeCode() != NT_HASH) {
             raiseError("option hash to WebSocketClient::connect() 'hdr' key not assigned to a hash; type "
                 "received: %y", opts.hdr.fullType());
@@ -2266,7 +2292,7 @@ ws.connect();
             m.lock();
             on_exit m.unlock();
 
-            acquireActionUnlocked(getConnectActionTimeout(), handoff);
+            acquireActionUnlocked(getConnectActionTimeout());
             on_exit releaseActionUnlocked();
 
             if (!reconnecting) {
@@ -3504,16 +3530,16 @@ ws.setEventQueue();
         controller never start an action, so an action never waits for them; user callbacks run outside actions.
 
         @param to the longest time to wait for an action in progress to end
-        @param handoff the handoff of an action from connectAsync() to this thread, if any
 
         @throw WEBSOCKET-ACTION-TIMEOUT the action in progress did not end within \a to
 
         @since WebSocketClient 2.5
     */
-    private acquireActionUnlocked(timeout to, *WscActionHandoff handoff) {
+    private acquireActionUnlocked(timeout to) {
         int tid = gettid();
         # an action handed over to this thread (see connectAsync()) becomes this call's action, unless the handoff
         # was abandoned
+        *WscActionHandoff handoff = action_handoffs.take();
         if (handoff && handoff.take()) {
             action_tid = tid;
             action_count = 1;
@@ -4244,13 +4270,19 @@ ws.setEventQueue();
         # released with the code: a start whose code is released without being run is not waited for, and abandons
         # the action handed over to it
         WscStartTicket ticket(lt, token, handoff);
+        WscActionHandoffs handoffs = action_handoffs;
         code run = sub () {
             ticket.enter();
-            # neither call is a cancellation point: done also when the thread is cancelled
+            # the action handed over to this thread is taken over by its connect (see acquireActionUnlocked())
+            if (handoff) {
+                handoffs.set(handoff);
+            }
+            # none of the calls is a cancellation point: done also when the thread is cancelled
             on_exit {
                 lt.leave(token);
                 # an action handed over to this thread and not taken over is abandoned (see connectAsync())
                 if (handoff) {
+                    handoffs.take();
                     handoff.abandon();
                 }
             }

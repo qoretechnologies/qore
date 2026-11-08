@@ -172,6 +172,8 @@ class LifecycleWsClient inherits WebSocketClient {
         bool report_h1_upgrade = False;
         #! hold the next connectAsync() worker before it takes the action over
         bool hold_worker = False;
+        #! the TID of the last connectAsync() worker that an action was handed over to
+        int handoff_tid = 0;
         #! released by the test to let the held worker go on
         Counter release_worker(1);
 
@@ -324,14 +326,17 @@ class LifecycleWsClient inherits WebSocketClient {
         WebSocketClient::runInitialDrain(c);
     }
 
-    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *WscActionHandoff handoff) {
-        if (hold_worker && handoff) {
+    private connectAsyncWorker(*hash<auto> opts, *Queue ready_queue, *bool handed_over) {
+        if (handed_over) {
+            handoff_tid = gettid();
+        }
+        if (hold_worker && handed_over) {
             hold_worker = False;
             Queue q = events;
             q.push("worker-held:" + gettid());
             release_worker.waitForZero(HandoffTimeout);
         }
-        WebSocketClient::connectAsyncWorker(opts, ready_queue, handoff);
+        WebSocketClient::connectAsyncWorker(opts, ready_queue, handed_over);
     }
 
     #! starts a thread of the client running @a body; @a tid gets the TID that the start returns
@@ -512,13 +517,13 @@ class LifecycleWsClient inherits WebSocketClient {
         return rv;
     }
 
-    private acquireActionUnlocked(timeout to, *WscActionHandoff handoff) {
-        if (report_action_wait && action_tid && action_tid != gettid() && !handoff) {
+    private acquireActionUnlocked(timeout to) {
+        bool handed = handoff_tid == gettid();
+        if (report_action_wait && action_tid && action_tid != gettid() && !handed) {
             events.push("action-wait");
         }
         bool reentry = action_tid == gettid();
-        bool handed = exists handoff;
-        WebSocketClient::acquireActionUnlocked(to, handoff);
+        WebSocketClient::acquireActionUnlocked(to);
         if ((gate_mode == "action" && !reentry) || (gate_mode == "handover" && handed)) {
             remove gate_mode;
             gateUnlocked();
@@ -4001,11 +4006,11 @@ class WdDiscord inherits DiscordWebSocketClient {
         DiscordWebSocketClient::startAsyncIo();
     }
 
-    private acquireActionUnlocked(timeout to, *WscActionHandoff handoff) {
-        if (report_action_wait && action_tid && action_tid != gettid() && !handoff) {
+    private acquireActionUnlocked(timeout to) {
+        if (report_action_wait && action_tid && action_tid != gettid()) {
             events.push("action-wait");
         }
-        DiscordWebSocketClient::acquireActionUnlocked(to, handoff);
+        DiscordWebSocketClient::acquireActionUnlocked(to);
     }
 
     #! holds the action in another thread, without the client's lock, until release_action is released
