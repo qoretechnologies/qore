@@ -392,6 +392,7 @@ kill -9 $shells
                 "examples/test/qlib/SqlUtil/MysqlSequenceFunction.qtest": unique,
                 "examples/test/qlib/SqlUtil/SerializationConfig.qtest": no_objects,
                 "examples/test/qlib/SqlUtil/PgsqlKeyAlignment.qtest": "it does not connect to MySQL",
+                "examples/test/qlib/SqlUtil/MssqlKeyAlignment.qtest": "it does not connect to MySQL",
                 "examples/test/qlib/DbDataProvider/DbSqlUtilWhereOperators.qtest": unique,
                 "examples/test/qlib/DbDataProvider/DbMaterializedViewRefresh.qtest": no_objects + " in MySQL",
                 "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
@@ -407,17 +408,34 @@ kill -9 $shells
             "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
             "modules/dataframe/test/dataframe-dbi.qtest": unique,
         }
-        module = {"PGSQL": "PgsqlTestIsolation.qm", "MYSQL": "MysqlTestIsolation.qm", "ORACLE": "OracleTestIsolation.qm"}
+        exempt["FREETDS"] = {
+            "examples/test/misc/DbTestConnections.qtest": "it only parses datasource strings",
+            "examples/test/bin/run_tests/run-tests-credentials.qtest": "it only prints datasource strings",
+            "examples/test/qlib/SqlUtil/PgsqlKeyAlignment.qtest": "it does not connect to SQL Server",
+            "examples/test/qlib/SchemaReverse/schema-reverse.qtest": "it skips SQL Server, whose reverse output it "
+                "does not know",
+            "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
+            "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
+            "modules/dataframe/test/dataframe-dbi.qtest": unique,
+        }
+        module = {"PGSQL": "PgsqlTestIsolation.qm", "MYSQL": "MysqlTestIsolation.qm", "ORACLE": "OracleTestIsolation.qm",
+                  "FREETDS": "MssqlTestIsolation.qm", "JDBC_PGSQL": "PgsqlTestIsolation.qm",
+                  "JDBC_ORACLE": "OracleTestIsolation.qm", "JDBC_MSSQL": "MssqlTestIsolation.qm",
+                  "JDBC_FIREBIRD": "FirebirdTestIsolation.qm"}
+        # the JDBC connections are not given by DbTestConnections
+        for db in ("JDBC_PGSQL", "JDBC_ORACLE", "JDBC_MSSQL", "JDBC_FIREBIRD"):
+            exempt[db] = {"modules/dataframe/test/dataframe-dbi.qtest": unique}
         lane = re.compile(r"(?m)^# test-parallel: ")
-        checked = {"PGSQL": 0, "MYSQL": 0, "ORACLE": 0}
+        checked = {db: 0 for db in module}
         for test in sorted((ROOT / "examples/test").rglob("*.qtest")) + sorted((ROOT / "modules").glob(
                 "*/test/**/*.qtest")):
             source = test.read_text(errors="replace")
             if lane.search(source):
                 continue
             name = str(test.relative_to(ROOT))
-            for db in ("PGSQL", "MYSQL", "ORACLE"):
-                if "QORE_DB_CONNSTR_" + db not in source and "DbTestConnections::get" not in source:
+            for db in module:
+                if not re.search(r"\bQORE_DB_CONNSTR_%s\b" % db, source) and (db.startswith("JDBC_")
+                        or "DbTestConnections::get" not in source):
                     continue
                 checked[db] += 1
                 if module[db] in source:
@@ -432,6 +450,9 @@ kill -9 $shells
         self.assertGreater(checked["PGSQL"], 20)
         self.assertGreater(checked["MYSQL"], 5)
         self.assertGreater(checked["ORACLE"], 5)
+        self.assertGreater(checked["FREETDS"], 5)
+        for db in ("JDBC_PGSQL", "JDBC_ORACLE", "JDBC_MSSQL", "JDBC_FIREBIRD"):
+            self.assertGreater(checked[db], 0, db)
 
     def test_process_limit_tests_are_exclusive(self):
         # A test that reads the process or thread limit of the machine does so to reach it: while it holds every
