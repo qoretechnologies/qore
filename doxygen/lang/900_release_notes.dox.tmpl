@@ -1881,6 +1881,14 @@
       deleting it deleted their static variables while the program still used them
     - deleting @ref Qore::Program "Program" objects that share a class in different threads at the same time could
       crash the process
+    - a @ref Qore::Program "Program" created while a program's data was released (by a destructor at exit, for
+      example) shared the values of the program's static class variables, so storing it in one of them kept those
+      values, and itself, alive; it now sees the values until they are released, and \c NOTHING afterwards (see
+      @ref static_class_variables)
+    - the constants and static class variables of a module loaded at runtime while a program's data was released
+      (by a destructor at exit, for example) were never released
+    - key-value data set with the C++ API function QoreClass::setKeyValue() was never released for a class without
+      static variables
 
     @section qore_2_2_1 Qore 2.2.1
 
