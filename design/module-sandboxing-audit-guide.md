@@ -142,8 +142,12 @@ Two more rules close the remaining routes:
 - `mayChangeModulePath()` allows an unquoted `%append-module-path` in a library module's own source
   (`qore_program_private::library_module`), whoever loads it first: the rule depends on the source being parsed. The
   directory it adds is searched but holds no library code; an application whose modules must be library code puts
-  their directories in `QORE_MODULE_DIR` (Qorus puts `$OMQ_DIR/qlib` and `$OMQ_DIR/user/modules` there in
-  `distrib/qorus.sh` and the container `env.sh`; its unquoted directives only repeat them as a fallback).
+  their directories in `QORE_MODULE_DIR` or adds them with `ModuleManager::addModuleDir()` before `qore_init()` (Qorus
+  adds `$OMQ_DIR/qlib` and `$OMQ_DIR/user/modules` that way in `exec/qorus_lib.cpp`; its unquoted directives only
+  repeat them as a fallback);
+- a load into a library module's Program (a run-time `load_module()` in library code) never takes a module that a
+  tenant chose, and `runTimeLoadModule()` skips its committed-feature fast paths for such a target, so a module that
+  a tenant's call put there cannot reach other callers.
 
 What this means for an audit:
 

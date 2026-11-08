@@ -821,9 +821,10 @@ public:
     //! Returns true if the code running on the current thread may use a module that code that is not trusted chose
     /** Only code that is not trusted, with the same sandbox as the code that loaded the module, or, if that code has
         no sandbox, in the same Program; never library code while it is initialized (see qore_module_init_library()),
-        nor while the child modules of a library module are attached
+        nor while the child modules of a library module are attached, nor for a load into the Program of a library
+        module (\a pgm, the target of the load, if any), whose modules every caller uses
     */
-    DLLLOCAL static bool mayUseTenantModule(const QoreAbstractModule& mi);
+    DLLLOCAL static bool mayUseTenantModule(const QoreAbstractModule& mi, const QoreProgram* pgm);
 
     //! Adds a directory to the process-wide module path; ignored for code that is not trusted
     /** see qore_caller_is_untrusted(); a directory added after init() is not a directory of library code (see

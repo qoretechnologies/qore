@@ -254,9 +254,10 @@ authenticate();
     initialized: those of \c QORE_MODULE_DIR and the standard module directories (or those that the embedding
     application sets before it initializes the library).  A directory added to the process-wide module path later,
     with an unquoted \c %append-module-path directive or by the embedding application, is searched for modules but
-    does not hold library code: an application whose modules must be library code puts their directories in
-    \c QORE_MODULE_DIR (Qorus, for example, puts \c $OMQ_DIR/qlib and \c $OMQ_DIR/user/modules there; its own
-    unquoted directives only repeat them as a fallback).  Code that is not trusted, and a %Program that is sandboxed
+    does not hold library code: an application whose modules must be library code adds their directories before it
+    initializes the library, in \c QORE_MODULE_DIR or with the embedding API (Qorus, for example, adds
+    \c $OMQ_DIR/qlib and \c $OMQ_DIR/user/modules with \c ModuleManager::addModuleDir() before it initializes the
+    library; its own unquoted directives only repeat them as a fallback).  Code that is not trusted, and a %Program that is sandboxed
     or restricted when it is parsed, cannot extend the process-wide module path: an unquoted
     \c %append-module-path directive is a parse error there (a quoted path adds a directory to the %Program's own
     module path), and the embedding API that adds directories ignores such a caller.  The source of a library module
@@ -284,7 +285,8 @@ authenticate();
       (\c %try-child-module) are resolved through its own module paths and the process-wide module path, not through
       the module paths that the loading %Program added, and never to a module that code that is not trusted chose
       (see below), also when that code loaded it before: an optional dependency or a child module is then left out,
-      and a dependency is missing;
+      and a dependency is missing; the same holds for a module that library code loads at run time into its own
+      %Program, whoever calls it;
     - a module that is not library code and that its initialization loads, by path or otherwise, is governed by the
       sandbox of the loading code, and is subject to the same limits as a module that the loading code loads itself
       (see below);

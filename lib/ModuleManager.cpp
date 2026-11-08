@@ -1997,8 +1997,11 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     // lock-free fast path: check committedFeatureList using only featureLock(read); this allows full
     // concurrency for the common case where the module is already loaded — no serialization on plock.
     // committedFeatureList is only populated AFTER namespace changes are committed in addToProgramImpl(),
-    // so a hit here guarantees the module's types are fully available in this program.
-    if (pgm && !load_opt) {
+    // so a hit here guarantees the module's types are fully available in this program.  Not for the Program of a
+    // library module: whether a module that it has may be used is decided under the module manager mutex (see
+    // mayUseTenantModule()), whoever calls
+    const bool library_target = pgm && qore_program_private::get(*pgm)->library_module;
+    if (pgm && !load_opt && !library_target) {
         QoreString tmp;
         const char* feat_name = name;
         if (strchrs(name, "./\\")) {
@@ -2027,7 +2030,7 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     // double-check under parse lock using hasFeature() (which includes not-yet-committed features);
     // this catches the case where another thread is in the middle of addToProgramImpl() — the feature
     // is registered (for duplicate detection per issue #3592) but namespace changes aren't committed yet
-    if (pgm && !load_opt) {
+    if (pgm && !load_opt && !library_target) {
         QoreString tmp;
         const char* feat_name = name;
         if (strchrs(name, "./\\")) {
@@ -2403,7 +2406,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     // a module that code that is not trusted loaded from outside the module path does not satisfy, and cannot be
     // reloaded by, other code, nor code with another sandbox: its file and its state are the choice of that code
-    if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi)) {
+    if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, pgm)) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot use module '%s' (%s): it was "
             "loaded from outside the module path by code that a sandbox governs or whose functional domains are "
             "restricted, and cannot be used by other code, nor by code with another sandbox", name,
@@ -3079,10 +3082,12 @@ int QoreModuleManager::checkShadowingLoad(ExceptionSink& xsink, const char* path
     return 0;
 }
 
-bool QoreModuleManager::mayUseTenantModule(const QoreAbstractModule& mi) {
+bool QoreModuleManager::mayUseTenantModule(const QoreAbstractModule& mi, const QoreProgram* pgm) {
     assert(mi.isTenantChosen());
-    // library code does not bind to a module that a tenant chose, whoever loaded it
-    if (!qore_caller_is_untrusted() || qore_module_init_library()) {
+    // library code does not bind to a module that a tenant chose, whoever loaded it, when it is initialized or later
+    // (a module loaded into a library module's Program at run time is used by every caller)
+    if (!qore_caller_is_untrusted() || qore_module_init_library()
+        || (pgm && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module)) {
         return false;
     }
     ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);

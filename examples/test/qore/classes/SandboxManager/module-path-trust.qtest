@@ -161,6 +161,29 @@ public class Info {
 }
 ";
 
+        #! a library module that loads a module when it is called, after its initialization
+        const XLazy = "%modern
+module XLazy {
+    version = \"1.0\";
+    desc = \"library module loading a module at run time\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public namespace XLazy {
+public class C {
+    static string y() {
+        try {
+            load_module(\"YOpt\");
+            return call_static_method(\"YOpt::Info\", \"who\");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + \": \" + ex.desc;
+        }
+    }
+}
+}
+";
+
         #! a library module that reports the parse defines it was parsed with
         const DefProbe = "%modern
 module DefProbe {
@@ -512,6 +535,16 @@ switch (case_name) {
         break;
     }
 
+    # the loader loads a module by path (ARGV[3]) and the library module arg, and calls it; then trusted code calls it
+    case \"lazy\": {
+        Program p = loader(Funcs);
+        p.callFunction(\"load\", ARGV[3]);
+        p.callFunction(\"load\", arg);
+        printf(\"tenant y: %s\\n\", p.callFunction(\"get\", arg + \"::C\", \"y\"));
+        printf(\"trusted y: %s\\n\", trusted_get(arg, arg + \"::C\", \"y\"));
+        break;
+    }
+
     # a module that restricted code with no sandbox loaded by path, requested by other restricted code
     case \"restricted-share\": {
         Program a = loader(Funcs);
@@ -609,6 +642,8 @@ switch (case_name) {
             \libraryAppendTest());
         addTestCase("a module that restricted code with no sandbox loaded is not given to other restricted code",
             \restrictedShareTest());
+        addTestCase("a module that a sandbox loaded is not loaded into a library module at run time",
+            \libraryRuntimeLoadTest());
         set_return_value(main());
     }
 
@@ -879,6 +914,16 @@ switch (case_name) {
             string out = custom(d, how, LibAppLoad);
             assertEq("libapp: ok", line("libapp:", out), how + ": " + out);
         }
+    }
+
+    libraryRuntimeLoadTest() {
+        hash<auto> d = dirs();
+        write(d.trusted + "/XLazy.qm", XLazy);
+        write(d.other + "/YOpt.qm", reporting("YOpt", "ATTACKER"));
+        string out = run(d, "lazy", "sandboxed", "XLazy", d.other + "/YOpt.qm");
+        # a load into the library module's Program is refused for every caller, the tenant's first call included
+        assertRegex("^tenant y: LOAD-MODULE-ERROR: .*cannot use module 'YOpt'", line("tenant y:", out) ?? "", out);
+        assertRegex("^trusted y: LOAD-MODULE-ERROR: .*cannot use module 'YOpt'", line("trusted y:", out) ?? "", out);
     }
 
     restrictedShareTest() {
