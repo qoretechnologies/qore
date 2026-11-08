@@ -6335,7 +6335,8 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
     // nothing to send: the alert or a fatal alert was sent already, or the handshake did not complete, in which case
     // SSL_shutdown() sends nothing either
     // after a write that the peer's close or reset made fail (SSL_ERROR_SYSCALL), OpenSSL forbids SSL_shutdown(): no
-    // alert is sent, and the session is not resumed (OpenSSL removes it from the cache when the connection is freed)
+    // alert is sent, on the client's and on the server's side (a TCP TLS socket has a TLS context of its own and does
+    // not resume sessions, so no session cache is affected)
     if (!write_failed.load(std::memory_order_acquire) && !(SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN)
             && SSL_is_init_finished(ssl)) {
         // one attempt that cannot block: the write side is closed right after
@@ -6348,8 +6349,7 @@ void SSLSocketHelper::sendCloseNotify(int fd) {
 #endif
         ERR_clear_error();
         // 0: the alert was sent (the peer's is not awaited); < 0: it could not be sent now, which the error queue
-        // must not report to a later TLS call of this thread.  Either way SSL_SENT_SHUTDOWN is set, so the session
-        // stays resumable.
+        // must not report to a later TLS call of this thread.
         (void)SSL_shutdown(ssl);
         ERR_clear_error();
 #ifdef DEBUG

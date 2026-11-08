@@ -103,6 +103,8 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
             "connection", \tlsTest());
         addTestCase("TLS: a socket kept open after a failed write is closed without a close_notify alert",
             \tlsNoCloseNotifyAfterFailedWriteTest());
+        addTestCase("TLS server: a socket kept open after a failed write is closed without a close_notify alert",
+            \tlsServerNoCloseNotifyAfterFailedWriteTest());
         addTestCase("TLS: a protocol error on a write closes the socket whatever errno holds",
             \tlsProtocolErrorClosesTest());
         set_return_value(main());
@@ -160,6 +162,46 @@ class TlsWriteAfterPeerResetTest inherits QUnit::Test {
         sock.close();
         assertEq(before, call_function("dbg_ssl_close_notify_count"),
             "no close_notify is sent after a fatal write error");
+    }
+
+    #! The same on the server's side: the client resets the connection, so the server's write fails; the close of the
+    #! server's socket kept open sends no close_notify alert
+    tlsServerNoCloseNotifyAfterFailedWriteTest() {
+        requireDebugHooks();
+        Socket listener();
+        listener.setCertificate(new SSLCertificate(CertPem));
+        listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        listener.bind("localhost:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Queue accepted();
+        background sub () {
+            try {
+                Socket conn = listener.accept(Timeout);
+                conn.upgradeServerToSSL(Timeout);
+                accepted.push(conn);
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        Socket client();
+        client.connectSSL(sprintf("localhost:%d", listener.getPort()), Timeout);
+        auto conn = accepted.get(Timeout);
+        assertEq(NT_OBJECT, conn.typeCode(), sprintf("the server accepted the connection: %y", conn));
+        call_function("dbg_reset_socket", client);
+        hash<ExceptionInfo> ex;
+        try {
+            conn.send(strmul("w", WriteSize), Timeout);
+            fail("a write to a reset connection must fail");
+        } catch (hash<ExceptionInfo> ex1) {
+            ex = ex1;
+        }
+        assertEq("SOCKET-SSL-ERROR", ex.err, ex.desc);
+        assertTrue(conn.isOpen(), "the server's socket stays open after the write failed");
+        int before = call_function("dbg_ssl_close_notify_count");
+        conn.close();
+        assertEq(before, call_function("dbg_ssl_close_notify_count"),
+            "no close_notify is sent by the server after a fatal write error");
     }
 
     #! An SSL_ERROR_SSL write failure closes the socket, also when errno holds a peer-close error from before

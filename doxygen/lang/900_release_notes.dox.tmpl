@@ -1666,8 +1666,7 @@
       the request
     - a TLS @ref Qore::Socket "Socket" stays open when a write fails because the peer closed the connection, so the
       data the peer sent before can still be read, and \c SOCKET-SSL-ERROR for a network failure has the error number
-      as its argument; such a connection is closed without a TLS \c close_notify alert, and its session is not
-      resumed
+      as its argument; such a connection is closed without a TLS \c close_notify alert
     - fixed \c qget: \c ftp:// and \c ftps:// downloads, saving an empty body, the exit status and error output of a
       failed retrieval, and a \c Content-Disposition file name that could write outside the current directory
     - fixed a crash when a file included with @ref include "%include" ends inside a literal or a block comment
