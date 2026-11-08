@@ -241,14 +241,19 @@ $function$
       gives the server version as a hash: the sequence was read as before PostgreSQL 10, which raised an error
     - added support for the procedures of PostgreSQL 11 and later (@ref PgsqlSqlUtilBase::PgsqlProcedure
       "PgsqlProcedure"), which were taken for functions, so that describing one raised \c FUNCTION-ERROR:
-      - functions (@ref SqlUtil::AbstractDatabase::listFunctions() "listFunctions()",
+      - on PostgreSQL 11 and later, functions (@ref SqlUtil::AbstractDatabase::listFunctions() "listFunctions()",
         @ref SqlUtil::AbstractDatabase::getFunction() "getFunction()") are no longer procedures
       - @ref SqlUtil::AbstractDatabase::getProcedure() "getProcedure()" returns the procedure of the name, else its
         function, and @ref SqlUtil::AbstractDatabase::listProcedures() "listProcedures()" lists procedures and
-        functions: before PostgreSQL 11, a function was given as a procedure
-      - @ref SqlUtil::AbstractDatabase::makeProcedure() "makeProcedure()" and the procedures of a schema description
-        make a procedure, unless the source has a \c RETURNS clause or an \c OUT or \c INOUT argument, which make a
-        function as before
+        functions, as functions were given as procedures before
+      - on PostgreSQL 11 and later, @ref SqlUtil::AbstractDatabase::makeProcedure() "makeProcedure()" and the
+        procedures of a schema description make a procedure, unless the source has a \c RETURNS clause or an \c OUT
+        or \c INOUT argument, which make a function as before
+      - earlier versions of PostgreSQL have no procedures: every routine is a function, as before, and
+        @ref PgsqlSqlUtilBase::PgsqlDatabase::hasProcedures() "PgsqlDatabase::hasProcedures()" tells which a server
+        has
+    - fixed listing functions on PostgreSQL 10 and earlier, which raised an error (column \c prokind does not
+      exist)
       - the default mode (\c IN) of a procedure's argument is left out of its name, as for a function
     - a template table built from a description, as for each table of a schema description in
       @ref SqlUtil::Tables::populate() "Tables::populate()" and schema alignment, no longer reads the catalog three
@@ -2222,12 +2227,20 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     */
     private PgsqlFunction makeProcedureImpl(string name, string src, *hash opts) {
         PgsqlFunction f = makeFunctionImpl(name, src, opts);
-        if (PgsqlDatabase::isFunctionSource(f.args, f.src)) {
+        # before PostgreSQL 11 there are no procedures
+        if (!hasProcedures() || PgsqlDatabase::isFunctionSource(f.args, f.src)) {
             return f;
         }
         # PostgreSQL quotes the body of a procedure with "$procedure$", where makeFunctionImpl() quotes it with
         # "$function$", so that the source of a procedure compares equal with its description
         return new PgsqlProcedure(f.name, replace(f.src, "$function$", "$procedure$"), f.args);
+    }
+
+    #! returns True if the server has procedures, which PostgreSQL 11 added, with the routine kind of pg_proc
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    bool hasProcedures() {
+        return pgsql_get_server_version_num(ds) >= 110000;
     }
 
     #! returns True if the arguments or the source given for a procedure are those of a function
@@ -2256,8 +2269,16 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         @param procedure True to look for a procedure, False for a function
     */
     private *AbstractFunction getRoutineIntern(string name, bool procedure) {
-        # a procedure is a routine of kind 'p'; any other kind is a function
-        string kind_cond = procedure ? "p.prokind = 'p'" : "p.prokind <> 'p'";
+        # a procedure is a routine of kind 'p'; any other kind is a function; before PostgreSQL 11, which added
+        # procedures and pg_proc.prokind, every routine is a function
+        string kind_cond;
+        if (hasProcedures()) {
+            kind_cond = procedure ? " and p.prokind = 'p'" : " and p.prokind <> 'p'";
+        } else if (procedure) {
+            return;
+        } else {
+            kind_cond = "";
+        }
         # a name without a schema is looked up in the schema the connection resolves unqualified names in, as for
         # tables, views and sequences; matching on the function name alone found the functions of every schema,
         # so the same function in two schemas was reported as two matches, or the other schema's was described
@@ -2283,7 +2304,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
                 "case provolatile when 'i' then 'IMMUTABLE' when 's' then 'STABLE' when 'v' then 'VOLATILE' end stability "
                 "from pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
                 "left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
-                "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v and "
+                "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v"
                 + kind_cond, name, schema);
             if (!qh.proname)
                 return;
@@ -2315,8 +2336,8 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
                 "join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
                 "left join pg_type t1 on p.prorettype = t1.oid left join pg_roles a on p.proowner = a.oid "
                 "left join pg_language l on p.prolang = l.oid where p.proname = %v and n.nspname = %v and "
-                "regexp_replace(pg_catalog.pg_get_function_identity_arguments(p.oid), '(^|, )IN ', '\\1', 'g') = %v "
-                "and " + kind_cond, nc, schema, args);
+                "regexp_replace(pg_catalog.pg_get_function_identity_arguments(p.oid), '(^|, )IN ', '\\1', 'g') = %v"
+                + kind_cond, nc, schema, args);
             if (!qh)
                 return;
         }
@@ -2580,15 +2601,23 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns the functions or the procedures of the schemas of the connection's \c search_path
     private list<string> listRoutinesIntern(bool procedure) {
+        # a procedure is a routine of kind 'p'; any other kind is a function; before PostgreSQL 11, which added
+        # procedures and pg_proc.prokind, every routine is a function
+        string kind_cond;
+        if (hasProcedures()) {
+            kind_cond = procedure ? " and p.prokind = 'p'" : " and p.prokind <> 'p'";
+        } else if (procedure) {
+            return ();
+        } else {
+            kind_cond = "";
+        }
         # the functions of the search_path schemas; this listed the functions of the "public" schema whatever the
         # connection's search_path, so the functions of any other schema could not be listed
-        string sql = sprintf("select n.nspname as schema, %s as name, pg_catalog.pg_get_function_result(p.oid) "
-            "as result_type, regexp_replace(pg_catalog.pg_get_function_arguments(p.oid), '(^|, )IN ', '\\1', 'g') "
-            "as args,"
-            " case when p.prokind = 'a' then 'agg' when p.prokind = 'w' then 'window' when p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype then 'trigger' else 'normal' end as type"
+        string sql = sprintf("select n.nspname as schema, %s as name, "
+            "regexp_replace(pg_catalog.pg_get_function_arguments(p.oid), '(^|, )IN ', '\\1', 'g') as args"
             " from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace"
-            " where n.nspname = any (current_schemas(false)) and p.prokind %s 'p' order by 1, 2, 4",
-            pgsql_relation_name_expr("n.nspname", "p.proname"), procedure ? "=" : "<>");
+            " where n.nspname = any (current_schemas(false))%s order by 1, 2, 3",
+            pgsql_relation_name_expr("n.nspname", "p.proname"), kind_cond);
         *hash qh = ds.select(sql);
 
         return map sprintf("%s(%s)", $1.name, $1.args), qh.contextIterator();

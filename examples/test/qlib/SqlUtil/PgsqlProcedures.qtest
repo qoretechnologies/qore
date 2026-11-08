@@ -14,6 +14,35 @@
 
 %exec-class PgsqlProceduresTest
 
+#! A connection to the PostgreSQL server that reports the version of PostgreSQL 10, and records the queries
+class Pg10Datasource inherits Datasource {
+    public {
+        list<string> sql = ();
+    }
+
+    constructor(string connstr) : Datasource(connstr) {
+    }
+
+    auto getServerVersion() {
+        return 100023;
+    }
+
+    auto select(string sql, ...) {
+        self.sql += sql;
+        return Datasource::vselect(sql, argv);
+    }
+
+    auto selectRow(string sql, ...) {
+        self.sql += sql;
+        return Datasource::vselectRow(sql, argv);
+    }
+
+    auto selectRows(string sql, ...) {
+        self.sql += sql;
+        return Datasource::vselectRows(sql, argv);
+    }
+}
+
 #! The procedures of PostgreSQL 11 and later: PgsqlSqlUtil took them for functions, so that describing one raised
 #! FUNCTION-ERROR ("function does not begin with 'create or replace function'"), and a procedure given in a schema was
 #! created as a function; a function is still a procedure when there is no procedure, as before PostgreSQL 11
@@ -46,6 +75,7 @@ class PgsqlProceduresTest inherits QUnit::Test {
         addTestCase("makeProcedure() makes a procedure or a function", \makeProcedure());
         addTestCase("a schema with a procedure is aligned", \alignSchema());
         addTestCase("functions and procedures are renamed", \rename());
+        addTestCase("before PostgreSQL 11, functions are read without a routine kind", \beforeProcedures());
         set_return_value(main());
     }
 
@@ -69,6 +99,34 @@ class PgsqlProceduresTest inherits QUnit::Test {
         ds.execRaw(Procedure);
         ds.commit();
         return new Database(ds);
+    }
+
+    #! pg_proc.prokind was added in PostgreSQL 11 with procedures: reading the functions of an earlier version
+    #! raised an error (column p.prokind does not exist)
+    private beforeProcedures() {
+        skipIfNone();
+        foreach hash<auto> i in (conns.pairIterator()) {
+            # the function and the procedure exist on the server, which is of a later version
+            getDatabase(i.value);
+            Pg10Datasource ds(i.value);
+            on_exit ds.rollback();
+            Database db(ds);
+            list<string> l = db.listFunctions();
+            assertTrue(inlist("qtest_pp_f(a int)", l) || inlist("qtest_pp_f(a integer)", l), i.key + ": " + l.join(","));
+            assertEq("PgsqlFunction", db.getFunction("qtest_pp_f").className(), i.key);
+            assertEq("PgsqlFunction", db.getFunction("qtest_pp_f(a integer)").className(), i.key);
+            # a function is the procedure of its name
+            assertEq("PgsqlFunction", db.getProcedure("qtest_pp_f").className(), i.key);
+            l = db.listProcedures();
+            assertTrue(inlist("qtest_pp_f(a int)", l) || inlist("qtest_pp_f(a integer)", l), i.key + ": " + l.join(","));
+            assertRegex("^drop function qtest_pp_f\\(", db.getDropProcedureSqlIfExists("qtest_pp_f"), i.key);
+            assertNothing(db.getDropFunctionSqlIfExists("qtest_pp_none"), i.key);
+            # a procedure source makes a function: there are no procedures
+            assertEq("PgsqlFunction", db.makeProcedure("qtest_pp_m1(a int)", "language plpgsql as $$ begin perform "
+                "a; end; $$").className(), i.key);
+            assertEq((), (select ds.sql, $1 =~ /prokind/), i.key);
+            assertTrue(ds.sql.size() > 0, i.key);
+        }
     }
 
     private functions() {
