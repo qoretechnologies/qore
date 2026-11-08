@@ -186,6 +186,8 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - implemented the \c "returning" insert option (@ref SqlUtil::AbstractTable::InsertOptions) with SQL Server's
+      \c OUTPUT clause; it raised \c UNIMPLEMENTED before
     - fixed the server version of a connection of the \c jdbc driver, which gives it as a hash: \c MERGE (upserts)
       and sequences were not used, as the version was taken for an unknown one
     - names of tables, columns, indexes, constraints, sequences, views, triggers, schemas, filegroups, partition
@@ -1777,7 +1779,6 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         # the jdbc driver gives the version as a hash with the product name
         return (version.typeCode() == NT_HASH ? version.name : version) =~ /Adaptive Server/;
     }
-
 
     #! returns a string that can be used to create the schema in the database
     static string getCreateSql(list l) {
@@ -4081,14 +4082,50 @@ tc.constraint_name, c1.ordinal_position", schema, name);
                 throw "COLUMN-ERROR", sprintf("%s.%s is not a valid column for the \"returning\" option (valid "
                     "columns: %y)", name, rh.key, columns.keys());
             l += rh.key;
-            args += rh.type ?* c.qore_type ?* Type::String;
         }
         if (l) {
-            throw "UNIMPLEMENTED", "output not yet implemented";
+            # SQL Server gives the values of the inserted row as a result set of the OUTPUT clause, which comes
+            # before the VALUES clause of the insert, with no placeholders
+            string output = "output " + (foldl $1 + ", " + $2, (map "inserted." + getColumnSqlName($1), l));
+            # the first ") values (" outside of a quoted (bracketed) name ends the insert's column list
+            int i = MssqlTable::findOutsideBrackets(sql, ") values (");
+            if (i < 0) {
+                throw "RETURNING-ERROR", sprintf("cannot add the OUTPUT clause to the insert %y", sql);
+            }
+            sql = sql.substr(0, i + 2) + output + sql.substr(i + 1);
         }
 
         *hash<auto> h = execData(opt, sql, args);
-        return h ? map {$1.key: $1.value[0]}, h.pairIterator() : h;
+        return h ? map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, h.pairIterator() : h;
+    }
+
+    #! returns the offset of the first occurrence of a string in SQL outside of a bracketed name, or -1 if none
+    /** In a bracketed name, \c "]]" is a \c "]" of the name
+    */
+    static int findOutsideBrackets(string sql, string str) {
+        bool quoted;
+        int len = sql.length();
+        for (int i = 0; i < len; ++i) {
+            string c = sql[i];
+            if (quoted) {
+                if (c == "]") {
+                    if (i + 1 < len && sql[i + 1] == "]") {
+                        ++i;
+                    } else {
+                        quoted = False;
+                    }
+                }
+                continue;
+            }
+            if (c == "[") {
+                quoted = True;
+                continue;
+            }
+            if (sql.substr(i, str.length()) == str) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private softbool tryUpdate(string sql, hash<auto> row, Columns cols, list updc) {
