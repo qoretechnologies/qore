@@ -352,9 +352,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     - the destructor waits, without a time limit, for the threads the client started for itself (automatic
       reconnects and @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" workers) and for its
       delivery tasks, except the thread it runs on, so they no longer run on a destroyed client; from its start, no
-      such thread is started, action waits end with \c WEBSOCKET-ERROR and a handshake in progress is canceled (see
-      @ref websocketclient_lifecycle for what user code run by these threads must not do); before, the wait for
-      delivery tasks gave up after 30 seconds
+      such thread is started, action waits end with \c WEBSOCKET-ERROR and a connect in progress ends, also in its
+      TCP connect or TLS handshake, without falling back to HTTP/1.1 (see @ref websocketclient_lifecycle for what
+      user code run by these threads, such as a \c start_thread hook, must not do); before, the wait for delivery
+      tasks gave up after 30 seconds
     - the frames an HTTP/2 or HTTP/3 connection receives with its handshake are delivered without the client's lock;
       before, a raw frame callback calling a method of the client could deadlock with the connecting thread
     - a callback running on the thread that processes a connection's frames (e.g. the raw frame callback) that calls
