@@ -93,6 +93,22 @@ static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
 const qore_mod_api_compat_s* qore_mod_api_list = qore_mod_api_list_l;
 const unsigned qore_mod_api_list_len = QORE_MOD_API_LEN;
 
+const pthread_mutexattr_t* qore_module_manager_mutex_attr() {
+#ifdef DEBUG
+    // made once, before the module manager (a static object) is constructed
+    static const pthread_mutexattr_t* attr = []() -> const pthread_mutexattr_t* {
+        static pthread_mutexattr_t a;
+        if (pthread_mutexattr_init(&a) || pthread_mutexattr_settype(&a, PTHREAD_MUTEX_ERRORCHECK)) {
+            return nullptr;
+        }
+        return &a;
+    }();
+    return attr;
+#else
+    return nullptr;
+#endif
+}
+
 QoreModuleManager QMM;
 
 void QoreModuleManager::forkChild(int tid) {
@@ -115,7 +131,7 @@ void QoreModuleManager::forkChild(int tid) {
         }
     }
     module_load_cond.reinitAfterFork();
-    mutex.reinitAfterFork();
+    mutex.reinitAfterFork(qore_module_manager_mutex_attr());
 }
 
 namespace {

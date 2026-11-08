@@ -575,6 +575,9 @@ struct DLHelper {
 class ModuleLoadMapHelper;
 struct QoreAOTModuleFileInfo;
 
+//! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
+DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
+
 class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
@@ -921,8 +924,13 @@ private:
     DLLLOCAL void clearModuleLoadWaitEdge(int tid);
 
 protected:
-    // mutex for atomicity
-    QoreThreadLock mutex;
+    //! mutex for atomicity
+    /** Not recursive: a thread that takes it twice deadlocks, and one that releases it without holding it (as
+        UnlockedModuleProgramRelease and the loaders that release it while a module initializes do) corrupts it.  In a
+        debug build it is an error-checking mutex, so either mistake fails an assertion in QoreThreadLock instead;
+        see qore_module_manager_mutex_attr()
+    */
+    QoreThreadLock mutex{qore_module_manager_mutex_attr()};
 
     // user module dependency map: module -> dependents
     ModMap md_map;
@@ -1339,6 +1347,8 @@ public:
 
     DLLLOCAL ~UnlockedModuleProgramRelease() {
         if (holder) {
+            // the mutex must be held here; in a debug build releasing it without holding it fails an assertion (see
+            // QoreModuleManager::mutex)
             AutoUnlocker au(QMM.mutex);
             holder = nullptr;
         }
