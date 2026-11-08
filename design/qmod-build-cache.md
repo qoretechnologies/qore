@@ -365,7 +365,7 @@ default 3072, set in `.gitlab-ci.yml`) and the other job names' caches by age, a
 A host directory costs no network transfer and no object store, and keeps the cache across branches and pipelines;
 on Kubernetes a node only has the modules of the jobs that ran on it, so the hit rate depends on how jobs land on
 nodes (the statistics line of each job shows it).  The runner configuration that mounts the directories is described
-in the change that introduced it (it is not part of this repository).
+in `design/qmod-build-cache-runners.md`.
 
 ## Measurements
 
